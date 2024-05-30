@@ -1,0 +1,12 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+api = { workspace = true }
+device = { workspace = true }
+
+tracing = { workspace = true }
+tracing-subscriber = "0.3.0"
+tokio = { workspace = true }

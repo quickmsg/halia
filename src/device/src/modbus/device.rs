@@ -1,0 +1,490 @@
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+
+use anyhow::{bail, Result};
+use async_trait::async_trait;
+use futures::lock::Mutex;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use tokio::{
+    select,
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        RwLock,
+    },
+    time::{self, sleep},
+};
+use tracing::{debug, error, trace};
+use types::device::{
+    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
+    ListGroupsResp, ListPointResp, Mode,
+};
+
+use crate::{
+    connection::{Connection, SerialConnection, TcpClientConnection},
+    modbus::protocol::TcpContext,
+    storage, Device, GroupRecord, DATA_ROOT_DIR, GROUP_RECORD_FILE_NAME,
+};
+
+use super::group::Group;
+
+static TYPE: &str = "modbus";
+
+pub(crate) struct Modbus {
+    id: u64,
+    status: Arc<AtomicU8>, // 1:停止 2:运行中 3:错误
+    conf: Conf,
+    auto_increment_id: AtomicU64,
+    groups: Arc<RwLock<Vec<Group>>>,
+    read_tx: Option<Sender<u64>>,
+    group_signals: Arc<Mutex<HashMap<u64, Arc<AtomicBool>>>>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+enum Link {
+    Serial,
+    Ethernet,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+enum Encode {
+    Tcp,
+    Rtu,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+struct Conf {
+    name: String,
+    link: Link,
+    conf: Value,
+}
+
+#[derive(Deserialize, Clone, Serialize)]
+pub(crate) struct TcpConf {
+    mode: Mode,
+    encode: Encode,
+    max_retry: u8,
+    command_interval: u64,
+    ip: String,
+    port: u16,
+    timeout: u64,
+}
+
+#[derive(Deserialize, Clone, Serialize)]
+struct RtuConf {
+    mode: Mode,
+    max_retry: u8,
+    command_interval: u64,
+    path: String,
+    stop_bits: u8,
+    baund_rate: u32,
+    data_bits: u8,
+    parity: u8,
+    port: u16,
+    timeout: u64,
+}
+
+impl Modbus {
+    pub fn new(create_device: &CreateDeviceReq, id: u64) -> Result<Box<dyn Device>> {
+        let conf: Conf = serde_json::from_value(create_device.conf.clone())?;
+        Ok(Box::new(Modbus {
+            id,
+            status: Arc::new(AtomicU8::new(1)),
+            conf,
+            groups: Arc::new(RwLock::new(Vec::new())),
+            read_tx: None,
+            group_signals: Arc::new(Mutex::new(HashMap::new())),
+            auto_increment_id: AtomicU64::new(1),
+        }))
+    }
+
+    async fn insert_group(&self, create_group: CreateGroupReq, id: u64) -> Result<()> {
+        let group = Group::new(create_group, id);
+        let stop_signal = Arc::new(AtomicBool::new(false));
+        let mut signals = self.group_signals.lock().await;
+        signals.insert(group.id.clone(), stop_signal.clone());
+
+        match self.status.load(Ordering::SeqCst) {
+            2 => {
+                let timer_group_id = group.id.clone();
+                let interval = group.interval;
+                if let Some(read_tx) = &self.read_tx {
+                    self.run_group_timer(timer_group_id, interval, stop_signal, read_tx.clone());
+                }
+            }
+            _ => {}
+        }
+
+        self.groups.write().await.push(group);
+
+        Ok(())
+    }
+
+    async fn run(&self) {
+        let conf = self.conf.clone();
+        let status = self.status.clone();
+        let groups = self.groups.clone();
+        tokio::spawn(async move {
+            loop {
+                match Modbus::get_connection(&conf).await {
+                    Ok(connection) => {
+                        status.store(1, Ordering::SeqCst);
+                        Modbus::event_loop(connection, status.clone(), todo!(), groups).await;
+                    }
+                    Err(e) => error!("{}", e),
+                }
+
+                let now_status = status.load(Ordering::SeqCst);
+                if now_status == 2 || now_status == 3 {
+                    return;
+                }
+                time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+    }
+
+    // TODO
+    async fn get_connection(conf: &Conf) -> Result<Connection> {
+        match conf.link {
+            Link::Ethernet => {
+                let conf: TcpConf = serde_json::from_value(conf.conf.clone())?;
+                TcpClientConnection::new(conf.ip, conf.port).await
+            }
+            Link::Serial => {
+                let conf: RtuConf = serde_json::from_value(conf.conf.clone())?;
+                SerialConnection::new(
+                    conf.path,
+                    conf.stop_bits,
+                    conf.baund_rate,
+                    conf.data_bits,
+                    conf.parity,
+                )
+                .await
+            }
+        }
+    }
+
+    fn run_group_timer(
+        &self,
+        group_id: u64,
+        interval: u64,
+        stop_signal: Arc<AtomicBool>,
+        tx: Sender<u64>,
+    ) {
+        trace!("group {} is runing", group_id);
+        tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_millis(interval));
+            loop {
+                interval.tick().await;
+                if stop_signal.load(Ordering::SeqCst) {
+                    debug!("group:{} sotp", group_id);
+                    break;
+                }
+                match tx.send(group_id.clone()).await {
+                    Ok(_) => {}
+                    Err(e) => debug!("group send point info err :{}", e),
+                }
+            }
+        });
+    }
+
+    async fn event_loop(
+        mut connection: Connection,
+        status: Arc<AtomicU8>,
+        mut read_rx: Receiver<u64>,
+        groups: Arc<RwLock<Vec<Group>>>,
+    ) {
+        let mut ctx = TcpContext::new();
+        let mut interval = time::interval(Duration::from_millis(200));
+        trace!("connected");
+        loop {
+            // select! {
+            interval.tick().await;
+            let now_status = status.load(Ordering::SeqCst);
+            if now_status == 2 || now_status == 3 {
+                debug!("event is stop");
+                return;
+            }
+            // match write_rx.try_recv() {
+            //     Ok(request) => match request {
+            //         Request::ReadCoils(_, _) => todo!(),
+            //         Request::ReadDiscreteInputs(_, _) => todo!(),
+            //         Request::WriteSingleCoil(_, _) => todo!(),
+            //         Request::ReadInputRegisters(_, _) => todo!(),
+            //         Request::ReadHoldingRegisters(_, _) => todo!(),
+            //         Request::WriteSingleRegister(_, _) => todo!(),
+            //         Request::WriteMultipleRegisters(_, _) => todo!(),
+            //         Request::Disconnect => todo!(),
+            //     },
+            //     Err(_) => {}
+            // }
+
+            match read_rx.recv().await {
+                Some(group_id) => {
+                    if let Some(group) = groups
+                        .write()
+                        .await
+                        .iter_mut()
+                        .find(|group| group.id == group_id)
+                    {
+                        debug!("read group:{}", group.name);
+                        for point in group.points.write().await.iter_mut() {
+                            debug!("{:?}", point);
+                            ctx.encode_read(point.area, point.slave, point.address, point.quantity);
+
+                            match connection.send(ctx.get_buf()).await {
+                                Err(e) => {
+                                    debug!("send err :{:?}", e);
+                                    break;
+                                }
+                                _ => {}
+                            }
+
+                            ctx.clear_buf();
+
+                            match connection.recv(ctx.get_buf()).await {
+                                Ok(_) => match ctx.decode() {
+                                    Ok(_) => {
+                                        // debug!("decode:{:?}",ctx.buf);
+                                        point.set_data(ctx.get_buf()).await;
+                                    }
+                                    Err(e) => println!("{}", e),
+                                },
+                                Err(e) => {
+                                    debug!("send err :{:?}", e);
+                                }
+                            }
+
+                            sleep(Duration::from_millis(20)).await;
+                        }
+                    }
+                }
+                None => {}
+            }
+        }
+        // }
+        // }
+    }
+}
+
+#[async_trait]
+impl Device for Modbus {
+    fn get_id(&self) -> u64 {
+        self.id
+    }
+
+    async fn update(&mut self, conf: Value) -> Result<()> {
+        todo!()
+    }
+
+    fn get_info(&self) -> ListDevicesResp {
+        ListDevicesResp {
+            id: self.id,
+            name: self.conf.name.clone(),
+            // TODO
+            status: 3,
+            // TODO
+            link: 3,
+            // TODO
+            rtt: 999,
+            r#type: TYPE,
+        }
+    }
+
+    fn get_detail(&self) -> DeviceDetailResp {
+        DeviceDetailResp {
+            id: self.id,
+            r#type: &TYPE,
+            name: self.conf.name.clone(),
+            conf: json!(&self.conf),
+        }
+    }
+
+    async fn create_group(&self, req: CreateGroupReq) -> Result<()> {
+        let id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
+        let group_dir = Path::new(DATA_ROOT_DIR).join(self.id.to_string());
+        storage::create_dir(&group_dir).await?;
+        storage::insert(
+            &group_dir.join(GROUP_RECORD_FILE_NAME),
+            format!(
+                "{{\"id\":{},\"req\":{}}}\n",
+                id,
+                &serde_json::to_string(&req)?
+            )
+            .as_bytes(),
+        )
+        .await?;
+        self.insert_group(req, id).await
+    }
+
+    async fn recover_group(&self, record: GroupRecord) -> Result<()> {
+        let now_id = self.auto_increment_id.load(Ordering::SeqCst);
+        if record.id > now_id {
+            self.auto_increment_id.store(record.id, Ordering::SeqCst);
+        }
+        self.insert_group(record.req, record.id).await
+    }
+
+    async fn delete_groups(&self, group_ids: Vec<u64>) -> Result<()> {
+        self.groups
+            .write()
+            .await
+            .retain(|group| !group_ids.contains(&group.id));
+
+        let mut stop_signals = self.group_signals.lock().await;
+        for group_id in &group_ids {
+            if let Some(stop_signal) = stop_signals.remove(group_id) {
+                stop_signal.store(true, Ordering::SeqCst);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn start(&mut self) -> Result<()> {
+        self.status.store(2, Ordering::SeqCst);
+        self.run().await;
+
+        // self.event_loop().await;
+        // let signals = self.group_signals.lock().await;
+        // for group in self.groups.read().await.iter() {
+        //     if let Some(signal) = signals.get(&group.id) {
+        //         signal.store(false, Ordering::SeqCst);
+        //         if let Some(read_tx) = &self.read_tx {
+        //             self.run_group_timer(
+        //                 group.id.clone(),
+        //                 group.interval,
+        //                 signal.clone(),
+        //                 read_tx.clone(),
+        //             )
+        //         }
+        //     }
+        // }
+
+        Ok(())
+    }
+
+    async fn stop(&mut self) {
+        self.status.store(1, Ordering::SeqCst);
+        for stop_signal in self.group_signals.lock().await.values() {
+            stop_signal.store(true, Ordering::SeqCst)
+        }
+    }
+
+    async fn read_groups(&self) -> Result<Vec<ListGroupsResp>> {
+        let mut resps = Vec::new();
+        for group in self.groups.read().await.iter() {
+            resps.push({
+                ListGroupsResp {
+                    id: group.id,
+                    name: group.name.clone(),
+                    interval: group.interval,
+                    point_count: group.get_points_num().await as u8,
+                }
+            });
+        }
+        Ok(resps)
+    }
+
+    // TODO
+    async fn update_group(&self, group_id: u64, update_group: Value) -> Result<()> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => match group.update(update_group) {
+                Ok(interval_changed) => {
+                    if interval_changed {
+                        match self.group_signals.lock().await.remove(&group_id) {
+                            Some(stop_signal) => {
+                                stop_signal.store(true, Ordering::SeqCst);
+                            }
+                            None => {}
+                        }
+
+                        let stop_signal = Arc::new(AtomicBool::new(false));
+                        let mut signals = self.group_signals.lock().await;
+                        signals.insert(group.id, stop_signal.clone());
+
+                        if let Some(read_tx) = &self.read_tx {
+                            self.run_group_timer(
+                                group.id.clone(),
+                                group.interval,
+                                stop_signal.clone(),
+                                read_tx.clone(),
+                            );
+                        };
+                    }
+
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            },
+            None => bail!("未找到组：{}。", group_id),
+        }
+    }
+
+    async fn create_points(&self, group_id: u64, create_points: Vec<CreatePointReq>) -> Result<()> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => group.create_points(create_points).await,
+            None => bail!("没有找到组"),
+        }
+    }
+
+    async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>> {
+        match self
+            .groups
+            .read()
+            .await
+            .iter()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => Ok(group.read_points().await),
+            None => bail!("未找到组。"),
+        }
+    }
+
+    async fn update_point(&self, group_id: u64, point_id: u64, update_point: Value) -> Result<()> {
+        match self
+            .groups
+            .read()
+            .await
+            .iter()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => group.update_point(point_id, update_point).await,
+            None => bail!("未找到组:{}。", group_id),
+        }
+    }
+
+    async fn delete_points(&self, group_id: u64, point_ids: Vec<u64>) -> Result<()> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => group.delete_points(point_ids).await,
+            None => bail!("没有找到组"),
+        }
+    }
+}

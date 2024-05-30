@@ -1,0 +1,15 @@
+[package]
+name = "api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+types = { workspace = true }
+managers = { workspace = true }
+device = { workspace = true }
+
+axum = { version = "0.7.5", features = ["macros", "query"] }
+tracing = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

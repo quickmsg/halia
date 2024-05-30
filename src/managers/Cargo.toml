@@ -1,0 +1,15 @@
+[package]
+name = "managers"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sources = { workspace = true }
+sinks = { workspace = true }
+message = { workspace = true }
+types = { workspace = true }
+operators = { workspace = true }
+
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }

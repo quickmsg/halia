@@ -1,0 +1,46 @@
+[workspace]
+members = [
+    "src/api",
+    "src/managers",
+    "src/message",
+    "src/server",
+    "src/types",
+    "src/sources",
+    "src/sinks",
+    "src/operators",
+    "src/device",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+api = { path = "src/api" }
+types = { path = "src/types" }
+message = { path = "src/message" }
+managers = { path = "src/managers" }
+sources = { path = "src/sources" }
+sinks = { path = "src/sinks" }
+operators = { path = "src/operators" }
+device = { path = "src/device" }
+
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0.81"
+bytes = "1.6.0"
+indexmap = "2.2.6"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1.40"
+futures = "0.3"
+dashmap = "5.5.3"
+async-trait = "0.1.80"
+uuid = { version = "1.8.0", features = ["v4"] }
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

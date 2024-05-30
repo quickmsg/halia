@@ -1,0 +1,10 @@
+[package]
+name = "types"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+message = { workspace = true }
+
+serde_json = { workspace = true }
+serde = { workspace = true }

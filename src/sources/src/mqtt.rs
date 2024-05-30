@@ -1,0 +1,102 @@
+use anyhow::{bail, Result};
+use message::MessageBatch;
+use rumqttc::v5::mqttbytes::QoS;
+use rumqttc::v5::{AsyncClient, ConnectionError, Event, Incoming, MqttOptions};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use types::rule::Status;
+use std::string::String;
+use tokio;
+use tokio::sync::broadcast;
+use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::time::Duration;
+use tracing::error;
+
+use crate::Source;
+
+pub struct Mqtt {
+    conf: Conf,
+    status: Status,
+    tx: Option<Sender<MessageBatch>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Conf {
+    id: String,
+    host: String,
+    topic: String,
+    port: u16,
+}
+
+impl Mqtt {
+    pub fn new(conf: Value) -> Result<Box<dyn Source + Sync>> {
+        let conf: Conf = serde_json::from_value(conf.clone())?;
+        Ok(Box::new(Mqtt {
+            conf,
+            status: Status::Stopped,
+            tx: None,
+        }))
+    }
+}
+
+async fn run(conf: Conf, tx: Sender<MessageBatch>) {
+    let mut mqtt_options = MqttOptions::new(conf.id, conf.host, conf.port);
+    mqtt_options.set_keep_alive(Duration::from_secs(5));
+
+    let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
+    match client.subscribe(conf.topic.clone(), QoS::AtMostOnce).await {
+        Ok(_) => {}
+        Err(e) => error!("Failed to connect mqtt server:{}", e),
+    }
+
+    loop {
+        match event_loop.poll().await {
+            Ok(Event::Incoming(Incoming::Publish(p))) => {
+                match MessageBatch::from_json(&p.payload) {
+                    Ok(msg) => match tx.send(msg) {
+                        Err(e) => error!("send message err:{}", e),
+                        _ => {}
+                    },
+                    Err(e) => error!("Failed to decode msg:{}", e),
+                }
+            }
+            Ok(_) => (),
+            Err(e) => {
+                if let ConnectionError::Timeout(_) = e {
+                    continue;
+                }
+                error!("Failed to poll mqtt eventloop:{}", e);
+                match client.subscribe(conf.topic.clone(), QoS::AtMostOnce).await {
+                    Ok(_) => {}
+                    Err(e) => error!("Failed to connect mqtt server:{}", e),
+                }
+            }
+        }
+    }
+}
+
+impl Source for Mqtt {
+    fn subscribe(&mut self) -> Result<Receiver<MessageBatch>> {
+        match self.status {
+            Status::Running => match &self.tx {
+                Some(tx) => Ok(tx.subscribe()),
+                None => bail!("tx is None"),
+            },
+            Status::Stopped => {
+                let (tx, rx) = broadcast::channel(10);
+                let tx1 = tx.clone();
+                self.tx = Some(tx);
+
+                let conf = self.conf.clone();
+                tokio::spawn(async move {
+                    run(conf, tx1).await;
+                });
+                Ok(rx)
+            }
+        }
+    }
+
+    fn stop(&self) {}
+
+    // async fn stop(&self) {}
+}

@@ -1,0 +1,12 @@
+[package]
+name = "sinks"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+message = { workspace = true }
+types = { workspace = true }
+
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
