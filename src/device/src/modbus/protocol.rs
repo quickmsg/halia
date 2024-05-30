@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use bytes::{Buf, BufMut, BytesMut};
-use tracing::warn;
+use tracing::{debug, warn};
 
 pub struct TcpContext {
     function_code: u8,
@@ -20,7 +20,9 @@ impl TcpContext {
     }
 
     pub fn clear_buf(&mut self) {
-        self.buf.clear();
+        unsafe {
+            self.buf.set_len(0);
+        }
     }
 
     pub fn get_buf(&mut self) -> &mut BytesMut {
@@ -76,6 +78,7 @@ impl TcpContext {
 
     pub fn decode(&mut self) -> Result<()> {
         if self.buf.len() < 8 {
+            debug!("{:?}", self.buf);
             bail!("too short,something is wrong")
         }
         warn!("decode:{:?}", self.buf);

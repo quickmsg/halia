@@ -118,7 +118,7 @@ impl Modbus {
                 let timer_group_id = group.id.clone();
                 let interval = group.interval;
                 if let Some(read_tx) = &self.read_tx {
-                    self.run_group_timer(timer_group_id, interval, stop_signal, read_tx.clone());
+                    Self::run_group_timer(timer_group_id, interval, stop_signal, read_tx.clone());
                 }
             }
             _ => {}
@@ -129,22 +129,46 @@ impl Modbus {
         Ok(())
     }
 
-    async fn run(&self) {
+    async fn run(&mut self) {
         let conf = self.conf.clone();
         let status = self.status.clone();
         let groups = self.groups.clone();
+
+        let (tx, mut rx) = mpsc::channel::<u64>(100);
+        self.read_tx = Some(tx.clone());
+
+        let group_signals = self.group_signals.clone();
+
         tokio::spawn(async move {
             loop {
                 match Modbus::get_connection(&conf).await {
                     Ok(connection) => {
-                        status.store(1, Ordering::SeqCst);
-                        Modbus::event_loop(connection, status.clone(), todo!(), groups).await;
+                        status.store(2, Ordering::SeqCst);
+
+                        for group in groups.read().await.iter() {
+                            if let Some(signal) = group_signals.lock().await.get(&group.id) {
+                                signal.store(false, Ordering::SeqCst);
+                                Self::run_group_timer(
+                                    group.id.clone(),
+                                    group.interval,
+                                    signal.clone(),
+                                    tx.clone(),
+                                );
+                            }
+                        }
+                        Modbus::event_loop(connection, status.clone(), &mut rx, groups.clone())
+                            .await;
+
+                        for stop_signal in group_signals.lock().await.values() {
+                            stop_signal.store(true, Ordering::SeqCst)
+                        }
                     }
                     Err(e) => error!("{}", e),
                 }
 
                 let now_status = status.load(Ordering::SeqCst);
-                if now_status == 2 || now_status == 3 {
+                if now_status == 1 {
+                    debug!("device stoped");
                     return;
                 }
                 time::sleep(Duration::from_secs(1)).await;
@@ -174,7 +198,6 @@ impl Modbus {
     }
 
     fn run_group_timer(
-        &self,
         group_id: u64,
         interval: u64,
         stop_signal: Arc<AtomicBool>,
@@ -200,7 +223,7 @@ impl Modbus {
     async fn event_loop(
         mut connection: Connection,
         status: Arc<AtomicU8>,
-        mut read_rx: Receiver<u64>,
+        read_rx: &mut Receiver<u64>,
         groups: Arc<RwLock<Vec<Group>>>,
     ) {
         let mut ctx = TcpContext::new();
@@ -210,7 +233,7 @@ impl Modbus {
             // select! {
             interval.tick().await;
             let now_status = status.load(Ordering::SeqCst);
-            if now_status == 2 || now_status == 3 {
+            if now_status == 1 || now_status == 3 {
                 debug!("event is stop");
                 return;
             }
@@ -244,7 +267,7 @@ impl Modbus {
                             match connection.send(ctx.get_buf()).await {
                                 Err(e) => {
                                     debug!("send err :{:?}", e);
-                                    break;
+                                    return;
                                 }
                                 _ => {}
                             }
@@ -261,10 +284,13 @@ impl Modbus {
                                 },
                                 Err(e) => {
                                     debug!("send err :{:?}", e);
+                                    return;
                                 }
                             }
 
-                            sleep(Duration::from_millis(20)).await;
+                            ctx.clear_buf();
+
+                            sleep(Duration::from_millis(100)).await;
                         }
                     }
                 }
@@ -353,23 +379,6 @@ impl Device for Modbus {
     async fn start(&mut self) -> Result<()> {
         self.status.store(2, Ordering::SeqCst);
         self.run().await;
-
-        // self.event_loop().await;
-        // let signals = self.group_signals.lock().await;
-        // for group in self.groups.read().await.iter() {
-        //     if let Some(signal) = signals.get(&group.id) {
-        //         signal.store(false, Ordering::SeqCst);
-        //         if let Some(read_tx) = &self.read_tx {
-        //             self.run_group_timer(
-        //                 group.id.clone(),
-        //                 group.interval,
-        //                 signal.clone(),
-        //                 read_tx.clone(),
-        //             )
-        //         }
-        //     }
-        // }
-
         Ok(())
     }
 
@@ -419,7 +428,7 @@ impl Device for Modbus {
                         signals.insert(group.id, stop_signal.clone());
 
                         if let Some(read_tx) = &self.read_tx {
-                            self.run_group_timer(
+                            Self::run_group_timer(
                                 group.id.clone(),
                                 group.interval,
                                 stop_signal.clone(),

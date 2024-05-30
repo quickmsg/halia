@@ -5,6 +5,7 @@ use tokio::{
     net::TcpStream,
 };
 use tokio_serial::{SerialPortBuilderExt, SerialStream, StopBits};
+use tracing::debug;
 
 use bytes::BytesMut;
 
@@ -73,6 +74,7 @@ impl TcpClientConnection {
     }
 
     pub(crate) async fn recv(&mut self, data: &mut BytesMut) -> Result<()> {
+        debug!("buf len is {}", data.capacity());
         self.tcp_stream.read_buf(data).await?;
         Ok(())
     }
