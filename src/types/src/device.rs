@@ -21,7 +21,6 @@ pub struct ListDevicesResp {
     pub id: u64,
     pub name: String,
     pub status: u8,
-    pub link: u8,
     pub rtt: u16,
     pub r#type: &'static str,
 }

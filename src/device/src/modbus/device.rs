@@ -3,10 +3,10 @@ use std::{
     net::SocketAddr,
     path::Path,
     sync::{
-        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+        atomic::{AtomicBool, AtomicU16, AtomicU64, AtomicU8, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{bail, Result};
@@ -15,6 +15,7 @@ use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::{
+    net::TcpStream,
     select,
     sync::{
         mpsc::{self, Receiver, Sender},
@@ -36,13 +37,14 @@ use types::device::{
 
 use crate::{storage, Device, GroupRecord, DATA_ROOT_DIR, GROUP_RECORD_FILE_NAME};
 
-use super::group::Group;
+use super::{group::Group, point::PointConf};
 
 static TYPE: &str = "modbus";
 
 pub(crate) struct Modbus {
     id: u64,
     status: Arc<AtomicU8>, // 1:停止 2:运行中 3:错误
+    rtt: Arc<AtomicU16>,
     conf: Conf,
     auto_increment_id: AtomicU64,
     groups: Arc<RwLock<Vec<Group>>>,
@@ -68,6 +70,7 @@ enum Encode {
 struct Conf {
     name: String,
     link: Link,
+    interval: u64,
     conf: Value,
 }
 
@@ -102,6 +105,7 @@ impl Modbus {
         Ok(Box::new(Modbus {
             id,
             status: Arc::new(AtomicU8::new(1)),
+            rtt: Arc::new(AtomicU16::new(9999)),
             conf,
             groups: Arc::new(RwLock::new(Vec::new())),
             read_tx: None,
@@ -137,10 +141,14 @@ impl Modbus {
         let status = self.status.clone();
         let groups = self.groups.clone();
 
-        let (tx, mut rx) = mpsc::channel::<u64>(100);
-        self.read_tx = Some(tx.clone());
+        let (read_tx, mut read_rx) = mpsc::channel::<u64>(100);
+        self.read_tx = Some(read_tx.clone());
 
         let group_signals = self.group_signals.clone();
+        let interval = self.conf.interval;
+        let rtt = self.rtt.clone();
+
+        let (write_tx, mut write_rx) = mpsc::channel::<PointConf>(100);
 
         tokio::spawn(async move {
             loop {
@@ -155,11 +163,20 @@ impl Modbus {
                                     group.id.clone(),
                                     group.interval,
                                     signal.clone(),
-                                    tx.clone(),
+                                    read_tx.clone(),
                                 );
                             }
                         }
-                        Modbus::event_loop(ctx, status.clone(), &mut rx, groups.clone()).await;
+                        Modbus::event_loop(
+                            ctx,
+                            rtt.clone(),
+                            status.clone(),
+                            &mut write_rx,
+                            &mut read_rx,
+                            groups.clone(),
+                            interval,
+                        )
+                        .await;
 
                         for stop_signal in group_signals.lock().await.values() {
                             stop_signal.store(true, Ordering::SeqCst)
@@ -183,15 +200,22 @@ impl Modbus {
             Link::Ethernet => {
                 let conf: TcpConf = serde_json::from_value(conf.conf.clone())?;
                 let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse()?;
-                let ctx = tcp::connect(socket_addr).await?;
-                Ok(ctx)
+                match conf.encode {
+                    Encode::Tcp => {
+                        let ctx = tcp::connect(socket_addr).await?;
+                        Ok(ctx)
+                    }
+                    Encode::Rtu => {
+                        let transport = TcpStream::connect(socket_addr).await?;
+                        Ok(rtu::attach(transport))
+                    }
+                }
             }
             Link::Serial => {
                 let conf: RtuConf = serde_json::from_value(conf.conf.clone())?;
                 let builder = tokio_serial::new(conf.path, conf.baund_rate);
                 let port = SerialStream::open(&builder)?;
-                let ctx = rtu::attach(port);
-                Ok(ctx)
+                Ok(rtu::attach(port))
             }
         }
     }
@@ -221,15 +245,15 @@ impl Modbus {
 
     async fn event_loop(
         mut ctx: Context,
+        rtt: Arc<AtomicU16>,
         status: Arc<AtomicU8>,
+        write_rx: &mut Receiver<PointConf>,
         read_rx: &mut Receiver<u64>,
         groups: Arc<RwLock<Vec<Group>>>,
+        interval: u64,
     ) {
-        let mut interval = time::interval(Duration::from_millis(200));
-        trace!("connected");
         loop {
             // select! {
-            interval.tick().await;
             let now_status = status.load(Ordering::SeqCst);
             if now_status == 1 || now_status == 3 {
                 debug!("event is stop");
@@ -260,6 +284,7 @@ impl Modbus {
                         debug!("read group:{}", group.name);
                         for point in group.points.write().await.iter_mut() {
                             ctx.set_slave(Slave(point.slave));
+                            let start_time = Instant::now();
                             match point.area {
                                 0 => match ctx
                                     .read_discrete_inputs(point.address, point.quantity)
@@ -359,7 +384,8 @@ impl Modbus {
                                 _ => unreachable!(),
                             }
 
-                            sleep(Duration::from_millis(100)).await;
+                            rtt.store(start_time.elapsed().as_micros() as u16, Ordering::SeqCst);
+                            sleep(Duration::from_millis(interval)).await;
                         }
                     }
                 }
@@ -385,12 +411,8 @@ impl Device for Modbus {
         ListDevicesResp {
             id: self.id,
             name: self.conf.name.clone(),
-            // TODO
-            status: 3,
-            // TODO
-            link: 3,
-            // TODO
-            rtt: 999,
+            status: self.status.load(Ordering::SeqCst),
+            rtt: self.rtt.load(Ordering::SeqCst),
             r#type: TYPE,
         }
     }

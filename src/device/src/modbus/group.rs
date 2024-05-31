@@ -99,19 +99,6 @@ impl Group {
 
     pub async fn delete_points(&self, ids: Vec<u64>) -> Result<()> {
         self.points.write().await.retain(|p| !ids.contains(&p.id));
-
         Ok(())
     }
-
-    // pub async fn set_point_value(&mut self, name: &String, words: Vec<u16>) {
-    //     if let Some(point) = self
-    //         .points
-    //         .write()
-    //         .await
-    //         .iter_mut()
-    //         .find(|p| &p.name == name)
-    //     {
-    //         point.set_data_from_raw_words(words).await;
-    //     }
-    // }
 }

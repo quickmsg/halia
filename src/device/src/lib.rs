@@ -11,7 +11,7 @@ use std::{
         LazyLock,
     },
 };
-use storage::{create_dir, insert};
+use storage::insert;
 use tokio::{
     fs::{self, File, OpenOptions},
     io::AsyncBufReadExt,

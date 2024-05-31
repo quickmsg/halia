@@ -23,7 +23,7 @@ pub(crate) struct Point {
 }
 
 #[derive(Deserialize, Debug)]
-pub(crate) struct Conf {
+pub(crate) struct PointConf {
     pub name: String,
     pub r#type: DataType,
     pub slave: u8,
@@ -45,7 +45,7 @@ struct UpdateConf {
 
 impl Point {
     pub fn new(conf: CreatePointReq, id: u64) -> Result<Point> {
-        let conf: Conf = serde_json::from_value(conf)?;
+        let conf: PointConf = serde_json::from_value(conf)?;
         let quantity = match conf.r#type {
             DataType::Bool => 1,
             DataType::Int16(_) => 1,
