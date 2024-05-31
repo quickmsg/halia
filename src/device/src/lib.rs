@@ -141,8 +141,7 @@ impl DeviceManager {
             None => bail!("未找到设备：{}。", id),
         };
 
-        // storage::delete(Path::new(DATA_ROOT_DIR).join(DEVICE_RECORD_FILE_NAME), id).await?;
-
+        storage::delete_device(id).await?;
         self.devices
             .write()
             .await

@@ -14,7 +14,15 @@ pub(crate) async fn insert_device(id: u64, data: String) -> Result<(), io::Error
     let device_path = Path::new(ROOT_DIR).join(FILE_NAME);
     let mut file = match fs::try_exists(&device_path).await? {
         true => OpenOptions::new().append(true).open(&device_path).await?,
-        false => File::create(&device_path).await?,
+        false => {
+            OpenOptions::new()
+                .read(true)
+                .create_new(true)
+                .write(true)
+                .mode(0o466)
+                .open(&device_path)
+                .await?
+        }
     };
     file.write(format!("{}-{}\n", id, data).as_bytes()).await?;
     Ok(())
@@ -41,19 +49,40 @@ pub(crate) async fn get_devices() -> Result<Vec<(u64, String)>, io::Error> {
 
 pub(crate) async fn update_device(id: u64, data: String) -> Result<(), io::Error> {
     let device_path = Path::new(ROOT_DIR).join(FILE_NAME);
-    let mut file = OpenOptions::new().read(true).open(device_path).await?;
+    let mut file = OpenOptions::new().write(true).open(device_path).await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
+    let new_line = format!("{}-{}\n", id, data);
     let mut lines: Vec<&str> = buf.split("\n").collect();
     for line in lines.iter_mut() {
-
+        let split_pos = line.find('-').expect("数据文件损坏");
+        if line[..split_pos].parse::<u64>().expect("文件") == id {
+            *line = new_line.as_str();
+        }
     }
+
+    let buf = lines.join("\n");
+    file.write_all(buf.as_bytes()).await?;
 
     Ok(())
 }
 
 pub(crate) async fn delete_device(id: u64) -> Result<(), io::Error> {
+    let device_path = Path::new(ROOT_DIR).join(FILE_NAME);
+    let mut file = OpenOptions::new().write(true).open(device_path).await?;
+    let mut buf = String::new();
+    file.read_to_string(&mut buf).await?;
+
+    let mut lines: Vec<&str> = buf.split("\n").collect();
+    lines.retain(|line| {
+        let split_pos = line.find('-').expect("数据文件损坏");
+        line[..split_pos].parse::<u64>().expect("文件") != id
+    });
+
+    let buf = lines.join("\n");
+    file.write_all(buf.as_bytes()).await?;
+
     Ok(())
 }
 
