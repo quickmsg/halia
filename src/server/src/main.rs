@@ -1,5 +1,4 @@
 use api::start;
-use device::GLOBAL_DEVICE_MANAGER;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -10,6 +9,7 @@ async fn main() {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
     info!("server start");
-    let _ = GLOBAL_DEVICE_MANAGER.recover().await;
+    // let _ = GLOBAL_DEVICE_MANAGER.recover().await;
+
     start().await;
 }

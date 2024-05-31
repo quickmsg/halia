@@ -4,14 +4,10 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use modbus::device::Modbus;
 use serde_json::Value;
-use std::{
-    path::Path,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        LazyLock,
-    },
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    LazyLock,
 };
-use storage::insert;
 use tokio::{
     fs::{self, File, OpenOptions},
     io::AsyncBufReadExt,
@@ -26,33 +22,16 @@ use types::device::{
 use serde::{Deserialize, Serialize};
 
 mod modbus;
-mod storage;
+pub mod storage;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
     auto_increment_id: AtomicU64::new(1),
     devices: RwLock::new(vec![]),
 });
 
-static DATA_ROOT_DIR: &str = "./storage";
-static DEVICE_RECORD_FILE_NAME: &str = "device.json";
-static GROUP_RECORD_FILE_NAME: &str = "group.json";
-static POINT_RECORD_FILE_NAME: &str = "point.json";
-
 pub struct DeviceManager {
     auto_increment_id: AtomicU64,
     devices: RwLock<Vec<Box<dyn Device>>>,
-}
-
-#[derive(Deserialize, Debug)]
-struct DeviceRecord {
-    id: u64,
-    req: CreateDeviceReq,
-}
-
-#[derive(Deserialize, Debug)]
-struct GroupRecord {
-    id: u64,
-    req: CreateGroupReq,
 }
 
 impl DeviceManager {
@@ -66,17 +45,7 @@ impl DeviceManager {
             _ => bail!("不支持协议"),
         };
 
-        insert(
-            Path::new(DATA_ROOT_DIR).join(DEVICE_RECORD_FILE_NAME),
-            format!(
-                "{{\"id\":{},\"req\":{}}}\n",
-                id,
-                &serde_json::to_string(&req)?
-            )
-            .as_bytes(),
-        )
-        .await?;
-
+        storage::insert_device(id, serde_json::to_string(&req)?).await?;
         self.devices.write().await.push(device);
 
         Ok(())
@@ -172,7 +141,7 @@ impl DeviceManager {
             None => bail!("未找到设备：{}。", id),
         };
 
-        storage::delete(Path::new(DATA_ROOT_DIR).join(DEVICE_RECORD_FILE_NAME), id).await?;
+        // storage::delete(Path::new(DATA_ROOT_DIR).join(DEVICE_RECORD_FILE_NAME), id).await?;
 
         self.devices
             .write()
@@ -345,100 +314,100 @@ impl DeviceManager {
     }
 }
 
-impl DeviceManager {
-    pub async fn recover(&self) -> Result<()> {
-        let exists = self.file_exists(DEVICE_RECORD_FILE_NAME).await?;
-        if exists {
-            self.recover_device().await?;
-        }
+// impl DeviceManager {
+//     pub async fn recover(&self) -> Result<()> {
+//         let exists = self.file_exists(DEVICE_RECORD_FILE_NAME).await?;
+//         if exists {
+//             self.recover_device().await?;
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    async fn recover_device(&self) -> Result<()> {
-        match OpenOptions::new()
-            .read(true)
-            .open(DEVICE_RECORD_FILE_NAME)
-            .await
-        {
-            Ok(file) => {
-                let mut buf_reader = tokio::io::BufReader::new(file);
-                let mut buf = String::new();
-                loop {
-                    match buf_reader.read_line(&mut buf).await {
-                        Ok(0) => return Ok(()),
-                        Ok(n) => {
-                            debug!("read buf :{:?}", buf);
-                            let record: DeviceRecord = match serde_json::from_str(&buf) {
-                                Ok(v) => v,
-                                Err(e) => bail!("{}", e),
-                            };
+//     async fn recover_device(&self) -> Result<()> {
+//         match OpenOptions::new()
+//             .read(true)
+//             .open(DEVICE_RECORD_FILE_NAME)
+//             .await
+//         {
+//             Ok(file) => {
+//                 let mut buf_reader = tokio::io::BufReader::new(file);
+//                 let mut buf = String::new();
+//                 loop {
+//                     match buf_reader.read_line(&mut buf).await {
+//                         Ok(0) => return Ok(()),
+//                         Ok(n) => {
+//                             debug!("read buf :{:?}", buf);
+//                             let record: DeviceRecord = match serde_json::from_str(&buf) {
+//                                 Ok(v) => v,
+//                                 Err(e) => bail!("{}", e),
+//                             };
 
-                            let device = match record.req.r#type.as_str() {
-                                "modbus" => match Modbus::new(&record.req, record.id) {
-                                    Ok(device) => device,
-                                    Err(e) => bail!("{}", e),
-                                },
-                                _ => bail!("not support"),
-                            };
+//                             let device = match record.req.r#type.as_str() {
+//                                 "modbus" => match Modbus::new(&record.req, record.id) {
+//                                     Ok(device) => device,
+//                                     Err(e) => bail!("{}", e),
+//                                 },
+//                                 _ => bail!("not support"),
+//                             };
 
-                            self.recover_groups(&device, record.id).await?;
+//                             self.recover_groups(&device, record.id).await?;
 
-                            self.devices.write().await.push(device);
-                            buf.clear();
-                        }
-                        Err(e) => bail!("{}", e),
-                    }
-                }
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
+//                             self.devices.write().await.push(device);
+//                             buf.clear();
+//                         }
+//                         Err(e) => bail!("{}", e),
+//                     }
+//                 }
+//             }
+//             Err(e) => Err(e.into()),
+//         }
+//     }
 
-    async fn recover_groups(&self, device: &Box<dyn Device>, id: u64) -> Result<()> {
-        let group_dir_path = Path::new(DEVICE_RECORD_FILE_NAME).join(id.to_string());
-        match fs::read_dir(group_dir_path).await {
-            Ok(mut dir) => {
-                while let Some(entry) = dir.next_entry().await? {
-                    match OpenOptions::new().read(true).open(entry.path()).await {
-                        Ok(file) => {
-                            let mut buf_reader = tokio::io::BufReader::new(file);
-                            let mut buf = String::new();
-                            loop {
-                                match buf_reader.read_line(&mut buf).await {
-                                    Ok(0) => return Ok(()),
-                                    Ok(n) => {
-                                        debug!("read buf :{:?}", buf);
-                                        let record: GroupRecord = match serde_json::from_str(&buf) {
-                                            Ok(v) => v,
-                                            Err(e) => bail!("{}", e),
-                                        };
+//     async fn recover_groups(&self, device: &Box<dyn Device>, id: u64) -> Result<()> {
+//         let group_dir_path = Path::new(DEVICE_RECORD_FILE_NAME).join(id.to_string());
+//         match fs::read_dir(group_dir_path).await {
+//             Ok(mut dir) => {
+//                 while let Some(entry) = dir.next_entry().await? {
+//                     match OpenOptions::new().read(true).open(entry.path()).await {
+//                         Ok(file) => {
+//                             let mut buf_reader = tokio::io::BufReader::new(file);
+//                             let mut buf = String::new();
+//                             loop {
+//                                 match buf_reader.read_line(&mut buf).await {
+//                                     Ok(0) => return Ok(()),
+//                                     Ok(n) => {
+//                                         debug!("read buf :{:?}", buf);
+//                                         let record: GroupRecord = match serde_json::from_str(&buf) {
+//                                             Ok(v) => v,
+//                                             Err(e) => bail!("{}", e),
+//                                         };
 
-                                        device.recover_group(record).await?;
+//                                         device.recover_group(record).await?;
 
-                                        buf.clear();
-                                    }
-                                    Err(e) => bail!("{}", e),
-                                }
-                            }
-                        }
-                        Err(_) => todo!(),
-                    }
-                }
-            }
-            Err(e) => bail!("{}", e),
-        }
+//                                         buf.clear();
+//                                     }
+//                                     Err(e) => bail!("{}", e),
+//                                 }
+//                             }
+//                         }
+//                         Err(_) => todo!(),
+//                     }
+//                 }
+//             }
+//             Err(e) => bail!("{}", e),
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    async fn recover_points(&self) {}
+//     async fn recover_points(&self) {}
 
-    async fn file_exists(&self, path: impl AsRef<Path>) -> Result<bool> {
-        let exists = fs::try_exists(path).await?;
-        Ok(exists)
-    }
-}
+//     async fn file_exists(&self, path: impl AsRef<Path>) -> Result<bool> {
+//         let exists = fs::try_exists(path).await?;
+//         Ok(exists)
+//     }
+// }
 
 #[derive(Serialize)]
 pub struct DeviceInfo {
@@ -458,7 +427,7 @@ trait Device: Sync + Send {
 
     // group
     async fn create_group(&self, create_group: CreateGroupReq) -> Result<()>;
-    async fn recover_group(&self, record: GroupRecord) -> Result<()>;
+    // async fn recover_group(&self, record: GroupRecord) -> Result<()>;
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>>;
     async fn update_group(&self, group_id: u64, update_group: Value) -> Result<()>;
     async fn delete_groups(&self, ids: Vec<u64>) -> Result<()>;

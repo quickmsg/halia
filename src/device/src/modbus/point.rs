@@ -39,7 +39,6 @@ struct UpdateConf {
     pub slave: Option<u8>,
     pub area: Option<u8>,
     pub address: Option<u16>,
-    // pub attribute: Option<Attribute>,
     pub describe: Option<String>,
 }
 

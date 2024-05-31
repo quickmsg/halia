@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     net::SocketAddr,
-    path::Path,
     sync::{
         atomic::{AtomicBool, AtomicU16, AtomicU64, AtomicU8, Ordering},
         Arc,
@@ -35,7 +34,7 @@ use types::device::{
     ListGroupsResp, ListPointResp, Mode,
 };
 
-use crate::{storage, Device, GroupRecord, DATA_ROOT_DIR, GROUP_RECORD_FILE_NAME};
+use crate::Device;
 
 use super::{group::Group, point::PointConf};
 
@@ -428,28 +427,28 @@ impl Device for Modbus {
 
     async fn create_group(&self, req: CreateGroupReq) -> Result<()> {
         let id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
-        let group_dir = Path::new(DATA_ROOT_DIR).join(self.id.to_string());
-        storage::create_dir(&group_dir).await?;
-        storage::insert(
-            &group_dir.join(GROUP_RECORD_FILE_NAME),
-            format!(
-                "{{\"id\":{},\"req\":{}}}\n",
-                id,
-                &serde_json::to_string(&req)?
-            )
-            .as_bytes(),
-        )
-        .await?;
+        // let group_dir = Path::new(DATA_ROOT_DIR).join(self.id.to_string());
+        // storage::create_dir(&group_dir).await?;
+        // storage::insert(
+        //     &group_dir.join(GROUP_RECORD_FILE_NAME),
+        //     format!(
+        //         "{{\"id\":{},\"req\":{}}}\n",
+        //         id,
+        //         &serde_json::to_string(&req)?
+        //     )
+        //     .as_bytes(),
+        // )
+        // .await?;
         self.insert_group(req, id).await
     }
 
-    async fn recover_group(&self, record: GroupRecord) -> Result<()> {
-        let now_id = self.auto_increment_id.load(Ordering::SeqCst);
-        if record.id > now_id {
-            self.auto_increment_id.store(record.id, Ordering::SeqCst);
-        }
-        self.insert_group(record.req, record.id).await
-    }
+    // async fn recover_group(&self, record: GroupRecord) -> Result<()> {
+    //     let now_id = self.auto_increment_id.load(Ordering::SeqCst);
+    //     if record.id > now_id {
+    //         self.auto_increment_id.store(record.id, Ordering::SeqCst);
+    //     }
+    //     self.insert_group(record.req, record.id).await
+    // }
 
     async fn delete_groups(&self, group_ids: Vec<u64>) -> Result<()> {
         self.groups
