@@ -2,7 +2,6 @@
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use bytes::Bytes;
 use modbus::device::Modbus;
 use serde_json::Value;
 use std::{
@@ -15,10 +14,10 @@ use std::{
 use storage::{create_dir, insert};
 use tokio::{
     fs::{self, File, OpenOptions},
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt},
+    io::AsyncBufReadExt,
     sync::RwLock,
 };
-use tracing::{debug, error, warn};
+use tracing::debug;
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp,
@@ -470,18 +469,6 @@ trait Device: Sync + Send {
     async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>>;
     async fn update_point(&self, group_id: u64, point_id: u64, update_point: Value) -> Result<()>;
     async fn delete_points(&self, group_id: u64, point_ids: Vec<u64>) -> Result<()>;
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum Attribute {
-    Read,
-    Write,
-    Subscribe,
-    ReadWrite,
-    ReadSubscribe,
-    ReadWriteSubscribe,
-    WriteSubscribe,
 }
 
 pub(crate) enum DataValue {

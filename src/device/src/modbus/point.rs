@@ -1,10 +1,8 @@
 use anyhow::Result;
-use bytes::{Buf, BytesMut};
+use byteorder::{ByteOrder, BE};
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::{debug, info, warn};
-
-use crate::Attribute;
+use tracing::{debug, warn};
 
 use types::device::{
     CreatePointReq, DataType,
@@ -31,7 +29,6 @@ pub(crate) struct Conf {
     pub slave: u8,
     pub area: u8,
     pub address: u16,
-    pub attribute: Attribute,
     pub describe: Option<String>,
 }
 
@@ -103,34 +100,34 @@ impl Point {
     }
 
     // modbus默认为大端
-    pub async fn set_data(&mut self, buf: &mut BytesMut) {
-        self.value = get_value(&self.r#type, buf);
+    pub fn set_data(&mut self, data: Vec<u16>) {
+        self.value = get_value(&self.r#type, data);
         debug!("{:?}", self.value);
     }
 }
 
-fn get_value(data_type: &DataType, buf: &mut BytesMut) -> Value {
+fn get_value(data_type: &DataType, mut data: Vec<u16>) -> Value {
     match data_type {
-        DataType::Bool => {
-            if buf.len() != 1 {
-                warn!("buf is not right");
-                Value::Null
-            } else {
-                info!("{:?}", buf);
-                Value::Null
-            }
-        }
+        // DataType::Bool => {
+        //     if buf.len() != 1 {
+        //         warn!("buf is not right");
+        //         Value::Null
+        //     } else {
+        //         info!("{:?}", buf);
+        //         Value::Null
+        //     }
+        // }
         DataType::Int16(endian) => {
-            if buf.len() != 2 {
+            if data.len() != 1 {
                 warn!("buf is not right");
                 Value::Null
             } else {
                 match endian {
-                    BigEndian => Value::from(buf.get_i16()),
-                    LittleEndian => {
-                        buf.swap(0, 1);
-                        Value::from(buf.get_i16())
+                    BigEndian => {
+                        BE::from_slice_u16(&mut data);
+                        Value::from(data[0])
                     }
+                    LittleEndian => Value::from(data[0]),
                 }
             }
         }

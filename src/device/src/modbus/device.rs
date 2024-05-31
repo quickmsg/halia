@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    net::SocketAddr,
     path::Path,
     sync::{
         atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
@@ -21,17 +22,19 @@ use tokio::{
     },
     time::{self, sleep},
 };
+use tokio_modbus::{
+    client::{rtu, tcp, Context, Reader},
+    slave::SlaveContext,
+    Slave,
+};
+use tokio_serial::SerialStream;
 use tracing::{debug, error, trace};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp, Mode,
 };
 
-use crate::{
-    connection::{Connection, SerialConnection, TcpClientConnection},
-    modbus::protocol::TcpContext,
-    storage, Device, GroupRecord, DATA_ROOT_DIR, GROUP_RECORD_FILE_NAME,
-};
+use crate::{storage, Device, GroupRecord, DATA_ROOT_DIR, GROUP_RECORD_FILE_NAME};
 
 use super::group::Group;
 
@@ -141,8 +144,8 @@ impl Modbus {
 
         tokio::spawn(async move {
             loop {
-                match Modbus::get_connection(&conf).await {
-                    Ok(connection) => {
+                match Modbus::get_context(&conf).await {
+                    Ok(ctx) => {
                         status.store(2, Ordering::SeqCst);
 
                         for group in groups.read().await.iter() {
@@ -156,8 +159,7 @@ impl Modbus {
                                 );
                             }
                         }
-                        Modbus::event_loop(connection, status.clone(), &mut rx, groups.clone())
-                            .await;
+                        Modbus::event_loop(ctx, status.clone(), &mut rx, groups.clone()).await;
 
                         for stop_signal in group_signals.lock().await.values() {
                             stop_signal.store(true, Ordering::SeqCst)
@@ -176,23 +178,20 @@ impl Modbus {
         });
     }
 
-    // TODO
-    async fn get_connection(conf: &Conf) -> Result<Connection> {
+    async fn get_context(conf: &Conf) -> Result<Context> {
         match conf.link {
             Link::Ethernet => {
                 let conf: TcpConf = serde_json::from_value(conf.conf.clone())?;
-                TcpClientConnection::new(conf.ip, conf.port).await
+                let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse()?;
+                let ctx = tcp::connect(socket_addr).await?;
+                Ok(ctx)
             }
             Link::Serial => {
                 let conf: RtuConf = serde_json::from_value(conf.conf.clone())?;
-                SerialConnection::new(
-                    conf.path,
-                    conf.stop_bits,
-                    conf.baund_rate,
-                    conf.data_bits,
-                    conf.parity,
-                )
-                .await
+                let builder = tokio_serial::new(conf.path, conf.baund_rate);
+                let port = SerialStream::open(&builder)?;
+                let ctx = rtu::attach(port);
+                Ok(ctx)
             }
         }
     }
@@ -221,12 +220,11 @@ impl Modbus {
     }
 
     async fn event_loop(
-        mut connection: Connection,
+        mut ctx: Context,
         status: Arc<AtomicU8>,
         read_rx: &mut Receiver<u64>,
         groups: Arc<RwLock<Vec<Group>>>,
     ) {
-        let mut ctx = TcpContext::new();
         let mut interval = time::interval(Duration::from_millis(200));
         trace!("connected");
         loop {
@@ -261,34 +259,67 @@ impl Modbus {
                     {
                         debug!("read group:{}", group.name);
                         for point in group.points.write().await.iter_mut() {
-                            debug!("{:?}", point);
-                            ctx.encode_read(point.area, point.slave, point.address, point.quantity);
-
-                            match connection.send(ctx.get_buf()).await {
-                                Err(e) => {
-                                    debug!("send err :{:?}", e);
-                                    return;
-                                }
-                                _ => {}
-                            }
-
-                            ctx.clear_buf();
-
-                            match connection.recv(ctx.get_buf()).await {
-                                Ok(_) => match ctx.decode() {
-                                    Ok(_) => {
-                                        // debug!("decode:{:?}",ctx.buf);
-                                        point.set_data(ctx.get_buf()).await;
-                                    }
-                                    Err(e) => println!("{}", e),
+                            ctx.set_slave(Slave(point.slave));
+                            match point.area {
+                                0 => match ctx
+                                    .read_discrete_inputs(point.address, point.quantity)
+                                    .await
+                                {
+                                    Ok(data) => {}
+                                    Err(e) => match e.kind() {
+                                        std::io::ErrorKind::InvalidData => {
+                                            error!("返回错误:{}", e);
+                                        }
+                                        _ => {
+                                            error!("连接断开。");
+                                            return;
+                                        }
+                                    },
                                 },
-                                Err(e) => {
-                                    debug!("send err :{:?}", e);
-                                    return;
-                                }
+                                1 => match ctx.read_coils(point.address, point.quantity).await {
+                                    Ok(data) => {}
+                                    Err(e) => match e.kind() {
+                                        std::io::ErrorKind::InvalidData => {
+                                            error!("返回错误:{}", e);
+                                        }
+                                        _ => {
+                                            error!("连接断开。");
+                                            return;
+                                        }
+                                    },
+                                },
+                                4 => match ctx
+                                    .read_input_registers(point.address, point.quantity)
+                                    .await
+                                {
+                                    Ok(data) => point.set_data(data),
+                                    Err(e) => match e.kind() {
+                                        std::io::ErrorKind::InvalidData => {
+                                            error!("返回错误:{}", e);
+                                        }
+                                        _ => {
+                                            error!("连接断开。");
+                                            return;
+                                        }
+                                    },
+                                },
+                                3 => match ctx
+                                    .read_holding_registers(point.address, point.quantity)
+                                    .await
+                                {
+                                    Ok(data) => point.set_data(data),
+                                    Err(e) => match e.kind() {
+                                        std::io::ErrorKind::InvalidData => {
+                                            error!("返回错误:{}", e);
+                                        }
+                                        _ => {
+                                            error!("连接断开。");
+                                            return;
+                                        }
+                                    },
+                                },
+                                _ => unreachable!(),
                             }
-
-                            ctx.clear_buf();
 
                             sleep(Duration::from_millis(100)).await;
                         }

@@ -6,7 +6,7 @@ pub struct TcpContext {
     function_code: u8,
     id: u16,
     slave: u8,
-    buf: BytesMut,
+    buf: [u8; 260],
 }
 
 impl TcpContext {
@@ -15,23 +15,28 @@ impl TcpContext {
             function_code: 0,
             id: 0,
             slave: 0,
-            buf: BytesMut::with_capacity(260),
+            buf: [0; 260],
         }
     }
 
-    pub fn clear_buf(&mut self) {
-        unsafe {
-            self.buf.set_len(0);
-        }
-    }
+    // pub fn clear_buf(&mut self) {
+    //     // self.buf.truncate(0);
+    //     debug!("{}", self.buf.capacity());
+    //     unsafe {
+    //         self.buf.set_len(0);
+    //     }
+    //     self.buf.truncate(0);
+    //     debug!("{}", self.buf.capacity());
+    //     // unsafe {
+    //     //     self.buf.set_len(0);
+    //     // }
 
-    pub fn get_buf(&mut self) -> &mut BytesMut {
+    pub fn get_buf(&mut self) -> &mut [u8] {
         &mut self.buf
     }
 
     pub fn encode_read(&mut self, area: u8, slave: u8, addr: u16, cnt: u16) {
         self.id = self.id.wrapping_add(1);
-        self.buf.clear();
         self.buf.put_u16(self.id);
         self.buf.put_u16(0);
         self.buf.put_u16(6);

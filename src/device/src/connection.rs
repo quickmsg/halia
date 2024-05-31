@@ -67,15 +67,14 @@ impl TcpClientConnection {
         }
     }
 
-    pub(crate) async fn send(&mut self, data: &mut BytesMut) -> Result<()> {
-        self.tcp_stream.write_buf(data).await?;
+    pub(crate) async fn send(&mut self, data: &[u8]) -> Result<()> {
+        self.tcp_stream.write(data).await?;
         self.tcp_stream.flush().await?;
         Ok(())
     }
 
-    pub(crate) async fn recv(&mut self, data: &mut BytesMut) -> Result<()> {
-        debug!("buf len is {}", data.capacity());
-        self.tcp_stream.read_buf(data).await?;
+    pub(crate) async fn recv(&mut self, data: &mut [u8]) -> Result<()> {
+        self.tcp_stream.read(data).await?;
         Ok(())
     }
 }
