@@ -25,7 +25,6 @@ use types::device::{
 
 use serde::{Deserialize, Serialize};
 
-mod connection;
 mod modbus;
 mod storage;
 

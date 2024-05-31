@@ -265,7 +265,18 @@ impl Modbus {
                                     .read_discrete_inputs(point.address, point.quantity)
                                     .await
                                 {
-                                    Ok(data) => {}
+                                    Ok(data) => {
+                                        let bytes: Vec<u8> =
+                                            data.iter().fold(vec![], |mut x, elem| {
+                                                if *elem {
+                                                    x.push(1);
+                                                } else {
+                                                    x.push(0);
+                                                }
+                                                x
+                                            });
+                                        point.set_data(bytes);
+                                    }
                                     Err(e) => match e.kind() {
                                         std::io::ErrorKind::InvalidData => {
                                             error!("返回错误:{}", e);
@@ -277,7 +288,18 @@ impl Modbus {
                                     },
                                 },
                                 1 => match ctx.read_coils(point.address, point.quantity).await {
-                                    Ok(data) => {}
+                                    Ok(data) => {
+                                        let bytes: Vec<u8> =
+                                            data.iter().fold(vec![], |mut x, elem| {
+                                                if *elem {
+                                                    x.push(1);
+                                                } else {
+                                                    x.push(0);
+                                                }
+                                                x
+                                            });
+                                        point.set_data(bytes);
+                                    }
                                     Err(e) => match e.kind() {
                                         std::io::ErrorKind::InvalidData => {
                                             error!("返回错误:{}", e);
@@ -292,7 +314,15 @@ impl Modbus {
                                     .read_input_registers(point.address, point.quantity)
                                     .await
                                 {
-                                    Ok(data) => point.set_data(data),
+                                    Ok(data) => {
+                                        let bytes: Vec<u8> =
+                                            data.iter().fold(vec![], |mut x, elem| {
+                                                x.push((elem & 0xff) as u8);
+                                                x.push((elem >> 8) as u8);
+                                                x
+                                            });
+                                        point.set_data(bytes);
+                                    }
                                     Err(e) => match e.kind() {
                                         std::io::ErrorKind::InvalidData => {
                                             error!("返回错误:{}", e);
@@ -307,7 +337,15 @@ impl Modbus {
                                     .read_holding_registers(point.address, point.quantity)
                                     .await
                                 {
-                                    Ok(data) => point.set_data(data),
+                                    Ok(data) => {
+                                        let bytes: Vec<u8> =
+                                            data.iter().fold(vec![], |mut x, elem| {
+                                                x.push((elem & 0xff) as u8);
+                                                x.push((elem >> 8) as u8);
+                                                x
+                                            });
+                                        point.set_data(bytes);
+                                    }
                                     Err(e) => match e.kind() {
                                         std::io::ErrorKind::InvalidData => {
                                             error!("返回错误:{}", e);

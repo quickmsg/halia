@@ -100,13 +100,13 @@ impl Point {
     }
 
     // modbus默认为大端
-    pub fn set_data(&mut self, data: Vec<u16>) {
+    pub fn set_data(&mut self, data: Vec<u8>) {
         self.value = get_value(&self.r#type, data);
         debug!("{:?}", self.value);
     }
 }
 
-fn get_value(data_type: &DataType, mut data: Vec<u16>) -> Value {
+fn get_value(data_type: &DataType, mut data: Vec<u8>) -> Value {
     match data_type {
         // DataType::Bool => {
         //     if buf.len() != 1 {
@@ -124,7 +124,7 @@ fn get_value(data_type: &DataType, mut data: Vec<u16>) -> Value {
             } else {
                 match endian {
                     BigEndian => {
-                        BE::from_slice_u16(&mut data);
+                        // BE::from_slice_u8(&mut data);
                         Value::from(data[0])
                     }
                     LittleEndian => Value::from(data[0]),
