@@ -1,8 +1,7 @@
 use std::{
-    collections::HashMap,
     net::SocketAddr,
     sync::{
-        atomic::{AtomicBool, AtomicU16, AtomicU64, AtomicU8, Ordering},
+        atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering},
         Arc,
     },
     time::{Duration, Instant},
@@ -10,7 +9,6 @@ use std::{
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::{
@@ -123,7 +121,13 @@ impl Modbus {
                     let timer_group_id = group.id.clone();
                     let interval = group.interval;
                     if let Some(read_tx) = &self.read_tx {
-                        run_group_timer(timer_group_id, interval, rx, read_tx.clone());
+                        run_group_timer(
+                            timer_group_id,
+                            interval,
+                            self.status.clone(),
+                            rx,
+                            read_tx.clone(),
+                        );
                     }
                 }
                 None => bail!("系统BUG"),
@@ -155,15 +159,6 @@ impl Modbus {
                 match Modbus::get_context(&conf).await {
                     Ok(ctx) => {
                         status.store(2, Ordering::SeqCst);
-
-                        for group in groups.read().await.iter() {
-                            run_group_timer(
-                                group.id.clone(),
-                                group.interval,
-                                todo!(),
-                                read_tx.clone(),
-                            );
-                        }
                         Modbus::event_loop(
                             ctx,
                             rtt.clone(),
@@ -183,7 +178,7 @@ impl Modbus {
                     debug!("device stoped");
                     return;
                 }
-                time::sleep(Duration::from_secs(1)).await;
+                time::sleep(Duration::from_secs(3)).await;
             }
         });
     }
@@ -439,6 +434,7 @@ impl Device for Modbus {
             Some(sender) => sender.send(0).unwrap(),
             None => unreachable!(),
         };
+        self.group_signals_sender = None;
     }
 
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>> {
@@ -553,6 +549,7 @@ impl Device for Modbus {
 fn run_group_timer(
     group_id: u64,
     interval: u64,
+    device_status: Arc<AtomicU8>,
     mut stop_signal: broadcast::Receiver<u64>,
     tx: mpsc::Sender<u64>,
 ) {
@@ -562,6 +559,9 @@ fn run_group_timer(
         loop {
             select! {
                 _ = interval.tick() => {
+                    if device_status.load(Ordering::SeqCst) == 3 {
+                        break;
+                    }
                     match tx.send(group_id).await {
                         Ok(_) => {}
                         Err(e) => debug!("group send point info err :{}", e),

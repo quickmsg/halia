@@ -1,9 +1,11 @@
-use std::{fs::Permissions, io, os::unix::fs::PermissionsExt, path::Path};
+use std::{collections::vec_deque, fs::Permissions, io, os::unix::fs::PermissionsExt, path::Path};
 
+use anyhow::bail;
 use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
+use tracing::debug;
 
 static ROOT_DIR: &str = "./storage";
 static FILE_NAME: &str = "data";
@@ -195,17 +197,22 @@ async fn read(path: impl AsRef<Path>) -> Result<Vec<(u64, String)>, io::Error> {
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
-    Ok(buf
-        .split("\n")
-        .map(|s| {
-            let split_pos = s.find('-').expect("数据文件损坏");
-            let (id, content) = s.split_at(split_pos);
-            (
-                id.parse::<u64>().expect("数据文件损坏"),
-                content.to_string(),
-            )
-        })
-        .collect())
+    let mut result = vec![];
+    for line in buf.split("\n") {
+        if line.len() == 0 {
+            break;
+        }
+
+        let pos = line.find(DELIMITER).expect("数据文件损坏");
+        let id = &line[..pos];
+        let data = &line[pos + 1..];
+        let id = id
+            .parse::<u64>()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "数据文件损坏"))?;
+        result.push((id, data.to_string()));
+    }
+
+    Ok(result)
 }
 
 async fn update(path: impl AsRef<Path>, id: u64, data: String) -> Result<(), io::Error> {

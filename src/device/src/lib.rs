@@ -32,14 +32,19 @@ pub struct DeviceManager {
 impl DeviceManager {
     pub async fn create_device(&self, req: CreateDeviceReq) -> Result<()> {
         let id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
+
+        self.insert_device(id, &req).await?;
+        storage::insert_device(id, serde_json::to_string(&req)?).await?;
+
+        Ok(())
+    }
+
+    async fn insert_device(&self, id: u64, req: &CreateDeviceReq) -> Result<()> {
         let device = match req.r#type.as_str() {
             "modbus" => Modbus::new(&req, id)?,
             _ => bail!("不支持协议"),
         };
-
-        storage::insert_device(id, serde_json::to_string(&req)?).await?;
         self.devices.write().await.push(device);
-
         Ok(())
     }
 
@@ -263,100 +268,101 @@ impl DeviceManager {
     }
 }
 
-// impl DeviceManager {
-//     pub async fn recover(&self) -> Result<()> {
-//         let exists = self.file_exists(DEVICE_RECORD_FILE_NAME).await?;
-//         if exists {
-//             self.recover_device().await?;
-//         }
+// 从本地文件中恢复所有信息
+impl DeviceManager {
+    pub async fn recover(&self) -> Result<()> {
+        let devices = storage::read_devices().await?;
+        for (id, data) in devices {
+            let req: CreateDeviceReq = serde_json::from_str(data.as_str())?;
+            self.insert_device(id, &req).await?;
+        }
+        Ok(())
+    }
 
-//         Ok(())
-//     }
+    //     async fn recover_device(&self) -> Result<()> {
+    //         match OpenOptions::new()
+    //             .read(true)
+    //             .open(DEVICE_RECORD_FILE_NAME)
+    //             .await
+    //         {
+    //             Ok(file) => {
+    //                 let mut buf_reader = tokio::io::BufReader::new(file);
+    //                 let mut buf = String::new();
+    //                 loop {
+    //                     match buf_reader.read_line(&mut buf).await {
+    //                         Ok(0) => return Ok(()),
+    //                         Ok(n) => {
+    //                             debug!("read buf :{:?}", buf);
+    //                             let record: DeviceRecord = match serde_json::from_str(&buf) {
+    //                                 Ok(v) => v,
+    //                                 Err(e) => bail!("{}", e),
+    //                             };
 
-//     async fn recover_device(&self) -> Result<()> {
-//         match OpenOptions::new()
-//             .read(true)
-//             .open(DEVICE_RECORD_FILE_NAME)
-//             .await
-//         {
-//             Ok(file) => {
-//                 let mut buf_reader = tokio::io::BufReader::new(file);
-//                 let mut buf = String::new();
-//                 loop {
-//                     match buf_reader.read_line(&mut buf).await {
-//                         Ok(0) => return Ok(()),
-//                         Ok(n) => {
-//                             debug!("read buf :{:?}", buf);
-//                             let record: DeviceRecord = match serde_json::from_str(&buf) {
-//                                 Ok(v) => v,
-//                                 Err(e) => bail!("{}", e),
-//                             };
+    //                             let device = match record.req.r#type.as_str() {
+    //                                 "modbus" => match Modbus::new(&record.req, record.id) {
+    //                                     Ok(device) => device,
+    //                                     Err(e) => bail!("{}", e),
+    //                                 },
+    //                                 _ => bail!("not support"),
+    //                             };
 
-//                             let device = match record.req.r#type.as_str() {
-//                                 "modbus" => match Modbus::new(&record.req, record.id) {
-//                                     Ok(device) => device,
-//                                     Err(e) => bail!("{}", e),
-//                                 },
-//                                 _ => bail!("not support"),
-//                             };
+    //                             self.recover_groups(&device, record.id).await?;
 
-//                             self.recover_groups(&device, record.id).await?;
+    //                             self.devices.write().await.push(device);
+    //                             buf.clear();
+    //                         }
+    //                         Err(e) => bail!("{}", e),
+    //                     }
+    //                 }
+    //             }
+    //             Err(e) => Err(e.into()),
+    //         }
+    //     }
 
-//                             self.devices.write().await.push(device);
-//                             buf.clear();
-//                         }
-//                         Err(e) => bail!("{}", e),
-//                     }
-//                 }
-//             }
-//             Err(e) => Err(e.into()),
-//         }
-//     }
+    //     async fn recover_groups(&self, device: &Box<dyn Device>, id: u64) -> Result<()> {
+    //         let group_dir_path = Path::new(DEVICE_RECORD_FILE_NAME).join(id.to_string());
+    //         match fs::read_dir(group_dir_path).await {
+    //             Ok(mut dir) => {
+    //                 while let Some(entry) = dir.next_entry().await? {
+    //                     match OpenOptions::new().read(true).open(entry.path()).await {
+    //                         Ok(file) => {
+    //                             let mut buf_reader = tokio::io::BufReader::new(file);
+    //                             let mut buf = String::new();
+    //                             loop {
+    //                                 match buf_reader.read_line(&mut buf).await {
+    //                                     Ok(0) => return Ok(()),
+    //                                     Ok(n) => {
+    //                                         debug!("read buf :{:?}", buf);
+    //                                         let record: GroupRecord = match serde_json::from_str(&buf) {
+    //                                             Ok(v) => v,
+    //                                             Err(e) => bail!("{}", e),
+    //                                         };
 
-//     async fn recover_groups(&self, device: &Box<dyn Device>, id: u64) -> Result<()> {
-//         let group_dir_path = Path::new(DEVICE_RECORD_FILE_NAME).join(id.to_string());
-//         match fs::read_dir(group_dir_path).await {
-//             Ok(mut dir) => {
-//                 while let Some(entry) = dir.next_entry().await? {
-//                     match OpenOptions::new().read(true).open(entry.path()).await {
-//                         Ok(file) => {
-//                             let mut buf_reader = tokio::io::BufReader::new(file);
-//                             let mut buf = String::new();
-//                             loop {
-//                                 match buf_reader.read_line(&mut buf).await {
-//                                     Ok(0) => return Ok(()),
-//                                     Ok(n) => {
-//                                         debug!("read buf :{:?}", buf);
-//                                         let record: GroupRecord = match serde_json::from_str(&buf) {
-//                                             Ok(v) => v,
-//                                             Err(e) => bail!("{}", e),
-//                                         };
+    //                                         device.recover_group(record).await?;
 
-//                                         device.recover_group(record).await?;
+    //                                         buf.clear();
+    //                                     }
+    //                                     Err(e) => bail!("{}", e),
+    //                                 }
+    //                             }
+    //                         }
+    //                         Err(_) => todo!(),
+    //                     }
+    //                 }
+    //             }
+    //             Err(e) => bail!("{}", e),
+    //         }
 
-//                                         buf.clear();
-//                                     }
-//                                     Err(e) => bail!("{}", e),
-//                                 }
-//                             }
-//                         }
-//                         Err(_) => todo!(),
-//                     }
-//                 }
-//             }
-//             Err(e) => bail!("{}", e),
-//         }
+    //         Ok(())
+    //     }
 
-//         Ok(())
-//     }
+    //     async fn recover_points(&self) {}
 
-//     async fn recover_points(&self) {}
-
-//     async fn file_exists(&self, path: impl AsRef<Path>) -> Result<bool> {
-//         let exists = fs::try_exists(path).await?;
-//         Ok(exists)
-//     }
-// }
+    //     async fn file_exists(&self, path: impl AsRef<Path>) -> Result<bool> {
+    //         let exists = fs::try_exists(path).await?;
+    //         Ok(exists)
+    //     }
+}
 
 #[derive(Serialize)]
 pub struct DeviceInfo {
