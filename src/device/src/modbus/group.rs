@@ -8,7 +8,6 @@ use types::device::{CreateGroupReq, CreatePointReq, ListPointResp};
 
 use super::point::Point;
 
-// 相同组的点位有同样的拉取间隔，避免给每个点位设置定时器的性能损耗
 pub(crate) struct Group {
     pub id: u64,
     pub name: String,
@@ -24,10 +23,10 @@ struct UpdateConf {
 }
 
 impl Group {
-    pub fn new(conf: CreateGroupReq, id: u64) -> Self {
+    pub fn new(conf: &CreateGroupReq, id: u64) -> Self {
         Group {
             id,
-            name: conf.name,
+            name: conf.name.clone(),
             interval: conf.interval,
             points: RwLock::new(vec![]),
             auto_increment_id: AtomicU64::new(1),
@@ -49,7 +48,6 @@ impl Group {
         Ok(change_interval)
     }
 
-    // TODO 地址查重
     pub async fn create_points(&self, create_points: Vec<CreatePointReq>) -> Result<()> {
         let mut points = Vec::with_capacity(create_points.len());
         for conf in create_points {
@@ -61,7 +59,6 @@ impl Group {
         Ok(())
     }
 
-    // TODO
     pub async fn read_points(&self) -> Vec<ListPointResp> {
         let mut resps = Vec::with_capacity(self.get_points_num().await);
         for point in self.points.read().await.iter() {

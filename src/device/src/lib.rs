@@ -8,18 +8,13 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     LazyLock,
 };
-use tokio::{
-    fs::{self, File, OpenOptions},
-    io::AsyncBufReadExt,
-    sync::RwLock,
-};
-use tracing::debug;
+use tokio::sync::RwLock;
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 mod modbus;
 pub mod storage;
@@ -38,10 +33,7 @@ impl DeviceManager {
     pub async fn create_device(&self, req: CreateDeviceReq) -> Result<()> {
         let id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
         let device = match req.r#type.as_str() {
-            "modbus" => match Modbus::new(&req, id) {
-                Ok(device) => device,
-                Err(e) => bail!(e),
-            },
+            "modbus" => Modbus::new(&req, id)?,
             _ => bail!("不支持协议"),
         };
 
@@ -64,7 +56,6 @@ impl DeviceManager {
         }
     }
 
-    // TODO now we just stop delete and new
     pub async fn update_device(&self, id: u64, conf: Value) -> Result<()> {
         match self
             .devices
@@ -73,23 +64,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == id)
         {
-            Some(device) => {
-                let _ = self.stop_device(id).await;
-                // match self
-                //     .create_device(CreateDeviceReq {
-                //         r#type: device.get_info().r#type.to_string(),
-                //         name: id.clone().to_string(),
-                //         conf,
-                //     })
-                //     .await
-                // {
-                //     Ok(()) => {
-                //         self.start_device(id).await;
-                //     }
-                //     Err(_) => todo!(),
-                // }
-                Ok(())
-            }
+            Some(device) => device.update(conf).await,
             None => bail!("未找到设备：{}。", id),
         }
     }
@@ -286,31 +261,6 @@ impl DeviceManager {
             None => bail!("未找到设备：{}。", device_id),
         }
     }
-
-    async fn get_file(&self) -> Result<File> {
-        match fs::try_exists("./device.json").await {
-            Ok(exists) => {
-                if exists {
-                    match OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .append(true)
-                        .open("./device.json")
-                        .await
-                    {
-                        Ok(file) => Ok(file),
-                        Err(e) => bail!(e),
-                    }
-                } else {
-                    match File::create("./device.json").await {
-                        Ok(file) => Ok(file),
-                        Err(e) => bail!("create file err: {}", e),
-                    }
-                }
-            }
-            Err(e) => bail!("try exists err: {}", e),
-        }
-    }
 }
 
 // impl DeviceManager {
@@ -425,7 +375,7 @@ trait Device: Sync + Send {
     async fn update(&mut self, conf: Value) -> Result<()>;
 
     // group
-    async fn create_group(&self, create_group: CreateGroupReq) -> Result<()>;
+    async fn create_group(&mut self, create_group: CreateGroupReq) -> Result<()>;
     // async fn recover_group(&self, record: GroupRecord) -> Result<()>;
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>>;
     async fn update_group(&self, group_id: u64, update_group: Value) -> Result<()>;
