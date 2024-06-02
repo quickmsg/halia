@@ -35,16 +35,14 @@ use types::device::{
 
 use crate::{storage, Device};
 
-use super::{
-    group::{self, Group},
-    point::PointConf,
-};
+use super::{group::Group, point::PointConf};
 
 static TYPE: &str = "modbus";
 
 pub(crate) struct Modbus {
     id: u64,
     status: Arc<AtomicU8>, // 1:停止 2:运行中 3:错误
+    stop_signal: Option<mpsc::Sender<()>>,
     rtt: Arc<AtomicU16>,
     conf: Conf,
     auto_increment_id: AtomicU64,
@@ -105,6 +103,7 @@ impl Modbus {
         Ok(Box::new(Modbus {
             id,
             status: Arc::new(AtomicU8::new(1)),
+            stop_signal: None,
             rtt: Arc::new(AtomicU16::new(9999)),
             conf,
             groups: Arc::new(RwLock::new(Vec::new())),
@@ -127,15 +126,18 @@ impl Modbus {
 
         let (write_tx, mut write_rx) = mpsc::channel::<PointConf>(100);
 
+        let (stop_signal_tx, mut stop_sgianl_rx) = mpsc::channel::<()>(1);
+        self.stop_signal = Some(stop_signal_tx);
+
         tokio::spawn(async move {
             loop {
                 match Modbus::get_context(&conf).await {
                     Ok(ctx) => {
                         status.store(2, Ordering::SeqCst);
-                        Modbus::event_loop(
+                        run_event_loop(
                             ctx,
                             rtt.clone(),
-                            status.clone(),
+                            &mut stop_sgianl_rx,
                             &mut write_rx,
                             &mut read_rx,
                             groups.clone(),
@@ -179,159 +181,6 @@ impl Modbus {
                 Ok(rtu::attach(port))
             }
         }
-    }
-
-    async fn event_loop(
-        mut ctx: Context,
-        rtt: Arc<AtomicU16>,
-        status: Arc<AtomicU8>,
-        write_rx: &mut Receiver<PointConf>,
-        read_rx: &mut Receiver<u64>,
-        groups: Arc<RwLock<Vec<Group>>>,
-        interval: u64,
-    ) {
-        loop {
-            // select! {
-            let now_status = status.load(Ordering::SeqCst);
-            if now_status == 1 || now_status == 3 {
-                debug!("event is stop");
-                return;
-            }
-            // match write_rx.try_recv() {
-            //     Ok(request) => match request {
-            //         Request::ReadCoils(_, _) => todo!(),
-            //         Request::ReadDiscreteInputs(_, _) => todo!(),
-            //         Request::WriteSingleCoil(_, _) => todo!(),
-            //         Request::ReadInputRegisters(_, _) => todo!(),
-            //         Request::ReadHoldingRegisters(_, _) => todo!(),
-            //         Request::WriteSingleRegister(_, _) => todo!(),
-            //         Request::WriteMultipleRegisters(_, _) => todo!(),
-            //         Request::Disconnect => todo!(),
-            //     },
-            //     Err(_) => {}
-            // }
-
-            match read_rx.recv().await {
-                Some(group_id) => {
-                    if let Some(group) = groups
-                        .write()
-                        .await
-                        .iter_mut()
-                        .find(|group| group.id == group_id)
-                    {
-                        debug!("read group:{}", group.name);
-                        for point in group.points.write().await.iter_mut() {
-                            ctx.set_slave(Slave(point.slave));
-                            let start_time = Instant::now();
-                            match point.area {
-                                0 => match ctx
-                                    .read_discrete_inputs(point.address, point.quantity)
-                                    .await
-                                {
-                                    Ok(data) => {
-                                        let bytes: Vec<u8> =
-                                            data.iter().fold(vec![], |mut x, elem| {
-                                                if *elem {
-                                                    x.push(1);
-                                                } else {
-                                                    x.push(0);
-                                                }
-                                                x
-                                            });
-                                        point.set_data(bytes);
-                                    }
-                                    Err(e) => match e.kind() {
-                                        std::io::ErrorKind::InvalidData => {
-                                            error!("返回错误:{}", e);
-                                        }
-                                        _ => {
-                                            error!("连接断开。");
-                                            return;
-                                        }
-                                    },
-                                },
-                                1 => match ctx.read_coils(point.address, point.quantity).await {
-                                    Ok(data) => {
-                                        let bytes: Vec<u8> =
-                                            data.iter().fold(vec![], |mut x, elem| {
-                                                if *elem {
-                                                    x.push(1);
-                                                } else {
-                                                    x.push(0);
-                                                }
-                                                x
-                                            });
-                                        point.set_data(bytes);
-                                    }
-                                    Err(e) => match e.kind() {
-                                        std::io::ErrorKind::InvalidData => {
-                                            error!("返回错误:{}", e);
-                                        }
-                                        _ => {
-                                            error!("连接断开。");
-                                            return;
-                                        }
-                                    },
-                                },
-                                4 => match ctx
-                                    .read_input_registers(point.address, point.quantity)
-                                    .await
-                                {
-                                    Ok(data) => {
-                                        let bytes: Vec<u8> =
-                                            data.iter().fold(vec![], |mut x, elem| {
-                                                x.push((elem & 0xff) as u8);
-                                                x.push((elem >> 8) as u8);
-                                                x
-                                            });
-                                        point.set_data(bytes);
-                                    }
-                                    Err(e) => match e.kind() {
-                                        std::io::ErrorKind::InvalidData => {
-                                            error!("返回错误:{}", e);
-                                        }
-                                        _ => {
-                                            error!("连接断开。");
-                                            return;
-                                        }
-                                    },
-                                },
-                                3 => match ctx
-                                    .read_holding_registers(point.address, point.quantity)
-                                    .await
-                                {
-                                    Ok(data) => {
-                                        let bytes: Vec<u8> =
-                                            data.iter().fold(vec![], |mut x, elem| {
-                                                x.push((elem & 0xff) as u8);
-                                                x.push((elem >> 8) as u8);
-                                                x
-                                            });
-                                        point.set_data(bytes);
-                                    }
-                                    Err(e) => match e.kind() {
-                                        std::io::ErrorKind::InvalidData => {
-                                            error!("返回错误:{}", e);
-                                        }
-                                        _ => {
-                                            error!("连接断开。");
-                                            return;
-                                        }
-                                    },
-                                },
-                                _ => unreachable!(),
-                            }
-
-                            rtt.store(start_time.elapsed().as_micros() as u16, Ordering::SeqCst);
-                            time::sleep(Duration::from_millis(interval)).await;
-                        }
-                    }
-                }
-                None => {}
-            }
-        }
-        // }
-        // }
     }
 }
 
@@ -439,6 +288,7 @@ impl Device for Modbus {
             None => unreachable!(),
         };
         self.group_signals_sender = None;
+        // todo stop signal
     }
 
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>> {
@@ -469,6 +319,7 @@ impl Device for Modbus {
         {
             Some(group) => match group.update(update_group) {
                 Ok(interval_changed) => {
+                    // stop and start
                     // if interval_changed {
                     //     match self.group_signals.lock().await.remove(&group_id) {
                     //         Some(stop_signal) => {
@@ -516,15 +367,6 @@ impl Device for Modbus {
             Some(group) => group.create_points(create_points).await,
             None => bail!("没有找到组"),
         }
-    }
-
-    // TODO
-    async fn recover_points(
-        &self,
-        group_id: u64,
-        points: Vec<(u64, CreatePointReq)>,
-    ) -> Result<()> {
-        Ok(())
     }
 
     async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>> {
@@ -606,7 +448,7 @@ fn run_group_timer(
 async fn run_event_loop(
     mut ctx: Context,
     rtt: Arc<AtomicU16>,
-    mut stop_signal: mpsc::Receiver<()>,
+    stop_signal: &mut mpsc::Receiver<()>,
     write_rx: &mut Receiver<PointConf>,
     read_rx: &mut Receiver<u64>,
     groups: Arc<RwLock<Vec<Group>>>,
@@ -614,130 +456,145 @@ async fn run_event_loop(
 ) {
     loop {
         select! {
-            biased;
-                _ = stop_signal.recv() => {
-                    debug!("stop event_loop");
-                    return
-                }
+               biased;
+                   _ = stop_signal.recv() => {
+                       debug!("stop event_loop");
+                       return
+                   }
 
-                point = write_rx.recv() => {
-                    debug!("{:?}", point);
-                }
+                   point = write_rx.recv() => {
+                       debug!("{:?}", point);
+                   }
 
-           group_id = read_rx.recv() => {
-            if let Some(group_id) = group_id {
-                    if let Some(group) = groups
-                        .write()
-                        .await
-                        .iter_mut()
-                        .find(|group| group.id == group_id)
-                    {
-                        debug!("read group:{}", group.name);
-                        for point in group.points.write().await.iter_mut() {
-                            ctx.set_slave(Slave(point.slave));
-                            let start_time = Instant::now();
-                            match point.area {
-                                0 => match ctx
-                                    .read_discrete_inputs(point.address, point.quantity)
-                                    .await
-                                {
-                                    Ok(data) => {
-                                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
-                                            if *elem {
-                                                x.push(1);
-                                            } else {
-                                                x.push(0);
-                                            }
-                                            x
-                                        });
-                                        point.set_data(bytes);
-                                    }
-                                    Err(e) => match e.kind() {
-                                        std::io::ErrorKind::InvalidData => {
-                                            error!("返回错误:{}", e);
-                                        }
-                                        _ => {
-                                            error!("连接断开。");
-                                            return;
-                                        }
-                                    },
-                                },
-                                1 => match ctx.read_coils(point.address, point.quantity).await {
-                                    Ok(data) => {
-                                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
-                                            if *elem {
-                                                x.push(1);
-                                            } else {
-                                                x.push(0);
-                                            }
-                                            x
-                                        });
-                                        point.set_data(bytes);
-                                    }
-                                    Err(e) => match e.kind() {
-                                        std::io::ErrorKind::InvalidData => {
-                                            error!("返回错误:{}", e);
-                                        }
-                                        _ => {
-                                            error!("连接断开。");
-                                            return;
-                                        }
-                                    },
-                                },
-                                4 => match ctx
-                                    .read_input_registers(point.address, point.quantity)
-                                    .await
-                                {
-                                    Ok(data) => {
-                                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
-                                            x.push((elem & 0xff) as u8);
-                                            x.push((elem >> 8) as u8);
-                                            x
-                                        });
-                                        point.set_data(bytes);
-                                    }
-                                    Err(e) => match e.kind() {
-                                        std::io::ErrorKind::InvalidData => {
-                                            error!("返回错误:{}", e);
-                                        }
-                                        _ => {
-                                            error!("连接断开。");
-                                            return;
-                                        }
-                                    },
-                                },
-                                3 => match ctx
-                                    .read_holding_registers(point.address, point.quantity)
-                                    .await
-                                {
-                                    Ok(data) => {
-                                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
-                                            x.push((elem & 0xff) as u8);
-                                            x.push((elem >> 8) as u8);
-                                            x
-                                        });
-                                        point.set_data(bytes);
-                                    }
-                                    Err(e) => match e.kind() {
-                                        std::io::ErrorKind::InvalidData => {
-                                            error!("返回错误:{}", e);
-                                        }
-                                        _ => {
-                                            error!("连接断开。");
-                                            return;
-                                        }
-                                    },
-                                },
-                                _ => unreachable!(),
-                            }
+              group_id = read_rx.recv() => {
+               if let Some(group_id) = group_id {
+        if           !read_group_points(&mut ctx, &groups, group_id, interval).await {
+           return
 
-                            rtt.store(start_time.elapsed().as_micros() as u16, Ordering::SeqCst);
-                            time::sleep(Duration::from_millis(interval)).await;
-                        }
-                    }
-            }
         }
-        }
+               }
+           }
+           }
     }
     // }
+}
+
+async fn read_group_points(
+    ctx: &mut Context,
+    groups: &RwLock<Vec<Group>>,
+    group_id: u64,
+    interval: u64,
+) -> bool {
+    if let Some(group) = groups
+        .write()
+        .await
+        .iter_mut()
+        .find(|group| group.id == group_id)
+    {
+        for point in group.points.write().await.iter_mut() {
+            ctx.set_slave(Slave(point.slave));
+            // for rtt
+            // let start_time = Instant::now();
+            match point.area {
+                0 => match ctx
+                    .read_discrete_inputs(point.address, point.quantity)
+                    .await
+                {
+                    Ok(data) => {
+                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
+                            if *elem {
+                                x.push(1);
+                            } else {
+                                x.push(0);
+                            }
+                            x
+                        });
+                        point.set_data(bytes);
+                    }
+                    Err(e) => match e.kind() {
+                        std::io::ErrorKind::InvalidData => {
+                            error!("返回错误:{}", e);
+                        }
+                        _ => {
+                            error!("连接断开。");
+                            return false;
+                        }
+                    },
+                },
+                1 => match ctx.read_coils(point.address, point.quantity).await {
+                    Ok(data) => {
+                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
+                            if *elem {
+                                x.push(1);
+                            } else {
+                                x.push(0);
+                            }
+                            x
+                        });
+                        point.set_data(bytes);
+                    }
+                    Err(e) => match e.kind() {
+                        std::io::ErrorKind::InvalidData => {
+                            error!("返回错误:{}", e);
+                        }
+                        _ => {
+                            error!("连接断开。");
+                            return false;
+                        }
+                    },
+                },
+                4 => match ctx
+                    .read_input_registers(point.address, point.quantity)
+                    .await
+                {
+                    Ok(data) => {
+                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
+                            x.push((elem & 0xff) as u8);
+                            x.push((elem >> 8) as u8);
+                            x
+                        });
+                        point.set_data(bytes);
+                    }
+                    Err(e) => match e.kind() {
+                        std::io::ErrorKind::InvalidData => {
+                            error!("返回错误:{}", e);
+                        }
+                        _ => {
+                            error!("连接断开。");
+                            return false;
+                        }
+                    },
+                },
+                3 => match ctx
+                    .read_holding_registers(point.address, point.quantity)
+                    .await
+                {
+                    Ok(data) => {
+                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
+                            x.push((elem & 0xff) as u8);
+                            x.push((elem >> 8) as u8);
+                            x
+                        });
+                        point.set_data(bytes);
+                    }
+                    Err(e) => match e.kind() {
+                        std::io::ErrorKind::InvalidData => {
+                            error!("返回错误:{}", e);
+                        }
+                        _ => {
+                            error!("连接断开。");
+                            return false;
+                        }
+                    },
+                },
+                _ => unreachable!(),
+            }
+
+            time::sleep(Duration::from_millis(interval)).await;
+        }
+
+        true
+    } else {
+        true
+    }
 }

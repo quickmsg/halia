@@ -313,9 +313,10 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => {
-                for (id, data) in groups {
+                for (group_id, data) in groups {
                     let req: CreateGroupReq = serde_json::from_str(data.as_str())?;
-                    // device.recover_group(id, req).await?;
+                    device.create_group(Some(group_id), &req).await?;
+                    self.recover_points(device_id, group_id).await?;
                 }
             }
             None => unreachable!(),
@@ -334,14 +335,14 @@ impl DeviceManager {
         {
             Some((_, device)) => {
                 let points = storage::read_points(device_id, group_id).await?;
-                let recover_points: Vec<(u64, CreatePointReq)> = points
+                let recover_points: Vec<(Option<u64>, CreatePointReq)> = points
                     .iter()
-                    .map(|x| {
-                        let req: CreatePointReq = serde_json::from_str(x.1.as_str()).unwrap();
-                        (x.0, req)
+                    .map(|(point_id, data)| {
+                        let req: CreatePointReq = serde_json::from_str(data.as_str()).unwrap();
+                        (Some(*point_id), req)
                     })
                     .collect();
-                device.recover_points(group_id, recover_points).await?;
+                device.create_points(group_id, recover_points).await?;
             }
             None => unreachable!(),
         }
@@ -381,8 +382,6 @@ trait Device: Sync + Send {
         group_id: u64,
         create_points: Vec<(Option<u64>, CreatePointReq)>,
     ) -> Result<()>;
-    async fn recover_points(&self, group_id: u64, points: Vec<(u64, CreatePointReq)>)
-        -> Result<()>;
     async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>>;
     async fn update_point(&self, group_id: u64, point_id: u64, update_point: Value) -> Result<()>;
     async fn delete_points(&self, group_id: u64, point_ids: Vec<u64>) -> Result<()>;

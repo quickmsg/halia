@@ -1,5 +1,4 @@
 use anyhow::Result;
-use byteorder::{ByteOrder, BE};
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::{debug, warn};

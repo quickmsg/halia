@@ -58,18 +58,23 @@ impl Group {
     ) -> Result<()> {
         let mut points = Vec::with_capacity(create_points.len());
         let mut storage_infos = Vec::with_capacity(create_points.len());
-        for (id, conf) in create_points {
-            let id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
-            let point = Point::new(conf.clone(), id)?;
-            points.push(point);
-            storage_infos.push((id, serde_json::to_string(&conf)?))
+        for (point_id, conf) in create_points {
+            match point_id {
+                Some(point_id) => {
+                    let point = Point::new(conf.clone(), point_id)?;
+                    points.push(point);
+                }
+                None => {
+                    let point_id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
+                    let point = Point::new(conf.clone(), point_id)?;
+                    points.push(point);
+                    storage_infos.push((point_id, serde_json::to_string(&conf)?));
+                }
+            }
         }
+
         self.points.write().await.extend(points);
         storage::insert_points(self.device_id, self.id, &storage_infos).await?;
-        Ok(())
-    }
-
-    pub async fn insert_points(&self, points: Vec<(u64, CreatePointReq)>) -> Result<()> {
         Ok(())
     }
 
