@@ -6,6 +6,8 @@ use serde_json::Value;
 use tokio::sync::RwLock;
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp};
 
+use crate::storage;
+
 use super::point::Point;
 
 pub(crate) struct Group {
@@ -13,6 +15,7 @@ pub(crate) struct Group {
     pub name: String,
     pub interval: u64,
     pub points: RwLock<Vec<Point>>,
+    pub device_id: u64,
     auto_increment_id: AtomicU64,
 }
 
@@ -23,9 +26,10 @@ struct UpdateConf {
 }
 
 impl Group {
-    pub fn new(conf: &CreateGroupReq, id: u64) -> Self {
+    pub fn new(device_id: u64, group_id: u64, conf: &CreateGroupReq) -> Self {
         Group {
-            id,
+            id: group_id,
+            device_id,
             name: conf.name.clone(),
             interval: conf.interval,
             points: RwLock::new(vec![]),
@@ -50,12 +54,15 @@ impl Group {
 
     pub async fn create_points(&self, create_points: Vec<CreatePointReq>) -> Result<()> {
         let mut points = Vec::with_capacity(create_points.len());
+        let mut storage_infos = Vec::with_capacity(create_points.len());
         for conf in create_points {
             let id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
-            let point = Point::new(conf, id)?;
+            let point = Point::new(conf.clone(), id)?;
             points.push(point);
+            storage_infos.push((id, serde_json::to_string(&conf)?))
         }
         self.points.write().await.extend(points);
+        storage::insert_points(self.device_id, self.id, &storage_infos).await?;
         Ok(())
     }
 
@@ -78,6 +85,8 @@ impl Group {
     }
 
     pub async fn update_point(&self, id: u64, update_point: Value) -> Result<()> {
+        let update_data = serde_json::to_string(&update_point)?;
+
         match self
             .points
             .write()
@@ -85,9 +94,13 @@ impl Group {
             .iter_mut()
             .find(|point| point.id == id)
         {
-            Some(point) => point.update(update_point).await,
+            Some(point) => point.update(update_point).await?,
             None => bail!("未找到点位：{}。", id),
-        }
+        };
+
+        storage::update_point(self.device_id, self.id, id, update_data).await?;
+
+        Ok(())
     }
 
     pub async fn get_points_num(&self) -> usize {
@@ -96,6 +109,7 @@ impl Group {
 
     pub async fn delete_points(&self, ids: Vec<u64>) -> Result<()> {
         self.points.write().await.retain(|p| !ids.contains(&p.id));
+        storage::delete_points(self.device_id, self.id, &ids).await?;
         Ok(())
     }
 }

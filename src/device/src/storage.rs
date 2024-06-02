@@ -4,7 +4,6 @@ use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use tracing::debug;
 
 static ROOT_DIR: &str = "./storage";
 static FILE_NAME: &str = "data";
@@ -24,7 +23,7 @@ pub(crate) async fn update_device(id: u64, data: String) -> Result<(), io::Error
 }
 
 pub(crate) async fn delete_device(id: u64) -> Result<(), io::Error> {
-    delete(Path::new(ROOT_DIR).join(FILE_NAME), id).await?;
+    delete(Path::new(ROOT_DIR).join(FILE_NAME), &vec![id]).await?;
     fs::remove_dir(Path::new(ROOT_DIR).join(id.to_string())).await
 }
 
@@ -74,12 +73,12 @@ pub(crate) async fn update_group(
     .await
 }
 
-pub(crate) async fn delete_group(device_id: u64, group_id: u64) -> Result<(), io::Error> {
+pub(crate) async fn delete_groups(device_id: u64, group_ids: &Vec<u64>) -> Result<(), io::Error> {
     delete(
         Path::new(ROOT_DIR)
             .join(device_id.to_string())
             .join(FILE_NAME),
-        group_id,
+        group_ids,
     )
     .await
 }
@@ -143,34 +142,19 @@ pub(crate) async fn update_point(
     .await
 }
 
-pub(crate) async fn delete_point(
+pub(crate) async fn delete_points(
     device_id: u64,
     group_id: u64,
-    points_ids: Vec<u64>,
+    point_ids: &Vec<u64>,
 ) -> Result<(), io::Error> {
-    let path = Path::new(ROOT_DIR)
-        .join(device_id.to_string())
-        .join(group_id.to_string())
-        .join(FILE_NAME);
-    let mut file = OpenOptions::new().read(true).open(&path).await?;
-    let mut buf = String::new();
-    file.read_to_string(&mut buf).await?;
-
-    let mut lines: Vec<&str> = buf.split("\n").collect();
-    lines.retain(|line| match line.find(DELIMITER) {
-        Some(pos) => points_ids.contains(&line[..pos].parse::<u64>().expect("文件")),
-        None => false,
-    });
-
-    let buf = lines.join("\n");
-    let mut file = OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .open(&path)
-        .await?;
-
-    file.write(buf.as_bytes()).await?;
-    file.flush().await
+    delete(
+        Path::new(ROOT_DIR)
+            .join(device_id.to_string())
+            .join(group_id.to_string())
+            .join(FILE_NAME),
+        point_ids,
+    )
+    .await
 }
 
 async fn insert(path: impl AsRef<Path>, id: u64, data: String) -> Result<(), io::Error> {
@@ -233,14 +217,14 @@ async fn update(path: impl AsRef<Path>, id: u64, data: String) -> Result<(), io:
     Ok(())
 }
 
-async fn delete(path: impl AsRef<Path>, id: u64) -> Result<(), io::Error> {
+async fn delete(path: impl AsRef<Path>, ids: &Vec<u64>) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().read(true).open(&path).await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
     let mut lines: Vec<&str> = buf.split("\n").collect();
     lines.retain(|line| match line.find(DELIMITER) {
-        Some(pos) => line[..pos].parse::<u64>().expect("文件") != id,
+        Some(pos) => !ids.contains(&line[..pos].parse::<u64>().expect("文件")),
         None => false,
     });
 

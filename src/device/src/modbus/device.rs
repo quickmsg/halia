@@ -9,7 +9,6 @@ use std::{
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use futures::{channel::oneshot, select_biased};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::{
@@ -112,14 +111,18 @@ impl Modbus {
         }))
     }
 
-    async fn insert_group(&mut self, req: CreateGroupReq, id: u64) -> Result<()> {
-        let group = Group::new(&req, id);
+    async fn insert_group(&mut self, req: CreateGroupReq, group_id: u64) -> Result<()> {
+        let group = Group::new(self.id, group_id, &req);
+
+        let interval = group.interval;
+        storage::insert_group(self.id, group_id, serde_json::to_string(&req)?).await?;
+        self.groups.write().await.push(group);
         match self.status.load(Ordering::SeqCst) {
             2 => match &self.group_signals_sender {
                 Some(sender) => {
                     let rx = sender.subscribe();
-                    let timer_group_id = group.id.clone();
-                    let interval = group.interval;
+                    let timer_group_id = group_id;
+                    let interval = interval;
                     if let Some(read_tx) = &self.read_tx {
                         run_group_timer(
                             timer_group_id,
@@ -134,9 +137,6 @@ impl Modbus {
             },
             _ => {}
         }
-
-        storage::insert_group(self.id, id, serde_json::to_string(&req)?).await?;
-        self.groups.write().await.push(group);
 
         Ok(())
     }
@@ -415,10 +415,14 @@ impl Device for Modbus {
             .await
             .retain(|group| !group_ids.contains(&group.id));
 
+        storage::delete_groups(self.id, &group_ids).await?;
         match &self.group_signals_sender {
             Some(sender) => {
                 for group_id in group_ids {
-                    sender.send(group_id);
+                    match sender.send(group_id) {
+                        Ok(_) => {}
+                        Err(e) => error!("group send stop singla err:{:?}", e),
+                    }
                 }
             }
             None => {}
@@ -459,6 +463,8 @@ impl Device for Modbus {
 
     // TODO
     async fn update_group(&self, group_id: u64, update_group: Value) -> Result<()> {
+        let update_data = serde_json::to_string(&update_group)?;
+
         match self
             .groups
             .write()
@@ -489,13 +495,15 @@ impl Device for Modbus {
                     //         );
                     //     };
                     // }
-
-                    Ok(())
                 }
-                Err(e) => Err(e),
+                Err(e) => bail!("{}", e),
             },
             None => bail!("未找到组：{}。", group_id),
         }
+
+        storage::update_group(self.id, group_id, update_data).await?;
+
+        Ok(())
     }
 
     async fn create_points(&self, group_id: u64, create_points: Vec<CreatePointReq>) -> Result<()> {
