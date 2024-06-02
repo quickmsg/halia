@@ -180,7 +180,7 @@ impl DeviceManager {
         &self,
         device_id: u64,
         group_id: u64,
-        update_group: Value,
+        req: &CreateGroupReq,
     ) -> Result<()> {
         match self
             .devices
@@ -189,7 +189,7 @@ impl DeviceManager {
             .iter()
             .find(|(id, _)| *id == device_id)
         {
-            Some((_, device)) => device.update_group(group_id, update_group).await,
+            Some((_, device)) => device.update_group(group_id, req).await,
             None => bail!("未找到设备：{}。", device_id),
         }
     }
@@ -259,7 +259,7 @@ impl DeviceManager {
         device_id: u64,
         group_id: u64,
         point_id: u64,
-        update_point: Value,
+        req: &CreatePointReq,
     ) -> Result<()> {
         match self
             .devices
@@ -268,7 +268,7 @@ impl DeviceManager {
             .iter()
             .find(|(id, _)| *id == device_id)
         {
-            Some((_, device)) => device.update_point(group_id, point_id, update_point).await,
+            Some((_, device)) => device.update_point(group_id, point_id, req).await,
             None => bail!("未找到设备：{}。", device_id),
         }
     }
@@ -373,7 +373,7 @@ trait Device: Sync + Send {
         create_group: &CreateGroupReq,
     ) -> Result<()>;
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>>;
-    async fn update_group(&self, group_id: u64, update_group: Value) -> Result<()>;
+    async fn update_group(&self, group_id: u64, req: &CreateGroupReq) -> Result<()>;
     async fn delete_groups(&self, ids: Vec<u64>) -> Result<()>;
 
     // points
@@ -383,7 +383,7 @@ trait Device: Sync + Send {
         create_points: Vec<(Option<u64>, CreatePointReq)>,
     ) -> Result<()>;
     async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>>;
-    async fn update_point(&self, group_id: u64, point_id: u64, update_point: Value) -> Result<()>;
+    async fn update_point(&self, group_id: u64, point_id: u64, req: &CreatePointReq) -> Result<()>;
     async fn delete_points(&self, group_id: u64, point_ids: Vec<u64>) -> Result<()>;
 }
 

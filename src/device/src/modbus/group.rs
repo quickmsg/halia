@@ -37,19 +37,10 @@ impl Group {
         }
     }
 
-    pub fn update(&mut self, update_group: Value) -> Result<bool> {
-        let update_conf: UpdateConf = serde_json::from_value(update_group)?;
-        if let Some(name) = update_conf.name {
-            self.name = name;
-        }
-
-        let mut change_interval = false;
-        if let Some(interval) = update_conf.interval {
-            self.interval = interval;
-            change_interval = true;
-        }
-
-        Ok(change_interval)
+    pub fn update(&mut self, req: &CreateGroupReq) -> Result<()> {
+        self.name = req.name.clone();
+        self.interval = req.interval;
+        Ok(())
     }
 
     pub async fn create_points(
@@ -96,9 +87,7 @@ impl Group {
         resps
     }
 
-    pub async fn update_point(&self, id: u64, update_point: Value) -> Result<()> {
-        let update_data = serde_json::to_string(&update_point)?;
-
+    pub async fn update_point(&self, id: u64, req: &CreatePointReq) -> Result<()> {
         match self
             .points
             .write()
@@ -106,11 +95,11 @@ impl Group {
             .iter_mut()
             .find(|point| point.id == id)
         {
-            Some(point) => point.update(update_point).await?,
+            Some(point) => point.update(req).await?,
             None => bail!("未找到点位：{}。", id),
         };
 
-        storage::update_point(self.device_id, self.id, id, update_data).await?;
+        storage::update_point(self.device_id, self.id, id, serde_json::to_string(req)?).await?;
 
         Ok(())
     }

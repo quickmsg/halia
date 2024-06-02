@@ -72,8 +72,8 @@ impl Point {
         })
     }
 
-    pub async fn update(&mut self, update_point: Value) -> Result<()> {
-        let update_conf: UpdateConf = serde_json::from_value(update_point)?;
+    pub async fn update(&mut self, req: &CreatePointReq) -> Result<()> {
+        let update_conf: UpdateConf = serde_json::from_value(req.clone())?;
         if let Some(name) = update_conf.name {
             self.name = name;
         }

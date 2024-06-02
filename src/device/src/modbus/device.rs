@@ -1,10 +1,10 @@
 use std::{
     net::SocketAddr,
     sync::{
-        atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering},
+        atomic::{AtomicBool, AtomicU16, AtomicU64, AtomicU8, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use anyhow::{bail, Result};
@@ -14,11 +14,7 @@ use serde_json::{json, Value};
 use tokio::{
     net::TcpStream,
     select,
-    sync::{
-        broadcast,
-        mpsc::{self, Receiver, Sender},
-        RwLock,
-    },
+    sync::{broadcast, mpsc, RwLock},
     time,
 };
 use tokio_modbus::{
@@ -40,14 +36,16 @@ use super::{group::Group, point::PointConf};
 static TYPE: &str = "modbus";
 
 pub(crate) struct Modbus {
+    on: AtomicBool, // true:开启 false:关闭
     id: u64,
     status: Arc<AtomicU8>, // 1:停止 2:运行中 3:错误
-    stop_signal: Option<mpsc::Sender<()>>,
     rtt: Arc<AtomicU16>,
     conf: Conf,
     auto_increment_id: AtomicU64,
     groups: Arc<RwLock<Vec<Group>>>,
-    read_tx: Option<Sender<u64>>,
+    stop_signal_tx: Option<mpsc::Sender<()>>,
+    read_tx: Option<mpsc::Sender<u64>>,
+    write_tx: Option<mpsc::Sender<PointConf>>,
     group_signals_sender: Option<broadcast::Sender<u64>>,
 }
 
@@ -102,24 +100,23 @@ impl Modbus {
         let conf: Conf = serde_json::from_value(create_device.conf.clone())?;
         Ok(Box::new(Modbus {
             id,
+            auto_increment_id: AtomicU64::new(1),
+            on: AtomicBool::new(false),
             status: Arc::new(AtomicU8::new(1)),
-            stop_signal: None,
+            stop_signal_tx: None,
             rtt: Arc::new(AtomicU16::new(9999)),
             conf,
             groups: Arc::new(RwLock::new(Vec::new())),
             read_tx: None,
             group_signals_sender: None,
-            auto_increment_id: AtomicU64::new(1),
+            write_tx: None,
         }))
     }
 
-    async fn run(&mut self) {
+    async fn run(&mut self) -> (mpsc::Sender<()>, mpsc::Sender<u64>, mpsc::Sender<PointConf>) {
         let conf = self.conf.clone();
         let status = self.status.clone();
         let groups = self.groups.clone();
-
-        let (read_tx, mut read_rx) = mpsc::channel::<u64>(100);
-        self.read_tx = Some(read_tx.clone());
 
         let interval = self.conf.interval;
         let rtt = self.rtt.clone();
@@ -127,7 +124,8 @@ impl Modbus {
         let (write_tx, mut write_rx) = mpsc::channel::<PointConf>(100);
 
         let (stop_signal_tx, mut stop_sgianl_rx) = mpsc::channel::<()>(1);
-        self.stop_signal = Some(stop_signal_tx);
+
+        let (read_tx, mut read_rx) = mpsc::channel::<u64>(100);
 
         tokio::spawn(async move {
             loop {
@@ -156,6 +154,8 @@ impl Modbus {
                 time::sleep(Duration::from_secs(3)).await;
             }
         });
+
+        (stop_signal_tx, read_tx, write_tx)
     }
 
     async fn get_context(conf: &Conf) -> Result<Context> {
@@ -181,6 +181,39 @@ impl Modbus {
                 Ok(rtu::attach(port))
             }
         }
+    }
+
+    fn run_group_timer(&self, group_id: u64, interval: u64) {
+        let mut stop_signal = self.group_signals_sender.as_ref().unwrap().subscribe();
+        let read_tx = self.read_tx.as_ref().unwrap().clone();
+
+        trace!("group {} is runing", group_id);
+        tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_millis(interval));
+            loop {
+                select! {
+                    _ = interval.tick() => {
+                        // if device_status.load(Ordering::SeqCst) == 2 {
+                        //     match tx.send(group_id).await {
+                        //         Ok(_) => {}
+                        //         Err(e) => debug!("group send point info err :{}", e),
+                        //     }
+                        // }
+                    },
+                    signal = stop_signal.recv() => {
+                        match signal {
+                            Ok(id) => {
+                                if id == group_id || id == 0 {
+                                    debug!("group {} stop.", group_id);
+                                    return;
+                                }
+                            }
+                            Err(e) => error!("group recv stop signal err :{:?}", e),
+                        }
+                    }
+                }
+            }
+        });
     }
 }
 
@@ -232,18 +265,9 @@ impl Device for Modbus {
         match self.status.load(Ordering::SeqCst) {
             2 => match &self.group_signals_sender {
                 Some(sender) => {
-                    let rx = sender.subscribe();
                     let timer_group_id = group_id;
                     let interval = interval;
-                    if let Some(read_tx) = &self.read_tx {
-                        run_group_timer(
-                            timer_group_id,
-                            interval,
-                            self.status.clone(),
-                            rx,
-                            read_tx.clone(),
-                        );
-                    }
+                    self.run_group_timer(timer_group_id, interval);
                 }
                 None => bail!("系统BUG"),
             },
@@ -276,12 +300,29 @@ impl Device for Modbus {
     }
 
     async fn start(&mut self) -> Result<()> {
+        if self.on.load(Ordering::SeqCst) {
+            return Ok(());
+        } else {
+            self.on.store(true, Ordering::SeqCst);
+        }
+
+        let status = self.status.load(Ordering::SeqCst);
+
         self.status.store(2, Ordering::SeqCst);
-        self.run().await;
+        let (stop_signal_tx, read_tx, write_tx) = self.run().await;
+        self.stop_signal_tx = Some(stop_signal_tx);
+        self.read_tx = Some(read_tx);
+        self.write_tx = Some(write_tx);
         Ok(())
     }
 
     async fn stop(&mut self) {
+        if !self.on.load(Ordering::SeqCst) {
+            return;
+        } else {
+            self.on.store(false, Ordering::SeqCst);
+        }
+
         self.status.store(1, Ordering::SeqCst);
         match &self.group_signals_sender {
             Some(sender) => sender.send(0).unwrap(),
@@ -306,10 +347,7 @@ impl Device for Modbus {
         Ok(resps)
     }
 
-    // TODO
-    async fn update_group(&self, group_id: u64, update_group: Value) -> Result<()> {
-        let update_data = serde_json::to_string(&update_group)?;
-
+    async fn update_group(&self, group_id: u64, req: &CreateGroupReq) -> Result<()> {
         match self
             .groups
             .write()
@@ -317,37 +355,17 @@ impl Device for Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => match group.update(update_group) {
-                Ok(interval_changed) => {
-                    // stop and start
-                    // if interval_changed {
-                    //     match self.group_signals.lock().await.remove(&group_id) {
-                    //         Some(stop_signal) => {
-                    //             stop_signal.store(true, Ordering::SeqCst);
-                    //         }
-                    //         None => {}
-                    //     }
-
-                    //     let stop_signal = Arc::new(AtomicBool::new(false));
-                    //     let mut signals = self.group_signals.lock().await;
-                    //     signals.insert(group.id, stop_signal.clone());
-
-                    //     if let Some(read_tx) = &self.read_tx {
-                    //         run_group_timer(
-                    //             group.id.clone(),
-                    //             group.interval,
-                    //             stop_signal.clone(),
-                    //             read_tx.clone(),
-                    //         );
-                    //     };
-                    // }
+            Some(group) => {
+                group.update(&req);
+                if self.on.load(Ordering::SeqCst) {
+                    let _ = self.group_signals_sender.as_ref().unwrap().send(group_id);
+                    self.run_group_timer(group_id, req.interval);
                 }
-                Err(e) => bail!("{}", e),
-            },
-            None => bail!("未找到组：{}。", group_id),
-        }
+            }
+            None => bail!("组不存在"),
+        };
 
-        storage::update_group(self.id, group_id, update_data).await?;
+        storage::update_group(self.id, group_id, serde_json::to_string(&req)?).await?;
 
         Ok(())
     }
@@ -382,7 +400,7 @@ impl Device for Modbus {
         }
     }
 
-    async fn update_point(&self, group_id: u64, point_id: u64, update_point: Value) -> Result<()> {
+    async fn update_point(&self, group_id: u64, point_id: u64, req: &CreatePointReq) -> Result<()> {
         match self
             .groups
             .read()
@@ -390,7 +408,7 @@ impl Device for Modbus {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.update_point(point_id, update_point).await,
+            Some(group) => group.update_point(point_id, req).await,
             None => bail!("未找到组:{}。", group_id),
         }
     }
@@ -409,48 +427,12 @@ impl Device for Modbus {
     }
 }
 
-fn run_group_timer(
-    group_id: u64,
-    interval: u64,
-    device_status: Arc<AtomicU8>,
-    mut stop_signal: broadcast::Receiver<u64>,
-    tx: mpsc::Sender<u64>,
-) {
-    trace!("group {} is runing", group_id);
-    tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_millis(interval));
-        loop {
-            select! {
-                _ = interval.tick() => {
-                    if device_status.load(Ordering::SeqCst) == 2 {
-                        match tx.send(group_id).await {
-                            Ok(_) => {}
-                            Err(e) => debug!("group send point info err :{}", e),
-                        }
-                    }
-                },
-                signal = stop_signal.recv() => {
-                    match signal {
-                        Ok(id) => {
-                            if id == group_id || id == 0 {
-                                debug!("group {} stop.", group_id);
-                                return;
-                            }
-                        }
-                        Err(e) => error!("group recv stop signal err :{:?}", e),
-                    }
-                }
-            }
-        }
-    });
-}
-
 async fn run_event_loop(
     mut ctx: Context,
     rtt: Arc<AtomicU16>,
     stop_signal: &mut mpsc::Receiver<()>,
-    write_rx: &mut Receiver<PointConf>,
-    read_rx: &mut Receiver<u64>,
+    write_rx: &mut mpsc::Receiver<PointConf>,
+    read_rx: &mut mpsc::Receiver<u64>,
     groups: Arc<RwLock<Vec<Group>>>,
     interval: u64,
 ) {

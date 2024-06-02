@@ -87,10 +87,10 @@ pub(crate) async fn read_groups(
 
 pub(crate) async fn update_group(
     Path((device_id, group_id)): Path<(u64, u64)>,
-    Json(update_group): Json<Value>,
+    Json(req): Json<CreateGroupReq>,
 ) -> Result<(), AppError> {
     match GLOBAL_DEVICE_MANAGER
-        .update_group(device_id, group_id, update_group)
+        .update_group(device_id, group_id, &req)
         .await
     {
         Ok(()) => Ok(()),
@@ -146,11 +146,11 @@ pub(crate) async fn read_points(
 
 pub(crate) async fn update_point(
     Path((device_id, group_id, point_id)): Path<(u64, u64, u64)>,
-    Json(update_point): Json<Value>,
+    Json(req): Json<CreatePointReq>,
 ) -> Result<(), AppError> {
-    debug!("update_point:{:?}", update_point);
+    debug!("update_point:{:?}", req);
     match GLOBAL_DEVICE_MANAGER
-        .update_point(device_id, group_id, point_id, update_point)
+        .update_point(device_id, group_id, point_id, &req)
         .await
     {
         Ok(()) => Ok(()),
