@@ -401,13 +401,13 @@ impl Device for Modbus {
         self.insert_group(req, id).await
     }
 
-    // async fn recover_group(&self, record: GroupRecord) -> Result<()> {
-    //     let now_id = self.auto_increment_id.load(Ordering::SeqCst);
-    //     if record.id > now_id {
-    //         self.auto_increment_id.store(record.id, Ordering::SeqCst);
-    //     }
-    //     self.insert_group(record.req, record.id).await
-    // }
+    async fn recover_group(&mut self, id: u64, req: CreateGroupReq) -> Result<()> {
+        let now_id = self.auto_increment_id.load(Ordering::SeqCst);
+        if id > now_id {
+            self.auto_increment_id.store(id, Ordering::SeqCst);
+        }
+        self.insert_group(req, id).await
+    }
 
     async fn delete_groups(&self, group_ids: Vec<u64>) -> Result<()> {
         self.groups
@@ -517,6 +517,15 @@ impl Device for Modbus {
             Some(group) => group.create_points(create_points).await,
             None => bail!("没有找到组"),
         }
+    }
+
+    // TODO
+    async fn recover_points(
+        &self,
+        group_id: u64,
+        points: Vec<(u64, CreatePointReq)>,
+    ) -> Result<()> {
+        Ok(())
     }
 
     async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>> {

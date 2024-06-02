@@ -269,93 +269,56 @@ impl DeviceManager {
         for (id, data) in devices {
             let req: CreateDeviceReq = serde_json::from_str(data.as_str())?;
             self.insert_device(id, &req).await?;
+            self.recover_group(id).await?;
         }
         Ok(())
     }
 
-    //     async fn recover_device(&self) -> Result<()> {
-    //         match OpenOptions::new()
-    //             .read(true)
-    //             .open(DEVICE_RECORD_FILE_NAME)
-    //             .await
-    //         {
-    //             Ok(file) => {
-    //                 let mut buf_reader = tokio::io::BufReader::new(file);
-    //                 let mut buf = String::new();
-    //                 loop {
-    //                     match buf_reader.read_line(&mut buf).await {
-    //                         Ok(0) => return Ok(()),
-    //                         Ok(n) => {
-    //                             debug!("read buf :{:?}", buf);
-    //                             let record: DeviceRecord = match serde_json::from_str(&buf) {
-    //                                 Ok(v) => v,
-    //                                 Err(e) => bail!("{}", e),
-    //                             };
+    async fn recover_group(&self, device_id: u64) -> Result<()> {
+        let groups = storage::read_groups(device_id).await?;
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => {
+                for (id, data) in groups {
+                    let req: CreateGroupReq = serde_json::from_str(data.as_str())?;
+                    device.recover_group(id, req).await?;
+                }
+            }
+            None => unreachable!(),
+        }
 
-    //                             let device = match record.req.r#type.as_str() {
-    //                                 "modbus" => match Modbus::new(&record.req, record.id) {
-    //                                     Ok(device) => device,
-    //                                     Err(e) => bail!("{}", e),
-    //                                 },
-    //                                 _ => bail!("not support"),
-    //                             };
+        Ok(())
+    }
 
-    //                             self.recover_groups(&device, record.id).await?;
+    async fn recover_points(&self, device_id: u64, group_id: u64) -> Result<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => {
+                let points = storage::read_points(device_id, group_id).await?;
+                let recover_points: Vec<(u64, CreatePointReq)> = points
+                    .iter()
+                    .map(|x| {
+                        let req: CreatePointReq = serde_json::from_str(x.1.as_str()).unwrap();
+                        (x.0, req)
+                    })
+                    .collect();
+                device.recover_points(group_id, recover_points).await?;
+            }
+            None => unreachable!(),
+        }
 
-    //                             self.devices.write().await.push(device);
-    //                             buf.clear();
-    //                         }
-    //                         Err(e) => bail!("{}", e),
-    //                     }
-    //                 }
-    //             }
-    //             Err(e) => Err(e.into()),
-    //         }
-    //     }
-
-    //     async fn recover_groups(&self, device: &Box<dyn Device>, id: u64) -> Result<()> {
-    //         let group_dir_path = Path::new(DEVICE_RECORD_FILE_NAME).join(id.to_string());
-    //         match fs::read_dir(group_dir_path).await {
-    //             Ok(mut dir) => {
-    //                 while let Some(entry) = dir.next_entry().await? {
-    //                     match OpenOptions::new().read(true).open(entry.path()).await {
-    //                         Ok(file) => {
-    //                             let mut buf_reader = tokio::io::BufReader::new(file);
-    //                             let mut buf = String::new();
-    //                             loop {
-    //                                 match buf_reader.read_line(&mut buf).await {
-    //                                     Ok(0) => return Ok(()),
-    //                                     Ok(n) => {
-    //                                         debug!("read buf :{:?}", buf);
-    //                                         let record: GroupRecord = match serde_json::from_str(&buf) {
-    //                                             Ok(v) => v,
-    //                                             Err(e) => bail!("{}", e),
-    //                                         };
-
-    //                                         device.recover_group(record).await?;
-
-    //                                         buf.clear();
-    //                                     }
-    //                                     Err(e) => bail!("{}", e),
-    //                                 }
-    //                             }
-    //                         }
-    //                         Err(_) => todo!(),
-    //                     }
-    //                 }
-    //             }
-    //             Err(e) => bail!("{}", e),
-    //         }
-
-    //         Ok(())
-    //     }
-
-    //     async fn recover_points(&self) {}
-
-    //     async fn file_exists(&self, path: impl AsRef<Path>) -> Result<bool> {
-    //         let exists = fs::try_exists(path).await?;
-    //         Ok(exists)
-    //     }
+        Ok(())
+    }
 }
 
 impl DeviceManager {
@@ -367,6 +330,8 @@ impl DeviceManager {
         self.devices.write().await.push(device);
         Ok(())
     }
+
+    async fn insert_group() {}
 }
 #[derive(Serialize)]
 pub struct DeviceInfo {
@@ -386,13 +351,15 @@ trait Device: Sync + Send {
 
     // group
     async fn create_group(&mut self, create_group: CreateGroupReq) -> Result<()>;
-    // async fn recover_group(&self, record: GroupRecord) -> Result<()>;
+    async fn recover_group(&mut self, id: u64, create_group: CreateGroupReq) -> Result<()>;
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>>;
     async fn update_group(&self, group_id: u64, update_group: Value) -> Result<()>;
     async fn delete_groups(&self, ids: Vec<u64>) -> Result<()>;
 
     // points
     async fn create_points(&self, group_id: u64, create_points: Vec<CreatePointReq>) -> Result<()>;
+    async fn recover_points(&self, group_id: u64, points: Vec<(u64, CreatePointReq)>)
+        -> Result<()>;
     async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>>;
     async fn update_point(&self, group_id: u64, point_id: u64, update_point: Value) -> Result<()>;
     async fn delete_points(&self, group_id: u64, point_ids: Vec<u64>) -> Result<()>;

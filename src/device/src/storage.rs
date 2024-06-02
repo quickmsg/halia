@@ -1,17 +1,21 @@
-use std::{fs::Permissions, io, os::unix::fs::PermissionsExt, path::Path};
+use std::{
+    fs::Permissions,
+    io,
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+};
 
 use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
 
-static ROOT_DIR: &str = "./storage";
+static ROOT_DIR: &str = "storage";
 static FILE_NAME: &str = "data";
 static DELIMITER: char = '-';
 
 pub(crate) async fn insert_device(id: u64, data: String) -> Result<(), io::Error> {
-    insert(Path::new(ROOT_DIR).join(FILE_NAME), id, data).await?;
-    fs::create_dir(Path::new(ROOT_DIR).join(id.to_string())).await
+    insert(Path::new(ROOT_DIR).to_path_buf(), &vec![(id, data)], true).await
 }
 
 pub(crate) async fn read_devices() -> Result<Vec<(u64, String)>, io::Error> {
@@ -24,7 +28,7 @@ pub(crate) async fn update_device(id: u64, data: String) -> Result<(), io::Error
 
 pub(crate) async fn delete_device(id: u64) -> Result<(), io::Error> {
     delete(Path::new(ROOT_DIR).join(FILE_NAME), &vec![id]).await?;
-    fs::remove_dir(Path::new(ROOT_DIR).join(id.to_string())).await
+    fs::remove_dir_all(Path::new(ROOT_DIR).join(id.to_string())).await
 }
 
 pub(crate) async fn insert_group(
@@ -33,18 +37,9 @@ pub(crate) async fn insert_group(
     data: String,
 ) -> Result<(), io::Error> {
     insert(
-        Path::new(ROOT_DIR)
-            .join(device_id.to_string())
-            .join(FILE_NAME),
-        group_id,
-        data,
-    )
-    .await?;
-
-    fs::create_dir(
-        Path::new(ROOT_DIR)
-            .join(device_id.to_string())
-            .join(group_id.to_string()),
+        Path::new(ROOT_DIR).join(device_id.to_string()),
+        &vec![(group_id, data)],
+        true,
     )
     .await
 }
@@ -88,28 +83,14 @@ pub(crate) async fn insert_points(
     group_id: u64,
     datas: &[(u64, String)],
 ) -> Result<(), io::Error> {
-    let path = Path::new(ROOT_DIR)
-        .join(device_id.to_string())
-        .join(group_id.to_string())
-        .join(FILE_NAME);
-    let mut file = match fs::try_exists(&path).await? {
-        true => OpenOptions::new().append(true).open(&path).await?,
-        false => {
-            let file = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open(&path)
-                .await?;
-            file.set_permissions(Permissions::from_mode(0o666)).await?;
-            file
-        }
-    };
-
-    for (id, data) in datas {
-        file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
-            .await?;
-    }
-    file.flush().await
+    insert(
+        Path::new(ROOT_DIR)
+            .join(device_id.to_string())
+            .join(group_id.to_string()),
+        datas,
+        false,
+    )
+    .await
 }
 
 pub(crate) async fn read_points(
@@ -157,21 +138,24 @@ pub(crate) async fn delete_points(
     .await
 }
 
-async fn insert(path: impl AsRef<Path>, id: u64, data: String) -> Result<(), io::Error> {
-    let mut file = match fs::try_exists(&path).await? {
-        true => OpenOptions::new().append(true).open(&path).await?,
-        false => {
+async fn insert(dir: PathBuf, datas: &[(u64, String)], create_dir: bool) -> Result<(), io::Error> {
+    let path = dir.join(FILE_NAME);
+    let mut file = OpenOptions::new().append(true).open(path).await?;
+    for (id, data) in datas {
+        file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
+            .await?;
+
+        if create_dir {
+            let dir_path = dir.join(id.to_string());
+            fs::create_dir(&dir_path).await?;
             let file = OpenOptions::new()
                 .create(true)
                 .write(true)
-                .open(&path)
+                .open(dir_path.join(FILE_NAME))
                 .await?;
             file.set_permissions(Permissions::from_mode(0o666)).await?;
-            file
         }
-    };
-    file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
-        .await?;
+    }
     file.flush().await
 }
 
