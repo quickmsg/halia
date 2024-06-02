@@ -9,6 +9,7 @@ use std::sync::{
     LazyLock,
 };
 use tokio::sync::RwLock;
+use tracing::debug;
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp,
@@ -295,6 +296,7 @@ impl DeviceManager {
 impl DeviceManager {
     pub async fn recover(&self) -> Result<()> {
         let devices = storage::read_devices().await?;
+        debug!("read devices is :{:?}", devices);
         for (id, data) in devices {
             let req: CreateDeviceReq = serde_json::from_str(data.as_str())?;
             self.create_device(Some(id), req).await?;
@@ -305,48 +307,34 @@ impl DeviceManager {
 
     async fn recover_group(&self, device_id: u64) -> Result<()> {
         let groups = storage::read_groups(device_id).await?;
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => {
-                for (group_id, data) in groups {
-                    let req: CreateGroupReq = serde_json::from_str(data.as_str())?;
-                    device.create_group(Some(group_id), &req).await?;
-                    self.recover_points(device_id, group_id).await?;
-                }
-            }
-            None => unreachable!(),
+        debug!("read groups is :{:?}", groups);
+        let groups: Vec<(Option<u64>, CreateGroupReq)> = groups
+            .into_iter()
+            .map(|(id, data)| {
+                let req: CreateGroupReq = serde_json::from_str(data.as_str()).unwrap();
+                (Some(id), req)
+            })
+            .collect();
+
+        for (group_id, req) in groups {
+            self.create_group(device_id, group_id, req).await?;
+            self.recover_points(device_id, group_id.unwrap()).await?;
         }
 
         Ok(())
     }
 
     async fn recover_points(&self, device_id: u64, group_id: u64) -> Result<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => {
-                let points = storage::read_points(device_id, group_id).await?;
-                let recover_points: Vec<(Option<u64>, CreatePointReq)> = points
-                    .iter()
-                    .map(|(point_id, data)| {
-                        let req: CreatePointReq = serde_json::from_str(data.as_str()).unwrap();
-                        (Some(*point_id), req)
-                    })
-                    .collect();
-                device.create_points(group_id, recover_points).await?;
-            }
-            None => unreachable!(),
-        }
-
+        let points = storage::read_points(device_id, group_id).await?;
+        let points: Vec<(Option<u64>, Value)> = points
+            .into_iter()
+            .map(|(id, data)| {
+                let value: Value = serde_json::from_str(data.as_str()).unwrap();
+                (Some(id), value)
+            })
+            .collect();
+        self.create_points(device_id, group_id, points).await?;
+        debug!("recover points done");
         Ok(())
     }
 }

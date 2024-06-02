@@ -248,19 +248,23 @@ impl Device for Modbus {
     }
 
     async fn create_group(&mut self, group_id: Option<u64>, req: &CreateGroupReq) -> Result<()> {
-        let group_id = match group_id {
+        let (group_id, new) = match group_id {
             Some(group_id) => {
                 if group_id > self.auto_increment_id.load(Ordering::SeqCst) {
                     self.auto_increment_id.store(group_id, Ordering::SeqCst);
                 }
-                group_id
+                (group_id, false)
             }
-            None => self.auto_increment_id.fetch_add(1, Ordering::SeqCst),
+            None => (self.auto_increment_id.fetch_add(1, Ordering::SeqCst), true),
         };
+
+        if new {
+            debug!("here");
+            storage::insert_group(self.id, group_id, serde_json::to_string(&req)?).await?;
+        }
 
         let group = Group::new(self.id, group_id, &req);
         let interval = group.interval;
-        storage::insert_group(self.id, group_id, serde_json::to_string(&req)?).await?;
         self.groups.write().await.push(group);
         match self.status.load(Ordering::SeqCst) {
             2 => match &self.group_signals_sender {
@@ -273,6 +277,8 @@ impl Device for Modbus {
             },
             _ => {}
         }
+
+        debug!("create group done");
 
         Ok(())
     }
@@ -356,7 +362,7 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => {
-                group.update(&req);
+                let _ = group.update(&req);
                 if self.on.load(Ordering::SeqCst) {
                     let _ = self.group_signals_sender.as_ref().unwrap().send(group_id);
                     self.run_group_timer(group_id, req.interval);

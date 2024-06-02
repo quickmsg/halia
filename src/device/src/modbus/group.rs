@@ -4,6 +4,7 @@ use anyhow::{bail, Result};
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::RwLock;
+use tracing::debug;
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp};
 
 use crate::storage;
@@ -47,6 +48,7 @@ impl Group {
         &self,
         create_points: Vec<(Option<u64>, CreatePointReq)>,
     ) -> Result<()> {
+        debug!("create points");
         let mut points = Vec::with_capacity(create_points.len());
         let mut storage_infos = Vec::with_capacity(create_points.len());
         for (point_id, conf) in create_points {
@@ -65,7 +67,10 @@ impl Group {
         }
 
         self.points.write().await.extend(points);
-        storage::insert_points(self.device_id, self.id, &storage_infos).await?;
+        if storage_infos.len() > 0 {
+            debug!("stroage info length > 0");
+            storage::insert_points(self.device_id, self.id, &storage_infos).await?;
+        }
         Ok(())
     }
 
