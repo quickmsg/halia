@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use futures::{channel::oneshot, select_biased};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::{
@@ -50,7 +51,7 @@ pub(crate) struct Modbus {
     group_signals_sender: Option<broadcast::Sender<u64>>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 enum Link {
     Serial,
@@ -85,7 +86,6 @@ pub(crate) struct TcpConf {
 
 #[derive(Deserialize, Clone, Serialize)]
 struct RtuConf {
-    mode: Mode,
     max_retry: u8,
     command_interval: u64,
     path: String,
@@ -369,7 +369,12 @@ impl Device for Modbus {
     }
 
     async fn update(&mut self, conf: Value) -> Result<()> {
-        todo!()
+        let conf: Conf = serde_json::from_value(conf)?;
+        self.stop().await;
+        self.conf = conf;
+        self.start().await?;
+
+        Ok(())
     }
 
     fn get_info(&self) -> ListDevicesResp {
@@ -559,12 +564,11 @@ fn run_group_timer(
         loop {
             select! {
                 _ = interval.tick() => {
-                    if device_status.load(Ordering::SeqCst) == 3 {
-                        break;
-                    }
-                    match tx.send(group_id).await {
-                        Ok(_) => {}
-                        Err(e) => debug!("group send point info err :{}", e),
+                    if device_status.load(Ordering::SeqCst) == 2 {
+                        match tx.send(group_id).await {
+                            Ok(_) => {}
+                            Err(e) => debug!("group send point info err :{}", e),
+                        }
                     }
                 },
                 signal = stop_signal.recv() => {
@@ -581,4 +585,143 @@ fn run_group_timer(
             }
         }
     });
+}
+
+async fn run_event_loop(
+    mut ctx: Context,
+    rtt: Arc<AtomicU16>,
+    mut stop_signal: mpsc::Receiver<()>,
+    write_rx: &mut Receiver<PointConf>,
+    read_rx: &mut Receiver<u64>,
+    groups: Arc<RwLock<Vec<Group>>>,
+    interval: u64,
+) {
+    loop {
+        select! {
+            biased;
+                _ = stop_signal.recv() => {
+                    debug!("stop event_loop");
+                    return
+                }
+
+                point = write_rx.recv() => {
+                    debug!("{:?}", point);
+                }
+
+           group_id = read_rx.recv() => {
+            if let Some(group_id) = group_id {
+                    if let Some(group) = groups
+                        .write()
+                        .await
+                        .iter_mut()
+                        .find(|group| group.id == group_id)
+                    {
+                        debug!("read group:{}", group.name);
+                        for point in group.points.write().await.iter_mut() {
+                            ctx.set_slave(Slave(point.slave));
+                            let start_time = Instant::now();
+                            match point.area {
+                                0 => match ctx
+                                    .read_discrete_inputs(point.address, point.quantity)
+                                    .await
+                                {
+                                    Ok(data) => {
+                                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
+                                            if *elem {
+                                                x.push(1);
+                                            } else {
+                                                x.push(0);
+                                            }
+                                            x
+                                        });
+                                        point.set_data(bytes);
+                                    }
+                                    Err(e) => match e.kind() {
+                                        std::io::ErrorKind::InvalidData => {
+                                            error!("返回错误:{}", e);
+                                        }
+                                        _ => {
+                                            error!("连接断开。");
+                                            return;
+                                        }
+                                    },
+                                },
+                                1 => match ctx.read_coils(point.address, point.quantity).await {
+                                    Ok(data) => {
+                                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
+                                            if *elem {
+                                                x.push(1);
+                                            } else {
+                                                x.push(0);
+                                            }
+                                            x
+                                        });
+                                        point.set_data(bytes);
+                                    }
+                                    Err(e) => match e.kind() {
+                                        std::io::ErrorKind::InvalidData => {
+                                            error!("返回错误:{}", e);
+                                        }
+                                        _ => {
+                                            error!("连接断开。");
+                                            return;
+                                        }
+                                    },
+                                },
+                                4 => match ctx
+                                    .read_input_registers(point.address, point.quantity)
+                                    .await
+                                {
+                                    Ok(data) => {
+                                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
+                                            x.push((elem & 0xff) as u8);
+                                            x.push((elem >> 8) as u8);
+                                            x
+                                        });
+                                        point.set_data(bytes);
+                                    }
+                                    Err(e) => match e.kind() {
+                                        std::io::ErrorKind::InvalidData => {
+                                            error!("返回错误:{}", e);
+                                        }
+                                        _ => {
+                                            error!("连接断开。");
+                                            return;
+                                        }
+                                    },
+                                },
+                                3 => match ctx
+                                    .read_holding_registers(point.address, point.quantity)
+                                    .await
+                                {
+                                    Ok(data) => {
+                                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
+                                            x.push((elem & 0xff) as u8);
+                                            x.push((elem >> 8) as u8);
+                                            x
+                                        });
+                                        point.set_data(bytes);
+                                    }
+                                    Err(e) => match e.kind() {
+                                        std::io::ErrorKind::InvalidData => {
+                                            error!("返回错误:{}", e);
+                                        }
+                                        _ => {
+                                            error!("连接断开。");
+                                            return;
+                                        }
+                                    },
+                                },
+                                _ => unreachable!(),
+                            }
+
+                            rtt.store(start_time.elapsed().as_micros() as u16, Ordering::SeqCst);
+                            time::sleep(Duration::from_millis(interval)).await;
+                        }
+                    }
+            }
+        }
+        }
+    }
+    // }
 }

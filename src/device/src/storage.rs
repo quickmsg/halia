@@ -1,6 +1,5 @@
-use std::{collections::vec_deque, fs::Permissions, io, os::unix::fs::PermissionsExt, path::Path};
+use std::{fs::Permissions, io, os::unix::fs::PermissionsExt, path::Path};
 
-use anyhow::bail;
 use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},

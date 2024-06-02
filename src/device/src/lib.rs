@@ -39,15 +39,6 @@ impl DeviceManager {
         Ok(())
     }
 
-    async fn insert_device(&self, id: u64, req: &CreateDeviceReq) -> Result<()> {
-        let device = match req.r#type.as_str() {
-            "modbus" => Modbus::new(&req, id)?,
-            _ => bail!("不支持协议"),
-        };
-        self.devices.write().await.push(device);
-        Ok(())
-    }
-
     pub async fn read_device(&self, id: u64) -> Result<DeviceDetailResp> {
         match self
             .devices
@@ -69,7 +60,11 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == id)
         {
-            Some(device) => device.update(conf).await,
+            Some(device) => {
+                device.update(conf.clone()).await?;
+                storage::update_device(id, serde_json::from_value(conf)?).await?;
+                Ok(())
+            }
             None => bail!("未找到设备：{}。", id),
         }
     }
@@ -268,7 +263,6 @@ impl DeviceManager {
     }
 }
 
-// 从本地文件中恢复所有信息
 impl DeviceManager {
     pub async fn recover(&self) -> Result<()> {
         let devices = storage::read_devices().await?;
@@ -364,6 +358,16 @@ impl DeviceManager {
     //     }
 }
 
+impl DeviceManager {
+    async fn insert_device(&self, id: u64, req: &CreateDeviceReq) -> Result<()> {
+        let device = match req.r#type.as_str() {
+            "modbus" => Modbus::new(&req, id)?,
+            _ => bail!("不支持协议"),
+        };
+        self.devices.write().await.push(device);
+        Ok(())
+    }
+}
 #[derive(Serialize)]
 pub struct DeviceInfo {
     pub name: String,
