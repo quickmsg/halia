@@ -52,10 +52,13 @@ impl Group {
         Ok(change_interval)
     }
 
-    pub async fn create_points(&self, create_points: Vec<CreatePointReq>) -> Result<()> {
+    pub async fn create_points(
+        &self,
+        create_points: Vec<(Option<u64>, CreatePointReq)>,
+    ) -> Result<()> {
         let mut points = Vec::with_capacity(create_points.len());
         let mut storage_infos = Vec::with_capacity(create_points.len());
-        for conf in create_points {
+        for (id, conf) in create_points {
             let id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
             let point = Point::new(conf.clone(), id)?;
             points.push(point);
@@ -63,6 +66,10 @@ impl Group {
         }
         self.points.write().await.extend(points);
         storage::insert_points(self.device_id, self.id, &storage_infos).await?;
+        Ok(())
+    }
+
+    pub async fn insert_points(&self, points: Vec<(u64, CreatePointReq)>) -> Result<()> {
         Ok(())
     }
 

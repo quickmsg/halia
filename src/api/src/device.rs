@@ -14,7 +14,7 @@ use crate::{AppError, DeleteIdsQuery};
 
 pub(crate) async fn create_device(Json(req): Json<CreateDeviceReq>) -> Result<(), AppError> {
     trace!("create_device:{:?}", req);
-    match GLOBAL_DEVICE_MANAGER.create_device(req).await {
+    match GLOBAL_DEVICE_MANAGER.create_device(None, req).await {
         Ok(()) => Ok(()),
         Err(e) => Err(AppError::new(e)),
     }
@@ -67,7 +67,10 @@ pub(crate) async fn create_group(
     Path(id): Path<u64>,
     Json(create_group): Json<CreateGroupReq>,
 ) -> Result<(), AppError> {
-    match GLOBAL_DEVICE_MANAGER.create_group(id, create_group).await {
+    match GLOBAL_DEVICE_MANAGER
+        .create_group(id, None, create_group)
+        .await
+    {
         Ok(()) => Ok(()),
         Err(e) => Err(AppError::new(e)),
     }
@@ -115,10 +118,16 @@ pub(crate) async fn delete_groups(
 
 pub(crate) async fn create_points(
     Path((device_id, group_id)): Path<(u64, u64)>,
-    Json(create_points): Json<Vec<CreatePointReq>>,
+    Json(req): Json<Vec<CreatePointReq>>,
 ) -> Result<(), AppError> {
     match GLOBAL_DEVICE_MANAGER
-        .create_points(device_id, group_id, create_points)
+        .create_points(
+            device_id,
+            group_id,
+            req.into_iter()
+                .map(|req| (None, req))
+                .collect::<Vec<(Option<u64>, CreatePointReq)>>(),
+        )
         .await
     {
         Ok(()) => Ok(()),

@@ -35,7 +35,10 @@ use types::device::{
 
 use crate::{storage, Device};
 
-use super::{group::Group, point::PointConf};
+use super::{
+    group::{self, Group},
+    point::PointConf,
+};
 
 static TYPE: &str = "modbus";
 
@@ -109,36 +112,6 @@ impl Modbus {
             group_signals_sender: None,
             auto_increment_id: AtomicU64::new(1),
         }))
-    }
-
-    async fn insert_group(&mut self, req: CreateGroupReq, group_id: u64) -> Result<()> {
-        let group = Group::new(self.id, group_id, &req);
-
-        let interval = group.interval;
-        storage::insert_group(self.id, group_id, serde_json::to_string(&req)?).await?;
-        self.groups.write().await.push(group);
-        match self.status.load(Ordering::SeqCst) {
-            2 => match &self.group_signals_sender {
-                Some(sender) => {
-                    let rx = sender.subscribe();
-                    let timer_group_id = group_id;
-                    let interval = interval;
-                    if let Some(read_tx) = &self.read_tx {
-                        run_group_timer(
-                            timer_group_id,
-                            interval,
-                            self.status.clone(),
-                            rx,
-                            read_tx.clone(),
-                        );
-                    }
-                }
-                None => bail!("系统BUG"),
-            },
-            _ => {}
-        }
-
-        Ok(())
     }
 
     async fn run(&mut self) {
@@ -364,10 +337,6 @@ impl Modbus {
 
 #[async_trait]
 impl Device for Modbus {
-    fn get_id(&self) -> u64 {
-        self.id
-    }
-
     async fn update(&mut self, conf: Value) -> Result<()> {
         let conf: Conf = serde_json::from_value(conf)?;
         self.stop().await;
@@ -396,17 +365,43 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_group(&mut self, req: CreateGroupReq) -> Result<()> {
-        let id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
-        self.insert_group(req, id).await
-    }
+    async fn create_group(&mut self, group_id: Option<u64>, req: &CreateGroupReq) -> Result<()> {
+        let group_id = match group_id {
+            Some(group_id) => {
+                if group_id > self.auto_increment_id.load(Ordering::SeqCst) {
+                    self.auto_increment_id.store(group_id, Ordering::SeqCst);
+                }
+                group_id
+            }
+            None => self.auto_increment_id.fetch_add(1, Ordering::SeqCst),
+        };
 
-    async fn recover_group(&mut self, id: u64, req: CreateGroupReq) -> Result<()> {
-        let now_id = self.auto_increment_id.load(Ordering::SeqCst);
-        if id > now_id {
-            self.auto_increment_id.store(id, Ordering::SeqCst);
+        let group = Group::new(self.id, group_id, &req);
+        let interval = group.interval;
+        storage::insert_group(self.id, group_id, serde_json::to_string(&req)?).await?;
+        self.groups.write().await.push(group);
+        match self.status.load(Ordering::SeqCst) {
+            2 => match &self.group_signals_sender {
+                Some(sender) => {
+                    let rx = sender.subscribe();
+                    let timer_group_id = group_id;
+                    let interval = interval;
+                    if let Some(read_tx) = &self.read_tx {
+                        run_group_timer(
+                            timer_group_id,
+                            interval,
+                            self.status.clone(),
+                            rx,
+                            read_tx.clone(),
+                        );
+                    }
+                }
+                None => bail!("系统BUG"),
+            },
+            _ => {}
         }
-        self.insert_group(req, id).await
+
+        Ok(())
     }
 
     async fn delete_groups(&self, group_ids: Vec<u64>) -> Result<()> {
@@ -506,7 +501,11 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn create_points(&self, group_id: u64, create_points: Vec<CreatePointReq>) -> Result<()> {
+    async fn create_points(
+        &self,
+        group_id: u64,
+        create_points: Vec<(Option<u64>, CreatePointReq)>,
+    ) -> Result<()> {
         match self
             .groups
             .write()
