@@ -154,10 +154,6 @@ impl DeviceManager {
         {
             Some((_, device)) => {
                 device.create_group(group_id, &req).await?;
-                if let Some(group_id) = group_id {
-                    storage::insert_group(device_id, group_id, serde_json::to_string(&req)?)
-                        .await?;
-                }
                 Ok(())
             }
             None => bail!("not find"),
