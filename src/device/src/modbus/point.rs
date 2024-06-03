@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use types::device::{
     CreatePointReq, DataType,
@@ -106,17 +106,17 @@ impl Point {
 
 fn get_value(data_type: &DataType, mut data: Vec<u8>) -> Value {
     match data_type {
-        // DataType::Bool => {
-        //     if buf.len() != 1 {
-        //         warn!("buf is not right");
-        //         Value::Null
-        //     } else {
-        //         info!("{:?}", buf);
-        //         Value::Null
-        //     }
-        // }
-        DataType::Int16(endian) => {
+        DataType::Bool => {
             if data.len() != 1 {
+                warn!("buf is not right");
+                Value::Null
+            } else {
+                info!("{:?}", data);
+                Value::Null
+            }
+        }
+        DataType::Int16(endian) => {
+            if data.len() != 2 {
                 warn!("buf is not right");
                 Value::Null
             } else {

@@ -31,14 +31,17 @@ use types::device::{
 
 use crate::{storage, Device};
 
-use super::{group::Group, point::PointConf};
+use super::{
+    group::{self, Group},
+    point::PointConf,
+};
 
 static TYPE: &str = "modbus";
 
 pub(crate) struct Modbus {
-    on: AtomicBool, // true:开启 false:关闭
+    on: Arc<AtomicBool>, // true:开启 false:关闭
+    err: Arc<AtomicBool>,
     id: u64,
-    status: Arc<AtomicU8>, // 1:停止 2:运行中 3:错误
     rtt: Arc<AtomicU16>,
     conf: Conf,
     auto_increment_id: AtomicU64,
@@ -46,7 +49,7 @@ pub(crate) struct Modbus {
     stop_signal_tx: Option<mpsc::Sender<()>>,
     read_tx: Option<mpsc::Sender<u64>>,
     write_tx: Option<mpsc::Sender<PointConf>>,
-    group_signals_sender: Option<broadcast::Sender<u64>>,
+    group_signals_sender: broadcast::Sender<u64>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
@@ -98,28 +101,31 @@ struct RtuConf {
 impl Modbus {
     pub fn new(create_device: &CreateDeviceReq, id: u64) -> Result<Box<dyn Device>> {
         let conf: Conf = serde_json::from_value(create_device.conf.clone())?;
+        let (group_signals_sender, _) = broadcast::channel::<u64>(16);
         Ok(Box::new(Modbus {
             id,
             auto_increment_id: AtomicU64::new(1),
-            on: AtomicBool::new(false),
-            status: Arc::new(AtomicU8::new(1)),
+            on: Arc::new(AtomicBool::new(false)),
+            err: Arc::new(AtomicBool::new(false)),
             stop_signal_tx: None,
             rtt: Arc::new(AtomicU16::new(9999)),
             conf,
             groups: Arc::new(RwLock::new(Vec::new())),
             read_tx: None,
-            group_signals_sender: None,
+            group_signals_sender,
             write_tx: None,
         }))
     }
 
     async fn run(&mut self) -> (mpsc::Sender<()>, mpsc::Sender<u64>, mpsc::Sender<PointConf>) {
         let conf = self.conf.clone();
-        let status = self.status.clone();
         let groups = self.groups.clone();
 
         let interval = self.conf.interval;
         let rtt = self.rtt.clone();
+
+        let err = self.err.clone();
+        let on = self.on.clone();
 
         let (write_tx, mut write_rx) = mpsc::channel::<PointConf>(100);
 
@@ -129,9 +135,10 @@ impl Modbus {
 
         tokio::spawn(async move {
             loop {
+                debug!("device runing");
                 match Modbus::get_context(&conf).await {
                     Ok(ctx) => {
-                        status.store(2, Ordering::SeqCst);
+                        err.store(false, Ordering::SeqCst);
                         run_event_loop(
                             ctx,
                             rtt.clone(),
@@ -146,8 +153,7 @@ impl Modbus {
                     Err(e) => error!("{}", e),
                 }
 
-                let now_status = status.load(Ordering::SeqCst);
-                if now_status == 1 {
+                if !on.load(Ordering::SeqCst) {
                     debug!("device stoped");
                     return;
                 }
@@ -184,8 +190,9 @@ impl Modbus {
     }
 
     fn run_group_timer(&self, group_id: u64, interval: u64) {
-        let mut stop_signal = self.group_signals_sender.as_ref().unwrap().subscribe();
+        let mut stop_signal = self.group_signals_sender.subscribe();
         let read_tx = self.read_tx.as_ref().unwrap().clone();
+        let err = self.err.clone();
 
         trace!("group {} is runing", group_id);
         tokio::spawn(async move {
@@ -193,12 +200,12 @@ impl Modbus {
             loop {
                 select! {
                     _ = interval.tick() => {
-                        // if device_status.load(Ordering::SeqCst) == 2 {
-                        //     match tx.send(group_id).await {
-                        //         Ok(_) => {}
-                        //         Err(e) => debug!("group send point info err :{}", e),
-                        //     }
-                        // }
+                        if !err.load(Ordering::SeqCst) {
+                            match read_tx.send(group_id).await {
+                                Ok(_) => {}
+                                Err(e) => debug!("group send point info err :{}", e),
+                            }
+                        }
                     },
                     signal = stop_signal.recv() => {
                         match signal {
@@ -232,7 +239,8 @@ impl Device for Modbus {
         ListDevicesResp {
             id: self.id,
             name: self.conf.name.clone(),
-            status: self.status.load(Ordering::SeqCst),
+            // todo
+            status: 3,
             rtt: self.rtt.load(Ordering::SeqCst),
             r#type: TYPE,
         }
@@ -266,16 +274,8 @@ impl Device for Modbus {
         let group = Group::new(self.id, group_id, &req);
         let interval = group.interval;
         self.groups.write().await.push(group);
-        match self.status.load(Ordering::SeqCst) {
-            2 => match &self.group_signals_sender {
-                Some(sender) => {
-                    let timer_group_id = group_id;
-                    let interval = interval;
-                    self.run_group_timer(timer_group_id, interval);
-                }
-                None => bail!("系统BUG"),
-            },
-            _ => {}
+        if self.on.load(Ordering::SeqCst) {
+            self.run_group_timer(group_id, interval);
         }
 
         debug!("create group done");
@@ -290,16 +290,11 @@ impl Device for Modbus {
             .retain(|group| !group_ids.contains(&group.id));
 
         storage::delete_groups(self.id, &group_ids).await?;
-        match &self.group_signals_sender {
-            Some(sender) => {
-                for group_id in group_ids {
-                    match sender.send(group_id) {
-                        Ok(_) => {}
-                        Err(e) => error!("group send stop singla err:{:?}", e),
-                    }
-                }
+        for group_id in group_ids {
+            match self.group_signals_sender.send(group_id) {
+                Ok(_) => {}
+                Err(e) => error!("group send stop singla err:{:?}", e),
             }
-            None => {}
         }
 
         Ok(())
@@ -312,13 +307,14 @@ impl Device for Modbus {
             self.on.store(true, Ordering::SeqCst);
         }
 
-        let status = self.status.load(Ordering::SeqCst);
-
-        self.status.store(2, Ordering::SeqCst);
         let (stop_signal_tx, read_tx, write_tx) = self.run().await;
         self.stop_signal_tx = Some(stop_signal_tx);
         self.read_tx = Some(read_tx);
         self.write_tx = Some(write_tx);
+
+        for group in self.groups.read().await.iter() {
+            self.run_group_timer(group.id, group.interval);
+        }
         Ok(())
     }
 
@@ -329,13 +325,13 @@ impl Device for Modbus {
             self.on.store(false, Ordering::SeqCst);
         }
 
-        self.status.store(1, Ordering::SeqCst);
-        match &self.group_signals_sender {
-            Some(sender) => sender.send(0).unwrap(),
-            None => unreachable!(),
-        };
-        self.group_signals_sender = None;
-        // todo stop signal
+        self.group_signals_sender.send(0);
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
     }
 
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>> {
@@ -364,7 +360,7 @@ impl Device for Modbus {
             Some(group) => {
                 let _ = group.update(&req);
                 if self.on.load(Ordering::SeqCst) {
-                    let _ = self.group_signals_sender.as_ref().unwrap().send(group_id);
+                    let _ = self.group_signals_sender.send(group_id);
                     self.run_group_timer(group_id, req.interval);
                 }
             }
@@ -455,6 +451,7 @@ async fn run_event_loop(
                    }
 
               group_id = read_rx.recv() => {
+                debug!("get {:?} data", group_id);
                if let Some(group_id) = group_id {
         if           !read_group_points(&mut ctx, &groups, group_id, interval).await {
            return
