@@ -36,8 +36,8 @@ use super::{group::Group, point::PointConf};
 static TYPE: &str = "modbus";
 
 pub(crate) struct Modbus {
-    on: Arc<AtomicBool>, // true:开启 false:关闭
-    err: Arc<AtomicBool>,
+    on: Arc<AtomicBool>,  // true:开启 false:关闭
+    err: Arc<AtomicBool>, // true:错误 false:正常
     id: u64,
     rtt: Arc<AtomicU16>,
     conf: Conf,
@@ -45,7 +45,6 @@ pub(crate) struct Modbus {
     groups: Arc<RwLock<Vec<Group>>>,
 
     group_signal_tx: broadcast::Sender<u64>,
-
     stop_signal_tx: Option<mpsc::Sender<()>>,
     read_tx: Option<mpsc::Sender<u64>>,
     write_tx: Option<mpsc::Sender<PointConf>>,
@@ -101,9 +100,6 @@ impl Modbus {
     pub fn new(create_device: &CreateDeviceReq, id: u64) -> Result<Box<dyn Device>> {
         let conf: Conf = serde_json::from_value(create_device.conf.clone())?;
         let (group_signal_tx, _) = broadcast::channel::<u64>(16);
-        // let (stop_signal_tx, _) = mpsc::channel::<()>(1);
-        // let (read_tx, _) = mpsc::channel::<u64>(100);
-        // let (write_tx, _) = mpsc::channel::<PointConf>(100);
         Ok(Box::new(Modbus {
             id,
             auto_increment_id: AtomicU64::new(1),
@@ -192,7 +188,7 @@ impl Modbus {
 
     fn run_group_timer(&self, group_id: u64, interval: u64) {
         let mut stop_signal = self.group_signal_tx.subscribe();
-        let read_tx = self.read_tx.clone();
+        let read_tx = self.read_tx.as_ref().unwrap().clone();
         let err = self.err.clone();
 
         trace!("group {} is runing", group_id);
@@ -308,7 +304,16 @@ impl Device for Modbus {
             self.on.store(true, Ordering::SeqCst);
         }
 
-        self.run().await;
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel::<()>(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+
+        let (read_tx, read_rx) = mpsc::channel::<u64>(20);
+        self.read_tx = Some(read_tx);
+
+        let (write_tx, write_rx) = mpsc::channel::<PointConf>(10);
+        self.write_tx = Some(write_tx);
+
+        self.run(stop_signal_rx, read_rx, write_rx).await;
         for group in self.groups.read().await.iter() {
             self.run_group_timer(group.id, group.interval);
         }
@@ -437,28 +442,26 @@ async fn run_event_loop(
 ) {
     loop {
         select! {
-               biased;
-                   _ = stop_signal.recv() => {
-                       debug!("stop event_loop");
-                       return
-                   }
+            biased;
+                _ = stop_signal.recv() => {
+                    debug!("stop event_loop");
+                    return
+                }
 
-                   point = write_rx.recv() => {
-                       debug!("{:?}", point);
-                   }
+                point = write_rx.recv() => {
+                    debug!("{:?}", point);
+                }
 
-              group_id = read_rx.recv() => {
+                group_id = read_rx.recv() => {
                 debug!("get {:?} data", group_id);
-               if let Some(group_id) = group_id {
-        if           !read_group_points(&mut ctx, &groups, group_id, interval).await {
-           return
-
+                if let Some(group_id) = group_id {
+                    if !read_group_points(&mut ctx, &groups, group_id, interval).await {
+                       return
+                    }
+                }
+            }
         }
-               }
-           }
-           }
     }
-    // }
 }
 
 async fn read_group_points(
@@ -574,7 +577,6 @@ async fn read_group_points(
 
             time::sleep(Duration::from_millis(interval)).await;
         }
-
         true
     } else {
         true
