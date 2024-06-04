@@ -10,13 +10,22 @@ use types::device::{
     ListGroupsResp, ListPointResp,
 };
 
-use crate::{AppError, DeleteIdsQuery};
+use crate::{AppError, AppResp, DeleteIdsQuery};
 
-pub(crate) async fn create_device(Json(req): Json<CreateDeviceReq>) -> Result<(), AppError> {
+// pub(crate) async fn create_device(Json(req): Json<CreateDeviceReq>) -> Result<(), AppError> {
+//     trace!("create_device:{:?}", req);
+//     match GLOBAL_DEVICE_MANAGER.create_device(None, req).await {
+//         Ok(()) => Ok(()),
+//         Err(e) => Err(AppError::new(e)),
+//     }
+// }
+
+// TODO
+pub(crate) async fn create_device(Json(req): Json<CreateDeviceReq>) -> AppResp<()> {
     trace!("create_device:{:?}", req);
     match GLOBAL_DEVICE_MANAGER.create_device(None, req).await {
-        Ok(()) => Ok(()),
-        Err(e) => Err(AppError::new(e)),
+        Ok(()) => AppResp::new_with_data(()),
+        Err(e) => AppResp::new_with_error(1),
     }
 }
 

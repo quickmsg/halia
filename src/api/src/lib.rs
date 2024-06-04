@@ -11,6 +11,31 @@ mod device;
 mod rule;
 
 #[derive(Serialize)]
+pub(crate) struct AppResp<T> {
+    code: u8,
+    data: Option<T>,
+}
+
+impl<T> AppResp<T> {
+    pub(crate) fn new_with_error(code: u8) -> Self {
+        Self { code, data: None }
+    }
+
+    pub(crate) fn new_with_data(data: T) -> Self {
+        Self {
+            code: 0,
+            data: Some(data),
+        }
+    }
+}
+
+impl<T: Serialize> IntoResponse for AppResp<T> {
+    fn into_response(self) -> Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
+}
+
+#[derive(Serialize)]
 pub(crate) struct AppError {
     error: String,
 }
