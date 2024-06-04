@@ -43,10 +43,12 @@ pub(crate) struct Modbus {
     conf: Conf,
     auto_increment_id: AtomicU64,
     groups: Arc<RwLock<Vec<Group>>>,
+
+    group_signal_tx: broadcast::Sender<u64>,
+
     stop_signal_tx: Option<mpsc::Sender<()>>,
     read_tx: Option<mpsc::Sender<u64>>,
     write_tx: Option<mpsc::Sender<PointConf>>,
-    group_signals_sender: broadcast::Sender<u64>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
@@ -98,23 +100,31 @@ struct RtuConf {
 impl Modbus {
     pub fn new(create_device: &CreateDeviceReq, id: u64) -> Result<Box<dyn Device>> {
         let conf: Conf = serde_json::from_value(create_device.conf.clone())?;
-        let (group_signals_sender, _) = broadcast::channel::<u64>(16);
+        let (group_signal_tx, _) = broadcast::channel::<u64>(16);
+        // let (stop_signal_tx, _) = mpsc::channel::<()>(1);
+        // let (read_tx, _) = mpsc::channel::<u64>(100);
+        // let (write_tx, _) = mpsc::channel::<PointConf>(100);
         Ok(Box::new(Modbus {
             id,
             auto_increment_id: AtomicU64::new(1),
             on: Arc::new(AtomicBool::new(false)),
             err: Arc::new(AtomicBool::new(false)),
-            stop_signal_tx: None,
             rtt: Arc::new(AtomicU16::new(9999)),
             conf,
             groups: Arc::new(RwLock::new(Vec::new())),
+            group_signal_tx,
+            stop_signal_tx: None,
             read_tx: None,
-            group_signals_sender,
             write_tx: None,
         }))
     }
 
-    async fn run(&mut self) -> (mpsc::Sender<()>, mpsc::Sender<u64>, mpsc::Sender<PointConf>) {
+    async fn run(
+        &self,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut read_rx: mpsc::Receiver<u64>,
+        mut write_rx: mpsc::Receiver<PointConf>,
+    ) {
         let conf = self.conf.clone();
         let groups = self.groups.clone();
 
@@ -123,12 +133,6 @@ impl Modbus {
 
         let err = self.err.clone();
         let on = self.on.clone();
-
-        let (write_tx, mut write_rx) = mpsc::channel::<PointConf>(100);
-
-        let (stop_signal_tx, mut stop_sgianl_rx) = mpsc::channel::<()>(1);
-
-        let (read_tx, mut read_rx) = mpsc::channel::<u64>(100);
 
         tokio::spawn(async move {
             loop {
@@ -139,7 +143,7 @@ impl Modbus {
                         run_event_loop(
                             ctx,
                             rtt.clone(),
-                            &mut stop_sgianl_rx,
+                            &mut stop_signal_rx,
                             &mut write_rx,
                             &mut read_rx,
                             groups.clone(),
@@ -157,8 +161,6 @@ impl Modbus {
                 time::sleep(Duration::from_secs(3)).await;
             }
         });
-
-        (stop_signal_tx, read_tx, write_tx)
     }
 
     async fn get_context(conf: &Conf) -> Result<Context> {
@@ -189,8 +191,8 @@ impl Modbus {
     }
 
     fn run_group_timer(&self, group_id: u64, interval: u64) {
-        let mut stop_signal = self.group_signals_sender.subscribe();
-        let read_tx = self.read_tx.as_ref().unwrap().clone();
+        let mut stop_signal = self.group_signal_tx.subscribe();
+        let read_tx = self.read_tx.clone();
         let err = self.err.clone();
 
         trace!("group {} is runing", group_id);
@@ -290,7 +292,7 @@ impl Device for Modbus {
 
         storage::delete_groups(self.id, &group_ids).await?;
         for group_id in group_ids {
-            match self.group_signals_sender.send(group_id) {
+            match self.group_signal_tx.send(group_id) {
                 Ok(_) => {}
                 Err(e) => error!("group send stop singla err:{:?}", e),
             }
@@ -306,11 +308,7 @@ impl Device for Modbus {
             self.on.store(true, Ordering::SeqCst);
         }
 
-        let (stop_signal_tx, read_tx, write_tx) = self.run().await;
-        self.stop_signal_tx = Some(stop_signal_tx);
-        self.read_tx = Some(read_tx);
-        self.write_tx = Some(write_tx);
-
+        self.run().await;
         for group in self.groups.read().await.iter() {
             self.run_group_timer(group.id, group.interval);
         }
@@ -324,7 +322,7 @@ impl Device for Modbus {
             self.on.store(false, Ordering::SeqCst);
         }
 
-        self.group_signals_sender.send(0);
+        self.group_signal_tx.send(0).unwrap();
         self.stop_signal_tx
             .as_ref()
             .unwrap()
@@ -359,7 +357,7 @@ impl Device for Modbus {
             Some(group) => {
                 let _ = group.update(&req);
                 if self.on.load(Ordering::SeqCst) {
-                    let _ = self.group_signals_sender.send(group_id);
+                    let _ = self.group_signal_tx.send(group_id);
                     self.run_group_timer(group_id, req.interval);
                 }
             }

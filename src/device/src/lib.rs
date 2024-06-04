@@ -63,7 +63,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => Ok(device.get_detail()),
-            None => return Err(HaliaError::NotFound),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -80,7 +80,7 @@ impl DeviceManager {
                 storage::update_device(device_id, serde_json::from_value(conf)?).await?;
                 Ok(())
             }
-            None => return Err(HaliaError::NotFound),
+            None => Err(HaliaError::NotFound),
         }
     }
 
