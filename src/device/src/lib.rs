@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, Result};
 use modbus::device::Modbus;
 use serde_json::Value;
-use std::sync::{atomic::AtomicU64, LazyLock};
+use std::sync::LazyLock;
 use storage::Status;
 use tokio::sync::RwLock;
 use tracing::debug;
@@ -20,12 +20,10 @@ mod modbus;
 pub mod storage;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
-    auto_increment_id: AtomicU64::new(1),
     devices: RwLock::new(vec![]),
 });
 
 pub struct DeviceManager {
-    auto_increment_id: AtomicU64,
     devices: RwLock<Vec<(Uuid, Box<dyn Device>)>>,
 }
 

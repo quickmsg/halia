@@ -54,7 +54,7 @@ impl Point {
             DataType::Int64(_, _, _, _) => 4,
             DataType::Uint64(_, _, _, _) => 4,
             DataType::Float32(_, _) => 2,
-            DataType::Float64(_, _, _, _) => 2,
+            DataType::Float64(_, _, _, _) => 4,
             DataType::Bit => 1,
             DataType::String => todo!(),
             DataType::Bytes => todo!(),

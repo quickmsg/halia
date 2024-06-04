@@ -17,7 +17,6 @@ pub(crate) struct Group {
     pub interval: u64,
     pub points: RwLock<Vec<Point>>,
     pub device_id: Uuid,
-    auto_increment_id: AtomicU64,
 }
 
 #[derive(Deserialize)]
@@ -34,7 +33,6 @@ impl Group {
             name: conf.name.clone(),
             interval: conf.interval,
             points: RwLock::new(vec![]),
-            auto_increment_id: AtomicU64::new(1),
         }
     }
 

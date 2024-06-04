@@ -42,7 +42,6 @@ pub(crate) struct Modbus {
     err: Arc<AtomicBool>, // true:错误 false:正常
     rtt: Arc<AtomicU16>,
     conf: Conf,
-    auto_increment_id: AtomicU64,
     groups: Arc<RwLock<Vec<Group>>>,
 
     group_signal_tx: broadcast::Sender<Uuid>,
@@ -103,7 +102,6 @@ impl Modbus {
         let (group_signal_tx, _) = broadcast::channel::<Uuid>(16);
         Ok(Box::new(Modbus {
             id,
-            auto_increment_id: AtomicU64::new(1),
             on: Arc::new(AtomicBool::new(false)),
             err: Arc::new(AtomicBool::new(false)),
             rtt: Arc::new(AtomicU16::new(9999)),
