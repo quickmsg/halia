@@ -4,27 +4,33 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
+use common::error::HaliaError;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
 mod device;
 mod rule;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub(crate) struct AppResp<T> {
     code: u8,
     data: Option<T>,
 }
 
 impl<T> AppResp<T> {
-    pub(crate) fn new_with_error(code: u8) -> Self {
-        Self { code, data: None }
-    }
-
-    pub(crate) fn new_with_data(data: T) -> Self {
+    pub fn new(data: T) -> Self {
         Self {
             code: 0,
             data: Some(data),
+        }
+    }
+}
+
+impl<T> From<HaliaError> for AppResp<T> {
+    fn from(err: HaliaError) -> Self {
+        Self {
+            code: err.code(),
+            data: None,
         }
     }
 }

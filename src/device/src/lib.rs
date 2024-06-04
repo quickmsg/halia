@@ -1,7 +1,7 @@
 #![feature(lazy_cell)]
 
-use anyhow::{bail, Result};
 use async_trait::async_trait;
+use common::error::{HaliaError, Result};
 use modbus::device::Modbus;
 use serde_json::Value;
 use std::sync::{
@@ -44,7 +44,7 @@ impl DeviceManager {
 
         let device = match req.r#type.as_str() {
             "modbus" => Modbus::new(&req, device_id)?,
-            _ => bail!("不支持协议"),
+            _ => return Err(HaliaError::ProtocolNotSupported),
         };
         self.devices.write().await.push((device_id, device));
         if backup {
@@ -63,7 +63,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => Ok(device.get_detail()),
-            None => bail!("未找到设备。"),
+            None => return Err(HaliaError::NotFound),
         }
     }
 
@@ -80,7 +80,7 @@ impl DeviceManager {
                 storage::update_device(device_id, serde_json::from_value(conf)?).await?;
                 Ok(())
             }
-            None => bail!("未找到设备。"),
+            None => return Err(HaliaError::NotFound),
         }
     }
 
@@ -93,7 +93,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.start().await,
-            None => bail!("not find device"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -106,7 +106,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => Ok(device.stop().await),
-            None => bail!("not find device"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -128,7 +128,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.stop().await,
-            None => bail!("未找到设备。"),
+            None => return Err(HaliaError::NotFound),
         };
 
         storage::delete_device(device_id).await?;
@@ -156,7 +156,7 @@ impl DeviceManager {
                 device.create_group(group_id, &req).await?;
                 Ok(())
             }
-            None => bail!("not find"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -169,7 +169,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.read_groups().await,
-            None => bail!("not find"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -187,7 +187,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.update_group(group_id, req).await,
-            None => bail!("未找到设备：{}。", device_id),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -200,7 +200,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.delete_groups(group_ids).await,
-            None => bail!("找不到该设备"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -221,7 +221,7 @@ impl DeviceManager {
                 device.create_points(group_id, create_points).await?;
                 Ok(())
             }
-            None => bail!("not find"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -234,7 +234,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.read_points(group_id).await,
-            None => bail!("未找到设备。"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -247,7 +247,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.read_points(group_id).await,
-            None => bail!("未找到设备：{}。", device_id),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -266,7 +266,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.update_point(group_id, point_id, req).await,
-            None => bail!("未找到设备：{}。", device_id),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -284,7 +284,7 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.delete_points(group_id, point_ids).await,
-            None => bail!("未找到设备：{}。", device_id),
+            None => Err(HaliaError::NotFound),
         }
     }
 }

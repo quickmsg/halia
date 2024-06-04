@@ -1,8 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use anyhow::{bail, Result};
+use common::error::{HaliaError, Result};
 use serde::Deserialize;
-use serde_json::Value;
 use tokio::sync::RwLock;
 use tracing::debug;
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp};
@@ -101,7 +100,7 @@ impl Group {
             .find(|point| point.id == id)
         {
             Some(point) => point.update(req).await?,
-            None => bail!("未找到点位：{}。", id),
+            None => return Err(HaliaError::NotFound),
         };
 
         storage::update_point(self.device_id, self.id, id, serde_json::to_string(req)?).await?;

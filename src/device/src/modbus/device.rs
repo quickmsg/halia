@@ -1,14 +1,14 @@
 use std::{
     net::SocketAddr,
     sync::{
-        atomic::{AtomicBool, AtomicU16, AtomicU64, AtomicU8, Ordering},
+        atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering},
         Arc,
     },
     time::Duration,
 };
 
-use anyhow::{bail, Result};
 use async_trait::async_trait;
+use common::error::{HaliaError, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::{
@@ -31,10 +31,7 @@ use types::device::{
 
 use crate::{storage, Device};
 
-use super::{
-    group::{self, Group},
-    point::PointConf,
-};
+use super::{group::Group, point::PointConf};
 
 static TYPE: &str = "modbus";
 
@@ -168,7 +165,8 @@ impl Modbus {
         match conf.link {
             Link::Ethernet => {
                 let conf: TcpConf = serde_json::from_value(conf.conf.clone())?;
-                let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse()?;
+                // let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse()?;
+                let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
                 match conf.encode {
                     Encode::Tcp => {
                         let ctx = tcp::connect(socket_addr).await?;
@@ -183,7 +181,8 @@ impl Modbus {
             Link::Serial => {
                 let conf: RtuConf = serde_json::from_value(conf.conf.clone())?;
                 let builder = tokio_serial::new(conf.path, conf.baund_rate);
-                let port = SerialStream::open(&builder)?;
+                // let port = SerialStream::open(&builder)?;
+                let port = SerialStream::open(&builder).unwrap();
                 Ok(rtu::attach(port))
             }
         }
@@ -364,7 +363,7 @@ impl Device for Modbus {
                     self.run_group_timer(group_id, req.interval);
                 }
             }
-            None => bail!("组不存在"),
+            None => return Err(HaliaError::NotFound),
         };
 
         storage::update_group(self.id, group_id, serde_json::to_string(&req)?).await?;
@@ -385,7 +384,7 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.create_points(create_points).await,
-            None => bail!("没有找到组"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -398,7 +397,7 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => Ok(group.read_points().await),
-            None => bail!("未找到组。"),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -411,7 +410,7 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update_point(point_id, req).await,
-            None => bail!("未找到组:{}。", group_id),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -424,7 +423,7 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.delete_points(point_ids).await,
-            None => bail!("没有找到组"),
+            None => Err(HaliaError::NotFound),
         }
     }
 }

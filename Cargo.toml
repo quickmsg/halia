@@ -9,6 +9,7 @@ members = [
     "src/sinks",
     "src/operators",
     "src/device",
+    "src/common",
 ]
 resolver = "2"
 
@@ -25,6 +26,7 @@ sources = { path = "src/sources" }
 sinks = { path = "src/sinks" }
 operators = { path = "src/operators" }
 device = { path = "src/device" }
+common = { path = "src/common" }
 
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

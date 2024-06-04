@@ -1,1 +1,0 @@
-static ERR_NOT_FOUND: u16 = 10001;

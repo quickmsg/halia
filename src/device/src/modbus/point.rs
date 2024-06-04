@@ -1,4 +1,4 @@
-use anyhow::Result;
+use common::error::Result;
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::{debug, info, warn};
