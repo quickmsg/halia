@@ -1,7 +1,7 @@
 use std::{
     net::SocketAddr,
     sync::{
-        atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
     },
     time::Duration,
@@ -124,7 +124,7 @@ impl Modbus {
         let groups = self.groups.clone();
 
         let interval = self.conf.interval;
-        let rtt = self.rtt.clone();
+        // let rtt = self.rtt.clone();
 
         let err = self.err.clone();
         let on = self.on.clone();
@@ -137,7 +137,7 @@ impl Modbus {
                         err.store(false, Ordering::SeqCst);
                         run_event_loop(
                             ctx,
-                            rtt.clone(),
+                            // rtt.clone(),
                             &mut stop_signal_rx,
                             &mut write_rx,
                             &mut read_rx,
@@ -435,7 +435,7 @@ impl Device for Modbus {
 
 async fn run_event_loop(
     mut ctx: Context,
-    rtt: Arc<AtomicU16>,
+    // rtt: Arc<AtomicU16>,
     stop_signal: &mut mpsc::Receiver<()>,
     write_rx: &mut mpsc::Receiver<PointConf>,
     read_rx: &mut mpsc::Receiver<Uuid>,

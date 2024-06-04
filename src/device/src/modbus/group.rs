@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use common::error::{HaliaError, Result};
 use serde::Deserialize;
 use tokio::sync::RwLock;

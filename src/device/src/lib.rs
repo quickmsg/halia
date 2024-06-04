@@ -382,8 +382,7 @@ pub(crate) enum DataValue {
     Uint64(u64),
     Float32(f32),
     Float64(f64),
-    Bit,
-    // TODO
-    String,
+    Bit(u8),
+    String(String),
     Bytes,
 }
