@@ -7,10 +7,11 @@ use types::device::{
     CreatePointReq, DataType,
     Endian::{BigEndian, LittleEndian},
 };
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub(crate) struct Point {
-    pub id: u64,
+    pub id: Uuid,
     pub name: String,
     pub r#type: DataType,
     pub slave: u8,
@@ -42,7 +43,7 @@ struct UpdateConf {
 }
 
 impl Point {
-    pub fn new(conf: CreatePointReq, id: u64) -> Result<Point> {
+    pub fn new(conf: CreatePointReq, id: Uuid) -> Result<Point> {
         let conf: PointConf = serde_json::from_value(conf)?;
         let quantity = match conf.r#type {
             DataType::Bool => 1,

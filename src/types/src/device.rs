@@ -1,6 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::str::FromStr;
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct CreateDeviceReq {
@@ -10,7 +11,7 @@ pub struct CreateDeviceReq {
 
 #[derive(Serialize)]
 pub struct DeviceDetailResp {
-    pub id: u64,
+    pub id: Uuid,
     pub r#type: &'static str,
     pub name: String,
     pub conf: Value,
@@ -18,7 +19,7 @@ pub struct DeviceDetailResp {
 
 #[derive(Serialize)]
 pub struct ListDevicesResp {
-    pub id: u64,
+    pub id: Uuid,
     pub name: String,
     pub status: u8,
     pub rtt: u16,
@@ -41,7 +42,7 @@ pub struct CreateGroupReq {
 
 #[derive(Serialize)]
 pub struct ListGroupsResp {
-    pub id: u64,
+    pub id: Uuid,
     pub name: String,
     pub point_count: u8,
     pub interval: u64,
@@ -49,7 +50,7 @@ pub struct ListGroupsResp {
 
 #[derive(Serialize)]
 pub struct ListPointResp {
-    pub id: u64,
+    pub id: Uuid,
     pub name: String,
     pub address: u16,
     pub r#type: String,

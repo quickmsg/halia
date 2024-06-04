@@ -38,7 +38,7 @@ tracing = "0.1.40"
 futures = "0.3"
 dashmap = "5.5.3"
 async-trait = "0.1.80"
-uuid = { version = "1.8.0", features = ["v4"] }
+uuid = { version = "1.8.0", features = ["v4", "serde"] }
 
 [profile.release]
 strip = true

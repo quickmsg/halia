@@ -28,6 +28,7 @@ use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp, Mode,
 };
+use uuid::Uuid;
 
 use crate::{storage, Device};
 
@@ -36,17 +37,17 @@ use super::{group::Group, point::PointConf};
 static TYPE: &str = "modbus";
 
 pub(crate) struct Modbus {
+    id: Uuid,
     on: Arc<AtomicBool>,  // true:开启 false:关闭
     err: Arc<AtomicBool>, // true:错误 false:正常
-    id: u64,
     rtt: Arc<AtomicU16>,
     conf: Conf,
     auto_increment_id: AtomicU64,
     groups: Arc<RwLock<Vec<Group>>>,
 
-    group_signal_tx: broadcast::Sender<u64>,
+    group_signal_tx: broadcast::Sender<Uuid>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    read_tx: Option<mpsc::Sender<u64>>,
+    read_tx: Option<mpsc::Sender<Uuid>>,
     write_tx: Option<mpsc::Sender<PointConf>>,
 }
 
@@ -97,9 +98,9 @@ struct RtuConf {
 }
 
 impl Modbus {
-    pub fn new(create_device: &CreateDeviceReq, id: u64) -> Result<Box<dyn Device>> {
+    pub fn new(create_device: &CreateDeviceReq, id: Uuid) -> Result<Box<dyn Device>> {
         let conf: Conf = serde_json::from_value(create_device.conf.clone())?;
-        let (group_signal_tx, _) = broadcast::channel::<u64>(16);
+        let (group_signal_tx, _) = broadcast::channel::<Uuid>(16);
         Ok(Box::new(Modbus {
             id,
             auto_increment_id: AtomicU64::new(1),
@@ -118,7 +119,7 @@ impl Modbus {
     async fn run(
         &self,
         mut stop_signal_rx: mpsc::Receiver<()>,
-        mut read_rx: mpsc::Receiver<u64>,
+        mut read_rx: mpsc::Receiver<Uuid>,
         mut write_rx: mpsc::Receiver<PointConf>,
     ) {
         let conf = self.conf.clone();
@@ -186,7 +187,7 @@ impl Modbus {
         }
     }
 
-    fn run_group_timer(&self, group_id: u64, interval: u64) {
+    fn run_group_timer(&self, group_id: Uuid, interval: u64) {
         let mut stop_signal = self.group_signal_tx.subscribe();
         let read_tx = self.read_tx.as_ref().unwrap().clone();
         let err = self.err.clone();
@@ -207,7 +208,7 @@ impl Modbus {
                     signal = stop_signal.recv() => {
                         match signal {
                             Ok(id) => {
-                                if id == group_id || id == 0 {
+                                if id == group_id {
                                     debug!("group {} stop.", group_id);
                                     return;
                                 }
@@ -252,19 +253,13 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_group(&mut self, group_id: Option<u64>, req: &CreateGroupReq) -> Result<()> {
-        let (group_id, new) = match group_id {
-            Some(group_id) => {
-                if group_id > self.auto_increment_id.load(Ordering::SeqCst) {
-                    self.auto_increment_id.store(group_id, Ordering::SeqCst);
-                }
-                (group_id, false)
-            }
-            None => (self.auto_increment_id.fetch_add(1, Ordering::SeqCst), true),
+    async fn create_group(&mut self, group_id: Option<Uuid>, req: &CreateGroupReq) -> Result<()> {
+        let (group_id, backup) = match group_id {
+            Some(group_id) => (group_id, false),
+            None => (Uuid::new_v4(), true),
         };
 
-        if new {
-            debug!("here");
+        if backup {
             storage::insert_group(self.id, group_id, serde_json::to_string(&req)?).await?;
         }
 
@@ -280,7 +275,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn delete_groups(&self, group_ids: Vec<u64>) -> Result<()> {
+    async fn delete_groups(&self, group_ids: Vec<Uuid>) -> Result<()> {
         self.groups
             .write()
             .await
@@ -307,7 +302,7 @@ impl Device for Modbus {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel::<()>(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        let (read_tx, read_rx) = mpsc::channel::<u64>(20);
+        let (read_tx, read_rx) = mpsc::channel::<Uuid>(20);
         self.read_tx = Some(read_tx);
 
         let (write_tx, write_rx) = mpsc::channel::<PointConf>(10);
@@ -327,13 +322,17 @@ impl Device for Modbus {
             self.on.store(false, Ordering::SeqCst);
         }
 
-        self.group_signal_tx.send(0).unwrap();
+        // TODO
+        // self.group_signal_tx.send(0).unwrap();
         self.stop_signal_tx
             .as_ref()
             .unwrap()
             .send(())
             .await
             .unwrap();
+
+        // TODO
+        self.stop_signal_tx = None;
     }
 
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>> {
@@ -351,7 +350,7 @@ impl Device for Modbus {
         Ok(resps)
     }
 
-    async fn update_group(&self, group_id: u64, req: &CreateGroupReq) -> Result<()> {
+    async fn update_group(&self, group_id: Uuid, req: &CreateGroupReq) -> Result<()> {
         match self
             .groups
             .write()
@@ -376,8 +375,8 @@ impl Device for Modbus {
 
     async fn create_points(
         &self,
-        group_id: u64,
-        create_points: Vec<(Option<u64>, CreatePointReq)>,
+        group_id: Uuid,
+        create_points: Vec<(Option<Uuid>, CreatePointReq)>,
     ) -> Result<()> {
         match self
             .groups
@@ -391,7 +390,7 @@ impl Device for Modbus {
         }
     }
 
-    async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>> {
+    async fn read_points(&self, group_id: Uuid) -> Result<Vec<ListPointResp>> {
         match self
             .groups
             .read()
@@ -404,7 +403,12 @@ impl Device for Modbus {
         }
     }
 
-    async fn update_point(&self, group_id: u64, point_id: u64, req: &CreatePointReq) -> Result<()> {
+    async fn update_point(
+        &self,
+        group_id: Uuid,
+        point_id: Uuid,
+        req: &CreatePointReq,
+    ) -> Result<()> {
         match self
             .groups
             .read()
@@ -417,7 +421,7 @@ impl Device for Modbus {
         }
     }
 
-    async fn delete_points(&self, group_id: u64, point_ids: Vec<u64>) -> Result<()> {
+    async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()> {
         match self
             .groups
             .write()
@@ -436,7 +440,7 @@ async fn run_event_loop(
     rtt: Arc<AtomicU16>,
     stop_signal: &mut mpsc::Receiver<()>,
     write_rx: &mut mpsc::Receiver<PointConf>,
-    read_rx: &mut mpsc::Receiver<u64>,
+    read_rx: &mut mpsc::Receiver<Uuid>,
     groups: Arc<RwLock<Vec<Group>>>,
     interval: u64,
 ) {
@@ -467,7 +471,7 @@ async fn run_event_loop(
 async fn read_group_points(
     ctx: &mut Context,
     groups: &RwLock<Vec<Group>>,
-    group_id: u64,
+    group_id: Uuid,
     interval: u64,
 ) -> bool {
     if let Some(group) = groups

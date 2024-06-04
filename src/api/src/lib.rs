@@ -19,7 +19,14 @@ pub(crate) struct AppResp<T> {
 }
 
 impl<T> AppResp<T> {
-    pub fn new(data: T) -> Self {
+    pub fn new() -> Self {
+        Self {
+            code: 0,
+            data: None,
+        }
+    }
+
+    pub fn with_data(data: T) -> Self {
         Self {
             code: 0,
             data: Some(data),
@@ -39,25 +46,6 @@ impl<T> From<HaliaError> for AppResp<T> {
 impl<T: Serialize> IntoResponse for AppResp<T> {
     fn into_response(self) -> Response {
         (StatusCode::OK, Json(self)).into_response()
-    }
-}
-
-#[derive(Serialize)]
-pub(crate) struct AppError {
-    error: String,
-}
-
-impl AppError {
-    pub(crate) fn new<T: ToString>(error: T) -> Self {
-        AppError {
-            error: error.to_string(),
-        }
-    }
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        (StatusCode::BAD_REQUEST, Json(self)).into_response()
     }
 }
 

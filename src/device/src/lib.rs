@@ -4,16 +4,15 @@ use async_trait::async_trait;
 use common::error::{HaliaError, Result};
 use modbus::device::Modbus;
 use serde_json::Value;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    LazyLock,
-};
+use std::sync::{atomic::AtomicU64, LazyLock};
+use storage::Status;
 use tokio::sync::RwLock;
 use tracing::debug;
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp,
 };
+use uuid::Uuid;
 
 use serde::Serialize;
 
@@ -27,19 +26,14 @@ pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| Dev
 
 pub struct DeviceManager {
     auto_increment_id: AtomicU64,
-    devices: RwLock<Vec<(u64, Box<dyn Device>)>>,
+    devices: RwLock<Vec<(Uuid, Box<dyn Device>)>>,
 }
 
 impl DeviceManager {
-    pub async fn create_device(&self, device_id: Option<u64>, req: CreateDeviceReq) -> Result<()> {
+    pub async fn create_device(&self, device_id: Option<Uuid>, req: CreateDeviceReq) -> Result<()> {
         let (device_id, backup) = match device_id {
-            Some(device_id) => {
-                if device_id > self.auto_increment_id.load(Ordering::SeqCst) {
-                    self.auto_increment_id.store(device_id, Ordering::SeqCst);
-                }
-                (device_id, false)
-            }
-            None => (self.auto_increment_id.fetch_add(1, Ordering::SeqCst), true),
+            Some(device_id) => (device_id, false),
+            None => (Uuid::new_v4(), true),
         };
 
         let device = match req.r#type.as_str() {
@@ -54,7 +48,7 @@ impl DeviceManager {
         Ok(())
     }
 
-    pub async fn read_device(&self, device_id: u64) -> Result<DeviceDetailResp> {
+    pub async fn read_device(&self, device_id: Uuid) -> Result<DeviceDetailResp> {
         match self
             .devices
             .read()
@@ -67,7 +61,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn update_device(&self, device_id: u64, conf: Value) -> Result<()> {
+    pub async fn update_device(&self, device_id: Uuid, conf: Value) -> Result<()> {
         match self
             .devices
             .write()
@@ -77,14 +71,16 @@ impl DeviceManager {
         {
             Some((_, device)) => {
                 device.update(conf.clone()).await?;
-                storage::update_device(device_id, serde_json::from_value(conf)?).await?;
+                // TODO
+                storage::update_device(device_id, serde_json::from_value(conf)?, Status::Runing)
+                    .await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn start_device(&self, device_id: u64) -> Result<()> {
+    pub async fn start_device(&self, device_id: Uuid) -> Result<()> {
         match self
             .devices
             .write()
@@ -97,7 +93,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn stop_device(&self, device_id: u64) -> Result<()> {
+    pub async fn stop_device(&self, device_id: Uuid) -> Result<()> {
         match self
             .devices
             .write()
@@ -119,7 +115,7 @@ impl DeviceManager {
             .collect()
     }
 
-    pub async fn delete_device(&self, device_id: u64) -> Result<()> {
+    pub async fn delete_device(&self, device_id: Uuid) -> Result<()> {
         match self
             .devices
             .write()
@@ -141,8 +137,8 @@ impl DeviceManager {
 
     pub async fn create_group(
         &self,
-        device_id: u64,
-        group_id: Option<u64>,
+        device_id: Uuid,
+        group_id: Option<Uuid>,
         req: CreateGroupReq,
     ) -> Result<()> {
         match self
@@ -160,7 +156,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn read_groups(&self, device_id: u64) -> Result<Vec<ListGroupsResp>> {
+    pub async fn read_groups(&self, device_id: Uuid) -> Result<Vec<ListGroupsResp>> {
         match self
             .devices
             .read()
@@ -175,8 +171,8 @@ impl DeviceManager {
 
     pub async fn update_group(
         &self,
-        device_id: u64,
-        group_id: u64,
+        device_id: Uuid,
+        group_id: Uuid,
         req: &CreateGroupReq,
     ) -> Result<()> {
         match self
@@ -191,7 +187,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn delete_groups(&self, device_id: u64, group_ids: Vec<u64>) -> Result<()> {
+    pub async fn delete_groups(&self, device_id: Uuid, group_ids: Vec<Uuid>) -> Result<()> {
         match self
             .devices
             .write()
@@ -206,9 +202,9 @@ impl DeviceManager {
 
     pub async fn create_points(
         &self,
-        device_id: u64,
-        group_id: u64,
-        create_points: Vec<(Option<u64>, CreatePointReq)>,
+        device_id: Uuid,
+        group_id: Uuid,
+        create_points: Vec<(Option<Uuid>, CreatePointReq)>,
     ) -> Result<()> {
         match self
             .devices
@@ -225,7 +221,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn get_points(&self, device_id: u64, group_id: u64) -> Result<Vec<ListPointResp>> {
+    pub async fn get_points(&self, device_id: Uuid, group_id: Uuid) -> Result<Vec<ListPointResp>> {
         match self
             .devices
             .read()
@@ -238,7 +234,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn read_points(&self, device_id: u64, group_id: u64) -> Result<Vec<ListPointResp>> {
+    pub async fn read_points(&self, device_id: Uuid, group_id: Uuid) -> Result<Vec<ListPointResp>> {
         match self
             .devices
             .read()
@@ -253,9 +249,9 @@ impl DeviceManager {
 
     pub async fn update_point(
         &self,
-        device_id: u64,
-        group_id: u64,
-        point_id: u64,
+        device_id: Uuid,
+        group_id: Uuid,
+        point_id: Uuid,
         req: &CreatePointReq,
     ) -> Result<()> {
         match self
@@ -272,9 +268,9 @@ impl DeviceManager {
 
     pub async fn delete_points(
         &self,
-        device_id: u64,
-        group_id: u64,
-        point_ids: Vec<u64>,
+        device_id: Uuid,
+        group_id: Uuid,
+        point_ids: Vec<Uuid>,
     ) -> Result<()> {
         match self
             .devices
@@ -292,19 +288,22 @@ impl DeviceManager {
 impl DeviceManager {
     pub async fn recover(&self) -> Result<()> {
         let devices = storage::read_devices().await?;
-        debug!("read devices is :{:?}", devices);
-        for (id, data) in devices {
+        for (id, status, data) in devices {
             let req: CreateDeviceReq = serde_json::from_str(data.as_str())?;
             self.create_device(Some(id), req).await?;
             self.recover_group(id).await?;
+            match status {
+                Status::Stopped => {}
+                Status::Runing => self.start_device(id).await?,
+            }
         }
         Ok(())
     }
 
-    async fn recover_group(&self, device_id: u64) -> Result<()> {
+    async fn recover_group(&self, device_id: Uuid) -> Result<()> {
         let groups = storage::read_groups(device_id).await?;
         debug!("read groups is :{:?}", groups);
-        let groups: Vec<(Option<u64>, CreateGroupReq)> = groups
+        let groups: Vec<(Option<Uuid>, CreateGroupReq)> = groups
             .into_iter()
             .map(|(id, data)| {
                 let req: CreateGroupReq = serde_json::from_str(data.as_str()).unwrap();
@@ -320,9 +319,9 @@ impl DeviceManager {
         Ok(())
     }
 
-    async fn recover_points(&self, device_id: u64, group_id: u64) -> Result<()> {
+    async fn recover_points(&self, device_id: Uuid, group_id: Uuid) -> Result<()> {
         let points = storage::read_points(device_id, group_id).await?;
-        let points: Vec<(Option<u64>, Value)> = points
+        let points: Vec<(Option<Uuid>, Value)> = points
             .into_iter()
             .map(|(id, data)| {
                 let value: Value = serde_json::from_str(data.as_str()).unwrap();
@@ -353,22 +352,27 @@ trait Device: Sync + Send {
     // group
     async fn create_group(
         &mut self,
-        group_id: Option<u64>,
+        group_id: Option<Uuid>,
         create_group: &CreateGroupReq,
     ) -> Result<()>;
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>>;
-    async fn update_group(&self, group_id: u64, req: &CreateGroupReq) -> Result<()>;
-    async fn delete_groups(&self, ids: Vec<u64>) -> Result<()>;
+    async fn update_group(&self, group_id: Uuid, req: &CreateGroupReq) -> Result<()>;
+    async fn delete_groups(&self, ids: Vec<Uuid>) -> Result<()>;
 
     // points
     async fn create_points(
         &self,
-        group_id: u64,
-        create_points: Vec<(Option<u64>, CreatePointReq)>,
+        group_id: Uuid,
+        create_points: Vec<(Option<Uuid>, CreatePointReq)>,
     ) -> Result<()>;
-    async fn read_points(&self, group_id: u64) -> Result<Vec<ListPointResp>>;
-    async fn update_point(&self, group_id: u64, point_id: u64, req: &CreatePointReq) -> Result<()>;
-    async fn delete_points(&self, group_id: u64, point_ids: Vec<u64>) -> Result<()>;
+    async fn read_points(&self, group_id: Uuid) -> Result<Vec<ListPointResp>>;
+    async fn update_point(
+        &self,
+        group_id: Uuid,
+        point_id: Uuid,
+        req: &CreatePointReq,
+    ) -> Result<()>;
+    async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()>;
 }
 
 pub(crate) enum DataValue {

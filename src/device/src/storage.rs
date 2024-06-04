@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     fs::Permissions,
     io,
     os::unix::fs::PermissionsExt,
@@ -9,31 +10,65 @@ use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
+use uuid::Uuid;
 
 static ROOT_DIR: &str = "storage";
 static FILE_NAME: &str = "data";
 static DELIMITER: char = '-';
 
-pub(crate) async fn insert_device(id: u64, data: String) -> Result<(), io::Error> {
+pub(crate) enum Status {
+    Stopped = 0,
+    Runing = 1,
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Status::Stopped => write!(f, "0"),
+            Status::Runing => write!(f, "1"),
+        }
+    }
+}
+
+pub(crate) async fn insert_device(id: Uuid, data: String) -> Result<(), io::Error> {
+    let data = format!("{}{}{}", 0, DELIMITER, data);
     insert(Path::new(ROOT_DIR).to_path_buf(), &vec![(id, data)], true).await
 }
 
-pub(crate) async fn read_devices() -> Result<Vec<(u64, String)>, io::Error> {
-    read(Path::new(ROOT_DIR).join(FILE_NAME)).await
+pub(crate) async fn read_devices() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
+    let datas = read(Path::new(ROOT_DIR).join(FILE_NAME)).await?;
+    let mut devices = vec![];
+    for (id, data) in datas {
+        let pos = data.find(DELIMITER).expect("数据文件损坏");
+        let status = &data[..pos];
+        let device = &data[pos + 1..];
+        let status = status
+            .parse::<u8>()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "数据文件损坏"))?;
+        let status = match status {
+            0 => Status::Stopped,
+            1 => Status::Runing,
+            _ => unreachable!(),
+        };
+        devices.push((id, status, device.to_string()))
+    }
+
+    Ok(devices)
 }
 
-pub(crate) async fn update_device(id: u64, data: String) -> Result<(), io::Error> {
+pub(crate) async fn update_device(id: Uuid, data: String, status: Status) -> Result<(), io::Error> {
+    let data = format!("{}{}{}", status, DELIMITER, data);
     update(Path::new(ROOT_DIR).join(FILE_NAME), id, data).await
 }
 
-pub(crate) async fn delete_device(id: u64) -> Result<(), io::Error> {
+pub(crate) async fn delete_device(id: Uuid) -> Result<(), io::Error> {
     delete(Path::new(ROOT_DIR).join(FILE_NAME), &vec![id]).await?;
     fs::remove_dir_all(Path::new(ROOT_DIR).join(id.to_string())).await
 }
 
 pub(crate) async fn insert_group(
-    device_id: u64,
-    group_id: u64,
+    device_id: Uuid,
+    group_id: Uuid,
     data: String,
 ) -> Result<(), io::Error> {
     insert(
@@ -44,7 +79,7 @@ pub(crate) async fn insert_group(
     .await
 }
 
-pub(crate) async fn read_groups(device_id: u64) -> Result<Vec<(u64, String)>, io::Error> {
+pub(crate) async fn read_groups(device_id: Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
     read(
         Path::new(ROOT_DIR)
             .join(device_id.to_string())
@@ -54,8 +89,8 @@ pub(crate) async fn read_groups(device_id: u64) -> Result<Vec<(u64, String)>, io
 }
 
 pub(crate) async fn update_group(
-    device_id: u64,
-    group_id: u64,
+    device_id: Uuid,
+    group_id: Uuid,
     data: String,
 ) -> Result<(), io::Error> {
     update(
@@ -68,7 +103,7 @@ pub(crate) async fn update_group(
     .await
 }
 
-pub(crate) async fn delete_groups(device_id: u64, group_ids: &Vec<u64>) -> Result<(), io::Error> {
+pub(crate) async fn delete_groups(device_id: Uuid, group_ids: &Vec<Uuid>) -> Result<(), io::Error> {
     delete(
         Path::new(ROOT_DIR)
             .join(device_id.to_string())
@@ -79,9 +114,9 @@ pub(crate) async fn delete_groups(device_id: u64, group_ids: &Vec<u64>) -> Resul
 }
 
 pub(crate) async fn insert_points(
-    device_id: u64,
-    group_id: u64,
-    datas: &[(u64, String)],
+    device_id: Uuid,
+    group_id: Uuid,
+    datas: &Vec<(Uuid, String)>,
 ) -> Result<(), io::Error> {
     insert(
         Path::new(ROOT_DIR)
@@ -94,9 +129,9 @@ pub(crate) async fn insert_points(
 }
 
 pub(crate) async fn read_points(
-    device_id: u64,
-    group_id: u64,
-) -> Result<Vec<(u64, String)>, io::Error> {
+    device_id: Uuid,
+    group_id: Uuid,
+) -> Result<Vec<(Uuid, String)>, io::Error> {
     read(
         Path::new(ROOT_DIR)
             .join(device_id.to_string())
@@ -107,9 +142,9 @@ pub(crate) async fn read_points(
 }
 
 pub(crate) async fn update_point(
-    device_id: u64,
-    group_id: u64,
-    point_id: u64,
+    device_id: Uuid,
+    group_id: Uuid,
+    point_id: Uuid,
     data: String,
 ) -> Result<(), io::Error> {
     update(
@@ -124,9 +159,9 @@ pub(crate) async fn update_point(
 }
 
 pub(crate) async fn delete_points(
-    device_id: u64,
-    group_id: u64,
-    point_ids: &Vec<u64>,
+    device_id: Uuid,
+    group_id: Uuid,
+    point_ids: &Vec<Uuid>,
 ) -> Result<(), io::Error> {
     delete(
         Path::new(ROOT_DIR)
@@ -138,7 +173,7 @@ pub(crate) async fn delete_points(
     .await
 }
 
-async fn insert(dir: PathBuf, datas: &[(u64, String)], create_dir: bool) -> Result<(), io::Error> {
+async fn insert(dir: PathBuf, datas: &[(Uuid, String)], create_dir: bool) -> Result<(), io::Error> {
     let path = dir.join(FILE_NAME);
     let mut file = OpenOptions::new().append(true).open(path).await?;
     for (id, data) in datas {
@@ -159,7 +194,7 @@ async fn insert(dir: PathBuf, datas: &[(u64, String)], create_dir: bool) -> Resu
     file.flush().await
 }
 
-async fn read(path: impl AsRef<Path>) -> Result<Vec<(u64, String)>, io::Error> {
+async fn read(path: impl AsRef<Path>) -> Result<Vec<(Uuid, String)>, io::Error> {
     let mut file = OpenOptions::new().read(true).open(path).await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
@@ -174,7 +209,7 @@ async fn read(path: impl AsRef<Path>) -> Result<Vec<(u64, String)>, io::Error> {
         let id = &line[..pos];
         let data = &line[pos + 1..];
         let id = id
-            .parse::<u64>()
+            .parse::<Uuid>()
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "数据文件损坏"))?;
         result.push((id, data.to_string()));
     }
@@ -182,7 +217,7 @@ async fn read(path: impl AsRef<Path>) -> Result<Vec<(u64, String)>, io::Error> {
     Ok(result)
 }
 
-async fn update(path: impl AsRef<Path>, id: u64, data: String) -> Result<(), io::Error> {
+async fn update(path: impl AsRef<Path>, id: Uuid, data: String) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().write(true).open(path).await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
@@ -191,7 +226,7 @@ async fn update(path: impl AsRef<Path>, id: u64, data: String) -> Result<(), io:
     let mut lines: Vec<&str> = buf.split("\n").collect();
     for line in lines.iter_mut() {
         let split_pos = line.find('-').expect("数据文件损坏");
-        if line[..split_pos].parse::<u64>().expect("文件") == id {
+        if line[..split_pos].parse::<Uuid>().expect("文件") == id {
             *line = new_line.as_str();
         }
     }
@@ -201,14 +236,14 @@ async fn update(path: impl AsRef<Path>, id: u64, data: String) -> Result<(), io:
     Ok(())
 }
 
-async fn delete(path: impl AsRef<Path>, ids: &Vec<u64>) -> Result<(), io::Error> {
+async fn delete(path: impl AsRef<Path>, ids: &Vec<Uuid>) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().read(true).open(&path).await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
     let mut lines: Vec<&str> = buf.split("\n").collect();
     lines.retain(|line| match line.find(DELIMITER) {
-        Some(pos) => !ids.contains(&line[..pos].parse::<u64>().expect("文件")),
+        Some(pos) => !ids.contains(&line[..pos].parse::<Uuid>().expect("文件")),
         None => false,
     });
 

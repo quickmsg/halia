@@ -5,17 +5,18 @@ use serde::Deserialize;
 use tokio::sync::RwLock;
 use tracing::debug;
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp};
+use uuid::Uuid;
 
 use crate::storage;
 
 use super::point::Point;
 
 pub(crate) struct Group {
-    pub id: u64,
+    pub id: Uuid,
     pub name: String,
     pub interval: u64,
     pub points: RwLock<Vec<Point>>,
-    pub device_id: u64,
+    pub device_id: Uuid,
     auto_increment_id: AtomicU64,
 }
 
@@ -26,7 +27,7 @@ struct UpdateConf {
 }
 
 impl Group {
-    pub fn new(device_id: u64, group_id: u64, conf: &CreateGroupReq) -> Self {
+    pub fn new(device_id: Uuid, group_id: Uuid, conf: &CreateGroupReq) -> Self {
         Group {
             id: group_id,
             device_id,
@@ -45,7 +46,7 @@ impl Group {
 
     pub async fn create_points(
         &self,
-        create_points: Vec<(Option<u64>, CreatePointReq)>,
+        create_points: Vec<(Option<Uuid>, CreatePointReq)>,
     ) -> Result<()> {
         debug!("create points");
         let mut points = Vec::with_capacity(create_points.len());
@@ -57,7 +58,7 @@ impl Group {
                     points.push(point);
                 }
                 None => {
-                    let point_id = self.auto_increment_id.fetch_add(1, Ordering::SeqCst);
+                    let point_id = Uuid::new_v4();
                     let point = Point::new(conf.clone(), point_id)?;
                     points.push(point);
                     storage_infos.push((point_id, serde_json::to_string(&conf)?));
@@ -67,7 +68,6 @@ impl Group {
 
         self.points.write().await.extend(points);
         if storage_infos.len() > 0 {
-            debug!("stroage info length > 0");
             storage::insert_points(self.device_id, self.id, &storage_infos).await?;
         }
         Ok(())
@@ -91,7 +91,7 @@ impl Group {
         resps
     }
 
-    pub async fn update_point(&self, id: u64, req: &CreatePointReq) -> Result<()> {
+    pub async fn update_point(&self, id: Uuid, req: &CreatePointReq) -> Result<()> {
         match self
             .points
             .write()
@@ -112,7 +112,7 @@ impl Group {
         self.points.read().await.len()
     }
 
-    pub async fn delete_points(&self, ids: Vec<u64>) -> Result<()> {
+    pub async fn delete_points(&self, ids: Vec<Uuid>) -> Result<()> {
         self.points.write().await.retain(|p| !ids.contains(&p.id));
         storage::delete_points(self.device_id, self.id, &ids).await?;
         Ok(())

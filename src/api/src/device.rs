@@ -10,110 +10,111 @@ use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp,
 };
+use uuid::Uuid;
 
-use crate::{AppError, AppResp, DeleteIdsQuery};
+use crate::{AppResp, DeleteIdsQuery};
 
 pub(crate) async fn create_device(Json(req): Json<CreateDeviceReq>) -> AppResp<()> {
     trace!("create_device:{:?}", req);
     match GLOBAL_DEVICE_MANAGER.create_device(None, req).await {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn read_device(Path(id): Path<u64>) -> AppResp<DeviceDetailResp> {
+pub(crate) async fn read_device(Path(id): Path<Uuid>) -> AppResp<DeviceDetailResp> {
     trace!("get_device:{:?}", id);
     match GLOBAL_DEVICE_MANAGER.read_device(id).await {
-        Ok(device_detail) => AppResp::new(device_detail),
+        Ok(device_detail) => AppResp::with_data(device_detail),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn read_devices() -> AppResp<Vec<ListDevicesResp>> {
-    AppResp::new(GLOBAL_DEVICE_MANAGER.read_devices().await)
+    AppResp::with_data(GLOBAL_DEVICE_MANAGER.read_devices().await)
 }
 
-pub(crate) async fn start_device(Path(id): Path<u64>) -> AppResp<()> {
+pub(crate) async fn start_device(Path(id): Path<Uuid>) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER.start_device(id).await {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn stop_device(Path(id): Path<u64>) -> AppResp<()> {
+pub(crate) async fn stop_device(Path(id): Path<Uuid>) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER.stop_device(id).await {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn update_device(Path(id): Path<u64>, Json(conf): Json<Value>) -> AppResp<()> {
+pub(crate) async fn update_device(Path(id): Path<Uuid>, Json(conf): Json<Value>) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER.update_device(id, conf).await {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn delete_device(Path(id): Path<u64>) -> AppResp<()> {
+pub(crate) async fn delete_device(Path(id): Path<Uuid>) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER.delete_device(id).await {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn create_group(
-    Path(id): Path<u64>,
+    Path(id): Path<Uuid>,
     Json(create_group): Json<CreateGroupReq>,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
         .create_group(id, None, create_group)
         .await
     {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn read_groups(Path(id): Path<u64>) -> AppResp<Vec<ListGroupsResp>> {
+pub(crate) async fn read_groups(Path(id): Path<Uuid>) -> AppResp<Vec<ListGroupsResp>> {
     match GLOBAL_DEVICE_MANAGER.read_groups(id).await {
-        Ok(groups) => AppResp::new(groups),
+        Ok(groups) => AppResp::with_data(groups),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn update_group(
-    Path((device_id, group_id)): Path<(u64, u64)>,
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateGroupReq>,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
         .update_group(device_id, group_id, &req)
         .await
     {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn delete_groups(
-    Path(id): Path<u64>,
+    Path(id): Path<Uuid>,
     Query(query): Query<DeleteIdsQuery>,
 ) -> AppResp<()> {
-    let group_ids: Vec<u64> = query
+    let group_ids: Vec<Uuid> = query
         .ids
         .split(',')
-        .map(|s| match s.parse::<u64>() {
+        .map(|s| match s.parse::<Uuid>() {
             Ok(id) => id,
             Err(_) => todo!(),
         })
         .collect();
     match GLOBAL_DEVICE_MANAGER.delete_groups(id, group_ids).await {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn create_points(
-    Path((device_id, group_id)): Path<(u64, u64)>,
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<Vec<CreatePointReq>>,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
@@ -122,26 +123,26 @@ pub(crate) async fn create_points(
             group_id,
             req.into_iter()
                 .map(|req| (None, req))
-                .collect::<Vec<(Option<u64>, CreatePointReq)>>(),
+                .collect::<Vec<(Option<Uuid>, CreatePointReq)>>(),
         )
         .await
     {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn read_points(
-    Path((device_id, group_id)): Path<(u64, u64)>,
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
 ) -> AppResp<Vec<ListPointResp>> {
     match GLOBAL_DEVICE_MANAGER.read_points(device_id, group_id).await {
-        Ok(values) => AppResp::new(values),
+        Ok(values) => AppResp::with_data(values),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn update_point(
-    Path((device_id, group_id, point_id)): Path<(u64, u64, u64)>,
+    Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(req): Json<CreatePointReq>,
 ) -> AppResp<()> {
     debug!("update_point:{:?}", req);
@@ -149,26 +150,26 @@ pub(crate) async fn update_point(
         .update_point(device_id, group_id, point_id, &req)
         .await
     {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn delete_points(
-    Path((device_id, group_id)): Path<(u64, u64)>,
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Query(query): Query<DeleteIdsQuery>,
 ) -> AppResp<()> {
-    let point_ids: Vec<u64> = query
+    let point_ids: Vec<Uuid> = query
         .ids
         .split(',')
-        .map(|s| s.parse::<u64>().map_err(|_e| return HaliaError::ParseErr))
-        .collect::<Result<Vec<u64>, _>>()
+        .map(|s| s.parse::<Uuid>().map_err(|_e| return HaliaError::ParseErr))
+        .collect::<Result<Vec<Uuid>, _>>()
         .expect("");
     match GLOBAL_DEVICE_MANAGER
         .delete_points(device_id, group_id, point_ids)
         .await
     {
-        Ok(()) => AppResp::new(()),
+        Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
