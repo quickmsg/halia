@@ -13,7 +13,6 @@ pub struct CreateDeviceReq {
 pub struct DeviceDetailResp {
     pub id: Uuid,
     pub r#type: &'static str,
-    pub name: String,
     pub conf: Value,
 }
 
@@ -21,9 +20,10 @@ pub struct DeviceDetailResp {
 pub struct ListDevicesResp {
     pub id: Uuid,
     pub name: String,
-    pub status: u8,
-    pub rtt: u16,
     pub r#type: &'static str,
+    pub on: bool,
+    pub err: bool,
+    pub rtt: u16,
 }
 
 // TODO

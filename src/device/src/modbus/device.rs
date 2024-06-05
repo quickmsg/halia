@@ -65,35 +65,32 @@ enum Encode {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
-struct Conf {
-    name: String,
-    link: Link,
-    interval: u64,
-    conf: Value,
+#[serde(untagged)]
+#[serde(rename_all = "snake_case")]
+enum Conf {
+    TcpConf(TcpConf),
+    RtuConf(RtuConf),
 }
 
 #[derive(Deserialize, Clone, Serialize)]
 pub(crate) struct TcpConf {
+    name: String,
     mode: Mode,
     encode: Encode,
-    max_retry: u8,
-    command_interval: u64,
     ip: String,
     port: u16,
-    timeout: u64,
+    interval: u64,
 }
 
 #[derive(Deserialize, Clone, Serialize)]
 struct RtuConf {
-    max_retry: u8,
-    command_interval: u64,
+    name: String,
+    interval: u64,
     path: String,
     stop_bits: u8,
     baund_rate: u32,
     data_bits: u8,
     parity: u8,
-    port: u16,
-    timeout: u64,
 }
 
 impl Modbus {
@@ -123,17 +120,14 @@ impl Modbus {
         let conf = self.conf.clone();
         let groups = self.groups.clone();
 
-        let interval = self.conf.interval;
-        // let rtt = self.rtt.clone();
-
         let err = self.err.clone();
         let on = self.on.clone();
 
         tokio::spawn(async move {
             loop {
-                debug!("device runing");
+                err.store(true, Ordering::SeqCst);
                 match Modbus::get_context(&conf).await {
-                    Ok(ctx) => {
+                    Ok((ctx, interval)) => {
                         err.store(false, Ordering::SeqCst);
                         run_event_loop(
                             ctx,
@@ -158,29 +152,26 @@ impl Modbus {
         });
     }
 
-    async fn get_context(conf: &Conf) -> Result<Context> {
-        match conf.link {
-            Link::Ethernet => {
-                let conf: TcpConf = serde_json::from_value(conf.conf.clone())?;
-                // let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse()?;
+    async fn get_context(conf: &Conf) -> Result<(Context, u64)> {
+        match conf {
+            Conf::TcpConf(conf) => {
                 let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
                 match conf.encode {
                     Encode::Tcp => {
                         let ctx = tcp::connect(socket_addr).await?;
-                        Ok(ctx)
+                        Ok((ctx, conf.interval))
                     }
                     Encode::Rtu => {
                         let transport = TcpStream::connect(socket_addr).await?;
-                        Ok(rtu::attach(transport))
+                        Ok((rtu::attach(transport), conf.interval))
                     }
                 }
             }
-            Link::Serial => {
-                let conf: RtuConf = serde_json::from_value(conf.conf.clone())?;
-                let builder = tokio_serial::new(conf.path, conf.baund_rate);
+            Conf::RtuConf(conf) => {
+                let builder = tokio_serial::new(conf.path.clone(), conf.baund_rate);
                 // let port = SerialStream::open(&builder)?;
                 let port = SerialStream::open(&builder).unwrap();
-                Ok(rtu::attach(port))
+                Ok((rtu::attach(port), conf.interval))
             }
         }
     }
@@ -232,21 +223,28 @@ impl Device for Modbus {
     }
 
     fn get_info(&self) -> ListDevicesResp {
+        let name = match &self.conf {
+            Conf::TcpConf(conf) => conf.name.clone(),
+            Conf::RtuConf(conf) => conf.name.clone(),
+        };
         ListDevicesResp {
             id: self.id,
-            name: self.conf.name.clone(),
-            // todo
-            status: 3,
-            rtt: self.rtt.load(Ordering::SeqCst),
+            name,
             r#type: TYPE,
+            rtt: self.rtt.load(Ordering::SeqCst),
+            on: self.on.load(Ordering::SeqCst),
+            err: self.err.load(Ordering::SeqCst),
         }
+    }
+
+    fn get_conf(&self) -> String {
+        serde_json::to_string(&self.conf).unwrap()
     }
 
     fn get_detail(&self) -> DeviceDetailResp {
         DeviceDetailResp {
             id: self.id,
             r#type: &TYPE,
-            name: self.conf.name.clone(),
             conf: json!(&self.conf),
         }
     }

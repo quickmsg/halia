@@ -10,12 +10,14 @@ use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
+use tracing::debug;
 use uuid::Uuid;
 
 static ROOT_DIR: &str = "storage";
 static FILE_NAME: &str = "data";
-static DELIMITER: char = '-';
+static DELIMITER: char = '|';
 
+#[derive(Debug)]
 pub(crate) enum Status {
     Stopped = 0,
     Runing = 1,
@@ -37,6 +39,7 @@ pub(crate) async fn insert_device(id: Uuid, data: String) -> Result<(), io::Erro
 
 pub(crate) async fn read_devices() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
     let datas = read(Path::new(ROOT_DIR).join(FILE_NAME)).await?;
+    debug!("{:?}", datas);
     let mut devices = vec![];
     for (id, data) in datas {
         let pos = data.find(DELIMITER).expect("数据文件损坏");
@@ -195,9 +198,11 @@ async fn insert(dir: PathBuf, datas: &[(Uuid, String)], create_dir: bool) -> Res
 }
 
 async fn read(path: impl AsRef<Path>) -> Result<Vec<(Uuid, String)>, io::Error> {
+    debug!("read file");
     let mut file = OpenOptions::new().read(true).open(path).await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
+    debug!("read file done");
 
     let mut result = vec![];
     for line in buf.split("\n") {
@@ -206,13 +211,17 @@ async fn read(path: impl AsRef<Path>) -> Result<Vec<(Uuid, String)>, io::Error> 
         }
 
         let pos = line.find(DELIMITER).expect("数据文件损坏");
+        debug!("find pos {}", pos);
         let id = &line[..pos];
+        debug!("fund id {}", id);
         let data = &line[pos + 1..];
         let id = id
             .parse::<Uuid>()
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "数据文件损坏"))?;
         result.push((id, data.to_string()));
     }
+
+    debug!("result is :{:?}", result);
 
     Ok(result)
 }

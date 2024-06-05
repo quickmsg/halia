@@ -1,0 +1,364 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Swagger Petstore - OpenAPI 3.0",
+        "description": "This is a sample Pet Store Server based on the OpenAPI 3.0 specification.  You can find out more about\nSwagger at [https://swagger.io](https://swagger.io). In the third iteration of the pet store, we've switched to the design first approach!\nYou can now help us improve the API whether it's by making changes to the definition itself or to the code.\nThat way, with time, we can improve the API in general, and expose some of the new features in OAS3.\n\n_If you're looking for the Swagger 2.0/OAS 2.0 version of Petstore, then click [here](https://editor.swagger.io/?url=https://petstore.swagger.io/v2/swagger.yaml). Alternatively, you can load via the `Edit > Load Petstore OAS 2.0` menu option!_\n\nSome useful links:\n- [The Pet Store repository](https://github.com/swagger-api/swagger-petstore)\n- [The source API definition for the Pet Store](https://github.com/swagger-api/swagger-petstore/blob/master/src/main/resources/openapi.yaml)",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "email": "apiteam@swagger.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0.11"
+    },
+    "servers": [
+        {
+            "url": "https://petstore3.swagger.io/api/v3"
+        }
+    ],
+    "tags": [
+        {
+            "name": "设备",
+            "description": "设备管理"
+        }
+    ],
+    "paths": {
+        "/device": {
+            "post": {
+                "tags": [
+                    "设备"
+                ],
+                "summary": "创建",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Device"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "请求成功"
+                    }
+                }
+            }
+        },
+        "/device/{deviceId}": {
+            "get": {
+                "tags": [
+                    "设备"
+                ],
+                "summary": "查看详情",
+                "parameters": [
+                    {
+                        "name": "deviceId",
+                        "in": "path",
+                        "description": "ID of order that needs to be fetched",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "请求成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeviceDetail"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "设备"
+                ],
+                "summary": "更新",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "description": "同创建时候的配置"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "parameters": [
+                    {
+                        "name": "deviceId",
+                        "in": "path",
+                        "description": "ID of order that needs to be fetched",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "请求成功"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "设备"
+                ],
+                "summary": "删除",
+                "parameters": [
+                    {
+                        "name": "deviceId",
+                        "in": "path",
+                        "description": "ID of order that needs to be fetched",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "请求成功"
+                    }
+                }
+            }
+        },
+        "/device/{deviceId}/start": {
+            "put": {
+                "tags": [
+                    "设备"
+                ],
+                "summary": "启动",
+                "parameters": [
+                    {
+                        "name": "deviceId",
+                        "in": "path",
+                        "description": "ID of order that needs to be fetched",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "请求成功"
+                    }
+                }
+            }
+        },
+        "/device/{deviceId}/stop": {
+            "put": {
+                "tags": [
+                    "设备"
+                ],
+                "summary": "停止",
+                "parameters": [
+                    {
+                        "name": "deviceId",
+                        "in": "path",
+                        "description": "ID of order that needs to be fetched",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "请求成功"
+                    }
+                }
+            }
+        },
+        "/devices": {
+            "get": {
+                "tags": [
+                    "设备"
+                ],
+                "summary": "查看列表",
+                "responses": {
+                    "200": {
+                        "description": "请求成功",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "type": {
+                                            "type": "string"
+                                        },
+                                        "on": {
+                                            "type": "boolean"
+                                        },
+                                        "err": {
+                                            "type": "boolean"
+                                        },
+                                        "rtt": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Device": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string"
+                    },
+                    "conf": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/ModbusTcpConf"
+                            },
+                            {
+                                "$ref": "#/components/schemas/ModbusRtuConf"
+                            }
+                        ]
+                    }
+                }
+            },
+            "DeviceDetail": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "conf": {
+                        "type": "object",
+                        "description": "同创建的配置"
+                    }
+                }
+            },
+            "ModbusTcpConf": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": [
+                            "client",
+                            "server"
+                        ]
+                    },
+                    "encode": {
+                        "type": "string",
+                        "enum": [
+                            "tcp",
+                            "rtu"
+                        ]
+                    },
+                    "ip": {
+                        "type": "string"
+                    },
+                    "port": {
+                        "type": "integer"
+                    },
+                    "interval": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "ModbusRtuConf": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "path": {
+                        "type": "string"
+                    },
+                    "stop_bits": {
+                        "type": "integer",
+                        "enum": [
+                            1,
+                            2
+                        ]
+                    },
+                    "baund_rage": {
+                        "type": "integer"
+                    },
+                    "data_bits": {
+                        "type": "integer",
+                        "enum": [
+                            5,
+                            6,
+                            7,
+                            8
+                        ]
+                    },
+                    "parity": {
+                        "type": "integer",
+                        "enum": [
+                            0,
+                            1,
+                            2
+                        ],
+                        "description": "校验规则，0为不校验，1为奇数校验，2为偶数校验"
+                    }
+                }
+            },
+            "ApiResponse": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "data": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "petstore_auth": {
+                "type": "oauth2",
+                "flows": {
+                    "implicit": {
+                        "authorizationUrl": "https://petstore3.swagger.io/oauth/authorize",
+                        "scopes": {
+                            "write:pets": "modify pets in your account",
+                            "read:pets": "read your pets"
+                        }
+                    }
+                }
+            },
+            "api_key": {
+                "type": "apiKey",
+                "name": "api_key",
+                "in": "header"
+            }
+        }
+    }
+}

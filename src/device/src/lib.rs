@@ -86,7 +86,11 @@ impl DeviceManager {
             .iter_mut()
             .find(|(id, _)| *id == device_id)
         {
-            Some((_, device)) => device.start().await,
+            Some((_, device)) => {
+                device.start().await?;
+                storage::update_device(device_id, device.get_conf(), Status::Runing).await?;
+                Ok(())
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -99,7 +103,11 @@ impl DeviceManager {
             .iter_mut()
             .find(|(id, _)| *id == device_id)
         {
-            Some((_, device)) => Ok(device.stop().await),
+            Some((_, device)) => {
+                device.stop().await;
+                storage::update_device(device_id, device.get_conf(), Status::Stopped).await?;
+                Ok(())
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -286,6 +294,7 @@ impl DeviceManager {
 impl DeviceManager {
     pub async fn recover(&self) -> Result<()> {
         let devices = storage::read_devices().await?;
+        debug!("{:?}", devices);
         for (id, status, data) in devices {
             let req: CreateDeviceReq = serde_json::from_str(data.as_str())?;
             self.create_device(Some(id), req).await?;
@@ -343,6 +352,7 @@ pub struct DeviceInfo {
 trait Device: Sync + Send {
     fn get_detail(&self) -> DeviceDetailResp;
     fn get_info(&self) -> ListDevicesResp;
+    fn get_conf(&self) -> String;
     async fn start(&mut self) -> Result<()>;
     async fn stop(&mut self);
     async fn update(&mut self, conf: Value) -> Result<()>;
