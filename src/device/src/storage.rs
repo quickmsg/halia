@@ -68,7 +68,6 @@ pub(crate) async fn read_devices() -> Result<Vec<(Uuid, Status, String)>, io::Er
 }
 
 pub(crate) async fn update_device_conf(id: Uuid, data: String) -> Result<(), io::Error> {
-    debug!("here");
     let path = Path::new(ROOT_DIR).join(DATA_FILE);
     let mut file = OpenOptions::new().read(true).write(true).open(path).await?;
     let mut buf = String::new();

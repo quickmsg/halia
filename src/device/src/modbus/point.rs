@@ -9,14 +9,9 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub(crate) struct Point {
     pub id: Uuid,
+    pub conf: PointConf,
     pub name: String,
-    pub r#type: DataType,
-    pub slave: u8,
-    pub area: u8,
-    pub address: u16,
-    pub describe: Option<String>,
-    pub quantity: u16,
-    pub value: Value,
+    pub quantity: u8,
 }
 
 #[derive(Deserialize, Debug)]

@@ -69,8 +69,6 @@ impl Group {
                 address: point.address,
                 r#type: "int16".to_string(),
                 value: point.value.clone(),
-                attribute: 3,
-                multi: 1.5,
                 describe: point.describe.clone(),
             })
         }

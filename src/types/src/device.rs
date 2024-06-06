@@ -54,9 +54,7 @@ pub struct ListPointResp {
     pub name: String,
     pub address: u16,
     pub r#type: String,
-    pub attribute: u8,
     pub value: Value,
-    pub multi: f32,
     pub describe: Option<String>,
 }
 
