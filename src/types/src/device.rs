@@ -73,7 +73,6 @@ pub enum DataType {
     Uint64(Endian, Endian, Endian, Endian),
     Float32(Endian, Endian),
     Float64(Endian, Endian, Endian, Endian),
-    Bit,
     // TODO
     String,
     Bytes,
@@ -133,7 +132,6 @@ impl<'de> Deserialize<'de> for DataType {
                         let endian = extract_endian(&map, 4).unwrap();
                         DataType::Float64(endian[0], endian[1], endian[2], endian[3])
                     }
-                    "bit" => DataType::Bit,
                     "string" => DataType::String,
                     "bytes" => DataType::Bytes,
                     _ => {
@@ -196,12 +194,11 @@ impl Serialize for DataType {
             }
             DataType::Bytes => serde_json::json!({"type": "bytes"}).serialize(serializer),
             DataType::String => serde_json::json!({"type": "string"}).serialize(serializer),
-            DataType::Bit => serde_json::json!({"type": "bit"}).serialize(serializer),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Endian {
     BigEndian,
     LittleEndian,
