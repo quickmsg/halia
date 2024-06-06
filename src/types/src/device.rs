@@ -58,7 +58,11 @@ pub struct ListPointResp {
     pub describe: Option<String>,
 }
 
-pub type CreatePointReq = Value;
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct CreatePointReq {
+    pub name: String,
+    pub conf: Value,
+}
 
 #[derive(Debug)]
 pub enum DataType {

@@ -335,11 +335,11 @@ impl DeviceManager {
 
     async fn recover_points(&self, device_id: Uuid, group_id: Uuid) -> Result<()> {
         let points = storage::read_points(device_id, group_id).await?;
-        let points: Vec<(Option<Uuid>, Value)> = points
+        let points: Vec<(Option<Uuid>, CreatePointReq)> = points
             .into_iter()
             .map(|(id, data)| {
-                let value: Value = serde_json::from_str(data.as_str()).unwrap();
-                (Some(id), value)
+                let req: CreatePointReq = serde_json::from_str(data.as_str()).unwrap();
+                (Some(id), req)
             })
             .collect();
         self.create_points(device_id, group_id, points).await?;

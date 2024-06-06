@@ -66,10 +66,10 @@ impl Group {
             resps.push(ListPointResp {
                 id: point.id,
                 name: point.name.clone(),
-                address: point.address,
+                address: point.conf.address,
                 r#type: "int16".to_string(),
                 value: point.value.clone(),
-                describe: point.describe.clone(),
+                describe: point.conf.describe.clone(),
             })
         }
 

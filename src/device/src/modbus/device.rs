@@ -32,7 +32,7 @@ use uuid::Uuid;
 
 use crate::{storage, Device};
 
-use super::{group::Group, point::PointConf};
+use super::{group::Group, point};
 
 static TYPE: &str = "modbus";
 
@@ -47,7 +47,7 @@ pub(crate) struct Modbus {
     group_signal_tx: Option<broadcast::Sender<Option<Uuid>>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
-    write_tx: Option<mpsc::Sender<PointConf>>,
+    write_tx: Option<mpsc::Sender<point::Conf>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -107,7 +107,7 @@ impl Modbus {
         &self,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut read_rx: mpsc::Receiver<Uuid>,
-        mut write_rx: mpsc::Receiver<PointConf>,
+        mut write_rx: mpsc::Receiver<point::Conf>,
     ) {
         let conf = self.conf.clone();
         let groups = self.groups.clone();
@@ -293,7 +293,7 @@ impl Device for Modbus {
         let (read_tx, read_rx) = mpsc::channel::<Uuid>(20);
         self.read_tx = Some(read_tx);
 
-        let (write_tx, write_rx) = mpsc::channel::<PointConf>(10);
+        let (write_tx, write_rx) = mpsc::channel::<point::Conf>(10);
         self.write_tx = Some(write_tx);
 
         self.run(stop_signal_rx, read_rx, write_rx).await;
@@ -431,7 +431,7 @@ impl Device for Modbus {
 async fn run_event_loop(
     mut ctx: Context,
     stop_signal: &mut mpsc::Receiver<()>,
-    write_rx: &mut mpsc::Receiver<PointConf>,
+    write_rx: &mut mpsc::Receiver<point::Conf>,
     read_rx: &mut mpsc::Receiver<Uuid>,
     groups: Arc<RwLock<Vec<Group>>>,
     interval: u64,
@@ -472,12 +472,12 @@ async fn read_group_points(
         .find(|group| group.id == group_id)
     {
         for point in group.points.write().await.iter_mut() {
-            ctx.set_slave(Slave(point.slave));
+            ctx.set_slave(Slave(point.conf.slave));
             // for rtt
             // let start_time = Instant::now();
-            match point.area {
+            match point.conf.area {
                 0 => match ctx
-                    .read_discrete_inputs(point.address, point.quantity)
+                    .read_discrete_inputs(point.conf.address, point.quantity)
                     .await
                 {
                     Ok(data) => {
@@ -501,7 +501,7 @@ async fn read_group_points(
                         }
                     },
                 },
-                1 => match ctx.read_coils(point.address, point.quantity).await {
+                1 => match ctx.read_coils(point.conf.address, point.quantity).await {
                     Ok(data) => {
                         let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
                             if *elem {
@@ -524,7 +524,7 @@ async fn read_group_points(
                     },
                 },
                 4 => match ctx
-                    .read_input_registers(point.address, point.quantity)
+                    .read_input_registers(point.conf.address, point.quantity)
                     .await
                 {
                     Ok(data) => {
@@ -546,7 +546,7 @@ async fn read_group_points(
                     },
                 },
                 3 => match ctx
-                    .read_holding_registers(point.address, point.quantity)
+                    .read_holding_registers(point.conf.address, point.quantity)
                     .await
                 {
                     Ok(data) => {
