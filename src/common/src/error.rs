@@ -30,7 +30,12 @@ impl From<io::Error> for HaliaError {
 
 impl Display for HaliaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "todo")
+        match self {
+            HaliaError::NotFound => write!(f, "未找到"),
+            HaliaError::ProtocolNotSupported => write!(f, "协议未支持"),
+            HaliaError::ParseErr => write!(f, "解析错误"),
+            HaliaError::IoErr => write!(f, "IO错误"),
+        }
     }
 }
 

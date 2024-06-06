@@ -1,7 +1,5 @@
 use common::error::{HaliaError, Result};
-use serde::Deserialize;
 use tokio::sync::RwLock;
-use tracing::debug;
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp};
 use uuid::Uuid;
 
@@ -15,12 +13,6 @@ pub(crate) struct Group {
     pub interval: u64,
     pub points: RwLock<Vec<Point>>,
     pub device_id: Uuid,
-}
-
-#[derive(Deserialize)]
-struct UpdateConf {
-    pub name: Option<String>,
-    pub interval: Option<u64>,
 }
 
 impl Group {
@@ -44,7 +36,6 @@ impl Group {
         &self,
         create_points: Vec<(Option<Uuid>, CreatePointReq)>,
     ) -> Result<()> {
-        debug!("create points");
         let mut points = Vec::with_capacity(create_points.len());
         let mut storage_infos = Vec::with_capacity(create_points.len());
         for (point_id, conf) in create_points {

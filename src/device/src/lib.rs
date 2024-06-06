@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::sync::LazyLock;
 use storage::Status;
 use tokio::sync::RwLock;
-use tracing::debug;
+use tracing::error;
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp,
@@ -69,9 +69,7 @@ impl DeviceManager {
         {
             Some((_, device)) => {
                 device.update(conf.clone()).await?;
-                // TODO
-                storage::update_device(device_id, serde_json::from_value(conf)?, Status::Runing)
-                    .await?;
+                storage::update_device_conf(device_id, serde_json::from_value(conf)?).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
@@ -87,9 +85,20 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => {
-                device.start().await?;
-                storage::update_device(device_id, device.get_conf(), Status::Runing).await?;
-                Ok(())
+                match device.start().await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("device start err:{}", e);
+                        return Err(e);
+                    }
+                }
+                match storage::update_device_status(device_id, Status::Runing).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        error!("storage update device err:{}", e);
+                        Err(e.into())
+                    }
+                }
             }
             None => Err(HaliaError::NotFound),
         }
@@ -105,7 +114,7 @@ impl DeviceManager {
         {
             Some((_, device)) => {
                 device.stop().await;
-                storage::update_device(device_id, device.get_conf(), Status::Stopped).await?;
+                storage::update_device_status(device_id, Status::Stopped).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
@@ -294,7 +303,6 @@ impl DeviceManager {
 impl DeviceManager {
     pub async fn recover(&self) -> Result<()> {
         let devices = storage::read_devices().await?;
-        debug!("{:?}", devices);
         for (id, status, data) in devices {
             let req: CreateDeviceReq = serde_json::from_str(data.as_str())?;
             self.create_device(Some(id), req).await?;
@@ -309,7 +317,6 @@ impl DeviceManager {
 
     async fn recover_group(&self, device_id: Uuid) -> Result<()> {
         let groups = storage::read_groups(device_id).await?;
-        debug!("read groups is :{:?}", groups);
         let groups: Vec<(Option<Uuid>, CreateGroupReq)> = groups
             .into_iter()
             .map(|(id, data)| {
@@ -336,7 +343,6 @@ impl DeviceManager {
             })
             .collect();
         self.create_points(device_id, group_id, points).await?;
-        debug!("recover points done");
         Ok(())
     }
 }
@@ -350,9 +356,9 @@ pub struct DeviceInfo {
 
 #[async_trait]
 trait Device: Sync + Send {
+    // device
     fn get_detail(&self) -> DeviceDetailResp;
     fn get_info(&self) -> ListDevicesResp;
-    fn get_conf(&self) -> String;
     async fn start(&mut self) -> Result<()>;
     async fn stop(&mut self);
     async fn update(&mut self, conf: Value) -> Result<()>;

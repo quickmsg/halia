@@ -8,6 +8,7 @@ use tracing_subscriber::FmtSubscriber;
 async fn main() -> Result<()> {
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::TRACE)
+        .with_line_number(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
     GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
