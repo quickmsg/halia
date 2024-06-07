@@ -1,5 +1,5 @@
 use axum::{
-    http::StatusCode,
+    http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
     Json, Router,
@@ -7,6 +7,7 @@ use axum::{
 use common::error::HaliaError;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
+use tower_http::cors::{Any, CorsLayer};
 
 mod device;
 mod rule;
@@ -90,7 +91,8 @@ pub async fn start() {
         .route(
             "/device/:device_id/group/:group_id/points",
             delete(device::delete_points),
-        );
+        )
+        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
 
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();

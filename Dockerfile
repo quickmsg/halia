@@ -1,20 +1,15 @@
-# TODO
-# Compile
-FROM rustlang/rust:nightly-alpine3.20 AS compiler
+FROM rustlang/rust:nightly AS compiler
+RUN apt-get install musl-tools
 
 WORKDIR /
 
 COPY    . .
-RUN     cargo build --release
+RUN     rustup target add x86_64-unknown-linux-musl
+RUN     cargo build --release --target=x86_64-unknown-linux-musl
 
-# Run
 FROM    alpine:3.20
 
-# add meilisearch and meilitool to the `/bin` so you can run it from anywhere
-# and it's easy to find.
 COPY    --from=compiler /target/release/server /bin/server
-# to move our PWD in there.
-# We don't want to put the meilisearch binary
 WORKDIR /storage
 RUN touch /storage/data
 
