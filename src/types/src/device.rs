@@ -34,14 +34,6 @@ pub struct ListDevicesResp {
     pub rtt: u16,
 }
 
-// TODO
-#[derive(Serialize)]
-pub enum DeviceStatus {
-    Runing,
-    Paused,
-    Stoped,
-}
-
 #[derive(Deserialize, Serialize, Debug)]
 pub struct CreateGroupReq {
     pub name: String,

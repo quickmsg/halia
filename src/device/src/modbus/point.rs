@@ -17,7 +17,6 @@ pub(crate) struct Point {
 
 #[derive(Deserialize, Debug)]
 pub(crate) struct Conf {
-    pub name: String,
     pub r#type: DataType,
     pub slave: u8,
     pub area: u8,

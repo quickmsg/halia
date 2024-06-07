@@ -73,7 +73,7 @@ pub(crate) async fn update_device_conf(id: Uuid, data: String) -> Result<(), io:
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
-    let mut new_line = String::new();
+    let new_line;
     let mut lines: Vec<&str> = buf.split("\n").collect();
     for line in lines.iter_mut() {
         let fields: Vec<&str> = line.split(DELIMITER).collect();
@@ -106,7 +106,7 @@ pub(crate) async fn update_device_status(id: Uuid, status: Status) -> Result<(),
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
-    let mut new_line = String::new();
+    let new_line;
     let mut lines: Vec<&str> = buf.split("\n").collect();
     for line in lines.iter_mut() {
         let fields: Vec<&str> = line.split(DELIMITER).collect();
