@@ -1,6 +1,6 @@
 use common::error::{HaliaError, Result};
 use tokio::sync::RwLock;
-use types::device::{CreateGroupReq, CreatePointReq, ListPointResp};
+use types::device::{CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupReq};
 use uuid::Uuid;
 
 use crate::storage;
@@ -27,7 +27,7 @@ impl Group {
         }
     }
 
-    pub fn update(&mut self, req: &CreateGroupReq) -> Result<()> {
+    pub fn update(&mut self, req: &UpdateGroupReq) -> Result<()> {
         self.name = req.name.clone();
         self.interval = req.interval;
         Ok(())

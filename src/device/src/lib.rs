@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, UpdateDeviceReq,
+    ListGroupsResp, ListPointResp, UpdateDeviceReq, UpdateGroupReq,
 };
 use uuid::Uuid;
 
@@ -192,7 +192,7 @@ impl DeviceManager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        req: &CreateGroupReq,
+        req: &UpdateGroupReq,
     ) -> Result<()> {
         match self
             .devices
@@ -377,7 +377,7 @@ trait Device: Sync + Send {
         create_group: &CreateGroupReq,
     ) -> Result<()>;
     async fn read_groups(&self) -> Result<Vec<ListGroupsResp>>;
-    async fn update_group(&self, group_id: Uuid, req: &CreateGroupReq) -> Result<()>;
+    async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> Result<()>;
     async fn delete_groups(&self, ids: Vec<Uuid>) -> Result<()>;
 
     // points

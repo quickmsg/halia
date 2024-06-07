@@ -7,7 +7,7 @@ use device::GLOBAL_DEVICE_MANAGER;
 use tracing::{debug, trace};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, UpdateDeviceReq,
+    ListGroupsResp, ListPointResp, UpdateDeviceReq, UpdateGroupReq,
 };
 use uuid::Uuid;
 
@@ -24,7 +24,7 @@ pub(crate) async fn create_device(Json(req): Json<CreateDeviceReq>) -> AppResp<(
 pub(crate) async fn read_device(Path(id): Path<Uuid>) -> AppResp<DeviceDetailResp> {
     trace!("get_device:{:?}", id);
     match GLOBAL_DEVICE_MANAGER.read_device(id).await {
-        Ok(device_detail) => AppResp::with_data(device_detail),
+        Ok(resp) => AppResp::with_data(resp),
         Err(e) => e.into(),
     }
 }
@@ -66,12 +66,9 @@ pub(crate) async fn delete_device(Path(id): Path<Uuid>) -> AppResp<()> {
 
 pub(crate) async fn create_group(
     Path(id): Path<Uuid>,
-    Json(create_group): Json<CreateGroupReq>,
+    Json(req): Json<CreateGroupReq>,
 ) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER
-        .create_group(id, None, create_group)
-        .await
-    {
+    match GLOBAL_DEVICE_MANAGER.create_group(id, None, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
@@ -86,7 +83,7 @@ pub(crate) async fn read_groups(Path(id): Path<Uuid>) -> AppResp<Vec<ListGroupsR
 
 pub(crate) async fn update_group(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateGroupReq>,
+    Json(req): Json<UpdateGroupReq>,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
         .update_group(device_id, group_id, &req)
@@ -161,12 +158,16 @@ pub(crate) async fn delete_points(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Query(query): Query<DeleteIdsQuery>,
 ) -> AppResp<()> {
-    let point_ids: Vec<Uuid> = query
+    let point_ids: Vec<Uuid> = match query
         .ids
         .split(',')
         .map(|s| s.parse::<Uuid>().map_err(|_e| return HaliaError::ParseErr))
         .collect::<Result<Vec<Uuid>, _>>()
-        .expect("");
+    {
+        Ok(ids) => ids,
+        Err(e) => return e.into(),
+    };
+
     match GLOBAL_DEVICE_MANAGER
         .delete_points(device_id, group_id, point_ids)
         .await

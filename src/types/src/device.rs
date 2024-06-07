@@ -40,6 +40,12 @@ pub struct CreateGroupReq {
     pub interval: u64,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct UpdateGroupReq {
+    pub name: String,
+    pub interval: u64,
+}
+
 #[derive(Serialize)]
 pub struct ListGroupsResp {
     pub id: Uuid,

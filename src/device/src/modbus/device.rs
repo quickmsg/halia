@@ -26,7 +26,7 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error, trace};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, Mode, UpdateDeviceReq,
+    ListGroupsResp, ListPointResp, Mode, UpdateDeviceReq, UpdateGroupReq,
 };
 use uuid::Uuid;
 
@@ -63,8 +63,8 @@ enum Encode {
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
 enum Conf {
-    TcpConf(EthernetConf),
-    RtuConf(SerialConf),
+    EthernetConf(EthernetConf),
+    SerialConf(SerialConf),
 }
 
 #[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
@@ -74,6 +74,22 @@ pub(crate) struct EthernetConf {
     ip: String,
     port: u16,
     interval: u64,
+}
+
+impl EthernetConf {
+    fn validate(&self) -> bool {
+        match format!("{}:{}", self.ip, self.port).parse::<SocketAddr>() {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+}
+
+// TODO
+impl SerialConf {
+    fn validate(&self) -> bool {
+        true
+    } 
 }
 
 #[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
@@ -146,7 +162,7 @@ impl Modbus {
 
     async fn get_context(conf: &Conf) -> Result<(Context, u64)> {
         match conf {
-            Conf::TcpConf(conf) => {
+            Conf::EthernetConf(conf) => {
                 let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
                 match conf.encode {
                     Encode::Tcp => {
@@ -159,7 +175,7 @@ impl Modbus {
                     }
                 }
             }
-            Conf::RtuConf(conf) => {
+            Conf::SerialConf(conf) => {
                 let builder = tokio_serial::new(conf.path.clone(), conf.baund_rate);
                 let mut port = SerialStream::open(&builder).unwrap();
                 port.set_baud_rate(conf.baund_rate).unwrap();
@@ -369,7 +385,7 @@ impl Device for Modbus {
         Ok(resps)
     }
 
-    async fn update_group(&self, group_id: Uuid, req: &CreateGroupReq) -> Result<()> {
+    async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> Result<()> {
         match self
             .groups
             .write()
@@ -380,7 +396,11 @@ impl Device for Modbus {
             Some(group) => {
                 let _ = group.update(&req);
                 if self.on.load(Ordering::SeqCst) {
-                    let _ = self.group_signal_tx.as_ref().unwrap().send(Some(group_id));
+                    match self.group_signal_tx.as_ref().unwrap().send(Some(group_id)) {
+                        Ok(_) => {}
+                        Err(e) => error!("group_signals send err :{:?}", e),
+                    }
+
                     self.run_group_timer(group_id, req.interval);
                 }
             }
