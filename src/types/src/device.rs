@@ -6,6 +6,13 @@ use uuid::Uuid;
 #[derive(Deserialize, Debug, Serialize)]
 pub struct CreateDeviceReq {
     pub r#type: String,
+    pub name: String,
+    pub conf: Value,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct UpdateDeviceReq {
+    pub name: String,
     pub conf: Value,
 }
 
@@ -13,6 +20,7 @@ pub struct CreateDeviceReq {
 pub struct DeviceDetailResp {
     pub id: Uuid,
     pub r#type: &'static str,
+    pub name: String,
     pub conf: Value,
 }
 
@@ -264,7 +272,7 @@ fn extract_endian(
         .collect()
 }
 
-#[derive(Deserialize, Serialize, Clone, Copy)]
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
     Client,

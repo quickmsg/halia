@@ -10,7 +10,7 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio::{
     net::TcpStream,
     select,
@@ -26,7 +26,7 @@ use tokio_serial::SerialStream;
 use tracing::{debug, error, trace};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, Mode,
+    ListGroupsResp, ListPointResp, Mode, UpdateDeviceReq,
 };
 use uuid::Uuid;
 
@@ -38,6 +38,7 @@ static TYPE: &str = "modbus";
 
 pub(crate) struct Modbus {
     id: Uuid,
+    name: String,
     on: Arc<AtomicBool>,  // true:开启 false:关闭
     err: Arc<AtomicBool>, // true:错误 false:正常
     rtt: Arc<AtomicU16>,
@@ -50,14 +51,14 @@ pub(crate) struct Modbus {
     write_tx: Option<mpsc::Sender<point::Conf>>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 enum Encode {
     Tcp,
     Rtu,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
 enum Conf {
@@ -65,9 +66,8 @@ enum Conf {
     RtuConf(SerialConf),
 }
 
-#[derive(Deserialize, Clone, Serialize)]
+#[derive(Deserialize, Clone, Serialize, PartialEq)]
 pub(crate) struct EthernetConf {
-    name: String,
     mode: Mode,
     encode: Encode,
     ip: String,
@@ -75,9 +75,8 @@ pub(crate) struct EthernetConf {
     interval: u64,
 }
 
-#[derive(Deserialize, Clone, Serialize)]
+#[derive(Deserialize, Clone, Serialize, PartialEq)]
 struct SerialConf {
-    name: String,
     interval: u64,
     path: String,
     stop_bits: u8,
@@ -87,10 +86,11 @@ struct SerialConf {
 }
 
 impl Modbus {
-    pub fn new(create_device: &CreateDeviceReq, id: Uuid) -> Result<Box<dyn Device>> {
-        let conf: Conf = serde_json::from_value(create_device.conf.clone())?;
+    pub fn new(id: Uuid, req: &CreateDeviceReq) -> Result<Box<dyn Device>> {
+        let conf: Conf = serde_json::from_value(req.conf.clone())?;
         Ok(Box::new(Modbus {
             id,
+            name: req.name.clone(),
             on: Arc::new(AtomicBool::new(false)),
             err: Arc::new(AtomicBool::new(false)),
             rtt: Arc::new(AtomicU16::new(9999)),
@@ -210,24 +210,23 @@ impl Modbus {
 
 #[async_trait]
 impl Device for Modbus {
-    async fn update(&mut self, conf: Value) -> Result<()> {
-        let conf: Conf = serde_json::from_value(conf)?;
-        self.stop().await;
-        self.conf = conf;
-        time::sleep(Duration::from_secs(3)).await;
-        self.start().await?;
+    async fn update(&mut self, req: &UpdateDeviceReq) -> Result<()> {
+        let conf: Conf = serde_json::from_value(req.conf.clone())?;
+        self.name = req.name.clone();
+        if self.conf != conf {
+            self.stop().await;
+            self.conf = conf;
+            time::sleep(Duration::from_secs(3)).await;
+            self.start().await?;
+        }
 
         Ok(())
     }
 
     fn get_info(&self) -> ListDevicesResp {
-        let name = match &self.conf {
-            Conf::TcpConf(conf) => conf.name.clone(),
-            Conf::RtuConf(conf) => conf.name.clone(),
-        };
         ListDevicesResp {
             id: self.id,
-            name,
+            name: self.name.clone(),
             r#type: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on.load(Ordering::SeqCst),
@@ -239,6 +238,7 @@ impl Device for Modbus {
         DeviceDetailResp {
             id: self.id,
             r#type: &TYPE,
+            name: self.name.clone(),
             conf: json!(&self.conf),
         }
     }

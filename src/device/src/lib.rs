@@ -3,14 +3,13 @@
 use async_trait::async_trait;
 use common::error::{HaliaError, Result};
 use modbus::device::Modbus;
-use serde_json::Value;
 use std::sync::LazyLock;
 use storage::Status;
 use tokio::sync::RwLock;
 use tracing::error;
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp,
+    ListGroupsResp, ListPointResp, UpdateDeviceReq,
 };
 use uuid::Uuid;
 
@@ -35,7 +34,7 @@ impl DeviceManager {
         };
 
         let device = match req.r#type.as_str() {
-            "modbus" => Modbus::new(&req, device_id)?,
+            "modbus" => Modbus::new(device_id, &req)?,
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
         self.devices.write().await.push((device_id, device));
@@ -59,7 +58,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn update_device(&self, device_id: Uuid, conf: Value) -> Result<()> {
+    pub async fn update_device(&self, device_id: Uuid, req: UpdateDeviceReq) -> Result<()> {
         match self
             .devices
             .write()
@@ -68,8 +67,8 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => {
-                device.update(conf.clone()).await?;
-                storage::update_device_conf(device_id, serde_json::from_value(conf)?).await?;
+                device.update(&req).await?;
+                storage::update_device_conf(device_id, serde_json::to_string(&req)?).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
@@ -361,7 +360,7 @@ trait Device: Sync + Send {
     fn get_info(&self) -> ListDevicesResp;
     async fn start(&mut self) -> Result<()>;
     async fn stop(&mut self);
-    async fn update(&mut self, conf: Value) -> Result<()>;
+    async fn update(&mut self, req: &UpdateDeviceReq) -> Result<()>;
 
     // group
     async fn create_group(

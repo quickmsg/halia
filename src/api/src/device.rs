@@ -4,11 +4,10 @@ use axum::{
 };
 use common::error::HaliaError;
 use device::GLOBAL_DEVICE_MANAGER;
-use serde_json::Value;
 use tracing::{debug, trace};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp,
+    ListGroupsResp, ListPointResp, UpdateDeviceReq,
 };
 use uuid::Uuid;
 
@@ -48,8 +47,11 @@ pub(crate) async fn stop_device(Path(id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn update_device(Path(id): Path<Uuid>, Json(conf): Json<Value>) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER.update_device(id, conf).await {
+pub(crate) async fn update_device(
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateDeviceReq>,
+) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.update_device(id, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
