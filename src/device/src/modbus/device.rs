@@ -89,7 +89,7 @@ impl EthernetConf {
 impl SerialConf {
     fn validate(&self) -> bool {
         true
-    } 
+    }
 }
 
 #[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
@@ -456,6 +456,27 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update_point(point_id, req).await,
+            None => {
+                debug!("未找到组");
+                Err(HaliaError::NotFound)
+            }
+        }
+    }
+
+    async fn write_point(
+        &self,
+        group_id: Uuid,
+        point_id: Uuid,
+        req: &CreatePointReq,
+    ) -> Result<()> {
+        match self
+            .groups
+            .read()
+            .await
+            .iter()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => group.write_point(point_id, req).await,
             None => {
                 debug!("未找到组");
                 Err(HaliaError::NotFound)

@@ -94,6 +94,21 @@ impl Group {
         Ok(())
     }
 
+    pub async fn write_point(&self, id: Uuid, req: &CreatePointReq) -> Result<()> {
+        match self
+            .points
+            .write()
+            .await
+            .iter_mut()
+            .find(|point| point.id == id)
+        {
+            Some(point) => point.write(req).await?,
+            None => return Err(HaliaError::NotFound),
+        }
+
+        Ok(())
+    }
+
     pub async fn get_points_num(&self) -> usize {
         self.points.read().await.len()
     }

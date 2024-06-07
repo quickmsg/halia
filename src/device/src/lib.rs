@@ -288,6 +288,26 @@ impl DeviceManager {
         }
     }
 
+    // TODO
+    pub async fn write_point(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        point_id: Uuid,
+        req: &CreatePointReq,
+    ) -> Result<()> {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|(id, _)| *id == device_id)
+        {
+            Some((_, device)) => device.update_point(group_id, point_id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
     pub async fn delete_points(
         &self,
         device_id: Uuid,
@@ -393,6 +413,8 @@ trait Device: Sync + Send {
         point_id: Uuid,
         req: &CreatePointReq,
     ) -> Result<()>;
+    async fn write_point(&self, group_id: Uuid, point_id: Uuid, req: &CreatePointReq)
+        -> Result<()>;
     async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()>;
 }
 

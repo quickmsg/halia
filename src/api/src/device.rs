@@ -154,6 +154,20 @@ pub(crate) async fn update_point(
     }
 }
 
+pub(crate) async fn write_point(
+    Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(req): Json<CreatePointReq>,
+) -> AppResp<()> {
+    debug!("update_point:{:?}", req);
+    match GLOBAL_DEVICE_MANAGER
+        .write_point(device_id, group_id, point_id, &req)
+        .await
+    {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
 pub(crate) async fn delete_points(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Query(query): Query<DeleteIdsQuery>,
