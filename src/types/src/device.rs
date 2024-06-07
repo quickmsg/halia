@@ -264,7 +264,7 @@ fn extract_endian(
         .collect()
 }
 
-#[derive(Deserialize, Serialize, Clone, Copy, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
     Client,

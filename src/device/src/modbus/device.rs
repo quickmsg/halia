@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
@@ -36,6 +36,7 @@ use super::{group::Group, point};
 
 static TYPE: &str = "modbus";
 
+#[derive(Debug)]
 pub(crate) struct Modbus {
     id: Uuid,
     name: String,
@@ -51,14 +52,14 @@ pub(crate) struct Modbus {
     write_tx: Option<mpsc::Sender<point::Conf>>,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "snake_case")]
 enum Encode {
     Tcp,
     Rtu,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
 enum Conf {
@@ -66,7 +67,7 @@ enum Conf {
     RtuConf(SerialConf),
 }
 
-#[derive(Deserialize, Clone, Serialize, PartialEq)]
+#[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
 pub(crate) struct EthernetConf {
     mode: Mode,
     encode: Encode,
@@ -75,7 +76,7 @@ pub(crate) struct EthernetConf {
     interval: u64,
 }
 
-#[derive(Deserialize, Clone, Serialize, PartialEq)]
+#[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
 struct SerialConf {
     interval: u64,
     path: String,
@@ -197,14 +198,7 @@ impl Modbus {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
                 select! {
-                    _ = interval.tick() => {
-                        if !err.load(Ordering::SeqCst) {
-                            match read_tx.send(group_id).await {
-                                Ok(_) => {}
-                                Err(e) => debug!("group send point info err :{}", e),
-                            }
-                        }
-                    },
+                    biased;
                     signal = stop_signal.recv() => {
                         match signal {
                             Ok(id) => {
@@ -220,6 +214,15 @@ impl Modbus {
                                 }
                             }
                             Err(e) => error!("group recv stop signal err :{:?}", e),
+                        }
+                    }
+
+                    _ = interval.tick() => {
+                        if !err.load(Ordering::SeqCst) {
+                            match read_tx.send(group_id).await {
+                                Ok(_) => {}
+                                Err(e) => debug!("group send point info err :{}", e),
+                            }
                         }
                     }
                 }
@@ -465,17 +468,18 @@ async fn run_event_loop(
     loop {
         select! {
             biased;
-                _ = stop_signal.recv() => {
-                    debug!("stop event_loop");
-                    return
-                }
+            _ = stop_signal.recv() => {
+                debug!("stop event_loop");
+                return
+            }
 
-                point = write_rx.recv() => {
-                    debug!("{:?}", point);
-                }
+            point = write_rx.recv() => {
+                // TODO
+                debug!("{:?}", point);
+            }
 
-                group_id = read_rx.recv() => {
-                if let Some(group_id) = group_id {
+            group_id = read_rx.recv() => {
+               if let Some(group_id) = group_id {
                     if !read_group_points(&mut ctx, &groups, group_id, interval).await {
                        return
                     }
@@ -499,8 +503,7 @@ async fn read_group_points(
     {
         for point in group.points.write().await.iter_mut() {
             ctx.set_slave(Slave(point.conf.slave));
-            // for rtt
-            // let start_time = Instant::now();
+            let start_time = Instant::now();
             match point.conf.area {
                 0 => match ctx
                     .read_discrete_inputs(point.conf.address, point.quantity)
@@ -595,6 +598,8 @@ async fn read_group_points(
                 },
                 _ => unreachable!(),
             }
+
+            let elapsed_time = start_time.elapsed().as_millis();
 
             time::sleep(Duration::from_millis(interval)).await;
         }

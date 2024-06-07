@@ -7,6 +7,7 @@ use crate::storage;
 
 use super::point::Point;
 
+#[derive(Debug)]
 pub(crate) struct Group {
     pub id: Uuid,
     pub name: String,
