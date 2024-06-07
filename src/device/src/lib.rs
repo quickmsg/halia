@@ -3,20 +3,19 @@
 use async_trait::async_trait;
 use common::error::{HaliaError, Result};
 use modbus::device::Modbus;
+use serde::Serialize;
 use std::sync::LazyLock;
 use storage::Status;
 use tokio::sync::RwLock;
-use tracing::error;
+use tracing::{debug, error};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp, UpdateDeviceReq,
 };
 use uuid::Uuid;
 
-use serde::Serialize;
-
 mod modbus;
-pub mod storage;
+mod storage;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
     devices: RwLock::new(vec![]),
@@ -34,7 +33,13 @@ impl DeviceManager {
         };
 
         let device = match req.r#type.as_str() {
-            "modbus" => Modbus::new(device_id, &req)?,
+            "modbus" => match Modbus::new(device_id, &req) {
+                Ok(device) => device,
+                Err(e) => {
+                    debug!("create device err:{}", e);
+                    return Err(e);
+                }
+            },
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
         self.devices.write().await.push((device_id, device));
@@ -197,7 +202,10 @@ impl DeviceManager {
             .find(|(id, _)| *id == device_id)
         {
             Some((_, device)) => device.update_group(group_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => {
+                debug!("未找到设备");
+                Err(HaliaError::NotFound)
+            }
         }
     }
 

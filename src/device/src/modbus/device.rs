@@ -22,7 +22,7 @@ use tokio_modbus::{
     slave::SlaveContext,
     Slave,
 };
-use tokio_serial::SerialStream;
+use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error, trace};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
@@ -160,8 +160,28 @@ impl Modbus {
             }
             Conf::RtuConf(conf) => {
                 let builder = tokio_serial::new(conf.path.clone(), conf.baund_rate);
-                // let port = SerialStream::open(&builder)?;
-                let port = SerialStream::open(&builder).unwrap();
+                let mut port = SerialStream::open(&builder).unwrap();
+                port.set_baud_rate(conf.baund_rate).unwrap();
+                match conf.stop_bits {
+                    1 => port.set_stop_bits(StopBits::One).unwrap(),
+                    2 => port.set_stop_bits(StopBits::Two).unwrap(),
+                    _ => unreachable!(),
+                };
+                match conf.data_bits {
+                    5 => port.set_data_bits(DataBits::Five).unwrap(),
+                    6 => port.set_data_bits(DataBits::Six).unwrap(),
+                    7 => port.set_data_bits(DataBits::Seven).unwrap(),
+                    8 => port.set_data_bits(DataBits::Eight).unwrap(),
+                    _ => unreachable!(),
+                };
+
+                match conf.parity {
+                    1 => port.set_parity(Parity::None).unwrap(),
+                    2 => port.set_parity(Parity::Odd).unwrap(),
+                    3 => port.set_parity(Parity::Even).unwrap(),
+                    _ => unreachable!(),
+                };
+
                 Ok((rtu::attach(port), conf.interval))
             }
         }
@@ -214,10 +234,13 @@ impl Device for Modbus {
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
         self.name = req.name.clone();
         if self.conf != conf {
-            self.stop().await;
             self.conf = conf;
-            time::sleep(Duration::from_secs(3)).await;
-            self.start().await?;
+            if self.on.load(Ordering::SeqCst) {
+                self.stop().await;
+                // TODO
+                time::sleep(Duration::from_secs(1)).await;
+                self.start().await?;
+            }
         }
 
         Ok(())
@@ -410,7 +433,10 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update_point(point_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => {
+                debug!("未找到组");
+                Err(HaliaError::NotFound)
+            }
         }
     }
 

@@ -69,7 +69,11 @@ pub(crate) async fn read_devices() -> Result<Vec<(Uuid, Status, String)>, io::Er
 
 pub(crate) async fn update_device_conf(id: Uuid, data: String) -> Result<(), io::Error> {
     let path = Path::new(ROOT_DIR).join(DATA_FILE);
-    let mut file = OpenOptions::new().read(true).write(true).open(path).await?;
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
@@ -92,6 +96,11 @@ pub(crate) async fn update_device_conf(id: Uuid, data: String) -> Result<(), io:
     }
 
     let buf = lines.join("\n");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&path)
+        .await?;
     file.write_all(buf.as_bytes()).await?;
     Ok(())
 }

@@ -141,7 +141,7 @@ impl<'de> Deserialize<'de> for DataType {
                             type_str,
                             &[
                                 "int16", "uint16", "int32", "uint32", "int64", "uint64", "float32",
-                                "float64", "bit", "string", "bytes",
+                                "float64", "string", "bytes",
                             ],
                         ))
                     }

@@ -92,7 +92,12 @@ pub async fn start() {
             "/device/:device_id/group/:group_id/points",
             delete(device::delete_points),
         )
-        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        );
 
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
