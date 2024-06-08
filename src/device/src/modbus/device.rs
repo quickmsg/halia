@@ -32,7 +32,7 @@ use uuid::Uuid;
 
 use crate::{storage, Device};
 
-use super::{group::Group, point};
+use super::group::Group;
 
 static TYPE: &str = "modbus";
 
@@ -276,9 +276,14 @@ impl Device for Modbus {
     }
 
     fn get_detail(&self) -> DeviceDetailResp {
+        let link_type = match self.conf {
+            Conf::EthernetConf(_) => "ethernet".to_string(),
+            Conf::SerialConf(_) => "serial".to_string(),
+        };
         DeviceDetailResp {
             id: self.id,
             r#type: &TYPE,
+            link_type,
             name: self.name.clone(),
             conf: json!(&self.conf),
         }

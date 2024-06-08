@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
-use serde::{de::value, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use std::{backtrace, str::FromStr};
+use std::str::FromStr;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
@@ -22,6 +22,7 @@ pub struct UpdateDeviceReq {
 pub struct DeviceDetailResp {
     pub id: Uuid,
     pub r#type: &'static str,
+    pub link_type: String,
     pub name: String,
     pub conf: Value,
 }
