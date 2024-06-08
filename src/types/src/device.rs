@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use serde::{de::value, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::{backtrace, str::FromStr};
-use tracing::warn;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -359,10 +359,8 @@ impl DataType {
                     if *endian == Endian::LittleEndian {
                         data.swap(0, 1);
                     }
-                    return Ok(data
-                        .chunks(2)
-                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
-                        .collect());
+                    debug!("{:?}", data);
+                    return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
@@ -372,10 +370,7 @@ impl DataType {
                     if *endian == Endian::LittleEndian {
                         data.swap(0, 1);
                     }
-                    return Ok(data
-                        .chunks(2)
-                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
-                        .collect());
+                    return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
@@ -388,10 +383,7 @@ impl DataType {
                     if *endian1 == Endian::LittleEndian {
                         data.swap(2, 3);
                     }
-                    return Ok(data
-                        .chunks(2)
-                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
-                        .collect());
+                    return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
@@ -404,10 +396,7 @@ impl DataType {
                     if *endian1 == Endian::LittleEndian {
                         data.swap(2, 3);
                     }
-                    return Ok(data
-                        .chunks(2)
-                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
-                        .collect());
+                    return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
@@ -426,10 +415,7 @@ impl DataType {
                     if *endian3 == Endian::LittleEndian {
                         data.swap(6, 7);
                     }
-                    return Ok(data
-                        .chunks(2)
-                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
-                        .collect());
+                    return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
@@ -448,10 +434,7 @@ impl DataType {
                     if *endian3 == Endian::LittleEndian {
                         data.swap(6, 7);
                     }
-                    return Ok(data
-                        .chunks(2)
-                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
-                        .collect());
+                    return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
@@ -464,10 +447,7 @@ impl DataType {
                     if *endian1 == Endian::LittleEndian {
                         data.swap(2, 3);
                     }
-                    return Ok(data
-                        .chunks(2)
-                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
-                        .collect());
+                    return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
@@ -486,10 +466,7 @@ impl DataType {
                     if *endian3 == Endian::LittleEndian {
                         data.swap(6, 7);
                     }
-                    return Ok(data
-                        .chunks(2)
-                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
-                        .collect());
+                    return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
@@ -579,4 +556,10 @@ pub enum Status {
     Paused,
     Error,
     Stoped,
+}
+
+fn array_u8_tou16(data: &[u8]) -> Vec<u16> {
+    data.chunks(2)
+        .map(|chunk| ((chunk[0] as u16) | (chunk[1] as u16) << 8))
+        .collect()
 }

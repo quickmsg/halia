@@ -513,7 +513,7 @@ async fn run_event_loop(
                         return
                     }
                 }
-
+                time::sleep(Duration::from_millis(interval)).await;
             }
 
             group_id = read_rx.recv() => {
@@ -675,7 +675,7 @@ async fn write_point_value(
                     },
                     None => error!("value is not bool"),
                 },
-                3 => match point.conf.r#type {
+                4 => match point.conf.r#type {
                     DataType::Int16(_)
                     | DataType::Uint16(_)
                     | DataType::Int32(_, _)
