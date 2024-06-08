@@ -468,22 +468,13 @@ impl Device for Modbus {
         point_id: Uuid,
         req: &WritePointValueReq,
     ) -> Result<()> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => {
-                // group.write_point_value(point_id, req).await,
-                todo!()
-            }
-            None => {
-                debug!("未找到组");
-                Err(HaliaError::NotFound)
-            }
-        }
+        let _ = self
+            .write_tx
+            .as_ref()
+            .unwrap()
+            .send((group_id, point_id, req.value.clone()))
+            .await;
+        Ok(())
     }
 
     async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()> {
@@ -517,8 +508,12 @@ async fn run_event_loop(
             }
 
             point = write_rx.recv() => {
-                // TODO
-                debug!("{:?}", point);
+                if let Some(point) = point {
+                    if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2).await {
+                        return
+                    }
+                }
+
             }
 
             group_id = read_rx.recv() => {
@@ -681,14 +676,25 @@ async fn write_point_value(
                     None => error!("value is not bool"),
                 },
                 3 => match point.conf.r#type {
-                    DataType::Int16(endian) => ctx.write_multiple_registers(addr, data),
-                    DataType::Uint16(_) => todo!(),
-                    DataType::Int32(_, _) => todo!(),
-                    DataType::Uint32(_, _) => todo!(),
-                    DataType::Int64(_, _, _, _) => todo!(),
-                    DataType::Uint64(_, _, _, _) => todo!(),
-                    DataType::Float32(_, _) => todo!(),
-                    DataType::Float64(_, _, _, _) => todo!(),
+                    DataType::Int16(_)
+                    | DataType::Uint16(_)
+                    | DataType::Int32(_, _)
+                    | DataType::Uint32(_, _)
+                    | DataType::Int64(_, _, _, _)
+                    | DataType::Uint64(_, _, _, _)
+                    | DataType::Float32(_, _)
+                    | DataType::Float64(_, _, _, _) => match point.conf.r#type.encode(value) {
+                        Ok(data) => {
+                            match ctx
+                                .write_multiple_registers(point.conf.address, &data)
+                                .await
+                            {
+                                Ok(_) => {}
+                                Err(e) => error!("{}", e),
+                            }
+                        }
+                        Err(e) => error!("{}", e),
+                    },
                     _ => error!("数据格式错误"),
                     // types::device::DataType::String => todo!(),
                     // types::device::DataType::Bytes => todo!(),
