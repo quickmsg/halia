@@ -9,3 +9,5 @@ message = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }

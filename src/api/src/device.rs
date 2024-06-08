@@ -7,7 +7,7 @@ use device::GLOBAL_DEVICE_MANAGER;
 use tracing::{debug, trace};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, UpdateDeviceReq, UpdateGroupReq,
+    ListGroupsResp, ListPointResp, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
 };
 use uuid::Uuid;
 
@@ -156,11 +156,11 @@ pub(crate) async fn update_point(
 
 pub(crate) async fn write_point(
     Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
-    Json(req): Json<CreatePointReq>,
+    Json(req): Json<WritePointValueReq>,
 ) -> AppResp<()> {
     debug!("update_point:{:?}", req);
     match GLOBAL_DEVICE_MANAGER
-        .write_point(device_id, group_id, point_id, &req)
+        .write_point_value(device_id, group_id, point_id, &req)
         .await
     {
         Ok(()) => AppResp::new(),

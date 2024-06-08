@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, UpdateDeviceReq, UpdateGroupReq,
+    ListGroupsResp, ListPointResp, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
 };
 use uuid::Uuid;
 
@@ -289,12 +289,12 @@ impl DeviceManager {
     }
 
     // TODO
-    pub async fn write_point(
+    pub async fn write_point_value(
         &self,
         device_id: Uuid,
         group_id: Uuid,
         point_id: Uuid,
-        req: &CreatePointReq,
+        req: &WritePointValueReq,
     ) -> Result<()> {
         match self
             .devices
@@ -303,7 +303,7 @@ impl DeviceManager {
             .iter()
             .find(|(id, _)| *id == device_id)
         {
-            Some((_, device)) => device.update_point(group_id, point_id, req).await,
+            Some((_, device)) => device.write_point_value(group_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -413,8 +413,12 @@ trait Device: Sync + Send {
         point_id: Uuid,
         req: &CreatePointReq,
     ) -> Result<()>;
-    async fn write_point(&self, group_id: Uuid, point_id: Uuid, req: &CreatePointReq)
-        -> Result<()>;
+    async fn write_point_value(
+        &self,
+        group_id: Uuid,
+        point_id: Uuid,
+        req: &WritePointValueReq,
+    ) -> Result<()>;
     async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()>;
 }
 

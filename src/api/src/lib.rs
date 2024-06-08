@@ -89,7 +89,7 @@ pub async fn start() {
             put(device::update_point),
         )
         .route(
-            "/device/:device:id/group/:group_id/point/point:id",
+            "/device/:device_id/group/:group_id/point/:point_id/value",
             put(device::write_point),
         )
         .route(

@@ -1,6 +1,8 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use anyhow::{bail, Result};
+use serde::{de::value, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use std::str::FromStr;
+use std::{backtrace, str::FromStr};
+use tracing::warn;
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -68,6 +70,11 @@ pub struct ListPointResp {
 pub struct CreatePointReq {
     pub name: String,
     pub conf: Value,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct WritePointValueReq {
+    pub value: Value,
 }
 
 #[derive(Debug)]
@@ -202,6 +209,293 @@ impl Serialize for DataType {
             }
             DataType::Bytes => serde_json::json!({"type": "bytes"}).serialize(serializer),
             DataType::String => serde_json::json!({"type": "string"}).serialize(serializer),
+        }
+    }
+}
+
+impl DataType {
+    pub fn decode(&self, data: Vec<u8>) -> Value {
+        match self {
+            DataType::Bool => {
+                if data.len() != 1 {
+                    warn!("buf is not right");
+                    Value::Null
+                } else {
+                    if data[0] == 1 {
+                        Value::from(true)
+                    } else {
+                        Value::from(false)
+                    }
+                }
+            }
+            DataType::Int16(endian) => {
+                let mut data = match data.as_slice() {
+                    [a, b] => [*a, *b],
+                    _ => return Value::Null,
+                };
+                if *endian == Endian::LittleEndian {
+                    data.swap(0, 1);
+                }
+                Value::from(i16::from_be_bytes(data))
+            }
+            DataType::Uint16(endian) => {
+                let mut data = match data.as_slice() {
+                    [a, b] => [*a, *b],
+                    _ => return Value::Null,
+                };
+                if *endian == Endian::LittleEndian {
+                    data.swap(0, 1);
+                }
+                Value::from(i16::from_be_bytes(data))
+            }
+            DataType::Int32(endian0, endian1) => {
+                let mut data = match data.as_slice() {
+                    [a, b, c, d] => [*a, *b, *c, *d],
+                    _ => return Value::Null,
+                };
+                if *endian0 == Endian::LittleEndian {
+                    data.swap(0, 1);
+                }
+                if *endian1 == Endian::LittleEndian {
+                    data.swap(2, 3);
+                }
+                Value::from(i32::from_be_bytes(data))
+            }
+            DataType::Uint32(endian0, endian1) => {
+                let mut data = match data.as_slice() {
+                    [a, b, c, d] => [*a, *b, *c, *d],
+                    _ => return Value::Null,
+                };
+                if *endian0 == Endian::LittleEndian {
+                    data.swap(0, 1);
+                }
+                if *endian1 == Endian::LittleEndian {
+                    data.swap(2, 3);
+                }
+                Value::from(u32::from_be_bytes(data))
+            }
+            DataType::Int64(endian0, endian1, endian2, endian3) => {
+                let mut data = match data.as_slice() {
+                    [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
+                    _ => return Value::Null,
+                };
+                if *endian0 == Endian::LittleEndian {
+                    data.swap(0, 1);
+                }
+                if *endian1 == Endian::LittleEndian {
+                    data.swap(2, 3);
+                }
+                if *endian2 == Endian::LittleEndian {
+                    data.swap(4, 5);
+                }
+                if *endian3 == Endian::LittleEndian {
+                    data.swap(6, 7);
+                }
+
+                Value::from(i64::from_be_bytes(data))
+            }
+            DataType::Uint64(endian0, endian1, endian2, endian3) => {
+                let mut data = match data.as_slice() {
+                    [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
+                    _ => return Value::Null,
+                };
+                if *endian0 == Endian::LittleEndian {
+                    data.swap(0, 1);
+                }
+                if *endian1 == Endian::LittleEndian {
+                    data.swap(2, 3);
+                }
+                if *endian2 == Endian::LittleEndian {
+                    data.swap(4, 5);
+                }
+                if *endian3 == Endian::LittleEndian {
+                    data.swap(6, 7);
+                }
+                Value::from(u64::from_be_bytes(data))
+            }
+            DataType::Float32(endian0, endian1) => {
+                let mut data = match data.as_slice() {
+                    [a, b, c, d] => [*a, *b, *c, *d],
+                    _ => return Value::Null,
+                };
+                if *endian0 == Endian::LittleEndian {
+                    data.swap(0, 1);
+                }
+                if *endian1 == Endian::LittleEndian {
+                    data.swap(2, 3);
+                }
+                Value::from(f32::from_be_bytes(data))
+            }
+            DataType::Float64(endian0, endian1, endian2, endian3) => {
+                let mut data = match data.as_slice() {
+                    [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
+                    _ => return Value::Null,
+                };
+                if *endian0 == Endian::LittleEndian {
+                    data.swap(0, 1);
+                }
+                if *endian1 == Endian::LittleEndian {
+                    data.swap(2, 3);
+                }
+                if *endian2 == Endian::LittleEndian {
+                    data.swap(4, 5);
+                }
+                if *endian3 == Endian::LittleEndian {
+                    data.swap(6, 7);
+                }
+                Value::from(f64::from_be_bytes(data))
+            }
+            // DataType::String => todo!(),
+            // DataType::Bytes => todo!(),
+            _ => Value::Null,
+        }
+    }
+
+    pub fn encode(&self, data: Value) -> Result<Vec<u16>> {
+        match self {
+            DataType::Int16(endian) => match data.as_i64() {
+                Some(value) => {
+                    let mut data = (value as i16).to_be_bytes();
+                    if *endian == Endian::LittleEndian {
+                        data.swap(0, 1);
+                    }
+                    return Ok(data
+                        .chunks(2)
+                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
+                        .collect());
+                }
+                None => bail!("value is wrong"),
+            },
+            DataType::Uint16(endian) => match data.as_i64() {
+                Some(value) => {
+                    let mut data = (value as u16).to_be_bytes();
+                    if *endian == Endian::LittleEndian {
+                        data.swap(0, 1);
+                    }
+                    return Ok(data
+                        .chunks(2)
+                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
+                        .collect());
+                }
+                None => bail!("value is wrong"),
+            },
+            DataType::Int32(endian0, endian1) => match data.as_i64() {
+                Some(value) => {
+                    let mut data = (value as i32).to_be_bytes();
+                    if *endian0 == Endian::LittleEndian {
+                        data.swap(0, 1);
+                    }
+                    if *endian1 == Endian::LittleEndian {
+                        data.swap(2, 3);
+                    }
+                    return Ok(data
+                        .chunks(2)
+                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
+                        .collect());
+                }
+                None => bail!("value is wrong"),
+            },
+            DataType::Uint32(endian0, endian1) => match data.as_i64() {
+                Some(value) => {
+                    let mut data = (value as u32).to_be_bytes();
+                    if *endian0 == Endian::LittleEndian {
+                        data.swap(0, 1);
+                    }
+                    if *endian1 == Endian::LittleEndian {
+                        data.swap(2, 3);
+                    }
+                    return Ok(data
+                        .chunks(2)
+                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
+                        .collect());
+                }
+                None => bail!("value is wrong"),
+            },
+            DataType::Int64(endian0, endian1, endian2, endian3) => match data.as_i64() {
+                Some(value) => {
+                    let mut data = (value as i64).to_be_bytes();
+                    if *endian0 == Endian::LittleEndian {
+                        data.swap(0, 1);
+                    }
+                    if *endian1 == Endian::LittleEndian {
+                        data.swap(2, 3);
+                    }
+                    if *endian2 == Endian::LittleEndian {
+                        data.swap(4, 5);
+                    }
+                    if *endian3 == Endian::LittleEndian {
+                        data.swap(6, 7);
+                    }
+                    return Ok(data
+                        .chunks(2)
+                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
+                        .collect());
+                }
+                None => bail!("value is wrong"),
+            },
+            DataType::Uint64(endian0, endian1, endian2, endian3) => match data.as_i64() {
+                Some(value) => {
+                    let mut data = (value as u64).to_be_bytes();
+                    if *endian0 == Endian::LittleEndian {
+                        data.swap(0, 1);
+                    }
+                    if *endian1 == Endian::LittleEndian {
+                        data.swap(2, 3);
+                    }
+                    if *endian2 == Endian::LittleEndian {
+                        data.swap(4, 5);
+                    }
+                    if *endian3 == Endian::LittleEndian {
+                        data.swap(6, 7);
+                    }
+                    return Ok(data
+                        .chunks(2)
+                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
+                        .collect());
+                }
+                None => bail!("value is wrong"),
+            },
+            DataType::Float32(endian0, endian1) => match data.as_f64() {
+                Some(value) => {
+                    let mut data = (value as f32).to_be_bytes();
+                    if *endian0 == Endian::LittleEndian {
+                        data.swap(0, 1);
+                    }
+                    if *endian1 == Endian::LittleEndian {
+                        data.swap(2, 3);
+                    }
+                    return Ok(data
+                        .chunks(2)
+                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
+                        .collect());
+                }
+                None => bail!("value is wrong"),
+            },
+            DataType::Float64(endian0, endian1, endian2, endian3) => match data.as_f64() {
+                Some(value) => {
+                    let mut data = (value as f32).to_be_bytes();
+                    if *endian0 == Endian::LittleEndian {
+                        data.swap(0, 1);
+                    }
+                    if *endian1 == Endian::LittleEndian {
+                        data.swap(2, 3);
+                    }
+                    if *endian2 == Endian::LittleEndian {
+                        data.swap(4, 5);
+                    }
+                    if *endian3 == Endian::LittleEndian {
+                        data.swap(6, 7);
+                    }
+                    return Ok(data
+                        .chunks(2)
+                        .map(|chunk| ((chunk[0] as u16) << 8) | (chunk[1] as u16))
+                        .collect());
+                }
+                None => bail!("value is wrong"),
+            },
+            // DataType::String => todo!(),
+            // DataType::Bytes => todo!(),
+            _ => bail!("value is wrong"),
         }
     }
 }

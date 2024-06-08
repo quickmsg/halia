@@ -10,7 +10,7 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::{
     net::TcpStream,
     select,
@@ -18,15 +18,15 @@ use tokio::{
     time,
 };
 use tokio_modbus::{
-    client::{rtu, tcp, Context, Reader},
+    client::{rtu, tcp, Context, Reader, Writer},
     slave::SlaveContext,
     Slave,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error, trace};
 use types::device::{
-    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, Mode, UpdateDeviceReq, UpdateGroupReq,
+    CreateDeviceReq, CreateGroupReq, CreatePointReq, DataType, DeviceDetailResp, ListDevicesResp,
+    ListGroupsResp, ListPointResp, Mode, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
 };
 use uuid::Uuid;
 
@@ -49,14 +49,7 @@ pub(crate) struct Modbus {
     group_signal_tx: Option<broadcast::Sender<Option<Uuid>>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
-    write_tx: Option<mpsc::Sender<point::Conf>>,
-}
-
-#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
-#[serde(rename_all = "snake_case")]
-enum Encode {
-    Tcp,
-    Rtu,
+    write_tx: Option<mpsc::Sender<(Uuid, Uuid, Value)>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
@@ -74,6 +67,13 @@ pub(crate) struct EthernetConf {
     ip: String,
     port: u16,
     interval: u64,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
+#[serde(rename_all = "snake_case")]
+enum Encode {
+    Tcp,
+    Rtu,
 }
 
 impl EthernetConf {
@@ -97,7 +97,7 @@ struct SerialConf {
     interval: u64,
     path: String,
     stop_bits: u8,
-    baund_rate: u32,
+    baud_rate: u32,
     data_bits: u8,
     parity: u8,
 }
@@ -124,7 +124,7 @@ impl Modbus {
         &self,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut read_rx: mpsc::Receiver<Uuid>,
-        mut write_rx: mpsc::Receiver<point::Conf>,
+        mut write_rx: mpsc::Receiver<(Uuid, Uuid, Value)>,
     ) {
         let conf = self.conf.clone();
         let groups = self.groups.clone();
@@ -176,9 +176,8 @@ impl Modbus {
                 }
             }
             Conf::SerialConf(conf) => {
-                let builder = tokio_serial::new(conf.path.clone(), conf.baund_rate);
+                let builder = tokio_serial::new(conf.path.clone(), conf.baud_rate);
                 let mut port = SerialStream::open(&builder).unwrap();
-                port.set_baud_rate(conf.baund_rate).unwrap();
                 match conf.stop_bits {
                     1 => port.set_stop_bits(StopBits::One).unwrap(),
                     2 => port.set_stop_bits(StopBits::Two).unwrap(),
@@ -193,9 +192,9 @@ impl Modbus {
                 };
 
                 match conf.parity {
-                    1 => port.set_parity(Parity::None).unwrap(),
-                    2 => port.set_parity(Parity::Odd).unwrap(),
-                    3 => port.set_parity(Parity::Even).unwrap(),
+                    0 => port.set_parity(Parity::None).unwrap(),
+                    1 => port.set_parity(Parity::Odd).unwrap(),
+                    2 => port.set_parity(Parity::Even).unwrap(),
                     _ => unreachable!(),
                 };
 
@@ -335,7 +334,7 @@ impl Device for Modbus {
         let (read_tx, read_rx) = mpsc::channel::<Uuid>(20);
         self.read_tx = Some(read_tx);
 
-        let (write_tx, write_rx) = mpsc::channel::<point::Conf>(10);
+        let (write_tx, write_rx) = mpsc::channel::<(Uuid, Uuid, Value)>(10);
         self.write_tx = Some(write_tx);
 
         self.run(stop_signal_rx, read_rx, write_rx).await;
@@ -463,11 +462,11 @@ impl Device for Modbus {
         }
     }
 
-    async fn write_point(
+    async fn write_point_value(
         &self,
         group_id: Uuid,
         point_id: Uuid,
-        req: &CreatePointReq,
+        req: &WritePointValueReq,
     ) -> Result<()> {
         match self
             .groups
@@ -476,7 +475,10 @@ impl Device for Modbus {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.write_point(point_id, req).await,
+            Some(group) => {
+                // group.write_point_value(point_id, req).await,
+                todo!()
+            }
             None => {
                 debug!("未找到组");
                 Err(HaliaError::NotFound)
@@ -501,7 +503,7 @@ impl Device for Modbus {
 async fn run_event_loop(
     mut ctx: Context,
     stop_signal: &mut mpsc::Receiver<()>,
-    write_rx: &mut mpsc::Receiver<point::Conf>,
+    write_rx: &mut mpsc::Receiver<(Uuid, Uuid, Value)>,
     read_rx: &mut mpsc::Receiver<Uuid>,
     groups: Arc<RwLock<Vec<Group>>>,
     interval: u64,
@@ -643,6 +645,58 @@ async fn read_group_points(
             let elapsed_time = start_time.elapsed().as_millis();
 
             time::sleep(Duration::from_millis(interval)).await;
+        }
+        true
+    } else {
+        true
+    }
+}
+
+async fn write_point_value(
+    ctx: &mut Context,
+    groups: &RwLock<Vec<Group>>,
+    group_id: Uuid,
+    point_id: Uuid,
+    value: Value,
+) -> bool {
+    if let Some(group) = groups
+        .read()
+        .await
+        .iter()
+        .find(|group| group.id == group_id)
+    {
+        if let Some(point) = group
+            .points
+            .read()
+            .await
+            .iter()
+            .find(|point| point.id == point_id)
+        {
+            match point.conf.area {
+                1 => match value.as_bool() {
+                    Some(value) => match ctx.write_single_coil(point.conf.address, value).await {
+                        Ok(_) => {}
+                        Err(e) => error!("write err:{:?}", e),
+                    },
+                    None => error!("value is not bool"),
+                },
+                3 => match point.conf.r#type {
+                    DataType::Int16(endian) => ctx.write_multiple_registers(addr, data),
+                    DataType::Uint16(_) => todo!(),
+                    DataType::Int32(_, _) => todo!(),
+                    DataType::Uint32(_, _) => todo!(),
+                    DataType::Int64(_, _, _, _) => todo!(),
+                    DataType::Uint64(_, _, _, _) => todo!(),
+                    DataType::Float32(_, _) => todo!(),
+                    DataType::Float64(_, _, _, _) => todo!(),
+                    _ => error!("数据格式错误"),
+                    // types::device::DataType::String => todo!(),
+                    // types::device::DataType::Bytes => todo!(),
+                },
+                _ => {
+                    error!("点位不可写")
+                }
+            }
         }
         true
     } else {

@@ -1390,9 +1390,11 @@ dependencies = [
 name = "types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "message",
  "serde",
  "serde_json",
+ "tracing",
  "uuid",
 ]
 

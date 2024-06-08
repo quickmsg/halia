@@ -1,6 +1,8 @@
 use common::error::{HaliaError, Result};
 use tokio::sync::RwLock;
-use types::device::{CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupReq};
+use types::device::{
+    CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupReq, WritePointValueReq,
+};
 use uuid::Uuid;
 
 use crate::storage;
@@ -94,20 +96,20 @@ impl Group {
         Ok(())
     }
 
-    pub async fn write_point(&self, id: Uuid, req: &CreatePointReq) -> Result<()> {
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|point| point.id == id)
-        {
-            Some(point) => point.write(req).await?,
-            None => return Err(HaliaError::NotFound),
-        }
+    // pub async fn write_point_value(&self, id: Uuid, req: &WritePointValueReq) -> Result<()> {
+    //     match self
+    //         .points
+    //         .write()
+    //         .await
+    //         .iter_mut()
+    //         .find(|point| point.id == id)
+    //     {
+    //         Some(point) => point.write(req).await?,
+    //         None => return Err(HaliaError::NotFound),
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub async fn get_points_num(&self) -> usize {
         self.points.read().await.len()
