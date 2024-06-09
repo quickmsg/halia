@@ -27,10 +27,9 @@ impl Group {
         }
     }
 
-    pub fn update(&mut self, req: &UpdateGroupReq) -> Result<()> {
+    pub fn update(&mut self, req: &UpdateGroupReq) {
         self.name = req.name.clone();
         self.interval = req.interval;
-        Ok(())
     }
 
     pub async fn create_points(

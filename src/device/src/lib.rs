@@ -146,11 +146,12 @@ impl DeviceManager {
             None => return Err(HaliaError::NotFound),
         };
 
-        storage::delete_device(device_id).await?;
         self.devices
             .write()
             .await
             .retain(|(id, _)| *id != device_id);
+        storage::delete_device(device_id).await?;
+
         Ok(())
     }
 
@@ -331,8 +332,17 @@ impl DeviceManager {
     pub async fn recover(&self) -> Result<()> {
         let devices = storage::read_devices().await?;
         for (id, status, data) in devices {
-            let req: CreateDeviceReq = serde_json::from_str(data.as_str())?;
-            self.create_device(Some(id), req).await?;
+            let req = match serde_json::from_str::<CreateDeviceReq>(data.as_str()) {
+                Ok(req) => req,
+                Err(e) => {
+                    error!("{}", e);
+                    return Err(e.into());
+                }
+            };
+            match self.create_device(Some(id), req).await {
+                Ok(_) => {}
+                Err(_) => todo!(),
+            }
             self.recover_group(id).await?;
             match status {
                 Status::Stopped => {}

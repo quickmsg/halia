@@ -52,50 +52,9 @@ impl<T: Serialize> IntoResponse for AppResp<T> {
 
 pub async fn start() {
     let app = Router::new()
-        // 规则
-        .route("/source", post(rule::create_source))
-        .route("/sink", post(rule::create_sink))
-        .route("/graph", post(rule::create))
-        .route("/graph/run/:ame", put(rule::run))
-        .route("/graph/stop/:name", put(rule::stop))
-        .route("/health", get(rule::helath))
-        // 设备
-        .route("/device", post(device::create_device))
-        .route("/device/:id", get(device::read_device))
-        .route("/devices", get(device::read_devices))
-        .route("/device/:id/start", put(device::start_device))
-        .route("/device/:id/stop", put(device::stop_device))
-        .route("/device/:id", put(device::update_device))
-        .route("/device/:id", delete(device::delete_device))
-        // 设备 -> 组
-        .route("/device/:id/group", post(device::create_group))
-        .route("/device/:id/groups", get(device::read_groups))
-        .route(
-            "/device/:device_id/group/:group_id",
-            put(device::update_group),
-        )
-        .route("/device/:id/groups", delete(device::delete_groups))
-        // 设备 -> 组 -> 点位
-        .route(
-            "/device/:device_id/group/:group_id/points",
-            post(device::create_points),
-        )
-        .route(
-            "/device/:device_id/group/:group_id/points",
-            get(device::read_points),
-        )
-        .route(
-            "/device/:device_id/group/:group_id/point/:point_id",
-            put(device::update_point),
-        )
-        .route(
-            "/device/:device_id/group/:group_id/point/:point_id/value",
-            put(device::write_point),
-        )
-        .route(
-            "/device/:device_id/group/:group_id/points",
-            delete(device::delete_points),
-        )
+        .nest("/api", device_routes())
+        .nest("/api/device/:device_id", group_routes())
+        .nest("/api/device/:device_id/group/:group_id", point_routes())
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -110,4 +69,42 @@ pub async fn start() {
 #[derive(Deserialize)]
 pub(crate) struct DeleteIdsQuery {
     ids: String,
+}
+
+fn device_routes() -> Router {
+    Router::new()
+        .route("/device", post(device::create_device))
+        .route("/device/:device_id", get(device::read_device))
+        .route("/devices", get(device::read_devices))
+        .route("/device/:device_id/start", put(device::start_device))
+        .route("/device/:device_id/stop", put(device::stop_device))
+        .route("/device/:device_id", put(device::update_device))
+        .route("/device/:device_id", delete(device::delete_device))
+}
+
+fn group_routes() -> Router {
+    Router::new()
+        .route("/group", post(device::create_group))
+        .route("/groups", get(device::read_groups))
+        .route("/group/:group_id", put(device::update_group))
+        .route("/groups", delete(device::delete_groups))
+}
+
+fn point_routes() -> Router {
+    Router::new()
+        .route("/points", post(device::create_points))
+        .route("/points", get(device::read_points))
+        .route("/point/:point_id", put(device::update_point))
+        .route("/point/:point_id/value", put(device::write_point))
+        .route("/points", delete(device::delete_points))
+}
+
+fn rule_routes() -> Router {
+    Router::new()
+        .route("/source", post(rule::create_source))
+        .route("/sink", post(rule::create_sink))
+        .route("/graph", post(rule::create))
+        .route("/graph/run/:ame", put(rule::run))
+        .route("/graph/stop/:name", put(rule::stop))
+        .route("/health", get(rule::helath))
 }

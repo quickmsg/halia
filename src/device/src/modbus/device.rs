@@ -132,6 +132,7 @@ impl Modbus {
         let err = self.err.clone();
         let on = self.on.clone();
 
+        let rtt = self.rtt.clone();
         tokio::spawn(async move {
             loop {
                 err.store(true, Ordering::SeqCst);
@@ -140,6 +141,7 @@ impl Modbus {
                         err.store(false, Ordering::SeqCst);
                         run_event_loop(
                             ctx,
+                            &rtt,
                             &mut stop_signal_rx,
                             &mut write_rx,
                             &mut read_rx,
@@ -234,9 +236,8 @@ impl Modbus {
 
                     _ = interval.tick() => {
                         if !err.load(Ordering::SeqCst) {
-                            match read_tx.send(group_id).await {
-                                Ok(_) => {}
-                                Err(e) => debug!("group send point info err :{}", e),
+                            if let Err(e) = read_tx.send(group_id).await {
+                                debug!("group send point info err :{}", e);
                             }
                         }
                     }
@@ -359,7 +360,7 @@ impl Device for Modbus {
             self.on.store(false, Ordering::SeqCst);
         }
 
-        self.group_signal_tx.as_ref().unwrap().send(None).unwrap();
+        let _ = self.group_signal_tx.as_ref().unwrap().send(None);
         self.group_signal_tx = None;
 
         self.stop_signal_tx
@@ -398,11 +399,11 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => {
-                let _ = group.update(&req);
+                group.update(&req);
+
                 if self.on.load(Ordering::SeqCst) {
-                    match self.group_signal_tx.as_ref().unwrap().send(Some(group_id)) {
-                        Ok(_) => {}
-                        Err(e) => error!("group_signals send err :{:?}", e),
+                    if let Err(e) = self.group_signal_tx.as_ref().unwrap().send(Some(group_id)) {
+                        error!("group_signals send err :{:?}", e);
                     }
 
                     self.run_group_timer(group_id, req.interval);
@@ -498,6 +499,7 @@ impl Device for Modbus {
 
 async fn run_event_loop(
     mut ctx: Context,
+    rtt: &Arc<AtomicU16>,
     stop_signal: &mut mpsc::Receiver<()>,
     write_rx: &mut mpsc::Receiver<(Uuid, Uuid, Value)>,
     read_rx: &mut mpsc::Receiver<Uuid>,
@@ -514,7 +516,7 @@ async fn run_event_loop(
 
             point = write_rx.recv() => {
                 if let Some(point) = point {
-                    if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2).await {
+                    if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2, rtt).await {
                         return
                     }
                 }
@@ -523,7 +525,7 @@ async fn run_event_loop(
 
             group_id = read_rx.recv() => {
                if let Some(group_id) = group_id {
-                    if !read_group_points(&mut ctx, &groups, group_id, interval).await {
+                    if !read_group_points(&mut ctx, &groups, group_id, interval, rtt).await {
                        return
                     }
                 }
@@ -537,6 +539,7 @@ async fn read_group_points(
     groups: &RwLock<Vec<Group>>,
     group_id: Uuid,
     interval: u64,
+    rtt: &Arc<AtomicU16>,
 ) -> bool {
     if let Some(group) = groups
         .write()
@@ -643,6 +646,7 @@ async fn read_group_points(
             }
 
             let elapsed_time = start_time.elapsed().as_millis();
+            rtt.store(elapsed_time as u16, Ordering::SeqCst);
 
             time::sleep(Duration::from_millis(interval)).await;
         }
@@ -658,6 +662,7 @@ async fn write_point_value(
     group_id: Uuid,
     point_id: Uuid,
     value: Value,
+    rtt: &Arc<AtomicU16>,
 ) -> bool {
     if let Some(group) = groups
         .read()
@@ -674,10 +679,15 @@ async fn write_point_value(
         {
             match point.conf.area {
                 1 => match value.as_bool() {
-                    Some(value) => match ctx.write_single_coil(point.conf.address, value).await {
-                        Ok(_) => {}
-                        Err(e) => error!("write err:{:?}", e),
-                    },
+                    Some(value) => {
+                        let start_time = Instant::now();
+                        if let Err(e) = ctx.write_single_coil(point.conf.address, value).await {
+                            error!("write err:{:?}", e);
+                        };
+
+                        let elapsed_time = start_time.elapsed().as_millis();
+                        rtt.store(elapsed_time as u16, Ordering::SeqCst);
+                    }
                     None => error!("value is not bool"),
                 },
                 4 => match point.conf.r#type {
@@ -690,13 +700,19 @@ async fn write_point_value(
                     | DataType::Float32(_, _)
                     | DataType::Float64(_, _, _, _) => match point.conf.r#type.encode(value) {
                         Ok(data) => {
-                            match ctx
-                                .write_multiple_registers(point.conf.address, &data)
-                                .await
                             {
-                                Ok(_) => {}
-                                Err(e) => error!("{}", e),
-                            }
+                                let start_time = Instant::now();
+
+                                if let Err(e) = ctx
+                                    .write_multiple_registers(point.conf.address, &data)
+                                    .await
+                                {
+                                    error!("{}", e);
+                                }
+
+                                let elapsed_time = start_time.elapsed().as_millis();
+                                rtt.store(elapsed_time as u16, Ordering::SeqCst);
+                            };
                         }
                         Err(e) => error!("{}", e),
                     },

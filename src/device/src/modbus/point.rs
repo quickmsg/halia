@@ -1,9 +1,8 @@
 use common::error::Result;
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::warn;
 
-use types::device::{CreatePointReq, DataType, Endian::LittleEndian};
+use types::device::{CreatePointReq, DataType};
 use uuid::Uuid;
 
 #[derive(Debug)]
