@@ -99,14 +99,11 @@ use core::mem;
 use core::str;
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
+use std::println;
 
 pub use self::index::Index;
 pub use self::ser::Serializer;
 pub use crate::map::Map;
-
-#[cfg(feature = "raw_value")]
-#[cfg_attr(docsrs, doc(cfg(feature = "raw_value")))]
-pub use crate::raw::{to_raw_value, RawValue};
 
 #[derive(Clone)]
 pub enum Value {
@@ -133,6 +130,13 @@ impl Debug for Value {
             Value::Null => formatter.write_str("Null"),
             Value::Boolean(boolean) => write!(formatter, "Bool({})", boolean),
             Value::Int8(number) => Debug::fmt(number, formatter),
+            Value::Int16(number) => Debug::fmt(number, formatter),
+            Value::Int32(number) => Debug::fmt(number, formatter),
+            Value::Int64(number) => Debug::fmt(number, formatter),
+            Value::UInt8(number) => Debug::fmt(number, formatter),
+            Value::UInt16(number) => Debug::fmt(number, formatter),
+            Value::UInt32(number) => Debug::fmt(number, formatter),
+            Value::UInt64(number) => Debug::fmt(number, formatter),
             Value::String(string) => write!(formatter, "String({:?})", string),
             Value::Array(vec) => {
                 tri!(formatter.write_str("Array "));
@@ -707,24 +711,36 @@ impl Value {
     ///     }
     /// });
     ///
-    /// assert_eq!(data.pointer("/x/y/1").unwrap(), &json!("zz"));
-    /// assert_eq!(data.pointer("/a/b/c"), None);
+    /// assert_eq!(data.pointer("x.y.1").unwrap(), &json!("zz"));
+    /// assert_eq!(data.pointer("a.b.c"), None);
     /// ```
+    // pub fn pointer(&self, pointer: &str) -> Option<&Value> {
+    //     if pointer.is_empty() {
+    //         return Some(self);
+    //     }
+    //     pointer
+    //         .split('.')
+    //         .map(|x| x.replace("~1", "/").replace("~0", "~"))
+    //         .try_fold(self, |target, token| match target {
+    //             Value::Object(map) => map.get(&token),
+    //             Value::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
+    //             _ => None,
+    //         })
+    // }
     pub fn pointer(&self, pointer: &str) -> Option<&Value> {
         if pointer.is_empty() {
             return Some(self);
         }
-        if !pointer.starts_with('/') {
-            return None;
-        }
         pointer
-            .split('/')
-            .skip(1)
+            .split('.')
             .map(|x| x.replace("~1", "/").replace("~0", "~"))
-            .try_fold(self, |target, token| match target {
-                Value::Object(map) => map.get(&token),
-                Value::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
-                _ => None,
+            .try_fold(self, |target, token| {
+                println!("{:?}, {:?}", target, token);
+                match target {
+                    Value::Object(map) => map.get(&token),
+                    Value::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
+                    _ => None,
+                }
             })
     }
 

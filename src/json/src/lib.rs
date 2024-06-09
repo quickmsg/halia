@@ -359,13 +359,11 @@
 // Restrictions
 #![deny(clippy::question_mark_used)]
 #![allow(non_upper_case_globals)]
-#![deny(missing_docs)]
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate alloc;
 
-#[cfg(feature = "std")]
 extern crate std;
 
 #[cfg(feature = "std")]

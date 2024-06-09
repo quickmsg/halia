@@ -1,5 +1,5 @@
 use serde::{de, ser};
-use std::fmt::{self, Display, Debug};
+use std::fmt::{self, Debug, Display};
 use std::io::{self, ErrorKind};
 use std::{error, result};
 

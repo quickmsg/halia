@@ -1070,6 +1070,7 @@ dependencies = [
  "anyhow",
  "api",
  "device",
+ "json",
  "tokio",
  "tracing",
  "tracing-subscriber",

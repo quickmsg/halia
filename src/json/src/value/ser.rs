@@ -18,9 +18,15 @@ impl Serialize for Value {
             Value::Null => serializer.serialize_unit(),
             Value::Boolean(b) => serializer.serialize_bool(*b),
             Value::Int8(n) => n.serialize(serializer),
+            Value::Int16(n) => n.serialize(serializer),
+            Value::Int32(n) => n.serialize(serializer),
+            Value::Int64(n) => n.serialize(serializer),
+            Value::UInt8(n) => n.serialize(serializer),
+            Value::UInt16(n) => n.serialize(serializer),
+            Value::UInt32(n) => n.serialize(serializer),
+            Value::UInt64(n) => n.serialize(serializer),
             Value::String(s) => serializer.serialize_str(s),
             Value::Array(v) => v.serialize(serializer),
-            #[cfg(any(feature = "std", feature = "alloc"))]
             Value::Object(m) => {
                 use serde::ser::SerializeMap;
                 let mut map = tri!(serializer.serialize_map(Some(m.len())));
@@ -29,8 +35,6 @@ impl Serialize for Value {
                 }
                 map.end()
             }
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            Value::Object(_) => unreachable!(),
             _ => todo!(),
         }
     }
@@ -129,7 +133,7 @@ impl serde::Serializer for Serializer {
 
     #[inline]
     fn serialize_u64(self, value: u64) -> Result<Value> {
-        self.serialize_u64(value)
+        Ok(Value::UInt64(value))
     }
 
     // fn serialize_u128(self, value: u128) -> Result<Value> {
@@ -297,6 +301,10 @@ impl serde::Serializer for Serializer {
         T: ?Sized + Display,
     {
         Ok(Value::String(value.to_string()))
+    }
+
+    fn serialize_bytes(self, v: &[u8]) -> result::Result<Self::Ok, Self::Error> {
+        todo!()
     }
 }
 
