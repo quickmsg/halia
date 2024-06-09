@@ -5,6 +5,8 @@ use serde_json::Map;
 use serde_json::Value;
 use std::collections::HashMap;
 
+mod datatype;
+
 pub enum FieldValue {
     Bool(bool),
     Int64(i64),
