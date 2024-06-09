@@ -5,7 +5,19 @@ use serde_json::Map;
 use serde_json::Value;
 use std::collections::HashMap;
 
-mod datatype;
+// mod de;
+mod message_value;
+// mod error;
+
+#[macro_export]
+macro_rules! tri {
+    ($e:expr $(,)?) => {
+        match $e {
+            Result::Ok(val) => val,
+            Result::Err(err) => return Result::Err(err),
+        }
+    };
+}
 
 pub enum FieldValue {
     Bool(bool),
