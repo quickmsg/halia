@@ -2,36 +2,28 @@ use std::{borrow::Cow, fmt::Debug, io};
 
 use async_trait::async_trait;
 
-use super::{
-    frame::{Coil, Word},
-    slave::SlaveContext,
-    Address, Error, Quantity, Request, Response, Result, Slave,
-};
+use super::{slave::SlaveContext, Error, Request, Response, Result, Slave};
 
-pub mod rtu;
-pub mod tcp;
+pub(crate) mod rtu;
+pub(crate) mod tcp;
 
-/// Transport independent asynchronous client trait
 #[async_trait]
 pub trait Client: SlaveContext + Send + Debug {
-    /// Invoke a _Modbus_ function
     async fn call(&mut self, request: Request<'_>) -> Result<Response>;
 }
 
-/// Asynchronous Modbus reader
 #[async_trait]
-pub trait Reader: Client {
-    /// Read multiple coils (0x01)
-    async fn read_coils(&mut self, addr: Address, cnt: Quantity) -> Result<Vec<Coil>>;
+pub(crate) trait Reader: Client {
+    async fn read_coils(&mut self, addr: u16, cnt: u16) -> Result<Vec<u8>>;
 
     /// Read multiple discrete inputs (0x02)
-    async fn read_discrete_inputs(&mut self, addr: Address, cnt: Quantity) -> Result<Vec<Coil>>;
+    async fn read_discrete_inputs(&mut self, addr: u16, cnt: u16) -> Result<Vec<u8>>;
 
     /// Read multiple holding registers (0x03)
-    async fn read_holding_registers(&mut self, addr: Address, cnt: Quantity) -> Result<Vec<Word>>;
+    async fn read_holding_registers(&mut self, addr: u16, cnt: u16) -> Result<Vec<u8>>;
 
     /// Read multiple input registers (0x04)
-    async fn read_input_registers(&mut self, addr: Address, cnt: Quantity) -> Result<Vec<Word>>;
+    async fn read_input_registers(&mut self, addr: u16, cnt: u16) -> Result<Vec<u8>>;
 
     /// Read and write multiple holding registers (0x17)
     ///
@@ -39,35 +31,30 @@ pub trait Reader: Client {
     /// the name of the operation might suggest!
     async fn read_write_multiple_registers(
         &mut self,
-        read_addr: Address,
-        read_count: Quantity,
-        write_addr: Address,
-        write_data: &[Word],
-    ) -> Result<Vec<Word>>;
+        read_addr: u16,
+        read_count: u16,
+        write_addr: u16,
+        write_data: &[u8],
+    ) -> Result<Vec<u8>>;
 }
 
 /// Asynchronous Modbus writer
 #[async_trait]
 pub trait Writer: Client {
-    /// Write a single coil (0x05)
-    async fn write_single_coil(&mut self, addr: Address, coil: Coil) -> Result<()>;
+    /// Write a single u8 (0x05)
+    async fn write_single_Coil(&mut self, addr: u16, u8: u8) -> Result<()>;
 
     /// Write a single holding register (0x06)
-    async fn write_single_register(&mut self, addr: Address, word: Word) -> Result<()>;
+    async fn write_single_register(&mut self, addr: u16, u8: u8) -> Result<()>;
 
-    /// Write multiple coils (0x0F)
-    async fn write_multiple_coils(&mut self, addr: Address, coils: &'_ [Coil]) -> Result<()>;
+    /// Write multiple u8s (0x0F)
+    async fn write_multiple_Coils(&mut self, addr: u16, u8s: &'_ [u8]) -> Result<()>;
 
     /// Write multiple holding registers (0x10)
-    async fn write_multiple_registers(&mut self, addr: Address, words: &[Word]) -> Result<()>;
+    async fn write_multiple_registers(&mut self, addr: u16, u8s: &[u8]) -> Result<()>;
 
     /// Set or clear individual bits of a holding register (0x16)
-    async fn masked_write_register(
-        &mut self,
-        addr: Address,
-        and_mask: Word,
-        or_mask: Word,
-    ) -> Result<()>;
+    async fn masked_write_register(&mut self, addr: u16, and_mask: u8, or_mask: u8) -> Result<()>;
 }
 
 /// Asynchronous Modbus client context
@@ -119,7 +106,7 @@ impl SlaveContext for Context {
 
 #[async_trait]
 impl Reader for Context {
-    async fn read_coils<'a>(&'a mut self, addr: Address, cnt: Quantity) -> Result<Vec<Coil>> {
+    async fn read_coils<'a>(&'a mut self, addr: u16, cnt: u16) -> Result<Vec<u8>> {
         self.client
             .call(Request::ReadCoils(addr, cnt))
             .await
@@ -135,53 +122,41 @@ impl Reader for Context {
             })
     }
 
-    async fn read_discrete_inputs<'a>(
-        &'a mut self,
-        addr: Address,
-        cnt: Quantity,
-    ) -> Result<Vec<Coil>> {
+    async fn read_discrete_inputs<'a>(&'a mut self, addr: u16, cnt: u16) -> Result<Vec<u8>> {
         self.client
             .call(Request::ReadDiscreteInputs(addr, cnt))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadDiscreteInputs(mut coils) => {
-                        debug_assert!(coils.len() >= cnt.into());
-                        coils.truncate(cnt.into());
-                        coils
+                    Response::ReadDiscreteInputs(mut u8s) => {
+                        debug_assert!(u8s.len() >= cnt.into());
+                        u8s.truncate(cnt.into());
+                        u8s
                     }
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
     }
 
-    async fn read_input_registers<'a>(
-        &'a mut self,
-        addr: Address,
-        cnt: Quantity,
-    ) -> Result<Vec<Word>> {
+    async fn read_input_registers<'a>(&'a mut self, addr: u16, cnt: u16) -> Result<Vec<u8>> {
         self.client
             .call(Request::ReadInputRegisters(addr, cnt))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadInputRegisters(words) => words,
+                    Response::ReadInputRegisters(u8s) => u8s,
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
     }
 
-    async fn read_holding_registers<'a>(
-        &'a mut self,
-        addr: Address,
-        cnt: Quantity,
-    ) -> Result<Vec<Word>> {
+    async fn read_holding_registers<'a>(&'a mut self, addr: u16, cnt: u16) -> Result<Vec<u8>> {
         self.client
             .call(Request::ReadHoldingRegisters(addr, cnt))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadHoldingRegisters(words) => words,
+                    Response::ReadHoldingRegisters(u8s) => u8s,
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
@@ -189,11 +164,11 @@ impl Reader for Context {
 
     async fn read_write_multiple_registers<'a>(
         &'a mut self,
-        read_addr: Address,
-        read_count: Quantity,
-        write_addr: Address,
-        write_data: &[Word],
-    ) -> Result<Vec<Word>> {
+        read_addr: u16,
+        read_count: u16,
+        write_addr: u16,
+        write_data: &[u8],
+    ) -> Result<Vec<u8>> {
         self.client
             .call(Request::ReadWriteMultipleRegisters(
                 read_addr,
@@ -204,7 +179,7 @@ impl Reader for Context {
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadWriteMultipleRegisters(words) => words,
+                    Response::ReadWriteMultipleRegisters(u8s) => u8s,
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
@@ -213,25 +188,25 @@ impl Reader for Context {
 
 #[async_trait]
 impl Writer for Context {
-    async fn write_single_coil<'a>(&'a mut self, addr: Address, coil: Coil) -> Result<()> {
+    async fn write_single_Coil<'a>(&'a mut self, addr: u16, u8: u8) -> Result<()> {
         self.client
-            .call(Request::WriteSingleCoil(addr, coil))
+            .call(Request::WriteSingleCoil(addr, u8))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::WriteSingleCoil(rsp_addr, rsp_coil) => {
+                    Response::WriteSingleCoil(rsp_addr, rsp_u8) => {
                         debug_assert_eq!(addr, rsp_addr);
-                        debug_assert_eq!(coil, rsp_coil);
+                        debug_assert_eq!(u8, rsp_u8);
                     }
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
     }
 
-    async fn write_multiple_coils<'a>(&'a mut self, addr: Address, coils: &[Coil]) -> Result<()> {
-        let cnt = coils.len();
+    async fn write_multiple_Coils<'a>(&'a mut self, addr: u16, u8s: &[u8]) -> Result<()> {
+        let cnt = u8s.len();
         self.client
-            .call(Request::WriteMultipleCoils(addr, Cow::Borrowed(coils)))
+            .call(Request::WriteMultipleCoils(addr, Cow::Borrowed(u8s)))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
@@ -243,26 +218,22 @@ impl Writer for Context {
             })
     }
 
-    async fn write_single_register<'a>(&'a mut self, addr: Address, word: Word) -> Result<()> {
+    async fn write_single_register<'a>(&'a mut self, addr: u16, u8: u8) -> Result<()> {
         self.client
-            .call(Request::WriteSingleRegister(addr, word))
+            .call(Request::WriteSingleRegister(addr, u8))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::WriteSingleRegister(rsp_addr, rsp_word) => {
+                    Response::WriteSingleRegister(rsp_addr, rsp_u8) => {
                         debug_assert_eq!(addr, rsp_addr);
-                        debug_assert_eq!(word, rsp_word);
+                        debug_assert_eq!(u8, rsp_u8);
                     }
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
     }
 
-    async fn write_multiple_registers<'a>(
-        &'a mut self,
-        addr: Address,
-        data: &[Word],
-    ) -> Result<()> {
+    async fn write_multiple_registers<'a>(&'a mut self, addr: u16, data: &[u8]) -> Result<()> {
         let cnt = data.len();
         self.client
             .call(Request::WriteMultipleRegisters(addr, Cow::Borrowed(data)))
@@ -280,9 +251,9 @@ impl Writer for Context {
 
     async fn masked_write_register<'a>(
         &'a mut self,
-        addr: Address,
-        and_mask: Word,
-        or_mask: Word,
+        addr: u16,
+        and_mask: u8,
+        or_mask: u8,
     ) -> Result<()> {
         self.client
             .call(Request::MaskWriteRegister(addr, and_mask, or_mask))
@@ -350,26 +321,26 @@ mod tests {
     }
 
     // #[test]
-    // fn read_some_coils() {
+    // fn read_some_u8s() {
     //     // The protocol will always return entire bytes with, i.e.
-    //     // a multiple of 8 coils.
-    //     let response_coils = [true, false, false, true, false, true, false, true];
-    //     for num_coils in 1..8 {
+    //     // a multiple of 8 u8s.
+    //     let response_u8s = [true, false, false, true, false, true, false, true];
+    //     for num_u8s in 1..8 {
     //         let mut client = Box::<ClientMock>::default();
-    //         client.set_next_response(Ok(Ok(Response::ReadCoils(response_coils.to_vec()))));
+    //         client.set_next_response(Ok(Ok(Response::Readu8s(response_u8s.to_vec()))));
     //         let mut context = Context { client };
     //         context.set_slave(Slave(1));
-    //         let coils = futures::executor::block_on(context.read_coils(1, num_coils))
+    //         let u8s = futures::executor::block_on(context.read_u8s(1, num_u8s))
     //             .unwrap()
     //             .unwrap();
-    //         assert_eq!(&response_coils[0..num_coils as usize], &coils[..]);
+    //         assert_eq!(&response_u8s[0..num_u8s as usize], &u8s[..]);
     //     }
     // }
 
     // #[test]
     // fn read_some_discrete_inputs() {
     //     // The protocol will always return entire bytes with, i.e.
-    //     // a multiple of 8 coils.
+    //     // a multiple of 8 u8s.
     //     let response_inputs = [true, false, false, true, false, true, false, true];
     //     for num_inputs in 1..8 {
     //         let mut client = Box::<ClientMock>::default();

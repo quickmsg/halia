@@ -7,7 +7,7 @@ use byteorder::{BigEndian, ReadBytesExt as _};
 use bytes::{BufMut, Bytes, BytesMut};
 
 use super::{
-    frame::{Coil, RequestPdu, ResponsePdu},
+    frame::{RequestPdu, ResponsePdu},
     Exception, ExceptionResponse, FunctionCode, Request, Response,
 };
 
@@ -395,8 +395,8 @@ impl TryFrom<Bytes> for ResponsePdu {
     }
 }
 
-fn bool_to_coil(state: bool) -> u16 {
-    if state {
+fn bool_to_coil(state: u8) -> u16 {
+    if state == 1 {
         0xFF00
     } else {
         0x0000

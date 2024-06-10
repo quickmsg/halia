@@ -30,8 +30,8 @@
 ///
 /// Used by [`Response::Custom`].
 pub mod client;
-
 pub mod slave;
+
 pub use self::slave::{Slave, SlaveId};
 
 mod codec;
@@ -55,6 +55,3 @@ pub use self::frame::{
 pub type Result<T> = std::result::Result<std::result::Result<T, Exception>, Error>;
 
 mod service;
-
-#[cfg(feature = "server")]
-pub mod server;

@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) 2017-2024 slowtec GmbH <post@slowtec.de>
-// SPDX-License-Identifier: MIT OR Apache-2.0
-
 //! Modbus devices
 
 use std::{fmt, num::ParseIntError, str::FromStr};
