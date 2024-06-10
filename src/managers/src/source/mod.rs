@@ -1,71 +1,60 @@
-use anyhow::{bail, Result};
-// use lazy_static::lazy_static;
+use common::error::{HaliaError, Result};
 use message::MessageBatch;
 use sources::mqtt::Mqtt;
 use sources::Source;
-use std::collections::HashMap;
 use std::sync::LazyLock;
-use std::sync::Mutex;
 use tokio::sync::broadcast::Receiver;
+use tokio::sync::RwLock;
 use tracing::{debug, error};
-use types::rule::CreateSource;
+use types::source::CreateSourceReq;
+use uuid::Uuid;
 
-pub struct Manager {
-    pub sources: HashMap<String, Box<dyn Source + Sync>>,
+pub struct SourceManager {
+    pub sources: RwLock<Vec<(Uuid, Box<dyn Source>)>>,
 }
 
-pub static SOURCE_MANAGER: LazyLock<Mutex<Manager>> = LazyLock::new(|| {
-    Mutex::new(Manager {
-        sources: HashMap::new(),
-    })
+pub static GLOBAL_SOURCE_MANAGER: LazyLock<SourceManager> = LazyLock::new(|| SourceManager {
+    sources: RwLock::new(vec![]),
 });
 
-// pub fn register(create_source: CreateSource) -> Result<()> {
-//     SOURCE_MANAGER.lock().unwrap().register(create_source)
-// }
-
-// pub fn get_receiver(name: String, graph_name: String) -> Result<Receiver<MessageBatch>> {
-//     SOURCE_MANAGER
-//         .lock()
-//         .unwrap()
-//         .get_receiver(&name, graph_name)
-// }
-
-impl Manager {
-    pub fn register(&mut self, create_source: CreateSource) -> Result<()> {
-        if self.sources.contains_key(&create_source.name) {
-            bail!("已存在");
-        }
-
-        match create_source.r#type.as_str() {
-            "mqtt" => match Mqtt::new(create_source.conf.clone()) {
+impl SourceManager {
+    pub async fn create_source(&self, id: Option<Uuid>, req: CreateSourceReq) -> Result<()> {
+        match req.r#type.as_str() {
+            "mqtt" => match Mqtt::new(req.conf.clone()) {
                 Ok(mqtt) => {
                     debug!("insert source");
-                    self.sources.insert(create_source.name.clone(), mqtt);
+                    self.sources.write().await.push((Uuid::new_v4(), mqtt));
                     return Ok(());
                 }
                 Err(e) => {
-                    error!("register souce:{} err:{}", create_source.name, e);
-                    bail!("todo")
+                    error!("register souce:{} err:{}", req.name, e);
+                    return Err(HaliaError::ProtocolNotSupported);
                 }
             },
-            _ => bail!("not support"),
+            _ => return Err(HaliaError::ParseErr),
         }
-
-        Ok(())
     }
 
-    pub fn get_receiver(
-        &mut self,
-        name: &String,
+    pub async fn get_receiver(
+        &self,
+        source_id: Uuid,
         graph_name: String,
     ) -> Result<Receiver<MessageBatch>> {
-        debug!("subscribe source: {}", name);
-        match self.sources.get_mut(name) {
-            Some(source) => source.subscribe(),
+        debug!("subscribe source: {}", source_id);
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|(id, _)| *id == source_id)
+        {
+            Some((_, source)) => match source.subscribe() {
+                Ok(x) => return Ok(x),
+                Err(_) => todo!(),
+            },
             None => {
-                error!("don't have source:{}", name);
-                bail!("")
+                error!("don't have source:{}", source_id);
+                return Err(HaliaError::IoErr);
             }
         }
     }

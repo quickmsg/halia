@@ -12,10 +12,14 @@ use tokio_util::codec::Framed;
 use tracing::debug;
 
 use crate::modbus::protocol::{
-    codec, frame::{
+    codec,
+    frame::{
         tcp::{Header, RequestAdu, TransactionId, UnitId},
         RequestPdu, ResponsePdu,
-    }, service::verify_response_header, slave::SlaveContext, ExceptionResponse, ProtocolError, Request, Response, Result, Slave
+    },
+    service::verify_response_header,
+    slave::SlaveContext,
+    ExceptionResponse, ProtocolError, Request, Response, Result, Slave,
 };
 
 const INITIAL_TRANSACTION_ID: TransactionId = 0;

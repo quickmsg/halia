@@ -572,6 +572,7 @@ name = "managers"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common",
  "message",
  "operators",
  "sinks",
@@ -579,6 +580,7 @@ dependencies = [
  "tokio",
  "tracing",
  "types",
+ "uuid",
 ]
 
 [[package]]

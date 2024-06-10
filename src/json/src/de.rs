@@ -6,8 +6,6 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::iter::FusedIterator;
 use core::marker::PhantomData;
-use core::result;
-use core::str::FromStr;
 use serde::de::{self, Expected, Unexpected};
 use serde::forward_to_deserialize_any;
 

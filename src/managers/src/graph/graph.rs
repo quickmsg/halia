@@ -6,8 +6,9 @@ use std::collections::HashMap;
 use tokio::sync::broadcast::{self, Receiver};
 use tracing::{debug, error};
 use types::rule::{CreateGraph, CreateGraphNode, Status};
+use uuid::Uuid;
 
-use crate::{sink::SINK_MANAGER, source::SOURCE_MANAGER};
+use crate::{sink::SINK_MANAGER, source::GLOBAL_SOURCE_MANAGER};
 
 use super::stream::Stream;
 
@@ -30,7 +31,7 @@ pub fn new(create_graph: &CreateGraph) -> Graph {
 }
 
 impl Graph {
-    pub fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> Result<()> {
         let (incoming_edges, outgoing_edges) = self.create_graph.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
@@ -63,11 +64,9 @@ impl Graph {
                     Some(r#type) => match r#type.as_str() {
                         "source" => {
                             if let Some(node) = node_map.get(&osi.first_id) {
-                                let receiver = SOURCE_MANAGER
-                                    .lock()
-                                    // todo remove unwrap
-                                    .unwrap()
-                                    .get_receiver(&node.name, "xx".to_string())
+                                let receiver = GLOBAL_SOURCE_MANAGER
+                                    .get_receiver(Uuid::new_v4(), "xx".to_string())
+                                    .await
                                     .unwrap();
                                 receivers.insert(osi.first_id, vec![receiver]);
                             }

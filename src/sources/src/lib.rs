@@ -4,7 +4,7 @@ use tokio::sync::broadcast::Receiver;
 
 pub mod mqtt;
 
-pub trait Source: Send {
+pub trait Source: Send + Sync {
     fn subscribe(&mut self) -> Result<Receiver<MessageBatch>>;
 
     fn stop(&self) {}

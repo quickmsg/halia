@@ -187,9 +187,9 @@ impl TryFrom<Bytes> for Request<'static> {
             0x01 => ReadCoils(bytes.get_u16(), bytes.get_u16()),
             0x02 => ReadDiscreteInputs(bytes.get_u16(), bytes.get_u16()),
             0x05 => WriteSingleCoil(
-                rdr.read_u16::<BigEndian>()?,
+                bytes.get_u16(),
                 // TODO
-                rdr.read_u8()?,
+                bytes.get_u8(),
                 // coil_to_bool(rdr.read_u16::<BigEndian>()?)?,
             ),
             0x0F => {

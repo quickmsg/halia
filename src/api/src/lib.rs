@@ -11,6 +11,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 mod device;
 mod rule;
+mod source;
 
 #[derive(Serialize, Debug)]
 pub(crate) struct AppResp<T> {
@@ -55,6 +56,7 @@ pub async fn start() {
         .nest("/api", device_routes())
         .nest("/api/device/:device_id", group_routes())
         .nest("/api/device/:device_id/group/:group_id", point_routes())
+        .nest("/api", rule_routes())
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -101,10 +103,10 @@ fn point_routes() -> Router {
 
 fn rule_routes() -> Router {
     Router::new()
-        .route("/source", post(rule::create_source))
+        // .route("/source", post(rule::create_source))
         .route("/sink", post(rule::create_sink))
         .route("/graph", post(rule::create))
-        .route("/graph/run/:ame", put(rule::run))
+        // .route("/graph/run/:id", put(rule::run))
         .route("/graph/stop/:name", put(rule::stop))
         .route("/health", get(rule::helath))
 }

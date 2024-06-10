@@ -49,10 +49,10 @@ impl Manager {
         Ok(())
     }
 
-    pub fn run(&self, name: String) -> Result<()> {
+    pub async fn run(&self, name: String) -> Result<()> {
         let graph = self.graphs.get(&name);
         match graph {
-            Some(graph) => graph.graph.run(),
+            Some(graph) => graph.graph.run().await,
             None => bail!("不存在"),
         }
     }
