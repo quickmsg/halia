@@ -31,6 +31,7 @@ impl SourceManager {
                     return Err(HaliaError::ProtocolNotSupported);
                 }
             },
+            // "device" => 
             _ => return Err(HaliaError::ParseErr),
         }
     }

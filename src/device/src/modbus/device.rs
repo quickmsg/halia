@@ -14,7 +14,10 @@ use serde_json::{json, Value};
 use tokio::{
     net::TcpStream,
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{
+        broadcast::{self, Sender},
+        mpsc, RwLock,
+    },
     time,
 };
 use tokio_modbus::{
@@ -495,6 +498,10 @@ impl Device for Modbus {
             None => Err(HaliaError::NotFound),
         }
     }
+
+    async fn subscribe(&self, group_id: Uuid) -> Result<Sender<String>> {
+        todo!()
+    }
 }
 
 async fn run_event_loop(
@@ -547,7 +554,8 @@ async fn read_group_points(
         .iter_mut()
         .find(|group| group.id == group_id)
     {
-        for point in group.points.write().await.iter_mut() {
+        let mut values = vec![];
+        for (id, point) in group.points.write().await.iter_mut() {
             ctx.set_slave(Slave(point.conf.slave));
             let start_time = Instant::now();
             match point.conf.area {
@@ -564,7 +572,8 @@ async fn read_group_points(
                             }
                             x
                         });
-                        point.set_data(bytes);
+                        values.push((id.clone(), bytes));
+                        // point.set_data(bytes);
                     }
                     Err(e) => match e.kind() {
                         std::io::ErrorKind::InvalidData => {
@@ -586,7 +595,8 @@ async fn read_group_points(
                             }
                             x
                         });
-                        point.set_data(bytes);
+                        values.push((id.clone(), bytes));
+                        // point.set_data(bytes);
                     }
                     Err(e) => match e.kind() {
                         std::io::ErrorKind::InvalidData => {
@@ -608,7 +618,8 @@ async fn read_group_points(
                             x.push((elem >> 8) as u8);
                             x
                         });
-                        point.set_data(bytes);
+                        values.push((id.clone(), bytes));
+                        // point.set_data(bytes);
                     }
                     Err(e) => match e.kind() {
                         std::io::ErrorKind::InvalidData => {
@@ -630,7 +641,8 @@ async fn read_group_points(
                             x.push((elem >> 8) as u8);
                             x
                         });
-                        point.set_data(bytes);
+                        values.push((id.clone(), bytes));
+                        // point.set_data(bytes);
                     }
                     Err(e) => match e.kind() {
                         std::io::ErrorKind::InvalidData => {
@@ -650,6 +662,8 @@ async fn read_group_points(
 
             time::sleep(Duration::from_millis(interval)).await;
         }
+
+        group.set_data(values).await;
         true
     } else {
         true
@@ -670,12 +684,12 @@ async fn write_point_value(
         .iter()
         .find(|group| group.id == group_id)
     {
-        if let Some(point) = group
+        if let Some((_, point)) = group
             .points
             .read()
             .await
             .iter()
-            .find(|point| point.id == point_id)
+            .find(|(id, _)| *id == point_id)
         {
             match point.conf.area {
                 1 => match value.as_bool() {

@@ -10,7 +10,7 @@ members = [
     "src/operators",
     "src/device",
     "src/common",
-    "src/json",
+    "src/json", "src/connectors",
 ]
 resolver = "2"
 

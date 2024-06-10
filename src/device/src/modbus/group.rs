@@ -12,7 +12,7 @@ pub(crate) struct Group {
     pub id: Uuid,
     pub name: String,
     pub interval: u64,
-    pub points: RwLock<Vec<Point>>,
+    pub points: RwLock<Vec<(Uuid, Point)>>,
     pub device_id: Uuid,
 }
 
@@ -42,12 +42,12 @@ impl Group {
             match point_id {
                 Some(point_id) => {
                     let point = Point::new(conf.clone(), point_id)?;
-                    points.push(point);
+                    points.push((point_id, point));
                 }
                 None => {
                     let point_id = Uuid::new_v4();
                     let point = Point::new(conf.clone(), point_id)?;
-                    points.push(point);
+                    points.push((point_id, point));
                     storage_infos.push((point_id, serde_json::to_string(&conf)?));
                 }
             }
@@ -62,7 +62,7 @@ impl Group {
 
     pub async fn read_points(&self) -> Vec<ListPointResp> {
         let mut resps = Vec::with_capacity(self.get_points_num().await);
-        for point in self.points.read().await.iter() {
+        for (_, point) in self.points.read().await.iter() {
             resps.push(ListPointResp {
                 id: point.id,
                 name: point.name.clone(),
@@ -76,19 +76,25 @@ impl Group {
         resps
     }
 
-    pub async fn update_point(&self, id: Uuid, req: &CreatePointReq) -> Result<()> {
+    pub async fn update_point(&self, point_id: Uuid, req: &CreatePointReq) -> Result<()> {
         match self
             .points
             .write()
             .await
             .iter_mut()
-            .find(|point| point.id == id)
+            .find(|(id, _)| *id == point_id)
         {
-            Some(point) => point.update(req).await?,
+            Some((_, point)) => point.update(req).await?,
             None => return Err(HaliaError::NotFound),
         };
 
-        storage::update_point(self.device_id, self.id, id, serde_json::to_string(req)?).await?;
+        storage::update_point(
+            self.device_id,
+            self.id,
+            point_id,
+            serde_json::to_string(req)?,
+        )
+        .await?;
 
         Ok(())
     }
@@ -98,8 +104,15 @@ impl Group {
     }
 
     pub async fn delete_points(&self, ids: Vec<Uuid>) -> Result<()> {
-        self.points.write().await.retain(|p| !ids.contains(&p.id));
+        self.points
+            .write()
+            .await
+            .retain(|(id, _)| !ids.contains(id));
         storage::delete_points(self.device_id, self.id, &ids).await?;
+        Ok(())
+    }
+
+    pub async fn set_data(&self, data: Vec<(Uuid, Vec<u8>)>) -> Result<()> {
         Ok(())
     }
 }

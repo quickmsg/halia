@@ -6,7 +6,7 @@ use modbus::device::Modbus;
 use serde::Serialize;
 use std::sync::LazyLock;
 use storage::Status;
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast::Sender, RwLock};
 use tracing::{debug, error};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
@@ -326,6 +326,19 @@ impl DeviceManager {
             None => Err(HaliaError::NotFound),
         }
     }
+
+    pub async fn subscribe(&self, device_id: Uuid, group_id: Uuid) -> Result<Sender<String>> {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|(id, _)| *id == device_id)
+        {
+            Some((_, device)) => device.subscribe(group_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
 }
 
 impl DeviceManager {
@@ -430,6 +443,8 @@ trait Device: Sync + Send {
         req: &WritePointValueReq,
     ) -> Result<()>;
     async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()>;
+
+    async fn subscribe(&self, group_id: Uuid) -> Result<Sender<String>>;
 }
 
 pub(crate) enum DataValue {
