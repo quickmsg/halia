@@ -40,9 +40,7 @@ mod error;
 pub use self::error::{Error, ProtocolError};
 
 mod frame;
-pub use self::frame::{
-    Address, Exception, ExceptionResponse, FunctionCode, Quantity, Request, Response,
-};
+pub use self::frame::{Exception, ExceptionResponse, FunctionCode, Request, Response};
 
 /// Specialized [`std::result::Result`] type for type-checked responses of the _Modbus_ client API.
 ///

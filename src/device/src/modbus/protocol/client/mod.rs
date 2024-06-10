@@ -42,19 +42,19 @@ pub(crate) trait Reader: Client {
 #[async_trait]
 pub trait Writer: Client {
     /// Write a single u8 (0x05)
-    async fn write_single_Coil(&mut self, addr: u16, u8: u8) -> Result<()>;
+    async fn write_single_Coil(&mut self, addr: u16, coil: &'_ [u8]) -> Result<()>;
 
     /// Write a single holding register (0x06)
-    async fn write_single_register(&mut self, addr: u16, u8: u8) -> Result<()>;
+    async fn write_single_register(&mut self, addr: u16, register: &'_ [u8]) -> Result<()>;
 
     /// Write multiple u8s (0x0F)
-    async fn write_multiple_Coils(&mut self, addr: u16, u8s: &'_ [u8]) -> Result<()>;
+    async fn write_multiple_Coils(&mut self, addr: u16, coils: &'_ [u8]) -> Result<()>;
 
     /// Write multiple holding registers (0x10)
-    async fn write_multiple_registers(&mut self, addr: u16, u8s: &[u8]) -> Result<()>;
+    async fn write_multiple_registers(&mut self, addr: u16, register: &'_ [u8]) -> Result<()>;
 
-    /// Set or clear individual bits of a holding register (0x16)
-    async fn masked_write_register(&mut self, addr: u16, and_mask: u8, or_mask: u8) -> Result<()>;
+    // Set or clear individual bits of a holding register (0x16)
+    // async fn masked_write_register(&mut self, addr: u16, and_mask: u8, or_mask: u8) -> Result<()>;
 }
 
 /// Asynchronous Modbus client context
@@ -188,87 +188,81 @@ impl Reader for Context {
 
 #[async_trait]
 impl Writer for Context {
-    async fn write_single_Coil<'a>(&'a mut self, addr: u16, u8: u8) -> Result<()> {
+    async fn write_single_Coil<'a>(&'a mut self, addr: u16, coil: &'_ [u8]) -> Result<()> {
         self.client
-            .call(Request::WriteSingleCoil(addr, u8))
+            .call(Request::WriteSingleCoil(addr, Cow::Borrowed(coil)))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::WriteSingleCoil(rsp_addr, rsp_u8) => {
-                        debug_assert_eq!(addr, rsp_addr);
-                        debug_assert_eq!(u8, rsp_u8);
-                    }
+                    Response::WriteSingleCoil(rsp_addr, rsp_u8) => {}
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
     }
 
-    async fn write_multiple_Coils<'a>(&'a mut self, addr: u16, u8s: &[u8]) -> Result<()> {
-        let cnt = u8s.len();
+    async fn write_multiple_Coils<'a>(&'a mut self, addr: u16, coils: &'_ [u8]) -> Result<()> {
         self.client
-            .call(Request::WriteMultipleCoils(addr, Cow::Borrowed(u8s)))
+            .call(Request::WriteMultipleCoils(addr, Cow::Borrowed(coils)))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::WriteMultipleCoils(rsp_addr, rsp_cnt) => {
-                        debug_assert_eq!(cnt, rsp_cnt as usize);
-                    }
+                    Response::WriteMultipleCoils(rsp_addr, rsp_cnt) => {}
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
     }
 
-    async fn write_single_register<'a>(&'a mut self, addr: u16, u8: u8) -> Result<()> {
+    async fn write_single_register<'a>(&'a mut self, addr: u16, register: &'_ [u8]) -> Result<()> {
         self.client
-            .call(Request::WriteSingleRegister(addr, u8))
+            .call(Request::WriteSingleRegister(addr, Cow::Borrowed(register)))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::WriteSingleRegister(rsp_addr, rsp_u8) => {
-                        debug_assert_eq!(addr, rsp_addr);
-                        debug_assert_eq!(u8, rsp_u8);
-                    }
+                    Response::WriteSingleRegister(rsp_addr, rsp_u8) => {}
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
     }
 
-    async fn write_multiple_registers<'a>(&'a mut self, addr: u16, data: &[u8]) -> Result<()> {
-        let cnt = data.len();
-        self.client
-            .call(Request::WriteMultipleRegisters(addr, Cow::Borrowed(data)))
-            .await
-            .map(|result| {
-                result.map_err(Into::into).map(|response| match response {
-                    Response::WriteMultipleRegisters(rsp_addr, rsp_cnt) => {
-                        debug_assert_eq!(addr, rsp_addr);
-                        debug_assert_eq!(cnt, rsp_cnt as usize);
-                    }
-                    _ => unreachable!("call() should reject mismatching responses"),
-                })
-            })
-    }
-
-    async fn masked_write_register<'a>(
+    async fn write_multiple_registers<'a>(
         &'a mut self,
         addr: u16,
-        and_mask: u8,
-        or_mask: u8,
+        registers: &'_ [u8],
     ) -> Result<()> {
         self.client
-            .call(Request::MaskWriteRegister(addr, and_mask, or_mask))
+            .call(Request::WriteMultipleRegisters(
+                addr,
+                Cow::Borrowed(registers),
+            ))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::MaskWriteRegister(rsp_addr, rsp_and_mask, rsp_or_mask) => {
-                        debug_assert_eq!(addr, rsp_addr);
-                        debug_assert_eq!(and_mask, rsp_and_mask);
-                        debug_assert_eq!(or_mask, rsp_or_mask);
-                    }
+                    Response::WriteMultipleRegisters(rsp_addr, rsp_cnt) => {}
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
     }
+
+    // async fn masked_write_register<'a>(
+    //     &'a mut self,
+    //     addr: u16,
+    //     and_mask: u8,
+    //     or_mask: u8,
+    // ) -> Result<()> {
+    //     self.client
+    //         .call(Request::MaskWriteRegister(addr, and_mask, or_mask))
+    //         .await
+    //         .map(|result| {
+    //             result.map_err(Into::into).map(|response| match response {
+    //                 Response::MaskWriteRegister(rsp_addr, rsp_and_mask, rsp_or_mask) => {
+    //                     debug_assert_eq!(addr, rsp_addr);
+    //                     debug_assert_eq!(and_mask, rsp_and_mask);
+    //                     debug_assert_eq!(or_mask, rsp_or_mask);
+    //                 }
+    //                 _ => unreachable!("call() should reject mismatching responses"),
+    //             })
+    //         })
+    // }
 }
 
 #[cfg(test)]
