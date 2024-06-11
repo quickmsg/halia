@@ -1,16 +1,10 @@
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use std::time::Duration;
 
 use crate::storage;
 use common::error::{HaliaError, Result};
 use tokio::{
     select,
-    sync::{
-        broadcast::{self, Receiver, Sender},
-        mpsc, RwLock,
-    },
+    sync::{broadcast, mpsc, RwLock},
     time,
 };
 use tracing::{debug, error};
@@ -99,7 +93,7 @@ impl Group {
         self.interval = req.interval;
     }
 
-    pub fn subscribe(&self) -> Sender<String> {
+    pub fn subscribe(&self) -> broadcast::Sender<String> {
         todo!()
     }
 

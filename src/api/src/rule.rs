@@ -1,6 +1,6 @@
 use axum::{extract::Path, http::StatusCode, Json};
-use managers::{graph::manager::GRAPH_MANAGER, sink::SINK_MANAGER, source::GLOBAL_SOURCE_MANAGER};
-use types::rule::{CreateGraph, CreateSink, CreateSource};
+use managers::{graph::manager::GRAPH_MANAGER, sink::SINK_MANAGER};
+use types::rule::{CreateGraph, CreateSink};
 
 pub(crate) async fn create(Json(create_graph): Json<CreateGraph>) -> (StatusCode, String) {
     match GRAPH_MANAGER.lock().unwrap().register(create_graph) {
