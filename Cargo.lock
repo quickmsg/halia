@@ -614,9 +614,8 @@ dependencies = [
  "anyhow",
  "bytes",
  "indexmap",
+ "json",
  "ryu",
- "serde",
- "serde_json",
 ]
 
 [[package]]

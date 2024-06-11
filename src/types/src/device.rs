@@ -85,10 +85,10 @@ pub enum DataType {
     Uint16(Endian),
     Int32(Endian, Endian),
     Uint32(Endian, Endian),
-    Int64(Endian, Endian, Endian, Endian),
-    Uint64(Endian, Endian, Endian, Endian),
+    Int64(Endian, Endian),
+    Uint64(Endian, Endian),
     Float32(Endian, Endian),
-    Float64(Endian, Endian, Endian, Endian),
+    Float64(Endian, Endian),
     // TODO
     String,
     Bytes,
@@ -133,20 +133,20 @@ impl<'de> Deserialize<'de> for DataType {
                         DataType::Uint32(endian[0], endian[1])
                     }
                     "int64" => {
-                        let endian = extract_endian(&map, 4).unwrap();
-                        DataType::Int64(endian[0], endian[1], endian[2], endian[3])
+                        let endian = extract_endian(&map, 2).unwrap();
+                        DataType::Int64(endian[0], endian[1])
                     }
                     "uint64" => {
-                        let endian = extract_endian(&map, 4).unwrap();
-                        DataType::Uint64(endian[0], endian[1], endian[2], endian[3])
+                        let endian = extract_endian(&map, 2).unwrap();
+                        DataType::Uint64(endian[0], endian[1])
                     }
                     "float32" => {
                         let endian = extract_endian(&map, 2).unwrap();
                         DataType::Float32(endian[0], endian[1])
                     }
                     "float64" => {
-                        let endian = extract_endian(&map, 4).unwrap();
-                        DataType::Float64(endian[0], endian[1], endian[2], endian[3])
+                        let endian = extract_endian(&map, 2).unwrap();
+                        DataType::Float64(endian[0], endian[1])
                     }
                     "string" => DataType::String,
                     "bytes" => DataType::Bytes,
@@ -192,20 +192,20 @@ impl Serialize for DataType {
                 serde_json::json!({"type": "uint32", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
-            DataType::Int64(endian1, endian2, endian3, endian4) => {
-                serde_json::json!({"type": "int32", "endian": [endian1, endian2, endian3, endian4]})
+            DataType::Int64(endian1, endian2) => {
+                serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
-            DataType::Uint64(endian1, endian2, endian3, endian4) => {
-                serde_json::json!({"type": "int32", "endian": [endian1, endian2, endian3, endian4]})
+            DataType::Uint64(endian1, endian2) => {
+                serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
             DataType::Float32(endian1, endian2) => {
                 serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
-            DataType::Float64(endian1, endian2, endian3, endian4) => {
-                serde_json::json!({"type": "int32", "endian": [endian1, endian2, endian3, endian4]})
+            DataType::Float64(endian1, endian2) => {
+                serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
             DataType::Bytes => serde_json::json!({"type": "bytes"}).serialize(serializer),
@@ -275,7 +275,7 @@ impl DataType {
                 }
                 Value::from(u32::from_be_bytes(data))
             }
-            DataType::Int64(endian0, endian1, endian2, endian3) => {
+            DataType::Int64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return Value::Null,
@@ -285,17 +285,11 @@ impl DataType {
                 }
                 if *endian1 == Endian::LittleEndian {
                     data.swap(2, 3);
-                }
-                if *endian2 == Endian::LittleEndian {
-                    data.swap(4, 5);
-                }
-                if *endian3 == Endian::LittleEndian {
-                    data.swap(6, 7);
                 }
 
                 Value::from(i64::from_be_bytes(data))
             }
-            DataType::Uint64(endian0, endian1, endian2, endian3) => {
+            DataType::Uint64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return Value::Null,
@@ -305,12 +299,6 @@ impl DataType {
                 }
                 if *endian1 == Endian::LittleEndian {
                     data.swap(2, 3);
-                }
-                if *endian2 == Endian::LittleEndian {
-                    data.swap(4, 5);
-                }
-                if *endian3 == Endian::LittleEndian {
-                    data.swap(6, 7);
                 }
                 Value::from(u64::from_be_bytes(data))
             }
@@ -327,7 +315,7 @@ impl DataType {
                 }
                 Value::from(f32::from_be_bytes(data))
             }
-            DataType::Float64(endian0, endian1, endian2, endian3) => {
+            DataType::Float64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return Value::Null,
@@ -337,12 +325,6 @@ impl DataType {
                 }
                 if *endian1 == Endian::LittleEndian {
                     data.swap(2, 3);
-                }
-                if *endian2 == Endian::LittleEndian {
-                    data.swap(4, 5);
-                }
-                if *endian3 == Endian::LittleEndian {
-                    data.swap(6, 7);
                 }
                 Value::from(f64::from_be_bytes(data))
             }
@@ -401,7 +383,7 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
-            DataType::Int64(endian0, endian1, endian2, endian3) => match data.as_i64() {
+            DataType::Int64(endian0, endian1) => match data.as_i64() {
                 Some(value) => {
                     let mut data = (value as i64).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
@@ -410,17 +392,12 @@ impl DataType {
                     if *endian1 == Endian::LittleEndian {
                         data.swap(2, 3);
                     }
-                    if *endian2 == Endian::LittleEndian {
-                        data.swap(4, 5);
-                    }
-                    if *endian3 == Endian::LittleEndian {
-                        data.swap(6, 7);
-                    }
+
                     return Ok(array_u8_tou16(&data));
                 }
                 None => bail!("value is wrong"),
             },
-            DataType::Uint64(endian0, endian1, endian2, endian3) => match data.as_i64() {
+            DataType::Uint64(endian0, endian1) => match data.as_i64() {
                 Some(value) => {
                     let mut data = (value as u64).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
@@ -428,12 +405,6 @@ impl DataType {
                     }
                     if *endian1 == Endian::LittleEndian {
                         data.swap(2, 3);
-                    }
-                    if *endian2 == Endian::LittleEndian {
-                        data.swap(4, 5);
-                    }
-                    if *endian3 == Endian::LittleEndian {
-                        data.swap(6, 7);
                     }
                     return Ok(array_u8_tou16(&data));
                 }
@@ -452,7 +423,7 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
-            DataType::Float64(endian0, endian1, endian2, endian3) => match data.as_f64() {
+            DataType::Float64(endian0, endian1) => match data.as_f64() {
                 Some(value) => {
                     let mut data = (value as f32).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
@@ -460,12 +431,6 @@ impl DataType {
                     }
                     if *endian1 == Endian::LittleEndian {
                         data.swap(2, 3);
-                    }
-                    if *endian2 == Endian::LittleEndian {
-                        data.swap(4, 5);
-                    }
-                    if *endian3 == Endian::LittleEndian {
-                        data.swap(6, 7);
                     }
                     return Ok(array_u8_tou16(&data));
                 }

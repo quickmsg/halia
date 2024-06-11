@@ -1,9 +1,9 @@
 use anyhow::{bail, Result};
 use message::MessageBatch;
 use operators::{
-    aggregate::Node as AggregateNode,
-    computes::ComputeNode,
-    filter::Node as FilterNode, // merge::merge::Merge,
+    // aggregate::Node as AggregateNode,
+    // computes::ComputeNode,
+    // filter::Node as FilterNode, 
 };
 use tokio::sync::broadcast::{Receiver, Sender};
 use tracing::{debug, error};
@@ -66,17 +66,17 @@ fn get_operator_node(cgn: &CreateGraphNode) -> Result<Box<dyn Operate>> {
             // }
             _ => bail!("not support"),
         },
-        "filter" => {
-            let filter = FilterNode::new(cgn.conf.clone())?;
-            Ok(Box::new(filter))
-        }
-        "compute" => {
-            ComputeNode::new(cgn.conf.clone())
-        }
-        "aggregate" => {
-            let aggregate = AggregateNode::new(cgn.conf.clone())?;
-            Ok(Box::new(aggregate))
-        }
+        // "filter" => {
+        //     let filter = FilterNode::new(cgn.conf.clone())?;
+        //     Ok(Box::new(filter))
+        // }
+        // "compute" => {
+        //     ComputeNode::new(cgn.conf.clone())
+        // }
+        // "aggregate" => {
+        //     let aggregate = AggregateNode::new(cgn.conf.clone())?;
+        //     Ok(Box::new(aggregate))
+        // }
         _ => bail!("not support"),
     }
 }

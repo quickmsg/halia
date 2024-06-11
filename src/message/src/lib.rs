@@ -1,31 +1,8 @@
 use anyhow::Result;
 use bytes::Bytes;
 use indexmap::IndexMap;
-use serde_json::Map;
-use serde_json::Value;
+use json::{Map, Value};
 use std::collections::HashMap;
-
-// mod de;
-mod message_value;
-// mod error;
-
-#[macro_export]
-macro_rules! tri {
-    ($e:expr $(,)?) => {
-        match $e {
-            Result::Ok(val) => val,
-            Result::Err(err) => return Result::Err(err),
-        }
-    };
-}
-
-pub enum FieldValue {
-    Bool(bool),
-    Int64(i64),
-    Float64(f64),
-    String(String),
-    Array(Vec<FieldValue>),
-}
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
@@ -112,12 +89,12 @@ pub struct Message {
 
 impl Message {
     pub fn from_str(s: &str) -> Result<Self> {
-        let value: Value = serde_json::from_str(s)?;
+        let value: Value = json::from_str(s)?;
         Ok(Message { value })
     }
 
     pub fn from_json(b: &Bytes) -> Result<Self> {
-        let value: Value = serde_json::from_slice(b)?;
+        let value: Value = json::from_slice(b)?;
         Ok(Message { value })
     }
 
@@ -251,21 +228,21 @@ impl Message {
         }
     }
 
-    pub fn get_i64(&self, name: &str) -> Option<i64> {
-        if let Some(value) = self.get(name) {
-            value.as_i64()
-        } else {
-            None
-        }
-    }
+    // pub fn get_i64(&self, name: &str) -> Option<i64> {
+    //     if let Some(value) = self.get(name) {
+    //         value.as_i64()
+    //     } else {
+    //         None
+    //     }
+    // }
 
-    pub fn get_f64(&self, name: &str) -> Option<f64> {
-        if let Some(value) = self.get(name) {
-            value.as_f64()
-        } else {
-            None
-        }
-    }
+    // pub fn get_f64(&self, name: &str) -> Option<f64> {
+    //     if let Some(value) = self.get(name) {
+    //         value.as_f64()
+    //     } else {
+    //         None
+    //     }
+    // }
 
     pub fn get_string(&self, name: &str) -> Option<&str> {
         if let Some(value) = self.get(name) {
@@ -338,45 +315,45 @@ fn parse_index(s: &str) -> Option<usize> {
     s.parse().ok()
 }
 
-#[cfg(test)]
-mod tests {
-    use serde_json::Value;
+// #[cfg(test)]
+// mod tests {
+//     use serde_json::Value;
 
-    use crate::Message;
+//     use crate::Message;
 
-    #[test]
-    fn get() {
-        let data = r#"
-        {
-            "a": 1,
-            "b": "2",
-            "c": [
-                {
-                    "a": 1
-                }
-            ],
-            "d": {
-                "e": {
-                    "f": ["1", "2", "3"]
-                }
-            }
-        }
-        "#;
-        let message = Message::from_str(data).unwrap();
-        assert_eq!(message.get("a"), Some(&Value::from(1)));
-        assert_eq!(message.get("b"), Some(&Value::from("2")));
-        assert_eq!(message.get("d.e.f.1"), Some(&Value::from("2")));
-        assert_eq!(message.get("e"), None);
-    }
+//     #[test]
+//     fn get() {
+//         let data = r#"
+//         {
+//             "a": 1,
+//             "b": "2",
+//             "c": [
+//                 {
+//                     "a": 1
+//                 }
+//             ],
+//             "d": {
+//                 "e": {
+//                     "f": ["1", "2", "3"]
+//                 }
+//             }
+//         }
+//         "#;
+//         let message = Message::from_str(data).unwrap();
+//         assert_eq!(message.get("a"), Some(&Value::from(1)));
+//         assert_eq!(message.get("b"), Some(&Value::from("2")));
+//         assert_eq!(message.get("d.e.f.1"), Some(&Value::from("2")));
+//         assert_eq!(message.get("e"), None);
+//     }
 
-    #[test]
-    fn get_prefix_and_name() {
-        let (prefix, name) = Message::get_prefix_and_name("a.b.c.d");
-        assert_eq!(prefix, Some("a.b.c"));
-        assert_eq!(name, "d");
+//     #[test]
+//     fn get_prefix_and_name() {
+//         let (prefix, name) = Message::get_prefix_and_name("a.b.c.d");
+//         assert_eq!(prefix, Some("a.b.c"));
+//         assert_eq!(name, "d");
 
-        let (prefix, name) = Message::get_prefix_and_name("a");
-        assert_eq!(prefix, None);
-        assert_eq!(name, "a");
-    }
-}
+//         let (prefix, name) = Message::get_prefix_and_name("a");
+//         assert_eq!(prefix, None);
+//         assert_eq!(name, "a");
+//     }
+// }

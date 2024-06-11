@@ -1,6 +1,7 @@
 use std::{borrow::Cow, fmt::Debug, io};
 
 use async_trait::async_trait;
+use tracing::debug;
 
 use super::{Error, Request, Response, Result, SlaveContext};
 
@@ -128,10 +129,10 @@ impl Reader for Context {
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadDiscreteInputs(mut u8s) => {
-                        debug_assert!(u8s.len() >= cnt.into());
-                        u8s.truncate(cnt.into());
-                        u8s
+                    Response::ReadDiscreteInputs(mut coils) => {
+                        debug!("coils :{:?}", coils);
+                        coils.truncate(cnt.into());
+                        coils
                     }
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
@@ -143,8 +144,9 @@ impl Reader for Context {
             .call(Request::ReadInputRegisters(addr, cnt))
             .await
             .map(|result| {
+                debug!("{:?}", result);
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadInputRegisters(u8s) => u8s,
+                    Response::ReadInputRegisters(data) => data,
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })

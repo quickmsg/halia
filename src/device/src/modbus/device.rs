@@ -496,7 +496,16 @@ impl Device for Modbus {
     }
 
     async fn subscribe(&self, group_id: Uuid) -> Result<Sender<String>> {
-        todo!()
+        match self
+            .groups
+            .write()
+            .await
+            .iter()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => Ok(group.subscribe()),
+            None => todo!(),
+        }
     }
 }
 
@@ -537,6 +546,20 @@ async fn run_event_loop(
     }
 }
 
+macro_rules! read_and_set_data {
+    ($ctx:expr, $point:expr, $read_fn:ident, $address:expr, $quantity:expr) => {
+        match $ctx.$read_fn($address, $quantity).await {
+            Ok(res) => match res {
+                Ok(data) => {
+                    $point.set_data(data);
+                }
+                Err(e) => error!("read exception err:{}", e),
+            },
+            Err(e) => error!("read err:{}", e),
+        }
+    };
+}
+
 async fn read_group_points(
     ctx: &mut Context,
     groups: &RwLock<Vec<Group>>,
@@ -550,57 +573,34 @@ async fn read_group_points(
         .iter_mut()
         .find(|group| group.id == group_id)
     {
-        let mut values = vec![];
+        // let mut values = vec![];
         for (id, point) in group.points.write().await.iter_mut() {
             ctx.set_slave(point.conf.slave);
             let start_time = Instant::now();
             match point.conf.area {
-                0 => match ctx
-                    .read_discrete_inputs(point.conf.address, point.quantity)
-                    .await
-                {
-                    Ok(res) => match res {
-                        Ok(data) => {
-                            point.set_data(data);
-                        }
-                        Err(e) => error!("read exception err:{}", e),
-                    },
-                    Err(e) => error!("read err:{} ", e),
-                },
-                1 => match ctx.read_coils(point.conf.address, point.quantity).await {
-                    Ok(res) => match res {
-                        Ok(data) => {
-                            point.set_data(data);
-                        }
-                        Err(e) => error!("read exception err:{}", e),
-                    },
-                    Err(e) => error!("read err:{} ", e),
-                },
-                4 => match ctx
-                    .read_input_registers(point.conf.address, point.quantity)
-                    .await
-                {
-                    Ok(res) => match res {
-                        Ok(data) => {
-                            point.set_data(data);
-                        }
-                        Err(e) => error!("read exception err:{}", e),
-                    },
-                    Err(e) => error!("read err:{} ", e),
-                },
-                3 => match ctx
-                    .read_holding_registers(point.conf.address, point.quantity)
-                    .await
-                {
-                    Ok(res) => match res {
-                        Ok(data) => {
-                            point.set_data(data);
-                        }
-                        Err(e) => error!("read exception err:{}", e),
-                    },
-                    Err(e) => error!("read err:{} ", e),
-                },
-                _ => unreachable!(),
+                0 => read_and_set_data!(
+                    ctx,
+                    point,
+                    read_discrete_inputs,
+                    point.conf.address,
+                    point.quantity
+                ),
+                1 => read_and_set_data!(ctx, point, read_coils, point.conf.address, point.quantity),
+                4 => read_and_set_data!(
+                    ctx,
+                    point,
+                    read_input_registers,
+                    point.conf.address,
+                    point.quantity
+                ),
+                3 => read_and_set_data!(
+                    ctx,
+                    point,
+                    read_holding_registers,
+                    point.conf.address,
+                    point.quantity
+                ),
+                _ => unreachable!("wrong area code"),
             }
 
             let elapsed_time = start_time.elapsed().as_millis();
@@ -609,7 +609,7 @@ async fn read_group_points(
             time::sleep(Duration::from_millis(interval)).await;
         }
 
-        group.set_data(values).await;
+        // group.set_data(values).await;
         true
     } else {
         true

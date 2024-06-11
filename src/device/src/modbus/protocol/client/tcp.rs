@@ -8,7 +8,7 @@ pub(crate) fn attach<T>(transport: T) -> Context
 where
     T: AsyncRead + AsyncWrite + Debug + Unpin + Send + 'static,
 {
-    let client = service::rtu::Client::new(transport, 0);
+    let client = service::tcp::Client::new(transport, 0);
     Context {
         client: Box::new(client),
     }

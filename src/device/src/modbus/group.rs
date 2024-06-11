@@ -1,5 +1,5 @@
 use common::error::{HaliaError, Result};
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast::Sender, RwLock};
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupReq};
 use uuid::Uuid;
 
@@ -30,6 +30,10 @@ impl Group {
     pub fn update(&mut self, req: &UpdateGroupReq) {
         self.name = req.name.clone();
         self.interval = req.interval;
+    }
+
+    pub fn subscribe(&self) -> Sender<String> {
+        todo!()
     }
 
     pub async fn create_points(

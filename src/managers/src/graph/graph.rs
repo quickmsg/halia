@@ -1,6 +1,6 @@
 use anyhow::Result;
 use message::MessageBatch;
-use operators::merge::merge::Merge;
+// use operators::merge::merge::Merge;
 use operators::window::window::Window;
 use std::collections::HashMap;
 use tokio::sync::broadcast::{self, Receiver};
@@ -106,31 +106,31 @@ impl Graph {
                                 }
                             }
                         }
-                        "merge" => {
-                            if let Some(source_ids) = incoming_edges.get(&osi.id) {
-                                debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);
-                                let mut rxs = Vec::new();
-                                for source_id in source_ids {
-                                    if let Some(mut node_receivers) = receivers.remove(source_id) {
-                                        let rx = node_receivers.remove(0);
-                                        rxs.push(rx);
-                                    }
-                                }
-                                debug!("source receivers len:{}", rxs.len());
-                                let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
-                                receivers.insert(osi.id, vec![nrx]);
-                                if let Some(node) = node_map.get(&osi.id) {
-                                    match Merge::new(node.conf.clone(), rxs, tx) {
-                                        Ok(mut merge) => {
-                                            tokio::spawn(async move {
-                                                merge.run().await;
-                                            });
-                                        }
-                                        Err(e) => error!("create merge err:{}", e),
-                                    }
-                                }
-                            }
-                        }
+                        // "merge" => {
+                        //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
+                        //         debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);
+                        //         let mut rxs = Vec::new();
+                        //         for source_id in source_ids {
+                        //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                        //                 let rx = node_receivers.remove(0);
+                        //                 rxs.push(rx);
+                        //             }
+                        //         }
+                        //         debug!("source receivers len:{}", rxs.len());
+                        //         let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
+                        //         receivers.insert(osi.id, vec![nrx]);
+                        //         if let Some(node) = node_map.get(&osi.id) {
+                        //             match Merge::new(node.conf.clone(), rxs, tx) {
+                        //                 Ok(mut merge) => {
+                        //                     tokio::spawn(async move {
+                        //                         merge.run().await;
+                        //                     });
+                        //                 }
+                        //                 Err(e) => error!("create merge err:{}", e),
+                        //             }
+                        //         }
+                        //     }
+                        // }
                         // "join" => {
                         //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
                         //         let mut rxs = Vec::new();
