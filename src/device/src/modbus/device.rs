@@ -20,22 +20,23 @@ use tokio::{
     },
     time,
 };
-use tokio_modbus::{
-    client::{rtu, tcp, Context, Reader, Writer},
-    slave::SlaveContext,
-    Slave,
-};
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error, trace};
 use types::device::{
-    CreateDeviceReq, CreateGroupReq, CreatePointReq, DataType, DeviceDetailResp, ListDevicesResp,
+    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp, Mode, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
 };
 use uuid::Uuid;
 
 use crate::{storage, Device};
 
-use super::group::Group;
+use super::{
+    group::Group,
+    protocol::{
+        client::{rtu, tcp, Context, Reader},
+        SlaveContext,
+    },
+};
 
 static TYPE: &str = "modbus";
 
@@ -169,15 +170,10 @@ impl Modbus {
         match conf {
             Conf::EthernetConf(conf) => {
                 let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
+                let transport = TcpStream::connect(socket_addr).await?;
                 match conf.encode {
-                    Encode::Tcp => {
-                        let ctx = tcp::connect(socket_addr).await?;
-                        Ok((ctx, conf.interval))
-                    }
-                    Encode::Rtu => {
-                        let transport = TcpStream::connect(socket_addr).await?;
-                        Ok((rtu::attach(transport), conf.interval))
-                    }
+                    Encode::Tcp => Ok((tcp::attach(transport), conf.interval)),
+                    Encode::Rtu => Ok((rtu::attach(transport), conf.interval)),
                 }
             }
             Conf::SerialConf(conf) => {
@@ -523,9 +519,9 @@ async fn run_event_loop(
 
             point = write_rx.recv() => {
                 if let Some(point) = point {
-                    if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2, rtt).await {
-                        return
-                    }
+                    // if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2, rtt).await {
+                        // return
+                    // }
                 }
                 time::sleep(Duration::from_millis(interval)).await;
             }
@@ -556,103 +552,53 @@ async fn read_group_points(
     {
         let mut values = vec![];
         for (id, point) in group.points.write().await.iter_mut() {
-            ctx.set_slave(Slave(point.conf.slave));
+            ctx.set_slave(point.conf.slave);
             let start_time = Instant::now();
             match point.conf.area {
                 0 => match ctx
                     .read_discrete_inputs(point.conf.address, point.quantity)
                     .await
                 {
-                    Ok(data) => {
-                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
-                            if *elem {
-                                x.push(1);
-                            } else {
-                                x.push(0);
-                            }
-                            x
-                        });
-                        values.push((id.clone(), bytes));
-                        // point.set_data(bytes);
-                    }
-                    Err(e) => match e.kind() {
-                        std::io::ErrorKind::InvalidData => {
-                            error!("返回错误:{}", e);
+                    Ok(res) => match res {
+                        Ok(data) => {
+                            point.set_data(data);
                         }
-                        _ => {
-                            error!("连接断开。");
-                            return false;
-                        }
+                        Err(e) => error!("read exception err:{}", e),
                     },
+                    Err(e) => error!("read err:{} ", e),
                 },
                 1 => match ctx.read_coils(point.conf.address, point.quantity).await {
-                    Ok(data) => {
-                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
-                            if *elem {
-                                x.push(1);
-                            } else {
-                                x.push(0);
-                            }
-                            x
-                        });
-                        values.push((id.clone(), bytes));
-                        // point.set_data(bytes);
-                    }
-                    Err(e) => match e.kind() {
-                        std::io::ErrorKind::InvalidData => {
-                            error!("返回错误:{}", e);
+                    Ok(res) => match res {
+                        Ok(data) => {
+                            point.set_data(data);
                         }
-                        _ => {
-                            error!("连接断开。");
-                            return false;
-                        }
+                        Err(e) => error!("read exception err:{}", e),
                     },
+                    Err(e) => error!("read err:{} ", e),
                 },
                 4 => match ctx
                     .read_input_registers(point.conf.address, point.quantity)
                     .await
                 {
-                    Ok(data) => {
-                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
-                            x.push((elem & 0xff) as u8);
-                            x.push((elem >> 8) as u8);
-                            x
-                        });
-                        values.push((id.clone(), bytes));
-                        // point.set_data(bytes);
-                    }
-                    Err(e) => match e.kind() {
-                        std::io::ErrorKind::InvalidData => {
-                            error!("返回错误:{}", e);
+                    Ok(res) => match res {
+                        Ok(data) => {
+                            point.set_data(data);
                         }
-                        _ => {
-                            error!("连接断开。");
-                            return false;
-                        }
+                        Err(e) => error!("read exception err:{}", e),
                     },
+                    Err(e) => error!("read err:{} ", e),
                 },
                 3 => match ctx
                     .read_holding_registers(point.conf.address, point.quantity)
                     .await
                 {
-                    Ok(data) => {
-                        let bytes: Vec<u8> = data.iter().fold(vec![], |mut x, elem| {
-                            x.push((elem & 0xff) as u8);
-                            x.push((elem >> 8) as u8);
-                            x
-                        });
-                        values.push((id.clone(), bytes));
-                        // point.set_data(bytes);
-                    }
-                    Err(e) => match e.kind() {
-                        std::io::ErrorKind::InvalidData => {
-                            error!("返回错误:{}", e);
+                    Ok(res) => match res {
+                        Ok(data) => {
+                            point.set_data(data);
                         }
-                        _ => {
-                            error!("连接断开。");
-                            return false;
-                        }
+                        Err(e) => error!("read exception err:{}", e),
                     },
+                    Err(e) => error!("read err:{} ", e),
                 },
                 _ => unreachable!(),
             }
@@ -670,77 +616,77 @@ async fn read_group_points(
     }
 }
 
-async fn write_point_value(
-    ctx: &mut Context,
-    groups: &RwLock<Vec<Group>>,
-    group_id: Uuid,
-    point_id: Uuid,
-    value: Value,
-    rtt: &Arc<AtomicU16>,
-) -> bool {
-    if let Some(group) = groups
-        .read()
-        .await
-        .iter()
-        .find(|group| group.id == group_id)
-    {
-        if let Some((_, point)) = group
-            .points
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == point_id)
-        {
-            match point.conf.area {
-                1 => match value.as_bool() {
-                    Some(value) => {
-                        let start_time = Instant::now();
-                        if let Err(e) = ctx.write_single_coil(point.conf.address, value).await {
-                            error!("write err:{:?}", e);
-                        };
+// async fn write_point_value(
+//     ctx: &mut Context,
+//     groups: &RwLock<Vec<Group>>,
+//     group_id: Uuid,
+//     point_id: Uuid,
+//     value: Value,
+//     rtt: &Arc<AtomicU16>,
+// ) -> bool {
+//     if let Some(group) = groups
+//         .read()
+//         .await
+//         .iter()
+//         .find(|group| group.id == group_id)
+//     {
+//         if let Some((_, point)) = group
+//             .points
+//             .read()
+//             .await
+//             .iter()
+//             .find(|(id, _)| *id == point_id)
+//         {
+//             match point.conf.area {
+//                 1 => match value.as_bool() {
+//                     Some(value) => {
+//                         let start_time = Instant::now();
+//                         if let Err(e) = ctx.write_single_coil(point.conf.address, value).await {
+//                             error!("write err:{:?}", e);
+//                         };
 
-                        let elapsed_time = start_time.elapsed().as_millis();
-                        rtt.store(elapsed_time as u16, Ordering::SeqCst);
-                    }
-                    None => error!("value is not bool"),
-                },
-                4 => match point.conf.r#type {
-                    DataType::Int16(_)
-                    | DataType::Uint16(_)
-                    | DataType::Int32(_, _)
-                    | DataType::Uint32(_, _)
-                    | DataType::Int64(_, _, _, _)
-                    | DataType::Uint64(_, _, _, _)
-                    | DataType::Float32(_, _)
-                    | DataType::Float64(_, _, _, _) => match point.conf.r#type.encode(value) {
-                        Ok(data) => {
-                            {
-                                let start_time = Instant::now();
+//                         let elapsed_time = start_time.elapsed().as_millis();
+//                         rtt.store(elapsed_time as u16, Ordering::SeqCst);
+//                     }
+//                     None => error!("value is not bool"),
+//                 },
+//                 4 => match point.conf.r#type {
+//                     DataType::Int16(_)
+//                     | DataType::Uint16(_)
+//                     | DataType::Int32(_, _)
+//                     | DataType::Uint32(_, _)
+//                     | DataType::Int64(_, _, _, _)
+//                     | DataType::Uint64(_, _, _, _)
+//                     | DataType::Float32(_, _)
+//                     | DataType::Float64(_, _, _, _) => match point.conf.r#type.encode(value) {
+//                         Ok(data) => {
+//                             {
+//                                 let start_time = Instant::now();
 
-                                if let Err(e) = ctx
-                                    .write_multiple_registers(point.conf.address, &data)
-                                    .await
-                                {
-                                    error!("{}", e);
-                                }
+//                                 if let Err(e) = ctx
+//                                     .write_multiple_registers(point.conf.address, &data)
+//                                     .await
+//                                 {
+//                                     error!("{}", e);
+//                                 }
 
-                                let elapsed_time = start_time.elapsed().as_millis();
-                                rtt.store(elapsed_time as u16, Ordering::SeqCst);
-                            };
-                        }
-                        Err(e) => error!("{}", e),
-                    },
-                    _ => error!("数据格式错误"),
-                    // types::device::DataType::String => todo!(),
-                    // types::device::DataType::Bytes => todo!(),
-                },
-                _ => {
-                    error!("点位不可写")
-                }
-            }
-        }
-        true
-    } else {
-        true
-    }
-}
+//                                 let elapsed_time = start_time.elapsed().as_millis();
+//                                 rtt.store(elapsed_time as u16, Ordering::SeqCst);
+//                             };
+//                         }
+//                         Err(e) => error!("{}", e),
+//                     },
+//                     _ => error!("数据格式错误"),
+//                     // types::device::DataType::String => todo!(),
+//                     // types::device::DataType::Bytes => todo!(),
+//                 },
+//                 _ => {
+//                     error!("点位不可写")
+//                 }
+//             }
+//         }
+//         true
+//     } else {
+//         true
+//     }
+// }

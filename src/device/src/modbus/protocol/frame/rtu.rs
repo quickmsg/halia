@@ -1,10 +1,8 @@
-use crate::modbus::protocol::SlaveId;
-
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Header {
-    pub(crate) slave_id: SlaveId,
+    pub(crate) slave_id: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

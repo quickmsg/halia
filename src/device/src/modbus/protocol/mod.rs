@@ -3,7 +3,6 @@
 
 // Opt-in for allowed-by-default lints (in alphabetical order)
 // See also: <https://doc.rust-lang.org/rustc/lints>
-#![warn(future_incompatible)]
 #![warn(let_underscore)]
 #![warn(missing_debug_implementations)]
 //#![warn(missing_docs)] // TODO
@@ -30,9 +29,6 @@
 ///
 /// Used by [`Response::Custom`].
 pub mod client;
-pub mod slave;
-
-pub use self::slave::{Slave, SlaveId};
 
 mod codec;
 
@@ -53,3 +49,8 @@ pub use self::frame::{Exception, ExceptionResponse, FunctionCode, Request, Respo
 pub type Result<T> = std::result::Result<std::result::Result<T, Exception>, Error>;
 
 mod service;
+
+pub trait SlaveContext {
+    /// Select a slave device for all subsequent outgoing requests.
+    fn set_slave(&mut self, slave: u8);
+}

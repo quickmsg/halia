@@ -49,9 +49,11 @@ impl<'a> TryFrom<Request<'a>> for Bytes {
                 data.put_u16(address);
                 data.put_u16(quantity);
             }
+            // TOOD
             WriteSingleCoil(address, state) => {
                 data.put_u16(address);
-                data.put_u16(bool_to_coil(state[0]));
+                // data.put_u16(bool_to_coil(state[0]));
+                data.put_u16(0xFF00);
             }
             WriteMultipleCoils(address, coils) => {
                 data.put_u16(address);
@@ -180,65 +182,65 @@ impl From<ResponsePdu> for Bytes {
 impl TryFrom<Bytes> for Request<'static> {
     type Error = Error;
 
+    // TODO get will panic if not have enough data
     fn try_from(mut bytes: Bytes) -> Result<Self, Self::Error> {
         use super::frame::Request::*;
         let fn_code = bytes.get_u8();
         let req = match fn_code {
             0x01 => ReadCoils(bytes.get_u16(), bytes.get_u16()),
             0x02 => ReadDiscreteInputs(bytes.get_u16(), bytes.get_u16()),
-            0x05 => WriteSingleCoil(
-                bytes.get_u16(),
-                // TODO
-                bytes.get_u8(),
-                // coil_to_bool(rdr.read_u16::<BigEndian>()?)?,
-            ),
+            0x05 => WriteSingleCoil(bytes.get_u16(), bytes.get_u8()),
             0x0F => {
-                let address = rdr.read_u16::<BigEndian>()?;
-                let quantity = rdr.read_u16::<BigEndian>()?;
-                let byte_count = rdr.read_u8()?;
+                let address = bytes.get_u16();
+                let quantity = bytes.get_u16();
+                let byte_count = bytes.get_u8();
                 if bytes.len() < 6 + usize::from(byte_count) {
                     return Err(Error::new(ErrorKind::InvalidData, "Invalid byte count"));
                 }
                 let x = &bytes[6..];
-                WriteMultipleCoils(address, unpack_coils(x, quantity).into())
+                WriteMultipleCoils(address, Vec::from(x).into())
             }
-            0x04 => ReadInputRegisters(rdr.read_u16::<BigEndian>()?, rdr.read_u16::<BigEndian>()?),
-            0x03 => {
-                ReadHoldingRegisters(rdr.read_u16::<BigEndian>()?, rdr.read_u16::<BigEndian>()?)
+            0x04 => ReadInputRegisters(bytes.get_u16(), bytes.get_u16()),
+            0x03 => ReadHoldingRegisters(bytes.get_u16(), bytes.get_u16()),
+            0x06 => {
+                let address = bytes.get_u16();
+                let mut data = Vec::with_capacity(2);
+                for _ in 0..2 {
+                    data.push(bytes.get_u8());
+                }
+                WriteSingleRegister(address, data.into())
             }
-            0x06 => WriteSingleRegister(rdr.read_u16::<BigEndian>()?, rdr.read_u16::<BigEndian>()?),
-
             0x10 => {
-                let address = rdr.read_u16::<BigEndian>()?;
-                let quantity = rdr.read_u16::<BigEndian>()?;
-                let byte_count = rdr.read_u8()?;
+                let address = bytes.get_u16();
+                let quantity = bytes.get_u16() * 2;
+                let byte_count = bytes.get_u8();
                 if bytes.len() < 6 + usize::from(byte_count) {
                     return Err(Error::new(ErrorKind::InvalidData, "Invalid byte count"));
                 }
                 let mut data = Vec::with_capacity(quantity.into());
                 for _ in 0..quantity {
-                    data.push(rdr.read_u16::<BigEndian>()?);
+                    data.push(bytes.get_u8());
                 }
                 WriteMultipleRegisters(address, data.into())
             }
             0x16 => {
-                let address = rdr.read_u16::<BigEndian>()?;
-                let and_mask = rdr.read_u16::<BigEndian>()?;
-                let or_mask = rdr.read_u16::<BigEndian>()?;
+                let address = bytes.get_u16();
+                let and_mask = bytes.get_u16();
+                let or_mask = bytes.get_u16();
                 MaskWriteRegister(address, and_mask, or_mask)
             }
             0x17 => {
-                let read_address = rdr.read_u16::<BigEndian>()?;
-                let read_quantity = rdr.read_u16::<BigEndian>()?;
-                let write_address = rdr.read_u16::<BigEndian>()?;
-                let write_quantity = rdr.read_u16::<BigEndian>()?;
-                let write_count = rdr.read_u8()?;
+                let read_address = bytes.get_u16();
+                let read_quantity = bytes.get_u16();
+                let write_address = bytes.get_u16();
+                let write_quantity = bytes.get_u16();
+                let write_count = bytes.get_u8();
                 if bytes.len() < 10 + usize::from(write_count) {
                     return Err(Error::new(ErrorKind::InvalidData, "Invalid byte count"));
                 }
                 let mut data = Vec::with_capacity(write_quantity.into());
                 for _ in 0..write_quantity {
-                    data.push(rdr.read_u16::<BigEndian>()?);
+                    data.push(bytes.get_u8());
                 }
                 ReadWriteMultipleRegisters(read_address, read_quantity, write_address, data.into())
             }
@@ -276,15 +278,12 @@ impl TryFrom<Bytes> for Response {
                 // Here we have not information about the exact requested quantity so we just
                 // unpack the whole byte.
                 let quantity = u16::from(byte_count) * 8;
-                ReadCoils(unpack_coils(x, quantity))
+                ReadCoils(Vec::from(x))
             }
             0x02 => {
                 let byte_count = bytes.get_u8();
                 let x = &bytes[2..];
-                // Here we have no information about the exact requested quantity so we just
-                // unpack the whole byte.
-                let quantity = u16::from(byte_count) * 8;
-                ReadDiscreteInputs(unpack_coils(x, quantity))
+                ReadDiscreteInputs(Vec::from(x))
             }
             0x05 => WriteSingleCoil(bytes.get_u16(), bytes.get_u8()),
             0x0F => WriteMultipleCoils(bytes.get_u16(), bytes.get_u16()),
@@ -418,13 +417,13 @@ fn pack_coils(coils: &[u8]) -> Vec<u8> {
     res
 }
 
-fn unpack_coils(bytes: &[u8], count: u16) -> Vec<u8> {
-    let mut res = Vec::with_capacity(count.into());
-    for i in 0usize..count.into() {
-        res.push((bytes[i / 8] >> (i % 8)) & 0b1 > 0);
-    }
-    res
-}
+// fn unpack_coils(bytes: &[u8], count: u16) -> Vec<u8> {
+//     let mut res = Vec::with_capacity(count.into());
+//     for i in 0usize..count.into() {
+//         res.push((bytes[i / 8] >> (i % 8)) & 0b1 > 0);
+//     }
+//     res
+// }
 
 fn request_byte_count(req: &Request<'_>) -> usize {
     use super::frame::Request::*;

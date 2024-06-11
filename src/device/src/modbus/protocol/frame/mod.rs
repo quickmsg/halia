@@ -102,7 +102,7 @@ pub enum Request<'a> {
     /// A request to write a single u8.
     /// The first parameter is the u16 of the u8.
     /// The second parameter is the value to write to the u8.
-    WriteSingleCoil(u16, Cow<'a, [u8]>),
+    WriteSingleCoil(u16, u8),
 
     /// A request to write multiple u8s.
     /// The first parameter is the u16 of the first u8 to write.
@@ -168,7 +168,7 @@ impl<'a> Request<'a> {
         match self {
             ReadCoils(addr, qty) => ReadCoils(addr, qty),
             ReadDiscreteInputs(addr, qty) => ReadDiscreteInputs(addr, qty),
-            WriteSingleCoil(addr, coil) => WriteSingleCoil(addr, Cow::Owned(coil.into_owned())),
+            WriteSingleCoil(addr, coil) => WriteSingleCoil(addr, coil),
             WriteMultipleCoils(addr, u8s) => WriteMultipleCoils(addr, Cow::Owned(u8s.into_owned())),
             ReadInputRegisters(addr, qty) => ReadInputRegisters(addr, qty),
             ReadHoldingRegisters(addr, qty) => ReadHoldingRegisters(addr, qty),

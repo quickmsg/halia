@@ -1,28 +1,11 @@
 use anyhow::Result;
 use api::start;
 use device::GLOBAL_DEVICE_MANAGER;
-use json::json;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let john = json!({
-        "name": {
-          "aa": "John Doe",
-          "bb": "xx",
-        },
-        "age": 43,
-        "phones": [
-            "+44 1234567",
-            "+44 2345678"
-        ]
-    });
-
-    println!("{:?}", john.pointer("phones.1"));
-
-    return Ok(());
-
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::TRACE)
         .with_line_number(true)

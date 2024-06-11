@@ -1,6 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) 2017-2024 slowtec GmbH <post@slowtec.de>
-// SPDX-License-Identifier: MIT OR Apache-2.0
-
 use std::{
     fmt, io,
     sync::atomic::{AtomicU16, Ordering},
@@ -18,8 +15,7 @@ use crate::modbus::protocol::{
         RequestPdu, ResponsePdu,
     },
     service::verify_response_header,
-    slave::SlaveContext,
-    ExceptionResponse, ProtocolError, Request, Response, Result, Slave,
+    ExceptionResponse, ProtocolError, Request, Response, Result, SlaveContext,
 };
 
 const INITIAL_TRANSACTION_ID: TransactionId = 0;
@@ -36,7 +32,7 @@ impl<T> Client<T>
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    pub(crate) fn new(transport: T, slave: Slave) -> Self {
+    pub(crate) fn new(transport: T, slave: u8) -> Self {
         let framed = Framed::new(transport, codec::tcp::ClientCodec::default());
         let unit_id: UnitId = slave.into();
         let transaction_id = AtomicU16::new(INITIAL_TRANSACTION_ID);
@@ -118,7 +114,7 @@ where
 }
 
 impl<T> SlaveContext for Client<T> {
-    fn set_slave(&mut self, slave: Slave) {
+    fn set_slave(&mut self, slave: u8) {
         self.unit_id = slave.into();
     }
 }

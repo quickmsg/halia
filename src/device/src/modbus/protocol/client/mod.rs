@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt::Debug, io};
 
 use async_trait::async_trait;
 
-use super::{slave::SlaveContext, Error, Request, Response, Result, Slave};
+use super::{Error, Request, Response, Result, SlaveContext};
 
 pub(crate) mod rtu;
 pub(crate) mod tcp;
@@ -40,9 +40,9 @@ pub(crate) trait Reader: Client {
 
 /// Asynchronous Modbus writer
 #[async_trait]
-pub trait Writer: Client {
+pub(crate) trait Writer: Client {
     /// Write a single u8 (0x05)
-    async fn write_single_Coil(&mut self, addr: u16, coil: &'_ [u8]) -> Result<()>;
+    async fn write_single_Coil(&mut self, addr: u16, coil: u8) -> Result<()>;
 
     /// Write a single holding register (0x06)
     async fn write_single_register(&mut self, addr: u16, register: &'_ [u8]) -> Result<()>;
@@ -99,7 +99,7 @@ impl Client for Context {
 }
 
 impl SlaveContext for Context {
-    fn set_slave(&mut self, slave: Slave) {
+    fn set_slave(&mut self, slave: u8) {
         self.client.set_slave(slave);
     }
 }
@@ -188,9 +188,9 @@ impl Reader for Context {
 
 #[async_trait]
 impl Writer for Context {
-    async fn write_single_Coil<'a>(&'a mut self, addr: u16, coil: &'_ [u8]) -> Result<()> {
+    async fn write_single_Coil<'a>(&'a mut self, addr: u16, coil: u8) -> Result<()> {
         self.client
-            .call(Request::WriteSingleCoil(addr, Cow::Borrowed(coil)))
+            .call(Request::WriteSingleCoil(addr, coil))
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
@@ -272,27 +272,27 @@ mod tests {
     use super::*;
     use std::sync::Mutex;
 
-    #[derive(Default, Debug)]
-    pub(crate) struct ClientMock {
-        slave: Option<Slave>,
-        last_request: Mutex<Option<Request<'static>>>,
-        next_response: Option<Result<Response>>,
-    }
+    // #[derive(Default, Debug)]
+    // pub(crate) struct ClientMock {
+    //     slave: Option<Slave>,
+    //     last_request: Mutex<Option<Request<'static>>>,
+    //     next_response: Option<Result<Response>>,
+    // }
 
-    #[allow(dead_code)]
-    impl ClientMock {
-        pub(crate) fn slave(&self) -> Option<Slave> {
-            self.slave
-        }
+    // #[allow(dead_code)]
+    // impl ClientMock {
+    //     pub(crate) fn slave(&self) -> Option<Slave> {
+    //         self.slave
+    //     }
 
-        pub(crate) fn last_request(&self) -> &Mutex<Option<Request<'static>>> {
-            &self.last_request
-        }
+    //     pub(crate) fn last_request(&self) -> &Mutex<Option<Request<'static>>> {
+    //         &self.last_request
+    //     }
 
-        pub(crate) fn set_next_response(&mut self, next_response: Result<Response>) {
-            self.next_response = Some(next_response);
-        }
-    }
+    //     pub(crate) fn set_next_response(&mut self, next_response: Result<Response>) {
+    //         self.next_response = Some(next_response);
+    //     }
+    // }
 
     // #[async_trait]
     // impl Client for ClientMock {
@@ -308,11 +308,11 @@ mod tests {
     //     }
     // }
 
-    impl SlaveContext for ClientMock {
-        fn set_slave(&mut self, slave: Slave) {
-            self.slave = Some(slave);
-        }
-    }
+    // impl SlaveContext for ClientMock {
+    //     fn set_slave(&mut self, slave: u8) {
+    //         self.slave = Some(slave);
+    //     }
+    // }
 
     // #[test]
     // fn read_some_u8s() {

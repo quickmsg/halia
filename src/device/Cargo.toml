@@ -20,6 +20,5 @@ smallvec = "1.13.2"
 tokio-util = { version = "0.7.11", features = ["codec"] }
 futures-util = "0.3.30"
 thiserror = "1.0.61"
-tokio-modbus = "0.11.0"
 tokio-serial = { version = "5.4.4" }
 uuid = { workspace = true }
