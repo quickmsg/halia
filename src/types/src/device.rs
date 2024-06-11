@@ -215,6 +215,16 @@ impl Serialize for DataType {
 }
 
 impl DataType {
+    pub fn get_quantity(&self) -> u16 {
+        match &self {
+            DataType::Bool | DataType::Int16(_) | DataType::Uint16(_) => 1,
+            DataType::Int32(_, _) | DataType::Uint32(_, _) | DataType::Float32(_, _) => 2,
+            DataType::Int64(_, _) | DataType::Uint64(_, _) | DataType::Float64(_, _) => 4,
+            DataType::String => todo!(),
+            DataType::Bytes => todo!(),
+        }
+    }
+
     pub fn decode(&self, data: Vec<u8>) -> Value {
         match self {
             DataType::Bool => {

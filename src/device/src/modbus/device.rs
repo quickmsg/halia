@@ -21,7 +21,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{debug, error, trace};
+use tracing::{debug, error};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
     ListGroupsResp, ListPointResp, Mode, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
@@ -31,7 +31,7 @@ use uuid::Uuid;
 use crate::{storage, Device};
 
 use super::{
-    group::Group,
+    group::{Command, Group},
     protocol::{
         client::{rtu, tcp, Context, Reader},
         SlaveContext,
@@ -50,7 +50,7 @@ pub(crate) struct Modbus {
     conf: Conf,
     groups: Arc<RwLock<Vec<Group>>>,
 
-    group_signal_tx: Option<broadcast::Sender<Option<Uuid>>>,
+    group_signal_tx: Option<broadcast::Sender<Command>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
     write_tx: Option<mpsc::Sender<(Uuid, Uuid, Value)>>,
@@ -203,47 +203,6 @@ impl Modbus {
             }
         }
     }
-
-    fn run_group_timer(&self, group_id: Uuid, interval: u64) {
-        let mut stop_signal = self.group_signal_tx.as_ref().unwrap().subscribe();
-        let read_tx = self.read_tx.as_ref().unwrap().clone();
-        let err = self.err.clone();
-
-        trace!("group {} is runing", group_id);
-        tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_millis(interval));
-            loop {
-                select! {
-                    biased;
-                    signal = stop_signal.recv() => {
-                        match signal {
-                            Ok(id) => {
-                                match id {
-                                    Some(id) => if id == group_id {
-                                        debug!("group {} stop.", group_id);
-                                        return;
-                                    }
-                                    None => {
-                                        debug!("group {} stop.", group_id);
-                                        return;
-                                    }
-                                }
-                            }
-                            Err(e) => error!("group recv stop signal err :{:?}", e),
-                        }
-                    }
-
-                    _ = interval.tick() => {
-                        if !err.load(Ordering::SeqCst) {
-                            if let Err(e) = read_tx.send(group_id).await {
-                                debug!("group send point info err :{}", e);
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
 }
 
 #[async_trait]
@@ -300,11 +259,12 @@ impl Device for Modbus {
         }
 
         let group = Group::new(self.id, group_id, &req);
-        let interval = group.interval;
-        self.groups.write().await.push(group);
         if self.on.load(Ordering::SeqCst) {
-            self.run_group_timer(group_id, interval);
+            let stop_signal = self.group_signal_tx.as_ref().unwrap().subscribe();
+            let read_tx = self.read_tx.as_ref().unwrap().clone();
+            group.run(stop_signal, read_tx);
         }
+        self.groups.write().await.push(group);
 
         Ok(())
     }
@@ -317,9 +277,14 @@ impl Device for Modbus {
 
         storage::delete_groups(self.id, &group_ids).await?;
         for group_id in group_ids {
-            match self.group_signal_tx.as_ref().unwrap().send(Some(group_id)) {
+            match self
+                .group_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(Command::Stop(group_id))
+            {
                 Ok(_) => {}
-                Err(e) => error!("group send stop singla err:{:?}", e),
+                Err(e) => error!("group send stop singla err:{}", e),
             }
         }
 
@@ -344,10 +309,12 @@ impl Device for Modbus {
 
         self.run(stop_signal_rx, read_rx, write_rx).await;
 
-        let (group_signal_tx, _) = broadcast::channel::<Option<Uuid>>(20);
+        let (group_signal_tx, _) = broadcast::channel::<Command>(20);
         self.group_signal_tx = Some(group_signal_tx);
         for group in self.groups.read().await.iter() {
-            self.run_group_timer(group.id, group.interval);
+            let stop_signal = self.group_signal_tx.as_ref().unwrap().subscribe();
+            let read_tx = self.read_tx.as_ref().unwrap().clone();
+            group.run(stop_signal, read_tx);
         }
         Ok(())
     }
@@ -359,7 +326,11 @@ impl Device for Modbus {
             self.on.store(false, Ordering::SeqCst);
         }
 
-        let _ = self.group_signal_tx.as_ref().unwrap().send(None);
+        let _ = self
+            .group_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(Command::StopAll);
         self.group_signal_tx = None;
 
         self.stop_signal_tx
@@ -401,11 +372,14 @@ impl Device for Modbus {
                 group.update(&req);
 
                 if self.on.load(Ordering::SeqCst) {
-                    if let Err(e) = self.group_signal_tx.as_ref().unwrap().send(Some(group_id)) {
-                        error!("group_signals send err :{:?}", e);
+                    if let Err(e) = self
+                        .group_signal_tx
+                        .as_ref()
+                        .unwrap()
+                        .send(Command::Update(group_id, req.interval))
+                    {
+                        error!("group_signals send err :{}", e);
                     }
-
-                    self.run_group_timer(group_id, req.interval);
                 }
             }
             None => return Err(HaliaError::NotFound),
