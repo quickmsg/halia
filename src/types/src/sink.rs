@@ -22,6 +22,7 @@ pub struct ReadSinkResp {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ListSinkResp {
+    pub id: Uuid,
     pub name: String,
     pub r#type: String,
 }

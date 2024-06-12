@@ -2,6 +2,7 @@ use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateGraph {
@@ -12,7 +13,8 @@ pub struct CreateGraph {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateGraphNode {
-    pub id: usize,
+    pub index: usize,
+    pub id: Uuid,
     pub r#type: String,
     pub name: String,
     pub conf: Value,
@@ -43,7 +45,7 @@ impl CreateGraph {
         (incoming_edges, outgoing_edges)
     }
 
-    pub fn get_ids_by_type(&self, r#type: &str) -> Vec<usize> {
+    pub fn get_ids_by_type(&self, r#type: &str) -> Vec<Uuid> {
         self.nodes
             .iter()
             .filter(|node| node.r#type.as_str() == r#type)
@@ -51,7 +53,7 @@ impl CreateGraph {
             .collect()
     }
 
-    pub fn get_operator_ids(&self) -> Vec<usize> {
+    pub fn get_operator_ids(&self) -> Vec<Uuid> {
         self.nodes
             .iter()
             .filter(|node| match node.r#type.as_str() {

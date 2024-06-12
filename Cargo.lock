@@ -290,6 +290,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "functions"
+version = "0.1.0"
+
+[[package]]
 name = "futures"
 version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1110,6 +1114,7 @@ dependencies = [
  "tokio",
  "tracing",
  "types",
+ "uuid",
 ]
 
 [[package]]

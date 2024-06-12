@@ -6,17 +6,20 @@ use types::{
     rule::Status,
     sink::{CreateSinkReq, ListSinkResp},
 };
+use uuid::Uuid;
 
 use crate::Sink;
 
 pub struct Log {
+    id: Uuid,
     name: String,
     status: Status,
 }
 
 impl Log {
-    pub fn new(req: CreateSinkReq) -> Result<Log> {
+    pub fn new(id: Uuid, req: CreateSinkReq) -> Result<Log> {
         Ok(Log {
+            id,
             status: Status::Stopped,
             name: req.name.clone(),
         })
@@ -68,6 +71,7 @@ impl Sink for Log {
 
     fn get_info(&self) -> Result<types::sink::ListSinkResp> {
         Ok(ListSinkResp {
+            id: self.id.clone(),
             name: self.name.clone(),
             r#type: "log".to_string(),
         })

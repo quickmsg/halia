@@ -1,0 +1,6 @@
+[package]
+name = "functions"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

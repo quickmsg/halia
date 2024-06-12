@@ -42,10 +42,15 @@ impl Graph {
         let mut node_map = HashMap::<usize, CreateGraphNode>::new();
         for node in self.create_graph.nodes.iter() {
             // TODO 去掉clone
-            node_map.insert(node.id, node.clone());
+            node_map.insert(node.index, node.clone());
         }
 
-        let mut ids = self.create_graph.nodes.iter().map(|node| node.id).collect();
+        let mut ids = self
+            .create_graph
+            .nodes
+            .iter()
+            .map(|node| node.index)
+            .collect();
         let streams = Graph::get_operator_streams(
             &mut ids,
             &node_map,
@@ -90,18 +95,21 @@ impl Graph {
                                 }
                             }
                         }
-                        // "sink" => {
-                        //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
-                        //         if let Some(source_id) = source_ids.first() {
-                        //             if let Some(mut node_receivers) = receivers.remove(source_id) {
-                        //                 let rx = node_receivers.remove(0);
-                        //                 if let Some(node) = node_map.get(&osi.id) {
-                        //                     GLOBAL_SINK_MANAGER.insert_rx(&node.name, rx).unwrap();
-                        //                 }
-                        //             }
-                        //         }
-                        //     }
-                        // }
+                        "sink" => {
+                            if let Some(source_ids) = incoming_edges.get(&osi.id) {
+                                if let Some(source_id) = source_ids.first() {
+                                    if let Some(mut node_receivers) = receivers.remove(source_id) {
+                                        let rx = node_receivers.remove(0);
+                                        if let Some(node) = node_map.get(&osi.id) {
+                                            GLOBAL_SINK_MANAGER
+                                                .insert_rx(&node.id, rx)
+                                                .await
+                                                .unwrap();
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         // "merge" => {
                         //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
                         //         debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);

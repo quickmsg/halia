@@ -1,9 +1,10 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use sinks::{log::Log, Sink};
 use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::{broadcast::Receiver, RwLock};
+use tracing::debug;
 use types::sink::{CreateSinkReq, ListSinkResp, ReadSinkResp, UpdateSinkReq};
 use uuid::Uuid;
 
@@ -24,7 +25,7 @@ impl SinkManager {
 
         match req.r#type.as_str() {
             "log" => {
-                let log = Log::new(req).unwrap();
+                let log = Log::new(id, req).unwrap();
                 self.sinks.write().await.insert(id, Box::new(log));
             }
             _ => return Err(HaliaError::ProtocolNotSupported),
@@ -61,10 +62,11 @@ impl SinkManager {
         todo!()
     }
 
-    pub async fn insert_rx(&self, id: Uuid, rx: Receiver<MessageBatch>) -> Result<()> {
-        // debug!("publish sink: {}", name);
-        //     let sink = self.sinks.get_mut(name).unwrap();
-        //     sink.insert_receiver(rx)
-        todo!()
+    pub async fn insert_rx(&self, id: &Uuid, rx: Receiver<MessageBatch>) -> Result<()> {
+        debug!("publish sink: {}", id);
+        match self.sinks.write().await.get_mut(&id) {
+            Some(sink) => sink.insert_receiver(rx),
+            None => bail!("not find"),
+        }
     }
 }
