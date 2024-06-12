@@ -1,8 +1,9 @@
 use anyhow::Result;
+use device::GLOBAL_DEVICE_MANAGER;
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::broadcast::Sender;
+use tokio::sync::broadcast::{self, Sender};
 use uuid::Uuid;
 
 use crate::Source;
@@ -26,7 +27,10 @@ impl Device {
 }
 
 impl Source for Device {
-    fn subscribe(&mut self) -> Result<tokio::sync::broadcast::Receiver<MessageBatch>> {
+    fn subscribe(&mut self) -> Result<broadcast::Receiver<MessageBatch>> {
+        // GLOBAL_DEVICE_MANAGER
+        //     .subscribe(self.conf.device_id, self.conf.group_id)
+        //     .await
         todo!()
     }
 }

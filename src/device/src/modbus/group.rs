@@ -1,7 +1,6 @@
-use std::time::Duration;
-
-use crate::storage;
 use common::error::{HaliaError, Result};
+use message::{Message, MessageBatch};
+use std::time::{Duration, Instant};
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -11,7 +10,13 @@ use tracing::{debug, error};
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupReq};
 use uuid::Uuid;
 
+use super::protocol::{
+    client::{Context, Reader},
+    SlaveContext,
+};
+
 use super::point::Point;
+use crate::storage;
 
 #[derive(Debug)]
 pub(crate) struct Group {
@@ -20,6 +25,8 @@ pub(crate) struct Group {
     pub interval: u64,
     pub points: RwLock<Vec<(Uuid, Point)>>,
     pub device_id: Uuid,
+    pub tx: Option<broadcast::Sender<MessageBatch>>,
+    // pub subscirbers: u16,
 }
 
 #[derive(Clone)]
@@ -39,6 +46,7 @@ impl Group {
             name: conf.name.clone(),
             interval: conf.interval,
             points: RwLock::new(vec![]),
+            tx: None,
         }
     }
 
@@ -93,8 +101,15 @@ impl Group {
         self.interval = req.interval;
     }
 
-    pub fn subscribe(&self) -> broadcast::Sender<String> {
-        todo!()
+    pub fn subscribe(&mut self) -> broadcast::Receiver<MessageBatch> {
+        match &self.tx {
+            Some(tx) => tx.subscribe(),
+            None => {
+                let (tx, rx) = broadcast::channel::<MessageBatch>(20);
+                self.tx = Some(tx);
+                rx
+            }
+        }
     }
 
     pub async fn create_points(
@@ -177,7 +192,43 @@ impl Group {
         Ok(())
     }
 
-    pub async fn set_data(&self, data: Vec<(Uuid, Vec<u8>)>) -> Result<()> {
-        Ok(())
+    pub async fn get_data(&self, ctx: &mut Context, interval: u64) {
+        for (id, point) in self.points.write().await.iter_mut() {
+            ctx.set_slave(point.conf.slave);
+            let start_time = Instant::now();
+            match point.conf.area {
+                0 => match ctx
+                    .read_discrete_inputs(point.conf.address, point.quantity)
+                    .await
+                {
+                    Ok(_) => todo!(),
+                    Err(_) => todo!(),
+                },
+                1 => todo!(),
+                4 => todo!(),
+                3 => todo!(),
+                _ => unreachable!(),
+            }
+            time::sleep(Duration::from_millis(interval)).await;
+        }
     }
+
+    // pub async fn set_data(&self, mut datas: Vec<(Uuid, Vec<u8>)>) -> Result<()> {
+    //     let mut points = self.points.write().await;
+    //     for (id, point) in points.iter_mut() {
+    //         if let Some((_, data)) = datas.iter_mut().find(|(data_id, _)| data_id == id) {
+    //             point.set_data(data);
+    //         }
+    //     }
+
+    //     let mut msg = Message::new();
+    //     for (_, point) in points.iter() {
+    //         msg.add(&point.name, point.value.clone())
+    //     }
+    //     if let Some(tx) = &self.tx {
+    //         todo!()
+    //     }
+
+    //     Ok(())
+    // }
 }

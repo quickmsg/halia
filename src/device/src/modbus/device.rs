@@ -9,15 +9,13 @@ use std::{
 
 use async_trait::async_trait;
 use common::error::{HaliaError, Result};
+use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::{
     net::TcpStream,
     select,
-    sync::{
-        broadcast::{self, Sender},
-        mpsc, RwLock,
-    },
+    sync::{broadcast, mpsc, RwLock},
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
@@ -49,7 +47,6 @@ pub(crate) struct Modbus {
     rtt: Arc<AtomicU16>,
     conf: Conf,
     groups: Arc<RwLock<Vec<Group>>>,
-
     group_signal_tx: Option<broadcast::Sender<Command>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
@@ -132,17 +129,22 @@ impl Modbus {
     ) {
         let conf = self.conf.clone();
         let groups = self.groups.clone();
-
         let err = self.err.clone();
         let on = self.on.clone();
-
+        let group_siganl_tx = self.group_signal_tx.as_ref().unwrap().clone();
         let rtt = self.rtt.clone();
         tokio::spawn(async move {
             loop {
+                if let Err(e) = group_siganl_tx.send(Command::Pause) {
+                    error!("send signal err:{}", e);
+                }
                 err.store(true, Ordering::SeqCst);
                 match Modbus::get_context(&conf).await {
                     Ok((ctx, interval)) => {
                         err.store(false, Ordering::SeqCst);
+                        if let Err(e) = group_siganl_tx.send(Command::Restart) {
+                            error!("send signal err:{}", e);
+                        }
                         run_event_loop(
                             ctx,
                             &rtt,
@@ -469,12 +471,12 @@ impl Device for Modbus {
         }
     }
 
-    async fn subscribe(&self, group_id: Uuid) -> Result<Sender<String>> {
+    async fn subscribe(&self, group_id: Uuid) -> Result<broadcast::Receiver<MessageBatch>> {
         match self
             .groups
             .write()
             .await
-            .iter()
+            .iter_mut()
             .find(|group| group.id == group_id)
         {
             Some(group) => Ok(group.subscribe()),
@@ -534,6 +536,7 @@ macro_rules! read_and_set_data {
     };
 }
 
+// TODO
 async fn read_group_points(
     ctx: &mut Context,
     groups: &RwLock<Vec<Group>>,
@@ -551,31 +554,32 @@ async fn read_group_points(
         for (id, point) in group.points.write().await.iter_mut() {
             ctx.set_slave(point.conf.slave);
             let start_time = Instant::now();
-            match point.conf.area {
-                0 => read_and_set_data!(
-                    ctx,
-                    point,
-                    read_discrete_inputs,
-                    point.conf.address,
-                    point.quantity
-                ),
-                1 => read_and_set_data!(ctx, point, read_coils, point.conf.address, point.quantity),
-                4 => read_and_set_data!(
-                    ctx,
-                    point,
-                    read_input_registers,
-                    point.conf.address,
-                    point.quantity
-                ),
-                3 => read_and_set_data!(
-                    ctx,
-                    point,
-                    read_holding_registers,
-                    point.conf.address,
-                    point.quantity
-                ),
-                _ => unreachable!("wrong area code"),
-            }
+            // let mut datas = vec![];
+            // match point.conf.area {
+            //     0 => read_and_set_data!(
+            //         ctx,
+            //         point,
+            //         read_discrete_inputs,
+            //         point.conf.address,
+            //         point.quantity
+            //     ),
+            //     1 => read_and_set_data!(ctx, point, read_coils, point.conf.address, point.quantity),
+            //     4 => read_and_set_data!(
+            //         ctx,
+            //         point,
+            //         read_input_registers,
+            //         point.conf.address,
+            //         point.quantity
+            //     ),
+            //     3 => read_and_set_data!(
+            //         ctx,
+            //         point,
+            //         read_holding_registers,
+            //         point.conf.address,
+            //         point.quantity
+            //     ),
+            //     _ => unreachable!("wrong area code"),
+            // }
 
             let elapsed_time = start_time.elapsed().as_millis();
             rtt.store(elapsed_time as u16, Ordering::SeqCst);

@@ -8,6 +8,7 @@ rumqttc = "0.24.0"
 
 message = { workspace = true }
 types = { workspace = true }
+device = { workspace = true }
 
 anyhow = { workspace = true }
 tokio = { workspace = true }

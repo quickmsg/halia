@@ -2,11 +2,12 @@
 
 use async_trait::async_trait;
 use common::error::{HaliaError, Result};
+use message::MessageBatch;
 use modbus::device::Modbus;
 use serde::Serialize;
 use std::sync::LazyLock;
 use storage::Status;
-use tokio::sync::{broadcast::Sender, RwLock};
+use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error};
 use types::device::{
     CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
@@ -327,7 +328,11 @@ impl DeviceManager {
         }
     }
 
-    pub async fn subscribe(&self, device_id: Uuid, group_id: Uuid) -> Result<Sender<String>> {
+    pub async fn subscribe(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+    ) -> Result<broadcast::Receiver<MessageBatch>> {
         match self
             .devices
             .read()
@@ -444,7 +449,7 @@ trait Device: Sync + Send {
     ) -> Result<()>;
     async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()>;
 
-    async fn subscribe(&self, group_id: Uuid) -> Result<Sender<String>>;
+    async fn subscribe(&self, group_id: Uuid) -> Result<broadcast::Receiver<MessageBatch>>;
 }
 
 pub(crate) enum DataValue {

@@ -63,7 +63,7 @@ pub struct ListPointResp {
     pub name: String,
     pub address: u16,
     pub r#type: String,
-    pub value: Value,
+    pub value: json::Value,
     pub describe: Option<String>,
 }
 
@@ -225,122 +225,147 @@ impl DataType {
         }
     }
 
-    pub fn decode(&self, data: Vec<u8>) -> Value {
+    pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
         match self {
             DataType::Bool => {
+                debug!("data is :{:?}", data);
                 if data.len() != 1 {
                     warn!("buf is not right");
-                    Value::Null
+                    json::Value::Null
                 } else {
                     if data[0] == 1 {
-                        Value::from(true)
+                        json::Value::from(true)
                     } else {
-                        Value::from(false)
+                        json::Value::from(false)
                     }
                 }
             }
             DataType::Int16(endian) => {
                 let mut data = match data.as_slice() {
                     [a, b] => [*a, *b],
-                    _ => return Value::Null,
+                    _ => return json::Value::Null,
                 };
                 if *endian == Endian::LittleEndian {
                     data.swap(0, 1);
                 }
-                Value::from(i16::from_be_bytes(data))
+                json::Value::from(i16::from_be_bytes(data))
             }
             DataType::Uint16(endian) => {
                 let mut data = match data.as_slice() {
                     [a, b] => [*a, *b],
-                    _ => return Value::Null,
+                    _ => return json::Value::Null,
                 };
                 if *endian == Endian::LittleEndian {
                     data.swap(0, 1);
                 }
-                Value::from(i16::from_be_bytes(data))
+                json::Value::from(u16::from_be_bytes(data))
             }
             DataType::Int32(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d] => [*a, *b, *c, *d],
-                    _ => return Value::Null,
+                    _ => return json::Value::Null,
                 };
                 if *endian0 == Endian::LittleEndian {
-                    data.swap(0, 1);
+                    data.swap(0, 2);
+                    data.swap(1, 3);
                 }
                 if *endian1 == Endian::LittleEndian {
+                    data.swap(0, 1);
                     data.swap(2, 3);
                 }
-                Value::from(i32::from_be_bytes(data))
+                json::Value::from(i32::from_be_bytes(data))
             }
             DataType::Uint32(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d] => [*a, *b, *c, *d],
-                    _ => return Value::Null,
+                    _ => return json::Value::Null,
                 };
                 if *endian0 == Endian::LittleEndian {
-                    data.swap(0, 1);
+                    data.swap(0, 2);
+                    data.swap(1, 3);
                 }
                 if *endian1 == Endian::LittleEndian {
+                    data.swap(0, 1);
                     data.swap(2, 3);
                 }
-                Value::from(u32::from_be_bytes(data))
+                json::Value::from(u32::from_be_bytes(data))
             }
             DataType::Int64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
-                    _ => return Value::Null,
+                    _ => return json::Value::Null,
                 };
                 if *endian0 == Endian::LittleEndian {
-                    data.swap(0, 1);
+                    data.swap(0, 6);
+                    data.swap(1, 7);
+                    data.swap(2, 4);
+                    data.swap(3, 5);
                 }
                 if *endian1 == Endian::LittleEndian {
+                    data.swap(0, 1);
                     data.swap(2, 3);
+                    data.swap(4, 5);
+                    data.swap(6, 7);
                 }
 
-                Value::from(i64::from_be_bytes(data))
+                json::Value::from(i64::from_be_bytes(data))
             }
             DataType::Uint64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
-                    _ => return Value::Null,
+                    _ => return json::Value::Null,
                 };
                 if *endian0 == Endian::LittleEndian {
-                    data.swap(0, 1);
+                    data.swap(0, 6);
+                    data.swap(1, 7);
+                    data.swap(2, 4);
+                    data.swap(3, 5);
                 }
                 if *endian1 == Endian::LittleEndian {
+                    data.swap(0, 1);
                     data.swap(2, 3);
+                    data.swap(4, 5);
+                    data.swap(6, 7);
                 }
-                Value::from(u64::from_be_bytes(data))
+                json::Value::from(u64::from_be_bytes(data))
             }
             DataType::Float32(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d] => [*a, *b, *c, *d],
-                    _ => return Value::Null,
+                    _ => return json::Value::Null,
                 };
                 if *endian0 == Endian::LittleEndian {
-                    data.swap(0, 1);
+                    data.swap(0, 2);
+                    data.swap(1, 3);
                 }
                 if *endian1 == Endian::LittleEndian {
+                    data.swap(0, 1);
                     data.swap(2, 3);
                 }
-                Value::from(f32::from_be_bytes(data))
+                json::Value::from(f32::from_be_bytes(data))
             }
             DataType::Float64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
-                    _ => return Value::Null,
+                    _ => return json::Value::Null,
                 };
                 if *endian0 == Endian::LittleEndian {
-                    data.swap(0, 1);
+                    data.swap(0, 6);
+                    data.swap(1, 7);
+                    data.swap(2, 4);
+                    data.swap(3, 5);
                 }
                 if *endian1 == Endian::LittleEndian {
+                    data.swap(0, 1);
                     data.swap(2, 3);
+                    data.swap(4, 5);
+                    data.swap(6, 7);
                 }
-                Value::from(f64::from_be_bytes(data))
+                json::Value::from(f64::from_be_bytes(data))
             }
             // DataType::String => todo!(),
             // DataType::Bytes => todo!(),
-            _ => Value::Null,
+            _ => json::Value::Null,
         }
     }
 

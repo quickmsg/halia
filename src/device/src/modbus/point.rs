@@ -1,8 +1,14 @@
-use common::error::Result;
+use common::error::{HaliaError, Result};
+use json::Value;
 use serde::Deserialize;
-use serde_json::Value;
+use tracing::warn;
 use types::device::{CreatePointReq, DataType};
 use uuid::Uuid;
+
+use super::protocol::{
+    client::{Context, Reader},
+    SlaveContext,
+};
 
 #[derive(Debug)]
 pub(crate) struct Point {
@@ -54,7 +60,41 @@ impl Point {
         Ok(())
     }
 
-    pub fn set_data(&mut self, data: Vec<u8>) {
-        self.value = self.conf.r#type.decode(data);
+    pub async fn read(&mut self, ctx: &mut Context) -> Result<()> {
+        ctx.set_slave(self.conf.slave);
+        match self.conf.area {
+            0 => match ctx
+                .read_discrete_inputs(self.conf.address, self.quantity)
+                .await
+            {
+                Ok(res) => match res {
+                    Ok(mut data) => Ok(self.value = self.conf.r#type.decode(&mut data)),
+                    Err(e) => {
+                        warn!("modbus protocl exception:{}", e);
+                        todo!()
+                    }
+                },
+                Err(_) => todo!(),
+            },
+            1 => match ctx.read_coils(self.conf.address, self.quantity).await {
+                Ok(_) => todo!(),
+                Err(_) => todo!(),
+            },
+            4 => match ctx
+                .read_input_registers(self.conf.address, self.quantity)
+                .await
+            {
+                Ok(_) => todo!(),
+                Err(_) => todo!(),
+            },
+            3 => match ctx
+                .read_holding_registers(self.conf.address, self.quantity)
+                .await
+            {
+                Ok(_) => todo!(),
+                Err(_) => todo!(),
+            },
+            _ => unreachable!(),
+        }
     }
 }

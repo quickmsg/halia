@@ -4,10 +4,53 @@ use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-// from_integer! {
-//     i8 i16 i32 i64 isize
-//     u8 u16 u32 u64 usize
-// }
+impl From<i8> for Value {
+    fn from(value: i8) -> Self {
+        Value::Int8(value)
+    }
+}
+
+impl From<u8> for Value {
+    fn from(value: u8) -> Self {
+        Value::UInt8(value)
+    }
+}
+
+impl From<i16> for Value {
+    fn from(value: i16) -> Self {
+        Value::Int16(value)
+    }
+}
+
+impl From<u16> for Value {
+    fn from(value: u16) -> Self {
+        Value::UInt16(value)
+    }
+}
+
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
+        Value::Int32(value)
+    }
+}
+
+impl From<u32> for Value {
+    fn from(value: u32) -> Self {
+        Value::UInt32(value)
+    }
+}
+
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        Value::Int64(value)
+    }
+}
+
+impl From<u64> for Value {
+    fn from(value: u64) -> Self {
+        Value::UInt64(value)
+    }
+}
 
 impl From<f32> for Value {
     /// Convert 32-bit floating point number to `Value::Number`, or

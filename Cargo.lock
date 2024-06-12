@@ -243,6 +243,8 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-util",
+ "json",
+ "message",
  "serde",
  "serde_json",
  "smallvec",
@@ -1139,6 +1141,7 @@ name = "sources"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "device",
  "message",
  "rumqttc",
  "serde",
@@ -1391,6 +1394,7 @@ name = "types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "json",
  "message",
  "serde",
  "serde_json",
