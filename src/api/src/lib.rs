@@ -11,6 +11,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 mod device;
 mod rule;
+mod sink;
 mod source;
 
 #[derive(Serialize, Debug)]
@@ -56,6 +57,8 @@ pub async fn start() {
         .nest("/api", device_routes())
         .nest("/api/device/:device_id", group_routes())
         .nest("/api/device/:device_id/group/:group_id", point_routes())
+        .nest("/api", source_routes())
+        .nest("/api", sink_routes())
         .nest("/api", rule_routes())
         .layer(
             CorsLayer::new()
@@ -101,12 +104,18 @@ fn point_routes() -> Router {
         .route("/points", delete(device::delete_points))
 }
 
+fn source_routes() -> Router {
+    Router::new().route("/source", post(source::create_source))
+}
+
+fn sink_routes() -> Router {
+    Router::new().route("/sink", post(rule::create_sink))
+}
+
 fn rule_routes() -> Router {
     Router::new()
-        // .route("/source", post(rule::create_source))
-        .route("/sink", post(rule::create_sink))
         .route("/graph", post(rule::create))
-        // .route("/graph/run/:id", put(rule::run))
+        .route("/graph/run/:name", put(rule::run))
         .route("/graph/stop/:name", put(rule::stop))
         .route("/health", get(rule::helath))
 }

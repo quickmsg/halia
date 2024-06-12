@@ -1,6 +1,6 @@
 use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},

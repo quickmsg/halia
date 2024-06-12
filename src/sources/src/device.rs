@@ -1,4 +1,6 @@
 use anyhow::Result;
+use async_trait::async_trait;
+use common::error::HaliaResult;
 use device::GLOBAL_DEVICE_MANAGER;
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
@@ -26,11 +28,11 @@ impl Device {
     }
 }
 
+#[async_trait]
 impl Source for Device {
-    fn subscribe(&mut self) -> Result<broadcast::Receiver<MessageBatch>> {
-        // GLOBAL_DEVICE_MANAGER
-        //     .subscribe(self.conf.device_id, self.conf.group_id)
-        //     .await
-        todo!()
+    async fn subscribe(&mut self) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        GLOBAL_DEVICE_MANAGER
+            .subscribe(self.conf.device_id, self.conf.group_id)
+            .await
     }
 }

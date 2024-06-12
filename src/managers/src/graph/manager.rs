@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use common::error::{HaliaError, HaliaResult};
 use std::{
     collections::HashMap,
     sync::{LazyLock, Mutex},
@@ -49,11 +50,14 @@ impl Manager {
         Ok(())
     }
 
-    pub async fn run(&self, name: String) -> Result<()> {
+    pub async fn run(&self, name: String) -> HaliaResult<()> {
         let graph = self.graphs.get(&name);
         match graph {
-            Some(graph) => graph.graph.run().await,
-            None => bail!("不存在"),
+            Some(graph) => match graph.graph.run().await {
+                Ok(_) => Ok(()),
+                Err(_) => todo!(),
+            },
+            None => return Err(HaliaError::NotFound),
         }
     }
 }

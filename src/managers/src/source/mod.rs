@@ -1,13 +1,13 @@
 use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
-use sources::mqtt::Mqtt;
 use sources::Source;
+use sources::{device::Device, mqtt::Mqtt};
 use std::sync::LazyLock;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::RwLock;
 use tracing::{debug, error};
-use types::source::CreateSourceReq;
+use types::source::{CreateSourceReq, SourceDetailResp};
 use uuid::Uuid;
 
 pub struct SourceManager {
@@ -19,7 +19,7 @@ pub static GLOBAL_SOURCE_MANAGER: LazyLock<SourceManager> = LazyLock::new(|| Sou
 });
 
 impl SourceManager {
-    pub async fn create_source(&self, id: Option<Uuid>, req: CreateSourceReq) -> Result<()> {
+    pub async fn create_source(&self, id: Option<Uuid>, req: CreateSourceReq) -> HaliaResult<()> {
         match req.r#type.as_str() {
             "mqtt" => match Mqtt::new(req.conf.clone()) {
                 Ok(mqtt) => {
@@ -29,11 +29,25 @@ impl SourceManager {
                 }
                 Err(e) => {
                     error!("register souce:{} err:{}", req.name, e);
-                    return Err(e);
+                    return Err(HaliaError::NotFound);
                 }
             },
-            _ => bail!("not support"),
+            "device" => match Device::new(req.conf.clone()) {
+                Ok(device) => {
+                    self.sources.write().await.push((Uuid::new_v4(), device));
+                    return Ok(());
+                }
+                Err(e) => {
+                    error!("register souce:{} err:{}", req.name, e);
+                    return Err(HaliaError::NotFound);
+                }
+            },
+            _ => return Err(HaliaError::ProtocolNotSupported),
         }
+    }
+
+    pub async fn read_source(&self, id: Uuid) -> HaliaResult<SourceDetailResp> {
+        todo!()
     }
 
     pub async fn get_receiver(
@@ -49,7 +63,7 @@ impl SourceManager {
             .iter_mut()
             .find(|(id, _)| *id == source_id)
         {
-            Some((_, source)) => match source.subscribe() {
+            Some((_, source)) => match source.subscribe().await {
                 Ok(x) => return Ok(x),
                 Err(_) => todo!(),
             },

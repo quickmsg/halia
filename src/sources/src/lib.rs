@@ -1,12 +1,15 @@
 use anyhow::Result;
+use async_trait::async_trait;
+use common::error::HaliaResult;
 use message::MessageBatch;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::{self, Receiver};
 
-pub mod mqtt;
 pub mod device;
+pub mod mqtt;
 
+#[async_trait]
 pub trait Source: Send + Sync {
-    fn subscribe(&mut self) -> Result<Receiver<MessageBatch>>;
+    async fn subscribe(&mut self) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
 
     fn stop(&self) {}
 }

@@ -31,7 +31,7 @@ use crate::{storage, Device};
 use super::{
     group::{Command, Group},
     protocol::{
-        client::{rtu, tcp, Context, Reader},
+        client::{rtu, tcp, Context},
         SlaveContext,
     },
 };
@@ -250,7 +250,11 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_group(&mut self, group_id: Option<Uuid>, req: &CreateGroupReq) -> HaliaResult<()> {
+    async fn create_group(
+        &mut self,
+        group_id: Option<Uuid>,
+        req: &CreateGroupReq,
+    ) -> HaliaResult<()> {
         let (group_id, backup) = match group_id {
             Some(group_id) => (group_id, false),
             None => (Uuid::new_v4(), true),
@@ -294,6 +298,7 @@ impl Device for Modbus {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
+        debug!("here");
         if self.on.load(Ordering::SeqCst) {
             return Ok(());
         } else {
@@ -309,10 +314,11 @@ impl Device for Modbus {
         let (write_tx, write_rx) = mpsc::channel::<(Uuid, Uuid, Value)>(10);
         self.write_tx = Some(write_tx);
 
-        self.run(stop_signal_rx, read_rx, write_rx).await;
-
         let (group_signal_tx, _) = broadcast::channel::<Command>(20);
         self.group_signal_tx = Some(group_signal_tx);
+
+        self.run(stop_signal_rx, read_rx, write_rx).await;
+
         for group in self.groups.read().await.iter() {
             let stop_signal = self.group_signal_tx.as_ref().unwrap().subscribe();
             let read_tx = self.read_tx.as_ref().unwrap().clone();
@@ -550,44 +556,7 @@ async fn read_group_points(
         .iter_mut()
         .find(|group| group.id == group_id)
     {
-        // let mut values = vec![];
-        for (id, point) in group.points.write().await.iter_mut() {
-            ctx.set_slave(point.conf.slave);
-            let start_time = Instant::now();
-            // let mut datas = vec![];
-            // match point.conf.area {
-            //     0 => read_and_set_data!(
-            //         ctx,
-            //         point,
-            //         read_discrete_inputs,
-            //         point.conf.address,
-            //         point.quantity
-            //     ),
-            //     1 => read_and_set_data!(ctx, point, read_coils, point.conf.address, point.quantity),
-            //     4 => read_and_set_data!(
-            //         ctx,
-            //         point,
-            //         read_input_registers,
-            //         point.conf.address,
-            //         point.quantity
-            //     ),
-            //     3 => read_and_set_data!(
-            //         ctx,
-            //         point,
-            //         read_holding_registers,
-            //         point.conf.address,
-            //         point.quantity
-            //     ),
-            //     _ => unreachable!("wrong area code"),
-            // }
-
-            let elapsed_time = start_time.elapsed().as_millis();
-            rtt.store(elapsed_time as u16, Ordering::SeqCst);
-
-            time::sleep(Duration::from_millis(interval)).await;
-        }
-
-        // group.set_data(values).await;
+        group.read(ctx, interval).await;
         true
     } else {
         true

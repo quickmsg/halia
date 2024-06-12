@@ -1,16 +1,18 @@
 use anyhow::{bail, Result};
+use async_trait::async_trait;
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::v5::mqttbytes::QoS;
 use rumqttc::v5::{AsyncClient, ConnectionError, Event, Incoming, MqttOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use types::rule::Status;
 use std::string::String;
 use tokio;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::time::Duration;
 use tracing::error;
+use types::rule::Status;
 
 use crate::Source;
 
@@ -29,7 +31,7 @@ pub struct Conf {
 }
 
 impl Mqtt {
-    pub fn new(conf: Value) -> Result<Box<dyn Source + Sync>> {
+    pub fn new(conf: Value) -> Result<Box<dyn Source + Sync + Send>> {
         let conf: Conf = serde_json::from_value(conf.clone())?;
         Ok(Box::new(Mqtt {
             conf,
@@ -75,12 +77,13 @@ async fn run(conf: Conf, tx: Sender<MessageBatch>) {
     }
 }
 
+#[async_trait]
 impl Source for Mqtt {
-    fn subscribe(&mut self) -> Result<Receiver<MessageBatch>> {
+    async fn subscribe(&mut self) -> HaliaResult<Receiver<MessageBatch>> {
         match self.status {
             Status::Running => match &self.tx {
                 Some(tx) => Ok(tx.subscribe()),
-                None => bail!("tx is None"),
+                None => return Err(HaliaError::IoErr),
             },
             Status::Stopped => {
                 let (tx, rx) = broadcast::channel(10);

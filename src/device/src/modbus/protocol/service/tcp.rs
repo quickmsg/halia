@@ -6,7 +6,6 @@ use std::{
 use futures_util::{SinkExt as _, StreamExt as _};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
-use tracing::debug;
 
 use crate::modbus::protocol::{
     codec,
@@ -69,7 +68,6 @@ where
     }
 
     pub(crate) async fn call(&mut self, req: Request<'_>) -> Result<Response> {
-        debug!("Call {:?}", req);
         let disconnect = req == Request::Disconnect;
         let req_function_code = req.function_code();
         let req_adu = self.next_request_adu(req, disconnect);
