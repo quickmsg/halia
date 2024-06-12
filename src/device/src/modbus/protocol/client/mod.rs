@@ -269,7 +269,7 @@ impl Writer for Context {
 
 #[cfg(test)]
 mod tests {
-    use crate::Result;
+    // use crate::Result;
 
     use super::*;
     use std::sync::Mutex;

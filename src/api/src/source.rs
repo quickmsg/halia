@@ -5,12 +5,12 @@ use uuid::Uuid;
 
 use crate::AppResp;
 
-pub(crate) async fn create_source(Json(req): Json<CreateSourceReq>) -> AppResp<()> {
-    match GLOBAL_SOURCE_MANAGER.create_source(None, req).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
+// pub(crate) async fn create_source(Json(req): Json<CreateSourceReq>) -> AppResp<()> {
+//     match GLOBAL_SOURCE_MANAGER.create_source(None, req).await {
+//         Ok(()) => AppResp::new(),
+//         Err(e) => e.into(),
+//     }
+// }
 
 // pub(crate) async fn read_source(Path(id): Path<Uuid>) -> AppResp<SourceDetailResp> {
 //     match GLOBAL_SOURCE_MANAGER.read_source(id).await {

@@ -1,7 +1,7 @@
 #![feature(lazy_cell)]
 
 use async_trait::async_trait;
-use common::error::{HaliaError, Result};
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use modbus::device::Modbus;
 use serde::Serialize;
@@ -27,7 +27,7 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn create_device(&self, device_id: Option<Uuid>, req: CreateDeviceReq) -> Result<()> {
+    pub async fn create_device(&self, device_id: Option<Uuid>, req: CreateDeviceReq) -> HaliaResult<()> {
         let (device_id, backup) = match device_id {
             Some(device_id) => (device_id, false),
             None => (Uuid::new_v4(), true),
@@ -51,7 +51,7 @@ impl DeviceManager {
         Ok(())
     }
 
-    pub async fn read_device(&self, device_id: Uuid) -> Result<DeviceDetailResp> {
+    pub async fn read_device(&self, device_id: Uuid) -> HaliaResult<DeviceDetailResp> {
         match self
             .devices
             .read()
@@ -64,7 +64,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn update_device(&self, device_id: Uuid, req: UpdateDeviceReq) -> Result<()> {
+    pub async fn update_device(&self, device_id: Uuid, req: UpdateDeviceReq) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -81,7 +81,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn start_device(&self, device_id: Uuid) -> Result<()> {
+    pub async fn start_device(&self, device_id: Uuid) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -109,7 +109,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn stop_device(&self, device_id: Uuid) -> Result<()> {
+    pub async fn stop_device(&self, device_id: Uuid) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -135,7 +135,7 @@ impl DeviceManager {
             .collect()
     }
 
-    pub async fn delete_device(&self, device_id: Uuid) -> Result<()> {
+    pub async fn delete_device(&self, device_id: Uuid) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -161,7 +161,7 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Option<Uuid>,
         req: CreateGroupReq,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -177,7 +177,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn read_groups(&self, device_id: Uuid) -> Result<Vec<ListGroupsResp>> {
+    pub async fn read_groups(&self, device_id: Uuid) -> HaliaResult<Vec<ListGroupsResp>> {
         match self
             .devices
             .read()
@@ -195,7 +195,7 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
         req: &UpdateGroupReq,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         match self
             .devices
             .read()
@@ -211,7 +211,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn delete_groups(&self, device_id: Uuid, group_ids: Vec<Uuid>) -> Result<()> {
+    pub async fn delete_groups(&self, device_id: Uuid, group_ids: Vec<Uuid>) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -229,7 +229,7 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
         create_points: Vec<(Option<Uuid>, CreatePointReq)>,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         match self
             .devices
             .read()
@@ -245,7 +245,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn get_points(&self, device_id: Uuid, group_id: Uuid) -> Result<Vec<ListPointResp>> {
+    pub async fn get_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<Vec<ListPointResp>> {
         match self
             .devices
             .read()
@@ -258,7 +258,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn read_points(&self, device_id: Uuid, group_id: Uuid) -> Result<Vec<ListPointResp>> {
+    pub async fn read_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<Vec<ListPointResp>> {
         match self
             .devices
             .read()
@@ -277,7 +277,7 @@ impl DeviceManager {
         group_id: Uuid,
         point_id: Uuid,
         req: &CreatePointReq,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         match self
             .devices
             .read()
@@ -297,7 +297,7 @@ impl DeviceManager {
         group_id: Uuid,
         point_id: Uuid,
         req: &WritePointValueReq,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         match self
             .devices
             .read()
@@ -315,7 +315,7 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
         point_ids: Vec<Uuid>,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         match self
             .devices
             .read()
@@ -332,7 +332,7 @@ impl DeviceManager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
-    ) -> Result<broadcast::Receiver<MessageBatch>> {
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self
             .devices
             .read()
@@ -347,7 +347,7 @@ impl DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn recover(&self) -> Result<()> {
+    pub async fn recover(&self) -> HaliaResult<()> {
         let devices = storage::read_devices().await?;
         for (id, status, data) in devices {
             let req = match serde_json::from_str::<CreateDeviceReq>(data.as_str()) {
@@ -370,7 +370,7 @@ impl DeviceManager {
         Ok(())
     }
 
-    async fn recover_group(&self, device_id: Uuid) -> Result<()> {
+    async fn recover_group(&self, device_id: Uuid) -> HaliaResult<()> {
         let groups = storage::read_groups(device_id).await?;
         let groups: Vec<(Option<Uuid>, CreateGroupReq)> = groups
             .into_iter()
@@ -388,7 +388,7 @@ impl DeviceManager {
         Ok(())
     }
 
-    async fn recover_points(&self, device_id: Uuid, group_id: Uuid) -> Result<()> {
+    async fn recover_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
         let points = storage::read_points(device_id, group_id).await?;
         let points: Vec<(Option<Uuid>, CreatePointReq)> = points
             .into_iter()
@@ -414,42 +414,42 @@ trait Device: Sync + Send {
     // device
     fn get_detail(&self) -> DeviceDetailResp;
     fn get_info(&self) -> ListDevicesResp;
-    async fn start(&mut self) -> Result<()>;
+    async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self);
-    async fn update(&mut self, req: &UpdateDeviceReq) -> Result<()>;
+    async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()>;
 
     // group
     async fn create_group(
         &mut self,
         group_id: Option<Uuid>,
         create_group: &CreateGroupReq,
-    ) -> Result<()>;
-    async fn read_groups(&self) -> Result<Vec<ListGroupsResp>>;
-    async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> Result<()>;
-    async fn delete_groups(&self, ids: Vec<Uuid>) -> Result<()>;
+    ) -> HaliaResult<()>;
+    async fn read_groups(&self) -> HaliaResult<Vec<ListGroupsResp>>;
+    async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()>;
+    async fn delete_groups(&self, ids: Vec<Uuid>) -> HaliaResult<()>;
 
     // points
     async fn create_points(
         &self,
         group_id: Uuid,
         create_points: Vec<(Option<Uuid>, CreatePointReq)>,
-    ) -> Result<()>;
-    async fn read_points(&self, group_id: Uuid) -> Result<Vec<ListPointResp>>;
+    ) -> HaliaResult<()>;
+    async fn read_points(&self, group_id: Uuid) -> HaliaResult<Vec<ListPointResp>>;
     async fn update_point(
         &self,
         group_id: Uuid,
         point_id: Uuid,
         req: &CreatePointReq,
-    ) -> Result<()>;
+    ) -> HaliaResult<()>;
     async fn write_point_value(
         &self,
         group_id: Uuid,
         point_id: Uuid,
         req: &WritePointValueReq,
-    ) -> Result<()>;
-    async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()>;
+    ) -> HaliaResult<()>;
+    async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> HaliaResult<()>;
 
-    async fn subscribe(&self, group_id: Uuid) -> Result<broadcast::Receiver<MessageBatch>>;
+    async fn subscribe(&self, group_id: Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
 }
 
 pub(crate) enum DataValue {

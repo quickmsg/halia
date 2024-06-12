@@ -1,4 +1,5 @@
-use common::error::{HaliaError, Result};
+use anyhow::{bail, Result};
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use sources::mqtt::Mqtt;
 use sources::Source;
@@ -28,11 +29,10 @@ impl SourceManager {
                 }
                 Err(e) => {
                     error!("register souce:{} err:{}", req.name, e);
-                    return Err(HaliaError::ProtocolNotSupported);
+                    return Err(e);
                 }
             },
-            // "device" => 
-            _ => return Err(HaliaError::ParseErr),
+            _ => bail!("not support"),
         }
     }
 
@@ -55,7 +55,7 @@ impl SourceManager {
             },
             None => {
                 error!("don't have source:{}", source_id);
-                return Err(HaliaError::IoErr);
+                bail!("not have source");
             }
         }
     }

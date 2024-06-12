@@ -1,6 +1,6 @@
 use std::{fmt::Display, io, result};
 
-pub type Result<T, E = HaliaError> = result::Result<T, E>;
+pub type HaliaResult<T, E = HaliaError> = result::Result<T, E>;
 
 #[derive(Debug)]
 pub enum HaliaError {

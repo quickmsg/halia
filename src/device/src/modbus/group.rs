@@ -1,4 +1,4 @@
-use common::error::{HaliaError, Result};
+use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch};
 use std::time::{Duration, Instant};
 use tokio::{
@@ -10,10 +10,7 @@ use tracing::{debug, error};
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupReq};
 use uuid::Uuid;
 
-use super::protocol::{
-    client::{Context, Reader},
-    SlaveContext,
-};
+use super::protocol::client::Context;
 
 use super::point::Point;
 use crate::storage;
@@ -115,7 +112,7 @@ impl Group {
     pub async fn create_points(
         &self,
         create_points: Vec<(Option<Uuid>, CreatePointReq)>,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         let mut points = Vec::with_capacity(create_points.len());
         let mut storage_infos = Vec::with_capacity(create_points.len());
         for (point_id, conf) in create_points {
@@ -156,7 +153,7 @@ impl Group {
         resps
     }
 
-    pub async fn update_point(&self, point_id: Uuid, req: &CreatePointReq) -> Result<()> {
+    pub async fn update_point(&self, point_id: Uuid, req: &CreatePointReq) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -183,7 +180,7 @@ impl Group {
         self.points.read().await.len()
     }
 
-    pub async fn delete_points(&self, ids: Vec<Uuid>) -> Result<()> {
+    pub async fn delete_points(&self, ids: Vec<Uuid>) -> HaliaResult<()> {
         self.points
             .write()
             .await
@@ -192,43 +189,20 @@ impl Group {
         Ok(())
     }
 
-    pub async fn get_data(&self, ctx: &mut Context, interval: u64) {
+    pub async fn read(&self, ctx: &mut Context, interval: u64) {
+        let mut msg = Message::new();
         for (id, point) in self.points.write().await.iter_mut() {
-            ctx.set_slave(point.conf.slave);
-            let start_time = Instant::now();
-            match point.conf.area {
-                0 => match ctx
-                    .read_discrete_inputs(point.conf.address, point.quantity)
-                    .await
-                {
-                    Ok(_) => todo!(),
-                    Err(_) => todo!(),
-                },
-                1 => todo!(),
-                4 => todo!(),
-                3 => todo!(),
-                _ => unreachable!(),
+            match point.read(ctx).await {
+                Ok(data) => msg.add(&point.name, data),
+                Err(_) => todo!(),
             }
             time::sleep(Duration::from_millis(interval)).await;
         }
+
+        if let Some(tx) = &self.tx {
+            if let Err(e) = tx.send(MessageBatch::from_message(msg)) {
+                error!("send message batch err :{}", e);
+            }
+        }
     }
-
-    // pub async fn set_data(&self, mut datas: Vec<(Uuid, Vec<u8>)>) -> Result<()> {
-    //     let mut points = self.points.write().await;
-    //     for (id, point) in points.iter_mut() {
-    //         if let Some((_, data)) = datas.iter_mut().find(|(data_id, _)| data_id == id) {
-    //             point.set_data(data);
-    //         }
-    //     }
-
-    //     let mut msg = Message::new();
-    //     for (_, point) in points.iter() {
-    //         msg.add(&point.name, point.value.clone())
-    //     }
-    //     if let Some(tx) = &self.tx {
-    //         todo!()
-    //     }
-
-    //     Ok(())
-    // }
 }

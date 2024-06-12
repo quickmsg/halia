@@ -8,7 +8,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::error::{HaliaError, Result};
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -104,7 +104,7 @@ struct SerialConf {
 }
 
 impl Modbus {
-    pub fn new(id: Uuid, req: &CreateDeviceReq) -> Result<Box<dyn Device>> {
+    pub fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
         Ok(Box::new(Modbus {
             id,
@@ -168,7 +168,7 @@ impl Modbus {
         });
     }
 
-    async fn get_context(conf: &Conf) -> Result<(Context, u64)> {
+    async fn get_context(conf: &Conf) -> HaliaResult<(Context, u64)> {
         match conf {
             Conf::EthernetConf(conf) => {
                 let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
@@ -209,7 +209,7 @@ impl Modbus {
 
 #[async_trait]
 impl Device for Modbus {
-    async fn update(&mut self, req: &UpdateDeviceReq) -> Result<()> {
+    async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()> {
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
         self.name = req.name.clone();
         if self.conf != conf {
@@ -250,7 +250,7 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_group(&mut self, group_id: Option<Uuid>, req: &CreateGroupReq) -> Result<()> {
+    async fn create_group(&mut self, group_id: Option<Uuid>, req: &CreateGroupReq) -> HaliaResult<()> {
         let (group_id, backup) = match group_id {
             Some(group_id) => (group_id, false),
             None => (Uuid::new_v4(), true),
@@ -271,7 +271,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn delete_groups(&self, group_ids: Vec<Uuid>) -> Result<()> {
+    async fn delete_groups(&self, group_ids: Vec<Uuid>) -> HaliaResult<()> {
         self.groups
             .write()
             .await
@@ -293,7 +293,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn start(&mut self) -> Result<()> {
+    async fn start(&mut self) -> HaliaResult<()> {
         if self.on.load(Ordering::SeqCst) {
             return Ok(());
         } else {
@@ -347,7 +347,7 @@ impl Device for Modbus {
         self.write_tx = None;
     }
 
-    async fn read_groups(&self) -> Result<Vec<ListGroupsResp>> {
+    async fn read_groups(&self) -> HaliaResult<Vec<ListGroupsResp>> {
         let mut resps = Vec::new();
         for group in self.groups.read().await.iter() {
             resps.push({
@@ -362,7 +362,7 @@ impl Device for Modbus {
         Ok(resps)
     }
 
-    async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> Result<()> {
+    async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -396,7 +396,7 @@ impl Device for Modbus {
         &self,
         group_id: Uuid,
         create_points: Vec<(Option<Uuid>, CreatePointReq)>,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -409,7 +409,7 @@ impl Device for Modbus {
         }
     }
 
-    async fn read_points(&self, group_id: Uuid) -> Result<Vec<ListPointResp>> {
+    async fn read_points(&self, group_id: Uuid) -> HaliaResult<Vec<ListPointResp>> {
         match self
             .groups
             .read()
@@ -427,7 +427,7 @@ impl Device for Modbus {
         group_id: Uuid,
         point_id: Uuid,
         req: &CreatePointReq,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         match self
             .groups
             .read()
@@ -448,7 +448,7 @@ impl Device for Modbus {
         group_id: Uuid,
         point_id: Uuid,
         req: &WritePointValueReq,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         let _ = self
             .write_tx
             .as_ref()
@@ -458,7 +458,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> Result<()> {
+    async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -471,7 +471,7 @@ impl Device for Modbus {
         }
     }
 
-    async fn subscribe(&self, group_id: Uuid) -> Result<broadcast::Receiver<MessageBatch>> {
+    async fn subscribe(&self, group_id: Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self
             .groups
             .write()
