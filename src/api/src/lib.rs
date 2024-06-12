@@ -109,13 +109,18 @@ fn source_routes() -> Router {
 }
 
 fn sink_routes() -> Router {
-    Router::new().route("/sink", post(rule::create_sink))
+    Router::new()
+        .route("/sink", post(sink::create))
+        .route("/sink/:id", get(sink::read))
+        .route("/sinks", get(sink::list))
+        .route("/update/:id", put(sink::update))
+        .route("/delete/:id", delete(sink::delete))
 }
 
 fn rule_routes() -> Router {
     Router::new()
         .route("/graph", post(rule::create))
-        .route("/graph/run/:name", put(rule::run))
+        // .route("/graph/run/:name", put(rule::run))
         .route("/graph/stop/:name", put(rule::stop))
         .route("/health", get(rule::helath))
 }

@@ -451,17 +451,3 @@ trait Device: Sync + Send {
 
     async fn subscribe(&self, group_id: Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
 }
-
-pub(crate) enum DataValue {
-    Int16(i16),
-    Uint16(u16),
-    Int32(i32),
-    Uint32(u32),
-    Int64(i64),
-    Uint64(u64),
-    Float32(f32),
-    Float64(f64),
-    Bit(u8),
-    String(String),
-    Bytes,
-}

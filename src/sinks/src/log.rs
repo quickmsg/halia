@@ -2,18 +2,23 @@ use anyhow::Result;
 use message::MessageBatch;
 use tokio::sync::broadcast::Receiver;
 use tracing::{debug, info};
-use types::rule::Status;
+use types::{
+    rule::Status,
+    sink::{CreateSinkReq, ListSinkResp},
+};
 
 use crate::Sink;
 
 pub struct Log {
+    name: String,
     status: Status,
 }
 
 impl Log {
-    pub fn new() -> Result<Log> {
+    pub fn new(req: CreateSinkReq) -> Result<Log> {
         Ok(Log {
             status: Status::Stopped,
+            name: req.name.clone(),
         })
     }
 }
@@ -51,5 +56,20 @@ impl Sink for Log {
             //   TODO
             Status::Running => Ok(()),
         }
+    }
+
+    fn get_detail(&self) -> Result<types::sink::ReadSinkResp> {
+        Ok(types::sink::ReadSinkResp {
+            r#type: "log".to_string(),
+            name: self.name.clone(),
+            conf: serde_json::Value::Null,
+        })
+    }
+
+    fn get_info(&self) -> Result<types::sink::ListSinkResp> {
+        Ok(ListSinkResp {
+            name: self.name.clone(),
+            r#type: "log".to_string(),
+        })
     }
 }

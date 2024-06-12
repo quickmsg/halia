@@ -74,14 +74,6 @@ pub trait Operate: Send + Sync {
     fn operate(&self, message_batch: &mut MessageBatch) -> bool;
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct CreateSink {
-    pub r#type: String,
-    pub name: String,
-    pub encode: String,
-    pub conf: serde_json::Value,
-}
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateSource {
     pub r#type: String,

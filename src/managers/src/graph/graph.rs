@@ -8,7 +8,7 @@ use tracing::{debug, error};
 use types::rule::{CreateGraph, CreateGraphNode, Status};
 use uuid::Uuid;
 
-use crate::{sink::SINK_MANAGER, source::GLOBAL_SOURCE_MANAGER};
+use crate::{sink::GLOBAL_SINK_MANAGER, source::GLOBAL_SOURCE_MANAGER};
 
 use super::stream::Stream;
 
@@ -90,22 +90,18 @@ impl Graph {
                                 }
                             }
                         }
-                        "sink" => {
-                            if let Some(source_ids) = incoming_edges.get(&osi.id) {
-                                if let Some(source_id) = source_ids.first() {
-                                    if let Some(mut node_receivers) = receivers.remove(source_id) {
-                                        let rx = node_receivers.remove(0);
-                                        if let Some(node) = node_map.get(&osi.id) {
-                                            SINK_MANAGER
-                                                .lock()
-                                                .unwrap()
-                                                .insert_receiver(&node.name, rx)
-                                                .unwrap();
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        // "sink" => {
+                        //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
+                        //         if let Some(source_id) = source_ids.first() {
+                        //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                        //                 let rx = node_receivers.remove(0);
+                        //                 if let Some(node) = node_map.get(&osi.id) {
+                        //                     GLOBAL_SINK_MANAGER.insert_rx(&node.name, rx).unwrap();
+                        //                 }
+                        //             }
+                        //         }
+                        //     }
+                        // }
                         // "merge" => {
                         //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
                         //         debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);

@@ -1,15 +1,41 @@
-use axum::Json;
-use managers::sink::SINK_MANAGER;
-use types::rule::CreateSink;
+use axum::{extract::Path, Json};
+use managers::sink::GLOBAL_SINK_MANAGER;
+use types::sink::{CreateSinkReq, ListSinkResp, ReadSinkResp, UpdateSinkReq};
+use uuid::Uuid;
 
-pub(crate) async fn create_sink(Json(create_sink): Json<CreateSink>) -> (StatusCode, String) {
-    match SINK_MANAGER.lock().unwrap().register(create_sink) {
-        Ok(_) => return (StatusCode::CREATED, String::from("OK")),
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                String::from(format!("because: {}", e)),
-            )
-        }
-    };
+use crate::AppResp;
+
+pub(crate) async fn create(Json(req): Json<CreateSinkReq>) -> AppResp<()> {
+    match GLOBAL_SINK_MANAGER.create(None, req).await {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn read(Path(id): Path<Uuid>) -> AppResp<ReadSinkResp> {
+    match GLOBAL_SINK_MANAGER.read(id).await {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn list() -> AppResp<Vec<ListSinkResp>> {
+    match GLOBAL_SINK_MANAGER.list().await {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn update(Path(id): Path<Uuid>, Json(req): Json<UpdateSinkReq>) -> AppResp<()> {
+    match GLOBAL_SINK_MANAGER.update(id, req).await {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn delete(Path(id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_SINK_MANAGER.delete(id).await {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
 }

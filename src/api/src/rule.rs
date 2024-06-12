@@ -1,7 +1,7 @@
 use axum::debug_handler;
 use axum::{extract::Path, http::StatusCode, Json};
-use managers::{graph::manager::GRAPH_MANAGER, sink::SINK_MANAGER};
-use types::rule::{CreateGraph, CreateSink};
+use managers::graph::manager::GRAPH_MANAGER;
+use types::rule::CreateGraph;
 
 use crate::AppResp;
 
@@ -17,7 +17,7 @@ pub(crate) async fn create(Json(create_graph): Json<CreateGraph>) -> (StatusCode
     };
 }
 
-#[axum::debug_handler]
+// #[axum::debug_handler]
 pub(crate) async fn run(Path(name): Path<String>) -> AppResp<()> {
     match GRAPH_MANAGER.lock().unwrap().run(name).await {
         Ok(()) => AppResp::new(),
@@ -32,4 +32,3 @@ pub(crate) async fn stop(Path(_name): Path<String>) -> (StatusCode, String) {
 pub(crate) async fn helath() -> (StatusCode, String) {
     return (StatusCode::CREATED, String::from("OK"));
 }
-
