@@ -13,10 +13,14 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::time::Duration;
 use tracing::error;
 use types::rule::Status;
+use types::source::ListSourceResp;
+use uuid::Uuid;
 
 use crate::Source;
 
 pub struct Mqtt {
+    id: Uuid,
+    name: String,
     conf: Conf,
     status: Status,
     tx: Option<Sender<MessageBatch>>,
@@ -31,9 +35,11 @@ pub struct Conf {
 }
 
 impl Mqtt {
-    pub fn new(conf: Value) -> Result<Box<dyn Source + Sync + Send>> {
+    pub fn new(id: Uuid, conf: Value) -> Result<Box<dyn Source + Sync + Send>> {
         let conf: Conf = serde_json::from_value(conf.clone())?;
         Ok(Box::new(Mqtt {
+            id,
+            name: "todo".to_string(),
             conf,
             status: Status::Stopped,
             tx: None,
@@ -102,4 +108,12 @@ impl Source for Mqtt {
     fn stop(&self) {}
 
     // async fn stop(&self) {}
+
+    fn get_info(&self) -> Result<ListSourceResp> {
+        Ok(ListSourceResp {
+            id: self.id,
+            name: self.name.clone(),
+            r#type: "mqtt".to_string(),
+        })
+    }
 }

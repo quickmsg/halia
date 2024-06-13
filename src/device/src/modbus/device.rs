@@ -293,7 +293,6 @@ impl Device for Modbus {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        debug!("here");
         if self.on.load(Ordering::SeqCst) {
             return Ok(());
         } else {

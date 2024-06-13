@@ -22,8 +22,5 @@ pub struct SourceDetailResp {
 pub struct ListSourceResp {
     pub id: Uuid,
     pub name: String,
-    pub r#type: &'static str,
-    pub on: bool,
-    pub err: bool,
-    pub rtt: u16,
+    pub r#type: String,
 }

@@ -6,11 +6,14 @@ use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::broadcast::{self, Sender};
+use types::source::ListSourceResp;
 use uuid::Uuid;
 
 use crate::Source;
 
 pub struct Device {
+    id: Uuid,
+    name: String,
     conf: Conf,
     tx: Option<Sender<MessageBatch>>,
 }
@@ -22,9 +25,14 @@ struct Conf {
 }
 
 impl Device {
-    pub fn new(conf: Value) -> Result<Box<dyn Source>> {
+    pub fn new(id: Uuid, conf: Value) -> Result<Box<dyn Source>> {
         let conf: Conf = serde_json::from_value(conf.clone())?;
-        Ok(Box::new(Device { conf, tx: None }))
+        Ok(Box::new(Device {
+            id,
+            conf,
+            name: "todo".to_string(),
+            tx: None,
+        }))
     }
 }
 
@@ -34,5 +42,13 @@ impl Source for Device {
         GLOBAL_DEVICE_MANAGER
             .subscribe(self.conf.device_id, self.conf.group_id)
             .await
+    }
+
+    fn get_info(&self) -> Result<ListSourceResp> {
+        Ok(ListSourceResp {
+            id: self.id,
+            name: self.name.clone(),
+            r#type: "device".to_string(),
+        })
     }
 }

@@ -42,13 +42,13 @@ pub trait Reader: Client {
 #[async_trait]
 pub trait Writer: Client {
     /// Write a single u8 (0x05)
-    async fn write_single_Coil(&mut self, addr: u16, coil: u8) -> Result<()>;
+    async fn write_single_coil(&mut self, addr: u16, coil: u8) -> Result<()>;
 
     /// Write a single holding register (0x06)
     async fn write_single_register(&mut self, addr: u16, register: &'_ [u8]) -> Result<()>;
 
     /// Write multiple u8s (0x0F)
-    async fn write_multiple_Coils(&mut self, addr: u16, coils: &'_ [u8]) -> Result<()>;
+    async fn write_multiple_coils(&mut self, addr: u16, coils: &'_ [u8]) -> Result<()>;
 
     /// Write multiple holding registers (0x10)
     async fn write_multiple_registers(&mut self, addr: u16, register: &'_ [u8]) -> Result<()>;
@@ -187,7 +187,7 @@ impl Reader for Context {
 
 #[async_trait]
 impl Writer for Context {
-    async fn write_single_Coil<'a>(&'a mut self, addr: u16, coil: u8) -> Result<()> {
+    async fn write_single_coil<'a>(&'a mut self, addr: u16, coil: u8) -> Result<()> {
         self.client
             .call(Request::WriteSingleCoil(addr, coil))
             .await
@@ -199,7 +199,7 @@ impl Writer for Context {
             })
     }
 
-    async fn write_multiple_Coils<'a>(&'a mut self, addr: u16, coils: &'_ [u8]) -> Result<()> {
+    async fn write_multiple_coils<'a>(&'a mut self, addr: u16, coils: &'_ [u8]) -> Result<()> {
         self.client
             .call(Request::WriteMultipleCoils(addr, Cow::Borrowed(coils)))
             .await

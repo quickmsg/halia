@@ -395,14 +395,6 @@ fn bool_to_coil(state: u8) -> u16 {
     }
 }
 
-fn coil_to_bool(coil: u16) -> io::Result<bool> {
-    match coil {
-        0xFF00 => Ok(true),
-        0x0000 => Ok(false),
-        _ => Err(Error::new(ErrorKind::InvalidData, "Invalid coil value: {}")),
-    }
-}
-
 fn packed_coils_len(bitcount: usize) -> usize {
     (bitcount + 7) / 8
 }
@@ -416,14 +408,6 @@ fn pack_coils(coils: &[u8]) -> Vec<u8> {
     }
     res
 }
-
-// fn unpack_coils(bytes: &[u8], count: u16) -> Vec<u8> {
-//     let mut res = Vec::with_capacity(count.into());
-//     for i in 0usize..count.into() {
-//         res.push((bytes[i / 8] >> (i % 8)) & 0b1 > 0);
-//     }
-//     res
-// }
 
 fn request_byte_count(req: &Request<'_>) -> usize {
     use super::frame::Request::*;

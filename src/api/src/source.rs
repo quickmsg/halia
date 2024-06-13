@@ -5,23 +5,25 @@ use uuid::Uuid;
 
 use crate::AppResp;
 
-pub(crate) async fn create_source(Json(req): Json<CreateSourceReq>) -> AppResp<()> {
-    match GLOBAL_SOURCE_MANAGER.create_source(None, req).await {
+pub(crate) async fn create(Json(req): Json<CreateSourceReq>) -> AppResp<()> {
+    match GLOBAL_SOURCE_MANAGER.create(None, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn read_source(Path(id): Path<Uuid>) -> AppResp<SourceDetailResp> {
+pub(crate) async fn read(Path(id): Path<Uuid>) -> AppResp<SourceDetailResp> {
     match GLOBAL_SOURCE_MANAGER.read_source(id).await {
         Ok(resp) => AppResp::with_data(resp),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn read_sources() -> AppResp<Vec<ListSourceResp>> {
-    todo!()
-    // AppResp::with_data(GLOBAL_SOURCE_MANAGER.read_sources().await)
+pub(crate) async fn list() -> AppResp<Vec<ListSourceResp>> {
+    match GLOBAL_SOURCE_MANAGER.list().await {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
 }
 
 pub(crate) async fn update_source() {}

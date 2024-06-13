@@ -105,7 +105,9 @@ fn point_routes() -> Router {
 }
 
 fn source_routes() -> Router {
-    Router::new().route("/source", post(source::create_source))
+    Router::new()
+        .route("/source", post(source::create))
+        .route("/sources", get(source::list))
 }
 
 fn sink_routes() -> Router {
