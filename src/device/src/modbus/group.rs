@@ -186,7 +186,6 @@ impl Group {
                 Ok(data) => msg.add(&point.name, data),
                 Err(_) => todo!(),
             }
-            debug!("msg:{:?}", msg);
             time::sleep(Duration::from_millis(interval)).await;
         }
 
@@ -206,8 +205,8 @@ impl Group {
     ) {
         match self.points.write().await.get_mut(&point_id) {
             Some(point) => match point.write(ctx, value).await {
-                Ok(_) => todo!(),
-                Err(_) => todo!(),
+                Ok(_) => {}
+                Err(e) => error!("write err :{}", e),
             },
             None => error!("not find point id :{}", point_id),
         }

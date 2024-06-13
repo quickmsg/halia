@@ -6,7 +6,7 @@ use protocol::modbus::{
     SlaveContext,
 };
 use serde::Deserialize;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use types::device::{CreatePointReq, DataType};
 use uuid::Uuid;
 
@@ -124,6 +124,7 @@ impl Point {
                 | DataType::Float32(_, _)
                 | DataType::Float64(_, _) => {
                     let data = self.conf.r#type.encode(value).unwrap();
+                    debug!("data is {:?}", data);
                     match ctx.write_multiple_registers(self.conf.address, &data).await {
                         Ok(_) => return Ok(()),
                         Err(e) => bail!("{}", e),

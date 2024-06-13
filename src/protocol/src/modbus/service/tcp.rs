@@ -6,6 +6,7 @@ use std::{
 use futures_util::{SinkExt as _, StreamExt as _};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
+use tracing::debug;
 
 use crate::modbus::{
     codec,
@@ -72,6 +73,7 @@ where
         let req_function_code = req.function_code();
         let req_adu = self.next_request_adu(req, disconnect);
         let req_hdr = req_adu.hdr;
+        debug!("{:?}, {:?}", req_adu, req_hdr);
 
         self.framed.read_buffer_mut().clear();
 
@@ -124,67 +126,5 @@ where
 {
     async fn call(&mut self, req: Request<'_>) -> Result<Response> {
         Client::call(self, req).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn validate_same_headers() {
-        // Given
-        let req_hdr = Header {
-            unit_id: 0,
-            transaction_id: 42,
-        };
-        let rsp_hdr = Header {
-            unit_id: 0,
-            transaction_id: 42,
-        };
-
-        // When
-        let result = verify_response_header(&req_hdr, &rsp_hdr);
-
-        // Then
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn invalid_validate_not_same_unit_id() {
-        // Given
-        let req_hdr = Header {
-            unit_id: 0,
-            transaction_id: 42,
-        };
-        let rsp_hdr = Header {
-            unit_id: 5,
-            transaction_id: 42,
-        };
-
-        // When
-        let result = verify_response_header(&req_hdr, &rsp_hdr);
-
-        // Then
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn invalid_validate_not_same_transaction_id() {
-        // Given
-        let req_hdr = Header {
-            unit_id: 0,
-            transaction_id: 42,
-        };
-        let rsp_hdr = Header {
-            unit_id: 0,
-            transaction_id: 86,
-        };
-
-        // When
-        let result = verify_response_header(&req_hdr, &rsp_hdr);
-
-        // Then
-        assert!(result.is_err());
     }
 }

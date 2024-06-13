@@ -732,7 +732,7 @@ impl Value {
             return Some(self);
         }
         pointer
-            .split('.')
+            .split("->")
             .map(|x| x.replace("~1", "/").replace("~0", "~"))
             .try_fold(self, |target, token| {
                 println!("{:?}, {:?}", target, token);

@@ -226,6 +226,7 @@ impl DataType {
     }
 
     pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
+        debug!("read data is {:?}", data);
         match self {
             DataType::Bool => {
                 debug!("data is :{:?}", data);
@@ -370,14 +371,15 @@ impl DataType {
     }
 
     pub fn encode(&self, data: Value) -> Result<Vec<u8>> {
+        debug!("write data is :{}", data);
         match self {
             DataType::Int16(endian) => match data.as_i64() {
                 Some(value) => {
-                    let mut data = (value as i16).to_be_bytes();
-                    if *endian == Endian::LittleEndian {
-                        data.swap(0, 1);
-                    }
-                    debug!("{:?}", data);
+                    let data = match endian {
+                        Endian::BigEndian => (value as i16).to_be_bytes().to_vec(),
+                        Endian::LittleEndian => (value as i16).to_le_bytes().to_vec(),
+                    };
+                    debug!("data is {:?}", data);
                     return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),

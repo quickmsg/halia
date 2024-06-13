@@ -145,16 +145,6 @@ impl Message {
         }
     }
 
-    pub fn get(&self, pointer: &str) -> Option<&Value> {
-        pointer
-            .split('.')
-            .try_fold(&self.value, |target, token| match target {
-                Value::Array(list) => parse_index(token).and_then(|x| list.get(x)),
-                Value::Object(map) => map.get(token),
-                _ => Some(target),
-            })
-    }
-
     pub fn get_mut(&mut self, pointer: &str) -> Option<&mut Value> {
         pointer
             .split('.')
