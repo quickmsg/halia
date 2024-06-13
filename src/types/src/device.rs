@@ -369,7 +369,7 @@ impl DataType {
         }
     }
 
-    pub fn encode(&self, data: Value) -> Result<Vec<u16>> {
+    pub fn encode(&self, data: Value) -> Result<Vec<u8>> {
         match self {
             DataType::Int16(endian) => match data.as_i64() {
                 Some(value) => {
@@ -378,7 +378,7 @@ impl DataType {
                         data.swap(0, 1);
                     }
                     debug!("{:?}", data);
-                    return Ok(array_u8_tou16(&data));
+                    return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
             },
@@ -388,7 +388,7 @@ impl DataType {
                     if *endian == Endian::LittleEndian {
                         data.swap(0, 1);
                     }
-                    return Ok(array_u8_tou16(&data));
+                    return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
             },
@@ -396,12 +396,14 @@ impl DataType {
                 Some(value) => {
                     let mut data = (value as i32).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
-                        data.swap(0, 1);
+                        data.swap(0, 2);
+                        data.swap(1, 3);
                     }
                     if *endian1 == Endian::LittleEndian {
-                        data.swap(2, 3);
+                        data.swap(0, 1);
+                        data.swap(2, 3)
                     }
-                    return Ok(array_u8_tou16(&data));
+                    return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
             },
@@ -409,12 +411,14 @@ impl DataType {
                 Some(value) => {
                     let mut data = (value as u32).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
-                        data.swap(0, 1);
+                        data.swap(0, 2);
+                        data.swap(1, 3);
                     }
                     if *endian1 == Endian::LittleEndian {
-                        data.swap(2, 3);
+                        data.swap(0, 1);
+                        data.swap(2, 3)
                     }
-                    return Ok(array_u8_tou16(&data));
+                    return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
             },
@@ -422,13 +426,19 @@ impl DataType {
                 Some(value) => {
                     let mut data = (value as i64).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
-                        data.swap(0, 1);
+                        data.swap(0, 6);
+                        data.swap(1, 7);
+                        data.swap(2, 4);
+                        data.swap(3, 5);
                     }
                     if *endian1 == Endian::LittleEndian {
+                        data.swap(0, 1);
                         data.swap(2, 3);
+                        data.swap(4, 5);
+                        data.swap(6, 7);
                     }
 
-                    return Ok(array_u8_tou16(&data));
+                    return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
             },
@@ -436,12 +446,18 @@ impl DataType {
                 Some(value) => {
                     let mut data = (value as u64).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
-                        data.swap(0, 1);
+                        data.swap(0, 6);
+                        data.swap(1, 7);
+                        data.swap(2, 4);
+                        data.swap(3, 5);
                     }
                     if *endian1 == Endian::LittleEndian {
+                        data.swap(0, 1);
                         data.swap(2, 3);
+                        data.swap(4, 5);
+                        data.swap(6, 7);
                     }
-                    return Ok(array_u8_tou16(&data));
+                    return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
             },
@@ -449,12 +465,14 @@ impl DataType {
                 Some(value) => {
                     let mut data = (value as f32).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
-                        data.swap(0, 1);
+                        data.swap(0, 2);
+                        data.swap(1, 3);
                     }
                     if *endian1 == Endian::LittleEndian {
-                        data.swap(2, 3);
+                        data.swap(0, 1);
+                        data.swap(2, 3)
                     }
-                    return Ok(array_u8_tou16(&data));
+                    return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
             },
@@ -462,12 +480,18 @@ impl DataType {
                 Some(value) => {
                     let mut data = (value as f32).to_be_bytes();
                     if *endian0 == Endian::LittleEndian {
-                        data.swap(0, 1);
+                        data.swap(0, 6);
+                        data.swap(1, 7);
+                        data.swap(2, 4);
+                        data.swap(3, 5);
                     }
                     if *endian1 == Endian::LittleEndian {
+                        data.swap(0, 1);
                         data.swap(2, 3);
+                        data.swap(4, 5);
+                        data.swap(6, 7);
                     }
-                    return Ok(array_u8_tou16(&data));
+                    return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
             },
@@ -557,10 +581,4 @@ pub enum Status {
     Paused,
     Error,
     Stoped,
-}
-
-fn array_u8_tou16(data: &[u8]) -> Vec<u16> {
-    data.chunks(2)
-        .map(|chunk| ((chunk[0] as u16) | (chunk[1] as u16) << 8))
-        .collect()
 }

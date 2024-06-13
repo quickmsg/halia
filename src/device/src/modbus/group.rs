@@ -1,7 +1,7 @@
 use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -19,7 +19,7 @@ pub(crate) struct Group {
     pub id: Uuid,
     pub name: String,
     pub interval: u64,
-    pub points: RwLock<Vec<(Uuid, Point)>>,
+    pub points: RwLock<HashMap<Uuid, Point>>,
     pub device_id: Uuid,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     // pub subscirbers: u16,
@@ -41,7 +41,7 @@ impl Group {
             device_id,
             name: conf.name.clone(),
             interval: conf.interval,
-            points: RwLock::new(vec![]),
+            points: RwLock::new(HashMap::new()),
             tx: None,
         }
     }
@@ -153,14 +153,8 @@ impl Group {
     }
 
     pub async fn update_point(&self, point_id: Uuid, req: &CreatePointReq) -> HaliaResult<()> {
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|(id, _)| *id == point_id)
-        {
-            Some((_, point)) => point.update(req).await?,
+        match self.points.write().await.get_mut(&point_id) {
+            Some(point) => point.update(req).await?,
             None => return Err(HaliaError::NotFound),
         };
 
@@ -180,17 +174,14 @@ impl Group {
     }
 
     pub async fn delete_points(&self, ids: Vec<Uuid>) -> HaliaResult<()> {
-        self.points
-            .write()
-            .await
-            .retain(|(id, _)| !ids.contains(id));
+        self.points.write().await.retain(|id, _| !ids.contains(id));
         storage::delete_points(self.device_id, self.id, &ids).await?;
         Ok(())
     }
 
     pub async fn read(&self, ctx: &mut Context, interval: u64) {
         let mut msg = Message::new();
-        for (id, point) in self.points.write().await.iter_mut() {
+        for (_, point) in self.points.write().await.iter_mut() {
             match point.read(ctx).await {
                 Ok(data) => msg.add(&point.name, data),
                 Err(_) => todo!(),
@@ -203,6 +194,22 @@ impl Group {
             if let Err(e) = tx.send(MessageBatch::from_message(msg)) {
                 error!("send message batch err :{}", e);
             }
+        }
+    }
+
+    pub async fn write(
+        &self,
+        ctx: &mut Context,
+        interval: u64,
+        point_id: Uuid,
+        value: serde_json::Value,
+    ) {
+        match self.points.write().await.get_mut(&point_id) {
+            Some(point) => match point.write(ctx, value).await {
+                Ok(_) => todo!(),
+                Err(_) => todo!(),
+            },
+            None => error!("not find point id :{}", point_id),
         }
     }
 }

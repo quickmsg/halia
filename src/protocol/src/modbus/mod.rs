@@ -1,13 +1,5 @@
-// SPDX-FileCopyrightText: Copyright (c) 2017-2024 slowtec GmbH <post@slowtec.de>
-// SPDX-License-Identifier: MIT OR Apache-2.0
-
-// Opt-in for allowed-by-default lints (in alphabetical order)
-// See also: <https://doc.rust-lang.org/rustc/lints>
 #![warn(let_underscore)]
 #![warn(missing_debug_implementations)]
-//#![warn(missing_docs)] // TODO
-#![warn(rust_2018_idioms)]
-#![warn(rust_2021_compatibility)]
 #![warn(unreachable_pub)]
 #![warn(unsafe_code)]
 #![warn(unused)]
@@ -23,11 +15,6 @@
 #![allow(clippy::wildcard_imports)] // TODO
 #![allow(clippy::missing_errors_doc)] // TODO
 
-/// Re-export the `bytes` crate
-///
-/// Needed to prevent version conflicts with types that are exposed by the public API.
-///
-/// Used by [`Response::Custom`].
 pub mod client;
 
 mod codec;

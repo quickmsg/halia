@@ -1,6 +1,5 @@
-use std::{fmt, io};
-
 use futures_util::{SinkExt as _, StreamExt as _};
+use std::{fmt, io};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 

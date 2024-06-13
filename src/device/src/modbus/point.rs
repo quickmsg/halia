@@ -1,11 +1,12 @@
+use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
 use json::Value;
 use protocol::modbus::{
-    client::{Context, Reader},
+    client::{Context, Reader, Writer},
     SlaveContext,
 };
 use serde::Deserialize;
-use tracing::warn;
+use tracing::{error, warn};
 use types::device::{CreatePointReq, DataType};
 use uuid::Uuid;
 
@@ -88,6 +89,49 @@ impl Point {
             {
                 Ok(_) => todo!(),
                 Err(_) => todo!(),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    pub async fn write(&mut self, ctx: &mut Context, value: serde_json::Value) -> Result<()> {
+        ctx.set_slave(self.conf.slave);
+        match self.conf.area {
+            // TODO
+            0 => match ctx.write_single_coil(self.conf.address, 1).await {
+                Ok(res) => match res {
+                    Ok(_) => return Ok(()),
+                    Err(e) => {
+                        warn!("modbus protocl exception:{}", e);
+                        todo!()
+                    }
+                },
+                Err(_) => todo!(),
+            },
+            4 => match self.conf.r#type {
+                // DataType::Bool => todo!(),
+                DataType::Int16(_) | DataType::Uint16(_) => {
+                    let data = self.conf.r#type.encode(value).unwrap();
+                    match ctx.write_single_register(self.conf.address, &data).await {
+                        Ok(_) => return Ok(()),
+                        Err(e) => bail!("{}", e),
+                    }
+                }
+                DataType::Int32(_, _)
+                | DataType::Uint32(_, _)
+                | DataType::Int64(_, _)
+                | DataType::Uint64(_, _)
+                | DataType::Float32(_, _)
+                | DataType::Float64(_, _) => {
+                    let data = self.conf.r#type.encode(value).unwrap();
+                    match ctx.write_multiple_registers(self.conf.address, &data).await {
+                        Ok(_) => return Ok(()),
+                        Err(e) => bail!("{}", e),
+                    }
+                }
+                // DataType::String => todo!(),
+                // DataType::Bytes => todo!(),
+                _ => bail!("not support"),
             },
             _ => unreachable!(),
         }

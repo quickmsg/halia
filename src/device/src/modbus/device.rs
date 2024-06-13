@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -504,9 +504,9 @@ async fn run_event_loop(
 
             point = write_rx.recv() => {
                 if let Some(point) = point {
-                    // if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2, rtt).await {
-                        // return
-                    // }
+                    if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2, rtt).await {
+                        return
+                    }
                 }
                 time::sleep(Duration::from_millis(interval)).await;
             }
@@ -522,21 +522,6 @@ async fn run_event_loop(
     }
 }
 
-macro_rules! read_and_set_data {
-    ($ctx:expr, $point:expr, $read_fn:ident, $address:expr, $quantity:expr) => {
-        match $ctx.$read_fn($address, $quantity).await {
-            Ok(res) => match res {
-                Ok(data) => {
-                    $point.set_data(data);
-                }
-                Err(e) => error!("read exception err:{}", e),
-            },
-            Err(e) => error!("read err:{}", e),
-        }
-    };
-}
-
-// TODO
 async fn read_group_points(
     ctx: &mut Context,
     groups: &RwLock<Vec<Group>>,
@@ -557,77 +542,23 @@ async fn read_group_points(
     }
 }
 
-// async fn write_point_value(
-//     ctx: &mut Context,
-//     groups: &RwLock<Vec<Group>>,
-//     group_id: Uuid,
-//     point_id: Uuid,
-//     value: Value,
-//     rtt: &Arc<AtomicU16>,
-// ) -> bool {
-//     if let Some(group) = groups
-//         .read()
-//         .await
-//         .iter()
-//         .find(|group| group.id == group_id)
-//     {
-//         if let Some((_, point)) = group
-//             .points
-//             .read()
-//             .await
-//             .iter()
-//             .find(|(id, _)| *id == point_id)
-//         {
-//             match point.conf.area {
-//                 1 => match value.as_bool() {
-//                     Some(value) => {
-//                         let start_time = Instant::now();
-//                         if let Err(e) = ctx.write_single_coil(point.conf.address, value).await {
-//                             error!("write err:{:?}", e);
-//                         };
+async fn write_point_value(
+    ctx: &mut Context,
+    groups: &RwLock<Vec<Group>>,
+    group_id: Uuid,
+    point_id: Uuid,
+    value: Value,
+    rtt: &Arc<AtomicU16>,
+) -> bool {
+    if let Some(group) = groups
+        .read()
+        .await
+        .iter()
+        .find(|group| group.id == group_id)
+    {
+        group.write(ctx, 20, point_id, value).await;
+        return true;
+    }
 
-//                         let elapsed_time = start_time.elapsed().as_millis();
-//                         rtt.store(elapsed_time as u16, Ordering::SeqCst);
-//                     }
-//                     None => error!("value is not bool"),
-//                 },
-//                 4 => match point.conf.r#type {
-//                     DataType::Int16(_)
-//                     | DataType::Uint16(_)
-//                     | DataType::Int32(_, _)
-//                     | DataType::Uint32(_, _)
-//                     | DataType::Int64(_, _, _, _)
-//                     | DataType::Uint64(_, _, _, _)
-//                     | DataType::Float32(_, _)
-//                     | DataType::Float64(_, _, _, _) => match point.conf.r#type.encode(value) {
-//                         Ok(data) => {
-//                             {
-//                                 let start_time = Instant::now();
-
-//                                 if let Err(e) = ctx
-//                                     .write_multiple_registers(point.conf.address, &data)
-//                                     .await
-//                                 {
-//                                     error!("{}", e);
-//                                 }
-
-//                                 let elapsed_time = start_time.elapsed().as_millis();
-//                                 rtt.store(elapsed_time as u16, Ordering::SeqCst);
-//                             };
-//                         }
-//                         Err(e) => error!("{}", e),
-//                     },
-//                     _ => error!("数据格式错误"),
-//                     // types::device::DataType::String => todo!(),
-//                     // types::device::DataType::Bytes => todo!(),
-//                 },
-//                 _ => {
-//                     error!("点位不可写")
-//                 }
-//             }
-//         }
-//         true
-//     } else {
-//         true
-//     }
-// }
+    true
+}
