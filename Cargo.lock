@@ -293,6 +293,11 @@ dependencies = [
 [[package]]
 name = "functions"
 version = "0.1.0"
+dependencies = [
+ "json",
+ "message",
+ "serde_json",
+]
 
 [[package]]
 name = "futures"
@@ -623,6 +628,7 @@ dependencies = [
  "indexmap",
  "json",
  "ryu",
+ "tracing",
 ]
 
 [[package]]

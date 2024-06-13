@@ -195,6 +195,7 @@ impl Group {
                 Ok(data) => msg.add(&point.name, data),
                 Err(_) => todo!(),
             }
+            debug!("msg:{:?}", msg);
             time::sleep(Duration::from_millis(interval)).await;
         }
 

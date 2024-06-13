@@ -11,3 +11,4 @@ indexmap = { workspace = true }
 # serde = { workspace = true }
 ryu = { workspace = true }
 json = { workspace = true }
+tracing = { workspace = true }

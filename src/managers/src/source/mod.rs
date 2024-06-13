@@ -29,7 +29,7 @@ impl SourceManager {
             "mqtt" => match Mqtt::new(id, req.conf.clone()) {
                 Ok(mqtt) => {
                     debug!("insert source");
-                    self.sources.write().await.insert(Uuid::new_v4(), mqtt);
+                    self.sources.write().await.insert(id, mqtt);
                     return Ok(());
                 }
                 Err(e) => {
@@ -39,7 +39,7 @@ impl SourceManager {
             },
             "device" => match Device::new(id, req.conf.clone()) {
                 Ok(device) => {
-                    self.sources.write().await.insert(Uuid::new_v4(), device);
+                    self.sources.write().await.insert(id, device);
                     return Ok(());
                 }
                 Err(e) => {
@@ -65,19 +65,15 @@ impl SourceManager {
             .collect())
     }
 
-    pub async fn get_receiver(
-        &self,
-        source_id: Uuid,
-        graph_name: String,
-    ) -> Result<Receiver<MessageBatch>> {
-        debug!("subscribe source: {}", source_id);
-        match self.sources.write().await.get_mut(&source_id) {
+    pub async fn get_receiver(&self, id: Uuid) -> Result<Receiver<MessageBatch>> {
+        debug!("subscribe source: {}", id);
+        match self.sources.write().await.get_mut(&id) {
             Some(source) => match source.subscribe().await {
                 Ok(x) => return Ok(x),
                 Err(_) => todo!(),
             },
             None => {
-                error!("don't have source:{}", source_id);
+                error!("don't have source:{}", id);
                 bail!("not have source");
             }
         }

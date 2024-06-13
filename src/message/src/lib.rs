@@ -3,6 +3,7 @@ use bytes::Bytes;
 use indexmap::IndexMap;
 use json::{Map, Value};
 use std::collections::HashMap;
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
@@ -102,6 +103,10 @@ impl Message {
         Ok(Message { value })
     }
 
+    pub fn get(&self, field: &str) -> Option<&Value> {
+        self.value.pointer(field)
+    }
+
     pub fn new() -> Self {
         Message {
             value: Value::Object(Map::new()),
@@ -110,40 +115,10 @@ impl Message {
 
     // TODO fix path
     pub fn add(&mut self, name: &str, value: Value) {
-        // let (prefix, name) = Self::get_prefix_and_name(Self::str_to_pointer(name.to_string()));
-        // if prefix != "" {
-        //     match self.value.pointer_mut(prefix.as_str()) {
-        //         Some(old_value) => *old_value = value,
-        //         None => match self.value.as_object_mut() {
-        //             Some(object) => {
-        //                 // TODO
-        //                 object.insert(name.to_string(), value);
-        //             }
-        //             None => todo!(),
-        //         },
-        //     }
-        // } else {
-        //     match self.value.as_object_mut() {
-        //         Some(object) => {
-        //             object.insert(name, value);
-        //         }
-        //         None => todo!(),
-        //     }
-        // }
-
-        // match self.value.as_object_mut() {
-        //     Some(old_value) => {
-        //         old_value.insert(name.to_string(), value);
-        //     }
-        //     // unreachable
-        //     None => match self.value.as_object_mut() {
-        //         Some(object) => {
-        //             // TODO
-        //             object.insert(name.to_string(), value);
-        //         }
-        //         None => todo!(),
-        //     },
-        // }
+        match self.value.as_object_mut() {
+            Some(object) => object.insert(name.to_string(), value),
+            None => unreachable!(),
+        };
     }
 
     pub fn select(&mut self, fields: &Vec<String>) {

@@ -69,10 +69,8 @@ impl Graph {
                     Some(r#type) => match r#type.as_str() {
                         "source" => {
                             if let Some(node) = node_map.get(&osi.first_id) {
-                                let receiver = GLOBAL_SOURCE_MANAGER
-                                    .get_receiver(node.id, "xx".to_string())
-                                    .await
-                                    .unwrap();
+                                let receiver =
+                                    GLOBAL_SOURCE_MANAGER.get_receiver(node.id).await.unwrap();
                                 receivers.insert(osi.first_id, vec![receiver]);
                             }
                         }
