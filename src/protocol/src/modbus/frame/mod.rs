@@ -175,8 +175,8 @@ impl<'a> Request<'a> {
             WriteSingleRegister(addr, data) => {
                 WriteSingleRegister(addr, Cow::Owned(data.into_owned()))
             }
-            WriteMultipleRegisters(addr, u8s) => {
-                WriteMultipleRegisters(addr, Cow::Owned(u8s.into_owned()))
+            WriteMultipleRegisters(addr, data) => {
+                WriteMultipleRegisters(addr, Cow::Owned(data.into_owned()))
             }
             MaskWriteRegister(addr, and_mask, or_mask) => {
                 MaskWriteRegister(addr, and_mask, or_mask)
@@ -320,7 +320,7 @@ impl Exception {
 
         match *self {
             IllegalFunction => "Illegal function",
-            IllegalDatau16 => "Illegal data u16",
+            IllegalDataAddress => "Illegal data u16",
             IllegalDataValue => "Illegal data value",
             ServerDeviceFailure => "Server device failure",
             Acknowledge => "Acknowledge",

@@ -73,10 +73,8 @@ where
         let req_function_code = req.function_code();
         let req_adu = self.next_request_adu(req, disconnect);
         let req_hdr = req_adu.hdr;
-        debug!("{:?}, {:?}", req_adu, req_hdr);
 
         self.framed.read_buffer_mut().clear();
-
         self.framed.send(req_adu).await?;
         let res_adu = self
             .framed

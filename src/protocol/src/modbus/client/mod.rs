@@ -14,6 +14,7 @@ pub trait Client: SlaveContext + Send + Debug {
 
 #[async_trait]
 pub trait Reader: Client {
+    /// Read multiple coils (0x01)
     async fn read_coils(&mut self, addr: u16, cnt: u16) -> Result<Vec<u8>>;
 
     /// Read multiple discrete inputs (0x02)
@@ -24,18 +25,6 @@ pub trait Reader: Client {
 
     /// Read multiple input registers (0x04)
     async fn read_input_registers(&mut self, addr: u16, cnt: u16) -> Result<Vec<u8>>;
-
-    /// Read and write multiple holding registers (0x17)
-    ///
-    /// The write operation is performed before the read unlike
-    /// the name of the operation might suggest!
-    async fn read_write_multiple_registers(
-        &mut self,
-        read_addr: u16,
-        read_count: u16,
-        write_addr: u16,
-        write_data: &[u8],
-    ) -> Result<Vec<u8>>;
 }
 
 /// Asynchronous Modbus writer
@@ -52,9 +41,6 @@ pub trait Writer: Client {
 
     /// Write multiple holding registers (0x10)
     async fn write_multiple_registers(&mut self, addr: u16, register: &'_ [u8]) -> Result<()>;
-
-    // Set or clear individual bits of a holding register (0x16)
-    // async fn masked_write_register(&mut self, addr: u16, and_mask: u8, or_mask: u8) -> Result<()>;
 }
 
 /// Asynchronous Modbus client context
@@ -160,29 +146,6 @@ impl Reader for Context {
                 })
             })
     }
-
-    async fn read_write_multiple_registers<'a>(
-        &'a mut self,
-        read_addr: u16,
-        read_count: u16,
-        write_addr: u16,
-        write_data: &[u8],
-    ) -> Result<Vec<u8>> {
-        self.client
-            .call(Request::ReadWriteMultipleRegisters(
-                read_addr,
-                read_count,
-                write_addr,
-                Cow::Borrowed(write_data),
-            ))
-            .await
-            .map(|result| {
-                result.map_err(Into::into).map(|response| match response {
-                    Response::ReadWriteMultipleRegisters(u8s) => u8s,
-                    _ => unreachable!("call() should reject mismatching responses"),
-                })
-            })
-    }
 }
 
 #[async_trait]
@@ -241,25 +204,4 @@ impl Writer for Context {
                 })
             })
     }
-
-    // async fn masked_write_register<'a>(
-    //     &'a mut self,
-    //     addr: u16,
-    //     and_mask: u8,
-    //     or_mask: u8,
-    // ) -> Result<()> {
-    //     self.client
-    //         .call(Request::MaskWriteRegister(addr, and_mask, or_mask))
-    //         .await
-    //         .map(|result| {
-    //             result.map_err(Into::into).map(|response| match response {
-    //                 Response::MaskWriteRegister(rsp_addr, rsp_and_mask, rsp_or_mask) => {
-    //                     debug_assert_eq!(addr, rsp_addr);
-    //                     debug_assert_eq!(and_mask, rsp_and_mask);
-    //                     debug_assert_eq!(or_mask, rsp_or_mask);
-    //                 }
-    //                 _ => unreachable!("call() should reject mismatching responses"),
-    //             })
-    //         })
-    // }
 }
