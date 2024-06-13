@@ -1,6 +1,9 @@
 use common::error::{HaliaError, HaliaResult};
 use json::Value;
-use protocol::modbus::{client::{Context, Reader}, SlaveContext};
+use protocol::modbus::{
+    client::{Context, Reader},
+    SlaveContext,
+};
 use serde::Deserialize;
 use tracing::warn;
 use types::device::{CreatePointReq, DataType};
