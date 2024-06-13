@@ -1,10 +1,10 @@
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::modbus::protocol::service;
+use crate::modbus::service;
 
 use super::*;
 
-pub(crate) fn attach<T>(transport: T) -> Context
+pub fn attach<T>(transport: T) -> Context
 where
     T: AsyncRead + AsyncWrite + Debug + Unpin + Send + 'static,
 {

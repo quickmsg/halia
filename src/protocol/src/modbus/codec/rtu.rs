@@ -8,7 +8,7 @@ use tracing::{debug, error, warn};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 use super::*;
-use crate::modbus::protocol::frame::rtu::{Header, RequestAdu, ResponseAdu};
+use crate::modbus::frame::rtu::{Header, RequestAdu, ResponseAdu};
 
 // [Modbus over Serial Line Specification and Implementation Guide V1.02](http://modbus.org/docs/Modbus_over_serial_line_V1_02.pdf), page 13
 // "The maximum size of a Modbus RTU frame is 256 bytes."

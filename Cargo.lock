@@ -245,6 +245,7 @@ dependencies = [
  "futures-util",
  "json",
  "message",
+ "protocol",
  "serde",
  "serde_json",
  "smallvec",
@@ -810,6 +811,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ad3d49ab951a01fbaafe34f2ec74122942fe18a3f9814c3268f1bb72042131b"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "protocol"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "futures-util",
+ "smallvec",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]

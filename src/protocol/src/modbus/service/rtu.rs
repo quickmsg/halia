@@ -1,30 +1,25 @@
-use std::{
-    fmt, io,
-    sync::atomic::{AtomicU16, Ordering},
-};
+use std::{fmt, io};
 
 use futures_util::{SinkExt as _, StreamExt as _};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
-use crate::modbus::protocol::{
+use crate::modbus::{
     codec,
     frame::{
-        tcp::{Header, RequestAdu, TransactionId, UnitId},
+        rtu::{Header, RequestAdu},
         RequestPdu, ResponsePdu,
     },
-    service::verify_response_header,
     ExceptionResponse, ProtocolError, Request, Response, Result, SlaveContext,
 };
 
-const INITIAL_TRANSACTION_ID: TransactionId = 0;
+use super::verify_response_header;
 
-/// Modbus TCP client
+/// Modbus RTU client
 #[derive(Debug)]
 pub(crate) struct Client<T> {
-    framed: Framed<T, codec::tcp::ClientCodec>,
-    unit_id: UnitId,
-    transaction_id: AtomicU16,
+    framed: Framed<T, codec::rtu::ClientCodec>,
+    slave_id: u8,
 }
 
 impl<T> Client<T>
@@ -32,42 +27,26 @@ where
     T: AsyncRead + AsyncWrite + Unpin,
 {
     pub(crate) fn new(transport: T, slave: u8) -> Self {
-        let framed = Framed::new(transport, codec::tcp::ClientCodec::default());
-        let unit_id: UnitId = slave.into();
-        let transaction_id = AtomicU16::new(INITIAL_TRANSACTION_ID);
-        Self {
-            framed,
-            unit_id,
-            transaction_id,
-        }
+        let framed = Framed::new(transport, codec::rtu::ClientCodec::default());
+        let slave_id = slave.into();
+        Self { framed, slave_id }
     }
 
-    fn next_transaction_id(&self) -> TransactionId {
-        let transaction_id = self.transaction_id.load(Ordering::Relaxed);
-        self.transaction_id
-            .store(transaction_id.wrapping_add(1), Ordering::Relaxed);
-        transaction_id
-    }
-
-    fn next_request_hdr(&self, unit_id: UnitId) -> Header {
-        let transaction_id = self.next_transaction_id();
-        Header {
-            transaction_id,
-            unit_id,
-        }
-    }
     fn next_request_adu<'a, R>(&self, req: R, disconnect: bool) -> RequestAdu<'a>
     where
         R: Into<RequestPdu<'a>>,
     {
+        let slave_id = self.slave_id;
+        let hdr = Header { slave_id };
+        let pdu = req.into();
         RequestAdu {
-            hdr: self.next_request_hdr(self.unit_id),
-            pdu: req.into(),
+            hdr,
+            pdu,
             disconnect,
         }
     }
 
-    pub(crate) async fn call(&mut self, req: Request<'_>) -> Result<Response> {
+    async fn call(&mut self, req: Request<'_>) -> Result<Response> {
         let disconnect = req == Request::Disconnect;
         let req_function_code = req.function_code();
         let req_adu = self.next_request_adu(req, disconnect);
@@ -80,7 +59,7 @@ where
             .framed
             .next()
             .await
-            .ok_or_else(io::Error::last_os_error)??;
+            .unwrap_or_else(|| Err(io::Error::from(io::ErrorKind::BrokenPipe)))?;
 
         let ResponsePdu(result) = res_adu.pdu;
 
@@ -113,35 +92,40 @@ where
 
 impl<T> SlaveContext for Client<T> {
     fn set_slave(&mut self, slave: u8) {
-        self.unit_id = slave.into();
+        self.slave_id = slave.into();
     }
 }
 
 #[async_trait::async_trait]
-impl<T> crate::modbus::protocol::client::Client for Client<T>
+impl<T> crate::modbus::client::Client for Client<T>
 where
     T: fmt::Debug + AsyncRead + AsyncWrite + Send + Unpin,
 {
     async fn call(&mut self, req: Request<'_>) -> Result<Response> {
-        Client::call(self, req).await
+        self.call(req).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+
+    use core::{
+        pin::Pin,
+        task::{Context, Poll},
+    };
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, Result};
+
+    use crate::modbus::{
+        frame::rtu::Header,
+        service::{self, verify_response_header},
+        Error,
+    };
 
     #[test]
     fn validate_same_headers() {
         // Given
-        let req_hdr = Header {
-            unit_id: 0,
-            transaction_id: 42,
-        };
-        let rsp_hdr = Header {
-            unit_id: 0,
-            transaction_id: 42,
-        };
+        let req_hdr = Header { slave_id: 0 };
+        let rsp_hdr = Header { slave_id: 0 };
 
         // When
         let result = verify_response_header(&req_hdr, &rsp_hdr);
@@ -151,16 +135,10 @@ mod tests {
     }
 
     #[test]
-    fn invalid_validate_not_same_unit_id() {
+    fn invalid_validate_not_same_slave_id() {
         // Given
-        let req_hdr = Header {
-            unit_id: 0,
-            transaction_id: 42,
-        };
-        let rsp_hdr = Header {
-            unit_id: 5,
-            transaction_id: 42,
-        };
+        let req_hdr = Header { slave_id: 0 };
+        let rsp_hdr = Header { slave_id: 5 };
 
         // When
         let result = verify_response_header(&req_hdr, &rsp_hdr);
@@ -169,22 +147,44 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn invalid_validate_not_same_transaction_id() {
-        // Given
-        let req_hdr = Header {
-            unit_id: 0,
-            transaction_id: 42,
-        };
-        let rsp_hdr = Header {
-            unit_id: 0,
-            transaction_id: 86,
-        };
+    #[derive(Debug)]
+    struct MockTransport;
 
-        // When
-        let result = verify_response_header(&req_hdr, &rsp_hdr);
+    impl Unpin for MockTransport {}
 
-        // Then
-        assert!(result.is_err());
+    impl AsyncRead for MockTransport {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            _: &mut ReadBuf<'_>,
+        ) -> Poll<Result<()>> {
+            Poll::Ready(Ok(()))
+        }
     }
+
+    impl AsyncWrite for MockTransport {
+        fn poll_write(self: Pin<&mut Self>, _: &mut Context<'_>, _: &[u8]) -> Poll<Result<usize>> {
+            Poll::Ready(Ok(2))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<()>> {
+            unimplemented!()
+        }
+    }
+
+    // #[tokio::test]
+    // async fn handle_broken_pipe() {
+    //     let transport = MockTransport;
+    //     let mut client = service::rtu::Client::new(transport, service::rtu::Slave::broadcast());
+    //     let res = client.call(service::rtu::Request::ReadCoils(0x00, 5)).await;
+    //     assert!(res.is_err());
+    //     let err = res.err().unwrap();
+    //     assert!(
+    //         matches!(err, Error::Transport(err) if err.kind() == std::io::ErrorKind::BrokenPipe)
+    //     );
+    // }
 }

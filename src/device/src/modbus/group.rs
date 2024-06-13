@@ -1,5 +1,6 @@
 use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch};
+use protocol::modbus::client::Context;
 use std::time::Duration;
 use tokio::{
     select,
@@ -9,8 +10,6 @@ use tokio::{
 use tracing::{debug, error};
 use types::device::{CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupReq};
 use uuid::Uuid;
-
-use super::protocol::client::Context;
 
 use super::point::Point;
 use crate::storage;

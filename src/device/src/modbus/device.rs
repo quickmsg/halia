@@ -10,6 +10,7 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
+use protocol::modbus::client::{rtu, tcp, Context};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::{
@@ -28,13 +29,7 @@ use uuid::Uuid;
 
 use crate::{storage, Device};
 
-use super::{
-    group::{Command, Group},
-    protocol::{
-        client::{rtu, tcp, Context},
-        SlaveContext,
-    },
-};
+use super::group::{Command, Group};
 
 static TYPE: &str = "modbus";
 

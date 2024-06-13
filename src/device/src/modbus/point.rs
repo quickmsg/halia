@@ -1,14 +1,10 @@
 use common::error::{HaliaError, HaliaResult};
 use json::Value;
+use protocol::modbus::{client::{Context, Reader}, SlaveContext};
 use serde::Deserialize;
 use tracing::warn;
 use types::device::{CreatePointReq, DataType};
 use uuid::Uuid;
-
-use super::protocol::{
-    client::{Context, Reader},
-    SlaveContext,
-};
 
 #[derive(Debug)]
 pub(crate) struct Point {

@@ -1,12 +1,9 @@
-// SPDX-FileCopyrightText: Copyright (c) 2017-2024 slowtec GmbH <post@slowtec.de>
-// SPDX-License-Identifier: MIT OR Apache-2.0
-
 use std::io::{Error, ErrorKind, Result};
 
 use byteorder::{BigEndian, ByteOrder};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::modbus::protocol::frame::tcp::{Header, RequestAdu, ResponseAdu};
+use crate::modbus::frame::tcp::{Header, RequestAdu, ResponseAdu};
 
 use super::*;
 
@@ -177,7 +174,7 @@ mod tests {
 
     mod client {
 
-        use crate::modbus::protocol::frame::tcp::{TransactionId, UnitId};
+        use crate::modbus::frame::tcp::{TransactionId, UnitId};
 
         use super::*;
 

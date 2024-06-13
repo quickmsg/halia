@@ -4,8 +4,8 @@ use async_trait::async_trait;
 
 use super::{Error, Request, Response, Result, SlaveContext};
 
-pub(crate) mod rtu;
-pub(crate) mod tcp;
+pub mod rtu;
+pub mod tcp;
 
 #[async_trait]
 pub trait Client: SlaveContext + Send + Debug {
@@ -13,7 +13,7 @@ pub trait Client: SlaveContext + Send + Debug {
 }
 
 #[async_trait]
-pub(crate) trait Reader: Client {
+pub trait Reader: Client {
     async fn read_coils(&mut self, addr: u16, cnt: u16) -> Result<Vec<u8>>;
 
     /// Read multiple discrete inputs (0x02)
@@ -40,7 +40,7 @@ pub(crate) trait Reader: Client {
 
 /// Asynchronous Modbus writer
 #[async_trait]
-pub(crate) trait Writer: Client {
+pub trait Writer: Client {
     /// Write a single u8 (0x05)
     async fn write_single_Coil(&mut self, addr: u16, coil: u8) -> Result<()>;
 
