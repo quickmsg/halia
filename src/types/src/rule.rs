@@ -26,6 +26,12 @@ pub struct CreateGraphEdge {
     pub target: usize,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ListRuleResp {
+    pub id: Uuid,
+    pub name: String,
+}
+
 impl CreateGraph {
     pub fn get_edges(&self) -> (HashMap<usize, Vec<usize>>, HashMap<usize, Vec<usize>>) {
         let mut incoming_edges = HashMap::new();

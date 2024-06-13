@@ -1,13 +1,12 @@
 use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
-use std::{
-    collections::HashMap,
-    sync::{LazyLock, Mutex},
-};
-use types::rule::{CreateGraph, Status};
+use std::{collections::HashMap, sync::LazyLock};
+use tokio::sync::RwLock;
+use types::rule::{CreateGraph, ListRuleResp, Status};
+use uuid::Uuid;
 
-pub struct Manager {
-    pub graphs: HashMap<String, Graph>,
+pub struct RuleManager {
+    rules: RwLock<HashMap<Uuid, Graph>>,
 }
 
 pub struct Graph {
@@ -16,43 +15,49 @@ pub struct Graph {
     pub graph: super::graph::Graph,
 }
 
-pub static GRAPH_MANAGER: LazyLock<Mutex<Manager>> = LazyLock::new(|| {
-    Mutex::new(Manager {
-        graphs: HashMap::new(),
-    })
+pub static GLOBAL_GRAPH_MANAGER: LazyLock<RuleManager> = LazyLock::new(|| RuleManager {
+    rules: RwLock::new(HashMap::new()),
 });
 
 pub fn stop(name: &str) -> Result<()> {
     Ok(())
 }
 
-impl Manager {
-    pub fn register(&mut self, create_graph: CreateGraph) -> Result<()> {
-        self.check_duplicate(&create_graph.name)?;
+impl RuleManager {
+    pub async fn create(&self, id: Option<Uuid>, req: CreateGraph) -> Result<()> {
+        let id = match id {
+            Some(id) => id,
+            None => Uuid::new_v4(),
+        };
 
-        let graph_name = create_graph.name.clone();
+        let graph_name = req.name.clone();
 
         let graph = Graph {
             status: Status::Stopped,
-            graph: super::graph::new(&create_graph),
-            create_graph: create_graph,
+            graph: super::graph::new(&req),
+            create_graph: req,
         };
 
-        self.graphs.insert(graph_name, graph);
+        self.rules.write().await.insert(id, graph);
 
         Ok(())
     }
 
-    fn check_duplicate(&self, name: &str) -> Result<()> {
-        if self.graphs.contains_key(name) {
-            bail!("已存在");
-        }
-        Ok(())
+    pub async fn list(&self) -> HaliaResult<Vec<ListRuleResp>> {
+        Ok(self
+            .rules
+            .read()
+            .await
+            .iter()
+            .map(|(id, g)| ListRuleResp {
+                id: id.clone(),
+                name: "todo".to_string(),
+            })
+            .collect())
     }
 
-    pub async fn run(&self, name: String) -> HaliaResult<()> {
-        let graph = self.graphs.get(&name);
-        match graph {
+    pub async fn start(&self, id: Uuid) -> HaliaResult<()> {
+        match self.rules.read().await.get(&id) {
             Some(graph) => match graph.graph.run().await {
                 Ok(_) => Ok(()),
                 Err(_) => todo!(),

@@ -121,8 +121,9 @@ fn sink_routes() -> Router {
 
 fn rule_routes() -> Router {
     Router::new()
-        .route("/graph", post(rule::create))
-        // .route("/graph/run/:name", put(rule::run))
-        .route("/graph/stop/:name", put(rule::stop))
+        .route("/rule", post(rule::create))
+        .route("/rules", get(rule::list))
+        .route("/rule/:id/start", put(rule::start))
+        .route("/rule/:id/stop", put(rule::stop))
         .route("/health", get(rule::helath))
 }

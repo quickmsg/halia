@@ -1,12 +1,13 @@
 use axum::debug_handler;
 use axum::{extract::Path, http::StatusCode, Json};
-use managers::graph::manager::GRAPH_MANAGER;
-use types::rule::CreateGraph;
+use managers::graph::manager::GLOBAL_GRAPH_MANAGER;
+use types::rule::{CreateGraph, ListRuleResp};
+use uuid::Uuid;
 
 use crate::AppResp;
 
-pub(crate) async fn create(Json(create_graph): Json<CreateGraph>) -> (StatusCode, String) {
-    match GRAPH_MANAGER.lock().unwrap().register(create_graph) {
+pub(crate) async fn create(Json(req): Json<CreateGraph>) -> (StatusCode, String) {
+    match GLOBAL_GRAPH_MANAGER.create(None, req).await {
         Ok(_) => return (StatusCode::CREATED, String::from("OK")),
         Err(e) => {
             return (
@@ -17,9 +18,16 @@ pub(crate) async fn create(Json(create_graph): Json<CreateGraph>) -> (StatusCode
     };
 }
 
-// #[axum::debug_handler]
-pub(crate) async fn run(Path(name): Path<String>) -> AppResp<()> {
-    match GRAPH_MANAGER.lock().unwrap().run(name).await {
+pub(crate) async fn list() -> AppResp<Vec<ListRuleResp>> {
+    match GLOBAL_GRAPH_MANAGER.list().await {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
+}
+
+#[axum::debug_handler]
+pub(crate) async fn start(Path(id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_GRAPH_MANAGER.start(id).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }

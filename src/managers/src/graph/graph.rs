@@ -70,7 +70,7 @@ impl Graph {
                         "source" => {
                             if let Some(node) = node_map.get(&osi.first_id) {
                                 let receiver = GLOBAL_SOURCE_MANAGER
-                                    .get_receiver(Uuid::new_v4(), "xx".to_string())
+                                    .get_receiver(node.id, "xx".to_string())
                                     .await
                                     .unwrap();
                                 receivers.insert(osi.first_id, vec![receiver]);
