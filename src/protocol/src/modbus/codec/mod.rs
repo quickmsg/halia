@@ -5,7 +5,6 @@ use std::{
 
 use byteorder::ReadBytesExt as _;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tracing::debug;
 
 use super::{
     frame::{RequestPdu, ResponsePdu},
@@ -14,24 +13,6 @@ use super::{
 
 pub(crate) mod rtu;
 pub(crate) mod tcp;
-
-#[allow(clippy::cast_possible_truncation)]
-fn u16_len(len: usize) -> u16 {
-    // This type conversion should always be safe, because either
-    // the caller is responsible to pass a valid usize or the
-    // possible values are limited by the protocol.
-    debug_assert!(len <= u16::MAX.into());
-    len as u16
-}
-
-#[allow(clippy::cast_possible_truncation)]
-fn u8_len(len: usize) -> u8 {
-    // This type conversion should always be safe, because either
-    // the caller is responsible to pass a valid usize or the
-    // possible values are limited by the protocol.
-    debug_assert!(len <= u8::MAX.into());
-    len as u8
-}
 
 impl<'a> TryFrom<Request<'a>> for Bytes {
     type Error = Error;
@@ -57,9 +38,9 @@ impl<'a> TryFrom<Request<'a>> for Bytes {
             WriteMultipleCoils(address, coils) => {
                 data.put_u16(address);
                 let len = coils.len();
-                data.put_u16(u16_len(len));
+                data.put_u16(len as u16);
                 let packed_coils = pack_coils(&coils);
-                data.put_u8(u8_len(packed_coils.len()));
+                data.put_u8(packed_coils.len() as u8);
                 for b in packed_coils {
                     data.put_u8(b);
                 }
@@ -86,8 +67,8 @@ impl<'a> TryFrom<Request<'a>> for Bytes {
                 data.put_u16(quantity);
                 data.put_u16(write_address);
                 let n = words.len();
-                data.put_u16(u16_len(n));
-                data.put_u8(u8_len(n * 2));
+                data.put_u16(n as u16);
+                data.put_u8((n * 2) as u8);
                 for w in &*words {
                     data.put_u8(*w);
                 }
@@ -120,7 +101,7 @@ impl From<Response> for Bytes {
         match rsp {
             ReadCoils(coils) | ReadDiscreteInputs(coils) => {
                 let packed_coils = pack_coils(&coils);
-                data.put_u8(u8_len(packed_coils.len()));
+                data.put_u8(packed_coils.len() as u8);
                 for b in packed_coils {
                     data.put_u8(b);
                 }
@@ -128,14 +109,13 @@ impl From<Response> for Bytes {
             ReadInputRegisters(registers)
             | ReadHoldingRegisters(registers)
             | ReadWriteMultipleRegisters(registers) => {
-                data.put_u8(u8_len(registers.len() * 2));
+                data.put_u8((registers.len() * 2) as u8);
                 for r in registers {
                     data.put_u8(r);
                 }
             }
             WriteSingleCoil(address, state) => {
                 data.put_u16(address);
-                debug!("{}", state);
                 data.put_u16(bool_to_coil(state));
             }
             WriteMultipleCoils(address, quantity) | WriteMultipleRegisters(address, quantity) => {
@@ -186,15 +166,8 @@ impl TryFrom<Bytes> for Request<'static> {
         let fn_code = bytes.get_u8();
         let req = match fn_code {
             0x01 => ReadCoils(bytes.get_u16(), bytes.get_u16()),
-            0x02 => {
-                debug!("bytes is {:?}", bytes);
-                ReadDiscreteInputs(bytes.get_u16(), bytes.get_u16())
-            }
-            0x05 => {
-                debug!("bytes is {:?}", bytes);
-
-                WriteSingleCoil(bytes.get_u16(), bytes.get_u8())
-            }
+            0x02 => ReadDiscreteInputs(bytes.get_u16(), bytes.get_u16()),
+            0x05 => WriteSingleCoil(bytes.get_u16(), bytes.get_u8()),
             0x0F => {
                 let address = bytes.get_u16();
                 let byte_count = bytes.get_u8();
@@ -419,7 +392,6 @@ fn request_byte_count(req: &Request<'_>) -> usize {
         | ReadHoldingRegisters(_, _)
         | WriteSingleRegister(_, _)
         | WriteSingleCoil(_, _) => 5,
-        // TODO
         WriteMultipleCoils(_, ref coils) => 6 + packed_coils_len(coils.len()),
         WriteMultipleRegisters(_, ref data) => 6 + data.len(),
         MaskWriteRegister(_, _, _) => 7,

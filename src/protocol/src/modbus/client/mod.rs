@@ -1,7 +1,6 @@
 use std::{borrow::Cow, fmt::Debug, io};
 
 use async_trait::async_trait;
-use tracing::debug;
 
 use super::{Error, Request, Response, Result, SlaveContext};
 
@@ -99,11 +98,7 @@ impl Reader for Context {
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadCoils(mut coils) => {
-                        debug_assert!(coils.len() >= cnt.into());
-                        coils.truncate(cnt.into());
-                        coils
-                    }
+                    Response::ReadCoils(coils) => coils,
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
@@ -115,10 +110,7 @@ impl Reader for Context {
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadDiscreteInputs(mut coils) => {
-                        coils.truncate(cnt.into());
-                        coils
-                    }
+                    Response::ReadDiscreteInputs(coils) => coils,
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
@@ -142,7 +134,7 @@ impl Reader for Context {
             .await
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
-                    Response::ReadHoldingRegisters(u8s) => u8s,
+                    Response::ReadHoldingRegisters(data) => data,
                     _ => unreachable!("call() should reject mismatching responses"),
                 })
             })
@@ -155,36 +147,21 @@ impl Writer for Context {
         self.client
             .call(Request::WriteSingleCoil(addr, coil))
             .await
-            .map(|result| {
-                result.map_err(Into::into).map(|response| match response {
-                    Response::WriteSingleCoil(rsp_addr, rsp_u8) => {}
-                    _ => unreachable!("call() should reject mismatching responses"),
-                })
-            })
+            .map(|result| result.map_err(Into::into).map(|_| {}))
     }
 
     async fn write_multiple_coils<'a>(&'a mut self, addr: u16, coils: &'_ [u8]) -> Result<()> {
         self.client
             .call(Request::WriteMultipleCoils(addr, Cow::Borrowed(coils)))
             .await
-            .map(|result| {
-                result.map_err(Into::into).map(|response| match response {
-                    Response::WriteMultipleCoils(rsp_addr, rsp_cnt) => {}
-                    _ => unreachable!("call() should reject mismatching responses"),
-                })
-            })
+            .map(|result| result.map_err(Into::into).map(|_| {}))
     }
 
     async fn write_single_register<'a>(&'a mut self, addr: u16, register: &'_ [u8]) -> Result<()> {
         self.client
             .call(Request::WriteSingleRegister(addr, Cow::Borrowed(register)))
             .await
-            .map(|result| {
-                result.map_err(Into::into).map(|response| match response {
-                    Response::WriteSingleRegister(rsp_addr, rsp_u8) => {}
-                    _ => unreachable!("call() should reject mismatching responses"),
-                })
-            })
+            .map(|result| result.map_err(Into::into).map(|_| {}))
     }
 
     async fn write_multiple_registers<'a>(
@@ -198,11 +175,6 @@ impl Writer for Context {
                 Cow::Borrowed(registers),
             ))
             .await
-            .map(|result| {
-                result.map_err(Into::into).map(|response| match response {
-                    Response::WriteMultipleRegisters(rsp_addr, rsp_cnt) => {}
-                    _ => unreachable!("call() should reject mismatching responses"),
-                })
-            })
+            .map(|result| result.map_err(Into::into).map(|_| {}))
     }
 }
