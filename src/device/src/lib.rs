@@ -5,7 +5,7 @@ use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use modbus::device::Modbus;
 use serde::Serialize;
-use std::sync::LazyLock;
+use std::{collections::HashMap, sync::LazyLock};
 use storage::Status;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error};
@@ -19,11 +19,11 @@ mod modbus;
 mod storage;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
-    devices: RwLock::new(vec![]),
+    devices: RwLock::new(HashMap::new()),
 });
 
 pub struct DeviceManager {
-    devices: RwLock<Vec<(Uuid, Box<dyn Device>)>>,
+    devices: RwLock<HashMap<Uuid, Box<dyn Device>>>,
 }
 
 impl DeviceManager {
@@ -47,7 +47,7 @@ impl DeviceManager {
             },
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
-        self.devices.write().await.push((device_id, device));
+        self.devices.write().await.insert(device_id, device);
         if backup {
             storage::insert_device(device_id, serde_json::to_string(&req)?).await?;
         }
@@ -56,27 +56,15 @@ impl DeviceManager {
     }
 
     pub async fn read_device(&self, device_id: Uuid) -> HaliaResult<DeviceDetailResp> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => Ok(device.get_detail()),
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => Ok(device.get_detail()),
             None => Err(HaliaError::NotFound),
         }
     }
 
     pub async fn update_device(&self, device_id: Uuid, req: UpdateDeviceReq) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => {
                 device.update(&req).await?;
                 storage::update_device_conf(device_id, serde_json::to_string(&req)?).await?;
                 Ok(())
@@ -86,14 +74,8 @@ impl DeviceManager {
     }
 
     pub async fn start_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => {
                 match device.start().await {
                     Ok(_) => {}
                     Err(e) => {
@@ -114,14 +96,8 @@ impl DeviceManager {
     }
 
     pub async fn stop_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => {
                 device.stop().await;
                 storage::update_device_status(device_id, Status::Stopped).await?;
                 Ok(())
@@ -140,21 +116,12 @@ impl DeviceManager {
     }
 
     pub async fn delete_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.stop().await,
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => device.stop().await,
             None => return Err(HaliaError::NotFound),
         };
 
-        self.devices
-            .write()
-            .await
-            .retain(|(id, _)| *id != device_id);
+        self.devices.write().await.remove(&device_id);
         storage::delete_device(device_id).await?;
 
         Ok(())
@@ -166,14 +133,8 @@ impl DeviceManager {
         group_id: Option<Uuid>,
         req: CreateGroupReq,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => {
                 device.create_group(group_id, &req).await?;
                 Ok(())
             }
@@ -182,14 +143,8 @@ impl DeviceManager {
     }
 
     pub async fn read_groups(&self, device_id: Uuid) -> HaliaResult<Vec<ListGroupsResp>> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.read_groups().await,
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.read_groups().await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -200,14 +155,8 @@ impl DeviceManager {
         group_id: Uuid,
         req: &UpdateGroupReq,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.update_group(group_id, req).await,
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.update_group(group_id, req).await,
             None => {
                 debug!("未找到设备");
                 Err(HaliaError::NotFound)
@@ -216,14 +165,8 @@ impl DeviceManager {
     }
 
     pub async fn delete_groups(&self, device_id: Uuid, group_ids: Vec<Uuid>) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.delete_groups(group_ids).await,
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => device.delete_groups(group_ids).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -234,14 +177,8 @@ impl DeviceManager {
         group_id: Uuid,
         create_points: Vec<(Option<Uuid>, CreatePointReq)>,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => {
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => {
                 device.create_points(group_id, create_points).await?;
                 Ok(())
             }
@@ -254,14 +191,8 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
     ) -> HaliaResult<Vec<ListPointResp>> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.read_points(group_id).await,
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.read_points(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -271,14 +202,8 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
     ) -> HaliaResult<Vec<ListPointResp>> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.read_points(group_id).await,
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.read_points(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -290,14 +215,8 @@ impl DeviceManager {
         point_id: Uuid,
         req: &CreatePointReq,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.update_point(group_id, point_id, req).await,
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.update_point(group_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -309,14 +228,8 @@ impl DeviceManager {
         point_id: Uuid,
         req: &WritePointValueReq,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.write_point_value(group_id, point_id, req).await,
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.write_point_value(group_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -327,14 +240,8 @@ impl DeviceManager {
         group_id: Uuid,
         point_ids: Vec<Uuid>,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.delete_points(group_id, point_ids).await,
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.delete_points(group_id, point_ids).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -344,14 +251,8 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|(id, _)| *id == device_id)
-        {
-            Some((_, device)) => device.subscribe(group_id).await,
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.subscribe(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
