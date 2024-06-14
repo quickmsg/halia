@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 types = { workspace = true }
 common = { workspace = true }
+
 anyhow = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }

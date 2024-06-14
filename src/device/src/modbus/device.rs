@@ -9,7 +9,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::MessageBatch;
 use protocol::modbus::client::{rtu, tcp, Context};
 use serde::{Deserialize, Serialize};
@@ -28,7 +31,7 @@ use types::device::{
 };
 use uuid::Uuid;
 
-use crate::{storage, Device};
+use crate::Device;
 
 use super::group::{Command, Group};
 
@@ -251,13 +254,13 @@ impl Device for Modbus {
         group_id: Option<Uuid>,
         req: &CreateGroupReq,
     ) -> HaliaResult<()> {
-        let (group_id, backup) = match group_id {
+        let (group_id, create) = match group_id {
             Some(group_id) => (group_id, false),
             None => (Uuid::new_v4(), true),
         };
 
-        if backup {
-            storage::insert_group(self.id, group_id, serde_json::to_string(&req)?).await?;
+        if create {
+            persistence::group::insert(self.id, group_id, serde_json::to_string(&req)?).await?;
         }
 
         let group = Group::new(self.id, group_id, &req);
@@ -277,7 +280,7 @@ impl Device for Modbus {
             .await
             .retain(|group| !group_ids.contains(&group.id));
 
-        storage::delete_groups(self.id, &group_ids).await?;
+        persistence::group::delete(self.id, &group_ids).await?;
         for group_id in group_ids {
             match self
                 .group_signal_tx
@@ -388,7 +391,7 @@ impl Device for Modbus {
             None => return Err(HaliaError::NotFound),
         };
 
-        storage::update_group(self.id, group_id, serde_json::to_string(&req)?).await?;
+        persistence::group::update(self.id, group_id, serde_json::to_string(&req)?).await?;
 
         Ok(())
     }

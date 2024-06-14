@@ -1,12 +1,14 @@
 #![feature(lazy_cell)]
 
 use async_trait::async_trait;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::MessageBatch;
 use modbus::device::Modbus;
 use serde::Serialize;
 use std::{collections::HashMap, sync::LazyLock};
-use storage::Status;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error};
 use types::device::{
@@ -16,7 +18,6 @@ use types::device::{
 use uuid::Uuid;
 
 mod modbus;
-mod storage;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
     devices: RwLock::new(HashMap::new()),
@@ -32,7 +33,7 @@ impl DeviceManager {
         device_id: Option<Uuid>,
         req: CreateDeviceReq,
     ) -> HaliaResult<()> {
-        let (device_id, backup) = match device_id {
+        let (device_id, create) = match device_id {
             Some(device_id) => (device_id, false),
             None => (Uuid::new_v4(), true),
         };
@@ -48,8 +49,9 @@ impl DeviceManager {
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
         self.devices.write().await.insert(device_id, device);
-        if backup {
-            storage::insert_device(device_id, serde_json::to_string(&req)?).await?;
+
+        if create {
+            persistence::device::insert(device_id, serde_json::to_string(&req)?).await?;
         }
 
         Ok(())
@@ -66,7 +68,7 @@ impl DeviceManager {
         match self.devices.write().await.get_mut(&device_id) {
             Some(device) => {
                 device.update(&req).await?;
-                storage::update_device_conf(device_id, serde_json::to_string(&req)?).await?;
+                persistence::device::update_conf(device_id, serde_json::to_string(&req)?).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
@@ -83,7 +85,9 @@ impl DeviceManager {
                         return Err(e);
                     }
                 }
-                match storage::update_device_status(device_id, Status::Runing).await {
+                match persistence::device::update_status(device_id, persistence::Status::Runing)
+                    .await
+                {
                     Ok(_) => Ok(()),
                     Err(e) => {
                         error!("storage update device err:{}", e);
@@ -99,7 +103,7 @@ impl DeviceManager {
         match self.devices.write().await.get_mut(&device_id) {
             Some(device) => {
                 device.stop().await;
-                storage::update_device_status(device_id, Status::Stopped).await?;
+                persistence::device::update_status(device_id, persistence::Status::Stopped).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
@@ -122,7 +126,7 @@ impl DeviceManager {
         };
 
         self.devices.write().await.remove(&device_id);
-        storage::delete_device(device_id).await?;
+        persistence::device::delete(device_id).await?;
 
         Ok(())
     }
@@ -260,7 +264,7 @@ impl DeviceManager {
 
 impl DeviceManager {
     pub async fn recover(&self) -> HaliaResult<()> {
-        let devices = storage::read_devices().await?;
+        let devices = persistence::device::read().await?;
         for (id, status, data) in devices {
             let req = match serde_json::from_str::<CreateDeviceReq>(data.as_str()) {
                 Ok(req) => req,
@@ -275,15 +279,15 @@ impl DeviceManager {
             }
             self.recover_group(id).await?;
             match status {
-                Status::Stopped => {}
-                Status::Runing => self.start_device(id).await?,
+                persistence::Status::Stopped => {}
+                persistence::Status::Runing => self.start_device(id).await?,
             }
         }
         Ok(())
     }
 
     async fn recover_group(&self, device_id: Uuid) -> HaliaResult<()> {
-        let groups = storage::read_groups(device_id).await?;
+        let groups = persistence::group::read(device_id).await?;
         let groups: Vec<(Option<Uuid>, CreateGroupReq)> = groups
             .into_iter()
             .map(|(id, data)| {
@@ -301,7 +305,7 @@ impl DeviceManager {
     }
 
     async fn recover_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        let points = storage::read_points(device_id, group_id).await?;
+        let points = persistence::point::read(device_id, group_id).await?;
         let points: Vec<(Option<Uuid>, CreatePointReq)> = points
             .into_iter()
             .map(|(id, data)| {

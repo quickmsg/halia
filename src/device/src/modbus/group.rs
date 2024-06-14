@@ -1,5 +1,8 @@
 use anyhow::{bail, Result};
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
 use std::{
@@ -20,7 +23,6 @@ use types::device::{CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupRe
 use uuid::Uuid;
 
 use super::point::Point;
-use crate::storage;
 
 #[derive(Debug)]
 pub(crate) struct Group {
@@ -139,7 +141,7 @@ impl Group {
 
         self.points.write().await.extend(points);
         if storage_infos.len() > 0 {
-            storage::insert_points(self.device_id, self.id, &storage_infos).await?;
+            persistence::point::insert(self.device_id, self.id, &storage_infos).await?;
         }
         Ok(())
     }
@@ -166,7 +168,7 @@ impl Group {
             None => return Err(HaliaError::NotFound),
         };
 
-        storage::update_point(
+        persistence::point::update(
             self.device_id,
             self.id,
             point_id,
@@ -183,7 +185,7 @@ impl Group {
 
     pub async fn delete_points(&self, ids: Vec<Uuid>) -> HaliaResult<()> {
         self.points.write().await.retain(|id, _| !ids.contains(id));
-        storage::delete_points(self.device_id, self.id, &ids).await?;
+        persistence::point::delete(self.device_id, self.id, &ids).await?;
         Ok(())
     }
 
