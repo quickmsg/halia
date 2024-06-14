@@ -1,7 +1,15 @@
+use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -179,13 +187,20 @@ impl Group {
         Ok(())
     }
 
-    pub async fn read(&self, ctx: &mut Context, interval: u64) {
+    pub async fn read_points_value(
+        &self,
+        ctx: &mut Context,
+        interval: u64,
+        rtt: &Arc<AtomicU16>,
+    ) -> Result<()> {
         let mut msg = Message::new();
         for (_, point) in self.points.write().await.iter_mut() {
+            let now = Instant::now();
             match point.read(ctx).await {
                 Ok(data) => msg.add(&point.name, data),
-                Err(_) => todo!(),
+                Err(e) => bail!("连接断开"),
             }
+            rtt.store(now.elapsed().as_millis() as u16, Ordering::SeqCst);
             time::sleep(Duration::from_millis(interval)).await;
         }
 
@@ -194,6 +209,8 @@ impl Group {
                 error!("send message batch err :{}", e);
             }
         }
+
+        Ok(())
     }
 
     pub async fn write(

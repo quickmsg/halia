@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use std::{
     net::SocketAddr,
     sync::{
@@ -513,7 +514,7 @@ async fn run_event_loop(
 
             group_id = read_rx.recv() => {
                if let Some(group_id) = group_id {
-                    if !read_group_points(&mut ctx, &groups, group_id, interval, rtt).await {
+                    if let Err(_) = read_group_points(&mut ctx, &groups, group_id, interval, rtt).await {
                        return
                     }
                 }
@@ -528,18 +529,19 @@ async fn read_group_points(
     group_id: Uuid,
     interval: u64,
     rtt: &Arc<AtomicU16>,
-) -> bool {
+) -> Result<()> {
     if let Some(group) = groups
         .write()
         .await
         .iter_mut()
         .find(|group| group.id == group_id)
     {
-        group.read(ctx, interval).await;
-        true
-    } else {
-        true
+        if let Err(e) = group.read_points_value(ctx, interval, rtt).await {
+            return Err(e);
+        }
     }
+
+    Ok(())
 }
 
 async fn write_point_value(

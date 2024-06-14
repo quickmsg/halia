@@ -116,7 +116,6 @@ impl Reader for Context {
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
                     Response::ReadDiscreteInputs(mut coils) => {
-                        debug!("{:?}", coils);
                         coils.truncate(cnt.into());
                         coils
                     }

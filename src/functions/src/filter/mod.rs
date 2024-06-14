@@ -42,7 +42,9 @@ impl Operate for Node {
         let messages = message_batch.get_messages_mut();
         messages.retain(|message| {
             for filter in &self.filters {
-                return filter.filter(message);
+                if filter.filter(message) {
+                    return true;
+                }
             }
             false
         });

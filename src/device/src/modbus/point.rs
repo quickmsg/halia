@@ -58,8 +58,9 @@ impl Point {
             {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        debug!("{:?}", data);
-                        Ok(Value::Null)
+                        let value = self.conf.r#type.decode(&mut data);
+                        self.value = value.clone();
+                        Ok(value)
                     }
                     Err(e) => {
                         warn!("modbus protocl exception:{}", e);
@@ -69,7 +70,17 @@ impl Point {
                 Err(_) => todo!(),
             },
             1 => match ctx.read_coils(self.conf.address, self.quantity).await {
-                Ok(_) => todo!(),
+                Ok(res) => match res {
+                    Ok(mut data) => {
+                        let value = self.conf.r#type.decode(&mut data);
+                        self.value = value.clone();
+                        Ok(value)
+                    }
+                    Err(e) => {
+                        warn!("modbus protocl exception:{}", e);
+                        Ok(Value::Null)
+                    }
+                },
                 Err(_) => todo!(),
             },
             4 => match ctx
@@ -100,7 +111,6 @@ impl Point {
     pub async fn write(&mut self, ctx: &mut Context, value: serde_json::Value) -> Result<()> {
         ctx.set_slave(self.conf.slave);
         match self.conf.area {
-            // TODO
             0 => match ctx.write_single_coil(self.conf.address, 1).await {
                 Ok(res) => match res {
                     Ok(_) => return Ok(()),
@@ -112,7 +122,6 @@ impl Point {
                 Err(_) => todo!(),
             },
             4 => match self.conf.r#type {
-                // DataType::Bool => todo!(),
                 DataType::Int16(_) | DataType::Uint16(_) => {
                     let data = self.conf.r#type.encode(value).unwrap();
                     match ctx.write_single_register(self.conf.address, &data).await {

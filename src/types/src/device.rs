@@ -265,7 +265,6 @@ impl DataType {
     pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
         match self {
             DataType::Bool => {
-                debug!("data is :{:?}", data);
                 if data.len() != 1 {
                     warn!("buf is not right");
                     json::Value::Null

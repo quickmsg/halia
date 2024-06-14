@@ -27,7 +27,11 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn create_device(&self, device_id: Option<Uuid>, req: CreateDeviceReq) -> HaliaResult<()> {
+    pub async fn create_device(
+        &self,
+        device_id: Option<Uuid>,
+        req: CreateDeviceReq,
+    ) -> HaliaResult<()> {
         let (device_id, backup) = match device_id {
             Some(device_id) => (device_id, false),
             None => (Uuid::new_v4(), true),
@@ -245,7 +249,11 @@ impl DeviceManager {
         }
     }
 
-    pub async fn get_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<Vec<ListPointResp>> {
+    pub async fn get_points(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+    ) -> HaliaResult<Vec<ListPointResp>> {
         match self
             .devices
             .read()
@@ -258,7 +266,11 @@ impl DeviceManager {
         }
     }
 
-    pub async fn read_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<Vec<ListPointResp>> {
+    pub async fn read_points(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+    ) -> HaliaResult<Vec<ListPointResp>> {
         match self
             .devices
             .read()
@@ -290,7 +302,6 @@ impl DeviceManager {
         }
     }
 
-    // TODO
     pub async fn write_point_value(
         &self,
         device_id: Uuid,

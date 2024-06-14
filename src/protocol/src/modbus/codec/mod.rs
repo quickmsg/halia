@@ -3,7 +3,7 @@ use std::{
     io::{Cursor, Error, ErrorKind},
 };
 
-use byteorder::{BigEndian, ReadBytesExt as _};
+use byteorder::ReadBytesExt as _;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tracing::debug;
 
