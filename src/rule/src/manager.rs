@@ -5,19 +5,13 @@ use tokio::sync::RwLock;
 use types::rule::{CreateGraph, ListRuleResp, Status};
 use uuid::Uuid;
 
-pub struct RuleManager {
-    rules: RwLock<HashMap<Uuid, Graph>>,
-}
+use crate::RuleManager;
 
 pub struct Graph {
     pub status: Status,
     pub create_graph: CreateGraph,
-    pub graph: super::graph::Graph,
+    pub graph: super::Graph,
 }
-
-pub static GLOBAL_GRAPH_MANAGER: LazyLock<RuleManager> = LazyLock::new(|| RuleManager {
-    rules: RwLock::new(HashMap::new()),
-});
 
 pub fn stop(name: &str) -> Result<()> {
     Ok(())
@@ -34,7 +28,7 @@ impl RuleManager {
 
         let graph = Graph {
             status: Status::Stopped,
-            graph: super::graph::new(&req),
+            graph: super::new(&req),
             create_graph: req,
         };
 

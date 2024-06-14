@@ -1,5 +1,5 @@
 use axum::{extract::Path, Json};
-use managers::sink::GLOBAL_SINK_MANAGER;
+use sink::GLOBAL_SINK_MANAGER;
 use types::sink::{CreateSinkReq, ListSinkResp, ReadSinkResp, UpdateSinkReq};
 use uuid::Uuid;
 

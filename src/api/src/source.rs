@@ -1,5 +1,5 @@
 use axum::{extract::Path, Json};
-use managers::source::GLOBAL_SOURCE_MANAGER;
+use source::GLOBAL_SOURCE_MANAGER;
 use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
 

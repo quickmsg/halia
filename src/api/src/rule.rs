@@ -1,13 +1,13 @@
 use axum::debug_handler;
 use axum::{extract::Path, http::StatusCode, Json};
-use managers::graph::manager::GLOBAL_GRAPH_MANAGER;
+use rule::GLOBAL_RULE_MANAGER;
 use types::rule::{CreateGraph, ListRuleResp};
 use uuid::Uuid;
 
 use crate::AppResp;
 
 pub(crate) async fn create(Json(req): Json<CreateGraph>) -> (StatusCode, String) {
-    match GLOBAL_GRAPH_MANAGER.create(None, req).await {
+    match GLOBAL_RULE_MANAGER.create(None, req).await {
         Ok(_) => return (StatusCode::CREATED, String::from("OK")),
         Err(e) => {
             return (
@@ -19,7 +19,7 @@ pub(crate) async fn create(Json(req): Json<CreateGraph>) -> (StatusCode, String)
 }
 
 pub(crate) async fn list() -> AppResp<Vec<ListRuleResp>> {
-    match GLOBAL_GRAPH_MANAGER.list().await {
+    match GLOBAL_RULE_MANAGER.list().await {
         Ok(data) => AppResp::with_data(data),
         Err(e) => e.into(),
     }
@@ -27,7 +27,7 @@ pub(crate) async fn list() -> AppResp<Vec<ListRuleResp>> {
 
 #[axum::debug_handler]
 pub(crate) async fn start(Path(id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_GRAPH_MANAGER.start(id).await {
+    match GLOBAL_RULE_MANAGER.start(id).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }

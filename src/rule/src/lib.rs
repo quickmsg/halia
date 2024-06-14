@@ -5,15 +5,26 @@ use message::MessageBatch;
 use operators::window::window::Window;
 use sink::GLOBAL_SINK_MANAGER;
 use source::GLOBAL_SOURCE_MANAGER;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 use stream::Stream;
-use tokio::sync::broadcast::{self, Receiver};
+use tokio::sync::{
+    broadcast::{self, Receiver},
+    RwLock,
+};
 use tracing::{debug, error};
 use types::rule::{CreateGraph, CreateGraphNode, Status};
 use uuid::Uuid;
 
 mod manager;
 mod stream;
+
+pub struct RuleManager {
+    rules: RwLock<HashMap<Uuid, manager::Graph>>,
+}
+
+pub static GLOBAL_RULE_MANAGER: LazyLock<RuleManager> = LazyLock::new(|| RuleManager {
+    rules: RwLock::new(HashMap::new()),
+});
 
 pub struct Graph {
     pub create_graph: CreateGraph,
