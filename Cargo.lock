@@ -294,9 +294,12 @@ dependencies = [
 name = "functions"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "json",
  "message",
+ "serde",
  "serde_json",
+ "types",
 ]
 
 [[package]]
@@ -588,6 +591,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common",
+ "functions",
  "message",
  "operators",
  "sinks",

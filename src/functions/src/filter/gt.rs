@@ -1,4 +1,8 @@
+use anyhow::{bail, Result};
 use message::Message;
+use serde::{Deserialize, Serialize};
+
+use super::Filter;
 
 pub struct Gt {
     field: String,
@@ -6,12 +10,32 @@ pub struct Gt {
 }
 
 impl Gt {
-    pub fn new() -> Self {
-        Self {
-            field: todo!(),
-            value: todo!(),
-        }
+    pub fn new(conf: serde_json::Value) -> Result<Self> {
+        let conf: Conf = serde_json::from_value(conf)?;
+        let value = match conf.value {
+            serde_json::Value::Number(number) => {
+                if let Some(int) = number.as_i64() {
+                    Value::Int(int)
+                } else if let Some(float) = number.as_f64() {
+                    Value::Float(float)
+                } else {
+                    bail!("parse value failed")
+                }
+            }
+            serde_json::Value::String(string) => Value::Field(string),
+            _ => bail!("not support"),
+        };
+        Ok(Self {
+            field: conf.field,
+            value,
+        })
     }
+}
+
+#[derive(Deserialize, Serialize)]
+struct Conf {
+    field: String,
+    value: serde_json::Value,
 }
 
 enum Value {
@@ -20,7 +44,7 @@ enum Value {
     Field(String),
 }
 
-impl Gt {
+impl Filter for Gt {
     fn filter(&self, msg: &Message) -> bool {
         match msg.get(&self.field) {
             Some(value) => match value {

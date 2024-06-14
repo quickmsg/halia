@@ -14,9 +14,9 @@ pub struct CreateGraph {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateGraphNode {
     pub index: usize,
-    pub id: Uuid,
+    pub id: Option<Uuid>,
     pub r#type: String,
-    pub name: String,
+    pub name: Option<String>,
     pub conf: Value,
 }
 
@@ -55,7 +55,7 @@ impl CreateGraph {
         self.nodes
             .iter()
             .filter(|node| node.r#type.as_str() == r#type)
-            .map(|node| node.id)
+            .map(|node| node.id.unwrap())
             .collect()
     }
 
@@ -68,7 +68,7 @@ impl CreateGraph {
                 // "window" => false,
                 _ => true,
             })
-            .map(|node| node.id)
+            .map(|node| node.id.unwrap())
             .collect()
     }
 }

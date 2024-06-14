@@ -226,7 +226,6 @@ impl DataType {
     }
 
     pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
-        debug!("read data is {:?}", data);
         match self {
             DataType::Bool => {
                 debug!("data is :{:?}", data);

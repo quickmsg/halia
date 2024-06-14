@@ -10,6 +10,7 @@ message = { workspace = true }
 types = { workspace = true }
 operators = { workspace = true }
 common = { workspace = true }
+functions = { workspace = true }
 
 anyhow = { workspace = true }
 tracing = { workspace = true }

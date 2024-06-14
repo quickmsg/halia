@@ -33,6 +33,7 @@ device = { path = "src/device" }
 common = { path = "src/common" }
 json = { path = "src/json" }
 protocol = { path = "src/protocol" }
+functions = { path = "src/functions" }
 
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

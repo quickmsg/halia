@@ -1,10 +1,6 @@
 use anyhow::{bail, Result};
+use functions::filter;
 use message::MessageBatch;
-use operators::{
-    // aggregate::Node as AggregateNode,
-    // computes::ComputeNode,
-    // filter::Node as FilterNode, 
-};
 use tokio::sync::broadcast::{Receiver, Sender};
 use tracing::{debug, error};
 use types::rule::{CreateGraphNode, Operate};
@@ -55,7 +51,7 @@ impl Stream {
 fn get_operator_node(cgn: &CreateGraphNode) -> Result<Box<dyn Operate>> {
     debug!("{:?}", cgn);
     match cgn.r#type.as_str() {
-        "field" => match cgn.name.as_str() {
+        "field" => match cgn.name.as_ref().unwrap().as_str() {
             // "watermark" => {
             //     let watermark = Watermark::new(cgn.conf.clone())?;
             //     Ok(Box::new(watermark))
@@ -66,10 +62,10 @@ fn get_operator_node(cgn: &CreateGraphNode) -> Result<Box<dyn Operate>> {
             // }
             _ => bail!("not support"),
         },
-        // "filter" => {
-        //     let filter = FilterNode::new(cgn.conf.clone())?;
-        //     Ok(Box::new(filter))
-        // }
+        "filter" => {
+            let filter = filter::Node::new(cgn.conf.clone())?;
+            Ok(Box::new(filter))
+        }
         // "compute" => {
         //     ComputeNode::new(cgn.conf.clone())
         // }
