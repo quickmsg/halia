@@ -5,6 +5,7 @@ use std::{
 
 use byteorder::{BigEndian, ReadBytesExt as _};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use tracing::debug;
 
 use super::{
     frame::{RequestPdu, ResponsePdu},
@@ -49,11 +50,9 @@ impl<'a> TryFrom<Request<'a>> for Bytes {
                 data.put_u16(address);
                 data.put_u16(quantity);
             }
-            // TOOD
             WriteSingleCoil(address, state) => {
                 data.put_u16(address);
-                // data.put_u16(bool_to_coil(state[0]));
-                data.put_u16(0xFF00);
+                data.put_u16(u8_to_coil(state));
             }
             WriteMultipleCoils(address, coils) => {
                 data.put_u16(address);
@@ -136,6 +135,7 @@ impl From<Response> for Bytes {
             }
             WriteSingleCoil(address, state) => {
                 data.put_u16(address);
+                debug!("{}", state);
                 data.put_u16(bool_to_coil(state));
             }
             WriteMultipleCoils(address, quantity) | WriteMultipleRegisters(address, quantity) => {
@@ -186,8 +186,15 @@ impl TryFrom<Bytes> for Request<'static> {
         let fn_code = bytes.get_u8();
         let req = match fn_code {
             0x01 => ReadCoils(bytes.get_u16(), bytes.get_u16()),
-            0x02 => ReadDiscreteInputs(bytes.get_u16(), bytes.get_u16()),
-            0x05 => WriteSingleCoil(bytes.get_u16(), bytes.get_u8()),
+            0x02 => {
+                debug!("bytes is {:?}", bytes);
+                ReadDiscreteInputs(bytes.get_u16(), bytes.get_u16())
+            }
+            0x05 => {
+                debug!("bytes is {:?}", bytes);
+
+                WriteSingleCoil(bytes.get_u16(), bytes.get_u8())
+            }
             0x0F => {
                 let address = bytes.get_u16();
                 let byte_count = bytes.get_u8();
@@ -270,12 +277,14 @@ impl TryFrom<Bytes> for Response {
         let fn_code = bytes.get_u8();
         let rsp = match fn_code {
             0x01 => {
-                let x = &bytes[2..];
-                ReadCoils(Vec::from(x))
+                let byte_count = bytes.get_u8();
+                let quantity = u16::from(byte_count) * 8;
+                ReadDiscreteInputs(unpack_coils(&bytes, quantity))
             }
             0x02 => {
-                let x = &bytes[2..];
-                ReadDiscreteInputs(Vec::from(x))
+                let byte_count = bytes.get_u8();
+                let quantity = u16::from(byte_count) * 8;
+                ReadDiscreteInputs(unpack_coils(&bytes, quantity))
             }
             0x05 => WriteSingleCoil(bytes.get_u16(), bytes.get_u8()),
             0x0F => WriteMultipleCoils(bytes.get_u16(), bytes.get_u16()),
@@ -434,4 +443,23 @@ fn response_byte_count(rsp: &Response) -> usize {
         MaskWriteRegister(_, _, _) => 7,
         Custom(_, ref data) => 1 + data.len(),
     }
+}
+
+fn u8_to_coil(state: u8) -> u16 {
+    if state == 1 {
+        0xFF00
+    } else {
+        0x0000
+    }
+}
+
+fn unpack_coils(bytes: &Bytes, count: u16) -> Vec<u8> {
+    let mut res = Vec::with_capacity(count.into());
+    for i in 0usize..count.into() {
+        match (bytes[i / 8] >> (i % 8)) & 0b1 > 0 {
+            true => res.push(1),
+            false => res.push(0),
+        }
+    }
+    res
 }

@@ -89,9 +89,8 @@ pub enum DataType {
     Uint64(Endian, Endian),
     Float32(Endian, Endian),
     Float64(Endian, Endian),
-    // TODO
-    String,
-    Bytes,
+    String(u16, bool, Endian, Endian),
+    Bytes(u16),
 }
 
 impl<'de> Deserialize<'de> for DataType {
@@ -148,8 +147,42 @@ impl<'de> Deserialize<'de> for DataType {
                         let endian = extract_endian(&map, 2).unwrap();
                         DataType::Float64(endian[0], endian[1])
                     }
-                    "string" => DataType::String,
-                    "bytes" => DataType::Bytes,
+                    "string" => {
+                        let len = map
+                            .get("len")
+                            .ok_or_else(|| serde::de::Error::missing_field("len"))?;
+                        let len = len.as_i64().ok_or_else(|| {
+                            serde::de::Error::invalid_type(
+                                serde::de::Unexpected::Other("not an array"),
+                                &"array",
+                            )
+                        })?;
+
+                        let single = map
+                            .get("single")
+                            .ok_or_else(|| serde::de::Error::missing_field("single"))?;
+                        let single = single.as_bool().ok_or_else(|| {
+                            serde::de::Error::invalid_type(
+                                serde::de::Unexpected::Other("not an array"),
+                                &"array",
+                            )
+                        })?;
+                        let endian = extract_endian(&map, 2).unwrap();
+
+                        DataType::String(len as u16, single, endian[0], endian[1])
+                    }
+                    "bytes" => {
+                        let len = map
+                            .get("len")
+                            .ok_or_else(|| serde::de::Error::missing_field("len"))?;
+                        let len = len.as_i64().ok_or_else(|| {
+                            serde::de::Error::invalid_type(
+                                serde::de::Unexpected::Other("not an array"),
+                                &"array",
+                            )
+                        })?;
+                        DataType::Bytes(len as u16)
+                    }
                     _ => {
                         return Err(serde::de::Error::unknown_variant(
                             type_str,
@@ -208,8 +241,12 @@ impl Serialize for DataType {
                 serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
-            DataType::Bytes => serde_json::json!({"type": "bytes"}).serialize(serializer),
-            DataType::String => serde_json::json!({"type": "string"}).serialize(serializer),
+            DataType::Bytes(len) => {
+                serde_json::json!({"type": "bytes", "len": len}).serialize(serializer)
+            }
+            DataType::String(len, single, endian0, endian1) => {
+                serde_json::json!({"type": "string", "len": len, "single": single,  "endian": [endian0, endian1]}).serialize(serializer)
+            }
         }
     }
 }
@@ -220,8 +257,8 @@ impl DataType {
             DataType::Bool | DataType::Int16(_) | DataType::Uint16(_) => 1,
             DataType::Int32(_, _) | DataType::Uint32(_, _) | DataType::Float32(_, _) => 2,
             DataType::Int64(_, _) | DataType::Uint64(_, _) | DataType::Float64(_, _) => 4,
-            DataType::String => todo!(),
-            DataType::Bytes => todo!(),
+            DataType::String(len, _, _, _) => *len,
+            DataType::Bytes(len) => *len,
         }
     }
 
@@ -499,6 +536,22 @@ impl DataType {
             // DataType::String => todo!(),
             // DataType::Bytes => todo!(),
             _ => bail!("value is wrong"),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            DataType::Bool => "bool".to_string(),
+            DataType::Int16(_) => "int16".to_string(),
+            DataType::Uint16(_) => "uint16".to_string(),
+            DataType::Int32(_, _) => "int32".to_string(),
+            DataType::Uint32(_, _) => "uint32".to_string(),
+            DataType::Int64(_, _) => "int64".to_string(),
+            DataType::Uint64(_, _) => "uint64".to_string(),
+            DataType::Float32(_, _) => "float32".to_string(),
+            DataType::Float64(_, _) => "float64".to_string(),
+            DataType::String(_, _, _, _) => "string".to_string(),
+            DataType::Bytes(_) => "bytes".to_string(),
         }
     }
 }

@@ -143,7 +143,7 @@ impl Group {
                 id: point.id,
                 name: point.name.clone(),
                 address: point.conf.address,
-                r#type: "int16".to_string(),
+                r#type: point.conf.r#type.to_string(),
                 value: point.value.clone(),
                 describe: point.conf.describe.clone(),
             })

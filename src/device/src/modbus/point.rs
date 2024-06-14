@@ -57,10 +57,13 @@ impl Point {
                 .await
             {
                 Ok(res) => match res {
-                    Ok(mut data) => todo!(),
+                    Ok(mut data) => {
+                        debug!("{:?}", data);
+                        Ok(Value::Null)
+                    }
                     Err(e) => {
                         warn!("modbus protocl exception:{}", e);
-                        todo!()
+                        Ok(Value::Null)
                     }
                 },
                 Err(_) => todo!(),

@@ -1,6 +1,7 @@
 use std::{borrow::Cow, fmt::Debug, io};
 
 use async_trait::async_trait;
+use tracing::debug;
 
 use super::{Error, Request, Response, Result, SlaveContext};
 
@@ -115,6 +116,7 @@ impl Reader for Context {
             .map(|result| {
                 result.map_err(Into::into).map(|response| match response {
                     Response::ReadDiscreteInputs(mut coils) => {
+                        debug!("{:?}", coils);
                         coils.truncate(cnt.into());
                         coils
                     }
