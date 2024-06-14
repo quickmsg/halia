@@ -20,6 +20,10 @@ pub mod sink;
 pub mod source;
 
 static ROOT_DIR: &str = "storage";
+static DEVICE_DIR: &str = "device";
+static SOURCE_DIR: &str = "source";
+static SINK_DIR: &str = "sink";
+static RULE_DIR: &str = "rule";
 static DATA_FILE: &str = "data";
 static DELIMITER: char = '|';
 

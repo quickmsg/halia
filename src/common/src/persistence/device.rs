@@ -1,4 +1,7 @@
-use std::{io, path::Path};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use tokio::{
     fs::{self, OpenOptions},
@@ -7,15 +10,23 @@ use tokio::{
 use tracing::debug;
 use uuid::Uuid;
 
-use super::{Status, DATA_FILE, DELIMITER, ROOT_DIR};
+use super::{Status, DELIMITER};
+
+fn get_dir() -> PathBuf {
+    Path::new(super::ROOT_DIR).join(super::DEVICE_DIR)
+}
+
+fn get_file() -> PathBuf {
+    get_dir().join(super::DATA_FILE)
+}
 
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
     let data = format!("{}{}{}", 0, DELIMITER, data);
-    super::insert(Path::new(ROOT_DIR).to_path_buf(), &vec![(id, data)], true).await
+    super::insert(get_dir(), &vec![(id, data)], true).await
 }
 
 pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
-    let datas = super::read(Path::new(ROOT_DIR).join(DATA_FILE)).await?;
+    let datas = super::read(get_file()).await?;
     let mut devices = vec![];
     for (id, data) in datas {
         let pos = data.find(DELIMITER).expect("数据文件损坏");
@@ -36,7 +47,7 @@ pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
 }
 
 pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {
-    let path = Path::new(ROOT_DIR).join(DATA_FILE);
+    let path = get_file();
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -74,7 +85,7 @@ pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {
 }
 
 pub async fn update_status(id: Uuid, status: Status) -> Result<(), io::Error> {
-    let path = Path::new(ROOT_DIR).join(DATA_FILE);
+    let path = get_file();
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -115,6 +126,6 @@ pub async fn update_status(id: Uuid, status: Status) -> Result<(), io::Error> {
 }
 
 pub async fn delete(id: Uuid) -> Result<(), io::Error> {
-    super::delete(Path::new(ROOT_DIR).join(DATA_FILE), &vec![id]).await?;
-    fs::remove_dir_all(Path::new(ROOT_DIR).join(id.to_string())).await
+    super::delete(get_file(), &vec![id]).await?;
+    fs::remove_dir_all(get_dir().join(id.to_string())).await
 }

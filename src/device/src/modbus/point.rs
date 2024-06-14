@@ -110,7 +110,7 @@ impl Point {
 
     pub async fn write(&mut self, ctx: &mut Context, value: serde_json::Value) -> Result<()> {
         ctx.set_slave(self.conf.slave);
-        match self.conf.area {
+        Ok(match self.conf.area {
             0 => match ctx.write_single_coil(self.conf.address, 1).await {
                 Ok(res) => match res {
                     Ok(_) => return Ok(()),
@@ -142,11 +142,25 @@ impl Point {
                         Err(e) => bail!("{}", e),
                     }
                 }
-                // DataType::String => todo!(),
+                DataType::String(_, _, _, _) => {
+                    if let Ok(data) = self.conf.r#type.encode(value) {
+                        if data.len() == 2 {
+                            match ctx.write_single_register(self.conf.address, &data).await {
+                                Ok(_) => todo!(),
+                                Err(_) => todo!(),
+                            }
+                        } else {
+                            match ctx.write_multiple_registers(self.conf.address, &data).await {
+                                Ok(_) => return Ok(()),
+                                Err(e) => bail!("{}", e),
+                            }
+                        }
+                    }
+                }
                 // DataType::Bytes => todo!(),
                 _ => bail!("not support"),
             },
             _ => unreachable!(),
-        }
+        })
     }
 }

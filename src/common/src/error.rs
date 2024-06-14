@@ -8,6 +8,7 @@ pub enum HaliaError {
     ProtocolNotSupported,
     ParseErr,
     IoErr,
+    Existed,
 }
 
 impl From<std::fmt::Error> for HaliaError {
@@ -35,6 +36,7 @@ impl Display for HaliaError {
             HaliaError::ProtocolNotSupported => write!(f, "协议未支持"),
             HaliaError::ParseErr => write!(f, "解析错误"),
             HaliaError::IoErr => write!(f, "IO错误"),
+            HaliaError::Existed => write!(f, "已存在"),
         }
     }
 }
@@ -46,6 +48,7 @@ impl HaliaError {
             HaliaError::ProtocolNotSupported => 2,
             HaliaError::ParseErr => 3,
             HaliaError::IoErr => 4,
+            HaliaError::Existed => 5,
         }
     }
 }

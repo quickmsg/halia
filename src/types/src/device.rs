@@ -625,13 +625,3 @@ pub enum Mode {
     Client,
     Server,
 }
-
-#[derive(Deserialize, Serialize, Clone)]
-#[serde(rename_all = "snake_case")]
-pub enum Status {
-    Init,
-    Runing,
-    Paused,
-    Error,
-    Stoped,
-}
