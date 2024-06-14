@@ -1,16 +1,19 @@
+#![feature(lazy_cell)]
 use anyhow::Result;
 use message::MessageBatch;
 // use operators::merge::merge::Merge;
 use operators::window::window::Window;
+use sink::GLOBAL_SINK_MANAGER;
+use source::GLOBAL_SOURCE_MANAGER;
 use std::collections::HashMap;
+use stream::Stream;
 use tokio::sync::broadcast::{self, Receiver};
 use tracing::{debug, error};
 use types::rule::{CreateGraph, CreateGraphNode, Status};
 use uuid::Uuid;
 
-use crate::{sink::GLOBAL_SINK_MANAGER, source::GLOBAL_SOURCE_MANAGER};
-
-use super::stream::Stream;
+mod manager;
+mod stream;
 
 pub struct Graph {
     pub create_graph: CreateGraph,

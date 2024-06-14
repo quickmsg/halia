@@ -39,7 +39,6 @@ dependencies = [
  "axum",
  "common",
  "device",
- "managers",
  "serde",
  "serde_json",
  "tokio",
@@ -200,10 +199,6 @@ dependencies = [
  "tracing",
  "uuid",
 ]
-
-[[package]]
-name = "connectors"
-version = "0.1.0"
 
 [[package]]
 name = "core-foundation"
@@ -589,23 +584,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "managers"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "common",
- "functions",
- "message",
- "operators",
- "sinks",
- "sources",
- "tokio",
- "tracing",
- "types",
- "uuid",
-]
-
-[[package]]
 name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -904,6 +882,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "rule"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common",
+ "functions",
+ "message",
+ "operators",
+ "sink",
+ "source",
+ "tokio",
+ "tracing",
+ "types",
+ "uuid",
+]
+
+[[package]]
 name = "rumqttc"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1134,10 +1129,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "sinks"
+name = "sink"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common",
  "message",
  "serde_json",
  "tokio",
@@ -1172,7 +1168,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sources"
+name = "source"
 version = "0.1.0"
 dependencies = [
  "anyhow",

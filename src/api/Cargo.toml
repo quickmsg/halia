@@ -5,7 +5,6 @@ edition.workspace = true
 
 [dependencies]
 types = { workspace = true }
-managers = { workspace = true }
 device = { workspace = true }
 common = { workspace = true }
 

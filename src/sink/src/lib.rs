@@ -1,12 +1,16 @@
+#![feature(lazy_cell)]
+
 use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
+use log::Log;
 use message::MessageBatch;
-use sinks::{log::Log, Sink};
 use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::{broadcast::Receiver, RwLock};
 use tracing::debug;
 use types::sink::{CreateSinkReq, ListSinkResp, ReadSinkResp, UpdateSinkReq};
 use uuid::Uuid;
+
+pub mod log;
 
 pub struct SinkManager {
     sinks: RwLock<HashMap<Uuid, Box<dyn Sink>>>,
@@ -69,4 +73,12 @@ impl SinkManager {
             None => bail!("not find"),
         }
     }
+}
+
+pub trait Sink: Send + Sync {
+    fn get_detail(&self) -> Result<ReadSinkResp>;
+
+    fn get_info(&self) -> Result<ListSinkResp>;
+
+    fn insert_receiver(&mut self, receiver: Receiver<MessageBatch>) -> Result<()>;
 }

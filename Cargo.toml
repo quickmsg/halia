@@ -1,19 +1,18 @@
 [workspace]
 members = [
     "src/api",
-    "src/managers",
     "src/message",
     "src/server",
     "src/types",
-    "src/sources",
-    "src/sinks",
+    "src/source",
+    "src/sink",
     "src/operators",
     "src/device",
     "src/common",
     "src/json",
-    "src/connectors",
     "src/functions",
     "src/protocol",
+    "src/rule",
 ]
 resolver = "2"
 
@@ -25,9 +24,8 @@ edition = "2021"
 api = { path = "src/api" }
 types = { path = "src/types" }
 message = { path = "src/message" }
-managers = { path = "src/managers" }
-sources = { path = "src/sources" }
-sinks = { path = "src/sinks" }
+source = { path = "src/source" }
+sink = { path = "src/sink" }
 operators = { path = "src/operators" }
 device = { path = "src/device" }
 common = { path = "src/common" }

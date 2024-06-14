@@ -1,15 +1,20 @@
+#![feature(lazy_cell)]
 use anyhow::{bail, Result};
+use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
+use device::Device;
 use message::MessageBatch;
-use sources::Source;
-use sources::{device::Device, mqtt::Mqtt};
+use mqtt::Mqtt;
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::{self, Receiver};
 use tokio::sync::RwLock;
 use tracing::{debug, error};
 use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
+
+pub mod device;
+pub mod mqtt;
 
 pub struct SourceManager {
     sources: RwLock<HashMap<Uuid, Box<dyn Source>>>,
@@ -82,4 +87,13 @@ impl SourceManager {
     fn stop() {
         // todo!()
     }
+}
+
+#[async_trait]
+pub trait Source: Send + Sync {
+    async fn subscribe(&mut self) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+
+    fn get_info(&self) -> Result<ListSourceResp>;
+
+    fn stop(&self) {}
 }
