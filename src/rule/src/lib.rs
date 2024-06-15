@@ -2,10 +2,10 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use rule::Rule;
-use uuid::Uuid;
 use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::RwLock;
-use types::rule::{CreateRuleReq, ListRuleResp, Status};
+use types::rule::{CreateRuleReq, ListRuleResp};
+use uuid::Uuid;
 
 mod rule;
 mod stream;

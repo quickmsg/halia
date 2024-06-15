@@ -1,78 +1,67 @@
-use anyhow::{bail, Result};
-use functions::filter;
+use anyhow::Result;
 use message::MessageBatch;
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::{select, sync::broadcast};
 use tracing::{debug, error};
-use types::rule::{CreateRuleNode, Operate};
+use types::rule::CreateRuleNode;
 
 pub struct Stream {
-    pub rx: Receiver<MessageBatch>,
-    pub nodes: Vec<Box<dyn Operate>>,
-    pub tx: Sender<MessageBatch>,
+    nodes: Vec<CreateRuleNode>,
 }
 
 impl Stream {
-    pub fn new(
-        rx: Receiver<MessageBatch>,
-        create_graph_nodes: &Vec<&CreateRuleNode>,
-        tx: Sender<MessageBatch>,
-    ) -> Result<Self> {
-        let mut nodes = Vec::new();
-        for create_graph_node in create_graph_nodes.iter() {
-            let node = get_operator_node(&create_graph_node)?;
-            nodes.push(node);
-        }
-        Ok(Stream { rx, nodes, tx })
+    pub fn new(nodes: Vec<CreateRuleNode>) -> Result<Self> {
+        // TODO validate
+        Ok(Stream { nodes })
     }
 
-    pub async fn run(&mut self) {
-        debug!("stream run");
-        loop {
-            match self.rx.recv().await {
-                Ok(mut message_batch) => {
-                    for node in self.nodes.iter() {
-                        node.operate(&mut message_batch);
+    pub async fn start(
+        &self,
+        mut rx: broadcast::Receiver<MessageBatch>,
+        tx: broadcast::Sender<MessageBatch>,
+        mut stop_signal: broadcast::Receiver<()>,
+    ) -> Result<()> {
+        let mut functions = Vec::new();
+        for create_graph_node in &self.nodes {
+            let node = functions::new(&create_graph_node)?;
+            functions.push(node);
+        }
+
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    biased;
+
+                    _ = stop_signal.recv() => {
+                        debug!("stream stop");
+                        return
                     }
-                    match self.tx.send(message_batch) {
-                        Err(e) => {
-                            error!("stream send err:{}, ids", e);
+
+                    message_batch = rx.recv() => {
+                        match message_batch {
+                            Ok(mut message_batch) => {
+                                for function in &functions {
+                                    function.call(&mut message_batch);
+                                    if message_batch.len() == 0 {
+                                        break;
+                                    }
+                                }
+
+                                if message_batch.len() != 0 {
+                                    if let Err(e) = tx.send(message_batch) {
+                                        error!("stream send err:{}, ids", e);
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                error!("stream recv err:{}", e);
+                                break;
+                            }
                         }
-                        _ => {}
                     }
-                }
-                Err(e) => {
-                    debug!("stream recv error: {:?}", e);
                 }
             }
-        }
-    }
-}
+        });
 
-fn get_operator_node(cgn: &CreateRuleNode) -> Result<Box<dyn Operate>> {
-    debug!("{:?}", cgn);
-    match cgn.r#type.as_str() {
-        "field" => match cgn.name.as_ref().unwrap().as_str() {
-            // "watermark" => {
-            //     let watermark = Watermark::new(cgn.conf.clone())?;
-            //     Ok(Box::new(watermark))
-            // }
-            // "name" => {
-            //     let name = Name::new(cgn.conf.clone())?;
-            //     Ok(Box::new(name))
-            // }
-            _ => bail!("not support"),
-        },
-        "filter" => {
-            let filter = filter::Node::new(cgn.conf.clone())?;
-            Ok(Box::new(filter))
-        }
-        // "compute" => {
-        //     ComputeNode::new(cgn.conf.clone())
-        // }
-        // "aggregate" => {
-        //     let aggregate = AggregateNode::new(cgn.conf.clone())?;
-        //     Ok(Box::new(aggregate))
-        // }
-        _ => bail!("not support"),
+        Ok(())
     }
 }

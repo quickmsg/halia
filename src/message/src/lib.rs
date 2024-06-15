@@ -3,7 +3,6 @@ use bytes::Bytes;
 use indexmap::IndexMap;
 use json::{Map, Value};
 use std::collections::HashMap;
-use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
@@ -42,6 +41,10 @@ impl MessageBatch {
 
     pub fn merge(&mut self, other: Self) {
         self.messages.extend(other.messages);
+    }
+
+    pub fn len(&self) -> usize {
+        self.messages.len()
     }
 
     pub fn clear(&mut self) {
