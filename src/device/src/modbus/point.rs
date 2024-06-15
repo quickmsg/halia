@@ -111,55 +111,58 @@ impl Point {
     pub async fn write(&mut self, ctx: &mut Context, value: serde_json::Value) -> Result<()> {
         ctx.set_slave(self.conf.slave);
         Ok(match self.conf.area {
-            0 => match ctx.write_single_coil(self.conf.address, 1).await {
-                Ok(res) => match res {
-                    Ok(_) => return Ok(()),
-                    Err(e) => {
-                        warn!("modbus protocl exception:{}", e);
-                        todo!()
-                    }
-                },
-                Err(_) => todo!(),
-            },
-            4 => match self.conf.r#type {
-                DataType::Int16(_) | DataType::Uint16(_) => {
-                    let data = self.conf.r#type.encode(value).unwrap();
-                    match ctx.write_single_register(self.conf.address, &data).await {
-                        Ok(_) => return Ok(()),
-                        Err(e) => bail!("{}", e),
-                    }
-                }
-                DataType::Int32(_, _)
-                | DataType::Uint32(_, _)
-                | DataType::Int64(_, _)
-                | DataType::Uint64(_, _)
-                | DataType::Float32(_, _)
-                | DataType::Float64(_, _) => {
-                    let data = self.conf.r#type.encode(value).unwrap();
-                    debug!("data is {:?}", data);
-                    match ctx.write_multiple_registers(self.conf.address, &data).await {
-                        Ok(_) => return Ok(()),
-                        Err(e) => bail!("{}", e),
-                    }
-                }
-                DataType::String(_, _, _, _) => {
-                    if let Ok(data) = self.conf.r#type.encode(value) {
-                        if data.len() == 2 {
-                            match ctx.write_single_register(self.conf.address, &data).await {
-                                Ok(_) => todo!(),
-                                Err(_) => todo!(),
-                            }
-                        } else {
-                            match ctx.write_multiple_registers(self.conf.address, &data).await {
+            0 => {
+                if let Ok(data) = self.conf.r#type.encode(value) {
+                    match data.len() {
+                        1 => match ctx.write_single_coil(self.conf.address, data[0]).await {
+                            Ok(res) => match res {
                                 Ok(_) => return Ok(()),
-                                Err(e) => bail!("{}", e),
-                            }
-                        }
+                                Err(e) => {
+                                    warn!("modbus protocl exception:{}", e);
+                                    return Ok(());
+                                }
+                            },
+                            Err(e) => return Err(e.into()),
+                        },
+                        _ => match ctx.write_multiple_coils(self.conf.address, &data).await {
+                            Ok(res) => match res {
+                                Ok(_) => return Ok(()),
+                                Err(e) => {
+                                    warn!("modbus protocl exception:{}", e);
+                                    return Ok(());
+                                }
+                            },
+                            Err(e) => return Err(e.into()),
+                        },
                     }
                 }
-                // DataType::Bytes => todo!(),
-                _ => bail!("not support"),
-            },
+            }
+            4 => {
+                if let Ok(data) = self.conf.r#type.encode(value) {
+                    match data.len() {
+                        2 => match ctx.write_single_register(self.conf.address, &data).await {
+                            Ok(res) => match res {
+                                Ok(_) => return Ok(()),
+                                Err(e) => {
+                                    warn!("modbus protocol exception:{}", e);
+                                    return Ok(());
+                                }
+                            },
+                            Err(e) => bail!("{}", e),
+                        },
+                        _ => match ctx.write_single_register(self.conf.address, &data).await {
+                            Ok(res) => match res {
+                                Ok(_) => return Ok(()),
+                                Err(e) => {
+                                    warn!("modbus protocol exception:{}", e);
+                                    return Ok(());
+                                }
+                            },
+                            Err(e) => bail!("{}", e),
+                        },
+                    }
+                }
+            }
             _ => unreachable!(),
         })
     }

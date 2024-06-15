@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::str::FromStr;
-use tracing::{debug, warn};
+use tracing::{debug, field::debug, warn};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -263,6 +263,7 @@ impl DataType {
     }
 
     pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
+        debug!("data is {:?}", data);
         match self {
             DataType::Bool => {
                 if data.len() != 1 {

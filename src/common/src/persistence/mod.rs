@@ -27,7 +27,7 @@ static RULE_DIR: &str = "rule";
 static DATA_FILE: &str = "data";
 static DELIMITER: char = '|';
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Status {
     Stopped = 0,
     Runing = 1,

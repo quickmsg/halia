@@ -264,7 +264,14 @@ impl DeviceManager {
 
 impl DeviceManager {
     pub async fn recover(&self) -> HaliaResult<()> {
-        let devices = persistence::device::read().await?;
+        let devices = match persistence::device::read().await {
+            Ok(devices) => devices,
+            Err(e) => {
+                error!("read device from file err:{}", e);
+                return Err(e.into());
+            }
+        };
+
         for (id, status, data) in devices {
             let req = match serde_json::from_str::<CreateDeviceReq>(data.as_str()) {
                 Ok(req) => req,
@@ -273,21 +280,32 @@ impl DeviceManager {
                     return Err(e.into());
                 }
             };
-            match self.create_device(Some(id), req).await {
-                Ok(_) => {}
-                Err(_) => todo!(),
+            if let Err(e) = self.create_device(Some(id), req).await {
+                error!("{}", e);
+                return Err(e.into());
             }
-            self.recover_group(id).await?;
-            match status {
-                persistence::Status::Stopped => {}
-                persistence::Status::Runing => self.start_device(id).await?,
+            if let Err(e) = self.recover_group(id).await {
+                error!("recover group err:{}", e);
+                return Err(e.into());
+            }
+            if status == persistence::Status::Runing {
+                if let Err(e) = self.start_device(id).await {
+                    error!("start device err:{}", e);
+                    return Err(e.into());
+                }
             }
         }
         Ok(())
     }
 
     async fn recover_group(&self, device_id: Uuid) -> HaliaResult<()> {
-        let groups = persistence::group::read(device_id).await?;
+        let groups = match persistence::group::read(device_id).await {
+            Ok(groups) => groups,
+            Err(e) => {
+                error!("read device:{} group from file err:{}", device_id, e);
+                return Err(e.into());
+            }
+        };
         let groups: Vec<(Option<Uuid>, CreateGroupReq)> = groups
             .into_iter()
             .map(|(id, data)| {
@@ -297,15 +315,36 @@ impl DeviceManager {
             .collect();
 
         for (group_id, req) in groups {
-            self.create_group(device_id, group_id, req).await?;
-            self.recover_points(device_id, group_id.unwrap()).await?;
+            if let Err(e) = self.create_group(device_id, group_id, req).await {
+                error!(
+                    "create device:{} group:{:?} err:{} ",
+                    device_id, group_id, e
+                );
+                return Err(e);
+            }
+            if let Err(e) = self.recover_points(device_id, group_id.unwrap()).await {
+                error!(
+                    "recover device:{} group:{:?} err:{}",
+                    device_id, group_id, e
+                );
+                return Err(e);
+            }
         }
 
         Ok(())
     }
 
     async fn recover_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        let points = persistence::point::read(device_id, group_id).await?;
+        let points = match persistence::point::read(device_id, group_id).await {
+            Ok(points) => points,
+            Err(e) => {
+                error!(
+                    "read device:{} group:{} points data err:{}",
+                    device_id, group_id, e
+                );
+                return Err(e.into());
+            }
+        };
         let points: Vec<(Option<Uuid>, CreatePointReq)> = points
             .into_iter()
             .map(|(id, data)| {
@@ -313,7 +352,10 @@ impl DeviceManager {
                 (Some(id), req)
             })
             .collect();
-        self.create_points(device_id, group_id, points).await?;
+        if let Err(e) = self.create_points(device_id, group_id, points).await {
+            error!("create points err:{}", e);
+            return Err(e);
+        }
         Ok(())
     }
 }

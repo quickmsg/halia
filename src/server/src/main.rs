@@ -11,7 +11,9 @@ async fn main() -> Result<()> {
         .with_line_number(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-    GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
+    if let Err(e) = GLOBAL_DEVICE_MANAGER.recover().await {
+        println!("{}", e);
+    }
 
     start().await;
     info!("server start");
