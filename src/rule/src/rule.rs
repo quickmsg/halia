@@ -10,27 +10,39 @@ use tracing::{debug, error};
 use types::rule::{CreateRuleNode, CreateRuleReq, Status};
 use uuid::Uuid;
 
-use crate::stream::Stream;
+use crate::stream::start_stream;
 
 pub(crate) struct Rule {
-    pub name: String,
+    pub id: Uuid,
     pub status: Status,
-    pub streams: Vec<Stream>,
-    pub rxs: Vec<broadcast::Receiver<MessageBatch>>,
+    // pub rxs: Vec<broadcast::Receiver<MessageBatch>>,
+    pub req: CreateRuleReq,
+    pub stop_signal: broadcast::Sender<()>,
 }
 
 impl Rule {
     pub async fn create(id: Uuid, req: CreateRuleReq) -> Result<Self> {
-        let (incoming_edges, outgoing_edges) = req.get_edges();
+        let (stop_signal, _) = broadcast::channel::<()>(1);
+        Ok(Self {
+            id,
+            status: Status::Stopped,
+            // rxs: todo!(),
+            req,
+            stop_signal,
+        })
+    }
+
+    pub async fn start(&mut self) -> Result<()> {
+        let (incoming_edges, outgoing_edges) = self.req.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
         let mut node_map = HashMap::<usize, CreateRuleNode>::new();
-        for node in req.nodes.iter() {
+        for node in self.req.nodes.iter() {
             node_map.insert(node.index, node.clone());
         }
 
-        let mut ids: Vec<usize> = req.nodes.iter().map(|node| node.index).collect();
+        let mut ids: Vec<usize> = self.req.nodes.iter().map(|node| node.index).collect();
 
         let mut receivers = HashMap::new();
         let stream_infos = get_stream_infos(
@@ -52,25 +64,25 @@ impl Rule {
                                 receivers.insert(info.first_id, vec![receiver]);
                             }
                         }
-                        "window" => {
-                            if let Some(source_ids) = incoming_edges.get(&info.id) {
-                                if let Some(source_id) = source_ids.first() {
-                                    if let Some(mut node_receivers) = receivers.remove(source_id) {
-                                        let rx = node_receivers.remove(0);
-                                        let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
-                                        receivers.insert(info.id, vec![nrx]);
+                        // "window" => {
+                        //     if let Some(source_ids) = incoming_edges.get(&info.id) {
+                        //         if let Some(source_id) = source_ids.first() {
+                        //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                        //                 let rx = node_receivers.remove(0);
+                        //                 let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
+                        //                 receivers.insert(info.id, vec![nrx]);
 
-                                        if let Some(node) = node_map.get(&info.id) {
-                                            let mut window =
-                                                Window::new(node.conf.clone(), rx, tx)?;
-                                            tokio::spawn(async move {
-                                                window.run().await;
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        //                 if let Some(node) = node_map.get(&info.id) {
+                        //                     let mut window =
+                        //                         Window::new(node.conf.clone(), rx, tx)?;
+                        //                     tokio::spawn(async move {
+                        //                         window.run().await;
+                        //                     });
+                        //                 }
+                        //             }
+                        //         }
+                        //     }
+                        // }
                         "sink" => {
                             if let Some(source_ids) = incoming_edges.get(&info.id) {
                                 if let Some(source_id) = source_ids.first() {
@@ -138,22 +150,14 @@ impl Rule {
                                     let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
                                     receivers.insert(info.last_id, vec![nrx]);
 
-                                    let mut create_graph_nodes = Vec::new();
+                                    let mut nodes = Vec::new();
                                     for id in info.ids.iter() {
-                                        create_graph_nodes.push(node_map.get(id).unwrap());
+                                        nodes.push(node_map.get(id).unwrap());
                                     }
 
-                                    debug!("create_graph_nodes:{:?}", create_graph_nodes);
+                                    debug!("create_graph_nodes:{:?}", nodes);
 
-                                    let stream = Stream::new(rx, &create_graph_nodes, tx);
-                                    match stream {
-                                        Ok(mut stream) => {
-                                            tokio::spawn(async move {
-                                                stream.run().await;
-                                            });
-                                        }
-                                        Err(e) => error!("{}", e),
-                                    }
+                                    start_stream(nodes, rx, tx, self.stop_signal.subscribe()).await;
                                 }
                             }
                         }
@@ -162,11 +166,14 @@ impl Rule {
             }
         }
 
-        todo!()
+        Ok(())
     }
 
-    fn run(&self) -> Result<()> {
-        todo!()
+    pub fn stop(&mut self) {
+        self.status = Status::Stopped;
+        if let Err(e) = self.stop_signal.send(()) {
+            error!("rule stop send signal err:{}", e);
+        }
     }
 }
 

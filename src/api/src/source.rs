@@ -26,6 +26,6 @@ pub(crate) async fn list() -> AppResp<Vec<ListSourceResp>> {
     }
 }
 
-pub(crate) async fn update_source() {}
+pub(crate) async fn update() {}
 
-pub(crate) async fn delete_source() {}
+pub(crate) async fn delete() {}

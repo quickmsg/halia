@@ -1,21 +1,15 @@
-use axum::debug_handler;
-use axum::{extract::Path, http::StatusCode, Json};
+use axum::{extract::Path, Json};
 use rule::GLOBAL_RULE_MANAGER;
 use types::rule::{CreateRuleReq, ListRuleResp};
 use uuid::Uuid;
 
 use crate::AppResp;
 
-pub(crate) async fn create(Json(req): Json<CreateRuleReq>) -> (StatusCode, String) {
+pub(crate) async fn create(Json(req): Json<CreateRuleReq>) -> AppResp<()> {
     match GLOBAL_RULE_MANAGER.create(None, req).await {
-        Ok(_) => return (StatusCode::CREATED, String::from("OK")),
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                String::from(format!("because: {}", e)),
-            )
-        }
-    };
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
 }
 
 pub(crate) async fn list() -> AppResp<Vec<ListRuleResp>> {
@@ -25,7 +19,13 @@ pub(crate) async fn list() -> AppResp<Vec<ListRuleResp>> {
     }
 }
 
-#[axum::debug_handler]
+pub(crate) async fn read(Path(id): Path<Uuid>) -> AppResp<CreateRuleReq> {
+    match GLOBAL_RULE_MANAGER.read(id).await {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
+}
+
 pub(crate) async fn start(Path(id): Path<Uuid>) -> AppResp<()> {
     match GLOBAL_RULE_MANAGER.start(id).await {
         Ok(()) => AppResp::new(),
@@ -33,10 +33,24 @@ pub(crate) async fn start(Path(id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn stop(Path(_name): Path<String>) -> (StatusCode, String) {
-    (StatusCode::OK, String::from("OK"))
+pub(crate) async fn stop(Path(id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_RULE_MANAGER.stop(id).await {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
 }
 
-pub(crate) async fn helath() -> (StatusCode, String) {
-    return (StatusCode::CREATED, String::from("OK"));
+pub(crate) async fn update(Path(id): Path<Uuid>) -> AppResp<()> {
+    // TODO
+    match GLOBAL_RULE_MANAGER.stop(id).await {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn delete(Path(id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_RULE_MANAGER.delete(id).await {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
 }
