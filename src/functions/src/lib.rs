@@ -21,10 +21,10 @@ pub fn new(req: &CreateRuleNode) -> Result<Box<dyn Function>> {
             // }
             _ => bail!("not support"),
         },
-        // "filter" => {
-        //     let filter = filter::Node::new(cgn.conf.clone())?;
-        //     Ok(Box::new(filter))
-        // }
+        "filter" => {
+            let filter = filter::Node::new(req.conf.clone())?;
+            Ok(Box::new(filter))
+        }
         // "compute" => {
         //     ComputeNode::new(cgn.conf.clone())
         // }

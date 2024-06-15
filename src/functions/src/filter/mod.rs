@@ -2,7 +2,10 @@ use anyhow::{bail, Result};
 use gt::Gt;
 use message::Message;
 use serde::Deserialize;
+use tracing::debug;
 use types::rule::Operate;
+
+use crate::Function;
 
 pub mod gt;
 
@@ -37,9 +40,10 @@ impl Node {
     }
 }
 
-impl Operate for Node {
-    fn operate(&self, message_batch: &mut message::MessageBatch) -> bool {
+impl Function for Node {
+    fn call(&self, message_batch: &mut message::MessageBatch) {
         let messages = message_batch.get_messages_mut();
+        debug!("{:?}", messages);
         messages.retain(|message| {
             for filter in &self.filters {
                 if filter.filter(message) {
@@ -48,7 +52,6 @@ impl Operate for Node {
             }
             false
         });
-
-        true
+        debug!("{:?}", messages);
     }
 }

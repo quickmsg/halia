@@ -300,6 +300,7 @@ dependencies = [
  "message",
  "serde",
  "serde_json",
+ "tracing",
  "types",
 ]
 
