@@ -409,6 +409,18 @@ impl DataType {
     pub fn encode(&self, data: Value) -> Result<Vec<u8>> {
         debug!("write data is :{}", data);
         match self {
+            DataType::Bool => match data.as_bool() {
+                Some(value) => {
+                    let mut data = Vec::with_capacity(1);
+                    if value {
+                        data.push(1);
+                    } else {
+                        data.push(0);
+                    }
+                    Ok(data)
+                }
+                None => bail!("value is wrong"),
+            },
             DataType::Int16(endian) => match data.as_i64() {
                 Some(value) => {
                     let data = match endian {

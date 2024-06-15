@@ -141,7 +141,11 @@ impl Group {
 
         self.points.write().await.extend(points);
         if storage_infos.len() > 0 {
-            persistence::point::insert(self.device_id, self.id, &storage_infos).await?;
+            if let Err(e) =
+                persistence::point::insert(self.device_id, self.id, &storage_infos).await
+            {
+                error!("insert point err:{}", e);
+            }
         }
         Ok(())
     }
