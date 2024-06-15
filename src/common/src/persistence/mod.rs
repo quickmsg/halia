@@ -51,29 +51,23 @@ impl Display for Status {
     }
 }
 
-pub(crate) async fn insert(
-    dir: PathBuf,
-    datas: &[(Uuid, String)],
-    create_dir: bool,
-) -> Result<(), io::Error> {
-    let path = dir.join(DATA_FILE);
+async fn insert(path: PathBuf, datas: &[(Uuid, String)]) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().append(true).open(path).await?;
     for (id, data) in datas {
         file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
             .await?;
-
-        if create_dir {
-            let dir_path = dir.join(id.to_string());
-            fs::create_dir(&dir_path).await?;
-            let file = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open(dir_path.join(DATA_FILE))
-                .await?;
-            file.set_permissions(Permissions::from_mode(0o666)).await?;
-        }
     }
     file.flush().await
+}
+
+async fn create_dir(path: PathBuf) -> Result<(), io::Error> {
+    fs::create_dir(&path).await?;
+    let file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path.join(DATA_FILE))
+        .await?;
+    file.set_permissions(Permissions::from_mode(0o666)).await
 }
 
 async fn read(path: impl AsRef<Path>) -> Result<Vec<(Uuid, String)>, io::Error> {

@@ -7,6 +7,7 @@ edition.workspace = true
 api = { workspace = true }
 device = { workspace = true }
 json = { workspace = true }
+source = { workspace = true }
 
 tracing = { workspace = true }
 tracing-subscriber = "0.3.0"

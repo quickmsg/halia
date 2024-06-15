@@ -1108,6 +1108,7 @@ dependencies = [
  "api",
  "device",
  "json",
+ "source",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -35,7 +35,7 @@ pub struct Conf {
 }
 
 impl Mqtt {
-    pub fn new(id: Uuid, conf: Value) -> Result<Box<dyn Source + Sync + Send>> {
+    pub fn new(id: Uuid, conf: Value) -> HaliaResult<Box<dyn Source + Sync + Send>> {
         let conf: Conf = serde_json::from_value(conf.clone())?;
         Ok(Box::new(Mqtt {
             id,

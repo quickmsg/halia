@@ -16,7 +16,8 @@ fn get_file(device_id: Uuid) -> PathBuf {
 }
 
 pub async fn insert(device_id: Uuid, group_id: Uuid, data: String) -> Result<(), io::Error> {
-    super::insert(get_dir(device_id), &vec![(group_id, data)], true).await
+    super::insert(get_dir(device_id), &vec![(group_id, data)]).await?;
+    super::create_dir(get_dir(device_id).join(group_id.to_string())).await
 }
 
 pub async fn read(device_id: Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {

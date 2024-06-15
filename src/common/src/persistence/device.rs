@@ -22,7 +22,8 @@ fn get_file() -> PathBuf {
 
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
     let data = format!("{}{}{}", 0, DELIMITER, data);
-    super::insert(get_dir(), &vec![(id, data)], true).await
+    super::insert(get_file(), &vec![(id, data)]).await?;
+    super::create_dir(get_dir().join(id.to_string())).await
 }
 
 pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {

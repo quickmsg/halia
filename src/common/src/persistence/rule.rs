@@ -11,7 +11,7 @@ use super::{Status, DATA_FILE, DELIMITER, ROOT_DIR};
 
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
     let data = format!("{}{}{}", 0, DELIMITER, data);
-    super::insert(Path::new(ROOT_DIR).to_path_buf(), &vec![(id, data)], true).await
+    super::insert(Path::new(ROOT_DIR).to_path_buf(), &vec![(id, data)]).await
 }
 
 pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {

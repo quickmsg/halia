@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::str::FromStr;
-use tracing::{debug, field::debug, warn};
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize)]

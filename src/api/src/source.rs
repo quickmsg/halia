@@ -13,7 +13,7 @@ pub(crate) async fn create(Json(req): Json<CreateSourceReq>) -> AppResp<()> {
 }
 
 pub(crate) async fn read(Path(id): Path<Uuid>) -> AppResp<SourceDetailResp> {
-    match GLOBAL_SOURCE_MANAGER.read_source(id).await {
+    match GLOBAL_SOURCE_MANAGER.read(id).await {
         Ok(resp) => AppResp::with_data(resp),
         Err(e) => e.into(),
     }

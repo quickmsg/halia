@@ -2,6 +2,7 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
+use common::persistence::{self, source};
 use device::Device;
 use message::MessageBatch;
 use mqtt::Mqtt;
@@ -26,37 +27,29 @@ pub static GLOBAL_SOURCE_MANAGER: LazyLock<SourceManager> = LazyLock::new(|| Sou
 
 impl SourceManager {
     pub async fn create(&self, id: Option<Uuid>, req: CreateSourceReq) -> HaliaResult<()> {
-        let id = match id {
-            Some(id) => id,
-            None => Uuid::new_v4(),
+        let (id, persistence) = match id {
+            Some(id) => (id, false),
+            None => (Uuid::new_v4(), true),
         };
-        match req.r#type.as_str() {
-            "mqtt" => match Mqtt::new(id, req.conf.clone()) {
-                Ok(mqtt) => {
-                    debug!("insert source");
-                    self.sources.write().await.insert(id, mqtt);
-                    return Ok(());
-                }
-                Err(e) => {
-                    error!("register souce:{} err:{}", req.name, e);
-                    return Err(HaliaError::NotFound);
-                }
-            },
-            "device" => match Device::new(id, req.conf.clone()) {
-                Ok(device) => {
-                    self.sources.write().await.insert(id, device);
-                    return Ok(());
-                }
-                Err(e) => {
-                    error!("register souce:{} err:{}", req.name, e);
-                    return Err(HaliaError::NotFound);
-                }
-            },
+
+        let source = match req.r#type.as_str() {
+            "mqtt" => Mqtt::new(id, req.conf.clone())?,
+            "device" => Device::new(id, req.conf.clone())?,
             _ => return Err(HaliaError::ProtocolNotSupported),
+        };
+
+        self.sources.write().await.insert(id, source);
+
+        if persistence {
+            if let Err(e) = source::insert(id, serde_json::to_string(&req).unwrap()).await {
+                error!("isnert source err :{}", e);
+            }
         }
+
+        Ok(())
     }
 
-    pub async fn read_source(&self, id: Uuid) -> HaliaResult<SourceDetailResp> {
+    pub async fn read(&self, id: Uuid) -> HaliaResult<SourceDetailResp> {
         todo!()
     }
 
@@ -69,6 +62,10 @@ impl SourceManager {
             .map(|(_, source)| source.get_info().unwrap())
             .collect())
     }
+
+    pub async fn update() {}
+
+    pub async fn delete() {}
 
     pub async fn get_receiver(&self, id: Uuid) -> Result<Receiver<MessageBatch>> {
         debug!("subscribe source: {}", id);
@@ -86,6 +83,30 @@ impl SourceManager {
 
     fn stop() {
         // todo!()
+    }
+}
+
+impl SourceManager {
+    pub async fn recover(&self) -> HaliaResult<()> {
+        let sources = match persistence::source::read().await {
+            Ok(sources) => sources,
+            Err(e) => {
+                error!("read sources from file err:{}", e);
+                return Err(e.into());
+            }
+        };
+
+        for (id, status, data) in sources {
+            let req = match serde_json::from_str::<CreateSourceReq>(&data) {
+                Ok(req) => req,
+                Err(e) => {
+                    error!("parse json file err:{}", e);
+                    return Err(e.into());
+                }
+            };
+            GLOBAL_SOURCE_MANAGER.create(Some(id), req).await?;
+        }
+        Ok(())
     }
 }
 

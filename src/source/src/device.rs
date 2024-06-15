@@ -25,7 +25,7 @@ struct Conf {
 }
 
 impl Device {
-    pub fn new(id: Uuid, conf: Value) -> Result<Box<dyn Source>> {
+    pub fn new(id: Uuid, conf: Value) -> HaliaResult<Box<dyn Source>> {
         let conf: Conf = serde_json::from_value(conf.clone())?;
         Ok(Box::new(Device {
             id,
