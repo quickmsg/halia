@@ -19,29 +19,11 @@ fn file_name() -> PathBuf {
 }
 
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
-    let data = format!("{}{}{}", Status::Stopped, DELIMITER, data);
     super::insert(file_name(), &vec![(id, data)]).await
 }
 
-pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
-    let datas = super::read(file_name()).await?;
-    let mut devices = vec![];
-    for (id, data) in datas {
-        let pos = data.find(DELIMITER).expect("数据文件损坏");
-        let status = &data[..pos];
-        let device = &data[pos + 1..];
-        let status = status
-            .parse::<u8>()
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "数据文件损坏"))?;
-        let status = match status {
-            0 => Status::Stopped,
-            1 => Status::Runing,
-            _ => unreachable!(),
-        };
-        devices.push((id, status, device.to_string()))
-    }
-
-    Ok(devices)
+pub async fn read() -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(file_name()).await
 }
 
 pub async fn update(id: Uuid, data: String) -> Result<(), io::Error> {

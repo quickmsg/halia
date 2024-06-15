@@ -1108,6 +1108,8 @@ dependencies = [
  "api",
  "device",
  "json",
+ "rule",
+ "sink",
  "source",
  "tokio",
  "tracing",

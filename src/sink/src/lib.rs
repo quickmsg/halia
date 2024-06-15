@@ -3,13 +3,13 @@
 use anyhow::{bail, Result};
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    persistence::{self, sink},
 };
 use log::Log;
 use message::MessageBatch;
 use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::{broadcast::Receiver, RwLock};
-use tracing::debug;
+use tracing::{debug, error};
 use types::sink::{CreateSinkReq, ListSinkResp, ReadSinkResp, UpdateSinkReq};
 use uuid::Uuid;
 
@@ -34,6 +34,12 @@ impl SinkManager {
             "log" => Log::new(id, &req)?,
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
+
+        if persistence {
+            if let Err(e) = sink::insert(id, serde_json::to_string(&req).unwrap()).await {
+                error!("write sink err: {}", e);
+            }
+        }
 
         self.sinks.write().await.insert(id, sink);
 
@@ -74,6 +80,30 @@ impl SinkManager {
             Some(sink) => sink.insert_receiver(rx),
             None => bail!("not find"),
         }
+    }
+}
+
+impl SinkManager {
+    pub async fn recover(&self) -> HaliaResult<()> {
+        let sources = match persistence::sink::read().await {
+            Ok(sources) => sources,
+            Err(e) => {
+                error!("read sources from file err:{}", e);
+                return Err(e.into());
+            }
+        };
+
+        for (id, data) in sources {
+            let req = match serde_json::from_str::<CreateSinkReq>(&data) {
+                Ok(req) => req,
+                Err(e) => {
+                    error!("parse json file err:{}", e);
+                    return Err(e.into());
+                }
+            };
+            GLOBAL_SINK_MANAGER.create(Some(id), req).await?;
+        }
+        Ok(())
     }
 }
 

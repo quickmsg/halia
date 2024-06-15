@@ -1,6 +1,7 @@
 use anyhow::Result;
 use api::start;
 use device::GLOBAL_DEVICE_MANAGER;
+use sink::GLOBAL_SINK_MANAGER;
 use source::GLOBAL_SOURCE_MANAGER;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -17,6 +18,7 @@ async fn main() -> Result<()> {
     }
 
     GLOBAL_SOURCE_MANAGER.recover().await.unwrap();
+    GLOBAL_SINK_MANAGER.recover().await.unwrap();
 
     start().await;
     info!("server start");

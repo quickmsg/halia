@@ -247,7 +247,6 @@ impl TryFrom<Bytes> for Response {
     type Error = Error;
 
     fn try_from(mut bytes: Bytes) -> Result<Self, Self::Error> {
-        debug!("{:?}", bytes);
         use super::frame::Response::*;
         let fn_code = bytes.get_u8();
         let rsp = match fn_code {
@@ -259,7 +258,6 @@ impl TryFrom<Bytes> for Response {
             0x02 => {
                 let byte_count = bytes.get_u8();
                 let quantity = u16::from(byte_count);
-                debug!("{},{}", byte_count, quantity);
                 ReadDiscreteInputs(unpack_coils(&bytes, quantity))
             }
             0x05 => WriteSingleCoil(bytes.get_u16(), bytes.get_u8()),

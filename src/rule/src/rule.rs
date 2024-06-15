@@ -156,7 +156,6 @@ impl Rule {
                                     }
 
                                     debug!("create_graph_nodes:{:?}", nodes);
-
                                     start_stream(nodes, rx, tx, self.stop_signal.subscribe()).await;
                                 }
                             }

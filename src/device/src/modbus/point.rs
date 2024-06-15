@@ -51,7 +51,6 @@ impl Point {
 
     pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<json::Value> {
         ctx.set_slave(self.conf.slave);
-        debug!("{},{}", self.conf.address, self.quantity);
         match self.conf.area {
             0 => match ctx
                 .read_discrete_inputs(self.conf.address, self.quantity)

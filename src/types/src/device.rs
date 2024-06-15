@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::str::FromStr;
-use tracing::{debug, warn};
+use tracing::warn;
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -263,7 +263,6 @@ impl DataType {
     }
 
     pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
-        debug!("data is {:?}", data);
         match self {
             DataType::Bool => {
                 if data.len() != 1 {
@@ -407,7 +406,6 @@ impl DataType {
     }
 
     pub fn encode(&self, data: Value) -> Result<Vec<u8>> {
-        debug!("write data is :{}", data);
         match self {
             DataType::Bool => match data.as_bool() {
                 Some(value) => {
@@ -427,7 +425,6 @@ impl DataType {
                         Endian::BigEndian => (value as i16).to_be_bytes().to_vec(),
                         Endian::LittleEndian => (value as i16).to_le_bytes().to_vec(),
                     };
-                    debug!("data is {:?}", data);
                     return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),

@@ -99,7 +99,7 @@ impl SourceManager {
             }
         };
 
-        for (id, status, data) in sources {
+        for (id, data) in sources {
             let req = match serde_json::from_str::<CreateSourceReq>(&data) {
                 Ok(req) => req,
                 Err(e) => {
