@@ -1,7 +1,10 @@
 #![feature(lazy_cell)]
 
 use anyhow::{bail, Result};
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use log::Log;
 use message::MessageBatch;
 use std::{collections::HashMap, sync::LazyLock};
@@ -22,18 +25,17 @@ pub static GLOBAL_SINK_MANAGER: LazyLock<SinkManager> = LazyLock::new(|| SinkMan
 
 impl SinkManager {
     pub async fn create(&self, id: Option<Uuid>, req: CreateSinkReq) -> HaliaResult<()> {
-        let id = match id {
-            Some(id) => id,
-            None => Uuid::new_v4(),
+        let (id, persistence) = match id {
+            Some(id) => (id, false),
+            None => (Uuid::new_v4(), true),
         };
 
-        match req.r#type.as_str() {
-            "log" => {
-                let log = Log::new(id, req).unwrap();
-                self.sinks.write().await.insert(id, Box::new(log));
-            }
+        let sink = match req.r#type.as_str() {
+            "log" => Log::new(id, &req)?,
             _ => return Err(HaliaError::ProtocolNotSupported),
-        }
+        };
+
+        self.sinks.write().await.insert(id, sink);
 
         Ok(())
     }

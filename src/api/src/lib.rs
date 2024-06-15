@@ -108,6 +108,7 @@ fn source_routes() -> Router {
     Router::new()
         .route("/source", post(source::create))
         .route("/sources", get(source::list))
+        .route("/source/:id", get(source::read))
 }
 
 fn sink_routes() -> Router {

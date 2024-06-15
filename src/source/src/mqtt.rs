@@ -13,7 +13,7 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::time::Duration;
 use tracing::error;
 use types::rule::Status;
-use types::source::ListSourceResp;
+use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
 
 use crate::Source;
@@ -35,11 +35,11 @@ pub struct Conf {
 }
 
 impl Mqtt {
-    pub fn new(id: Uuid, conf: Value) -> HaliaResult<Box<dyn Source + Sync + Send>> {
-        let conf: Conf = serde_json::from_value(conf.clone())?;
+    pub fn new(id: Uuid, req: &CreateSourceReq) -> HaliaResult<Box<dyn Source + Sync + Send>> {
+        let conf: Conf = serde_json::from_value(req.conf.clone())?;
         Ok(Box::new(Mqtt {
             id,
-            name: "todo".to_string(),
+            name: req.name.clone(),
             conf,
             status: Status::Stopped,
             tx: None,
@@ -114,6 +114,15 @@ impl Source for Mqtt {
             id: self.id,
             name: self.name.clone(),
             r#type: "mqtt".to_string(),
+        })
+    }
+
+    fn get_detail(&self) -> HaliaResult<SourceDetailResp> {
+        Ok(SourceDetailResp {
+            id: self.id.clone(),
+            r#type: "mqtt",
+            name: self.name.clone(),
+            conf: serde_json::json!(self.conf),
         })
     }
 }

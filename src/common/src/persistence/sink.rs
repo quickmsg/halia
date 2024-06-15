@@ -1,21 +1,30 @@
-use std::{io, path::Path};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use tokio::{
-    fs::{self, OpenOptions},
+    fs::OpenOptions,
     io::{AsyncReadExt, AsyncWriteExt},
 };
 use tracing::debug;
 use uuid::Uuid;
 
-use super::{Status, DATA_FILE, DELIMITER, ROOT_DIR};
+use super::{Status, DELIMITER};
+
+fn file_name() -> PathBuf {
+    Path::new(super::ROOT_DIR)
+        .join(super::SINK_DIR)
+        .join(super::DATA_FILE)
+}
 
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
-    let data = format!("{}{}{}", 0, DELIMITER, data);
-    super::insert(Path::new(ROOT_DIR).to_path_buf(), &vec![(id, data)]).await
+    let data = format!("{}{}{}", Status::Stopped, DELIMITER, data);
+    super::insert(file_name(), &vec![(id, data)]).await
 }
 
 pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
-    let datas = super::read(Path::new(ROOT_DIR).join(DATA_FILE)).await?;
+    let datas = super::read(file_name()).await?;
     let mut devices = vec![];
     for (id, data) in datas {
         let pos = data.find(DELIMITER).expect("数据文件损坏");
@@ -35,8 +44,8 @@ pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
     Ok(devices)
 }
 
-pub async fn update(id: Uuid, data: String) -> Result<(), io::Error> {
-    let path = Path::new(ROOT_DIR).join(DATA_FILE);
+pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {
+    let path = file_name();
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -74,6 +83,5 @@ pub async fn update(id: Uuid, data: String) -> Result<(), io::Error> {
 }
 
 pub async fn delete(id: Uuid) -> Result<(), io::Error> {
-    super::delete(Path::new(ROOT_DIR).join(DATA_FILE), &vec![id]).await?;
-    fs::remove_dir_all(Path::new(ROOT_DIR).join(id.to_string())).await
+    super::delete(file_name(), &vec![id]).await
 }

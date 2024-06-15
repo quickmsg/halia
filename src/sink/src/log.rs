@@ -1,4 +1,5 @@
 use anyhow::Result;
+use common::error::HaliaResult;
 use message::MessageBatch;
 use tokio::sync::broadcast::Receiver;
 use tracing::{debug, info};
@@ -17,12 +18,12 @@ pub struct Log {
 }
 
 impl Log {
-    pub fn new(id: Uuid, req: CreateSinkReq) -> Result<Log> {
-        Ok(Log {
+    pub fn new(id: Uuid, req: &CreateSinkReq) -> HaliaResult<Box<dyn Sink>> {
+        Ok(Box::new(Log {
             id,
             status: Status::Stopped,
             name: req.name.clone(),
-        })
+        }))
     }
 }
 

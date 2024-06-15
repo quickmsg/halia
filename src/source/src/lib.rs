@@ -33,8 +33,8 @@ impl SourceManager {
         };
 
         let source = match req.r#type.as_str() {
-            "mqtt" => Mqtt::new(id, req.conf.clone())?,
-            "device" => Device::new(id, req.conf.clone())?,
+            "mqtt" => Mqtt::new(id, &req)?,
+            "device" => Device::new(id, &req)?,
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
@@ -50,7 +50,10 @@ impl SourceManager {
     }
 
     pub async fn read(&self, id: Uuid) -> HaliaResult<SourceDetailResp> {
-        todo!()
+        match self.sources.read().await.get(&id) {
+            Some(source) => source.get_detail(),
+            None => return Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn list(&self) -> HaliaResult<Vec<ListSourceResp>> {
@@ -115,6 +118,8 @@ pub trait Source: Send + Sync {
     async fn subscribe(&mut self) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
 
     fn get_info(&self) -> Result<ListSourceResp>;
+
+    fn get_detail(&self) -> HaliaResult<SourceDetailResp>;
 
     fn stop(&self) {}
 }
