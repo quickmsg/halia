@@ -5,14 +5,14 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CreateGraph {
+pub struct CreateRuleReq {
     pub name: String,
-    pub nodes: Vec<CreateGraphNode>,
-    pub edges: Vec<CreateGraphEdge>,
+    pub nodes: Vec<CreateRuleNode>,
+    pub edges: Vec<CreateRuleEdge>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CreateGraphNode {
+pub struct CreateRuleNode {
     pub index: usize,
     pub id: Option<Uuid>,
     pub r#type: String,
@@ -21,7 +21,7 @@ pub struct CreateGraphNode {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CreateGraphEdge {
+pub struct CreateRuleEdge {
     pub source: usize,
     pub target: usize,
 }
@@ -32,7 +32,7 @@ pub struct ListRuleResp {
     pub name: String,
 }
 
-impl CreateGraph {
+impl CreateRuleReq {
     pub fn get_edges(&self) -> (HashMap<usize, Vec<usize>>, HashMap<usize, Vec<usize>>) {
         let mut incoming_edges = HashMap::new();
         let mut outgoing_edges = HashMap::new();

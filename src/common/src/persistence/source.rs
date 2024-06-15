@@ -44,7 +44,7 @@ pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
     Ok(sources)
 }
 
-pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {
+pub async fn update(id: Uuid, data: String) -> Result<(), io::Error> {
     let path = get_file();
     let mut file = OpenOptions::new()
         .read(true)
@@ -67,47 +67,6 @@ pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {
                 fields[0], DELIMITER, fields[1], DELIMITER, data
             );
             debug!("{}", new_line);
-            *line = new_line.as_str();
-            break;
-        }
-    }
-
-    let buf = lines.join("\n");
-    let mut file = OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .open(&path)
-        .await?;
-    file.write_all(buf.as_bytes()).await?;
-    Ok(())
-}
-
-pub async fn update_status(id: Uuid, status: Status) -> Result<(), io::Error> {
-    let path = get_file();
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&path)
-        .await?;
-    let mut buf = String::new();
-    file.read_to_string(&mut buf).await?;
-
-    let new_line;
-    let mut lines: Vec<&str> = buf.split("\n").collect();
-    for line in lines.iter_mut() {
-        let fields: Vec<&str> = line.split(DELIMITER).collect();
-        if fields.len() != 3 {
-            panic!("数据文件损坏");
-        }
-        if fields[0].parse::<Uuid>().expect("数据文件损坏") == id {
-            new_line = format!(
-                "{}{}{}{}{}",
-                fields[0],
-                DELIMITER,
-                status.to_string(),
-                DELIMITER,
-                fields[2]
-            );
             *line = new_line.as_str();
             break;
         }

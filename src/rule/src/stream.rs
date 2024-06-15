@@ -3,7 +3,7 @@ use functions::filter;
 use message::MessageBatch;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tracing::{debug, error};
-use types::rule::{CreateGraphNode, Operate};
+use types::rule::{CreateRuleNode, Operate};
 
 pub struct Stream {
     pub rx: Receiver<MessageBatch>,
@@ -14,7 +14,7 @@ pub struct Stream {
 impl Stream {
     pub fn new(
         rx: Receiver<MessageBatch>,
-        create_graph_nodes: &Vec<&CreateGraphNode>,
+        create_graph_nodes: &Vec<&CreateRuleNode>,
         tx: Sender<MessageBatch>,
     ) -> Result<Self> {
         let mut nodes = Vec::new();
@@ -48,7 +48,7 @@ impl Stream {
     }
 }
 
-fn get_operator_node(cgn: &CreateGraphNode) -> Result<Box<dyn Operate>> {
+fn get_operator_node(cgn: &CreateRuleNode) -> Result<Box<dyn Operate>> {
     debug!("{:?}", cgn);
     match cgn.r#type.as_str() {
         "field" => match cgn.name.as_ref().unwrap().as_str() {

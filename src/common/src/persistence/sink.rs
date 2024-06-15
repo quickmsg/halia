@@ -44,7 +44,7 @@ pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
     Ok(devices)
 }
 
-pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {
+pub async fn update(id: Uuid, data: String) -> Result<(), io::Error> {
     let path = file_name();
     let mut file = OpenOptions::new()
         .read(true)

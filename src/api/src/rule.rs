@@ -1,12 +1,12 @@
 use axum::debug_handler;
 use axum::{extract::Path, http::StatusCode, Json};
 use rule::GLOBAL_RULE_MANAGER;
-use types::rule::{CreateGraph, ListRuleResp};
+use types::rule::{CreateRuleReq, ListRuleResp};
 use uuid::Uuid;
 
 use crate::AppResp;
 
-pub(crate) async fn create(Json(req): Json<CreateGraph>) -> (StatusCode, String) {
+pub(crate) async fn create(Json(req): Json<CreateRuleReq>) -> (StatusCode, String) {
     match GLOBAL_RULE_MANAGER.create(None, req).await {
         Ok(_) => return (StatusCode::CREATED, String::from("OK")),
         Err(e) => {
