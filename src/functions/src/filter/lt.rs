@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 
 use super::Filter;
 
-pub struct Gt {
+pub struct Lt {
     field: String,
     value: Value,
 }
 
-impl Gt {
+impl Lt {
     pub fn new(conf: serde_json::Value) -> Result<Self> {
         let conf: Conf = serde_json::from_value(conf)?;
         let value = match conf.value {
@@ -56,7 +56,7 @@ enum Value {
     Field(String),
 }
 
-impl Filter for Gt {
+impl Filter for Lt {
     fn filter(&self, msg: &Message) -> bool {
         match msg.get(&self.field) {
             Some(value) => match value {

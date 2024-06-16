@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 
 use super::Filter;
 
-pub struct Gt {
+pub struct Lte {
     field: String,
     value: Value,
 }
 
-impl Gt {
+impl Lte {
     pub fn new(conf: serde_json::Value) -> Result<Self> {
         let conf: Conf = serde_json::from_value(conf)?;
         let value = match conf.value {
@@ -56,25 +56,25 @@ enum Value {
     Field(String),
 }
 
-impl Filter for Gt {
+impl Filter for Lte {
     fn filter(&self, msg: &Message) -> bool {
         match msg.get(&self.field) {
             Some(value) => match value {
                 json::Value::Int8(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs > *rhs as i8,
-                    Value::Float(rhs) => *lhs > *rhs as i8,
+                    Value::Int(rhs) => *lhs >= *rhs as i8,
+                    Value::Float(rhs) => *lhs >= *rhs as i8,
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => lhs > rhs,
-                            json::Value::Int16(rhs) => *lhs > *rhs as i8,
-                            json::Value::Int32(rhs) => *lhs > *rhs as i8,
-                            json::Value::Int64(rhs) => *lhs > *rhs as i8,
-                            json::Value::UInt8(rhs) => *lhs > *rhs as i8,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as i8,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as i8,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as i8,
-                            json::Value::Float32(rhs) => *lhs > *rhs as i8,
-                            json::Value::Float64(rhs) => *lhs > *rhs as i8,
+                            json::Value::Int8(rhs) => lhs >= rhs,
+                            json::Value::Int16(rhs) => *lhs >= *rhs as i8,
+                            json::Value::Int32(rhs) => *lhs >= *rhs as i8,
+                            json::Value::Int64(rhs) => *lhs >= *rhs as i8,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as i8,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as i8,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as i8,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as i8,
+                            json::Value::Float32(rhs) => *lhs >= *rhs as i8,
+                            json::Value::Float64(rhs) => *lhs >= *rhs as i8,
                             _ => false,
                         },
                         None => false,
@@ -86,16 +86,16 @@ impl Filter for Gt {
                     Value::Float(rhs) => *lhs > *rhs as i16,
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs > *rhs as i16,
-                            json::Value::Int16(rhs) => lhs > rhs,
-                            json::Value::Int32(rhs) => *lhs > *rhs as i16,
-                            json::Value::Int64(rhs) => *lhs > *rhs as i16,
-                            json::Value::UInt8(rhs) => *lhs > *rhs as i16,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as i16,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as i16,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as i16,
-                            json::Value::Float32(rhs) => *lhs > *rhs as i16,
-                            json::Value::Float64(rhs) => *lhs > *rhs as i16,
+                            json::Value::Int8(rhs) => *lhs >= *rhs as i16,
+                            json::Value::Int16(rhs) => lhs >= rhs,
+                            json::Value::Int32(rhs) => *lhs >= *rhs as i16,
+                            json::Value::Int64(rhs) => *lhs >= *rhs as i16,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as i16,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as i16,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as i16,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as i16,
+                            json::Value::Float32(rhs) => *lhs >= *rhs as i16,
+                            json::Value::Float64(rhs) => *lhs >= *rhs as i16,
                             _ => false,
                         },
                         None => false,
@@ -107,16 +107,16 @@ impl Filter for Gt {
                     Value::Float(rhs) => *lhs > *rhs as i32,
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs > *rhs as i32,
-                            json::Value::Int16(rhs) => *lhs > *rhs as i32,
-                            json::Value::Int32(rhs) => lhs > rhs,
-                            json::Value::Int64(rhs) => *lhs > *rhs as i32,
-                            json::Value::UInt8(rhs) => *lhs > *rhs as i32,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as i32,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as i32,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as i32,
-                            json::Value::Float32(rhs) => *lhs > *rhs as i32,
-                            json::Value::Float64(rhs) => *lhs > *rhs as i32,
+                            json::Value::Int8(rhs) => *lhs >= *rhs as i32,
+                            json::Value::Int16(rhs) => *lhs >= *rhs as i32,
+                            json::Value::Int32(rhs) => lhs >= rhs,
+                            json::Value::Int64(rhs) => *lhs >= *rhs as i32,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as i32,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as i32,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as i32,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as i32,
+                            json::Value::Float32(rhs) => *lhs >= *rhs as i32,
+                            json::Value::Float64(rhs) => *lhs >= *rhs as i32,
                             _ => false,
                         },
                         None => false,
@@ -124,20 +124,20 @@ impl Filter for Gt {
                     Value::String(_) => false,
                 },
                 json::Value::Int64(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs > *rhs as i64,
-                    Value::Float(rhs) => *lhs > *rhs as i64,
+                    Value::Int(rhs) => *lhs >= *rhs as i64,
+                    Value::Float(rhs) => *lhs >= *rhs as i64,
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs > *rhs as i64,
-                            json::Value::Int16(rhs) => *lhs > *rhs as i64,
-                            json::Value::Int32(rhs) => *lhs > *rhs as i64,
-                            json::Value::Int64(rhs) => lhs > rhs,
-                            json::Value::UInt8(rhs) => *lhs > *rhs as i64,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as i64,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as i64,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as i64,
-                            json::Value::Float32(rhs) => *lhs > *rhs as i64,
-                            json::Value::Float64(rhs) => *lhs > *rhs as i64,
+                            json::Value::Int8(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Int16(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Int32(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Int64(rhs) => lhs >= rhs,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as i64,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as i64,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as i64,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Float32(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Float64(rhs) => *lhs >= *rhs as i64,
                             _ => false,
                         },
                         None => false,
@@ -149,13 +149,13 @@ impl Filter for Gt {
                         if *rhs < 0 {
                             return false;
                         }
-                        *lhs > *rhs as u8
+                        *lhs >= *rhs as u8
                     }
                     Value::Float(rhs) => {
                         if *rhs < 0.0 {
                             return false;
                         }
-                        *lhs as f64 > *rhs
+                        *lhs as f64 >= *rhs
                     }
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
@@ -163,41 +163,41 @@ impl Filter for Gt {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u8
+                                *lhs >= *rhs as u8
                             }
                             json::Value::Int16(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u8
+                                *lhs >= *rhs as u8
                             }
                             json::Value::Int32(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u8
+                                *lhs >= *rhs as u8
                             }
                             json::Value::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u8
+                                *lhs >= *rhs as u8
                             }
-                            json::Value::UInt8(rhs) => *lhs > *rhs as u8,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as u8,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as u8,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as u8,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as u8,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as u8,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as u8,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as u8,
                             json::Value::Float32(rhs) => {
                                 if *rhs < 0.0 {
                                     return false;
                                 }
-                                *lhs as f32 > *rhs
+                                *lhs as f32 >= *rhs
                             }
                             json::Value::Float64(rhs) => {
                                 if *rhs < 0.0 {
                                     return false;
                                 }
-                                *lhs as f64 > *rhs
+                                *lhs as f64 >= *rhs
                             }
                             _ => false,
                         },
@@ -210,13 +210,13 @@ impl Filter for Gt {
                         if *rhs < 0 {
                             return false;
                         }
-                        *lhs > *rhs as u16
+                        *lhs >= *rhs as u16
                     }
                     Value::Float(rhs) => {
                         if *rhs < 0.0 {
                             return false;
                         }
-                        *lhs as f64 > *rhs
+                        *lhs as f64 >= *rhs
                     }
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
@@ -224,32 +224,32 @@ impl Filter for Gt {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u16
+                                *lhs >= *rhs as u16
                             }
                             json::Value::Int16(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u16
+                                *lhs >= *rhs as u16
                             }
                             json::Value::Int32(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u16
+                                *lhs >= *rhs as u16
                             }
                             json::Value::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u16
+                                *lhs >= *rhs as u16
                             }
-                            json::Value::UInt8(rhs) => *lhs > *rhs as u16,
-                            json::Value::UInt16(rhs) => lhs > rhs,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as u16,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as u16,
-                            json::Value::Float32(rhs) => *lhs > *rhs as u16,
-                            json::Value::Float64(rhs) => *lhs > *rhs as u16,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as u16,
+                            json::Value::UInt16(rhs) => lhs >= rhs,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as u16,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as u16,
+                            json::Value::Float32(rhs) => *lhs >= *rhs as u16,
+                            json::Value::Float64(rhs) => *lhs >= *rhs as u16,
                             _ => false,
                         },
                         None => false,
@@ -261,13 +261,13 @@ impl Filter for Gt {
                         if *rhs < 0 {
                             return false;
                         }
-                        *lhs > *rhs as u32
+                        *lhs >= *rhs as u32
                     }
                     Value::Float(rhs) => {
                         if *rhs < 0.0 {
                             return false;
                         }
-                        *lhs as f64 > *rhs
+                        *lhs as f64 >= *rhs
                     }
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
@@ -275,43 +275,43 @@ impl Filter for Gt {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u32
+                                *lhs >= *rhs as u32
                             }
                             json::Value::Int16(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u32
+                                *lhs >= *rhs as u32
                             }
                             json::Value::Int32(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u32
+                                *lhs >= *rhs as u32
                             }
                             json::Value::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u32
+                                *lhs >= *rhs as u32
                             }
-                            json::Value::UInt8(rhs) => *lhs > *rhs as u32,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as u32,
-                            json::Value::UInt32(rhs) => lhs > rhs,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as u32,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as u32,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as u32,
+                            json::Value::UInt32(rhs) => lhs >= rhs,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as u32,
                             json::Value::Float32(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
                                     return false;
                                 }
-                                *lhs as f32 > *rhs
+                                *lhs as f32 >= *rhs
                             }
                             json::Value::Float64(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
                                     return false;
                                 }
-                                *lhs as f64 > *rhs
+                                *lhs as f64 >= *rhs
                             }
                             _ => false,
                         },
@@ -324,13 +324,13 @@ impl Filter for Gt {
                         if *rhs < 0 {
                             return false;
                         }
-                        *lhs > *rhs as u64
+                        *lhs >= *rhs as u64
                     }
                     Value::Float(rhs) => {
                         if *rhs < 0.0 {
                             return false;
                         }
-                        *lhs as f64 > *rhs
+                        *lhs as f64 >= *rhs
                     }
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
@@ -338,43 +338,43 @@ impl Filter for Gt {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u64
+                                *lhs >= *rhs as u64
                             }
                             json::Value::Int16(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u64
+                                *lhs >= *rhs as u64
                             }
                             json::Value::Int32(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u64
+                                *lhs >= *rhs as u64
                             }
                             json::Value::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
-                                *lhs > *rhs as u64
+                                *lhs >= *rhs as u64
                             }
-                            json::Value::UInt8(rhs) => *lhs > *rhs as u64,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as u64,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as u64,
-                            json::Value::UInt64(rhs) => lhs > rhs,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as u64,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as u64,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as u64,
+                            json::Value::UInt64(rhs) => lhs >= rhs,
                             json::Value::Float32(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
                                     return false;
                                 }
-                                *lhs as f32 > *rhs
+                                *lhs as f32 >= *rhs
                             }
                             json::Value::Float64(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
                                     return false;
                                 }
-                                *lhs as f64 > *rhs
+                                *lhs as f64 >= *rhs
                             }
                             _ => false,
                         },
@@ -383,20 +383,20 @@ impl Filter for Gt {
                     Value::String(_) => false,
                 },
                 json::Value::Float32(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs > *rhs as f32,
-                    Value::Float(rhs) => *lhs > *rhs as f32,
+                    Value::Int(rhs) => *lhs >= *rhs as f32,
+                    Value::Float(rhs) => *lhs >= *rhs as f32,
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs > *rhs as f32,
-                            json::Value::Int16(rhs) => *lhs > *rhs as f32,
-                            json::Value::Int32(rhs) => *lhs > *rhs as f32,
-                            json::Value::Int64(rhs) => *lhs > *rhs as f32,
-                            json::Value::UInt8(rhs) => *lhs > *rhs as f32,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as f32,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as f32,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as f32,
-                            json::Value::Float32(rhs) => lhs > rhs,
-                            json::Value::Float64(rhs) => *lhs > *rhs as f32,
+                            json::Value::Int8(rhs) => *lhs >= *rhs as f32,
+                            json::Value::Int16(rhs) => *lhs >= *rhs as f32,
+                            json::Value::Int32(rhs) => *lhs >= *rhs as f32,
+                            json::Value::Int64(rhs) => *lhs >= *rhs as f32,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as f32,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as f32,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as f32,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as f32,
+                            json::Value::Float32(rhs) => lhs >= rhs,
+                            json::Value::Float64(rhs) => *lhs >= *rhs as f32,
                             _ => false,
                         },
                         None => false,
@@ -404,20 +404,20 @@ impl Filter for Gt {
                     Value::String(_) => false,
                 },
                 json::Value::Float64(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs > *rhs as f64,
-                    Value::Float(rhs) => *lhs > *rhs,
+                    Value::Int(rhs) => *lhs >= *rhs as f64,
+                    Value::Float(rhs) => *lhs >= *rhs,
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs > *rhs as f64,
-                            json::Value::Int16(rhs) => *lhs > *rhs as f64,
-                            json::Value::Int32(rhs) => *lhs > *rhs as f64,
-                            json::Value::Int64(rhs) => *lhs > *rhs as f64,
-                            json::Value::UInt8(rhs) => *lhs > *rhs as f64,
-                            json::Value::UInt16(rhs) => *lhs > *rhs as f64,
-                            json::Value::UInt32(rhs) => *lhs > *rhs as f64,
-                            json::Value::UInt64(rhs) => *lhs > *rhs as f64,
-                            json::Value::Float32(rhs) => *lhs > *rhs as f64,
-                            json::Value::Float64(rhs) => lhs > rhs,
+                            json::Value::Int8(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Int16(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Int32(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Int64(rhs) => *lhs >= *rhs as f64,
+                            json::Value::UInt8(rhs) => *lhs >= *rhs as f64,
+                            json::Value::UInt16(rhs) => *lhs >= *rhs as f64,
+                            json::Value::UInt32(rhs) => *lhs >= *rhs as f64,
+                            json::Value::UInt64(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Float32(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Float64(rhs) => lhs >= rhs,
                             _ => false,
                         },
                         None => false,
@@ -425,10 +425,10 @@ impl Filter for Gt {
                     Value::String(_) => false,
                 },
                 json::Value::String(lhs) => match &self.value {
-                    Value::String(rhs) => lhs > rhs,
+                    Value::String(rhs) => lhs >= rhs,
                     Value::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::String(rhs) => lhs > rhs,
+                            json::Value::String(rhs) => lhs >= rhs,
                             _ => false,
                         },
                         None => false,
