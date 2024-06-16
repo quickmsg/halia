@@ -1,57 +1,79 @@
-use message::MessageBatch;
-use serde_json::Value;
 use super::Aggregater;
+use message::MessageBatch;
 
-pub struct MinInt {
+pub struct Min {
     field: String,
 }
 
-impl MinInt {
+impl Min {
     pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(MinInt { field })
+        Box::new(Min { field })
     }
 }
 
-impl Aggregater for MinInt {
-    fn aggregate(&self, mb: &MessageBatch) -> Value {
-        let mut min = std::i64::MAX;
-        let messages = mb.get_messages();
-        for message in messages {
-            match message.get_i64(&self.field) {
-                Some(value) => {
-                    min = min.min(value);
-                }
-                None => {}
-            }
-        }
-
-        Value::from(min)
-    }
-}
-
-pub struct MinFloat {
-    field: String,
-}
-
-impl MinFloat {
-    pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(MinFloat { field })
-    }
-}
-
-impl Aggregater for MinFloat {
-    fn aggregate(&self, mb: &MessageBatch) -> Value {
+impl Aggregater for Min {
+    fn aggregate(&self, mb: &MessageBatch) -> json::Value {
         let mut min = std::f64::MAX;
         let messages = mb.get_messages();
         for message in messages {
-            match message.get_f64(&self.field) {
-                Some(value) => {
-                    min = min.min(value);
-                }
+            match message.get(&self.field) {
+                Some(value) => match value {
+                    json::Value::Int8(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::Int16(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::Int32(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::Int64(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::UInt8(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::UInt16(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::UInt32(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::UInt64(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::Float32(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    json::Value::Float64(value) => {
+                        if min > *value as f64 {
+                            min = *value as f64
+                        }
+                    }
+                    _ => {}
+                },
                 None => {}
             }
         }
 
-        Value::from(min)
+        json::Value::Float64(min)
     }
 }

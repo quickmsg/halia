@@ -1,62 +1,60 @@
 use message::MessageBatch;
-use serde_json::Value;
-use tracing::debug;
 
 use super::Aggregater;
 
-pub struct SumInt {
+pub(crate) struct Sum {
     field: String,
 }
 
-impl SumInt {
+impl Sum {
     pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(SumInt { field })
+        Box::new(Sum { field })
     }
 }
 
-impl Aggregater for SumInt {
-    fn aggregate(&self, mb: &MessageBatch) -> Value {
-        let mut sum = 0;
+impl Aggregater for Sum {
+    fn aggregate(&self, mb: &MessageBatch) -> json::Value {
+        let mut sum: f64 = 0.0;
         let messages = mb.get_messages();
-        debug!("messages: {:?}", messages);
         for message in messages {
-            debug!("field is: {:?}", self.field);
-            match message.get_i64(&self.field) {
-                Some(value) => {
-                    sum += value;
-                }
+            match message.get(&self.field) {
+                Some(value) => match value {
+                    json::Value::Int8(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::Int16(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::Int32(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::Int64(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::UInt8(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::UInt16(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::UInt32(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::UInt64(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::Float32(value) => {
+                        sum += *value as f64;
+                    }
+                    json::Value::Float64(value) => {
+                        sum += value;
+                    }
+                    _ => {}
+                },
                 None => {}
             }
         }
 
-        Value::from(sum)
-    }
-}
-
-
-pub struct SumFloat {
-    field: String,
-}
-
-impl SumFloat {
-    pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(SumFloat { field })
-    }
-}
-
-impl Aggregater for SumFloat {
-    fn aggregate(&self, mb: &MessageBatch) -> Value {
-        let mut sum = 0.0;
-        let messages = mb.get_messages();
-        for message in messages {
-            match message.get_f64(&self.field) {
-                Some(value) => {
-                    sum += value;
-                }
-                None => {}
-            }
-        }
-
-        Value::from(sum)
+        json::Value::Float64(sum)
     }
 }

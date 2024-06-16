@@ -1,18 +1,13 @@
 use anyhow::{bail, Result};
+use avg::Avg;
+use max::Max;
 use message::{Message, MessageBatch};
+use min::Min;
 use serde::Deserialize;
 use serde_json::Value;
+use sum::Sum;
 use tracing::debug;
 use types::rule::Operate;
-
-use crate::aggregate::sum::SumFloat;
-
-use self::{
-    avg::{AvgFloat, AvgInt},
-    max::{MaxFloat, MaxInt},
-    min::{MinFloat, MinInt},
-    sum::SumInt,
-};
 
 pub mod avg;
 pub mod max;
@@ -20,7 +15,7 @@ pub mod min;
 pub mod sum;
 
 pub trait Aggregater: Sync + Send {
-    fn aggregate(&self, mb: &MessageBatch) -> Value;
+    fn aggregate(&self, mb: &MessageBatch) -> json::Value;
 }
 
 #[derive(Deserialize)]
@@ -43,26 +38,10 @@ impl Node {
         let mut aggregaters = Vec::new();
         for rule in rules.iter_mut() {
             match &rule.r#type.as_str() {
-                &"sum" => match &rule.option.as_str() {
-                    &"int" => aggregaters.push(SumInt::new(rule.field.clone())),
-                    &"float" => aggregaters.push(SumFloat::new(rule.field.clone())),
-                    _ => bail!("not support"),
-                },
-                &"avg" => match &rule.option.as_str() {
-                    &"int" => aggregaters.push(AvgInt::new(rule.field.clone())),
-                    &"float" => aggregaters.push(AvgFloat::new(rule.field.clone())),
-                    _ => bail!("not support"),
-                },
-                &"max" => match &rule.option.as_str() {
-                    &"int" => aggregaters.push(MaxInt::new(rule.field.clone())),
-                    &"float" => aggregaters.push(MaxFloat::new(rule.field.clone())),
-                    _ => bail!("not support"),
-                },
-                &"min" => match &rule.option.as_str() {
-                    &"int" => aggregaters.push(MinInt::new(rule.field.clone())),
-                    &"float" => aggregaters.push(MinFloat::new(rule.field.clone())),
-                    _ => bail!("not support"),
-                },
+                &"sum" => aggregaters.push(Sum::new(rule.field.clone())),
+                &"avg" => aggregaters.push(Avg::new(rule.field.clone())),
+                &"max" => aggregaters.push(Max::new(rule.field.clone())),
+                &"min" => aggregaters.push(Min::new(rule.field.clone())),
                 _ => bail!("not support"),
             }
         }

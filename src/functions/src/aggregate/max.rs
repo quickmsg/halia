@@ -1,58 +1,79 @@
-use message::MessageBatch;
-use serde_json::Value;
-
 use super::Aggregater;
+use message::MessageBatch;
 
-pub struct MaxInt {
+pub struct Max {
     field: String,
 }
 
-impl MaxInt {
+impl Max {
     pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(MaxInt { field })
+        Box::new(Max { field })
     }
 }
 
-impl Aggregater for MaxInt {
-    fn aggregate(&self, mb: &MessageBatch) -> Value {
-        let mut max = std::i64::MIN;
-        let messages = mb.get_messages();
-        for message in messages {
-            match message.get_i64(&self.field) {
-                Some(value) => {
-                    max = max.max(value);
-                }
-                None => {}
-            }
-        }
-
-        Value::from(max)
-    }
-}
-
-pub struct MaxFloat {
-    field: String,
-}
-
-impl MaxFloat {
-    pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(MaxFloat { field })
-    }
-}
-
-impl Aggregater for MaxFloat {
-    fn aggregate(&self, mb: &MessageBatch) -> Value {
+impl Aggregater for Max {
+    fn aggregate(&self, mb: &MessageBatch) -> json::Value {
         let mut max = std::f64::MIN;
         let messages = mb.get_messages();
         for message in messages {
-            match message.get_f64(&self.field) {
-                Some(value) => {
-                    max = max.max(value);
-                }
+            match message.get(&self.field) {
+                Some(value) => match value {
+                    json::Value::Int8(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::Int16(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::Int32(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::Int64(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::UInt8(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::UInt16(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::UInt32(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::UInt64(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::Float32(value) => {
+                        if *value as f64 > max {
+                            max = *value as f64
+                        }
+                    }
+                    json::Value::Float64(value) => {
+                        if *value > max {
+                            max = *value
+                        }
+                    }
+                    _ => {}
+                },
                 None => {}
             }
         }
 
-        Value::from(max)
+        json::Value::Float64(max)
     }
 }

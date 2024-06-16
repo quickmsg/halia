@@ -1,66 +1,75 @@
 use message::MessageBatch;
-use serde_json::Value;
 
 use super::Aggregater;
 
-pub(crate) struct AvgInt {
+pub(crate) struct Avg {
     field: String,
 }
 
-impl AvgInt {
+impl Avg {
     pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(AvgInt { field })
+        Box::new(Avg { field })
     }
 }
 
-impl Aggregater for AvgInt {
-    fn aggregate(&self, mb: &MessageBatch) -> Value {
-        let mut sum = 0;
+impl Aggregater for Avg {
+    fn aggregate(&self, mb: &MessageBatch) -> json::Value {
+        let mut sum: f64 = 0.0;
         let mut count = 0;
         let messages = mb.get_messages();
         for message in messages {
-            match message.get_i64(&self.field) {
-                Some(value) => {
-                    count += 1;
-                    sum += value;
-                }
+            match message.get(&self.field) {
+                Some(value) => match value {
+                    json::Value::Int8(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::Int16(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::Int32(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::Int64(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::UInt8(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::UInt16(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::UInt32(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::UInt64(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::Float32(value) => {
+                        sum += *value as f64;
+                        count += 1;
+                    }
+                    json::Value::Float64(value) => {
+                        sum += value;
+                        count += 1;
+                    }
+                    _ => {}
+                },
                 None => {}
             }
         }
 
-        let avg = sum / count;
-
-        Value::from(avg)
-    }
-}
-
-pub struct AvgFloat {
-    field: String,
-}
-
-impl AvgFloat {
-    pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(AvgFloat { field })
-    }
-}
-
-impl Aggregater for AvgFloat {
-    fn aggregate(&self, mb: &MessageBatch) -> Value {
-        let mut sum = 0.0;
-        let mut count: f64 = 0.0;
-        let messages = mb.get_messages();
-        for message in messages {
-            match message.get_f64(&self.field) {
-                Some(value) => {
-                    count += 1.0;
-                    sum += value;
-                }
-                None => {}
-            }
+        if count > 0 {
+            json::Value::Float64(sum / count as f64)
+        } else {
+            json::Value::Float64(0.0)
         }
-
-        let avg = sum / count;
-
-        Value::from(avg)
     }
 }
