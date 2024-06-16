@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
 use message::MessageBatch;
-use operators::window::window::Window;
 use sink::GLOBAL_SINK_MANAGER;
 use source::GLOBAL_SOURCE_MANAGER;
+use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
 use types::rule::{CreateRuleNode, CreateRuleReq, Status};
@@ -21,13 +19,13 @@ pub(crate) struct Rule {
 }
 
 impl Rule {
-    pub async fn create(id: Uuid, req: CreateRuleReq) -> Result<Self> {
+    pub async fn create(id: Uuid, req: &CreateRuleReq) -> Result<Self> {
         let (stop_signal, _) = broadcast::channel::<()>(1);
         Ok(Self {
             id,
             status: Status::Stopped,
             // rxs: todo!(),
-            req,
+            req: req.clone(),
             stop_signal,
         })
     }

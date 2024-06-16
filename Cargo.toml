@@ -6,7 +6,6 @@ members = [
     "src/types",
     "src/source",
     "src/sink",
-    "src/operators",
     "src/device",
     "src/common",
     "src/json",
@@ -26,7 +25,6 @@ types = { path = "src/types" }
 message = { path = "src/message" }
 source = { path = "src/source" }
 sink = { path = "src/sink" }
-operators = { path = "src/operators" }
 device = { path = "src/device" }
 common = { path = "src/common" }
 json = { path = "src/json" }

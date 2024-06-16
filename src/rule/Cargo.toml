@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 message = { workspace = true }
-operators = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 types = { workspace = true }
@@ -15,3 +14,4 @@ source = { workspace = true }
 sink = { workspace = true }
 functions = { workspace = true }
 common = { workspace = true }
+serde_json = { workspace = true }

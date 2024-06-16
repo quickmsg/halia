@@ -1,6 +1,9 @@
 #![feature(lazy_cell)]
-use anyhow::Result;
-use common::error::{HaliaError, HaliaResult};
+use anyhow::{bail, Result};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use rule::Rule;
 use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::RwLock;
@@ -21,13 +24,21 @@ pub struct RuleManager {
 
 impl RuleManager {
     pub async fn create(&self, id: Option<Uuid>, req: CreateRuleReq) -> HaliaResult<()> {
-        let id = match id {
-            Some(id) => id,
-            None => Uuid::new_v4(),
+        let (id, persistence) = match id {
+            Some(id) => (id, false),
+            None => (Uuid::new_v4(), true),
         };
 
-        let rule = Rule::create(id, req).await.unwrap();
+        let rule = Rule::create(id, &req).await.unwrap();
+        if persistence {
+            if let Err(e) =
+                persistence::rule::insert(id, serde_json::to_string(&req).unwrap()).await
+            {
+                error!("write rule to file err: {}", e);
+            }
+        }
         self.rules.write().await.insert(id, rule);
+
         Ok(())
     }
 
