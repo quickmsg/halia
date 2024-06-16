@@ -70,7 +70,7 @@ impl SourceManager {
 
     pub async fn delete() {}
 
-    pub async fn get_receiver(&self, id: Uuid) -> Result<Receiver<MessageBatch>> {
+    pub async fn subscribe(&self, id: Uuid) -> Result<Receiver<MessageBatch>> {
         debug!("subscribe source: {}", id);
         match self.sources.write().await.get_mut(&id) {
             Some(source) => match source.subscribe().await {
@@ -82,10 +82,6 @@ impl SourceManager {
                 bail!("not have source");
             }
         }
-    }
-
-    fn stop() {
-        // todo!()
     }
 }
 

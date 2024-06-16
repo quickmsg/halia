@@ -105,10 +105,6 @@ impl Source for Mqtt {
         }
     }
 
-    fn stop(&self) {}
-
-    // async fn stop(&self) {}
-
     fn get_info(&self) -> Result<ListSourceResp> {
         Ok(ListSourceResp {
             id: self.id,

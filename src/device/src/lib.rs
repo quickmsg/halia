@@ -110,13 +110,22 @@ impl DeviceManager {
         }
     }
 
-    pub async fn read_devices(&self) -> Vec<ListDevicesResp> {
-        self.devices
+    pub async fn search_devices(&self, page: u8, size: u8) -> Vec<ListDevicesResp> {
+        let mut resp = vec![];
+        for device in self
+            .devices
             .read()
             .await
-            .iter()
-            .map(|(_, device)| device.get_info())
-            .collect()
+            .values()
+            .skip(((page - 1) * size) as usize)
+        {
+            resp.push(device.get_info());
+            if resp.len() == size as usize {
+                break;
+            }
+        }
+
+        resp
     }
 
     pub async fn delete_device(&self, device_id: Uuid) -> HaliaResult<()> {
@@ -146,9 +155,14 @@ impl DeviceManager {
         }
     }
 
-    pub async fn read_groups(&self, device_id: Uuid) -> HaliaResult<Vec<ListGroupsResp>> {
+    pub async fn read_groups(
+        &self,
+        device_id: Uuid,
+        page: u8,
+        size: u8,
+    ) -> HaliaResult<Vec<ListGroupsResp>> {
         match self.devices.read().await.get(&device_id) {
-            Some(device) => device.read_groups().await,
+            Some(device) => device.read_groups(page, size).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -194,9 +208,11 @@ impl DeviceManager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
+        page: u8,
+        size: u8,
     ) -> HaliaResult<Vec<ListPointResp>> {
         match self.devices.read().await.get(&device_id) {
-            Some(device) => device.read_points(group_id).await,
+            Some(device) => device.read_points(group_id, page, size).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -205,9 +221,11 @@ impl DeviceManager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
+        page: u8,
+        size: u8,
     ) -> HaliaResult<Vec<ListPointResp>> {
         match self.devices.read().await.get(&device_id) {
-            Some(device) => device.read_points(group_id).await,
+            Some(device) => device.read_points(group_id, page, size).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -382,7 +400,7 @@ trait Device: Sync + Send {
         group_id: Option<Uuid>,
         create_group: &CreateGroupReq,
     ) -> HaliaResult<()>;
-    async fn read_groups(&self) -> HaliaResult<Vec<ListGroupsResp>>;
+    async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<Vec<ListGroupsResp>>;
     async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()>;
     async fn delete_groups(&self, ids: Vec<Uuid>) -> HaliaResult<()>;
 
@@ -392,7 +410,12 @@ trait Device: Sync + Send {
         group_id: Uuid,
         create_points: Vec<(Option<Uuid>, CreatePointReq)>,
     ) -> HaliaResult<()>;
-    async fn read_points(&self, group_id: Uuid) -> HaliaResult<Vec<ListPointResp>>;
+    async fn read_points(
+        &self,
+        group_id: Uuid,
+        page: u8,
+        size: u8,
+    ) -> HaliaResult<Vec<ListPointResp>>;
     async fn update_point(
         &self,
         group_id: Uuid,

@@ -58,7 +58,7 @@ impl Rule {
                         "source" => {
                             if let Some(node) = node_map.get(&info.first_id) {
                                 let receiver = GLOBAL_SOURCE_MANAGER
-                                    .get_receiver(node.id.unwrap())
+                                    .subscribe(node.id.unwrap())
                                     .await
                                     .unwrap();
                                 receivers.insert(info.first_id, vec![receiver]);

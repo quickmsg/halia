@@ -53,11 +53,10 @@ pub(crate) struct Modbus {
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
-#[serde(untagged)]
 #[serde(rename_all = "snake_case")]
-enum Conf {
-    EthernetConf(EthernetConf),
-    SerialConf(SerialConf),
+struct Conf {
+    ethernet: Option<EthernetConf>,
+    serial: Option<SerialConf>,
 }
 
 #[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
@@ -105,6 +104,10 @@ struct SerialConf {
 impl Modbus {
     pub fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
+        if conf.ethernet.is_none() && conf.serial.is_none() {
+            // TODO
+            return Err(HaliaError::Existed);
+        }
         Ok(Box::new(Modbus {
             id,
             name: req.name.clone(),
@@ -168,40 +171,39 @@ impl Modbus {
     }
 
     async fn get_context(conf: &Conf) -> HaliaResult<(Context, u64)> {
-        match conf {
-            Conf::EthernetConf(conf) => {
-                let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
-                let transport = TcpStream::connect(socket_addr).await?;
-                match conf.encode {
-                    Encode::Tcp => Ok((tcp::attach(transport), conf.interval)),
-                    Encode::Rtu => Ok((rtu::attach(transport), conf.interval)),
-                }
+        if let Some(conf) = &conf.ethernet {
+            let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
+            let transport = TcpStream::connect(socket_addr).await?;
+            match conf.encode {
+                Encode::Tcp => Ok((tcp::attach(transport), conf.interval)),
+                Encode::Rtu => Ok((rtu::attach(transport), conf.interval)),
             }
-            Conf::SerialConf(conf) => {
-                let builder = tokio_serial::new(conf.path.clone(), conf.baud_rate);
-                let mut port = SerialStream::open(&builder).unwrap();
-                match conf.stop_bits {
-                    1 => port.set_stop_bits(StopBits::One).unwrap(),
-                    2 => port.set_stop_bits(StopBits::Two).unwrap(),
-                    _ => unreachable!(),
-                };
-                match conf.data_bits {
-                    5 => port.set_data_bits(DataBits::Five).unwrap(),
-                    6 => port.set_data_bits(DataBits::Six).unwrap(),
-                    7 => port.set_data_bits(DataBits::Seven).unwrap(),
-                    8 => port.set_data_bits(DataBits::Eight).unwrap(),
-                    _ => unreachable!(),
-                };
+        } else if let Some(conf) = &conf.serial {
+            let builder = tokio_serial::new(conf.path.clone(), conf.baud_rate);
+            let mut port = SerialStream::open(&builder).unwrap();
+            match conf.stop_bits {
+                1 => port.set_stop_bits(StopBits::One).unwrap(),
+                2 => port.set_stop_bits(StopBits::Two).unwrap(),
+                _ => unreachable!(),
+            };
+            match conf.data_bits {
+                5 => port.set_data_bits(DataBits::Five).unwrap(),
+                6 => port.set_data_bits(DataBits::Six).unwrap(),
+                7 => port.set_data_bits(DataBits::Seven).unwrap(),
+                8 => port.set_data_bits(DataBits::Eight).unwrap(),
+                _ => unreachable!(),
+            };
 
-                match conf.parity {
-                    0 => port.set_parity(Parity::None).unwrap(),
-                    1 => port.set_parity(Parity::Odd).unwrap(),
-                    2 => port.set_parity(Parity::Even).unwrap(),
-                    _ => unreachable!(),
-                };
+            match conf.parity {
+                0 => port.set_parity(Parity::None).unwrap(),
+                1 => port.set_parity(Parity::Odd).unwrap(),
+                2 => port.set_parity(Parity::Even).unwrap(),
+                _ => unreachable!(),
+            };
 
-                Ok((rtu::attach(port), conf.interval))
-            }
+            Ok((rtu::attach(port), conf.interval))
+        } else {
+            panic!("no conf for modubs");
         }
     }
 }
@@ -236,14 +238,9 @@ impl Device for Modbus {
     }
 
     fn get_detail(&self) -> DeviceDetailResp {
-        let link_type = match self.conf {
-            Conf::EthernetConf(_) => "ethernet".to_string(),
-            Conf::SerialConf(_) => "serial".to_string(),
-        };
         DeviceDetailResp {
             id: self.id,
             r#type: &TYPE,
-            link_type,
             name: self.name.clone(),
             conf: json!(&self.conf),
         }
@@ -351,9 +348,15 @@ impl Device for Modbus {
         self.write_tx = None;
     }
 
-    async fn read_groups(&self) -> HaliaResult<Vec<ListGroupsResp>> {
+    async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<Vec<ListGroupsResp>> {
         let mut resps = Vec::new();
-        for group in self.groups.read().await.iter() {
+        for group in self
+            .groups
+            .read()
+            .await
+            .iter()
+            .skip(((page - 1) * size) as usize)
+        {
             resps.push({
                 ListGroupsResp {
                     id: group.id,
@@ -362,6 +365,9 @@ impl Device for Modbus {
                     point_count: group.get_points_num().await as u8,
                 }
             });
+            if resps.len() == size as usize {
+                break;
+            }
         }
         Ok(resps)
     }
@@ -413,7 +419,12 @@ impl Device for Modbus {
         }
     }
 
-    async fn read_points(&self, group_id: Uuid) -> HaliaResult<Vec<ListPointResp>> {
+    async fn read_points(
+        &self,
+        group_id: Uuid,
+        page: u8,
+        size: u8,
+    ) -> HaliaResult<Vec<ListPointResp>> {
         match self
             .groups
             .read()
@@ -421,7 +432,7 @@ impl Device for Modbus {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => Ok(group.read_points().await),
+            Some(group) => Ok(group.read_points(page, size).await),
             None => Err(HaliaError::NotFound),
         }
     }

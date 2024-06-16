@@ -22,7 +22,6 @@ pub struct UpdateDeviceReq {
 pub struct DeviceDetailResp {
     pub id: Uuid,
     pub r#type: &'static str,
-    pub link_type: String,
     pub name: String,
     pub conf: Value,
 }

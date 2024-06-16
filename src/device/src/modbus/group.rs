@@ -150,9 +150,15 @@ impl Group {
         Ok(())
     }
 
-    pub async fn read_points(&self) -> Vec<ListPointResp> {
+    pub async fn read_points(&self, page: u8, size: u8) -> Vec<ListPointResp> {
         let mut resps = Vec::with_capacity(self.get_points_num().await);
-        for (_, point) in self.points.read().await.iter() {
+        for (_, point) in self
+            .points
+            .read()
+            .await
+            .iter()
+            .skip(((page - 1) * size) as usize)
+        {
             resps.push(ListPointResp {
                 id: point.id,
                 name: point.name.clone(),
@@ -160,7 +166,10 @@ impl Group {
                 r#type: point.conf.r#type.to_string(),
                 value: point.value.clone(),
                 describe: point.conf.describe.clone(),
-            })
+            });
+            if resps.len() == 0 {
+                break;
+            }
         }
 
         resps
@@ -194,7 +203,7 @@ impl Group {
     }
 
     pub async fn read_points_value(
-        &self,
+        &mut self,
         ctx: &mut Context,
         interval: u64,
         rtt: &Arc<AtomicU16>,
@@ -212,7 +221,8 @@ impl Group {
 
         if let Some(tx) = &self.tx {
             if let Err(e) = tx.send(MessageBatch::from_message(msg)) {
-                error!("send message batch err :{}", e);
+                debug!("unscribe :{}", e);
+                self.tx = None;
             }
         }
 

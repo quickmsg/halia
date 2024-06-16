@@ -11,7 +11,7 @@ use types::device::{
 };
 use uuid::Uuid;
 
-use crate::{AppResp, DeleteIdsQuery};
+use crate::{AppResp, DeleteIdsQuery, Pagination};
 
 pub(crate) async fn create_device(Json(req): Json<CreateDeviceReq>) -> AppResp<()> {
     trace!("create_device:{:?}", req);
@@ -28,8 +28,12 @@ pub(crate) async fn read_device(Path(device_id): Path<Uuid>) -> AppResp<DeviceDe
     }
 }
 
-pub(crate) async fn read_devices() -> AppResp<Vec<ListDevicesResp>> {
-    AppResp::with_data(GLOBAL_DEVICE_MANAGER.read_devices().await)
+pub(crate) async fn search_devices(pagination: Query<Pagination>) -> AppResp<Vec<ListDevicesResp>> {
+    AppResp::with_data(
+        GLOBAL_DEVICE_MANAGER
+            .search_devices(pagination.p, pagination.s)
+            .await,
+    )
 }
 
 pub(crate) async fn start_device(Path(device_id): Path<Uuid>) -> AppResp<()> {
@@ -76,8 +80,14 @@ pub(crate) async fn create_group(
     }
 }
 
-pub(crate) async fn read_groups(Path(device_id): Path<Uuid>) -> AppResp<Vec<ListGroupsResp>> {
-    match GLOBAL_DEVICE_MANAGER.read_groups(device_id).await {
+pub(crate) async fn read_groups(
+    Path(device_id): Path<Uuid>,
+    pagination: Query<Pagination>,
+) -> AppResp<Vec<ListGroupsResp>> {
+    match GLOBAL_DEVICE_MANAGER
+        .read_groups(device_id, pagination.p, pagination.s)
+        .await
+    {
         Ok(groups) => AppResp::with_data(groups),
         Err(e) => e.into(),
     }
@@ -138,8 +148,12 @@ pub(crate) async fn create_points(
 
 pub(crate) async fn read_points(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
+    pagination: Query<Pagination>,
 ) -> AppResp<Vec<ListPointResp>> {
-    match GLOBAL_DEVICE_MANAGER.read_points(device_id, group_id).await {
+    match GLOBAL_DEVICE_MANAGER
+        .read_points(device_id, group_id, pagination.p, pagination.s)
+        .await
+    {
         Ok(values) => AppResp::with_data(values),
         Err(e) => e.into(),
     }

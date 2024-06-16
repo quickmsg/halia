@@ -52,6 +52,12 @@ impl<T: Serialize> IntoResponse for AppResp<T> {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct Pagination {
+    p: u8,
+    s: u8,
+}
+
 pub async fn start() {
     let app = Router::new()
         .nest("/api", device_routes())
@@ -80,7 +86,7 @@ fn device_routes() -> Router {
     Router::new()
         .route("/device", post(device::create_device))
         .route("/device/:device_id", get(device::read_device))
-        .route("/devices", get(device::read_devices))
+        .route("/device/search", get(device::search_devices))
         .route("/device/:device_id/start", put(device::start_device))
         .route("/device/:device_id/stop", put(device::stop_device))
         .route("/device/:device_id", put(device::update_device))
