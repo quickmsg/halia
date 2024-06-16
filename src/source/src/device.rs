@@ -4,13 +4,8 @@ use common::error::HaliaResult;
 use device::GLOBAL_DEVICE_MANAGER;
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tokio::sync::broadcast::{self, Sender};
-use types::{
-    rule::CreateSource,
-    sink::CreateSinkReq,
-    source::{CreateSourceReq, ListSourceResp, SourceDetailResp},
-};
+use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
 
 use crate::Source;
