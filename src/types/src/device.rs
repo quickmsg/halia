@@ -452,6 +452,14 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
+            DataType::Int8(_) => match data.as_i64() {
+                Some(value) => Ok((value as u8).to_be_bytes().to_vec()),
+                None => bail!("value is wrong"),
+            }
+            DataType::Uint8(_) => match data.as_i64() {
+                Some(value) => Ok((value as u8).to_be_bytes().to_vec()),
+                None => bail!("value is wrong"),
+            }
             DataType::Int16(endian) => match data.as_i64() {
                 Some(value) => {
                     let data = match endian {

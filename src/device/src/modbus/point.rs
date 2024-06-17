@@ -7,7 +7,7 @@ use protocol::modbus::{
 };
 use serde::Deserialize;
 use tracing::{debug, error, warn};
-use types::device::{CreatePointReq, DataType};
+use types::device::{CreatePointReq, DataType, Endian};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -140,6 +140,28 @@ impl Point {
             4 => {
                 if let Ok(data) = self.conf.r#type.encode(value) {
                     match data.len() {
+                        1 => match self.conf.r#type {
+                            DataType::Int8(endian) | DataType::Uint8(endian) => {
+                                let (and_mask, or_mask) = match endian {
+                                    Endian::BigEndian => (0x00FF, (data[0] as u16) << 8),
+                                    Endian::LittleEndian => (0xFF00, data[0] as u16),
+                                };
+                                match ctx
+                                    .masked_write_register(self.conf.address, and_mask, or_mask)
+                                    .await
+                                {
+                                    Ok(res) => match res {
+                                        Ok(_) => return Ok(()),
+                                        Err(e) => {
+                                            warn!("modbus protocol exception:{}", e);
+                                            return Ok(());
+                                        }
+                                    },
+                                    Err(e) => bail!("{}", e),
+                                }
+                            }
+                            _ => todo!(),
+                        },
                         2 => match ctx.write_single_register(self.conf.address, &data).await {
                             Ok(res) => match res {
                                 Ok(_) => return Ok(()),
