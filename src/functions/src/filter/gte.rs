@@ -69,10 +69,10 @@ impl Filter for Gte {
                             json::Value::Int16(rhs) => *lhs >= *rhs as i8,
                             json::Value::Int32(rhs) => *lhs >= *rhs as i8,
                             json::Value::Int64(rhs) => *lhs >= *rhs as i8,
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as i8,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as i8,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as i8,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as i8,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as i8,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as i8,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as i8,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as i8,
                             json::Value::Float32(rhs) => *lhs >= *rhs as i8,
                             json::Value::Float64(rhs) => *lhs >= *rhs as i8,
                             _ => false,
@@ -90,10 +90,10 @@ impl Filter for Gte {
                             json::Value::Int16(rhs) => lhs >= rhs,
                             json::Value::Int32(rhs) => *lhs >= *rhs as i16,
                             json::Value::Int64(rhs) => *lhs >= *rhs as i16,
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as i16,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as i16,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as i16,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as i16,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as i16,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as i16,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as i16,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as i16,
                             json::Value::Float32(rhs) => *lhs >= *rhs as i16,
                             json::Value::Float64(rhs) => *lhs >= *rhs as i16,
                             _ => false,
@@ -111,10 +111,10 @@ impl Filter for Gte {
                             json::Value::Int16(rhs) => *lhs >= *rhs as i32,
                             json::Value::Int32(rhs) => lhs >= rhs,
                             json::Value::Int64(rhs) => *lhs >= *rhs as i32,
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as i32,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as i32,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as i32,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as i32,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as i32,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as i32,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as i32,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as i32,
                             json::Value::Float32(rhs) => *lhs >= *rhs as i32,
                             json::Value::Float64(rhs) => *lhs >= *rhs as i32,
                             _ => false,
@@ -132,10 +132,10 @@ impl Filter for Gte {
                             json::Value::Int16(rhs) => *lhs >= *rhs as i64,
                             json::Value::Int32(rhs) => *lhs >= *rhs as i64,
                             json::Value::Int64(rhs) => lhs >= rhs,
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as i64,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as i64,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as i64,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as i64,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as i64,
                             json::Value::Float32(rhs) => *lhs >= *rhs as i64,
                             json::Value::Float64(rhs) => *lhs >= *rhs as i64,
                             _ => false,
@@ -144,7 +144,7 @@ impl Filter for Gte {
                     },
                     Value::String(_) => false,
                 },
-                json::Value::UInt8(lhs) => match &self.value {
+                json::Value::Uint8(lhs) => match &self.value {
                     Value::Int(rhs) => {
                         if *rhs < 0 {
                             return false;
@@ -183,10 +183,10 @@ impl Filter for Gte {
                                 }
                                 *lhs >= *rhs as u8
                             }
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as u8,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as u8,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as u8,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as u8,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as u8,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as u8,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as u8,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as u8,
                             json::Value::Float32(rhs) => {
                                 if *rhs < 0.0 {
                                     return false;
@@ -205,7 +205,7 @@ impl Filter for Gte {
                     },
                     Value::String(_) => false,
                 },
-                json::Value::UInt16(lhs) => match &self.value {
+                json::Value::Uint16(lhs) => match &self.value {
                     Value::Int(rhs) => {
                         if *rhs < 0 {
                             return false;
@@ -244,10 +244,10 @@ impl Filter for Gte {
                                 }
                                 *lhs >= *rhs as u16
                             }
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as u16,
-                            json::Value::UInt16(rhs) => lhs >= rhs,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as u16,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as u16,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as u16,
+                            json::Value::Uint16(rhs) => lhs >= rhs,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as u16,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as u16,
                             json::Value::Float32(rhs) => *lhs >= *rhs as u16,
                             json::Value::Float64(rhs) => *lhs >= *rhs as u16,
                             _ => false,
@@ -256,7 +256,7 @@ impl Filter for Gte {
                     },
                     Value::String(_) => false,
                 },
-                json::Value::UInt32(lhs) => match &self.value {
+                json::Value::Uint32(lhs) => match &self.value {
                     Value::Int(rhs) => {
                         if *rhs < 0 {
                             return false;
@@ -295,10 +295,10 @@ impl Filter for Gte {
                                 }
                                 *lhs >= *rhs as u32
                             }
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as u32,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as u32,
-                            json::Value::UInt32(rhs) => lhs >= rhs,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as u32,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as u32,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as u32,
+                            json::Value::Uint32(rhs) => lhs >= rhs,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as u32,
                             json::Value::Float32(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
@@ -319,7 +319,7 @@ impl Filter for Gte {
                     },
                     Value::String(_) => false,
                 },
-                json::Value::UInt64(lhs) => match &self.value {
+                json::Value::Uint64(lhs) => match &self.value {
                     Value::Int(rhs) => {
                         if *rhs < 0 {
                             return false;
@@ -358,10 +358,10 @@ impl Filter for Gte {
                                 }
                                 *lhs >= *rhs as u64
                             }
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as u64,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as u64,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as u64,
-                            json::Value::UInt64(rhs) => lhs >= rhs,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as u64,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as u64,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as u64,
+                            json::Value::Uint64(rhs) => lhs >= rhs,
                             json::Value::Float32(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
@@ -391,10 +391,10 @@ impl Filter for Gte {
                             json::Value::Int16(rhs) => *lhs >= *rhs as f32,
                             json::Value::Int32(rhs) => *lhs >= *rhs as f32,
                             json::Value::Int64(rhs) => *lhs >= *rhs as f32,
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as f32,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as f32,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as f32,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as f32,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as f32,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as f32,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as f32,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as f32,
                             json::Value::Float32(rhs) => lhs >= rhs,
                             json::Value::Float64(rhs) => *lhs >= *rhs as f32,
                             _ => false,
@@ -412,10 +412,10 @@ impl Filter for Gte {
                             json::Value::Int16(rhs) => *lhs >= *rhs as f64,
                             json::Value::Int32(rhs) => *lhs >= *rhs as f64,
                             json::Value::Int64(rhs) => *lhs >= *rhs as f64,
-                            json::Value::UInt8(rhs) => *lhs >= *rhs as f64,
-                            json::Value::UInt16(rhs) => *lhs >= *rhs as f64,
-                            json::Value::UInt32(rhs) => *lhs >= *rhs as f64,
-                            json::Value::UInt64(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Uint8(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Uint16(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Uint32(rhs) => *lhs >= *rhs as f64,
+                            json::Value::Uint64(rhs) => *lhs >= *rhs as f64,
                             json::Value::Float32(rhs) => *lhs >= *rhs as f64,
                             json::Value::Float64(rhs) => lhs >= rhs,
                             _ => false,

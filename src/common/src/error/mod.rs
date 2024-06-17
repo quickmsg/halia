@@ -9,6 +9,7 @@ pub enum HaliaError {
     ParseErr,
     IoErr,
     Existed,
+    ConfErr,
 }
 
 impl From<std::fmt::Error> for HaliaError {
@@ -37,6 +38,7 @@ impl Display for HaliaError {
             HaliaError::ParseErr => write!(f, "解析错误"),
             HaliaError::IoErr => write!(f, "IO错误"),
             HaliaError::Existed => write!(f, "已存在"),
+            HaliaError::ConfErr => write!(f, "配置错误"),
         }
     }
 }
@@ -49,6 +51,7 @@ impl HaliaError {
             HaliaError::ParseErr => 3,
             HaliaError::IoErr => 4,
             HaliaError::Existed => 5,
+            HaliaError::ConfErr => 6,
         }
     }
 }

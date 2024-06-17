@@ -235,13 +235,16 @@ impl Group {
         interval: u64,
         point_id: Uuid,
         value: serde_json::Value,
+        rtt: &Arc<AtomicU16>,
     ) {
+        let now = Instant::now();
         match self.points.write().await.get_mut(&point_id) {
             Some(point) => match point.write(ctx, value).await {
-                Ok(_) => {}
+                Ok(_) => rtt.store(now.elapsed().as_millis() as u16, Ordering::SeqCst),
                 Err(e) => error!("write err :{}", e),
             },
             None => error!("not find point id :{}", point_id),
         }
+        time::sleep(Duration::from_millis(interval)).await;
     }
 }

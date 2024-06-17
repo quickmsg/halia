@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use std::{
     net::SocketAddr,
     sync::{
@@ -84,7 +84,6 @@ impl EthernetConf {
     }
 }
 
-// TODO
 impl SerialConf {
     fn validate(&self) -> bool {
         true
@@ -104,10 +103,18 @@ struct SerialConf {
 impl Modbus {
     pub fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
-        if conf.ethernet.is_none() && conf.serial.is_none() {
-            // TODO
-            return Err(HaliaError::Existed);
+        if let Some(ethernet) = &conf.ethernet {
+            if !ethernet.validate() {
+                return Err(HaliaError::ConfErr);
+            }
+        } else if let Some(serial) = &conf.serial {
+            if !serial.validate() {
+                return Err(HaliaError::ConfErr);
+            }
+        } else {
+            return Err(HaliaError::ConfErr);
         }
+
         Ok(Box::new(Modbus {
             id,
             name: req.name.clone(),
@@ -381,9 +388,7 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => {
-                group.update(&req);
-
-                if self.on.load(Ordering::SeqCst) {
+                if group.interval != req.interval && self.on.load(Ordering::SeqCst) {
                     if let Err(e) = self
                         .group_signal_tx
                         .as_ref()
@@ -393,6 +398,8 @@ impl Device for Modbus {
                         error!("group_signals send err :{}", e);
                     }
                 }
+
+                group.update(&req);
             }
             None => return Err(HaliaError::NotFound),
         };
@@ -519,7 +526,7 @@ async fn run_event_loop(
 
             point = write_rx.recv() => {
                 if let Some(point) = point {
-                    if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2, rtt).await {
+                    if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2, interval, rtt).await {
                         return
                     }
                 }
@@ -564,6 +571,7 @@ async fn write_point_value(
     group_id: Uuid,
     point_id: Uuid,
     value: Value,
+    interval: u64,
     rtt: &Arc<AtomicU16>,
 ) -> bool {
     if let Some(group) = groups
@@ -572,7 +580,7 @@ async fn write_point_value(
         .iter()
         .find(|group| group.id == group_id)
     {
-        group.write(ctx, 20, point_id, value).await;
+        group.write(ctx, interval, point_id, value, rtt).await;
         return true;
     }
 

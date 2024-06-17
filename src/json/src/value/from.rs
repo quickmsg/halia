@@ -12,7 +12,7 @@ impl From<i8> for Value {
 
 impl From<u8> for Value {
     fn from(value: u8) -> Self {
-        Value::UInt8(value)
+        Value::Uint8(value)
     }
 }
 
@@ -24,7 +24,7 @@ impl From<i16> for Value {
 
 impl From<u16> for Value {
     fn from(value: u16) -> Self {
-        Value::UInt16(value)
+        Value::Uint16(value)
     }
 }
 
@@ -36,7 +36,7 @@ impl From<i32> for Value {
 
 impl From<u32> for Value {
     fn from(value: u32) -> Self {
-        Value::UInt32(value)
+        Value::Uint32(value)
     }
 }
 
@@ -48,7 +48,7 @@ impl From<i64> for Value {
 
 impl From<u64> for Value {
     fn from(value: u64) -> Self {
-        Value::UInt64(value)
+        Value::Uint64(value)
     }
 }
 

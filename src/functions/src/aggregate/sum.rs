@@ -31,16 +31,16 @@ impl Aggregater for Sum {
                     json::Value::Int64(value) => {
                         sum += *value as f64;
                     }
-                    json::Value::UInt8(value) => {
+                    json::Value::Uint8(value) => {
                         sum += *value as f64;
                     }
-                    json::Value::UInt16(value) => {
+                    json::Value::Uint16(value) => {
                         sum += *value as f64;
                     }
-                    json::Value::UInt32(value) => {
+                    json::Value::Uint32(value) => {
                         sum += *value as f64;
                     }
-                    json::Value::UInt64(value) => {
+                    json::Value::Uint64(value) => {
                         sum += *value as f64;
                     }
                     json::Value::Float32(value) => {

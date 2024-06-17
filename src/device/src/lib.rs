@@ -1,5 +1,4 @@
 #![feature(lazy_cell)]
-
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
@@ -139,7 +138,10 @@ impl DeviceManager {
 
         Ok(())
     }
+}
 
+// group
+impl DeviceManager {
     pub async fn create_group(
         &self,
         device_id: Uuid,
@@ -188,7 +190,10 @@ impl DeviceManager {
             None => Err(HaliaError::NotFound),
         }
     }
+}
 
+// point
+impl DeviceManager {
     pub async fn create_points(
         &self,
         device_id: Uuid,
@@ -267,19 +272,9 @@ impl DeviceManager {
             None => Err(HaliaError::NotFound),
         }
     }
-
-    pub async fn subscribe(
-        &self,
-        device_id: Uuid,
-        group_id: Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.devices.read().await.get(&device_id) {
-            Some(device) => device.subscribe(group_id).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
 }
 
+// recover
 impl DeviceManager {
     pub async fn recover(&self) -> HaliaResult<()> {
         let devices = match persistence::device::read().await {
@@ -375,6 +370,20 @@ impl DeviceManager {
             return Err(e);
         }
         Ok(())
+    }
+}
+
+// source and sink
+impl DeviceManager {
+    pub async fn subscribe(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => device.subscribe(group_id).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 }
 

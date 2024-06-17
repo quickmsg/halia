@@ -21,10 +21,10 @@ impl Serialize for Value {
             Value::Int16(n) => n.serialize(serializer),
             Value::Int32(n) => n.serialize(serializer),
             Value::Int64(n) => n.serialize(serializer),
-            Value::UInt8(n) => n.serialize(serializer),
-            Value::UInt16(n) => n.serialize(serializer),
-            Value::UInt32(n) => n.serialize(serializer),
-            Value::UInt64(n) => n.serialize(serializer),
+            Value::Uint8(n) => n.serialize(serializer),
+            Value::Uint16(n) => n.serialize(serializer),
+            Value::Uint32(n) => n.serialize(serializer),
+            Value::Uint64(n) => n.serialize(serializer),
             Value::String(s) => serializer.serialize_str(s),
             Value::Array(v) => v.serialize(serializer),
             Value::Object(m) => {
@@ -133,7 +133,7 @@ impl serde::Serializer for Serializer {
 
     #[inline]
     fn serialize_u64(self, value: u64) -> Result<Value> {
-        Ok(Value::UInt64(value))
+        Ok(Value::Uint64(value))
     }
 
     // fn serialize_u128(self, value: u128) -> Result<Value> {
