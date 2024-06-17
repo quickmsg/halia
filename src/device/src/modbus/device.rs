@@ -11,7 +11,7 @@ use std::{
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    persistence::{self},
 };
 use message::MessageBatch;
 use protocol::modbus::client::{rtu, tcp, Context};
@@ -264,7 +264,11 @@ impl Device for Modbus {
         };
 
         if create {
-            persistence::group::insert(self.id, group_id, serde_json::to_string(&req)?).await?;
+            if let Err(e) =
+                persistence::group::insert(self.id, group_id, serde_json::to_string(&req)?).await
+            {
+                error!("wirte group to file err:{}", e);
+            }
         }
 
         let group = Group::new(self.id, group_id, &req);

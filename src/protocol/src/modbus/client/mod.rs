@@ -41,6 +41,10 @@ pub trait Writer: Client {
 
     /// Write multiple holding registers (0x10)
     async fn write_multiple_registers(&mut self, addr: u16, register: &'_ [u8]) -> Result<()>;
+
+    /// Set or clear individual bits of a holding register (0x16)
+    async fn masked_write_register(&mut self, addr: u16, and_mask: u16, or_mask: u16)
+        -> Result<()>;
 }
 
 /// Asynchronous Modbus client context
@@ -174,6 +178,18 @@ impl Writer for Context {
                 addr,
                 Cow::Borrowed(registers),
             ))
+            .await
+            .map(|result| result.map_err(Into::into).map(|_| {}))
+    }
+
+    async fn masked_write_register<'a>(
+        &'a mut self,
+        addr: u16,
+        and_mask: u16,
+        or_mask: u16,
+    ) -> Result<()> {
+        self.client
+            .call(Request::MaskWriteRegister(addr, and_mask, or_mask))
             .await
             .map(|result| result.map_err(Into::into).map(|_| {}))
     }

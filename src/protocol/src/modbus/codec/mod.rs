@@ -1,11 +1,9 @@
+use byteorder::ReadBytesExt as _;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{
     convert::TryFrom,
     io::{Cursor, Error, ErrorKind},
 };
-
-use byteorder::ReadBytesExt as _;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tracing::debug;
 
 use super::{
     frame::{RequestPdu, ResponsePdu},
