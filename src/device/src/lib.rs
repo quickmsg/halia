@@ -58,7 +58,7 @@ impl DeviceManager {
 
     pub async fn read_device(&self, device_id: Uuid) -> HaliaResult<DeviceDetailResp> {
         match self.devices.read().await.get(&device_id) {
-            Some(device) => Ok(device.get_detail()),
+            Some(device) => Ok(device.get_detail().await),
             None => Err(HaliaError::NotFound),
         }
     }
@@ -67,7 +67,6 @@ impl DeviceManager {
         match self.devices.write().await.get_mut(&device_id) {
             Some(device) => {
                 device.update(&req).await?;
-                persistence::device::update_conf(device_id, serde_json::to_string(&req)?).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
@@ -397,7 +396,7 @@ pub struct DeviceInfo {
 #[async_trait]
 trait Device: Sync + Send {
     // device
-    fn get_detail(&self) -> DeviceDetailResp;
+    async fn get_detail(&self) -> DeviceDetailResp;
     fn get_info(&self) -> ListDevicesResp;
     async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self);

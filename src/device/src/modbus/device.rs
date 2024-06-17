@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 use tokio::{
     net::TcpStream,
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, mpsc, Mutex, RwLock},
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
@@ -33,7 +33,7 @@ use uuid::Uuid;
 
 use crate::Device;
 
-use super::group::{Command, Group};
+use super::group::{self, Group};
 
 static TYPE: &str = "modbus";
 
@@ -44,18 +44,26 @@ pub(crate) struct Modbus {
     on: Arc<AtomicBool>,  // true:开启 false:关闭
     err: Arc<AtomicBool>, // true:错误 false:正常
     rtt: Arc<AtomicU16>,
-    conf: Conf,
+    conf: Arc<Mutex<Conf>>,
     groups: Arc<RwLock<Vec<Group>>>,
-    group_signal_tx: Option<broadcast::Sender<Command>>,
-    stop_signal_tx: Option<mpsc::Sender<()>>,
+    group_signal_tx: Option<broadcast::Sender<group::Command>>,
+    signal_tx: Option<mpsc::Sender<Command>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
     write_tx: Option<mpsc::Sender<(Uuid, Uuid, Value)>>,
+}
+
+#[derive(Debug)]
+enum Command {
+    Stop,
+    Update,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "snake_case")]
 struct Conf {
+    #[serde(skip_serializing_if = "Option::is_none")]
     ethernet: Option<EthernetConf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     serial: Option<SerialConf>,
 }
 
@@ -121,10 +129,10 @@ impl Modbus {
             on: Arc::new(AtomicBool::new(false)),
             err: Arc::new(AtomicBool::new(false)),
             rtt: Arc::new(AtomicU16::new(9999)),
-            conf,
+            conf: Arc::new(Mutex::new(conf)),
             groups: Arc::new(RwLock::new(Vec::new())),
+            signal_tx: None,
             group_signal_tx: None,
-            stop_signal_tx: None,
             read_tx: None,
             write_tx: None,
         }))
@@ -132,7 +140,7 @@ impl Modbus {
 
     async fn run(
         &self,
-        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut signal_rx: mpsc::Receiver<Command>,
         mut read_rx: mpsc::Receiver<Uuid>,
         mut write_rx: mpsc::Receiver<(Uuid, Uuid, Value)>,
     ) {
@@ -144,20 +152,20 @@ impl Modbus {
         let rtt = self.rtt.clone();
         tokio::spawn(async move {
             loop {
-                if let Err(e) = group_siganl_tx.send(Command::Pause) {
+                if let Err(e) = group_siganl_tx.send(group::Command::Pause) {
                     error!("send signal err:{}", e);
                 }
                 err.store(true, Ordering::SeqCst);
                 match Modbus::get_context(&conf).await {
                     Ok((ctx, interval)) => {
                         err.store(false, Ordering::SeqCst);
-                        if let Err(e) = group_siganl_tx.send(Command::Restart) {
+                        if let Err(e) = group_siganl_tx.send(group::Command::Restart) {
                             error!("send signal err:{}", e);
                         }
                         run_event_loop(
                             ctx,
                             &rtt,
-                            &mut stop_signal_rx,
+                            &mut signal_rx,
                             &mut write_rx,
                             &mut read_rx,
                             groups.clone(),
@@ -177,15 +185,15 @@ impl Modbus {
         });
     }
 
-    async fn get_context(conf: &Conf) -> HaliaResult<(Context, u64)> {
-        if let Some(conf) = &conf.ethernet {
+    async fn get_context(conf: &Arc<Mutex<Conf>>) -> HaliaResult<(Context, u64)> {
+        if let Some(conf) = &conf.lock().await.ethernet {
             let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
             let transport = TcpStream::connect(socket_addr).await?;
             match conf.encode {
                 Encode::Tcp => Ok((tcp::attach(transport), conf.interval)),
                 Encode::Rtu => Ok((rtu::attach(transport), conf.interval)),
             }
-        } else if let Some(conf) = &conf.serial {
+        } else if let Some(conf) = &conf.lock().await.serial {
             let builder = tokio_serial::new(conf.path.clone(), conf.baud_rate);
             let mut port = SerialStream::open(&builder).unwrap();
             match conf.stop_bits {
@@ -218,17 +226,24 @@ impl Modbus {
 #[async_trait]
 impl Device for Modbus {
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()> {
-        let conf: Conf = serde_json::from_value(req.conf.clone())?;
-        self.name = req.name.clone();
-        if self.conf != conf {
-            self.conf = conf;
-            if self.on.load(Ordering::SeqCst) {
-                self.stop().await;
-                // TODO
-                time::sleep(Duration::from_secs(1)).await;
-                self.start().await?;
-            }
+        let update_conf: Conf = serde_json::from_value(req.conf.clone())?;
+
+        if self.name != req.name {
+            self.name = req.name.clone();
         }
+
+        *self.conf.lock().await = update_conf.clone();
+        if self.on.load(Ordering::SeqCst) {
+            let _ = self.signal_tx.as_ref().unwrap().send(Command::Update);
+        }
+
+        let create_device_req = CreateDeviceReq {
+            r#type: TYPE.to_string(),
+            name: self.name.clone(),
+            conf: serde_json::to_value(update_conf).unwrap(),
+        };
+        persistence::device::update_conf(self.id, serde_json::to_string(&create_device_req)?)
+            .await?;
 
         Ok(())
     }
@@ -244,12 +259,12 @@ impl Device for Modbus {
         }
     }
 
-    fn get_detail(&self) -> DeviceDetailResp {
+    async fn get_detail(&self) -> DeviceDetailResp {
         DeviceDetailResp {
             id: self.id,
             r#type: &TYPE,
             name: self.name.clone(),
-            conf: json!(&self.conf),
+            conf: json!(&self.conf.lock().await.clone()),
         }
     }
 
@@ -294,7 +309,7 @@ impl Device for Modbus {
                 .group_signal_tx
                 .as_ref()
                 .unwrap()
-                .send(Command::Stop(group_id))
+                .send(group::Command::Stop(group_id))
             {
                 Ok(_) => {}
                 Err(e) => error!("group send stop singla err:{}", e),
@@ -311,8 +326,8 @@ impl Device for Modbus {
             self.on.store(true, Ordering::SeqCst);
         }
 
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel::<()>(1);
-        self.stop_signal_tx = Some(stop_signal_tx);
+        let (signal_tx, signal_rx) = mpsc::channel::<Command>(1);
+        self.signal_tx = Some(signal_tx);
 
         let (read_tx, read_rx) = mpsc::channel::<Uuid>(20);
         self.read_tx = Some(read_tx);
@@ -320,10 +335,10 @@ impl Device for Modbus {
         let (write_tx, write_rx) = mpsc::channel::<(Uuid, Uuid, Value)>(10);
         self.write_tx = Some(write_tx);
 
-        let (group_signal_tx, _) = broadcast::channel::<Command>(20);
+        let (group_signal_tx, _) = broadcast::channel::<group::Command>(20);
         self.group_signal_tx = Some(group_signal_tx);
 
-        self.run(stop_signal_rx, read_rx, write_rx).await;
+        self.run(signal_rx, read_rx, write_rx).await;
 
         for group in self.groups.read().await.iter() {
             let stop_signal = self.group_signal_tx.as_ref().unwrap().subscribe();
@@ -344,16 +359,16 @@ impl Device for Modbus {
             .group_signal_tx
             .as_ref()
             .unwrap()
-            .send(Command::StopAll);
+            .send(group::Command::StopAll);
         self.group_signal_tx = None;
 
-        self.stop_signal_tx
+        self.signal_tx
             .as_ref()
             .unwrap()
-            .send(())
+            .send(Command::Stop)
             .await
             .unwrap();
-        self.stop_signal_tx = None;
+        self.signal_tx = None;
 
         self.read_tx = None;
         self.write_tx = None;
@@ -397,7 +412,7 @@ impl Device for Modbus {
                         .group_signal_tx
                         .as_ref()
                         .unwrap()
-                        .send(Command::Update(group_id, req.interval))
+                        .send(group::Command::Update(group_id, req.interval))
                     {
                         error!("group_signals send err :{}", e);
                     }
@@ -514,7 +529,7 @@ impl Device for Modbus {
 async fn run_event_loop(
     mut ctx: Context,
     rtt: &Arc<AtomicU16>,
-    stop_signal: &mut mpsc::Receiver<()>,
+    signal_rx: &mut mpsc::Receiver<Command>,
     write_rx: &mut mpsc::Receiver<(Uuid, Uuid, Value)>,
     read_rx: &mut mpsc::Receiver<Uuid>,
     groups: Arc<RwLock<Vec<Group>>>,
@@ -523,9 +538,13 @@ async fn run_event_loop(
     loop {
         select! {
             biased;
-            _ = stop_signal.recv() => {
-                debug!("stop event_loop");
-                return
+            command = signal_rx.recv() => {
+                if let Some(command) = command {
+                    match command {
+                        Command::Stop => return,
+                        Command::Update => return,
+                    }
+                }
             }
 
             point = write_rx.recv() => {
