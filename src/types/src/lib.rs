@@ -1,4 +1,4 @@
-pub mod rule;
 pub mod device;
-pub mod source;
+pub mod rule;
 pub mod sink;
+pub mod source;

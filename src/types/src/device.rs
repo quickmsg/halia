@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use tracing::{debug, error};
 use std::str::FromStr;
+use tracing::{debug, error};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -85,7 +85,7 @@ pub struct WritePointValueReq {
 
 #[derive(Debug)]
 pub enum DataType {
-    Bool,
+    Bool(u8),
     Int8(Endian),
     Uint8(Endian),
     Int16(Endian),
@@ -120,9 +120,19 @@ impl<'de> Deserialize<'de> for DataType {
                 })?;
 
                 let data_type = match type_str {
-                    "bool" => DataType::Bool,
+                    "bool" => {
+                        let pos = map
+                            .get("len")
+                            .ok_or_else(|| serde::de::Error::missing_field("len"))?;
+                        let pos = pos.as_i64().ok_or_else(|| {
+                            serde::de::Error::invalid_type(
+                                serde::de::Unexpected::Other("not an array"),
+                                &"array",
+                            )
+                        })?;
+                        DataType::Bool(pos as u8)
+                    }
                     "int16" => {
-                        // TODO remove unwrap
                         let endian = extract_endian(&map, 1).unwrap();
                         DataType::Int16(endian[0])
                     }
@@ -217,7 +227,7 @@ impl Serialize for DataType {
         S: Serializer,
     {
         match self {
-            DataType::Bool => serde_json::json!({"type": "bool"}).serialize(serializer),
+            DataType::Bool(pos) => serde_json::json!({"type": "bool", "pos": pos}).serialize(serializer),
             DataType::Int8(endian) => serde_json::json!({"type": "int8", "endian": [endian]}).serialize(serializer),
             DataType::Uint8(endian) =>  serde_json::json!({"type": "uint8", "endian": [endian]}).serialize(serializer),
             DataType::Int16(endian) => {
@@ -256,7 +266,6 @@ impl Serialize for DataType {
             DataType::String(len, single, endian ) => {
                 serde_json::json!({"type": "string", "len": len, "single": single,  "endian": [endian]}).serialize(serializer)
             }
-           
         }
     }
 }
@@ -264,7 +273,7 @@ impl Serialize for DataType {
 impl DataType {
     pub fn get_quantity(&self) -> u16 {
         match &self {
-            DataType::Bool
+            DataType::Bool(_)
             | DataType::Int8(_)
             | DataType::Uint8(_)
             | DataType::Int16(_)
@@ -278,7 +287,7 @@ impl DataType {
 
     pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
         match self {
-            DataType::Bool => {
+            DataType::Bool(pos) => {
                 if data.len() != 1 {
                     json::Value::Null
                 } else {
@@ -433,66 +442,58 @@ impl DataType {
                 }
                 json::Value::from(f64::from_be_bytes(data))
             }
-            DataType::String(len, single, endian) => {
-                match (single, endian) {
-                    (true, Endian::BigEndian) => {
-                        let mut new_data = vec![];
-                        for i in 0..*len {
-                            if i % 2 != 0 {
-                                new_data.push(data[i as usize]);
-                            }
-                        }
-                        match String::from_utf8(new_data) {
-                            Ok(string) => return json::Value::String(string),
-                            Err(e) => {
-                                return json::Value::Null;
-                            }
+            DataType::String(len, single, endian) => match (single, endian) {
+                (true, Endian::BigEndian) => {
+                    let mut new_data = vec![];
+                    for i in 0..*len {
+                        if i % 2 != 0 {
+                            new_data.push(data[i as usize]);
                         }
                     }
-                    (true, Endian::LittleEndian) => {
-                        let mut new_data = vec![];
-                        for i in 0..*len {
-                            if i % 2 == 0 {
-                                new_data.push(data[i as usize]);
-                            }
-                        }
-                        match String::from_utf8(new_data) {
-                            Ok(string) => return json::Value::String(string),
-                            Err(e) => {
-                                return json::Value::Null;
-                            }
-                        }
-                    }
-                    (false, Endian::BigEndian) => {
-                        for i in 0..*len {
-                            if i % 2 == 0 {
-                                data.swap((i*2) as usize, (i*2+1) as usize);
-                            }
-                        }
-                        match String::from_utf8(data.clone()) {
-                            Ok(string) => return json::Value::String(string),
-                            Err(e) => {
-                                return json::Value::Null;
-                            }
-                        }
-                    }
-                    (false, Endian::LittleEndian) => {
-                        match String::from_utf8(data.clone()) {
-                            Ok(string) => return json::Value::String(string),
-                            Err(e) => {
-                                return json::Value::Null;
-                            }
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return json::Value::String(string),
+                        Err(e) => {
+                            return json::Value::Null;
                         }
                     }
                 }
-            }
+                (true, Endian::LittleEndian) => {
+                    let mut new_data = vec![];
+                    for i in 0..*len {
+                        if i % 2 == 0 {
+                            new_data.push(data[i as usize]);
+                        }
+                    }
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return json::Value::String(string),
+                        Err(e) => {
+                            return json::Value::Null;
+                        }
+                    }
+                }
+                (false, Endian::BigEndian) => {
+                    for i in 0..*len {
+                        if i % 2 == 0 {
+                            data.swap((i * 2) as usize, (i * 2 + 1) as usize);
+                        }
+                    }
+                    match String::from_utf8(data.clone()) {
+                        Ok(string) => return json::Value::String(string),
+                        Err(_) => return json::Value::Null,
+                    }
+                }
+                (false, Endian::LittleEndian) => match String::from_utf8(data.clone()) {
+                    Ok(string) => return json::Value::String(string),
+                    Err(_) => return json::Value::Null,
+                },
+            },
             DataType::Bytes(_) => json::Value::Bytes(data.clone()),
         }
     }
 
     pub fn encode(&self, data: Value) -> Result<Vec<u8>> {
         match self {
-            DataType::Bool => match data.as_bool() {
+            DataType::Bool(_) => match data.as_bool() {
                 Some(value) => {
                     let mut data = Vec::with_capacity(1);
                     if value {
@@ -507,11 +508,11 @@ impl DataType {
             DataType::Int8(_) => match data.as_i64() {
                 Some(value) => Ok((value as u8).to_be_bytes().to_vec()),
                 None => bail!("value is wrong"),
-            }
+            },
             DataType::Uint8(_) => match data.as_i64() {
                 Some(value) => Ok((value as u8).to_be_bytes().to_vec()),
                 None => bail!("value is wrong"),
-            }
+            },
             DataType::Int16(endian) => match data.as_i64() {
                 Some(value) => {
                     let data = match endian {
@@ -635,15 +636,46 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
-            DataType::String(len, single, endian) => todo!(),
+            DataType::String(len, single, endian) => match data.as_str() {
+                Some(value) => {
+                    let mut new_data = vec![];
+                    let data = value.as_bytes();
+                    match (single, endian) {
+                        (true, Endian::BigEndian) => {
+                            for i in 0..*len {
+                                new_data.push(0);
+                                new_data.push(data[i as usize]);
+                            }
+                            return Ok(new_data);
+                        }
+                        (true, Endian::LittleEndian) => {
+                            for i in 0..*len {
+                                new_data.push(data[i as usize]);
+                                new_data.push(0);
+                            }
+                            return Ok(new_data);
+                        }
+                        (false, Endian::BigEndian) => {
+                            for i in 0..*len {
+                                new_data.push(data[(i * 2 + 1) as usize]);
+                                new_data.push(data[(i * 2) as usize]);
+                            }
+                            return Ok(data.to_vec());
+                        }
+                        (false, Endian::LittleEndian) => {
+                            return Ok(data.to_vec());
+                        }
+                    }
+                }
+                None => bail!("value is wrong"),
+            },
             DataType::Bytes(_) => todo!(),
-            _ => bail!("value is wrong"),
         }
     }
 
     pub fn to_string(&self) -> String {
         match self {
-            DataType::Bool => "bool".to_string(),
+            DataType::Bool(_) => "bool".to_string(),
             DataType::Int8(_) => "int8".to_string(),
             DataType::Uint8(_) => "uint8".to_string(),
             DataType::Int16(_) => "int16".to_string(),
@@ -737,7 +769,7 @@ mod tests {
 
     #[test]
     fn test_datatype_quantity() {
-        assert_eq!(DataType::Bool.get_quantity(), 1);
+        assert_eq!(DataType::Bool(1).get_quantity(), 1);
         assert_eq!(DataType::Int16(Endian::LittleEndian).get_quantity(), 1);
         assert_eq!(DataType::Uint16(Endian::LittleEndian).get_quantity(), 1);
         assert_eq!(

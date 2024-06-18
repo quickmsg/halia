@@ -2,8 +2,8 @@ use anyhow::{bail, Result};
 use message::MessageBatch;
 use types::rule::CreateRuleNode;
 
-mod filter;
 mod aggregate;
+mod filter;
 
 pub trait Function: Send + Sync {
     fn call(&self, message_batch: &mut MessageBatch);

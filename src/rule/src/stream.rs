@@ -19,12 +19,12 @@ pub(crate) async fn start_stream(
         loop {
             select! {
                 biased;
-    
+
                 _ = stop_signal.recv() => {
                     debug!("stream stop");
                     return
                 }
-    
+
                 message_batch = rx.recv() => {
                     match message_batch {
                         Ok(mut message_batch) => {
@@ -34,7 +34,7 @@ pub(crate) async fn start_stream(
                                     break;
                                 }
                             }
-    
+
                             if message_batch.len() != 0 {
                                 if let Err(e) = tx.send(message_batch) {
                                     error!("stream send err:{}, ids", e);
