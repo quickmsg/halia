@@ -19,7 +19,10 @@ use tokio::{
     time,
 };
 use tracing::{debug, error};
-use types::device::{CreateGroupReq, CreatePointReq, ListPointResp, UpdateGroupReq};
+use types::device::{
+    group::{CreateGroupReq, UpdateGroupReq},
+    point::{CreatePointReq, ListPointResp},
+};
 use uuid::Uuid;
 
 use super::point::Point;

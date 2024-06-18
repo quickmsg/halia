@@ -1,87 +1,8 @@
+use std::str::FromStr;
+
 use anyhow::{bail, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use std::str::FromStr;
-use tracing::{debug, error};
-use uuid::Uuid;
-
-#[derive(Deserialize, Debug, Serialize)]
-pub struct CreateDeviceReq {
-    pub r#type: String,
-    pub name: String,
-    pub conf: Value,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct UpdateDeviceReq {
-    pub name: String,
-    pub conf: Value,
-}
-
-#[derive(Serialize)]
-pub struct DeviceDetailResp {
-    pub id: Uuid,
-    pub r#type: &'static str,
-    pub name: String,
-    pub conf: Value,
-}
-
-#[derive(Serialize)]
-pub struct SearchDeviceResp {
-    pub total: usize,
-    pub data: Vec<SearchDeviceItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchDeviceItemResp {
-    pub id: Uuid,
-    pub name: String,
-    pub r#type: &'static str,
-    pub on: bool,
-    pub err: bool,
-    pub rtt: u16,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct CreateGroupReq {
-    pub name: String,
-    pub interval: u64,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct UpdateGroupReq {
-    pub name: String,
-    pub interval: u64,
-}
-
-#[derive(Serialize)]
-pub struct ListGroupsResp {
-    pub id: Uuid,
-    pub name: String,
-    pub point_count: u8,
-    pub interval: u64,
-}
-
-#[derive(Serialize)]
-pub struct ListPointResp {
-    pub id: Uuid,
-    pub name: String,
-    pub address: u16,
-    pub r#type: String,
-    pub value: json::Value,
-    pub describe: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreatePointReq {
-    pub name: String,
-    pub conf: Value,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct WritePointValueReq {
-    pub value: Value,
-}
 
 #[derive(Debug)]
 pub enum DataType {
@@ -287,7 +208,7 @@ impl DataType {
 
     pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
         match self {
-            DataType::Bool(pos) => {
+            DataType::Bool(_) => {
                 if data.len() != 1 {
                     json::Value::Null
                 } else {
@@ -754,55 +675,4 @@ fn extract_endian(
                 .and_then(|s| Endian::from_str(s).map_err(serde::de::Error::custom))
         })
         .collect()
-}
-
-#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum Mode {
-    Client,
-    Server,
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::device::{DataType, Endian};
-
-    #[test]
-    fn test_datatype_quantity() {
-        assert_eq!(DataType::Bool(1).get_quantity(), 1);
-        assert_eq!(DataType::Int16(Endian::LittleEndian).get_quantity(), 1);
-        assert_eq!(DataType::Uint16(Endian::LittleEndian).get_quantity(), 1);
-        assert_eq!(
-            DataType::Int32(Endian::LittleEndian, Endian::LittleEndian).get_quantity(),
-            2
-        );
-        assert_eq!(
-            DataType::Uint32(Endian::LittleEndian, Endian::LittleEndian).get_quantity(),
-            2
-        );
-        assert_eq!(
-            DataType::Int64(Endian::LittleEndian, Endian::LittleEndian).get_quantity(),
-            4
-        );
-        assert_eq!(
-            DataType::Int64(Endian::LittleEndian, Endian::LittleEndian).get_quantity(),
-            4
-        );
-        assert_eq!(
-            DataType::Float32(Endian::LittleEndian, Endian::LittleEndian).get_quantity(),
-            2
-        );
-        assert_eq!(
-            DataType::Float64(Endian::LittleEndian, Endian::LittleEndian).get_quantity(),
-            4
-        );
-        assert_eq!(
-            DataType::String(6, true, Endian::LittleEndian).get_quantity(),
-            6
-        );
-        assert_eq!(
-            DataType::String(6, false, Endian::LittleEndian).get_quantity(),
-            3
-        );
-    }
 }

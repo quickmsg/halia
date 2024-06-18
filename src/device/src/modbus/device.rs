@@ -11,7 +11,7 @@ use std::{
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence::{self},
+    persistence,
 };
 use message::MessageBatch;
 use protocol::modbus::client::{rtu, tcp, Context};
@@ -26,8 +26,9 @@ use tokio::{
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error};
 use types::device::{
-    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListGroupsResp,
-    ListPointResp, Mode, SearchDeviceItemResp, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
+    device::{CreateDeviceReq, DeviceDetailResp, Mode, SearchDeviceItemResp, UpdateDeviceReq},
+    group::{CreateGroupReq, ListGroupsResp, UpdateGroupReq},
+    point::{CreatePointReq, ListPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
 

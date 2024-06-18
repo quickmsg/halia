@@ -6,8 +6,9 @@ use common::error::HaliaError;
 use device::GLOBAL_DEVICE_MANAGER;
 use tracing::{debug, trace};
 use types::device::{
-    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListGroupsResp,
-    ListPointResp, SearchDeviceResp, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
+    device::{CreateDeviceReq, DeviceDetailResp, SearchDeviceResp, UpdateDeviceReq},
+    group::{CreateGroupReq, ListGroupsResp, UpdateGroupReq},
+    point::{CreatePointReq, ListPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
 

@@ -11,9 +11,11 @@ use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error};
 use types::device::{
-    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListGroupsResp,
-    ListPointResp, SearchDeviceItemResp, SearchDeviceResp, UpdateDeviceReq, UpdateGroupReq,
-    WritePointValueReq,
+    device::{
+        CreateDeviceReq, DeviceDetailResp, SearchDeviceItemResp, SearchDeviceResp, UpdateDeviceReq,
+    },
+    group::{CreateGroupReq, ListGroupsResp, UpdateGroupReq},
+    point::{CreatePointReq, ListPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
 

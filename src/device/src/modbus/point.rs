@@ -7,7 +7,10 @@ use protocol::modbus::{
 };
 use serde::Deserialize;
 use tracing::{debug, error, warn};
-use types::device::{CreatePointReq, DataType, Endian};
+use types::device::{
+    datatype::{DataType, Endian},
+    point::CreatePointReq,
+};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -159,6 +162,9 @@ impl Point {
                                     },
                                     Err(e) => bail!("{}", e),
                                 }
+                            }
+                            DataType::Bool(pos) => {
+                                todo!()
                             }
                             _ => todo!(),
                         },
