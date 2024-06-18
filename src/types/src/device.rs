@@ -26,7 +26,13 @@ pub struct DeviceDetailResp {
 }
 
 #[derive(Serialize)]
-pub struct ListDevicesResp {
+pub struct SearchDeviceResp {
+    pub total: usize,
+    pub data: Vec<SearchDeviceItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchDeviceItemResp {
     pub id: Uuid,
     pub name: String,
     pub r#type: &'static str,

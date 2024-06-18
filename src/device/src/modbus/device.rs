@@ -26,8 +26,8 @@ use tokio::{
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error};
 use types::device::{
-    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, Mode, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
+    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListGroupsResp,
+    ListPointResp, Mode, SearchDeviceItemResp, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
 };
 use uuid::Uuid;
 
@@ -248,8 +248,8 @@ impl Device for Modbus {
         Ok(())
     }
 
-    fn get_info(&self) -> ListDevicesResp {
-        ListDevicesResp {
+    fn get_info(&self) -> SearchDeviceItemResp {
+        SearchDeviceItemResp {
             id: self.id,
             name: self.name.clone(),
             r#type: TYPE,
@@ -297,23 +297,21 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn delete_groups(&self, group_ids: Vec<Uuid>) -> HaliaResult<()> {
+    async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()> {
         self.groups
             .write()
             .await
-            .retain(|group| !group_ids.contains(&group.id));
+            .retain(|group| group_id != group.id);
 
-        persistence::group::delete(self.id, &group_ids).await?;
-        for group_id in group_ids {
-            match self
-                .group_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(group::Command::Stop(group_id))
-            {
-                Ok(_) => {}
-                Err(e) => error!("group send stop singla err:{}", e),
-            }
+        persistence::group::delete(self.id, group_id).await?;
+        match self
+            .group_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(group::Command::Stop(group_id))
+        {
+            Ok(_) => {}
+            Err(e) => error!("group send stop singla err:{}", e),
         }
 
         Ok(())

@@ -11,8 +11,9 @@ use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error};
 use types::device::{
-    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
+    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListGroupsResp,
+    ListPointResp, SearchDeviceItemResp, SearchDeviceResp, UpdateDeviceReq, UpdateGroupReq,
+    WritePointValueReq,
 };
 use uuid::Uuid;
 
@@ -108,7 +109,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn search_devices(&self, page: u8, size: u8) -> Vec<ListDevicesResp> {
+    pub async fn search_device(&self, page: u8, size: u8) -> SearchDeviceResp {
         let mut resp = vec![];
         for device in self
             .devices
@@ -123,7 +124,10 @@ impl DeviceManager {
             }
         }
 
-        resp
+        SearchDeviceResp {
+            total: self.devices.read().await.len(),
+            data: resp,
+        }
     }
 
     pub async fn delete_device(&self, device_id: Uuid) -> HaliaResult<()> {
@@ -156,7 +160,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn read_groups(
+    pub async fn search_group(
         &self,
         device_id: Uuid,
         page: u8,
@@ -183,9 +187,9 @@ impl DeviceManager {
         }
     }
 
-    pub async fn delete_groups(&self, device_id: Uuid, group_ids: Vec<Uuid>) -> HaliaResult<()> {
+    pub async fn delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
         match self.devices.write().await.get_mut(&device_id) {
-            Some(device) => device.delete_groups(group_ids).await,
+            Some(device) => device.delete_group(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -397,7 +401,7 @@ pub struct DeviceInfo {
 trait Device: Sync + Send {
     // device
     async fn get_detail(&self) -> DeviceDetailResp;
-    fn get_info(&self) -> ListDevicesResp;
+    fn get_info(&self) -> SearchDeviceItemResp;
     async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self);
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()>;
@@ -410,7 +414,7 @@ trait Device: Sync + Send {
     ) -> HaliaResult<()>;
     async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<Vec<ListGroupsResp>>;
     async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()>;
-    async fn delete_groups(&self, ids: Vec<Uuid>) -> HaliaResult<()>;
+    async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()>;
 
     // points
     async fn create_points(

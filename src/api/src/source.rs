@@ -19,7 +19,7 @@ pub(crate) async fn read(Path(id): Path<Uuid>) -> AppResp<SourceDetailResp> {
     }
 }
 
-pub(crate) async fn list() -> AppResp<Vec<ListSourceResp>> {
+pub(crate) async fn search() -> AppResp<Vec<ListSourceResp>> {
     match GLOBAL_SOURCE_MANAGER.list().await {
         Ok(data) => AppResp::with_data(data),
         Err(e) => e.into(),

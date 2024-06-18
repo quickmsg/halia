@@ -28,6 +28,6 @@ pub async fn update(device_id: Uuid, group_id: Uuid, data: String) -> Result<(),
     super::update(get_file(device_id), group_id, data).await
 }
 
-pub async fn delete(device_id: Uuid, group_ids: &Vec<Uuid>) -> Result<(), io::Error> {
-    super::delete(get_file(device_id), group_ids).await
+pub async fn delete(device_id: Uuid, group_id: Uuid) -> Result<(), io::Error> {
+    super::delete(get_file(device_id), &vec![group_id]).await
 }

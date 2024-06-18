@@ -6,8 +6,8 @@ use common::error::HaliaError;
 use device::GLOBAL_DEVICE_MANAGER;
 use tracing::{debug, trace};
 use types::device::{
-    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListDevicesResp,
-    ListGroupsResp, ListPointResp, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
+    CreateDeviceReq, CreateGroupReq, CreatePointReq, DeviceDetailResp, ListGroupsResp,
+    ListPointResp, SearchDeviceResp, UpdateDeviceReq, UpdateGroupReq, WritePointValueReq,
 };
 use uuid::Uuid;
 
@@ -28,10 +28,10 @@ pub(crate) async fn read_device(Path(device_id): Path<Uuid>) -> AppResp<DeviceDe
     }
 }
 
-pub(crate) async fn search_devices(pagination: Query<Pagination>) -> AppResp<Vec<ListDevicesResp>> {
+pub(crate) async fn search_device(pagination: Query<Pagination>) -> AppResp<SearchDeviceResp> {
     AppResp::with_data(
         GLOBAL_DEVICE_MANAGER
-            .search_devices(pagination.p, pagination.s)
+            .search_device(pagination.p, pagination.s)
             .await,
     )
 }
@@ -80,12 +80,12 @@ pub(crate) async fn create_group(
     }
 }
 
-pub(crate) async fn read_groups(
+pub(crate) async fn search_group(
     Path(device_id): Path<Uuid>,
     pagination: Query<Pagination>,
 ) -> AppResp<Vec<ListGroupsResp>> {
     match GLOBAL_DEVICE_MANAGER
-        .read_groups(device_id, pagination.p, pagination.s)
+        .search_group(device_id, pagination.p, pagination.s)
         .await
     {
         Ok(groups) => AppResp::with_data(groups),
@@ -106,20 +106,9 @@ pub(crate) async fn update_group(
     }
 }
 
-pub(crate) async fn delete_groups(
-    Path(device_id): Path<Uuid>,
-    Query(query): Query<DeleteIdsQuery>,
-) -> AppResp<()> {
-    let group_ids: Vec<Uuid> = query
-        .ids
-        .split(',')
-        .map(|s| match s.parse::<Uuid>() {
-            Ok(id) => id,
-            Err(_) => todo!(),
-        })
-        .collect();
+pub(crate) async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
-        .delete_groups(device_id, group_ids)
+        .delete_group(device_id, group_id)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -146,7 +135,7 @@ pub(crate) async fn create_points(
     }
 }
 
-pub(crate) async fn read_points(
+pub(crate) async fn search_point(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     pagination: Query<Pagination>,
 ) -> AppResp<Vec<ListPointResp>> {

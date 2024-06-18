@@ -86,7 +86,7 @@ fn device_routes() -> Router {
     Router::new()
         .route("/device", post(device::create_device))
         .route("/device/:device_id", get(device::read_device))
-        .route("/device/search", get(device::search_devices))
+        .route("/device/search", get(device::search_device))
         .route("/device/:device_id/start", put(device::start_device))
         .route("/device/:device_id/stop", put(device::stop_device))
         .route("/device/:device_id", put(device::update_device))
@@ -96,15 +96,15 @@ fn device_routes() -> Router {
 fn group_routes() -> Router {
     Router::new()
         .route("/group", post(device::create_group))
-        .route("/groups", get(device::read_groups))
+        .route("/group/search", get(device::search_group))
         .route("/group/:group_id", put(device::update_group))
-        .route("/groups", delete(device::delete_groups))
+        .route("/group/:group_id", delete(device::delete_group))
 }
 
 fn point_routes() -> Router {
     Router::new()
         .route("/points", post(device::create_points))
-        .route("/points", get(device::read_points))
+        .route("/point/search", get(device::search_point))
         .route("/point/:point_id", put(device::update_point))
         .route("/point/:point_id/value", put(device::write_point))
         .route("/points", delete(device::delete_points))
@@ -113,7 +113,7 @@ fn point_routes() -> Router {
 fn source_routes() -> Router {
     Router::new()
         .route("/source", post(source::create))
-        .route("/sources", get(source::list))
+        .route("/source/search", get(source::search))
         .route("/source/:id", get(source::read))
         .route("/source/:id", put(source::update))
         .route("/source/:id", delete(source::delete))
