@@ -120,6 +120,7 @@ pub enum Value {
     Float32(f32),
     Float64(f64),
     String(String),
+    Bytes(Vec<u8>),
     Array(Vec<Value>),
     Object(Map<String, Value>),
 }

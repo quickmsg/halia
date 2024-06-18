@@ -478,6 +478,7 @@ impl Filter for Neq {
                     _ => false,
                 },
                 json::Value::Object(_) => todo!(),
+                json::Value::Bytes(_) => todo!(),
             },
             None => false,
         }

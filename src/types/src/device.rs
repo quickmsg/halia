@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
+use tracing::{debug, error};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -95,7 +96,7 @@ pub enum DataType {
     Uint64(Endian, Endian),
     Float32(Endian, Endian),
     Float64(Endian, Endian),
-    String(u16, bool, Endian, Endian),
+    String(u16, bool, Endian),
     Bytes(u16),
 }
 
@@ -173,9 +174,9 @@ impl<'de> Deserialize<'de> for DataType {
                                 &"array",
                             )
                         })?;
-                        let endian = extract_endian(&map, 2).unwrap();
+                        let endian = extract_endian(&map, 1).unwrap();
 
-                        DataType::String(len as u16, single, endian[0], endian[1])
+                        DataType::String(len as u16, single, endian[0])
                     }
                     "bytes" => {
                         let len = map
@@ -252,8 +253,8 @@ impl Serialize for DataType {
             DataType::Bytes(len) => {
                 serde_json::json!({"type": "bytes", "len": len}).serialize(serializer)
             }
-            DataType::String(len, single, endian0, endian1) => {
-                serde_json::json!({"type": "string", "len": len, "single": single,  "endian": [endian0, endian1]}).serialize(serializer)
+            DataType::String(len, single, endian ) => {
+                serde_json::json!({"type": "string", "len": len, "single": single,  "endian": [endian]}).serialize(serializer)
             }
            
         }
@@ -270,13 +271,7 @@ impl DataType {
             | DataType::Uint16(_) => 1,
             DataType::Int32(_, _) | DataType::Uint32(_, _) | DataType::Float32(_, _) => 2,
             DataType::Int64(_, _) | DataType::Uint64(_, _) | DataType::Float64(_, _) => 4,
-            DataType::String(len, single, _, _) => {
-                if *single {
-                    *len
-                } else {
-                    *len / 2
-                }
-            }
+            DataType::String(len, _, _) => *len,
             DataType::Bytes(len) => *len,
         }
     }
@@ -438,9 +433,60 @@ impl DataType {
                 }
                 json::Value::from(f64::from_be_bytes(data))
             }
-            // DataType::String => todo!(),
-            // DataType::Bytes => todo!(),
-            _ => todo!()
+            DataType::String(len, single, endian) => {
+                match (single, endian) {
+                    (true, Endian::BigEndian) => {
+                        let mut new_data = vec![];
+                        for i in 0..*len {
+                            if i % 2 != 0 {
+                                new_data.push(data[i as usize]);
+                            }
+                        }
+                        match String::from_utf8(new_data) {
+                            Ok(string) => return json::Value::String(string),
+                            Err(e) => {
+                                return json::Value::Null;
+                            }
+                        }
+                    }
+                    (true, Endian::LittleEndian) => {
+                        let mut new_data = vec![];
+                        for i in 0..*len {
+                            if i % 2 == 0 {
+                                new_data.push(data[i as usize]);
+                            }
+                        }
+                        match String::from_utf8(new_data) {
+                            Ok(string) => return json::Value::String(string),
+                            Err(e) => {
+                                return json::Value::Null;
+                            }
+                        }
+                    }
+                    (false, Endian::BigEndian) => {
+                        for i in 0..*len {
+                            if i % 2 == 0 {
+                                data.swap((i*2) as usize, (i*2+1) as usize);
+                            }
+                        }
+                        match String::from_utf8(data.clone()) {
+                            Ok(string) => return json::Value::String(string),
+                            Err(e) => {
+                                return json::Value::Null;
+                            }
+                        }
+                    }
+                    (false, Endian::LittleEndian) => {
+                        match String::from_utf8(data.clone()) {
+                            Ok(string) => return json::Value::String(string),
+                            Err(e) => {
+                                return json::Value::Null;
+                            }
+                        }
+                    }
+                }
+            }
+            DataType::Bytes(_) => json::Value::Bytes(data.clone()),
         }
     }
 
@@ -589,8 +635,8 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
-            // DataType::String => todo!(),
-            // DataType::Bytes => todo!(),
+            DataType::String(len, single, endian) => todo!(),
+            DataType::Bytes(_) => todo!(),
             _ => bail!("value is wrong"),
         }
     }
@@ -608,7 +654,7 @@ impl DataType {
             DataType::Uint64(_, _) => "uint64".to_string(),
             DataType::Float32(_, _) => "float32".to_string(),
             DataType::Float64(_, _) => "float64".to_string(),
-            DataType::String(_, _, _, _) => "string".to_string(),
+            DataType::String(_, _, _) => "string".to_string(),
             DataType::Bytes(_) => "bytes".to_string(),
         }
     }
@@ -719,11 +765,11 @@ mod tests {
             4
         );
         assert_eq!(
-            DataType::String(6, true, Endian::LittleEndian, Endian::LittleEndian).get_quantity(),
+            DataType::String(6, true, Endian::LittleEndian).get_quantity(),
             6
         );
         assert_eq!(
-            DataType::String(6, false, Endian::LittleEndian, Endian::LittleEndian).get_quantity(),
+            DataType::String(6, false, Endian::LittleEndian).get_quantity(),
             3
         );
     }

@@ -107,7 +107,7 @@ impl Source for Mqtt {
 
     fn get_info(&self) -> Result<ListSourceResp> {
         Ok(ListSourceResp {
-            id: self.id,
+            id: self.id.clone(),
             name: self.name.clone(),
             r#type: "mqtt".to_string(),
         })
