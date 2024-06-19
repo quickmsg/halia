@@ -14,7 +14,7 @@ use types::device::{
     device::{
         CreateDeviceReq, DeviceDetailResp, SearchDeviceItemResp, SearchDeviceResp, UpdateDeviceReq,
     },
-    group::{CreateGroupReq, ListGroupsResp, UpdateGroupReq},
+    group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, ListPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
@@ -167,7 +167,7 @@ impl DeviceManager {
         device_id: Uuid,
         page: u8,
         size: u8,
-    ) -> HaliaResult<Vec<ListGroupsResp>> {
+    ) -> HaliaResult<SearchGroupResp> {
         match self.devices.read().await.get(&device_id) {
             Some(device) => device.read_groups(page, size).await,
             None => Err(HaliaError::NotFound),
@@ -414,7 +414,7 @@ trait Device: Sync + Send {
         group_id: Option<Uuid>,
         create_group: &CreateGroupReq,
     ) -> HaliaResult<()>;
-    async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<Vec<ListGroupsResp>>;
+    async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<SearchGroupResp>;
     async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()>;
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()>;
 

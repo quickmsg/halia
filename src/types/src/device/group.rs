@@ -14,7 +14,13 @@ pub struct UpdateGroupReq {
 }
 
 #[derive(Serialize)]
-pub struct ListGroupsResp {
+pub struct SearchGroupResp {
+    pub total: usize,
+    pub data: Vec<SearchGroupItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchGroupItemResp {
     pub id: Uuid,
     pub name: String,
     pub point_count: u8,

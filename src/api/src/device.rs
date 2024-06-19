@@ -7,7 +7,7 @@ use device::GLOBAL_DEVICE_MANAGER;
 use tracing::{debug, trace};
 use types::device::{
     device::{CreateDeviceReq, DeviceDetailResp, SearchDeviceResp, UpdateDeviceReq},
-    group::{CreateGroupReq, ListGroupsResp, UpdateGroupReq},
+    group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, ListPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
@@ -84,7 +84,7 @@ pub(crate) async fn create_group(
 pub(crate) async fn search_group(
     Path(device_id): Path<Uuid>,
     pagination: Query<Pagination>,
-) -> AppResp<Vec<ListGroupsResp>> {
+) -> AppResp<SearchGroupResp> {
     match GLOBAL_DEVICE_MANAGER
         .search_group(device_id, pagination.p, pagination.s)
         .await

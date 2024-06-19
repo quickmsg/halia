@@ -27,7 +27,7 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error};
 use types::device::{
     device::{CreateDeviceReq, DeviceDetailResp, Mode, SearchDeviceItemResp, UpdateDeviceReq},
-    group::{CreateGroupReq, ListGroupsResp, UpdateGroupReq},
+    group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, ListPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
@@ -373,7 +373,7 @@ impl Device for Modbus {
         self.write_tx = None;
     }
 
-    async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<Vec<ListGroupsResp>> {
+    async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<SearchGroupResp> {
         let mut resps = Vec::new();
         for group in self
             .groups
@@ -383,7 +383,7 @@ impl Device for Modbus {
             .skip(((page - 1) * size) as usize)
         {
             resps.push({
-                ListGroupsResp {
+                SearchGroupItemResp {
                     id: group.id,
                     name: group.name.clone(),
                     interval: group.interval,
@@ -394,7 +394,10 @@ impl Device for Modbus {
                 break;
             }
         }
-        Ok(resps)
+        Ok(SearchGroupResp {
+            total: self.groups.read().await.len(),
+            data: resps,
+        })
     }
 
     async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()> {
