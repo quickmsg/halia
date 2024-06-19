@@ -5,7 +5,6 @@ use message::MessageBatch;
 use rumqttc::v5::mqttbytes::QoS;
 use rumqttc::v5::{AsyncClient, ConnectionError, Event, Incoming, MqttOptions};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::string::String;
 use tokio;
 use tokio::sync::broadcast;
@@ -45,41 +44,53 @@ impl Mqtt {
             tx: None,
         }))
     }
-}
 
-async fn run(conf: Conf, tx: Sender<MessageBatch>) {
-    let mut mqtt_options = MqttOptions::new(conf.id, conf.host, conf.port);
-    mqtt_options.set_keep_alive(Duration::from_secs(5));
+    async fn run(&self) {
+        let mut mqtt_options =
+            MqttOptions::new(self.conf.id.clone(), self.conf.host.clone(), self.conf.port);
+        mqtt_options.set_keep_alive(Duration::from_secs(5));
 
-    let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
-    match client.subscribe(conf.topic.clone(), QoS::AtMostOnce).await {
-        Ok(_) => {}
-        Err(e) => error!("Failed to connect mqtt server:{}", e),
-    }
-
-    loop {
-        match event_loop.poll().await {
-            Ok(Event::Incoming(Incoming::Publish(p))) => {
-                match MessageBatch::from_json(&p.payload) {
-                    Ok(msg) => match tx.send(msg) {
-                        Err(e) => error!("send message err:{}", e),
-                        _ => {}
-                    },
-                    Err(e) => error!("Failed to decode msg:{}", e),
-                }
-            }
-            Ok(_) => (),
-            Err(e) => {
-                if let ConnectionError::Timeout(_) = e {
-                    continue;
-                }
-                error!("Failed to poll mqtt eventloop:{}", e);
-                match client.subscribe(conf.topic.clone(), QoS::AtMostOnce).await {
-                    Ok(_) => {}
-                    Err(e) => error!("Failed to connect mqtt server:{}", e),
-                }
-            }
+        let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
+        match client
+            .subscribe(self.conf.topic.clone(), QoS::AtMostOnce)
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => error!("Failed to connect mqtt server:{}", e),
         }
+
+        let conf = self.conf.clone();
+        let tx = match &self.tx {
+            Some(tx) => tx.clone(),
+            None => panic!("sendoer is none"),
+        };
+
+        tokio::spawn(async move {
+            loop {
+                match event_loop.poll().await {
+                    Ok(Event::Incoming(Incoming::Publish(p))) => {
+                        match MessageBatch::from_json(&p.payload) {
+                            Ok(msg) => match tx.send(msg) {
+                                Err(e) => error!("send message err:{}", e),
+                                _ => {}
+                            },
+                            Err(e) => error!("Failed to decode msg:{}", e),
+                        }
+                    }
+                    Ok(_) => (),
+                    Err(e) => {
+                        if let ConnectionError::Timeout(_) = e {
+                            continue;
+                        }
+                        error!("Failed to poll mqtt eventloop:{}", e);
+                        match client.subscribe(conf.topic.clone(), QoS::AtMostOnce).await {
+                            Ok(_) => {}
+                            Err(e) => error!("Failed to connect mqtt server:{}", e),
+                        }
+                    }
+                }
+            }
+        });
     }
 }
 
@@ -95,11 +106,7 @@ impl Source for Mqtt {
                 let (tx, rx) = broadcast::channel(10);
                 let tx1 = tx.clone();
                 self.tx = Some(tx);
-
-                let conf = self.conf.clone();
-                tokio::spawn(async move {
-                    run(conf, tx1).await;
-                });
+                self.run().await;
                 Ok(rx)
             }
         }
@@ -121,4 +128,12 @@ impl Source for Mqtt {
             conf: serde_json::json!(self.conf),
         })
     }
+
+    fn stop(&self) {
+
+    }
+
+    fn update(&mut self) {
+
+    } 
 }

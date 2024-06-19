@@ -59,4 +59,12 @@ impl Source for Device {
             conf: serde_json::json!(self.conf),
         })
     }
+
+    fn stop(&self) {
+
+    }
+
+    fn update(&mut self) {
+
+    } 
 }

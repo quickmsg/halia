@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 pub mod device;
 pub mod mqtt;
+mod http_pull;
 
 pub struct SourceManager {
     sources: RwLock<HashMap<Uuid, Box<dyn Source>>>,
@@ -117,5 +118,7 @@ pub trait Source: Send + Sync {
 
     fn get_detail(&self) -> HaliaResult<SourceDetailResp>;
 
-    fn stop(&self) {}
+    fn stop(&self);
+
+    fn update(&mut self);
 }
