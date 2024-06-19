@@ -64,7 +64,7 @@ impl Source for Device {
 
     }
 
-    fn update(&mut self) {
-
+    fn update(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
+        todo!()
     } 
 }

@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use ct::Ct;
 use eq::Eq;
 use gt::Gt;
 use gte::Gte;
@@ -6,17 +7,20 @@ use lt::Lt;
 use lte::Lte;
 use message::Message;
 use neq::Neq;
+use reg::Reg;
 use serde::Deserialize;
 use tracing::debug;
 
 use crate::Function;
 
+pub mod ct;
 pub mod eq;
 pub mod gt;
 pub mod gte;
 pub mod lt;
 pub mod lte;
 pub mod neq;
+pub mod reg;
 
 pub trait Filter: Sync + Send {
     fn filter(&self, message: &Message) -> bool;
@@ -61,6 +65,14 @@ impl Node {
                 "neq" => {
                     let neq = Neq::new(conf.conf)?;
                     filters.push(Box::new(neq));
+                }
+                "ct" => {
+                    let ct = Ct::new(conf.conf)?;
+                    filters.push(Box::new(ct));
+                }
+                "reg" => {
+                    let reg = Reg::new(conf.conf)?;
+                    filters.push(Box::new(reg));
                 }
                 _ => bail!("not support"),
             }

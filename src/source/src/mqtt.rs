@@ -5,6 +5,7 @@ use message::MessageBatch;
 use rumqttc::v5::mqttbytes::QoS;
 use rumqttc::v5::{AsyncClient, ConnectionError, Event, Incoming, MqttOptions};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::string::String;
 use tokio;
 use tokio::sync::broadcast;
@@ -129,11 +130,9 @@ impl Source for Mqtt {
         })
     }
 
-    fn stop(&self) {
+    fn stop(&self) {}
 
+    fn update(&mut self, conf: Value) -> HaliaResult<()> {
+        todo!()
     }
-
-    fn update(&mut self) {
-
-    } 
 }

@@ -6,6 +6,7 @@ use common::persistence::{self, source};
 use device::Device;
 use message::MessageBatch;
 use mqtt::Mqtt;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use tokio::sync::broadcast::{self, Receiver};
@@ -16,7 +17,7 @@ use uuid::Uuid;
 
 pub mod device;
 pub mod mqtt;
-mod http_pull;
+// mod http_pull;
 
 pub struct SourceManager {
     sources: RwLock<HashMap<Uuid, Box<dyn Source>>>,
@@ -120,5 +121,5 @@ pub trait Source: Send + Sync {
 
     fn stop(&self);
 
-    fn update(&mut self);
+    fn update(&mut self, conf: Value) -> HaliaResult<()>;
 }

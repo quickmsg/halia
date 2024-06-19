@@ -373,9 +373,7 @@ impl DataType {
                     }
                     match String::from_utf8(new_data) {
                         Ok(string) => return json::Value::String(string),
-                        Err(e) => {
-                            return json::Value::Null;
-                        }
+                        Err(_) => return json::Value::Null,
                     }
                 }
                 (true, Endian::LittleEndian) => {
@@ -386,10 +384,8 @@ impl DataType {
                         }
                     }
                     match String::from_utf8(new_data) {
-                        Ok(string) => return json::Value::String(string),
-                        Err(e) => {
-                            return json::Value::Null;
-                        }
+                        Ok(string) => return json::Value::String(string.replace("\0", "")),
+                        Err(_) => return json::Value::Null,
                     }
                 }
                 (false, Endian::BigEndian) => {
