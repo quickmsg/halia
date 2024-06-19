@@ -15,7 +15,7 @@ use types::device::{
         CreateDeviceReq, DeviceDetailResp, SearchDeviceItemResp, SearchDeviceResp, UpdateDeviceReq,
     },
     group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
-    point::{CreatePointReq, ListPointResp, WritePointValueReq},
+    point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
 
@@ -214,28 +214,15 @@ impl DeviceManager {
         }
     }
 
-    pub async fn get_points(
+    pub async fn search_point(
         &self,
         device_id: Uuid,
         group_id: Uuid,
         page: u8,
         size: u8,
-    ) -> HaliaResult<Vec<ListPointResp>> {
+    ) -> HaliaResult<SearchPointResp> {
         match self.devices.read().await.get(&device_id) {
-            Some(device) => device.read_points(group_id, page, size).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn read_points(
-        &self,
-        device_id: Uuid,
-        group_id: Uuid,
-        page: u8,
-        size: u8,
-    ) -> HaliaResult<Vec<ListPointResp>> {
-        match self.devices.read().await.get(&device_id) {
-            Some(device) => device.read_points(group_id, page, size).await,
+            Some(device) => device.search_point(group_id, page, size).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -424,12 +411,12 @@ trait Device: Sync + Send {
         group_id: Uuid,
         create_points: Vec<(Option<Uuid>, CreatePointReq)>,
     ) -> HaliaResult<()>;
-    async fn read_points(
+    async fn search_point(
         &self,
         group_id: Uuid,
         page: u8,
         size: u8,
-    ) -> HaliaResult<Vec<ListPointResp>>;
+    ) -> HaliaResult<SearchPointResp>;
     async fn update_point(
         &self,
         group_id: Uuid,

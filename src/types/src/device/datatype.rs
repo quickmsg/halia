@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DataType {
     Bool(u8),
     Int8(Endian),

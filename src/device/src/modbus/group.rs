@@ -21,7 +21,7 @@ use tokio::{
 use tracing::{debug, error};
 use types::device::{
     group::{CreateGroupReq, UpdateGroupReq},
-    point::{CreatePointReq, ListPointResp},
+    point::{CreatePointReq, SearchPointItemResp, SearchPointResp},
 };
 use uuid::Uuid;
 
@@ -153,8 +153,8 @@ impl Group {
         Ok(())
     }
 
-    pub async fn read_points(&self, page: u8, size: u8) -> Vec<ListPointResp> {
-        let mut resps = Vec::with_capacity(self.get_points_num().await);
+    pub async fn search_point(&self, page: u8, size: u8) -> SearchPointResp {
+        let mut resps = vec![];
         for (_, point) in self
             .points
             .read()
@@ -162,20 +162,21 @@ impl Group {
             .iter()
             .skip(((page - 1) * size) as usize)
         {
-            resps.push(ListPointResp {
-                id: point.id,
+            resps.push(SearchPointItemResp {
+                id: point.id.clone(),
                 name: point.name.clone(),
-                address: point.conf.address,
-                r#type: point.conf.r#type.to_string(),
+                conf: serde_json::json!(point.conf),
                 value: point.value.clone(),
-                describe: point.conf.describe.clone(),
             });
             if resps.len() == 0 {
                 break;
             }
         }
 
-        resps
+        SearchPointResp {
+            total: self.points.read().await.len(),
+            data: resps,
+        }
     }
 
     pub async fn update_point(&self, point_id: Uuid, req: &CreatePointReq) -> HaliaResult<()> {

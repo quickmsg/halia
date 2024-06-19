@@ -5,7 +5,7 @@ use protocol::modbus::{
     client::{Context, Reader, Writer},
     SlaveContext,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error, warn};
 use types::device::{
     datatype::{DataType, Endian},
@@ -22,7 +22,7 @@ pub(crate) struct Point {
     pub value: Value,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub(crate) struct Conf {
     pub r#type: DataType,
     pub slave: u8,

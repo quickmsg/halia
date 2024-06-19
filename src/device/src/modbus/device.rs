@@ -28,7 +28,7 @@ use tracing::{debug, error};
 use types::device::{
     device::{CreateDeviceReq, DeviceDetailResp, Mode, SearchDeviceItemResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
-    point::{CreatePointReq, ListPointResp, WritePointValueReq},
+    point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
 
@@ -447,12 +447,12 @@ impl Device for Modbus {
         }
     }
 
-    async fn read_points(
+    async fn search_point(
         &self,
         group_id: Uuid,
         page: u8,
         size: u8,
-    ) -> HaliaResult<Vec<ListPointResp>> {
+    ) -> HaliaResult<SearchPointResp> {
         match self
             .groups
             .read()
@@ -460,7 +460,7 @@ impl Device for Modbus {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => Ok(group.read_points(page, size).await),
+            Some(group) => Ok(group.search_point(page, size).await),
             None => Err(HaliaError::NotFound),
         }
     }

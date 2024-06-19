@@ -105,7 +105,6 @@ impl Source for Mqtt {
             },
             Status::Stopped => {
                 let (tx, rx) = broadcast::channel(10);
-                let tx1 = tx.clone();
                 self.tx = Some(tx);
                 self.run().await;
                 Ok(rx)

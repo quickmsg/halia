@@ -8,7 +8,7 @@ use tracing::{debug, trace};
 use types::device::{
     device::{CreateDeviceReq, DeviceDetailResp, SearchDeviceResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
-    point::{CreatePointReq, ListPointResp, WritePointValueReq},
+    point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
 
@@ -139,9 +139,9 @@ pub(crate) async fn create_points(
 pub(crate) async fn search_point(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     pagination: Query<Pagination>,
-) -> AppResp<Vec<ListPointResp>> {
+) -> AppResp<SearchPointResp> {
     match GLOBAL_DEVICE_MANAGER
-        .read_points(device_id, group_id, pagination.p, pagination.s)
+        .search_point(device_id, group_id, pagination.p, pagination.s)
         .await
     {
         Ok(values) => AppResp::with_data(values),
