@@ -113,21 +113,30 @@ impl DeviceManager {
 
     pub async fn search_device(&self, page: u8, size: u8) -> SearchDeviceResp {
         let mut resp = vec![];
-        for device in self
-            .devices
-            .read()
-            .await
-            .values()
-            .skip(((page - 1) * size) as usize)
-        {
-            resp.push(device.get_info());
-            if resp.len() == size as usize {
-                break;
+        let mut i = 0;
+        let mut total = 0;
+        let mut err_cnt = 0;
+        let mut close_cnt = 0;
+        for device in self.devices.read().await.values() {
+            let info = device.get_info();
+
+            if *&info.err {
+                err_cnt += 1;
             }
+            if !*&info.on {
+                close_cnt += 1;
+            }
+            if i > (page - 1) * size && i <= page * size {
+                resp.push(info);
+            }
+            total += 1;
+            i += 1;
         }
 
         SearchDeviceResp {
-            total: self.devices.read().await.len(),
+            total,
+            err_cnt,
+            close_cnt,
             data: resp,
         }
     }

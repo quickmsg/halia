@@ -26,6 +26,8 @@ pub struct DeviceDetailResp {
 #[derive(Serialize)]
 pub struct SearchDeviceResp {
     pub total: usize,
+    pub err_cnt: usize,
+    pub close_cnt: usize,
     pub data: Vec<SearchDeviceItemResp>,
 }
 
