@@ -103,7 +103,7 @@ fn group_routes() -> Router {
 
 fn point_routes() -> Router {
     Router::new()
-        .route("/points", post(device::create_points))
+        .route("/point", post(device::create_point))
         .route("/point/search", get(device::search_point))
         .route("/point/:point_id", put(device::update_point))
         .route("/point/:point_id/value", put(device::write_point))

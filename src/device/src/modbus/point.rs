@@ -31,6 +31,7 @@ pub(crate) struct Conf {
     pub describe: Option<String>,
 }
 
+// 
 impl Point {
     pub fn new(req: CreatePointReq, id: Uuid) -> HaliaResult<Point> {
         let conf: Conf = serde_json::from_value(req.conf)?;

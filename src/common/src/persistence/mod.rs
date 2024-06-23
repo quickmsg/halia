@@ -62,7 +62,7 @@ async fn insert(path: PathBuf, datas: &[(Uuid, String)]) -> Result<(), io::Error
 }
 
 async fn create_dir(path: PathBuf) -> Result<(), io::Error> {
-    fs::create_dir(&path).await?;
+    fs::create_dir_all(&path).await?;
     let file = OpenOptions::new()
         .create(true)
         .write(true)

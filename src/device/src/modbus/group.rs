@@ -121,35 +121,31 @@ impl Group {
         }
     }
 
-    pub async fn create_points(
+    pub async fn create_point(
         &self,
-        create_points: Vec<(Option<Uuid>, CreatePointReq)>,
+        point_id: Option<Uuid>,
+        req: CreatePointReq,
     ) -> HaliaResult<()> {
-        let mut points = Vec::with_capacity(create_points.len());
-        let mut storage_infos = Vec::with_capacity(create_points.len());
-        for (point_id, conf) in create_points {
-            match point_id {
-                Some(point_id) => {
-                    let point = Point::new(conf.clone(), point_id)?;
-                    points.push((point_id, point));
-                }
-                None => {
-                    let point_id = Uuid::new_v4();
-                    let point = Point::new(conf.clone(), point_id)?;
-                    points.push((point_id, point));
-                    storage_infos.push((point_id, serde_json::to_string(&conf)?));
-                }
-            }
-        }
+        let (point_id, create) = match point_id {
+            Some(point_id) => (point_id, false),
+            None => (Uuid::new_v4(), true),
+        };
 
-        self.points.write().await.extend(points);
-        if storage_infos.len() > 0 {
-            if let Err(e) =
-                persistence::point::insert(self.device_id, self.id, &storage_infos).await
+        let point = Point::new(req.clone(), point_id)?;
+        self.points.write().await.insert(point_id, point);
+        if create {
+            if let Err(e) = persistence::point::insert(
+                self.device_id,
+                self.id,
+                point_id,
+                serde_json::to_string(&req)?,
+            )
+            .await
             {
                 error!("insert point err:{}", e);
             }
         }
+
         Ok(())
     }
 

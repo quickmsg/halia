@@ -117,18 +117,12 @@ pub(crate) async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>
     }
 }
 
-pub(crate) async fn create_points(
+pub(crate) async fn create_point(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<Vec<CreatePointReq>>,
+    Json(req): Json<CreatePointReq>,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
-        .create_points(
-            device_id,
-            group_id,
-            req.into_iter()
-                .map(|req| (None, req))
-                .collect::<Vec<(Option<Uuid>, CreatePointReq)>>(),
-        )
+        .create_point(device_id, group_id, None, req)
         .await
     {
         Ok(()) => AppResp::new(),

@@ -6,14 +6,11 @@ use std::{
 use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::Mutex,
 };
 use tracing::debug;
 use uuid::Uuid;
 
 use super::{Status, DELIMITER};
-
-// static DEVICE_LOCK: Mutex<()> = Mutex::new(());
 
 fn get_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(super::DEVICE_DIR)
@@ -23,9 +20,12 @@ fn get_file() -> PathBuf {
     get_dir().join(super::DATA_FILE)
 }
 
+pub async fn init() -> Result<(), io::Error> {
+    super::create_dir(get_dir()).await
+}
+
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
     let data = format!("{}{}{}", 0, DELIMITER, data);
-    // DEVICE_LOCK.lock();
     super::insert(get_file(), &vec![(id, data)]).await?;
     super::create_dir(get_dir().join(id.to_string())).await
 }

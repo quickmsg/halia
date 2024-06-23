@@ -1,6 +1,7 @@
 use anyhow::Result;
 use api::start;
 use device::GLOBAL_DEVICE_MANAGER;
+use rule::GLOBAL_RULE_MANAGER;
 use sink::GLOBAL_SINK_MANAGER;
 use source::GLOBAL_SOURCE_MANAGER;
 use tracing::{info, Level};
@@ -13,12 +14,10 @@ async fn main() -> Result<()> {
         .with_line_number(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-    if let Err(e) = GLOBAL_DEVICE_MANAGER.recover().await {
-        println!("{}", e);
-    }
-
+    GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
     GLOBAL_SOURCE_MANAGER.recover().await.unwrap();
     GLOBAL_SINK_MANAGER.recover().await.unwrap();
+    GLOBAL_RULE_MANAGER.recover().await.unwrap();
 
     start().await;
     info!("server start");

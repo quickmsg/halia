@@ -16,9 +16,10 @@ fn get_file(device_id: Uuid, group_id: Uuid) -> PathBuf {
 pub async fn insert(
     device_id: Uuid,
     group_id: Uuid,
-    datas: &Vec<(Uuid, String)>,
+    point_id: Uuid,
+    data: String,
 ) -> Result<(), io::Error> {
-    super::insert(get_file(device_id, group_id), datas).await
+    super::insert(get_file(device_id, group_id), &vec![(point_id, data)]).await
 }
 
 pub async fn read(device_id: Uuid, group_id: Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {

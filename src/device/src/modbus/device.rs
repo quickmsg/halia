@@ -430,10 +430,11 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn create_points(
+    async fn create_point(
         &self,
         group_id: Uuid,
-        create_points: Vec<(Option<Uuid>, CreatePointReq)>,
+        point_id: Option<Uuid>,
+        req: CreatePointReq,
     ) -> HaliaResult<()> {
         match self
             .groups
@@ -442,7 +443,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.create_points(create_points).await,
+            Some(group) => group.create_point(point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }

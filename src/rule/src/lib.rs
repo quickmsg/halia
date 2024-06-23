@@ -93,3 +93,9 @@ impl RuleManager {
         }
     }
 }
+
+impl RuleManager {
+    pub async fn recover(&self) -> Result<()> {
+        Ok(())
+    } 
+}

@@ -1,4 +1,7 @@
-use std::{io, path::Path};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use tokio::{
     fs::{self, OpenOptions},
@@ -8,6 +11,18 @@ use tracing::debug;
 use uuid::Uuid;
 
 use super::{Status, DATA_FILE, DELIMITER, ROOT_DIR};
+
+fn get_dir() -> PathBuf {
+    Path::new(super::ROOT_DIR).join(super::RULE_DIR)
+}
+
+fn get_file() -> PathBuf {
+    get_dir().join(super::DATA_FILE)
+}
+
+pub async fn init() -> Result<(), io::Error> {
+    super::create_dir(get_dir()).await
+}
 
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
     let data = format!("{}{}{}", 0, DELIMITER, data);

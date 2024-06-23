@@ -12,10 +12,16 @@ use uuid::Uuid;
 
 use super::{Status, DELIMITER};
 
+fn get_dir() -> PathBuf {
+    Path::new(super::ROOT_DIR).join(super::SINK_DIR)
+}
+
 fn file_name() -> PathBuf {
-    Path::new(super::ROOT_DIR)
-        .join(super::SINK_DIR)
-        .join(super::DATA_FILE)
+    get_dir().join(super::DATA_FILE)
+}
+
+pub async fn init() -> Result<(), io::Error> {
+    super::create_dir(get_dir()).await
 }
 
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {

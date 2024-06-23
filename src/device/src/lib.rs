@@ -1,4 +1,3 @@
-#![feature(lazy_cell)]
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
@@ -126,7 +125,7 @@ impl DeviceManager {
             if !*&info.on {
                 close_cnt += 1;
             }
-            if i > (page - 1) * size && i <= page * size {
+            if i >= (page - 1) * size && i < page * size {
                 resp.push(info);
             }
             total += 1;
@@ -208,15 +207,16 @@ impl DeviceManager {
 
 // point
 impl DeviceManager {
-    pub async fn create_points(
+    pub async fn create_point(
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        create_points: Vec<(Option<Uuid>, CreatePointReq)>,
+        point_id: Option<Uuid>,
+        req: CreatePointReq,
     ) -> HaliaResult<()> {
         match self.devices.read().await.get(&device_id) {
             Some(device) => {
-                device.create_points(group_id, create_points).await?;
+                device.create_point(group_id, point_id, req).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
@@ -278,38 +278,66 @@ impl DeviceManager {
 // recover
 impl DeviceManager {
     pub async fn recover(&self) -> HaliaResult<()> {
-        let devices = match persistence::device::read().await {
-            Ok(devices) => devices,
-            Err(e) => {
-                error!("read device from file err:{}", e);
-                return Err(e.into());
-            }
-        };
+        match persistence::device::read().await {
+            Ok(devices) => {
+                for (id, status, data) in devices {
+                    let req = match serde_json::from_str::<CreateDeviceReq>(data.as_str()) {
+                        Ok(req) => req,
+                        Err(e) => {
+                            error!("{}", e);
+                            return Err(e.into());
+                        }
+                    };
+                    if let Err(e) = self.create_device(Some(id), req).await {
+                        error!("{}", e);
+                        return Err(e.into());
+                    }
+                    if let Err(e) = self.recover_group(id).await {
+                        error!("recover group err:{}", e);
+                        return Err(e.into());
+                    }
+                    if status == persistence::Status::Runing {
+                        if let Err(e) = self.start_device(id).await {
+                            error!("start device err:{}", e);
+                            return Err(e.into());
+                        }
+                    }
+                }
 
-        for (id, status, data) in devices {
-            let req = match serde_json::from_str::<CreateDeviceReq>(data.as_str()) {
-                Ok(req) => req,
-                Err(e) => {
-                    error!("{}", e);
-                    return Err(e.into());
-                }
-            };
-            if let Err(e) = self.create_device(Some(id), req).await {
-                error!("{}", e);
-                return Err(e.into());
+                Ok(())
             }
-            if let Err(e) = self.recover_group(id).await {
-                error!("recover group err:{}", e);
-                return Err(e.into());
-            }
-            if status == persistence::Status::Runing {
-                if let Err(e) = self.start_device(id).await {
-                    error!("start device err:{}", e);
-                    return Err(e.into());
-                }
-            }
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => match persistence::device::init().await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        error!("{e}");
+                        return Err(e.into());
+                    }
+                },
+                std::io::ErrorKind::PermissionDenied => todo!(),
+                std::io::ErrorKind::ConnectionRefused => todo!(),
+                std::io::ErrorKind::ConnectionReset => todo!(),
+                std::io::ErrorKind::ConnectionAborted => todo!(),
+                std::io::ErrorKind::NotConnected => todo!(),
+                std::io::ErrorKind::AddrInUse => todo!(),
+                std::io::ErrorKind::AddrNotAvailable => todo!(),
+                std::io::ErrorKind::BrokenPipe => todo!(),
+                std::io::ErrorKind::AlreadyExists => todo!(),
+                std::io::ErrorKind::WouldBlock => todo!(),
+                std::io::ErrorKind::InvalidInput => todo!(),
+                std::io::ErrorKind::InvalidData => todo!(),
+                std::io::ErrorKind::TimedOut => todo!(),
+                std::io::ErrorKind::WriteZero => todo!(),
+                std::io::ErrorKind::Interrupted => todo!(),
+                std::io::ErrorKind::Unsupported => todo!(),
+                std::io::ErrorKind::UnexpectedEof => todo!(),
+                std::io::ErrorKind::OutOfMemory => todo!(),
+                std::io::ErrorKind::Other => todo!(),
+                _ => todo!(),
+                // error!("read device from file err:{}", e);
+                // return Err(e.into());
+            },
         }
-        Ok(())
     }
 
     async fn recover_group(&self, device_id: Uuid) -> HaliaResult<()> {
@@ -366,9 +394,14 @@ impl DeviceManager {
                 (Some(id), req)
             })
             .collect();
-        if let Err(e) = self.create_points(device_id, group_id, points).await {
-            error!("create points err:{}", e);
-            return Err(e);
+
+        for (point_id, point) in points {
+            if let Err(e) = self
+                .create_point(device_id, group_id, point_id, point)
+                .await
+            {
+                return Err(e);
+            }
         }
         Ok(())
     }
@@ -415,11 +448,13 @@ trait Device: Sync + Send {
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()>;
 
     // points
-    async fn create_points(
+    async fn create_point(
         &self,
         group_id: Uuid,
-        create_points: Vec<(Option<Uuid>, CreatePointReq)>,
+        point_id: Option<Uuid>,
+        req: CreatePointReq,
     ) -> HaliaResult<()>;
+
     async fn search_point(
         &self,
         group_id: Uuid,
