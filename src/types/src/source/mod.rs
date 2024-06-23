@@ -23,5 +23,5 @@ pub struct SourceDetailResp {
 pub struct ListSourceResp {
     pub id: Uuid,
     pub name: String,
-    pub r#type: String,
+    pub r#type: &'static str,
 }

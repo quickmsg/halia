@@ -64,7 +64,7 @@ pub async fn start() {
         .nest("/api", device_routes())
         .nest("/api/device/:device_id", group_routes())
         .nest("/api/device/:device_id/group/:group_id", point_routes())
-        .nest("/api/source", source_routes())
+        .nest("/api", source_routes())
         .nest("/api", sink_routes())
         .nest("/api", rule_routes())
         .layer(
@@ -118,7 +118,7 @@ fn source_routes() -> Router {
         .route("/source/:id", get(source::read))
         .route("/srouce/:id", put(source::update))
         .route("/srouce/:id", delete(source::delete))
-        .nest("/:source_id/mqtt", mqtt_routes())
+        .nest("/source/:source_id/mqtt", mqtt_routes())
 }
 
 fn sink_routes() -> Router {

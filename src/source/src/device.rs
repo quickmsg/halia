@@ -46,9 +46,9 @@ impl Device {
 
     fn get_info(&self) -> Result<ListSourceResp> {
         Ok(ListSourceResp {
-            id: self.id,
+            id: self.id.clone(),
             name: self.name.clone(),
-            r#type: "device".to_string(),
+            r#type: &TYPE,
         })
     }
 
