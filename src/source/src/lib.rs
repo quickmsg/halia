@@ -16,7 +16,7 @@ use uuid::Uuid;
 pub mod device;
 mod http_pull;
 mod mqttv31;
-// mod http_pull;
+mod mqtt_topic;
 
 pub struct SourceManager {
     sources: RwLock<HashMap<Uuid, Source>>,

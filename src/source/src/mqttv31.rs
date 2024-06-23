@@ -63,7 +63,6 @@ impl Mqtt {
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
         self.client = Some(client);
 
-        let conf = self.conf.clone();
         let tx = match &self.tx {
             Some(tx) => tx.clone(),
             None => panic!("sendoer is none"),
@@ -73,6 +72,7 @@ impl Mqtt {
             loop {
                 match event_loop.poll().await {
                     Ok(Event::Incoming(Incoming::Publish(p))) => {
+                        debug!("{p:?}");
                         match MessageBatch::from_json(&p.payload) {
                             Ok(msg) => match tx.send(msg) {
                                 Err(e) => error!("send message err:{}", e),
@@ -113,10 +113,6 @@ impl Mqtt {
         }
     }
 
-    fn get_type(&self) -> &'static str {
-        return &TYPE;
-    }
-
     pub fn get_info(&self) -> Result<ListSourceResp> {
         Ok(ListSourceResp {
             id: self.id.clone(),
@@ -133,8 +129,6 @@ impl Mqtt {
             conf: serde_json::json!(self.conf),
         })
     }
-
-    fn stop(&self) {}
 
     fn update(&mut self, conf: Value) -> HaliaResult<()> {
         todo!()
