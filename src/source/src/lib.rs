@@ -3,7 +3,7 @@ use common::error::{HaliaError, HaliaResult};
 use common::persistence::{self, source};
 use device::Device;
 use message::MessageBatch;
-use mqtt::Mqtt;
+use mqttv31::Mqtt;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use tokio::sync::broadcast::{self, Receiver};
@@ -14,8 +14,8 @@ use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
 
 pub mod device;
-mod mqtt;
 mod http_pull;
+mod mqttv31;
 // mod http_pull;
 
 pub struct SourceManager {
@@ -100,7 +100,7 @@ impl SourceManager {
     ) -> HaliaResult<()> {
         match self.sources.write().await.get_mut(&mqtt_id) {
             Some(source) => match source {
-                Source::Mqtt(mqtt) => mqtt.create_topic(topic_id, req),
+                Source::Mqtt(mqtt) => mqtt.create_topic(topic_id, req).await,
                 _ => todo!(),
             },
             None => todo!(),
@@ -196,7 +196,7 @@ impl SourceManager {
 }
 
 enum Source {
-    Mqtt(mqtt::Mqtt),
+    Mqtt(mqttv31::Mqtt),
     Device(device::Device),
 }
 

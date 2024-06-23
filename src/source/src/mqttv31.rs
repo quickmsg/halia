@@ -1,5 +1,4 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::v5::mqttbytes::QoS;
@@ -9,10 +8,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::string::String;
 use tokio;
-use tokio::sync::broadcast;
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::time::Duration;
-use tracing::error;
+use tracing::{debug, error};
 use types::rule::Status;
 use types::source::mqtt::{SearchTopicResp, TopicReq, TopicResp};
 use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
@@ -24,6 +22,7 @@ pub struct Mqtt {
     id: Uuid,
     name: String,
     conf: Conf,
+    client: Option<AsyncClient>,
     status: Status,
     tx: Option<Sender<MessageBatch>>,
     topics: HashMap<Uuid, Topic>,
@@ -46,6 +45,7 @@ impl Mqtt {
     pub fn new(id: Uuid, req: &CreateSourceReq) -> HaliaResult<Self> {
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
         Ok(Mqtt {
+            client: None,
             id,
             name: req.name.clone(),
             conf,
@@ -55,19 +55,13 @@ impl Mqtt {
         })
     }
 
-    async fn run(&self) {
+    async fn run(&mut self) {
         let mut mqtt_options =
             MqttOptions::new(self.conf.id.clone(), self.conf.host.clone(), self.conf.port);
         mqtt_options.set_keep_alive(Duration::from_secs(5));
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
-        // match client
-        //     .subscribe(self.conf.topic.clone(), QoS::AtMostOnce)
-        //     .await
-        // {
-        //     Ok(_) => {}
-        //     Err(e) => error!("Failed to connect mqtt server:{}", e),
-        // }
+        self.client = Some(client);
 
         let conf = self.conf.clone();
         let tx = match &self.tx {
@@ -103,7 +97,8 @@ impl Mqtt {
         });
     }
 
-    async fn subscribe(&mut self) -> HaliaResult<Receiver<MessageBatch>> {
+    async fn subscribe(&mut self, id: Uuid) -> HaliaResult<Receiver<MessageBatch>> {
+        // let id to topic
         match self.status {
             Status::Running => match &self.tx {
                 Some(tx) => Ok(tx.subscribe()),
@@ -145,7 +140,7 @@ impl Mqtt {
         todo!()
     }
 
-    pub fn create_topic(&mut self, topic_id: Option<Uuid>, req: TopicReq) -> HaliaResult<()> {
+    pub async fn create_topic(&mut self, topic_id: Option<Uuid>, req: TopicReq) -> HaliaResult<()> {
         let topic_id = match topic_id {
             Some(id) => id,
             None => Uuid::new_v4(),
@@ -153,10 +148,29 @@ impl Mqtt {
 
         let topic = Topic {
             id: topic_id.clone(),
-            topic: req.topic,
+            topic: req.topic.clone(),
             qos: req.qos,
         };
         self.topics.insert(topic_id, topic);
+
+        // TODO
+        match &self.client {
+            Some(client) => {
+                let qos = match req.qos {
+                    0 => QoS::AtMostOnce,
+                    _ => unreachable!(),
+                };
+                match client.subscribe(req.topic, qos).await {
+                    Ok(_) => {
+                        debug!("ok");
+                    }
+                    Err(_) => {
+                        debug!("err");
+                    }
+                }
+            }
+            None => todo!(),
+        }
         Ok(())
     }
 
