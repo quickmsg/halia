@@ -10,6 +10,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
 mod device;
+mod mqtt;
 mod rule;
 mod sink;
 mod source;
@@ -63,7 +64,7 @@ pub async fn start() {
         .nest("/api", device_routes())
         .nest("/api/device/:device_id", group_routes())
         .nest("/api/device/:device_id/group/:group_id", point_routes())
-        .nest("/api", source_routes())
+        .nest("/api/source", source_routes())
         .nest("/api", sink_routes())
         .nest("/api", rule_routes())
         .layer(
@@ -115,8 +116,9 @@ fn source_routes() -> Router {
         .route("/source", post(source::create))
         .route("/source/search", get(source::search))
         .route("/source/:id", get(source::read))
-        .route("/source/:id", put(source::update))
-        .route("/source/:id", delete(source::delete))
+        .route("/srouce/:id", put(source::update))
+        .route("/srouce/:id", delete(source::delete))
+        .nest("/:source_id/mqtt", mqtt_routes())
 }
 
 fn sink_routes() -> Router {
@@ -137,4 +139,13 @@ fn rule_routes() -> Router {
         .route("/rule/:id/stop", put(rule::stop))
         .route("/rule/:id", put(rule::update))
         .route("/rule/:id", delete(rule::delete))
+}
+
+// TODO
+fn mqtt_routes() -> Router {
+    Router::new()
+        .route("/topic", post(mqtt::create))
+        .route("/topic/search", todo!())
+        .route("/topic/:topic_id", todo!())
+        .route("/topic/:topic_id", todo!())
 }

@@ -414,8 +414,15 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.devices.read().await.get(&device_id) {
+        match self.devices.write().await.get_mut(&device_id) {
             Some(device) => device.subscribe(group_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn unsubscribe(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => device.unsubscribe(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -475,5 +482,8 @@ trait Device: Sync + Send {
     ) -> HaliaResult<()>;
     async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> HaliaResult<()>;
 
-    async fn subscribe(&self, group_id: Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+    async fn subscribe(&mut self, group_id: Uuid)
+        -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+
+    async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()>;
 }

@@ -4,17 +4,18 @@ use common::error::HaliaResult;
 use device::GLOBAL_DEVICE_MANAGER;
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast::{self, Sender};
+use tokio::sync::broadcast;
 use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
 
 use crate::Source;
 
+static TYPE: &str = "device";
+
 pub struct Device {
     id: Uuid,
     name: String,
     conf: Conf,
-    tx: Option<Sender<MessageBatch>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -30,7 +31,6 @@ impl Device {
             id,
             conf,
             name: req.name.clone(),
-            tx: None,
         }))
     }
 }
@@ -41,6 +41,10 @@ impl Source for Device {
         GLOBAL_DEVICE_MANAGER
             .subscribe(self.conf.device_id, self.conf.group_id)
             .await
+    }
+
+    fn get_type(&self) -> &'static str {
+        return &TYPE;
     }
 
     fn get_info(&self) -> Result<ListSourceResp> {
@@ -60,11 +64,9 @@ impl Source for Device {
         })
     }
 
-    fn stop(&self) {
-
-    }
+    fn stop(&self) {}
 
     fn update(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
         todo!()
-    } 
+    }
 }

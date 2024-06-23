@@ -1,4 +1,3 @@
-#![feature(lazy_cell)]
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -12,11 +11,13 @@ use std::sync::LazyLock;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::sync::RwLock;
 use tracing::{debug, error};
+use types::source::mqtt::{SearchTopicResp, TopicReq};
 use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
 
 pub mod device;
-pub mod mqtt;
+// pub mod mqtt_bak;
+mod mqtt;
 // mod http_pull;
 
 pub struct SourceManager {
@@ -88,6 +89,34 @@ impl SourceManager {
 }
 
 impl SourceManager {
+    pub async fn create_topic(
+        &self,
+        mqtt_id: Uuid,
+        topic_id: Option<Uuid>,
+        req: TopicReq,
+    ) -> HaliaResult<()> {
+        match self.sources.write().await.get(&mqtt_id) {
+            Some(source) => {
+                if source.get_type() == mqtt::TYPE {
+                    todo!()
+                } else {
+                    todo!()
+                }
+            }
+            None => todo!(),
+        }
+    }
+
+    pub async fn search_topic(&self, mqtt_id: Uuid, page: usize, size: usize) -> HaliaResult<SearchTopicResp> {
+        todo!()
+    }
+
+    pub async fn update_topic(&self, mqtt_id: Uuid, topic_id: Uuid, req: TopicReq) {}
+
+    pub async fn delete_topic(&self, mqtt_id: Uuid, topic_id: Uuid) {}
+}
+
+impl SourceManager {
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::source::read().await {
             Ok(sources) => {
@@ -137,6 +166,8 @@ impl SourceManager {
 #[async_trait]
 pub trait Source: Send + Sync {
     async fn subscribe(&mut self) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+
+    fn get_type(&self) -> &'static str;
 
     fn get_info(&self) -> Result<ListSourceResp>;
 

@@ -35,7 +35,7 @@ pub(crate) struct Group {
     pub points: RwLock<HashMap<Uuid, Point>>,
     pub device_id: Uuid,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
-    // pub subscirbers: u16,
+    pub ref_cnt: usize,
 }
 
 #[derive(Clone)]
@@ -56,6 +56,7 @@ impl Group {
             interval: conf.interval,
             points: RwLock::new(HashMap::new()),
             tx: None,
+            ref_cnt: 0,
         }
     }
 
@@ -111,6 +112,7 @@ impl Group {
     }
 
     pub fn subscribe(&mut self) -> broadcast::Receiver<MessageBatch> {
+        self.ref_cnt += 1;
         match &self.tx {
             Some(tx) => tx.subscribe(),
             None => {
@@ -118,6 +120,13 @@ impl Group {
                 self.tx = Some(tx);
                 rx
             }
+        }
+    }
+
+    pub fn unsubscribe(&mut self) {
+        self.ref_cnt -= 1;
+        if self.ref_cnt == 0 {
+            self.tx = None;
         }
     }
 

@@ -51,6 +51,7 @@ pub(crate) struct Modbus {
     signal_tx: Option<mpsc::Sender<Command>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
     write_tx: Option<mpsc::Sender<(Uuid, Uuid, Value)>>,
+    ref_cnt: usize,
 }
 
 #[derive(Debug)]
@@ -136,6 +137,7 @@ impl Modbus {
             group_signal_tx: None,
             read_tx: None,
             write_tx: None,
+            ref_cnt: 0,
         }))
     }
 
@@ -515,7 +517,11 @@ impl Device for Modbus {
         }
     }
 
-    async fn subscribe(&self, group_id: Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+    async fn subscribe(
+        &mut self,
+        group_id: Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        self.ref_cnt += 1;
         match self
             .groups
             .write()
@@ -524,6 +530,20 @@ impl Device for Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => Ok(group.subscribe()),
+            None => todo!(),
+        }
+    }
+
+    async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()> {
+        self.ref_cnt -= 1;
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => Ok(group.unsubscribe()),
             None => todo!(),
         }
     }
