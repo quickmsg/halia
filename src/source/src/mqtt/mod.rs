@@ -38,15 +38,15 @@ pub struct Conf {
 }
 
 impl Mqtt {
-    pub fn new(id: Uuid, req: &CreateSourceReq) -> HaliaResult<Box<dyn Source + Sync + Send>> {
+    pub fn new(id: Uuid, req: &CreateSourceReq) -> HaliaResult<Self> {
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
-        Ok(Box::new(Mqtt {
+        Ok(Mqtt {
             id,
             name: req.name.clone(),
             conf,
             status: Status::Stopped,
             tx: None,
-        }))
+        })
     }
 
     async fn run(&self) {
@@ -96,10 +96,7 @@ impl Mqtt {
             }
         });
     }
-}
 
-#[async_trait]
-impl Source for Mqtt {
     async fn subscribe(&mut self) -> HaliaResult<Receiver<MessageBatch>> {
         match self.status {
             Status::Running => match &self.tx {
@@ -127,7 +124,7 @@ impl Source for Mqtt {
         })
     }
 
-    fn get_detail(&self) -> HaliaResult<SourceDetailResp> {
+    pub fn get_detail(&self) -> HaliaResult<SourceDetailResp> {
         Ok(SourceDetailResp {
             id: self.id.clone(),
             r#type: "mqtt",
@@ -142,3 +139,48 @@ impl Source for Mqtt {
         todo!()
     }
 }
+
+// #[async_trait]
+// impl Source for Mqtt {
+//     async fn subscribe(&mut self) -> HaliaResult<Receiver<MessageBatch>> {
+//         match self.status {
+//             Status::Running => match &self.tx {
+//                 Some(tx) => Ok(tx.subscribe()),
+//                 None => return Err(HaliaError::IoErr),
+//             },
+//             Status::Stopped => {
+//                 let (tx, rx) = broadcast::channel(10);
+//                 self.tx = Some(tx);
+//                 self.run().await;
+//                 Ok(rx)
+//             }
+//         }
+//     }
+
+//     fn get_type(&self) -> &'static str {
+//         return &TYPE;
+//     }
+
+//     fn get_info(&self) -> Result<ListSourceResp> {
+//         Ok(ListSourceResp {
+//             id: self.id.clone(),
+//             name: self.name.clone(),
+//             r#type: "mqtt".to_string(),
+//         })
+//     }
+
+//     fn get_detail(&self) -> HaliaResult<SourceDetailResp> {
+//         Ok(SourceDetailResp {
+//             id: self.id.clone(),
+//             r#type: "mqtt",
+//             name: self.name.clone(),
+//             conf: serde_json::json!(self.conf),
+//         })
+//     }
+
+//     fn stop(&self) {}
+
+//     fn update(&mut self, conf: Value) -> HaliaResult<()> {
+//         todo!()
+//     }
+// }

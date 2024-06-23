@@ -110,7 +110,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn search_device(&self, page: u8, size: u8) -> SearchDeviceResp {
+    pub async fn search_device(&self, page: usize, size: usize) -> SearchDeviceResp {
         let mut resp = vec![];
         let mut i = 0;
         let mut total = 0;
@@ -173,8 +173,8 @@ impl DeviceManager {
     pub async fn search_group(
         &self,
         device_id: Uuid,
-        page: u8,
-        size: u8,
+        page: usize,
+        size: usize,
     ) -> HaliaResult<SearchGroupResp> {
         match self.devices.read().await.get(&device_id) {
             Some(device) => device.read_groups(page, size).await,
@@ -227,8 +227,8 @@ impl DeviceManager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        page: u8,
-        size: u8,
+        page: usize,
+        size: usize,
     ) -> HaliaResult<SearchPointResp> {
         match self.devices.read().await.get(&device_id) {
             Some(device) => device.search_point(group_id, page, size).await,
@@ -450,7 +450,7 @@ trait Device: Sync + Send {
         group_id: Option<Uuid>,
         create_group: &CreateGroupReq,
     ) -> HaliaResult<()>;
-    async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<SearchGroupResp>;
+    async fn read_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp>;
     async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()>;
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()>;
 
@@ -465,8 +465,8 @@ trait Device: Sync + Send {
     async fn search_point(
         &self,
         group_id: Uuid,
-        page: u8,
-        size: u8,
+        page: usize,
+        size: usize,
     ) -> HaliaResult<SearchPointResp>;
     async fn update_point(
         &self,

@@ -55,8 +55,8 @@ impl<T: Serialize> IntoResponse for AppResp<T> {
 
 #[derive(Debug, Deserialize)]
 struct Pagination {
-    p: u8,
-    s: u8,
+    p: usize,
+    s: usize,
 }
 
 pub async fn start() {
@@ -141,11 +141,10 @@ fn rule_routes() -> Router {
         .route("/rule/:id", delete(rule::delete))
 }
 
-// TODO
 fn mqtt_routes() -> Router {
     Router::new()
         .route("/topic", post(mqtt::create))
-        .route("/topic/search", todo!())
-        .route("/topic/:topic_id", todo!())
-        .route("/topic/:topic_id", todo!())
+        .route("/topic/search", get(mqtt::search))
+        .route("/topic/:topic_id", put(mqtt::update))
+        .route("/topic/:topic_id", delete(mqtt::delete))
 }

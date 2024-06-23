@@ -7,12 +7,14 @@ pub struct TopicReq {
     pub qos: u8,
 }
 
+#[derive(Deserialize, Serialize)]
 pub struct TopicResp {
     pub id: Uuid,
     pub topic: String,
     pub qos: u8,
 }
 
+#[derive(Deserialize, Serialize)]
 pub struct SearchTopicResp {
     pub total: usize,
     pub data: Vec<TopicResp>,

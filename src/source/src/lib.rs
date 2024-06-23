@@ -1,11 +1,9 @@
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use common::persistence::{self, source};
 use device::Device;
 use message::MessageBatch;
 use mqtt::Mqtt;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use tokio::sync::broadcast::{self, Receiver};
@@ -21,7 +19,7 @@ mod mqtt;
 // mod http_pull;
 
 pub struct SourceManager {
-    sources: RwLock<HashMap<Uuid, Box<dyn Source>>>,
+    sources: RwLock<HashMap<Uuid, Source>>,
 }
 
 pub static GLOBAL_SOURCE_MANAGER: LazyLock<SourceManager> = LazyLock::new(|| SourceManager {
@@ -36,8 +34,8 @@ impl SourceManager {
         };
 
         let source = match req.r#type.as_str() {
-            "mqtt" => Mqtt::new(id, &req)?,
-            "device" => Device::new(id, &req)?,
+            "mqtt" => Source::Mqtt(Mqtt::new(id, &req)?),
+            "device" => Source::Device(Device::new(id, &req)?),
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
@@ -96,24 +94,35 @@ impl SourceManager {
         req: TopicReq,
     ) -> HaliaResult<()> {
         match self.sources.write().await.get(&mqtt_id) {
-            Some(source) => {
-                if source.get_type() == mqtt::TYPE {
-                    todo!()
-                } else {
-                    todo!()
-                }
-            }
+            Some(source) => match source {
+                Source::Mqtt(mqtt) => todo!(),
+                _ => todo!(),
+            },
             None => todo!(),
         }
     }
 
-    pub async fn search_topic(&self, mqtt_id: Uuid, page: usize, size: usize) -> HaliaResult<SearchTopicResp> {
+    pub async fn search_topic(
+        &self,
+        mqtt_id: Uuid,
+        page: usize,
+        size: usize,
+    ) -> HaliaResult<SearchTopicResp> {
         todo!()
     }
 
-    pub async fn update_topic(&self, mqtt_id: Uuid, topic_id: Uuid, req: TopicReq) {}
+    pub async fn update_topic(
+        &self,
+        mqtt_id: Uuid,
+        topic_id: Uuid,
+        req: TopicReq,
+    ) -> HaliaResult<()> {
+        Ok(())
+    }
 
-    pub async fn delete_topic(&self, mqtt_id: Uuid, topic_id: Uuid) {}
+    pub async fn delete_topic(&self, mqtt_id: Uuid, topic_id: Uuid) -> HaliaResult<()> {
+        Ok(())
+    }
 }
 
 impl SourceManager {
@@ -163,17 +172,39 @@ impl SourceManager {
     }
 }
 
-#[async_trait]
-pub trait Source: Send + Sync {
-    async fn subscribe(&mut self) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
-
-    fn get_type(&self) -> &'static str;
-
-    fn get_info(&self) -> Result<ListSourceResp>;
-
-    fn get_detail(&self) -> HaliaResult<SourceDetailResp>;
-
-    fn stop(&self);
-
-    fn update(&mut self, conf: Value) -> HaliaResult<()>;
+enum Source {
+    Mqtt(mqtt::Mqtt),
+    Device(device::Device),
 }
+
+impl Source {
+    fn get_detail(&self) -> HaliaResult<SourceDetailResp> {
+        match self {
+            Source::Mqtt(mqtt) => mqtt.get_detail(),
+            Source::Device(_) => todo!(),
+        }
+    }
+
+    fn get_info(&self) -> Result<ListSourceResp> {
+        todo!()
+    }
+
+    async fn subscribe(&self) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        todo!()
+    }
+}
+
+// #[async_trait]
+// pub trait Source: Send + Sync {
+//     async fn subscribe(&mut self) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+
+//     fn get_type(&self) -> &'static str;
+
+//     fn get_info(&self) -> Result<ListSourceResp>;
+
+//     fn get_detail(&self) -> HaliaResult<SourceDetailResp>;
+
+//     fn stop(&self);
+
+//     fn update(&mut self, conf: Value) -> HaliaResult<()>;
+// }

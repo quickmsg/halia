@@ -25,18 +25,15 @@ struct Conf {
 }
 
 impl Device {
-    pub fn new(id: Uuid, req: &CreateSourceReq) -> HaliaResult<Box<dyn Source>> {
+    pub fn new(id: Uuid, req: &CreateSourceReq) -> HaliaResult<Self> {
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
-        Ok(Box::new(Device {
+        Ok(Device {
             id,
             conf,
             name: req.name.clone(),
-        }))
+        })
     }
-}
 
-#[async_trait]
-impl Source for Device {
     async fn subscribe(&mut self) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         GLOBAL_DEVICE_MANAGER
             .subscribe(self.conf.device_id, self.conf.group_id)

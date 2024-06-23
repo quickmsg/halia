@@ -158,15 +158,9 @@ impl Group {
         Ok(())
     }
 
-    pub async fn search_point(&self, page: u8, size: u8) -> SearchPointResp {
+    pub async fn search_point(&self, page: usize, size: usize) -> SearchPointResp {
         let mut resps = vec![];
-        for (_, point) in self
-            .points
-            .read()
-            .await
-            .iter()
-            .skip(((page - 1) * size) as usize)
-        {
+        for (_, point) in self.points.read().await.iter().skip((page - 1) * size) {
             resps.push(SearchPointItemResp {
                 id: point.id.clone(),
                 name: point.name.clone(),

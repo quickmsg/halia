@@ -1,11 +1,9 @@
 use anyhow::Result;
 use std::{
-    net::SocketAddr,
-    sync::{
+    net::SocketAddr, os::unix::raw::uid_t, sync::{
         atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
-    },
-    time::Duration,
+    }, time::Duration
 };
 
 use async_trait::async_trait;
@@ -375,7 +373,7 @@ impl Device for Modbus {
         self.write_tx = None;
     }
 
-    async fn read_groups(&self, page: u8, size: u8) -> HaliaResult<SearchGroupResp> {
+    async fn read_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp> {
         let mut resps = Vec::new();
         for group in self
             .groups
@@ -453,8 +451,8 @@ impl Device for Modbus {
     async fn search_point(
         &self,
         group_id: Uuid,
-        page: u8,
-        size: u8,
+        page: usize,
+        size: usize,
     ) -> HaliaResult<SearchPointResp> {
         match self
             .groups
