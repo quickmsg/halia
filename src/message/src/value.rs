@@ -48,6 +48,12 @@ impl MessageValue {
     }
 }
 
+impl Default for MessageValue {
+    fn default() -> Self {
+        MessageValue::Object(HashMap::new())
+    }
+}
+
 fn parse_index(s: &str) -> Option<usize> {
     if s.starts_with('+') || (s.starts_with('0') && s.len() != 1) {
         return None;

@@ -100,8 +100,18 @@ impl Message {
     }
 
     pub fn from_json(b: &Bytes) -> Result<Self> {
-        let value: MessageValue = json::from_slice(b)?;
-        Ok(Message { value })
+        let value: serde_json::Value = serde_json::from_slice(b)?;
+        let message_value = MessageValue::default();
+        match value {
+            serde_json::Value::Null => todo!(),
+            serde_json::Value::Bool(_) => todo!(),
+            serde_json::Value::Number(_) => todo!(),
+            serde_json::Value::String(_) => todo!(),
+            serde_json::Value::Array(_) => todo!(),
+            serde_json::Value::Object(obj) => todo!(),
+        }
+        todo!()
+        // Ok(Message { value })
     }
 
     pub fn from_value(value: MessageValue) -> Result<Self> {
