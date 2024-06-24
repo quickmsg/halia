@@ -95,6 +95,7 @@ impl SourceManager {
         topic_id: Option<Uuid>,
         req: TopicReq,
     ) -> HaliaResult<()> {
+        debug!("{mqtt_id:?} {topic_id:?}");
         match self.sources.write().await.get_mut(&mqtt_id) {
             Some(source) => match source {
                 Source::Mqtt(mqtt) => mqtt.create_topic(topic_id, req).await,

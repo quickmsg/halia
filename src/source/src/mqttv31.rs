@@ -13,7 +13,6 @@ use tokio::sync::broadcast::{self, Receiver};
 use tokio::sync::RwLock;
 use tokio::time::Duration;
 use tracing::{debug, error};
-use types::rule::Status;
 use types::source::mqtt::{SearchTopicResp, TopicReq, TopicResp};
 use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
@@ -27,7 +26,7 @@ pub struct Mqtt {
     name: String,
     conf: Conf,
     client: Option<AsyncClient>,
-    status: Status,
+    status: bool,
     topics: Arc<RwLock<Vec<Topic>>>,
 }
 
@@ -54,7 +53,7 @@ impl Mqtt {
             id,
             name: req.name.clone(),
             conf,
-            status: Status::Stopped,
+            status: false,
             topics: Arc::new(RwLock::new(vec![])),
         })
     }
@@ -89,7 +88,6 @@ impl Mqtt {
                         if let ConnectionError::Timeout(_) = e {
                             continue;
                         }
-                        error!("Failed to poll mqtt eventloop:{}", e);
                         // match client.subscribe(conf.topic.clone(), QoS::AtMostOnce).await {
                         //     Ok(_) => {}
                         //     Err(e) => error!("Failed to connect mqtt server:{}", e),
@@ -186,25 +184,26 @@ impl Mqtt {
             }
         }
 
-        // TODO
-        match &self.client {
-            Some(client) => {
-                let qos = match req.qos {
-                    0 => QoS::AtMostOnce,
-                    1 => QoS::AtLeastOnce,
-                    2 => QoS::ExactlyOnce,
-                    _ => unreachable!(),
-                };
-                match client.subscribe(req.topic, qos).await {
-                    Ok(_) => {
-                        debug!("ok");
-                    }
-                    Err(_) => {
-                        debug!("err");
+        if !self.client.is_none() {
+            match &self.client {
+                Some(client) => {
+                    let qos = match req.qos {
+                        0 => QoS::AtMostOnce,
+                        1 => QoS::AtLeastOnce,
+                        2 => QoS::ExactlyOnce,
+                        _ => unreachable!(),
+                    };
+                    match client.subscribe(req.topic, qos).await {
+                        Ok(_) => {
+                            debug!("ok");
+                        }
+                        Err(_) => {
+                            debug!("err");
+                        }
                     }
                 }
+                None => return Err(HaliaError::NotFound),
             }
-            None => return Err(HaliaError::NotFound),
         }
         Ok(())
     }

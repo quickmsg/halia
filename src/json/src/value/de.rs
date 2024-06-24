@@ -216,14 +216,20 @@ impl<'de> serde::Deserializer<'de> for Value {
         match self {
             Value::Null => visitor.visit_unit(),
             Value::Boolean(v) => visitor.visit_bool(v),
-            // Value::Number(n) => n.deserialize_any(visitor),
-            #[cfg(any(feature = "std", feature = "alloc"))]
+            Value::Uint8(n) => visitor.visit_u8(n),
+            Value::Uint16(n) => visitor.visit_u16(n),
             Value::String(v) => visitor.visit_string(v),
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            Value::String(_) => unreachable!(),
             Value::Array(v) => visit_array(v, visitor),
             Value::Object(v) => visit_object(v, visitor),
-            _ => todo!(),
+            Value::Int8(_) => todo!(),
+            Value::Int16(_) => todo!(),
+            Value::Int32(_) => todo!(),
+            Value::Int64(_) => todo!(),
+            Value::Uint32(_) => todo!(),
+            Value::Uint64(_) => todo!(),
+            Value::Float32(_) => todo!(),
+            Value::Float64(_) => todo!(),
+            Value::Bytes(_) => todo!(),
         }
     }
 
