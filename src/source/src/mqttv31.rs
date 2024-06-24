@@ -5,16 +5,19 @@ use rumqttc::v5::mqttbytes::{qos, QoS};
 use rumqttc::v5::{AsyncClient, ConnectionError, Event, Incoming, MqttOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::string::String;
+use std::sync::Arc;
 use tokio;
-use tokio::sync::broadcast::{self, Receiver, Sender};
+use tokio::sync::broadcast::{self, Receiver};
+use tokio::sync::RwLock;
 use tokio::time::Duration;
 use tracing::{debug, error};
 use types::rule::Status;
 use types::source::mqtt::{SearchTopicResp, TopicReq, TopicResp};
 use types::source::{CreateSourceReq, ListSourceResp, SourceDetailResp};
 use uuid::Uuid;
+
+use crate::mqtt_topic::matches;
 
 pub(crate) static TYPE: &str = "mqtt";
 
@@ -24,7 +27,7 @@ pub struct Mqtt {
     conf: Conf,
     client: Option<AsyncClient>,
     status: Status,
-    topics: Vec<Topic>,
+    topics: Arc<RwLock<Vec<Topic>>>,
 }
 
 struct Topic {
@@ -51,7 +54,7 @@ impl Mqtt {
             name: req.name.clone(),
             conf,
             status: Status::Stopped,
-            topics: vec![],
+            topics: Arc::new(RwLock::new(vec![])),
         })
     }
 
@@ -63,19 +66,22 @@ impl Mqtt {
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
         self.client = Some(client);
 
+        let topics = self.topics.clone();
         tokio::spawn(async move {
             loop {
                 match event_loop.poll().await {
                     Ok(Event::Incoming(Incoming::Publish(p))) => {
-                        let topic = std::str::from_utf8(&p.topic).unwrap();
-                        debug!("{p:?},{topic:?}");
-                        // match MessageBatch::from_json(&p.payload) {
-                        //     Ok(msg) => match tx.send(msg) {
-                        //         Err(e) => error!("send message err:{}", e),
-                        //         _ => {}
-                        //     },
-                        //     Err(e) => error!("Failed to decode msg:{}", e),
-                        // }
+                        let topic_str = std::str::from_utf8(&p.topic).unwrap();
+                        match MessageBatch::from_json(&p.payload) {
+                            Ok(msg) => {
+                                for topic in topics.write().await.iter_mut() {
+                                    if matches(&topic.topic, topic_str) {
+                                        let _ = topic.tx.as_ref().unwrap().send(msg.clone());
+                                    }
+                                }
+                            }
+                            Err(e) => error!("Failed to decode msg:{}", e),
+                        }
                     }
                     Ok(_) => (),
                     Err(e) => {
@@ -98,7 +104,13 @@ impl Mqtt {
             self.run().await;
         }
 
-        match self.topics.get(&id) {
+        match self
+            .topics
+            .write()
+            .await
+            .iter_mut()
+            .find(|topic| topic.id == id)
+        {
             Some(topic) => {
                 match self
                     .client
@@ -109,38 +121,21 @@ impl Mqtt {
                 {
                     Ok(_) => {}
                     Err(e) => {
-                        error!("subscribe err")
+                        error!("{e}");
                     }
                 }
 
-                match self.txs.get(&id) {
-                    Some(tx) => match tx {
-                        Some(tx) => Ok(tx.subscribe()),
-                        None => {
-                            let (tx, rx) = broadcast::channel(10);
-                            self.txs.insert(id, Some(tx));
-                            Ok(rx)
-                        }
-                    },
-                    None => unreachable!(),
+                match &topic.tx {
+                    Some(tx) => Ok(tx.subscribe()),
+                    None => {
+                        let (tx, rx) = broadcast::channel(10);
+                        topic.tx = Some(tx);
+                        Ok(rx)
+                    }
                 }
             }
-            None => return Err(HaliaError::NotFound),
+            None => Err(HaliaError::NotFound),
         }
-
-        // let id to topic
-        // match self.status {
-        //     Status::Running => match &self.tx {
-        //         Some(tx) => Ok(tx.subscribe()),
-        //         None => return Err(HaliaError::IoErr),
-        //     },
-        //     Status::Stopped => {
-        //         let (tx, rx) = broadcast::channel(10);
-        //         self.tx = Some(tx);
-        //         self.run().await;
-        //         Ok(rx)
-        //     }
-        // }
     }
 
     pub fn get_info(&self) -> Result<ListSourceResp> {
@@ -176,7 +171,7 @@ impl Mqtt {
             tx: None,
             ref_cnt: 0,
         };
-        self.topics.push(topic);
+        self.topics.write().await.push(topic);
 
         // TODO
         match &self.client {
@@ -201,33 +196,33 @@ impl Mqtt {
         Ok(())
     }
 
-    pub fn search_topic(&mut self, page: usize, size: usize) -> HaliaResult<SearchTopicResp> {
-        let mut total = 0;
-
-        let mut i = 0;
+    pub async fn search_topic(&mut self, page: usize, size: usize) -> HaliaResult<SearchTopicResp> {
         let mut topics = vec![];
-        for (_, topic) in &self.topics {
-            total += 1;
-            if i >= (page - 1) * size && i < page * size {
+        for (index, topic) in self.topics.read().await.iter().enumerate() {
+            if index >= (page - 1) * size && index < page * size {
                 topics.push(TopicResp {
                     id: topic.id.clone(),
                     topic: topic.topic.clone(),
                     qos: topic.qos,
                 });
             }
-            i += 1;
         }
 
         Ok(SearchTopicResp {
-            total: total,
+            total: self.topics.read().await.len(),
             data: topics,
         })
     }
 
-    pub fn update_topic(&mut self, topic_id: Uuid, req: TopicReq) -> HaliaResult<()> {
-        match self.topics.get_mut(&topic_id) {
+    pub async fn update_topic(&mut self, topic_id: Uuid, req: TopicReq) -> HaliaResult<()> {
+        match self
+            .topics
+            .write()
+            .await
+            .iter_mut()
+            .find(|topic| topic.id == topic_id)
+        {
             Some(topic) => {
-                // TODO 判断是否需要更改
                 topic.topic = req.topic;
                 topic.qos = req.qos;
                 Ok(())
@@ -236,10 +231,11 @@ impl Mqtt {
         }
     }
 
-    pub fn delete_topic(&mut self, topic_id: Uuid) -> HaliaResult<()> {
-        match self.topics.remove(&topic_id) {
-            Some(_) => Ok(()),
-            None => Err(HaliaError::NotFound),
-        }
+    pub async fn delete_topic(&mut self, topic_id: Uuid) -> HaliaResult<()> {
+        self.topics
+            .write()
+            .await
+            .retain(|topic| topic.id == topic_id);
+        Ok(())
     }
 }

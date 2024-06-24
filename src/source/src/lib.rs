@@ -112,7 +112,7 @@ impl SourceManager {
     ) -> HaliaResult<SearchTopicResp> {
         match self.sources.write().await.get_mut(&mqtt_id) {
             Some(source) => match source {
-                Source::Mqtt(mqtt) => mqtt.search_topic(page, size),
+                Source::Mqtt(mqtt) => mqtt.search_topic(page, size).await,
                 _ => todo!(),
             },
             None => todo!(),
@@ -127,7 +127,7 @@ impl SourceManager {
     ) -> HaliaResult<()> {
         match self.sources.write().await.get_mut(&mqtt_id) {
             Some(source) => match source {
-                Source::Mqtt(mqtt) => mqtt.update_topic(topic_id, req),
+                Source::Mqtt(mqtt) => mqtt.update_topic(topic_id, req).await,
                 _ => todo!(),
             },
             None => todo!(),
@@ -137,7 +137,7 @@ impl SourceManager {
     pub async fn delete_topic(&self, mqtt_id: Uuid, topic_id: Uuid) -> HaliaResult<()> {
         match self.sources.write().await.get_mut(&mqtt_id) {
             Some(source) => match source {
-                Source::Mqtt(mqtt) => mqtt.delete_topic(topic_id),
+                Source::Mqtt(mqtt) => mqtt.delete_topic(topic_id).await,
                 _ => todo!(),
             },
             None => todo!(),

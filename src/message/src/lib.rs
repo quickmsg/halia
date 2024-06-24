@@ -2,6 +2,7 @@ use anyhow::Result;
 use bytes::Bytes;
 use indexmap::IndexMap;
 use json::{Map, Value};
+use tracing::debug;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -98,6 +99,7 @@ impl Message {
     }
 
     pub fn from_json(b: &Bytes) -> Result<Self> {
+        debug!("{b:?}");
         let value: Value = json::from_slice(b)?;
         Ok(Message { value })
     }
