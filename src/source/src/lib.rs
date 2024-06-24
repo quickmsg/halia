@@ -157,7 +157,11 @@ impl SourceManager {
                             return Err(e.into());
                         }
                     };
-                    GLOBAL_SOURCE_MANAGER.create(Some(id), req).await?;
+                    GLOBAL_SOURCE_MANAGER.create(Some(id), req.clone()).await?;
+                    match req.r#type.as_str() {
+                        "mqtt" => self.recover_mqtt_topics(id).await?,
+                        _ => {}
+                    }
                 }
 
                 Ok(())
@@ -188,6 +192,26 @@ impl SourceManager {
                 std::io::ErrorKind::Other => todo!(),
                 _ => todo!(),
             },
+        }
+    }
+
+    async fn recover_mqtt_topics(&self, source_id: Uuid) -> HaliaResult<()> {
+        match persistence::source_item::read(source_id).await {
+            Ok(items) => {
+                for (id, data) in items {
+                    match self
+                        .create_topic(source_id, Some(id), serde_json::from_str(&data).unwrap())
+                        .await
+                    {
+                        Ok(_) => {}
+                        Err(e) => {
+                            error!("create topic err:{e:?}");
+                        }
+                    }
+                }
+                Ok(())
+            }
+            Err(_) => todo!(),
         }
     }
 }

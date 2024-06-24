@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 pub mod mqtt;
 
-#[derive(Deserialize, Debug, Serialize)]
+#[derive(Deserialize, Debug, Serialize, Clone)]
 pub struct CreateSourceReq {
     pub r#type: String,
     pub name: String,

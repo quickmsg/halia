@@ -19,6 +19,7 @@ pub mod rule;
 pub mod sink;
 pub mod source;
 pub mod message;
+pub mod source_item;
 
 static ROOT_DIR: &str = "storage";
 static DEVICE_DIR: &str = "device";

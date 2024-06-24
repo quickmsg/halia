@@ -10,7 +10,7 @@ use tokio::{
 use tracing::debug;
 use uuid::Uuid;
 
-use super::{Status, DELIMITER};
+use super::DELIMITER;
 
 fn get_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(super::SOURCE_DIR)
@@ -25,7 +25,8 @@ pub async fn init() -> Result<(), io::Error> {
 }
 
 pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
-    super::insert(get_file(), &vec![(id, data)]).await
+    super::insert(get_file(), &vec![(id, data)]).await?;
+    super::create_dir(get_dir().join(id.to_string())).await
 }
 
 pub async fn read() -> Result<Vec<(Uuid, String)>, io::Error> {

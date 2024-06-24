@@ -1,5 +1,6 @@
 use anyhow::Result;
 use common::error::{HaliaError, HaliaResult};
+use common::persistence;
 use message::MessageBatch;
 use rumqttc::v5::mqttbytes::{qos, QoS};
 use rumqttc::v5::{AsyncClient, ConnectionError, Event, Incoming, MqttOptions};
@@ -160,9 +161,9 @@ impl Mqtt {
     }
 
     pub async fn create_topic(&mut self, topic_id: Option<Uuid>, req: TopicReq) -> HaliaResult<()> {
-        let topic_id = match topic_id {
-            Some(id) => id,
-            None => Uuid::new_v4(),
+        let (topic_id, create) = match topic_id {
+            Some(id) => (id, false),
+            None => (Uuid::new_v4(), true),
         };
         let topic = Topic {
             id: topic_id.clone(),
@@ -172,6 +173,18 @@ impl Mqtt {
             ref_cnt: 0,
         };
         self.topics.write().await.push(topic);
+
+        if create {
+            if let Err(e) = persistence::source_item::insert(
+                self.id,
+                topic_id,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await
+            {
+                error!("insert source_item err:{e:?}");
+            }
+        }
 
         // TODO
         match &self.client {
