@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::{bail, Result};
+use message::value::MessageValue;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
@@ -52,6 +53,14 @@ impl<'de> Deserialize<'de> for DataType {
                             )
                         })?;
                         DataType::Bool(pos as u8)
+                    }
+                    "int8" => {
+                        let endian = extract_endian(&map, 1).unwrap();
+                        DataType::Int8(endian[0])
+                    }
+                    "uint8" => {
+                        let endian = extract_endian(&map, 1).unwrap();
+                        DataType::Uint8(endian[0])
                     }
                     "int16" => {
                         let endian = extract_endian(&map, 1).unwrap();
@@ -206,65 +215,65 @@ impl DataType {
         }
     }
 
-    pub fn decode(&self, data: &mut Vec<u8>) -> json::Value {
+    pub fn decode(&self, data: &mut Vec<u8>) -> MessageValue {
         match self {
             DataType::Bool(_) => {
                 if data.len() != 1 {
-                    json::Value::Null
+                    MessageValue::Null
                 } else {
                     if data[0] == 1 {
-                        json::Value::from(true)
+                        MessageValue::Boolean(true)
                     } else {
-                        json::Value::from(false)
+                        MessageValue::Boolean(false)
                     }
                 }
             }
             DataType::Int8(endian) => {
                 let data = match data.as_slice() {
                     [a, b] => [*a, *b],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian == Endian::LittleEndian {
-                    json::Value::Int8(data[0] as i8)
+                    MessageValue::Int8(data[0] as i8)
                 } else {
-                    json::Value::Int8(data[1] as i8)
+                    MessageValue::Int8(data[1] as i8)
                 }
             }
             DataType::Uint8(endian) => {
                 let data = match data.as_slice() {
                     [a, b] => [*a, *b],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian == Endian::LittleEndian {
-                    json::Value::Uint8(data[0] as u8)
+                    MessageValue::Uint8(data[0] as u8)
                 } else {
-                    json::Value::Uint8(data[1] as u8)
+                    MessageValue::Uint8(data[1] as u8)
                 }
             }
             DataType::Int16(endian) => {
                 let mut data = match data.as_slice() {
                     [a, b] => [*a, *b],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian == Endian::BigEndian {
                     data.swap(0, 1);
                 }
-                json::Value::from(i16::from_be_bytes(data))
+                MessageValue::Int16(i16::from_be_bytes(data))
             }
             DataType::Uint16(endian) => {
                 let mut data = match data.as_slice() {
                     [a, b] => [*a, *b],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian == Endian::BigEndian {
                     data.swap(0, 1);
                 }
-                json::Value::from(u16::from_be_bytes(data))
+                MessageValue::Uint16(u16::from_be_bytes(data))
             }
             DataType::Int32(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d] => [*a, *b, *c, *d],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian0 == Endian::BigEndian {
                     data.swap(0, 1);
@@ -274,12 +283,12 @@ impl DataType {
                     data.swap(0, 2);
                     data.swap(1, 3);
                 }
-                json::Value::Int32(i32::from_be_bytes(data))
+                MessageValue::Int32(i32::from_be_bytes(data))
             }
             DataType::Uint32(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d] => [*a, *b, *c, *d],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian0 == Endian::BigEndian {
                     data.swap(0, 1);
@@ -289,12 +298,12 @@ impl DataType {
                     data.swap(0, 2);
                     data.swap(1, 3);
                 }
-                json::Value::from(u32::from_be_bytes(data))
+                MessageValue::Uint32(u32::from_be_bytes(data))
             }
             DataType::Int64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian0 == Endian::BigEndian {
                     data.swap(0, 1);
@@ -308,12 +317,12 @@ impl DataType {
                     data.swap(2, 4);
                     data.swap(3, 5);
                 }
-                json::Value::from(i64::from_be_bytes(data))
+                MessageValue::Int64(i64::from_be_bytes(data))
             }
             DataType::Uint64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian0 == Endian::BigEndian {
                     data.swap(0, 1);
@@ -327,12 +336,12 @@ impl DataType {
                     data.swap(2, 4);
                     data.swap(3, 5);
                 }
-                json::Value::from(u64::from_be_bytes(data))
+                MessageValue::Uint64(u64::from_be_bytes(data))
             }
             DataType::Float32(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d] => [*a, *b, *c, *d],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian0 == Endian::LittleEndian {
                     data.swap(0, 1);
@@ -342,12 +351,12 @@ impl DataType {
                     data.swap(0, 2);
                     data.swap(1, 3);
                 }
-                json::Value::from(f32::from_be_bytes(data))
+                MessageValue::Float32(f32::from_be_bytes(data))
             }
             DataType::Float64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
-                    _ => return json::Value::Null,
+                    _ => return MessageValue::Null,
                 };
                 if *endian0 == Endian::LittleEndian {
                     data.swap(0, 1);
@@ -361,7 +370,7 @@ impl DataType {
                     data.swap(2, 4);
                     data.swap(3, 5);
                 }
-                json::Value::from(f64::from_be_bytes(data))
+                MessageValue::Float64(f64::from_be_bytes(data))
             }
             DataType::String(len, single, endian) => match (single, endian) {
                 (true, Endian::BigEndian) => {
@@ -372,8 +381,8 @@ impl DataType {
                         }
                     }
                     match String::from_utf8(new_data) {
-                        Ok(string) => return json::Value::String(string),
-                        Err(_) => return json::Value::Null,
+                        Ok(string) => return MessageValue::String(string),
+                        Err(_) => return MessageValue::Null,
                     }
                 }
                 (true, Endian::LittleEndian) => {
@@ -384,8 +393,8 @@ impl DataType {
                         }
                     }
                     match String::from_utf8(new_data) {
-                        Ok(string) => return json::Value::String(string.replace("\0", "")),
-                        Err(_) => return json::Value::Null,
+                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
+                        Err(_) => return MessageValue::Null,
                     }
                 }
                 (false, Endian::BigEndian) => {
@@ -395,16 +404,16 @@ impl DataType {
                         }
                     }
                     match String::from_utf8(data.clone()) {
-                        Ok(string) => return json::Value::String(string),
-                        Err(_) => return json::Value::Null,
+                        Ok(string) => return MessageValue::String(string),
+                        Err(_) => return MessageValue::Null,
                     }
                 }
                 (false, Endian::LittleEndian) => match String::from_utf8(data.clone()) {
-                    Ok(string) => return json::Value::String(string),
-                    Err(_) => return json::Value::Null,
+                    Ok(string) => return MessageValue::String(string),
+                    Err(_) => return MessageValue::Null,
                 },
             },
-            DataType::Bytes(_) => json::Value::Bytes(data.clone()),
+            DataType::Bytes(_) => MessageValue::Bytes(data.clone()),
         }
     }
 

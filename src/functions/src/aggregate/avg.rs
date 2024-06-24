@@ -1,4 +1,4 @@
-use message::MessageBatch;
+use message::{value::MessageValue, MessageBatch};
 
 use super::Aggregater;
 
@@ -13,50 +13,50 @@ impl Avg {
 }
 
 impl Aggregater for Avg {
-    fn aggregate(&self, mb: &MessageBatch) -> json::Value {
+    fn aggregate(&self, mb: &MessageBatch) -> MessageValue {
         let mut sum: f64 = 0.0;
         let mut count = 0;
         let messages = mb.get_messages();
         for message in messages {
             match message.get(&self.field) {
                 Some(value) => match value {
-                    json::Value::Int8(value) => {
+                    MessageValue::Int8(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Int16(value) => {
+                    MessageValue::Int16(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Int32(value) => {
+                    MessageValue::Int32(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Int64(value) => {
+                    MessageValue::Int64(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Uint8(value) => {
+                    MessageValue::Uint8(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Uint16(value) => {
+                    MessageValue::Uint16(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Uint32(value) => {
+                    MessageValue::Uint32(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Uint64(value) => {
+                    MessageValue::Uint64(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Float32(value) => {
+                    MessageValue::Float32(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    json::Value::Float64(value) => {
+                    MessageValue::Float64(value) => {
                         sum += value;
                         count += 1;
                     }
@@ -67,9 +67,9 @@ impl Aggregater for Avg {
         }
 
         if count > 0 {
-            json::Value::Float64(sum / count as f64)
+           MessageValue::Float64(sum / count as f64)
         } else {
-            json::Value::Float64(0.0)
+            MessageValue::Float64(0.0)
         }
     }
 }

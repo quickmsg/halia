@@ -67,7 +67,7 @@ impl Filter for Eq {
     fn filter(&self, msg: &Message) -> bool {
         match msg.get(&self.field) {
             Some(value) => match value {
-                json::Value::Int8(lhs) => match &self.value {
+                message::value::Value::Int8(lhs) => match &self.value {
                     Value::Int(rhs) => *lhs == *rhs as i8,
                     Value::Float(rhs) => *lhs == *rhs as i8,
                     Value::Field(field) => match msg.get(&field) {

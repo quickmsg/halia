@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use avg::Avg;
 use max::Max;
-use message::{Message, MessageBatch};
+use message::{value::MessageValue, Message, MessageBatch};
 use min::Min;
 use serde::Deserialize;
 use serde_json::Value;
@@ -15,7 +15,7 @@ pub mod min;
 pub mod sum;
 
 pub trait Aggregater: Sync + Send {
-    fn aggregate(&self, mb: &MessageBatch) -> json::Value;
+    fn aggregate(&self, mb: &MessageBatch) -> MessageValue;
 }
 
 #[derive(Deserialize)]

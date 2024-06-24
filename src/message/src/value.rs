@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum Value {
+pub enum MessageValue {
     Null,
     Boolean(bool),
     Int8(i8),
@@ -18,12 +18,12 @@ pub enum Value {
     Float64(f64),
     String(String),
     Bytes(Vec<u8>),
-    Array(Vec<Value>),
-    Object(HashMap<String, Value>),
+    Array(Vec<MessageValue>),
+    Object(HashMap<String, MessageValue>),
 }
 
-impl Value {
-    pub fn pointer(&self, pointer: &str) -> Option<&Value> {
+impl MessageValue {
+    pub fn pointer(&self, pointer: &str) -> Option<&MessageValue> {
         if pointer.is_empty() {
             return Some(self);
         }
@@ -33,11 +33,18 @@ impl Value {
             .try_fold(self, |target, token| {
                 println!("{:?}, {:?}", target, token);
                 match target {
-                    Value::Object(map) => map.get(&token),
-                    Value::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
+                    MessageValue::Object(map) => map.get(&token),
+                    MessageValue::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
                     _ => None,
                 }
             })
+    }
+
+    pub fn as_object_mut(&mut self) -> Option<&mut HashMap<String, MessageValue>> {
+        match self {
+            MessageValue::Object(map) => Some(map),
+            _ => None,
+        }
     }
 }
 

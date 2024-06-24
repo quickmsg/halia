@@ -1,9 +1,8 @@
 use anyhow::Result;
 use bytes::Bytes;
-use indexmap::IndexMap;
 use std::collections::HashMap;
 use tracing::debug;
-use value::Value;
+use value::MessageValue;
 
 pub mod value;
 
@@ -91,41 +90,40 @@ impl Default for MessageBatch {
 
 #[derive(Clone, Debug)]
 pub struct Message {
-    value: Value,
+    value: MessageValue,
 }
 
 impl Message {
     pub fn from_str(s: &str) -> Result<Self> {
-        let value: Value = serde_json::from_str(s)?;
+        let value: MessageValue = serde_json::from_str(s)?;
         Ok(Message { value })
     }
 
     pub fn from_json(b: &Bytes) -> Result<Self> {
-        let value: Value = json::from_slice(b)?;
+        let value: MessageValue = json::from_slice(b)?;
         Ok(Message { value })
     }
 
-    pub fn from_value(value: Value) -> Result<Self> {
+    pub fn from_value(value: MessageValue) -> Result<Self> {
         Ok(Message { value })
     }
 
-    pub fn get(&self, field: &str) -> Option<&Value> {
+    pub fn get(&self, field: &str) -> Option<&MessageValue> {
         self.value.pointer(field)
     }
 
     pub fn new() -> Self {
         Message {
-            value: Value::Object(HashMap::new()),
+            value: MessageValue::Object(HashMap::new()),
         }
     }
 
-    // TODO fix path
-    // pub fn add(&mut self, name: &str, value: Value) {
-    //     match self.value.as_object_mut() {
-    //         Some(object) => object.insert(name.to_string(), value),
-    //         None => unreachable!(),
-    //     };
-    // }
+    pub fn add(&mut self, name: &str, value: MessageValue) {
+        match self.value.as_object_mut() {
+            Some(object) => object.insert(name.to_string(), value),
+            None => unreachable!(),
+        };
+    }
 
     // pub fn select(&mut self, fields: &Vec<String>) {
     //     if let Some(object) = self.value.as_object_mut() {
@@ -255,7 +253,7 @@ impl Message {
 impl Default for Message {
     fn default() -> Self {
         Self {
-            value: Value::Object(HashMap::new()),
+            value: MessageValue::Object(HashMap::new()),
         }
     }
 }

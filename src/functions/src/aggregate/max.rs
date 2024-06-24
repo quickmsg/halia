@@ -1,5 +1,5 @@
 use super::Aggregater;
-use message::MessageBatch;
+use message::{value::MessageValue, MessageBatch};
 
 pub struct Max {
     field: String,
@@ -12,58 +12,58 @@ impl Max {
 }
 
 impl Aggregater for Max {
-    fn aggregate(&self, mb: &MessageBatch) -> json::Value {
+    fn aggregate(&self, mb: &MessageBatch) -> MessageValue {
         let mut max = std::f64::MIN;
         let messages = mb.get_messages();
         for message in messages {
             match message.get(&self.field) {
                 Some(value) => match value {
-                    json::Value::Int8(value) => {
+                    MessageValue::Int8(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Int16(value) => {
+                    MessageValue::Int16(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Int32(value) => {
+                    MessageValue::Int32(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Int64(value) => {
+                    MessageValue::Int64(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Uint8(value) => {
+                    MessageValue::Uint8(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Uint16(value) => {
+                    MessageValue::Uint16(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Uint32(value) => {
+                    MessageValue::Uint32(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Uint64(value) => {
+                    MessageValue::Uint64(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Float32(value) => {
+                    MessageValue::Float32(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    json::Value::Float64(value) => {
+                    MessageValue::Float64(value) => {
                         if *value > max {
                             max = *value
                         }
@@ -74,6 +74,6 @@ impl Aggregater for Max {
             }
         }
 
-        json::Value::Float64(max)
+        MessageValue::Float64(max)
     }
 }

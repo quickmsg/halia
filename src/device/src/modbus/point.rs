@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
 use json::Value;
+use message::value::MessageValue;
 use protocol::modbus::{
     client::{Context, Reader, Writer},
     SlaveContext,
@@ -19,7 +20,7 @@ pub(crate) struct Point {
     pub conf: Conf,
     pub name: String,
     pub quantity: u16,
-    pub value: Value,
+    pub value: MessageValue,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
@@ -41,7 +42,7 @@ impl Point {
             conf,
             name: req.name,
             quantity,
-            value: Value::Null,
+            value: MessageValue::Null,
         })
     }
 
@@ -53,7 +54,7 @@ impl Point {
         Ok(())
     }
 
-    pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<json::Value> {
+    pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<MessageValue> {
         ctx.set_slave(self.conf.slave);
         match self.conf.area {
             0 => match ctx
@@ -68,7 +69,7 @@ impl Point {
                     }
                     Err(e) => {
                         warn!("modbus protocl exception:{}", e);
-                        Ok(Value::Null)
+                        Ok(MessageValue::Null)
                     }
                 },
                 Err(_) => todo!(),
@@ -82,7 +83,7 @@ impl Point {
                     }
                     Err(e) => {
                         warn!("modbus protocl exception:{}", e);
-                        Ok(Value::Null)
+                        Ok(MessageValue::Null)
                     }
                 },
                 Err(_) => todo!(),
