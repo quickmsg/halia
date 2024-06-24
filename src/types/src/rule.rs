@@ -15,6 +15,7 @@ pub struct CreateRuleReq {
 pub struct CreateRuleNode {
     pub index: usize,
     pub id: Option<Uuid>,
+    pub item_id: Option<Uuid>,
     pub r#type: String,
     pub name: Option<String>,
     pub conf: Value,

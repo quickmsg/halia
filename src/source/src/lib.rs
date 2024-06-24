@@ -15,8 +15,8 @@ use uuid::Uuid;
 
 pub mod device;
 mod http_pull;
-mod mqttv31;
 mod mqtt_topic;
+mod mqttv31;
 
 pub struct SourceManager {
     sources: RwLock<HashMap<Uuid, Source>>,
@@ -28,21 +28,16 @@ pub static GLOBAL_SOURCE_MANAGER: LazyLock<SourceManager> = LazyLock::new(|| Sou
 
 impl SourceManager {
     pub async fn create(&self, id: Option<Uuid>, req: CreateSourceReq) -> HaliaResult<()> {
-        debug!("here");
         let (id, persistence) = match id {
             Some(id) => (id, false),
             None => (Uuid::new_v4(), true),
         };
-
-        debug!("here");
 
         let source = match req.r#type.as_str() {
             "mqtt" => Source::Mqtt(Mqtt::new(id, &req)?),
             "device" => Source::Device(Device::new(id, &req)?),
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
-
-        debug!("here");
 
         self.sources.write().await.insert(id, source);
 
@@ -76,15 +71,17 @@ impl SourceManager {
 
     pub async fn delete() {}
 
-    pub async fn subscribe(&self, id: Uuid) -> Result<Receiver<MessageBatch>> {
-        debug!("subscribe source: {}", id);
-        match self.sources.write().await.get_mut(&id) {
-            Some(source) => match source.subscribe().await {
+    pub async fn subscribe(
+        &self,
+        source_id: Uuid,
+        item_id: Option<Uuid>,
+    ) -> Result<Receiver<MessageBatch>> {
+        match self.sources.write().await.get_mut(&source_id) {
+            Some(source) => match source.subscribe(item_id).await {
                 Ok(x) => return Ok(x),
                 Err(_) => todo!(),
             },
             None => {
-                error!("don't have source:{}", id);
                 bail!("not have source");
             }
         }
@@ -215,7 +212,13 @@ impl Source {
         }
     }
 
-    async fn subscribe(&self) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        todo!()
+    async fn subscribe(
+        &mut self,
+        item_id: Option<Uuid>,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self {
+            Source::Mqtt(mqtt) => mqtt.subscribe(item_id.unwrap()).await,
+            Source::Device(_) => todo!(),
+        }
     }
 }

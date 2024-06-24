@@ -1,7 +1,7 @@
 use anyhow::Result;
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
-use rumqttc::v5::mqttbytes::QoS;
+use rumqttc::v5::mqttbytes::{qos, QoS};
 use rumqttc::v5::{AsyncClient, ConnectionError, Event, Incoming, MqttOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,14 +24,15 @@ pub struct Mqtt {
     conf: Conf,
     client: Option<AsyncClient>,
     status: Status,
-    tx: Option<Sender<MessageBatch>>,
-    topics: HashMap<Uuid, Topic>,
+    topics: Vec<Topic>,
 }
 
 struct Topic {
     pub id: Uuid,
     pub topic: String,
     pub qos: u8,
+    pub tx: Option<broadcast::Sender<MessageBatch>>,
+    pub ref_cnt: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -50,8 +51,7 @@ impl Mqtt {
             name: req.name.clone(),
             conf,
             status: Status::Stopped,
-            tx: None,
-            topics: HashMap::new(),
+            topics: vec![],
         })
     }
 
@@ -63,23 +63,19 @@ impl Mqtt {
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
         self.client = Some(client);
 
-        let tx = match &self.tx {
-            Some(tx) => tx.clone(),
-            None => panic!("sendoer is none"),
-        };
-
         tokio::spawn(async move {
             loop {
                 match event_loop.poll().await {
                     Ok(Event::Incoming(Incoming::Publish(p))) => {
-                        debug!("{p:?}");
-                        match MessageBatch::from_json(&p.payload) {
-                            Ok(msg) => match tx.send(msg) {
-                                Err(e) => error!("send message err:{}", e),
-                                _ => {}
-                            },
-                            Err(e) => error!("Failed to decode msg:{}", e),
-                        }
+                        let topic = std::str::from_utf8(&p.topic).unwrap();
+                        debug!("{p:?},{topic:?}");
+                        // match MessageBatch::from_json(&p.payload) {
+                        //     Ok(msg) => match tx.send(msg) {
+                        //         Err(e) => error!("send message err:{}", e),
+                        //         _ => {}
+                        //     },
+                        //     Err(e) => error!("Failed to decode msg:{}", e),
+                        // }
                     }
                     Ok(_) => (),
                     Err(e) => {
@@ -97,20 +93,54 @@ impl Mqtt {
         });
     }
 
-    async fn subscribe(&mut self, id: Uuid) -> HaliaResult<Receiver<MessageBatch>> {
-        // let id to topic
-        match self.status {
-            Status::Running => match &self.tx {
-                Some(tx) => Ok(tx.subscribe()),
-                None => return Err(HaliaError::IoErr),
-            },
-            Status::Stopped => {
-                let (tx, rx) = broadcast::channel(10);
-                self.tx = Some(tx);
-                self.run().await;
-                Ok(rx)
-            }
+    pub async fn subscribe(&mut self, id: Uuid) -> HaliaResult<Receiver<MessageBatch>> {
+        if self.client.is_none() {
+            self.run().await;
         }
+
+        match self.topics.get(&id) {
+            Some(topic) => {
+                match self
+                    .client
+                    .as_ref()
+                    .unwrap()
+                    .subscribe(topic.topic.clone(), qos(topic.qos).unwrap())
+                    .await
+                {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("subscribe err")
+                    }
+                }
+
+                match self.txs.get(&id) {
+                    Some(tx) => match tx {
+                        Some(tx) => Ok(tx.subscribe()),
+                        None => {
+                            let (tx, rx) = broadcast::channel(10);
+                            self.txs.insert(id, Some(tx));
+                            Ok(rx)
+                        }
+                    },
+                    None => unreachable!(),
+                }
+            }
+            None => return Err(HaliaError::NotFound),
+        }
+
+        // let id to topic
+        // match self.status {
+        //     Status::Running => match &self.tx {
+        //         Some(tx) => Ok(tx.subscribe()),
+        //         None => return Err(HaliaError::IoErr),
+        //     },
+        //     Status::Stopped => {
+        //         let (tx, rx) = broadcast::channel(10);
+        //         self.tx = Some(tx);
+        //         self.run().await;
+        //         Ok(rx)
+        //     }
+        // }
     }
 
     pub fn get_info(&self) -> Result<ListSourceResp> {
@@ -139,19 +169,22 @@ impl Mqtt {
             Some(id) => id,
             None => Uuid::new_v4(),
         };
-
         let topic = Topic {
             id: topic_id.clone(),
             topic: req.topic.clone(),
             qos: req.qos,
+            tx: None,
+            ref_cnt: 0,
         };
-        self.topics.insert(topic_id, topic);
+        self.topics.push(topic);
 
         // TODO
         match &self.client {
             Some(client) => {
                 let qos = match req.qos {
                     0 => QoS::AtMostOnce,
+                    1 => QoS::AtLeastOnce,
+                    2 => QoS::ExactlyOnce,
                     _ => unreachable!(),
                 };
                 match client.subscribe(req.topic, qos).await {
@@ -163,7 +196,7 @@ impl Mqtt {
                     }
                 }
             }
-            None => todo!(),
+            None => return Err(HaliaError::NotFound),
         }
         Ok(())
     }
