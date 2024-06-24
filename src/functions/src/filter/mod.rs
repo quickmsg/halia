@@ -3,8 +3,8 @@ use ct::Ct;
 use eq::Eq;
 use gt::Gt;
 use gte::Gte;
-use lt::Lt;
-use lte::Lte;
+// use lt::Lt;
+// use lte::Lte;
 use message::Message;
 use neq::Neq;
 use reg::Reg;
@@ -17,8 +17,8 @@ pub mod ct;
 pub mod eq;
 pub mod gt;
 pub mod gte;
-pub mod lt;
-pub mod lte;
+// pub mod lt;
+// pub mod lte;
 pub mod neq;
 pub mod reg;
 
@@ -50,14 +50,14 @@ impl Node {
                     let gte = Gte::new(conf.conf)?;
                     filters.push(Box::new(gte));
                 }
-                "lt" => {
-                    let lt = Lt::new(conf.conf)?;
-                    filters.push(Box::new(lt));
-                }
-                "lte" => {
-                    let lte = Lte::new(conf.conf)?;
-                    filters.push(Box::new(lte));
-                }
+                // "lt" => {
+                //     let lt = Lt::new(conf.conf)?;
+                //     filters.push(Box::new(lt));
+                // }
+                // "lte" => {
+                //     let lte = Lte::new(conf.conf)?;
+                //     filters.push(Box::new(lte));
+                // }
                 "eq" => {
                     let eq = Eq::new(conf.conf)?;
                     filters.push(Box::new(eq));
