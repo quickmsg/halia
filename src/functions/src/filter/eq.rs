@@ -1,12 +1,12 @@
 use anyhow::{bail, Result};
-use message::Message;
+use message::{value::MessageValue, Message};
 use serde::{Deserialize, Serialize};
 
 use super::Filter;
 
 pub struct Eq {
     field: String,
-    value: Value,
+    value: TargetValue,
 }
 
 impl Eq {
@@ -15,29 +15,29 @@ impl Eq {
         let value = match conf.value {
             serde_json::Value::Number(number) => {
                 if let Some(int) = number.as_i64() {
-                    Value::Int(int)
+                    TargetValue::Int(int)
                 } else if let Some(float) = number.as_f64() {
-                    Value::Float(float)
+                    TargetValue::Float(float)
                 } else {
                     bail!("parse value failed")
                 }
             }
             serde_json::Value::String(string) => {
                 if string.starts_with("'") && string.ends_with("'") && string.len() >= 3 {
-                    Value::String(
+                    TargetValue::String(
                         string
                             .trim_start_matches("'")
                             .trim_end_matches("'")
                             .to_string(),
                     )
                 } else {
-                    Value::Field(string)
+                    TargetValue::Field(string)
                 }
             }
-            serde_json::Value::Null => Value::Null,
-            serde_json::Value::Bool(bool) => Value::Boolean(bool),
-            serde_json::Value::Array(array) => Value::Array(array),
-            serde_json::Value::Object(obj) => Value::Object(obj),
+            serde_json::Value::Null => TargetValue::Null,
+            serde_json::Value::Bool(bool) => TargetValue::Boolean(bool),
+            serde_json::Value::Array(array) => TargetValue::Array(array),
+            serde_json::Value::Object(obj) => TargetValue::Object(obj),
         };
         Ok(Self {
             field: conf.field,
@@ -52,7 +52,7 @@ struct Conf {
     value: serde_json::Value,
 }
 
-enum Value {
+enum TargetValue {
     Int(i64),
     Float(f64),
     Boolean(bool),
@@ -67,140 +67,140 @@ impl Filter for Eq {
     fn filter(&self, msg: &Message) -> bool {
         match msg.get(&self.field) {
             Some(value) => match value {
-                message::value::Value::Int8(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs == *rhs as i8,
-                    Value::Float(rhs) => *lhs == *rhs as i8,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::Int8(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => *lhs == *rhs as i8,
+                    TargetValue::Float(rhs) => *lhs == *rhs as i8,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => lhs == rhs,
-                            json::Value::Int16(rhs) => *lhs == *rhs as i8,
-                            json::Value::Int32(rhs) => *lhs == *rhs as i8,
-                            json::Value::Int64(rhs) => *lhs == *rhs as i8,
-                            json::Value::Uint8(rhs) => *lhs == *rhs as i8,
-                            json::Value::Uint16(rhs) => *lhs == *rhs as i8,
-                            json::Value::Uint32(rhs) => *lhs == *rhs as i8,
-                            json::Value::Uint64(rhs) => *lhs == *rhs as i8,
-                            json::Value::Float32(rhs) => *lhs == *rhs as i8,
-                            json::Value::Float64(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Int8(rhs) => lhs == rhs,
+                            MessageValue::Int16(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Int32(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Int64(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Uint8(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Uint16(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Uint32(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Uint64(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Float32(rhs) => *lhs == *rhs as i8,
+                            MessageValue::Float64(rhs) => *lhs == *rhs as i8,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Int16(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs == *rhs as i16,
-                    Value::Float(rhs) => *lhs == *rhs as i16,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::Int16(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => *lhs == *rhs as i16,
+                    TargetValue::Float(rhs) => *lhs == *rhs as i16,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs == *rhs as i16,
-                            json::Value::Int16(rhs) => lhs == rhs,
-                            json::Value::Int32(rhs) => *lhs == *rhs as i16,
-                            json::Value::Int64(rhs) => *lhs == *rhs as i16,
-                            json::Value::Uint8(rhs) => *lhs == *rhs as i16,
-                            json::Value::Uint16(rhs) => *lhs == *rhs as i16,
-                            json::Value::Uint32(rhs) => *lhs == *rhs as i16,
-                            json::Value::Uint64(rhs) => *lhs == *rhs as i16,
-                            json::Value::Float32(rhs) => *lhs == *rhs as i16,
-                            json::Value::Float64(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Int8(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Int16(rhs) => lhs == rhs,
+                            MessageValue::Int32(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Int64(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Uint8(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Uint16(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Uint32(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Uint64(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Float32(rhs) => *lhs == *rhs as i16,
+                            MessageValue::Float64(rhs) => *lhs == *rhs as i16,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Int32(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs == *rhs as i32,
-                    Value::Float(rhs) => *lhs == *rhs as i32,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::Int32(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => *lhs == *rhs as i32,
+                    TargetValue::Float(rhs) => *lhs == *rhs as i32,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs == *rhs as i32,
-                            json::Value::Int16(rhs) => *lhs == *rhs as i32,
-                            json::Value::Int32(rhs) => lhs == rhs,
-                            json::Value::Int64(rhs) => *lhs == *rhs as i32,
-                            json::Value::Uint8(rhs) => *lhs == *rhs as i32,
-                            json::Value::Uint16(rhs) => *lhs == *rhs as i32,
-                            json::Value::Uint32(rhs) => *lhs == *rhs as i32,
-                            json::Value::Uint64(rhs) => *lhs == *rhs as i32,
-                            json::Value::Float32(rhs) => *lhs == *rhs as i32,
-                            json::Value::Float64(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Int8(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Int16(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Int32(rhs) => lhs == rhs,
+                            MessageValue::Int64(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Uint8(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Uint16(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Uint32(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Uint64(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Float32(rhs) => *lhs == *rhs as i32,
+                            MessageValue::Float64(rhs) => *lhs == *rhs as i32,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Int64(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs == *rhs as i64,
-                    Value::Float(rhs) => *lhs == *rhs as i64,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::Int64(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => *lhs == *rhs as i64,
+                    TargetValue::Float(rhs) => *lhs == *rhs as i64,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs == *rhs as i64,
-                            json::Value::Int16(rhs) => *lhs == *rhs as i64,
-                            json::Value::Int32(rhs) => *lhs == *rhs as i64,
-                            json::Value::Int64(rhs) => lhs == rhs,
-                            json::Value::Uint8(rhs) => *lhs == *rhs as i64,
-                            json::Value::Uint16(rhs) => *lhs == *rhs as i64,
-                            json::Value::Uint32(rhs) => *lhs == *rhs as i64,
-                            json::Value::Uint64(rhs) => *lhs == *rhs as i64,
-                            json::Value::Float32(rhs) => *lhs == *rhs as i64,
-                            json::Value::Float64(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Int8(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Int16(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Int32(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Int64(rhs) => lhs == rhs,
+                            MessageValue::Uint8(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Uint16(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Uint32(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Uint64(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Float32(rhs) => *lhs == *rhs as i64,
+                            MessageValue::Float64(rhs) => *lhs == *rhs as i64,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Uint8(lhs) => match &self.value {
-                    Value::Int(rhs) => {
+                MessageValue::Uint8(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => {
                         if *rhs < 0 {
                             return false;
                         }
                         *lhs == *rhs as u8
                     }
-                    Value::Float(rhs) => {
+                    TargetValue::Float(rhs) => {
                         if *rhs < 0.0 {
                             return false;
                         }
                         *lhs as f64 == *rhs
                     }
-                    Value::Field(field) => match msg.get(&field) {
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => {
+                            MessageValue::Int8(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u8
                             }
-                            json::Value::Int16(rhs) => {
+                            MessageValue::Int16(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u8
                             }
-                            json::Value::Int32(rhs) => {
+                            MessageValue::Int32(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u8
                             }
-                            json::Value::Int64(rhs) => {
+                            MessageValue::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u8
                             }
-                            json::Value::Uint8(rhs) => *lhs == *rhs as u8,
-                            json::Value::Uint16(rhs) => *lhs == *rhs as u8,
-                            json::Value::Uint32(rhs) => *lhs == *rhs as u8,
-                            json::Value::Uint64(rhs) => *lhs == *rhs as u8,
-                            json::Value::Float32(rhs) => {
+                            MessageValue::Uint8(rhs) => *lhs == *rhs as u8,
+                            MessageValue::Uint16(rhs) => *lhs == *rhs as u8,
+                            MessageValue::Uint32(rhs) => *lhs == *rhs as u8,
+                            MessageValue::Uint64(rhs) => *lhs == *rhs as u8,
+                            MessageValue::Float32(rhs) => {
                                 if *rhs < 0.0 {
                                     return false;
                                 }
                                 *lhs as f32 == *rhs
                             }
-                            json::Value::Float64(rhs) => {
+                            MessageValue::Float64(rhs) => {
                                 if *rhs < 0.0 {
                                     return false;
                                 }
@@ -212,108 +212,108 @@ impl Filter for Eq {
                     },
                     _ => false,
                 },
-                json::Value::Uint16(lhs) => match &self.value {
-                    Value::Int(rhs) => {
+                MessageValue::Uint16(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => {
                         if *rhs < 0 {
                             return false;
                         }
                         *lhs == *rhs as u16
                     }
-                    Value::Float(rhs) => {
+                    TargetValue::Float(rhs) => {
                         if *rhs < 0.0 {
                             return false;
                         }
                         *lhs as f64 == *rhs
                     }
-                    Value::Field(field) => match msg.get(&field) {
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => {
+                            MessageValue::Int8(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u16
                             }
-                            json::Value::Int16(rhs) => {
+                            MessageValue::Int16(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u16
                             }
-                            json::Value::Int32(rhs) => {
+                            MessageValue::Int32(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u16
                             }
-                            json::Value::Int64(rhs) => {
+                            MessageValue::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u16
                             }
-                            json::Value::Uint8(rhs) => *lhs == *rhs as u16,
-                            json::Value::Uint16(rhs) => lhs == rhs,
-                            json::Value::Uint32(rhs) => *lhs == *rhs as u16,
-                            json::Value::Uint64(rhs) => *lhs == *rhs as u16,
-                            json::Value::Float32(rhs) => *lhs == *rhs as u16,
-                            json::Value::Float64(rhs) => *lhs == *rhs as u16,
+                            MessageValue::Uint8(rhs) => *lhs == *rhs as u16,
+                            MessageValue::Uint16(rhs) => lhs == rhs,
+                            MessageValue::Uint32(rhs) => *lhs == *rhs as u16,
+                            MessageValue::Uint64(rhs) => *lhs == *rhs as u16,
+                            MessageValue::Float32(rhs) => *lhs == *rhs as u16,
+                            MessageValue::Float64(rhs) => *lhs == *rhs as u16,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Uint32(lhs) => match &self.value {
-                    Value::Int(rhs) => {
+                MessageValue::Uint32(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => {
                         if *rhs < 0 {
                             return false;
                         }
                         *lhs == *rhs as u32
                     }
-                    Value::Float(rhs) => {
+                    TargetValue::Float(rhs) => {
                         if *rhs < 0.0 {
                             return false;
                         }
                         *lhs as f64 == *rhs
                     }
-                    Value::Field(field) => match msg.get(&field) {
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => {
+                            MessageValue::Int8(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u32
                             }
-                            json::Value::Int16(rhs) => {
+                            MessageValue::Int16(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u32
                             }
-                            json::Value::Int32(rhs) => {
+                            MessageValue::Int32(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u32
                             }
-                            json::Value::Int64(rhs) => {
+                            MessageValue::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs == *rhs as u32
                             }
-                            json::Value::Uint8(rhs) => *lhs == *rhs as u32,
-                            json::Value::Uint16(rhs) => *lhs == *rhs as u32,
-                            json::Value::Uint32(rhs) => lhs == rhs,
-                            json::Value::Uint64(rhs) => *lhs == *rhs as u32,
-                            json::Value::Float32(rhs) => {
+                            MessageValue::Uint8(rhs) => *lhs == *rhs as u32,
+                            MessageValue::Uint16(rhs) => *lhs == *rhs as u32,
+                            MessageValue::Uint32(rhs) => lhs == rhs,
+                            MessageValue::Uint64(rhs) => *lhs == *rhs as u32,
+                            MessageValue::Float32(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
                                     return false;
                                 }
                                 *lhs as f32 == *rhs
                             }
-                            json::Value::Float64(rhs) => {
+                            MessageValue::Float64(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
                                     return false;
@@ -326,57 +326,57 @@ impl Filter for Eq {
                     },
                     _ => false,
                 },
-                json::Value::Uint64(lhs) => match &self.value {
-                    Value::Int(rhs) => {
+                MessageValue::Uint64(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => {
                         if *rhs < 0 {
                             return false;
                         }
                         *lhs > *rhs as u64
                     }
-                    Value::Float(rhs) => {
+                    TargetValue::Float(rhs) => {
                         if *rhs < 0.0 {
                             return false;
                         }
                         *lhs as f64 > *rhs
                     }
-                    Value::Field(field) => match msg.get(&field) {
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => {
+                            MessageValue::Int8(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs > *rhs as u64
                             }
-                            json::Value::Int16(rhs) => {
+                            MessageValue::Int16(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs > *rhs as u64
                             }
-                            json::Value::Int32(rhs) => {
+                            MessageValue::Int32(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs > *rhs as u64
                             }
-                            json::Value::Int64(rhs) => {
+                            MessageValue::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs > *rhs as u64
                             }
-                            json::Value::Uint8(rhs) => *lhs > *rhs as u64,
-                            json::Value::Uint16(rhs) => *lhs > *rhs as u64,
-                            json::Value::Uint32(rhs) => *lhs > *rhs as u64,
-                            json::Value::Uint64(rhs) => lhs > rhs,
-                            json::Value::Float32(rhs) => {
+                            MessageValue::Uint8(rhs) => *lhs > *rhs as u64,
+                            MessageValue::Uint16(rhs) => *lhs > *rhs as u64,
+                            MessageValue::Uint32(rhs) => *lhs > *rhs as u64,
+                            MessageValue::Uint64(rhs) => lhs > rhs,
+                            MessageValue::Float32(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
                                     return false;
                                 }
                                 *lhs as f32 > *rhs
                             }
-                            json::Value::Float64(rhs) => {
+                            MessageValue::Float64(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
                                     return false;
@@ -389,83 +389,83 @@ impl Filter for Eq {
                     },
                     _ => false,
                 },
-                json::Value::Float32(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs > *rhs as f32,
-                    Value::Float(rhs) => *lhs > *rhs as f32,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::Float32(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => *lhs > *rhs as f32,
+                    TargetValue::Float(rhs) => *lhs > *rhs as f32,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs > *rhs as f32,
-                            json::Value::Int16(rhs) => *lhs > *rhs as f32,
-                            json::Value::Int32(rhs) => *lhs > *rhs as f32,
-                            json::Value::Int64(rhs) => *lhs > *rhs as f32,
-                            json::Value::Uint8(rhs) => *lhs > *rhs as f32,
-                            json::Value::Uint16(rhs) => *lhs > *rhs as f32,
-                            json::Value::Uint32(rhs) => *lhs > *rhs as f32,
-                            json::Value::Uint64(rhs) => *lhs > *rhs as f32,
-                            json::Value::Float32(rhs) => lhs > rhs,
-                            json::Value::Float64(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Int8(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Int16(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Int32(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Int64(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Uint8(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Uint16(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Uint32(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Uint64(rhs) => *lhs > *rhs as f32,
+                            MessageValue::Float32(rhs) => lhs > rhs,
+                            MessageValue::Float64(rhs) => *lhs > *rhs as f32,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Float64(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs > *rhs as f64,
-                    Value::Float(rhs) => *lhs > *rhs,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::Float64(lhs) => match &self.value {
+                    TargetValue::Int(rhs) => *lhs > *rhs as f64,
+                    TargetValue::Float(rhs) => *lhs > *rhs,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs > *rhs as f64,
-                            json::Value::Int16(rhs) => *lhs > *rhs as f64,
-                            json::Value::Int32(rhs) => *lhs > *rhs as f64,
-                            json::Value::Int64(rhs) => *lhs > *rhs as f64,
-                            json::Value::Uint8(rhs) => *lhs > *rhs as f64,
-                            json::Value::Uint16(rhs) => *lhs > *rhs as f64,
-                            json::Value::Uint32(rhs) => *lhs > *rhs as f64,
-                            json::Value::Uint64(rhs) => *lhs > *rhs as f64,
-                            json::Value::Float32(rhs) => *lhs > *rhs as f64,
-                            json::Value::Float64(rhs) => lhs > rhs,
+                            MessageValue::Int8(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Int16(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Int32(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Int64(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Uint8(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Uint16(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Uint32(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Uint64(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Float32(rhs) => *lhs > *rhs as f64,
+                            MessageValue::Float64(rhs) => lhs > rhs,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::String(lhs) => match &self.value {
-                    Value::String(rhs) => lhs == rhs,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::String(lhs) => match &self.value {
+                    TargetValue::String(rhs) => lhs == rhs,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::String(rhs) => lhs == rhs,
+                            MessageValue::String(rhs) => lhs == rhs,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Null => match &self.value {
-                    Value::Null => true,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::Null => match &self.value {
+                    TargetValue::Null => true,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Null => true,
+                            MessageValue::Null => true,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Boolean(lhs) => match &self.value {
-                    Value::Boolean(rhs) => lhs == rhs,
-                    Value::Field(field) => match msg.get(&field) {
+                MessageValue::Boolean(lhs) => match &self.value {
+                    TargetValue::Boolean(rhs) => lhs == rhs,
+                    TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                            json::Value::Boolean(rhs) => lhs == rhs,
+                            MessageValue::Boolean(rhs) => lhs == rhs,
                             _ => false,
                         },
                         None => false,
                     },
                     _ => false,
                 },
-                json::Value::Array(lhs) => match &self.value {
-                    Value::Array(rhs) => {
+                MessageValue::Array(lhs) => match &self.value {
+                    TargetValue::Array(rhs) => {
                         if lhs.len() != rhs.len() {
                             return false;
                         }
@@ -474,11 +474,11 @@ impl Filter for Eq {
 
                         true
                     }
-                    Value::Field(_) => todo!(),
+                    TargetValue::Field(_) => todo!(),
                     _ => false,
                 },
-                json::Value::Object(_) => todo!(),
-                json::Value::Bytes(_) => todo!(),
+                MessageValue::Object(_) => todo!(),
+                MessageValue::Bytes(_) => todo!(),
             },
             None => false,
         }

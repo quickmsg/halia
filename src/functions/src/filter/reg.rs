@@ -30,14 +30,17 @@ impl Reg {
 
 impl Filter for Reg {
     fn filter(&self, message: &message::Message) -> bool {
-        match message.get_string(&self.field) {
-            Some(message_value) => {
-                if self.value.is_match(message_value) {
-                    true
-                } else {
-                    false
+        match message.get(&self.field) {
+            Some(value) => match value {
+                message::value::MessageValue::String(string) => {
+                    if self.value.is_match(string) {
+                        true
+                    } else {
+                        false
+                    }
                 }
-            }
+                _ => false,
+            },
             None => false,
         }
     }
