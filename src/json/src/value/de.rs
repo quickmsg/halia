@@ -221,7 +221,7 @@ impl<'de> serde::Deserializer<'de> for Value {
             Value::String(v) => visitor.visit_string(v),
             Value::Array(v) => visit_array(v, visitor),
             Value::Object(v) => visit_object(v, visitor),
-            Value::Int8(_) => todo!(),
+            Value::Int8(n) => visitor.visit_i8(n),
             Value::Int16(_) => todo!(),
             Value::Int32(_) => todo!(),
             Value::Int64(_) => todo!(),

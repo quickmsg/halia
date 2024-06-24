@@ -620,6 +620,8 @@ dependencies = [
  "indexmap",
  "json",
  "ryu",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 

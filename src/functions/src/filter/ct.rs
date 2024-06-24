@@ -67,46 +67,46 @@ impl Filter for Ct {
     fn filter(&self, msg: &Message) -> bool {
         match msg.get(&self.field) {
             Some(value) => match value {
-                json::Value::Array(values) => match &self.value {
+                message::value::Value::Array(values) => match &self.value {
                     Value::Int(rhs) => {
                         for item in values {
                             match item {
-                                json::Value::Int8(i8) => {
+                                message::value::Value::Int8(i8) => {
                                     if *i8 as i64 == *rhs {
                                         return true;
                                     }
                                 }
-                                json::Value::Int16(i16) => {
+                                message::value::Value::Int16(i16) => {
                                     if *i16 as i64 == *rhs {
                                         return true;
                                     }
                                 }
-                                json::Value::Int32(i32) => {
+                                message::value::Value::Int32(i32) => {
                                     if *i32 as i64 == *rhs {
                                         return true;
                                     }
                                 }
-                                json::Value::Int64(i64) => {
+                                message::value::Value::Int64(i64) => {
                                     if *i64 == *rhs {
                                         return true;
                                     }
                                 }
-                                json::Value::Uint8(u8) => {
+                                message::value::Value::Uint8(u8) => {
                                     if *u8 as i64 == *rhs {
                                         return true;
                                     }
                                 }
-                                json::Value::Uint16(u16) => {
+                                message::value::Value::Uint16(u16) => {
                                     if *u16 as i64 == *rhs {
                                         return true;
                                     }
                                 }
-                                json::Value::Uint32(u32) => {
+                                message::value::Value::Uint32(u32) => {
                                     if *u32 as i64 == *rhs {
                                         return true;
                                     }
                                 }
-                                json::Value::Uint64(u64) => {
+                                message::value::Value::Uint64(u64) => {
                                     // TODO
                                     if *u64 as i64 == *rhs {
                                         return true;
@@ -120,12 +120,12 @@ impl Filter for Ct {
                     Value::Float(rhs) => {
                         for item in values {
                             match item {
-                                json::Value::Float32(f32) => {
+                                message::value::Value::Float32(f32) => {
                                     if *f32 as f64 == *rhs {
                                         return true;
                                     }
                                 }
-                                json::Value::Float64(f64) => {
+                                message::value::Value::Float64(f64) => {
                                     if *f64 == *rhs {
                                         return true;
                                     }
@@ -138,7 +138,7 @@ impl Filter for Ct {
                     Value::Boolean(rhs) => {
                         for item in values {
                             match item {
-                                json::Value::Boolean(bool) => {
+                                message::value::Value::Boolean(bool) => {
                                     if *bool == *rhs {
                                         return true;
                                     }
@@ -151,7 +151,7 @@ impl Filter for Ct {
                     Value::String(rhs) => {
                         for item in values {
                             match item {
-                                json::Value::String(string) => {
+                                message::value::Value::String(string) => {
                                     if *string == *rhs {
                                         return true;
                                     }
@@ -165,7 +165,7 @@ impl Filter for Ct {
                     Value::Null => {
                         for item in values {
                             match item {
-                                json::Value::Null => return true,
+                                message::value::Value::Null => return true,
                                 _ => {}
                             }
                         }

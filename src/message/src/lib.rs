@@ -1,9 +1,11 @@
 use anyhow::Result;
 use bytes::Bytes;
 use indexmap::IndexMap;
-use json::{Map, Value};
-use tracing::debug;
 use std::collections::HashMap;
+use tracing::debug;
+use value::Value;
+
+pub mod value;
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
@@ -94,12 +96,11 @@ pub struct Message {
 
 impl Message {
     pub fn from_str(s: &str) -> Result<Self> {
-        let value: Value = json::from_str(s)?;
+        let value: Value = serde_json::from_str(s)?;
         Ok(Message { value })
     }
 
     pub fn from_json(b: &Bytes) -> Result<Self> {
-        debug!("{b:?}");
         let value: Value = json::from_slice(b)?;
         Ok(Message { value })
     }
@@ -114,29 +115,29 @@ impl Message {
 
     pub fn new() -> Self {
         Message {
-            value: Value::Object(Map::new()),
+            value: Value::Object(HashMap::new()),
         }
     }
 
     // TODO fix path
-    pub fn add(&mut self, name: &str, value: Value) {
-        match self.value.as_object_mut() {
-            Some(object) => object.insert(name.to_string(), value),
-            None => unreachable!(),
-        };
-    }
+    // pub fn add(&mut self, name: &str, value: Value) {
+    //     match self.value.as_object_mut() {
+    //         Some(object) => object.insert(name.to_string(), value),
+    //         None => unreachable!(),
+    //     };
+    // }
 
-    pub fn select(&mut self, fields: &Vec<String>) {
-        if let Some(object) = self.value.as_object_mut() {
-            object.retain(|key, _| fields.contains(key));
-        }
-    }
+    // pub fn select(&mut self, fields: &Vec<String>) {
+    //     if let Some(object) = self.value.as_object_mut() {
+    //         object.retain(|key, _| fields.contains(key));
+    //     }
+    // }
 
-    pub fn except(&mut self, fields: &Vec<String>) {
-        if let Some(object) = self.value.as_object_mut() {
-            object.retain(|key, _| !fields.contains(key));
-        }
-    }
+    // pub fn except(&mut self, fields: &Vec<String>) {
+    //     if let Some(object) = self.value.as_object_mut() {
+    //         object.retain(|key, _| !fields.contains(key));
+    //     }
+    // }
 
     // TODO
     pub fn remove(&self, fields: &Vec<String>) {
@@ -150,53 +151,43 @@ impl Message {
         }
     }
 
-    pub fn get_mut(&mut self, pointer: &str) -> Option<&mut Value> {
-        pointer
-            .split('.')
-            .try_fold(&mut self.value, |target, token| match target {
-                Value::Array(list) => parse_index(token).and_then(|x| list.get_mut(x)),
-                Value::Object(map) => map.get_mut(token),
-                _ => Some(target),
-            })
-    }
+    // pub fn get_bool(&self, name: &str) -> Option<bool> {
+    //     if let Some(value) = self.get(name) {
+    //         value.as_bool()
+    //     } else {
+    //         None
+    //     }
+    // }
 
-    pub fn get_bool(&self, name: &str) -> Option<bool> {
-        if let Some(value) = self.get(name) {
-            value.as_bool()
-        } else {
-            None
-        }
-    }
-
-    pub fn set(&mut self, name: &str, set_value: Value) {
-        let (prefix, name) = Self::get_prefix_and_name(name);
-        match prefix {
-            Some(prefix) => match self.get_mut(prefix) {
-                Some(value) => match value {
-                    Value::Array(_) => todo!(),
-                    Value::Object(object) => {
-                        if object.contains_key(name) {
-                            object[name] = set_value;
-                        } else {
-                            object.insert(name.to_string(), set_value);
-                        }
-                    }
-                    _ => {}
-                },
-                None => {}
-            },
-            None => match self.value.as_object_mut() {
-                Some(object) => {
-                    if object.contains_key(name) {
-                        object[name] = set_value;
-                    } else {
-                        object.insert(name.to_string(), set_value);
-                    }
-                }
-                None => {}
-            },
-        }
-    }
+    // pub fn set(&mut self, name: &str, set_value: Value) {
+    //     let (prefix, name) = Self::get_prefix_and_name(name);
+    //     match prefix {
+    //         Some(prefix) => match self.get_mut(prefix) {
+    //             Some(value) => match value {
+    //                 Value::Array(_) => todo!(),
+    //                 Value::Object(object) => {
+    //                     if object.contains_key(name) {
+    //                         object[name] = set_value;
+    //                     } else {
+    //                         object.insert(name.to_string(), set_value);
+    //                     }
+    //                 }
+    //                 _ => {}
+    //             },
+    //             None => {}
+    //         },
+    //         None => match self.value.as_object_mut() {
+    //             Some(object) => {
+    //                 if object.contains_key(name) {
+    //                     object[name] = set_value;
+    //                 } else {
+    //                     object.insert(name.to_string(), set_value);
+    //                 }
+    //             }
+    //             None => {}
+    //         },
+    //     }
+    // }
 
     // pub fn get_i64(&self, name: &str) -> Option<i64> {
     //     if let Some(value) = self.get(name) {
@@ -214,75 +205,59 @@ impl Message {
     //     }
     // }
 
-    pub fn get_string(&self, name: &str) -> Option<&str> {
-        if let Some(value) = self.get(name) {
-            value.as_str()
-        } else {
-            None
-        }
-    }
+    // pub fn get_string(&self, name: &str) -> Option<&str> {
+    //     if let Some(value) = self.get(name) {
+    //         value.as_str()
+    //     } else {
+    //         None
+    //     }
+    // }
 
-    pub fn get_array(&self, name: &str) -> Option<&Vec<Value>> {
-        if let Some(value) = self.get(name) {
-            value.as_array()
-        } else {
-            None
-        }
-    }
+    // pub fn get_array(&self, name: &str) -> Option<&Vec<Value>> {
+    //     if let Some(value) = self.get(name) {
+    //         value.as_array()
+    //     } else {
+    //         None
+    //     }
+    // }
 
-    pub fn get_array_mut(&mut self, name: &str) -> Option<&mut Vec<Value>> {
-        if let Some(value) = self.get_mut(name) {
-            value.as_array_mut()
-        } else {
-            None
-        }
-    }
+    // pub fn get_array_mut(&mut self, name: &str) -> Option<&mut Vec<Value>> {
+    //     if let Some(value) = self.get_mut(name) {
+    //         value.as_array_mut()
+    //     } else {
+    //         None
+    //     }
+    // }
 
-    pub fn as_object(&self) -> Option<&Map<String, Value>> {
-        self.value.as_object()
-    }
+    // pub fn as_object(&self) -> Option<&Map<String, Value>> {
+    //     self.value.as_object()
+    // }
 
-    pub fn merge(messages: &IndexMap<String, Self>) -> Message {
-        let mut result = Message::new();
-        for (_, message) in messages {
-            let map = message.as_object();
-            match map {
-                Some(map) => {
-                    for (key, value) in map {
-                        // TODO fix value clone
-                        result.add(key, value.clone());
-                    }
-                }
-                None => {}
-            }
-        }
+    // pub fn merge(messages: &IndexMap<String, Self>) -> Message {
+    //     let mut result = Message::new();
+    //     for (_, message) in messages {
+    //         let map = message.as_object();
+    //         match map {
+    //             Some(map) => {
+    //                 for (key, value) in map {
+    //                     // TODO fix value clone
+    //                     result.add(key, value.clone());
+    //                 }
+    //             }
+    //             None => {}
+    //         }
+    //     }
 
-        result
-    }
-
-    // a.b.c -> (a.b, c)
-    // a -> (None, a)
-    fn get_prefix_and_name(arg: &str) -> (Option<&str>, &str) {
-        match arg.rsplit_once(".") {
-            Some(args) => (Some(args.0), args.1),
-            None => (None, arg),
-        }
-    }
+    //     result
+    // }
 }
 
 impl Default for Message {
     fn default() -> Self {
         Self {
-            value: Value::Object(Map::new()),
+            value: Value::Object(HashMap::new()),
         }
     }
-}
-
-fn parse_index(s: &str) -> Option<usize> {
-    if s.starts_with('+') || (s.starts_with('0') && s.len() != 1) {
-        return None;
-    }
-    s.parse().ok()
 }
 
 // #[cfg(test)]

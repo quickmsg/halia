@@ -1,5 +1,4 @@
-#![feature(lazy_cell)]
-use anyhow::{bail, Result};
+use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
@@ -97,5 +96,5 @@ impl RuleManager {
 impl RuleManager {
     pub async fn recover(&self) -> Result<()> {
         Ok(())
-    } 
+    }
 }

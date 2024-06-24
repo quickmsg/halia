@@ -14,6 +14,7 @@ async fn main() -> Result<()> {
         .with_line_number(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
     GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
     GLOBAL_SOURCE_MANAGER.recover().await.unwrap();
     GLOBAL_SINK_MANAGER.recover().await.unwrap();
