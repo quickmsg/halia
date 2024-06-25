@@ -211,11 +211,14 @@ impl Group {
         interval: u64,
         rtt: &Arc<AtomicU16>,
     ) -> Result<()> {
-        let mut msg = Message::new();
+        let mut msg = Message::default();
         for (_, point) in self.points.write().await.iter_mut() {
             let now = Instant::now();
             match point.read(ctx).await {
-                Ok(data) => msg.add(&point.name, data),
+                Ok(data) =>  {
+                    point.value = data;
+                    msg.add(point.name.clone(), data);
+                }
                 Err(e) => bail!("连接断开"),
             }
             rtt.store(now.elapsed().as_millis() as u16, Ordering::SeqCst);
@@ -223,7 +226,9 @@ impl Group {
         }
 
         if let Some(tx) = &self.tx {
-            if let Err(e) = tx.send(MessageBatch::from_message(msg)) {
+            let mut mb = MessageBatch::default();
+            mb.push_message(msg);
+            if let Err(e) = tx.send(mb) {
                 debug!("unscribe :{}", e);
                 self.tx = None;
             }

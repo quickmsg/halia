@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 api = { workspace = true }
 device = { workspace = true }
-json = { workspace = true }
 source = { workspace = true }
 sink = { workspace = true }
 rule = { workspace = true }

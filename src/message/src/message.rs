@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
+#[derive(Clone, Debug)]
+pub struct Message {
+    value: MessageValue,
+}
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub enum MessageValue {
     Null,
     Boolean(bool),

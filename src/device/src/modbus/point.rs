@@ -1,12 +1,12 @@
 use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
-use json::Value;
-use message::value::MessageValue;
+use message::MessageValue;
 use protocol::modbus::{
     client::{Context, Reader, Writer},
     SlaveContext,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tracing::{debug, error, warn};
 use types::device::{
     datatype::{DataType, Endian},
@@ -20,7 +20,7 @@ pub(crate) struct Point {
     pub conf: Conf,
     pub name: String,
     pub quantity: u16,
-    pub value: MessageValue,
+    pub value: Value,
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
@@ -32,7 +32,6 @@ pub(crate) struct Conf {
     pub describe: Option<String>,
 }
 
-// 
 impl Point {
     pub fn new(req: CreatePointReq, id: Uuid) -> HaliaResult<Point> {
         let conf: Conf = serde_json::from_value(req.conf)?;
@@ -42,7 +41,7 @@ impl Point {
             conf,
             name: req.name,
             quantity,
-            value: MessageValue::Null,
+            value: Value::Null,
         })
     }
 

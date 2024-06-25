@@ -8,7 +8,6 @@ members = [
     "src/sink",
     "src/device",
     "src/common",
-    "src/json",
     "src/functions",
     "src/protocol",
     "src/rule",
@@ -27,7 +26,6 @@ source = { path = "src/source" }
 sink = { path = "src/sink" }
 device = { path = "src/device" }
 common = { path = "src/common" }
-json = { path = "src/json" }
 protocol = { path = "src/protocol" }
 functions = { path = "src/functions" }
 rule = { path = "src/rule" }

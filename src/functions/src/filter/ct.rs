@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use message::{value::MessageValue, Message};
+use message::{MessageValue, Message};
 use serde::{Deserialize, Serialize};
 
 use super::Filter;

@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use message::MessageValue;
 use regex::Regex;
 use serde::Deserialize;
 
@@ -32,7 +33,7 @@ impl Filter for Reg {
     fn filter(&self, message: &message::Message) -> bool {
         match message.get(&self.field) {
             Some(value) => match value {
-                message::value::MessageValue::String(string) => {
+                MessageValue::String(string) => {
                     if self.value.is_match(string) {
                         true
                     } else {

@@ -1,9 +1,0 @@
-[package]
-name = "json"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-serde = { workspace = true }
-ryu = { workspace = true }
-itoa = { workspace = true }

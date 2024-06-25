@@ -5,7 +5,6 @@ edition.workspace = true
 
 [dependencies]
 message = { workspace = true }
-json = { workspace = true }
 types = { workspace = true }
 
 anyhow = { workspace = true }

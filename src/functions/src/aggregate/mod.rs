@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use avg::Avg;
 use max::Max;
-use message::{value::MessageValue, Message, MessageBatch};
+use message::{Message, MessageBatch, MessageValue};
 use min::Min;
 use serde::Deserialize;
 use serde_json::Value;
@@ -51,18 +51,19 @@ impl Node {
 
 impl Operate for Node {
     fn operate(&self, message_batch: &mut MessageBatch) -> bool {
-        let mut message = Message::new();
+        let mut message = Message::default();
         for (index, rule) in self.rules.iter().enumerate() {
             let value = self.aggregaters[index].aggregate(&message_batch);
             debug!("value:{:?}", value);
             match &rule.name {
-                Some(name) => message.add(name, value),
-                None => message.add(&rule.field, value),
+                Some(name) => message.add(name.clone(), value),
+                None => message.add(rule.field.clone(), value),
             }
         }
         debug!("message is:{:?}", message);
-        message_batch.clear();
-        message_batch.push(message);
+        // message_batch.clear();
+        // message_batch.push(message);
+        todo!();
         true
     }
 }

@@ -1,4 +1,4 @@
-use message::{value::MessageValue, MessageBatch};
+use message::{MessageValue, MessageBatch};
 
 use super::Aggregater;
 

@@ -252,7 +252,6 @@ dependencies = [
  "dashmap",
  "futures",
  "futures-util",
- "json",
  "message",
  "protocol",
  "serde",
@@ -304,7 +303,6 @@ name = "functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "json",
  "message",
  "regex",
  "serde",
@@ -545,15 +543,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 
 [[package]]
-name = "json"
-version = "0.1.0"
-dependencies = [
- "itoa",
- "ryu",
- "serde",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -618,7 +607,6 @@ dependencies = [
  "anyhow",
  "bytes",
  "indexmap",
- "json",
  "ryu",
  "serde",
  "serde_json",
@@ -1095,7 +1083,6 @@ dependencies = [
  "anyhow",
  "api",
  "device",
- "json",
  "rule",
  "sink",
  "source",
@@ -1421,7 +1408,6 @@ name = "types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "json",
  "message",
  "serde",
  "serde_json",

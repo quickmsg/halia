@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::{bail, Result};
-use message::value::MessageValue;
+use message::MessageValue;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 

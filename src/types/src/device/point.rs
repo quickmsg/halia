@@ -1,4 +1,3 @@
-use message::value::MessageValue;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -25,5 +24,5 @@ pub struct SearchPointItemResp {
     pub id: Uuid,
     pub name: String,
     pub conf: Value,
-    pub value: MessageValue,
+    pub value: Value,
 }

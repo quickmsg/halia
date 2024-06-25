@@ -1,4 +1,4 @@
-use message::{value::MessageValue, MessageBatch};
+use message::{MessageBatch, MessageValue};
 
 use super::Aggregater;
 
@@ -67,7 +67,7 @@ impl Aggregater for Avg {
         }
 
         if count > 0 {
-           MessageValue::Float64(sum / count as f64)
+            MessageValue::Float64(sum / count as f64)
         } else {
             MessageValue::Float64(0.0)
         }
