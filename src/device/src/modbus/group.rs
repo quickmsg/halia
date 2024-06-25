@@ -215,8 +215,7 @@ impl Group {
         for (_, point) in self.points.write().await.iter_mut() {
             let now = Instant::now();
             match point.read(ctx).await {
-                Ok(data) =>  {
-                    point.value = data;
+                Ok(data) => {
                     msg.add(point.name.clone(), data);
                 }
                 Err(e) => bail!("连接断开"),

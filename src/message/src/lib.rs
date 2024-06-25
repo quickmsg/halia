@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 mod json;
-mod message;
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
@@ -12,6 +11,10 @@ pub struct MessageBatch {
 impl MessageBatch {
     pub fn get_name(&self) -> &String {
         return &self.name;
+    }
+
+    pub fn len(&self) -> usize {
+        self.messages.len()
     }
 
     pub fn get_messages(&self) -> &Vec<Message> {
@@ -43,7 +46,7 @@ pub struct Message {
 
 impl Message {
     pub fn get(&self, field: &String) -> Option<&MessageValue> {
-        return self.value.pointer(&field);
+        return self.value.get(&field);
     }
 
     pub fn add(&mut self, field: String, value: MessageValue) {
@@ -80,7 +83,7 @@ pub enum MessageValue {
 }
 
 impl MessageValue {
-    pub fn pointer(&self, pointer: &str) -> Option<&MessageValue> {
+    pub fn get(&self, pointer: &str) -> Option<&MessageValue> {
         if pointer.is_empty() {
             return Some(self);
         }

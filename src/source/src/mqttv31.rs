@@ -72,7 +72,7 @@ impl Mqtt {
                 match event_loop.poll().await {
                     Ok(Event::Incoming(Incoming::Publish(p))) => {
                         let topic_str = std::str::from_utf8(&p.topic).unwrap();
-                        match MessageBatch::from_json(&p.payload) {
+                        match MessageBatch::from_json(p.payload) {
                             Ok(msg) => {
                                 for topic in topics.write().await.iter_mut() {
                                     if matches(&topic.topic, topic_str) {

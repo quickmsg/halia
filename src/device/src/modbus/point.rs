@@ -63,7 +63,7 @@ impl Point {
                 Ok(res) => match res {
                     Ok(mut data) => {
                         let value = self.conf.r#type.decode(&mut data);
-                        self.value = value.clone();
+                        self.value = value.clone().into();
                         Ok(value)
                     }
                     Err(e) => {
@@ -77,7 +77,7 @@ impl Point {
                 Ok(res) => match res {
                     Ok(mut data) => {
                         let value = self.conf.r#type.decode(&mut data);
-                        self.value = value.clone();
+                        self.value = value.clone().into();
                         Ok(value)
                     }
                     Err(e) => {
@@ -94,7 +94,7 @@ impl Point {
                 Ok(res) => match res {
                     Ok(mut data) => {
                         let value = self.conf.r#type.decode(&mut data);
-                        self.value = value.clone();
+                        self.value = value.clone().into();
                         Ok(value)
                     }
                     Err(_) => todo!(),
