@@ -1,5 +1,5 @@
 use super::Aggregater;
-use message::{MessageValue, MessageBatch};
+use message::{MessageBatch, MessageValue};
 
 pub struct Max {
     field: String,
