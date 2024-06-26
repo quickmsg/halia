@@ -23,11 +23,20 @@ pub(crate) struct Point {
     pub value: Value,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum Area {
+    Coils,
+    DiscreteInput,
+    InputRegisters,
+    HoldingRegisters,
+}
+
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub(crate) struct Conf {
     pub r#type: DataType,
     pub slave: u8,
-    pub area: u8,
+    pub area: Area,
     pub address: u16,
     pub describe: Option<String>,
 }
@@ -56,7 +65,7 @@ impl Point {
     pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<MessageValue> {
         ctx.set_slave(self.conf.slave);
         match self.conf.area {
-            0 => match ctx
+            Area::DiscreteInput => match ctx
                 .read_discrete_inputs(self.conf.address, self.quantity)
                 .await
             {
@@ -73,7 +82,7 @@ impl Point {
                 },
                 Err(_) => todo!(),
             },
-            1 => match ctx.read_coils(self.conf.address, self.quantity).await {
+            Area::Coils => match ctx.read_coils(self.conf.address, self.quantity).await {
                 Ok(res) => match res {
                     Ok(mut data) => {
                         let value = self.conf.r#type.decode(&mut data);
@@ -87,7 +96,7 @@ impl Point {
                 },
                 Err(_) => todo!(),
             },
-            4 => match ctx
+            Area::InputRegisters => match ctx
                 .read_input_registers(self.conf.address, self.quantity)
                 .await
             {
@@ -101,7 +110,7 @@ impl Point {
                 },
                 Err(_) => todo!(),
             },
-            3 => match ctx
+            Area::HoldingRegisters => match ctx
                 .read_holding_registers(self.conf.address, self.quantity)
                 .await
             {
@@ -115,7 +124,7 @@ impl Point {
     pub async fn write(&mut self, ctx: &mut Context, value: serde_json::Value) -> Result<()> {
         ctx.set_slave(self.conf.slave);
         Ok(match self.conf.area {
-            0 => {
+            Area::DiscreteInput => {
                 if let Ok(data) = self.conf.r#type.encode(value) {
                     match data.len() {
                         1 => match ctx.write_single_coil(self.conf.address, data[0]).await {
@@ -141,7 +150,7 @@ impl Point {
                     }
                 }
             }
-            4 => {
+            Area::InputRegisters => {
                 if let Ok(data) = self.conf.r#type.encode(value) {
                     match data.len() {
                         1 => match self.conf.r#type {

@@ -1,5 +1,4 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use common::error::HaliaResult;
 use device::GLOBAL_DEVICE_MANAGER;
 use message::MessageBatch;

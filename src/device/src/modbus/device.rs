@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::{
     net::SocketAddr,
-    os::unix::raw::uid_t,
     sync::{
         atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
