@@ -1,5 +1,4 @@
 use anyhow::Result;
-use api::start;
 use device::GLOBAL_DEVICE_MANAGER;
 use rule::GLOBAL_RULE_MANAGER;
 use sink::GLOBAL_SINK_MANAGER;
@@ -20,7 +19,7 @@ async fn main() -> Result<()> {
     GLOBAL_SINK_MANAGER.recover().await.unwrap();
     GLOBAL_RULE_MANAGER.recover().await.unwrap();
 
-    start().await;
+    api::start().await;
     info!("server start");
     Ok(())
 }

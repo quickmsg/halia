@@ -10,6 +10,7 @@ pub enum HaliaError {
     IoErr,
     Existed,
     ConfErr,
+    Disconnect,
 }
 
 impl From<std::fmt::Error> for HaliaError {
@@ -39,6 +40,7 @@ impl Display for HaliaError {
             HaliaError::IoErr => write!(f, "IO错误"),
             HaliaError::Existed => write!(f, "已存在"),
             HaliaError::ConfErr => write!(f, "配置错误"),
+            HaliaError::Disconnect => write!(f, "连接断开"),
         }
     }
 }
@@ -52,6 +54,7 @@ impl HaliaError {
             HaliaError::IoErr => 4,
             HaliaError::Existed => 5,
             HaliaError::ConfErr => 6,
+            HaliaError::Disconnect => 7,
         }
     }
 }

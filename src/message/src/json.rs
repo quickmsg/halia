@@ -72,7 +72,7 @@ impl Into<serde_json::Value> for MessageValue {
             MessageValue::Float32(n) => serde_json::Value::from(n),
             MessageValue::Float64(n) => serde_json::Value::from(n),
             MessageValue::String(s) => serde_json::Value::from(s),
-            MessageValue::Bytes(_) => todo!(),
+            MessageValue::Bytes(bytes) => serde_json::Value::from(bytes),
             MessageValue::Array(arr) => {
                 serde_json::Value::Array(arr.into_iter().map(Self::into).collect())
             }

@@ -4,6 +4,7 @@ use anyhow::{bail, Result};
 use message::MessageValue;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub enum DataType {
@@ -44,8 +45,8 @@ impl<'de> Deserialize<'de> for DataType {
                 let data_type = match type_str {
                     "bool" => {
                         let pos = map
-                            .get("len")
-                            .ok_or_else(|| serde::de::Error::missing_field("len"))?;
+                            .get("pos")
+                            .ok_or_else(|| serde::de::Error::missing_field("pos"))?;
                         let pos = pos.as_i64().ok_or_else(|| {
                             serde::de::Error::invalid_type(
                                 serde::de::Unexpected::Other("not an array"),
@@ -217,15 +218,20 @@ impl DataType {
 
     pub fn decode(&self, data: &mut Vec<u8>) -> MessageValue {
         match self {
-            DataType::Bool(_) => {
-                if data.len() != 1 {
-                    MessageValue::Null
-                } else {
+            DataType::Bool(pos) => {
+                if data.len() == 1 {
                     if data[0] == 1 {
                         MessageValue::Boolean(true)
                     } else {
                         MessageValue::Boolean(false)
                     }
+                } else {
+                    let data = match data.as_slice() {
+                        [a, b] => [*a, *b],
+                        _ => return MessageValue::Null,
+                    };
+                    let data = u16::from_be_bytes(data);
+                    MessageValue::Boolean((data >> pos) & 1 != 0)
                 }
             }
             DataType::Int8(endian) => {
@@ -381,7 +387,7 @@ impl DataType {
                         }
                     }
                     match String::from_utf8(new_data) {
-                        Ok(string) => return MessageValue::String(string),
+                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
                         Err(_) => return MessageValue::Null,
                     }
                 }
@@ -442,8 +448,8 @@ impl DataType {
             DataType::Int16(endian) => match data.as_i64() {
                 Some(value) => {
                     let data = match endian {
-                        Endian::BigEndian => (value as i16).to_be_bytes().to_vec(),
-                        Endian::LittleEndian => (value as i16).to_le_bytes().to_vec(),
+                        Endian::BigEndian => (value as i16).to_le_bytes().to_vec(),
+                        Endian::LittleEndian => (value as i16).to_be_bytes().to_vec(),
                     };
                     return Ok(data.to_vec());
                 }
@@ -451,10 +457,10 @@ impl DataType {
             },
             DataType::Uint16(endian) => match data.as_i64() {
                 Some(value) => {
-                    let mut data = (value as u16).to_be_bytes();
-                    if *endian == Endian::LittleEndian {
-                        data.swap(0, 1);
-                    }
+                    let data = match endian {
+                        Endian::BigEndian => (value as u16).to_le_bytes().to_vec(),
+                        Endian::LittleEndian => (value as u16).to_be_bytes().to_vec(),
+                    };
                     return Ok(data.to_vec());
                 }
                 None => bail!("value is wrong"),
@@ -462,11 +468,11 @@ impl DataType {
             DataType::Int32(endian0, endian1) => match data.as_i64() {
                 Some(value) => {
                     let mut data = (value as i32).to_be_bytes();
-                    if *endian0 == Endian::LittleEndian {
+                    if *endian0 == Endian::BigEndian {
                         data.swap(0, 2);
                         data.swap(1, 3);
                     }
-                    if *endian1 == Endian::LittleEndian {
+                    if *endian1 == Endian::BigEndian {
                         data.swap(0, 1);
                         data.swap(2, 3)
                     }
@@ -477,11 +483,11 @@ impl DataType {
             DataType::Uint32(endian0, endian1) => match data.as_i64() {
                 Some(value) => {
                     let mut data = (value as u32).to_be_bytes();
-                    if *endian0 == Endian::LittleEndian {
+                    if *endian0 == Endian::BigEndian {
                         data.swap(0, 2);
                         data.swap(1, 3);
                     }
-                    if *endian1 == Endian::LittleEndian {
+                    if *endian1 == Endian::BigEndian {
                         data.swap(0, 1);
                         data.swap(2, 3)
                     }
@@ -492,13 +498,13 @@ impl DataType {
             DataType::Int64(endian0, endian1) => match data.as_i64() {
                 Some(value) => {
                     let mut data = (value as i64).to_be_bytes();
-                    if *endian0 == Endian::LittleEndian {
+                    if *endian0 == Endian::BigEndian {
                         data.swap(0, 6);
                         data.swap(1, 7);
                         data.swap(2, 4);
                         data.swap(3, 5);
                     }
-                    if *endian1 == Endian::LittleEndian {
+                    if *endian1 == Endian::BigEndian {
                         data.swap(0, 1);
                         data.swap(2, 3);
                         data.swap(4, 5);
@@ -512,13 +518,13 @@ impl DataType {
             DataType::Uint64(endian0, endian1) => match data.as_i64() {
                 Some(value) => {
                     let mut data = (value as u64).to_be_bytes();
-                    if *endian0 == Endian::LittleEndian {
+                    if *endian0 == Endian::BigEndian {
                         data.swap(0, 6);
                         data.swap(1, 7);
                         data.swap(2, 4);
                         data.swap(3, 5);
                     }
-                    if *endian1 == Endian::LittleEndian {
+                    if *endian1 == Endian::BigEndian {
                         data.swap(0, 1);
                         data.swap(2, 3);
                         data.swap(4, 5);
@@ -531,11 +537,11 @@ impl DataType {
             DataType::Float32(endian0, endian1) => match data.as_f64() {
                 Some(value) => {
                     let mut data = (value as f32).to_be_bytes();
-                    if *endian0 == Endian::LittleEndian {
+                    if *endian0 == Endian::BigEndian {
                         data.swap(0, 2);
                         data.swap(1, 3);
                     }
-                    if *endian1 == Endian::LittleEndian {
+                    if *endian1 == Endian::BigEndian {
                         data.swap(0, 1);
                         data.swap(2, 3)
                     }
@@ -546,13 +552,13 @@ impl DataType {
             DataType::Float64(endian0, endian1) => match data.as_f64() {
                 Some(value) => {
                     let mut data = (value as f32).to_be_bytes();
-                    if *endian0 == Endian::LittleEndian {
+                    if *endian0 == Endian::BigEndian {
                         data.swap(0, 6);
                         data.swap(1, 7);
                         data.swap(2, 4);
                         data.swap(3, 5);
                     }
-                    if *endian1 == Endian::LittleEndian {
+                    if *endian1 == Endian::BigEndian {
                         data.swap(0, 1);
                         data.swap(2, 3);
                         data.swap(4, 5);
@@ -568,15 +574,15 @@ impl DataType {
                     let data = value.as_bytes();
                     match (single, endian) {
                         (true, Endian::BigEndian) => {
-                            for i in 0..*len {
+                            for byte in data {
                                 new_data.push(0);
-                                new_data.push(data[i as usize]);
+                                new_data.push(*byte);
                             }
                             return Ok(new_data);
                         }
                         (true, Endian::LittleEndian) => {
-                            for i in 0..*len {
-                                new_data.push(data[i as usize]);
+                            for byte in data {
+                                new_data.push(*byte);
                                 new_data.push(0);
                             }
                             return Ok(new_data);
@@ -595,7 +601,27 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
-            DataType::Bytes(_) => todo!(),
+            DataType::Bytes(_) => match data {
+                Value::Array(arr) => {
+                    debug!("{arr:?}");
+                    if arr.len() % 2 != 0 {
+                        bail!("bytes 必须为偶数")
+                    }
+
+                    let mut new_data = vec![];
+                    for v in arr {
+                        match v {
+                            Value::Number(n) => match n.as_u64() {
+                                Some(v) => new_data.push(v as u8),
+                                None => bail!("not support"),
+                            },
+                            _ => bail!("not support"),
+                        }
+                    }
+                    Ok(new_data)
+                }
+                _ => bail!("not support"),
+            },
         }
     }
 

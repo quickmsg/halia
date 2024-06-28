@@ -26,10 +26,10 @@ pub(crate) struct Point {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum Area {
-    Coils,
-    DiscreteInput,
+    InputDiscrete,
+    Coils, // 可读写
     InputRegisters,
-    HoldingRegisters,
+    HoldingRegisters, // 可读写
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
@@ -65,7 +65,7 @@ impl Point {
     pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<MessageValue> {
         ctx.set_slave(self.conf.slave);
         match self.conf.area {
-            Area::DiscreteInput => match ctx
+            Area::InputDiscrete => match ctx
                 .read_discrete_inputs(self.conf.address, self.quantity)
                 .await
             {
@@ -80,7 +80,7 @@ impl Point {
                         Ok(MessageValue::Null)
                     }
                 },
-                Err(_) => todo!(),
+                Err(_) => Err(HaliaError::Disconnect),
             },
             Area::Coils => match ctx.read_coils(self.conf.address, self.quantity).await {
                 Ok(res) => match res {
@@ -94,7 +94,7 @@ impl Point {
                         Ok(MessageValue::Null)
                     }
                 },
-                Err(_) => todo!(),
+                Err(_) => Err(HaliaError::Disconnect),
             },
             Area::InputRegisters => match ctx
                 .read_input_registers(self.conf.address, self.quantity)
@@ -106,25 +106,31 @@ impl Point {
                         self.value = value.clone().into();
                         Ok(value)
                     }
-                    Err(_) => todo!(),
+                    Err(_) => Ok(MessageValue::Null),
                 },
-                Err(_) => todo!(),
+                Err(_) => Err(HaliaError::Disconnect),
             },
             Area::HoldingRegisters => match ctx
                 .read_holding_registers(self.conf.address, self.quantity)
                 .await
             {
-                Ok(_) => todo!(),
-                Err(_) => todo!(),
+                Ok(res) => match res {
+                    Ok(mut data) => {
+                        let value = self.conf.r#type.decode(&mut data);
+                        self.value = value.clone().into();
+                        Ok(value)
+                    }
+                    Err(_) => Ok(MessageValue::Null),
+                },
+                Err(_) => Err(HaliaError::Disconnect),
             },
-            _ => unreachable!(),
         }
     }
 
     pub async fn write(&mut self, ctx: &mut Context, value: serde_json::Value) -> Result<()> {
         ctx.set_slave(self.conf.slave);
         Ok(match self.conf.area {
-            Area::DiscreteInput => {
+            Area::Coils => {
                 if let Ok(data) = self.conf.r#type.encode(value) {
                     match data.len() {
                         1 => match ctx.write_single_coil(self.conf.address, data[0]).await {
@@ -150,14 +156,32 @@ impl Point {
                     }
                 }
             }
-            Area::InputRegisters => {
+            Area::HoldingRegisters => {
                 if let Ok(data) = self.conf.r#type.encode(value) {
+                    debug!("data is {data:?}");
                     match data.len() {
                         1 => match self.conf.r#type {
+                            DataType::Bool(pos) => {
+                                let and_mask = !(1 << pos);
+                                let or_mask = (data[0] as u16) << pos;
+                                match ctx
+                                    .masked_write_register(self.conf.address, and_mask, or_mask)
+                                    .await
+                                {
+                                    Ok(res) => match res {
+                                        Ok(_) => return Ok(()),
+                                        Err(_) => {
+                                            // todo log error
+                                            return Ok(());
+                                        }
+                                    },
+                                    Err(e) => bail!("{}", e),
+                                }
+                            }
                             DataType::Int8(endian) | DataType::Uint8(endian) => {
                                 let (and_mask, or_mask) = match endian {
-                                    Endian::BigEndian => (0x00FF, (data[0] as u16) << 8),
-                                    Endian::LittleEndian => (0xFF00, data[0] as u16),
+                                    Endian::LittleEndian => (0x00FF, (data[0] as u16) << 8),
+                                    Endian::BigEndian => (0xFF00, data[0] as u16),
                                 };
                                 match ctx
                                     .masked_write_register(self.conf.address, and_mask, or_mask)
@@ -173,9 +197,7 @@ impl Point {
                                     Err(e) => bail!("{}", e),
                                 }
                             }
-                            DataType::Bool(pos) => {
-                                todo!()
-                            }
+
                             _ => todo!(),
                         },
                         2 => match ctx.write_single_register(self.conf.address, &data).await {
@@ -188,7 +210,7 @@ impl Point {
                             },
                             Err(e) => bail!("{}", e),
                         },
-                        _ => match ctx.write_single_register(self.conf.address, &data).await {
+                        _ => match ctx.write_multiple_registers(self.conf.address, &data).await {
                             Ok(res) => match res {
                                 Ok(_) => return Ok(()),
                                 Err(e) => {
@@ -201,7 +223,7 @@ impl Point {
                     }
                 }
             }
-            _ => unreachable!(),
+            _ => bail!("点位不支持写"),
         })
     }
 }
