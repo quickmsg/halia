@@ -19,7 +19,7 @@ async fn main() -> Result<()> {
     GLOBAL_SINK_MANAGER.recover().await.unwrap();
     GLOBAL_RULE_MANAGER.recover().await.unwrap();
 
+    info!("server starting...");
     api::start().await;
-    info!("server start");
     Ok(())
 }

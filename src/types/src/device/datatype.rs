@@ -8,7 +8,7 @@ use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub enum DataType {
-    Bool(u8),
+    Bool(Option<u8>),
     Int8(Endian),
     Uint8(Endian),
     Int16(Endian),
@@ -20,7 +20,7 @@ pub enum DataType {
     Float32(Endian, Endian),
     Float64(Endian, Endian),
     String(u16, bool, Endian),
-    Bytes(u16),
+    Bytes(u16, bool, Endian),
 }
 
 impl<'de> Deserialize<'de> for DataType {
@@ -43,18 +43,18 @@ impl<'de> Deserialize<'de> for DataType {
                 })?;
 
                 let data_type = match type_str {
-                    "bool" => {
-                        let pos = map
-                            .get("pos")
-                            .ok_or_else(|| serde::de::Error::missing_field("pos"))?;
-                        let pos = pos.as_i64().ok_or_else(|| {
-                            serde::de::Error::invalid_type(
-                                serde::de::Unexpected::Other("not an array"),
-                                &"array",
-                            )
-                        })?;
-                        DataType::Bool(pos as u8)
-                    }
+                    "bool" => match map.get("pos") {
+                        Some(pos) => {
+                            let pos = pos.as_i64().ok_or_else(|| {
+                                serde::de::Error::invalid_type(
+                                    serde::de::Unexpected::Other("not an array"),
+                                    &"array",
+                                )
+                            })?;
+                            DataType::Bool(Some(pos as u8))
+                        }
+                        None => DataType::Bool(None),
+                    },
                     "int8" => {
                         let endian = extract_endian(&map, 1).unwrap();
                         DataType::Int8(endian[0])
@@ -129,7 +129,19 @@ impl<'de> Deserialize<'de> for DataType {
                                 &"array",
                             )
                         })?;
-                        DataType::Bytes(len as u16)
+
+                        let single = map
+                            .get("single")
+                            .ok_or_else(|| serde::de::Error::missing_field("single"))?;
+                        let single = single.as_bool().ok_or_else(|| {
+                            serde::de::Error::invalid_type(
+                                serde::de::Unexpected::Other("not an array"),
+                                &"array",
+                            )
+                        })?;
+                        let endian = extract_endian(&map, 1).unwrap();
+
+                        DataType::Bytes(len as u16, single, endian[0])
                     }
                     _ => {
                         return Err(serde::de::Error::unknown_variant(
@@ -158,7 +170,12 @@ impl Serialize for DataType {
         S: Serializer,
     {
         match self {
-            DataType::Bool(pos) => serde_json::json!({"type": "bool", "pos": pos}).serialize(serializer),
+            DataType::Bool(pos) => {
+                match pos {
+                    Some(pos) => serde_json::json!({"type": "bool", "pos": pos}).serialize(serializer),
+                    None => serde_json::json!({"type": "bool"}).serialize(serializer),
+                }
+            } 
             DataType::Int8(endian) => serde_json::json!({"type": "int8", "endian": [endian]}).serialize(serializer),
             DataType::Uint8(endian) =>  serde_json::json!({"type": "uint8", "endian": [endian]}).serialize(serializer),
             DataType::Int16(endian) => {
@@ -184,15 +201,15 @@ impl Serialize for DataType {
                     .serialize(serializer)
             }
             DataType::Float32(endian1, endian2) => {
-                serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
+                serde_json::json!({"type": "float32", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
             DataType::Float64(endian1, endian2) => {
-                serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
+                serde_json::json!({"type": "float64", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
-            DataType::Bytes(len) => {
-                serde_json::json!({"type": "bytes", "len": len}).serialize(serializer)
+            DataType::Bytes(len, single, endian) => {
+                serde_json::json!({"type": "bytes", "len": len, "single": single, "endian": [endian]}).serialize(serializer)
             }
             DataType::String(len, single, endian ) => {
                 serde_json::json!({"type": "string", "len": len, "single": single,  "endian": [endian]}).serialize(serializer)
@@ -212,20 +229,14 @@ impl DataType {
             DataType::Int32(_, _) | DataType::Uint32(_, _) | DataType::Float32(_, _) => 2,
             DataType::Int64(_, _) | DataType::Uint64(_, _) | DataType::Float64(_, _) => 4,
             DataType::String(len, _, _) => *len,
-            DataType::Bytes(len) => *len,
+            DataType::Bytes(len, _, _) => *len,
         }
     }
 
     pub fn decode(&self, data: &mut Vec<u8>) -> MessageValue {
         match self {
-            DataType::Bool(pos) => {
-                if data.len() == 1 {
-                    if data[0] == 1 {
-                        MessageValue::Boolean(true)
-                    } else {
-                        MessageValue::Boolean(false)
-                    }
-                } else {
+            DataType::Bool(pos) => match pos {
+                Some(pos) => {
                     let data = match data.as_slice() {
                         [a, b] => [*a, *b],
                         _ => return MessageValue::Null,
@@ -233,7 +244,14 @@ impl DataType {
                     let data = u16::from_be_bytes(data);
                     MessageValue::Boolean((data >> pos) & 1 != 0)
                 }
-            }
+                None => {
+                    if data[0] == 1 {
+                        MessageValue::Boolean(true)
+                    } else {
+                        MessageValue::Boolean(false)
+                    }
+                }
+            },
             DataType::Int8(endian) => {
                 let data = match data.as_slice() {
                     [a, b] => [*a, *b],
@@ -419,7 +437,8 @@ impl DataType {
                     Err(_) => return MessageValue::Null,
                 },
             },
-            DataType::Bytes(_) => MessageValue::Bytes(data.clone()),
+            // TODO
+            DataType::Bytes(_, _, _) => MessageValue::Bytes(data.clone()),
         }
     }
 
@@ -601,7 +620,8 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
-            DataType::Bytes(_) => match data {
+            // TODO
+            DataType::Bytes(_, _, _) => match data {
                 Value::Array(arr) => {
                     debug!("{arr:?}");
                     if arr.len() % 2 != 0 {
@@ -639,7 +659,7 @@ impl DataType {
             DataType::Float32(_, _) => "float32".to_string(),
             DataType::Float64(_, _) => "float64".to_string(),
             DataType::String(_, _, _) => "string".to_string(),
-            DataType::Bytes(_) => "bytes".to_string(),
+            DataType::Bytes(_, _, _) => "bytes".to_string(),
         }
     }
 }

@@ -162,20 +162,29 @@ impl Point {
                     match data.len() {
                         1 => match self.conf.r#type {
                             DataType::Bool(pos) => {
-                                let and_mask = !(1 << pos);
-                                let or_mask = (data[0] as u16) << pos;
-                                match ctx
-                                    .masked_write_register(self.conf.address, and_mask, or_mask)
-                                    .await
-                                {
-                                    Ok(res) => match res {
-                                        Ok(_) => return Ok(()),
-                                        Err(_) => {
-                                            // todo log error
-                                            return Ok(());
+                                match pos {
+                                    Some(pos) => {
+                                        let and_mask = !(1 << pos);
+                                        let or_mask = (data[0] as u16) << pos;
+                                        match ctx
+                                            .masked_write_register(
+                                                self.conf.address,
+                                                and_mask,
+                                                or_mask,
+                                            )
+                                            .await
+                                        {
+                                            Ok(res) => match res {
+                                                Ok(_) => return Ok(()),
+                                                Err(_) => {
+                                                    // todo log error
+                                                    return Ok(());
+                                                }
+                                            },
+                                            Err(e) => bail!("{}", e),
                                         }
-                                    },
-                                    Err(e) => bail!("{}", e),
+                                    }
+                                    None => bail!("must have pos"),
                                 }
                             }
                             DataType::Int8(endian) | DataType::Uint8(endian) => {
