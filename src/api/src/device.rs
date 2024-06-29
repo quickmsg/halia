@@ -1,12 +1,13 @@
 use axum::{
+    body::Bytes,
     extract::{Path, Query},
     Json,
 };
 use common::error::HaliaError;
 use device::GLOBAL_DEVICE_MANAGER;
-use tracing::{debug, trace};
+use tracing::debug;
 use types::device::{
-    device::{CreateDeviceReq, DeviceDetailResp, SearchDeviceResp, UpdateDeviceReq},
+    device::{DeviceDetailResp, SearchDeviceResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
@@ -14,9 +15,8 @@ use uuid::Uuid;
 
 use crate::{AppResp, DeleteIdsQuery, Pagination};
 
-pub(crate) async fn create_device(Json(req): Json<CreateDeviceReq>) -> AppResp<()> {
-    trace!("create_device:{:?}", req);
-    match GLOBAL_DEVICE_MANAGER.create_device(None, req).await {
+pub(crate) async fn create_device(body: Bytes) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.api_create_device(&body).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
@@ -51,11 +51,8 @@ pub(crate) async fn stop_device(Path(device_id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn update_device(
-    Path(device_id): Path<Uuid>,
-    Json(req): Json<UpdateDeviceReq>,
-) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER.update_device(device_id, req).await {
+pub(crate) async fn update_device(Path(device_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.update_device(device_id, &body).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }

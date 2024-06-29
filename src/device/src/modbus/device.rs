@@ -36,7 +36,7 @@ use crate::Device;
 
 use super::group::{self, Group};
 
-static TYPE: &str = "modbus";
+pub(crate) const TYPE: &str = "modbus";
 
 #[derive(Debug)]
 pub(crate) struct Modbus {
@@ -239,14 +239,6 @@ impl Device for Modbus {
         if self.on.load(Ordering::SeqCst) {
             let _ = self.signal_tx.as_ref().unwrap().send(Command::Update);
         }
-
-        let create_device_req = CreateDeviceReq {
-            r#type: TYPE.to_string(),
-            name: self.name.clone(),
-            conf: serde_json::to_value(update_conf).unwrap(),
-        };
-        persistence::device::update_conf(self.id, serde_json::to_string(&create_device_req)?)
-            .await?;
 
         Ok(())
     }

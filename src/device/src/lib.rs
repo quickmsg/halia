@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
@@ -18,7 +19,7 @@ use types::device::{
 };
 use uuid::Uuid;
 
-mod modbus;
+pub mod modbus;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
     devices: RwLock::new(HashMap::new()),
@@ -29,18 +30,29 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn create_device(
-        &self,
-        device_id: Option<Uuid>,
-        req: CreateDeviceReq,
-    ) -> HaliaResult<()> {
-        let (device_id, create) = match device_id {
-            Some(device_id) => (device_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+    pub async fn api_create_device(&self, body: &Bytes) -> HaliaResult<()> {
+        let req: CreateDeviceReq = serde_json::from_slice(body)?;
+        let device_id = Uuid::new_v4();
+        self.create_device(device_id.clone(), &req).await?;
+        unsafe {
+            persistence::device::insert(&device_id, body).await?;
+        }
+        Ok(())
+    }
 
+    pub async fn persistence_create_device(
+        &self,
+        device_id: Uuid,
+        data: String,
+    ) -> HaliaResult<()> {
+        let req: CreateDeviceReq = serde_json::from_str(&data)?;
+        self.create_device(device_id, &req).await?;
+        Ok(())
+    }
+
+    async fn create_device(&self, device_id: Uuid, req: &CreateDeviceReq) -> HaliaResult<()> {
         let device = match req.r#type.as_str() {
-            "modbus" => match Modbus::new(device_id, &req) {
+            modbus::device::TYPE => match Modbus::new(device_id, req) {
                 Ok(device) => device,
                 Err(e) => {
                     debug!("create device err:{}", e);
@@ -50,11 +62,6 @@ impl DeviceManager {
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
         self.devices.write().await.insert(device_id, device);
-
-        if create {
-            persistence::device::insert(device_id, serde_json::to_string(&req)?).await?;
-        }
-
         Ok(())
     }
 
@@ -65,14 +72,18 @@ impl DeviceManager {
         }
     }
 
-    pub async fn update_device(&self, device_id: Uuid, req: UpdateDeviceReq) -> HaliaResult<()> {
+    pub async fn update_device(&self, device_id: Uuid, data: &Bytes) -> HaliaResult<()> {
+        let req: UpdateDeviceReq = serde_json::from_slice(data)?;
         match self.devices.write().await.get_mut(&device_id) {
             Some(device) => {
                 device.update(&req).await?;
-                Ok(())
             }
-            None => Err(HaliaError::NotFound),
+            None => return Err(HaliaError::NotFound),
         }
+
+        // data json解析成功的情况下，必定可以转换为string，这是安全的
+        unsafe { persistence::device::update_conf(device_id, data) }.await?;
+        Ok(())
     }
 
     pub async fn start_device(&self, device_id: Uuid) -> HaliaResult<()> {
@@ -281,14 +292,7 @@ impl DeviceManager {
         match persistence::device::read().await {
             Ok(devices) => {
                 for (id, status, data) in devices {
-                    let req = match serde_json::from_str::<CreateDeviceReq>(data.as_str()) {
-                        Ok(req) => req,
-                        Err(e) => {
-                            error!("{}", e);
-                            return Err(e.into());
-                        }
-                    };
-                    if let Err(e) = self.create_device(Some(id), req).await {
+                    if let Err(e) = self.persistence_create_device(id, data).await {
                         error!("{}", e);
                         return Err(e.into());
                     }

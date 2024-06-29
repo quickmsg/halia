@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use bytes::Bytes;
 use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
@@ -24,9 +25,10 @@ pub async fn init() -> Result<(), io::Error> {
     super::create_dir(get_dir()).await
 }
 
-pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
-    let data = format!("{}{}{}", 0, DELIMITER, data);
-    super::insert(get_file(), &vec![(id, data)]).await?;
+pub async unsafe fn insert(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+    let data = format!("{}{}{}", 0, DELIMITER, std::str::from_utf8_unchecked(data));
+    // TODO remove clone
+    super::insert(get_file(), &vec![(id.clone(), data)]).await?;
     super::create_dir(get_dir().join(id.to_string())).await
 }
 
@@ -51,7 +53,7 @@ pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
     Ok(devices)
 }
 
-pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {
+pub async unsafe fn update_conf(id: Uuid, conf: &Bytes) -> Result<(), io::Error> {
     let path = get_file();
     let mut file = OpenOptions::new()
         .read(true)
@@ -71,7 +73,11 @@ pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {
         if fields[0].parse::<Uuid>().expect("数据文件损坏") == id {
             new_line = format!(
                 "{}{}{}{}{}",
-                fields[0], DELIMITER, fields[1], DELIMITER, data
+                fields[0],
+                DELIMITER,
+                fields[1],
+                DELIMITER,
+                std::str::from_utf8_unchecked(conf)
             );
             debug!("{}", new_line);
             *line = new_line.as_str();

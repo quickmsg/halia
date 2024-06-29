@@ -7,7 +7,7 @@ use protocol::modbus::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 use types::device::{
     datatype::{DataType, Endian},
     point::CreatePointReq,
