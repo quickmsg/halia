@@ -1,0 +1,120 @@
+use axum::{
+    body::Bytes,
+    extract::{Path, Query},
+};
+use connectors::GLOBAL_CONNECTOR_MANAGER;
+use types::connector::SearchConnectorResp;
+use uuid::Uuid;
+
+use crate::{AppResp, Pagination};
+
+pub(crate) async fn create_connector(body: Bytes) -> AppResp<()> {
+    match GLOBAL_CONNECTOR_MANAGER.api_create_connector(&body).await {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn search_connectors(
+    pagination: Query<Pagination>,
+) -> AppResp<SearchConnectorResp> {
+    AppResp::with_data(
+        GLOBAL_CONNECTOR_MANAGER
+            .search_connectors(pagination.p, pagination.s)
+            .await,
+    )
+}
+
+pub(crate) async fn update_connector(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_CONNECTOR_MANAGER
+        .update_connector(connector_id, &body)
+        .await
+    {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn delete_connector(Path(connector_id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_CONNECTOR_MANAGER
+        .delete_connector(connector_id)
+        .await
+    {
+        Ok(_) => todo!(),
+        Err(_) => todo!(),
+    }
+}
+
+pub(crate) async fn create_source(body: Bytes) -> AppResp<()> {
+    todo!()
+    // match GLOBAL_CONNECTOR_MANAGER.api_create_connector(&body).await {
+    //     Ok(()) => AppResp::new(),
+    //     Err(e) => e.into(),
+    // }
+}
+
+pub(crate) async fn search_sources(pagination: Query<Pagination>) -> AppResp<SearchConnectorResp> {
+    todo!()
+    // AppResp::with_data(
+    //     GLOBAL_CONNECTOR_MANAGER
+    //         .search_connectors(pagination.p, pagination.s)
+    //         .await,
+    // )
+}
+
+pub(crate) async fn update_source(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_CONNECTOR_MANAGER
+        .update_connector(connector_id, &body)
+        .await
+    {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn delete_source(Path(connector_id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_CONNECTOR_MANAGER
+        .delete_connector(connector_id)
+        .await
+    {
+        Ok(_) => todo!(),
+        Err(_) => todo!(),
+    }
+}
+
+pub(crate) async fn create_sink(body: Bytes) -> AppResp<()> {
+    todo!()
+    // match GLOBAL_CONNECTOR_MANAGER.api_create_connector(&body).await {
+    //     Ok(()) => AppResp::new(),
+    //     Err(e) => e.into(),
+    // }
+}
+
+pub(crate) async fn search_sinks(pagination: Query<Pagination>) -> AppResp<SearchConnectorResp> {
+    todo!()
+    // AppResp::with_data(
+    //     GLOBAL_CONNECTOR_MANAGER
+    //         .search_connectors(pagination.p, pagination.s)
+    //         .await,
+    // )
+}
+
+pub(crate) async fn update_sink(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_CONNECTOR_MANAGER
+        .update_connector(connector_id, &body)
+        .await
+    {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn delete_sink(Path(connector_id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_CONNECTOR_MANAGER
+        .delete_connector(connector_id)
+        .await
+    {
+        Ok(_) => todo!(),
+        Err(_) => todo!(),
+    }
+}

@@ -18,9 +18,10 @@ pub struct ConnectorManager {
     connectors: RwLock<Vec<Connector>>,
 }
 
-pub static GLOBAL_SOURCE_MANAGER: LazyLock<ConnectorManager> = LazyLock::new(|| ConnectorManager {
-    connectors: RwLock::new(vec![]),
-});
+pub static GLOBAL_CONNECTOR_MANAGER: LazyLock<ConnectorManager> =
+    LazyLock::new(|| ConnectorManager {
+        connectors: RwLock::new(vec![]),
+    });
 
 enum Connector {
     MqttV311(mqtt_v311_client::MqttV311),
@@ -79,7 +80,15 @@ impl ConnectorManager {
         }
     }
 
-    pub async fn search(&self, page: usize, size: usize) -> SearchConnectorResp {
+    pub async fn search_connectors(&self, page: usize, size: usize) -> SearchConnectorResp {
+        todo!()
+    }
+
+    pub async fn update_connector(&self, id: Uuid, body: &Bytes) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn delete_connector(&self, id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 

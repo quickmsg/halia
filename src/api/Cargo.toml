@@ -10,6 +10,7 @@ common = { workspace = true }
 source = { workspace = true }
 sink = { workspace = true }
 rule = { workspace = true }
+connectors = { workspace = true }
 
 axum = { version = "0.7.5", features = ["macros", "query"] }
 tracing = { workspace = true }
