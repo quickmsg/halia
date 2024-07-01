@@ -50,12 +50,10 @@ impl Display for Status {
     }
 }
 
-async fn insert(path: PathBuf, datas: &[(Uuid, String)]) -> Result<(), io::Error> {
+async fn insert(path: PathBuf, id: &Uuid, data: &String) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().append(true).open(path).await?;
-    for (id, data) in datas {
-        file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
-            .await?;
-    }
+    file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
+        .await?;
     file.flush().await
 }
 
@@ -92,7 +90,7 @@ async fn read(path: impl AsRef<Path>) -> Result<Vec<(Uuid, String)>, io::Error> 
     Ok(result)
 }
 
-async fn update(path: impl AsRef<Path>, id: Uuid, data: String) -> Result<(), io::Error> {
+async fn update(path: impl AsRef<Path>, id: &Uuid, data: &String) -> Result<(), io::Error> {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -105,7 +103,7 @@ async fn update(path: impl AsRef<Path>, id: Uuid, data: String) -> Result<(), io
     let mut lines: Vec<&str> = buf.split("\n").collect();
     for line in lines.iter_mut() {
         let split_pos = line.find(DELIMITER).expect("数据文件损坏");
-        if line[..split_pos].parse::<Uuid>().expect("文件") == id {
+        if line[..split_pos].parse::<Uuid>().expect("文件") == *id {
             *line = new_line.as_str();
         }
     }
@@ -120,14 +118,16 @@ async fn update(path: impl AsRef<Path>, id: Uuid, data: String) -> Result<(), io
     Ok(())
 }
 
-async fn delete(path: impl AsRef<Path>, ids: &Vec<Uuid>) -> Result<(), io::Error> {
+async fn delete(path: impl AsRef<Path>, id: &Uuid) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().read(true).open(&path).await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
     let mut lines: Vec<&str> = buf.split("\n").collect();
+
+    let id = id.to_string();
     lines.retain(|line| match line.find(DELIMITER) {
-        Some(pos) => !ids.contains(&line[..pos].parse::<Uuid>().expect("文件")),
+        Some(pos) => id == &line[..pos],
         None => false,
     });
 

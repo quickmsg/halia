@@ -152,7 +152,7 @@ impl DeviceManager {
         };
 
         self.devices.write().await.remove(&device_id);
-        persistence::device::delete(device_id).await?;
+        persistence::device::delete(&device_id).await?;
 
         Ok(())
     }
@@ -339,7 +339,7 @@ impl DeviceManager {
     }
 
     async fn recover_group(&self, device_id: Uuid) -> HaliaResult<()> {
-        let groups = match persistence::group::read(device_id).await {
+        let groups = match persistence::group::read(&device_id).await {
             Ok(groups) => groups,
             Err(e) => {
                 error!("read device:{} group from file err:{}", device_id, e);
@@ -375,7 +375,7 @@ impl DeviceManager {
     }
 
     async fn recover_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        let points = match persistence::point::read(device_id, group_id).await {
+        let points = match persistence::point::read(&device_id, &group_id).await {
             Ok(points) => points,
             Err(e) => {
                 error!(

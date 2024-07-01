@@ -24,9 +24,9 @@ pub async fn init() -> Result<(), io::Error> {
     super::create_dir(get_dir()).await
 }
 
-pub async fn insert(id: Uuid, data: String) -> Result<(), io::Error> {
-    let data = format!("{}{}{}", 0, DELIMITER, data);
-    super::insert(Path::new(ROOT_DIR).to_path_buf(), &vec![(id, data)]).await
+pub async fn insert(id: &Uuid, data: &String) -> Result<(), io::Error> {
+    let data = format!("{}{}{}", Status::Stopped, DELIMITER, data);
+    super::insert(Path::new(ROOT_DIR).to_path_buf(), id, &data).await
 }
 
 pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
@@ -126,7 +126,7 @@ pub async fn update_status(id: Uuid, data: String) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub async fn delete(id: Uuid) -> Result<(), io::Error> {
-    super::delete(Path::new(ROOT_DIR).join(DATA_FILE), &vec![id]).await?;
+pub async fn delete(id: &Uuid) -> Result<(), io::Error> {
+    super::delete(Path::new(ROOT_DIR).join(DATA_FILE), id).await?;
     fs::remove_dir_all(Path::new(ROOT_DIR).join(id.to_string())).await
 }

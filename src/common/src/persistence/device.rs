@@ -27,8 +27,7 @@ pub async fn init() -> Result<(), io::Error> {
 
 pub async unsafe fn insert(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
     let data = format!("{}{}{}", 0, DELIMITER, std::str::from_utf8_unchecked(data));
-    // TODO remove clone
-    super::insert(get_file(), &vec![(id.clone(), data)]).await?;
+    super::insert(get_file(), id, &data).await?;
     super::create_dir(get_dir().join(id.to_string())).await
 }
 
@@ -136,7 +135,7 @@ pub async fn update_status(id: Uuid, status: Status) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub async fn delete(id: Uuid) -> Result<(), io::Error> {
-    super::delete(get_file(), &vec![id]).await?;
+pub async fn delete(id: &Uuid) -> Result<(), io::Error> {
+    super::delete(get_file(), id).await?;
     fs::remove_dir_all(get_dir().join(id.to_string())).await
 }

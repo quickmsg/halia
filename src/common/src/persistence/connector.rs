@@ -25,8 +25,8 @@ pub async fn init() -> Result<(), io::Error> {
     super::create_dir(get_dir()).await
 }
 
-pub async unsafe fn insert(id: &Uuid, data: &String) -> Result<(), io::Error> {
-    super::insert(get_file(), &vec![(id.clone(), data.clone())]).await?;
+pub async fn insert(id: &Uuid, data: &String) -> Result<(), io::Error> {
+    super::insert(get_file(), id, data).await?;
     super::create_dir(get_dir().join(id.to_string())).await
 }
 
@@ -34,7 +34,7 @@ pub async fn read() -> Result<Vec<(Uuid, String)>, io::Error> {
     super::read(get_file()).await
 }
 
-pub async unsafe fn update_conf(id: Uuid, conf: &Bytes) -> Result<(), io::Error> {
+pub async unsafe fn update(id: &Uuid, conf: &Bytes) -> Result<(), io::Error> {
     let path = get_file();
     let mut file = OpenOptions::new()
         .read(true)
@@ -51,7 +51,7 @@ pub async unsafe fn update_conf(id: Uuid, conf: &Bytes) -> Result<(), io::Error>
         if fields.len() != 3 {
             panic!("数据文件损坏");
         }
-        if fields[0].parse::<Uuid>().expect("数据文件损坏") == id {
+        if fields[0].parse::<Uuid>().expect("数据文件损坏") == *id {
             new_line = format!(
                 "{}{}{}{}{}",
                 fields[0],
@@ -76,7 +76,7 @@ pub async unsafe fn update_conf(id: Uuid, conf: &Bytes) -> Result<(), io::Error>
     Ok(())
 }
 
-pub async fn delete(id: Uuid) -> Result<(), io::Error> {
-    super::delete(get_file(), &vec![id]).await?;
+pub async fn delete(id: &Uuid) -> Result<(), io::Error> {
+    super::delete(get_file(), id).await?;
     fs::remove_dir_all(get_dir().join(id.to_string())).await
 }

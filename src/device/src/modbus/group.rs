@@ -147,10 +147,10 @@ impl Group {
         self.points.write().await.insert(point_id, point);
         if create {
             if let Err(e) = persistence::point::insert(
-                self.device_id,
-                self.id,
-                point_id,
-                serde_json::to_string(&req)?,
+                &self.device_id,
+                &self.id,
+                &point_id,
+                &serde_json::to_string(&req)?,
             )
             .await
             {
@@ -188,10 +188,10 @@ impl Group {
         };
 
         persistence::point::update(
-            self.device_id,
-            self.id,
-            point_id,
-            serde_json::to_string(req)?,
+            &self.device_id,
+            &self.id,
+            &point_id,
+            &serde_json::to_string(req)?,
         )
         .await?;
 
@@ -204,7 +204,9 @@ impl Group {
 
     pub async fn delete_points(&self, ids: Vec<Uuid>) -> HaliaResult<()> {
         self.points.write().await.retain(|id, _| !ids.contains(id));
-        persistence::point::delete(self.device_id, self.id, &ids).await?;
+        for id in ids {
+            persistence::point::delete(&self.device_id, &self.id, &id).await?;
+        }
         Ok(())
     }
 

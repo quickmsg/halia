@@ -16,5 +16,7 @@ pub struct SearchConnectorResp {
 
 #[derive(Serialize)]
 pub struct SearchConnectorItemResp {
-
+    pub r#type: &'static str,
+    pub name: String,
+    pub conf: Value,
 }

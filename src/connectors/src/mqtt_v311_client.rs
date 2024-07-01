@@ -7,17 +7,15 @@ use rumqttc::{AsyncClient, Event, Incoming, MqttOptions};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::error;
-use types::connector::CreateConnectorReq;
+use types::connector::{CreateConnectorReq, SearchConnectorItemResp};
 use uuid::Uuid;
 
 use crate::Connector;
 
-mod sink;
-mod source;
-
 pub(crate) const TYPE: &str = "mqtt_v3.1.1";
 
 pub(crate) struct MqttV311 {
+    name: String,
     pub id: Uuid,
     conf: Conf,
     status: bool,
@@ -55,10 +53,11 @@ struct PasswordConf {
     password: String,
 }
 
-pub fn new(id: Uuid, req: &CreateConnectorReq) -> Result<Box<dyn Connector>> {
+pub fn new(id: Uuid, req: CreateConnectorReq) -> Result<Box<dyn Connector>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
     Ok(Box::new(MqttV311 {
-        id: Uuid::new_v4(),
+        id,
+        name: req.name,
         conf,
         source_topics: Arc::new(RwLock::new(vec![])),
         sink_topics: vec![],
@@ -155,6 +154,14 @@ impl MqttV311 {
 impl Connector for MqttV311 {
     fn get_id(&self) -> Uuid {
         todo!()
+    }
+
+    fn get_info(&self) -> SearchConnectorItemResp {
+        SearchConnectorItemResp {
+            r#type: TYPE,
+            name: self.name.clone(),
+            conf: serde_json::to_value(&self.conf).unwrap(),
+        }
     }
 
     async fn subscribe(

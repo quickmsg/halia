@@ -31,7 +31,7 @@ impl RuleManager {
         let rule = Rule::create(id, &req).await.unwrap();
         if persistence {
             if let Err(e) =
-                persistence::rule::insert(id, serde_json::to_string(&req).unwrap()).await
+                persistence::rule::insert(&id, &serde_json::to_string(&req).unwrap()).await
             {
                 error!("write rule to file err: {}", e);
             }

@@ -278,7 +278,7 @@ impl Device for Modbus {
 
         if create {
             if let Err(e) =
-                persistence::group::insert(self.id, group_id, serde_json::to_string(&req)?).await
+                persistence::group::insert(&self.id, &group_id, &serde_json::to_string(&req)?).await
             {
                 error!("wirte group to file err:{}", e);
             }
@@ -308,7 +308,7 @@ impl Device for Modbus {
             .await
             .retain(|group| group_id != group.id);
 
-        persistence::group::delete(self.id, group_id).await?;
+        persistence::group::delete(&self.id, &group_id).await?;
         match self
             .group_signal_tx
             .as_ref()
@@ -429,7 +429,7 @@ impl Device for Modbus {
             None => return Err(HaliaError::NotFound),
         };
 
-        persistence::group::update(self.id, group_id, serde_json::to_string(&req)?).await?;
+        persistence::group::update(&self.id, &group_id, &serde_json::to_string(&req)?).await?;
 
         Ok(())
     }

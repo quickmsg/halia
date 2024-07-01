@@ -9,7 +9,7 @@ use message::MessageBatch;
 use std::{sync::LazyLock, vec};
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error};
-use types::connector::{CreateConnectorReq, SearchConnectorResp};
+use types::connector::{CreateConnectorReq, SearchConnectorItemResp, SearchConnectorResp};
 use uuid::Uuid;
 
 mod mqtt_v311_client;
@@ -28,6 +28,8 @@ pub static GLOBAL_CONNECTOR_MANAGER: LazyLock<ConnectorManager> =
 pub trait Connector: Sync + Send {
     fn get_id(&self) -> Uuid;
 
+    fn get_info(&self) -> SearchConnectorItemResp;
+
     async fn subscribe(
         &mut self,
         item_id: Option<Uuid>,
@@ -38,8 +40,7 @@ impl ConnectorManager {
     pub async fn api_create_connector(&self, body: &Bytes) -> HaliaResult<()> {
         let req: CreateConnectorReq = serde_json::from_slice(body)?;
         let connector_id = Uuid::new_v4();
-        self.create_connector(connector_id, &req).await?;
-        todo!()
+        self.create_connector(connector_id, req).await
     }
 
     async fn persistence_create_connector(
@@ -48,17 +49,17 @@ impl ConnectorManager {
         data: String,
     ) -> HaliaResult<()> {
         let req: CreateConnectorReq = serde_json::from_str(&data)?;
-        self.create_connector(connector_id, &req).await
+        self.create_connector(connector_id, req).await
     }
 
     async fn create_connector(
         &self,
         connector_id: Uuid,
-        req: &CreateConnectorReq,
+        req: CreateConnectorReq,
     ) -> HaliaResult<()> {
         let connector = match req.r#type.as_str() {
             mqtt_v311_client::TYPE => mqtt_v311_client::new(connector_id, req),
-            _ => todo!(),
+            _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
         match connector {
@@ -74,7 +75,17 @@ impl ConnectorManager {
     }
 
     pub async fn search_connectors(&self, page: usize, size: usize) -> SearchConnectorResp {
-        todo!()
+        let mut resp = vec![];
+        let mut i = 0;
+        let mut total = 0;
+        for connector in self.connectors.read().await.iter() {
+            if i >= (page - 1) * size && i < page * size {
+                resp.push(connector.get_info());
+            }
+            i += 1;
+            total += 1;
+        }
+        SearchConnectorResp { total, data: resp }
     }
 
     pub async fn update_connector(&self, id: Uuid, body: &Bytes) -> HaliaResult<()> {
@@ -113,7 +124,16 @@ impl ConnectorManager {
 
                 Ok(())
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => match persistence::device::init().await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        error!("{e}");
+                        return Err(e.into());
+                    }
+                },
+                _ => todo!(),
+            },
         }
     }
 }
