@@ -155,9 +155,12 @@ impl Modbus {
         let rtt = self.rtt.clone();
         tokio::spawn(async move {
             loop {
-                if let Err(e) = group_siganl_tx.send(group::Command::Pause) {
-                    error!("send signal err:{}", e);
+                if groups.read().await.len() != 0 {
+                    if let Err(e) = group_siganl_tx.send(group::Command::Pause) {
+                        error!("send signal err:{}", e);
+                    }
                 }
+
                 err.store(true, Ordering::SeqCst);
                 match Modbus::get_context(&conf).await {
                     Ok((ctx, interval)) => {

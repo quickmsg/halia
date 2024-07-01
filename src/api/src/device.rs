@@ -7,7 +7,7 @@ use common::error::HaliaError;
 use device::GLOBAL_DEVICE_MANAGER;
 use tracing::debug;
 use types::device::{
-    device::{DeviceDetailResp, SearchDeviceResp, UpdateDeviceReq},
+    device::{DeviceDetailResp, SearchDeviceResp},
     group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };

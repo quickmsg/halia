@@ -11,6 +11,7 @@ members = [
     "src/functions",
     "src/protocol",
     "src/rule",
+    "src/connectors",
 ]
 resolver = "2"
 
@@ -29,6 +30,7 @@ common = { path = "src/common" }
 protocol = { path = "src/protocol" }
 functions = { path = "src/functions" }
 rule = { path = "src/rule" }
+connectors = { path = "src/connectors" }
 
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

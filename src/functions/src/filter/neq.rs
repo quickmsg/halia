@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use message::{MessageValue, Message};
+use message::{Message, MessageValue};
 use serde::{Deserialize, Serialize};
 
 use super::Filter;
@@ -96,16 +96,15 @@ impl Filter for Neq {
                     }
                     TargetValue::Field(field) => match msg.get(&field) {
                         Some(value) => match value {
-                        
                             MessageValue::Int64(rhs) => {
                                 if *rhs < 0 {
                                     return false;
                                 }
                                 *lhs > *rhs as u64
                             }
-                           
+
                             MessageValue::Uint64(rhs) => lhs > rhs,
-                          
+
                             MessageValue::Float64(rhs) => {
                                 // TODO 溢出问题
                                 if *rhs < 0.0 {
