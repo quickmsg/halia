@@ -1,7 +1,5 @@
 use anyhow::Result;
 use message::MessageBatch;
-use sink::GLOBAL_SINK_MANAGER;
-use source::GLOBAL_SOURCE_MANAGER;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};

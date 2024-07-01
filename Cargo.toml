@@ -4,8 +4,6 @@ members = [
     "src/message",
     "src/server",
     "src/types",
-    "src/source",
-    "src/sink",
     "src/device",
     "src/common",
     "src/functions",
@@ -23,8 +21,6 @@ edition = "2021"
 api = { path = "src/api" }
 types = { path = "src/types" }
 message = { path = "src/message" }
-source = { path = "src/source" }
-sink = { path = "src/sink" }
 device = { path = "src/device" }
 common = { path = "src/common" }
 protocol = { path = "src/protocol" }
