@@ -18,15 +18,10 @@ pub mod group;
 pub mod message;
 pub mod point;
 pub mod rule;
-pub mod sink;
-pub mod source;
-pub mod source_item;
 
 static ROOT_DIR: &str = "storage";
 static DEVICE_DIR: &str = "device";
 static CONNECTOR_DIR: &str = "connector";
-static SOURCE_DIR: &str = "source";
-static SINK_DIR: &str = "sink";
 static RULE_DIR: &str = "rule";
 static DATA_FILE: &str = "data";
 static DELIMITER: char = '|';

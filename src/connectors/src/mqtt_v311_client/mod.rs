@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
+use async_trait::async_trait;
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions};
 use serde::{Deserialize, Serialize};
@@ -54,9 +55,9 @@ struct PasswordConf {
     password: String,
 }
 
-pub fn new(id: Uuid, req: &CreateConnectorReq) -> Result<Connector> {
+pub fn new(id: Uuid, req: &CreateConnectorReq) -> Result<Box<dyn Connector>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
-    Ok(Connector::MqttV311(MqttV311 {
+    Ok(Box::new(MqttV311 {
         id: Uuid::new_v4(),
         conf,
         source_topics: Arc::new(RwLock::new(vec![])),
@@ -147,6 +148,20 @@ impl MqttV311 {
                 }
             }
         });
+    }
+}
+
+#[async_trait]
+impl Connector for MqttV311 {
+    fn get_id(&self) -> Uuid {
+        todo!()
+    }
+
+    async fn subscribe(
+        &mut self,
+        item_id: Option<Uuid>,
+    ) -> Result<broadcast::Receiver<MessageBatch>> {
+        todo!()
     }
 }
 

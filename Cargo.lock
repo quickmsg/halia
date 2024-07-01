@@ -490,6 +490,7 @@ name = "connectors"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bytes",
  "common",
  "message",
@@ -1679,6 +1680,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common",
+ "connectors",
  "functions",
  "message",
  "serde_json",
@@ -2000,6 +2002,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "api",
+ "connectors",
  "device",
  "rule",
  "tokio",

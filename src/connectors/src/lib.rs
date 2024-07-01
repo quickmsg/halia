@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use async_trait::async_trait;
 use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
@@ -15,7 +16,7 @@ mod mqtt_v311_client;
 pub mod mqtt_v311_server;
 
 pub struct ConnectorManager {
-    connectors: RwLock<Vec<Connector>>,
+    connectors: RwLock<Vec<Box<dyn Connector>>>,
 }
 
 pub static GLOBAL_CONNECTOR_MANAGER: LazyLock<ConnectorManager> =
@@ -23,22 +24,14 @@ pub static GLOBAL_CONNECTOR_MANAGER: LazyLock<ConnectorManager> =
         connectors: RwLock::new(vec![]),
     });
 
-enum Connector {
-    MqttV311(mqtt_v311_client::MqttV311),
-}
+#[async_trait]
+pub trait Connector: Sync + Send {
+    fn get_id(&self) -> Uuid;
 
-impl Connector {
-    fn get_id(&self) -> Uuid {
-        match self {
-            Connector::MqttV311(c) => c.id,
-        }
-    }
-
-    async fn subscribe(&mut self, item_id: Uuid) -> Result<broadcast::Receiver<MessageBatch>> {
-        match self {
-            Connector::MqttV311(c) => c.subscribe(item_id).await,
-        }
-    }
+    async fn subscribe(
+        &mut self,
+        item_id: Option<Uuid>,
+    ) -> Result<broadcast::Receiver<MessageBatch>>;
 }
 
 impl ConnectorManager {
@@ -95,7 +88,7 @@ impl ConnectorManager {
     pub async fn subscribe(
         &self,
         connector_id: Uuid,
-        item_id: Uuid,
+        item_id: Option<Uuid>,
     ) -> Result<broadcast::Receiver<MessageBatch>> {
         for connector in self.connectors.write().await.iter_mut() {
             if connector.get_id() == connector_id {

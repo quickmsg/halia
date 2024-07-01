@@ -1,4 +1,5 @@
 use anyhow::Result;
+use connectors::GLOBAL_CONNECTOR_MANAGER;
 use message::MessageBatch;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
@@ -53,7 +54,7 @@ impl Rule {
                     Some(r#type) => match r#type.as_str() {
                         "source" => {
                             if let Some(node) = node_map.get(&info.first_id) {
-                                let receiver = GLOBAL_SOURCE_MANAGER
+                                let receiver = GLOBAL_CONNECTOR_MANAGER
                                     .subscribe(node.id.unwrap(), node.item_id)
                                     .await
                                     .unwrap();
@@ -80,19 +81,19 @@ impl Rule {
                         //     }
                         // }
                         "sink" => {
-                            if let Some(source_ids) = incoming_edges.get(&info.id) {
-                                if let Some(source_id) = source_ids.first() {
-                                    if let Some(mut node_receivers) = receivers.remove(source_id) {
-                                        let rx = node_receivers.remove(0);
-                                        if let Some(node) = node_map.get(&info.id) {
-                                            GLOBAL_SINK_MANAGER
-                                                .insert_rx(&node.id.unwrap(), rx)
-                                                .await
-                                                .unwrap();
-                                        }
-                                    }
-                                }
-                            }
+                            // if let Some(source_ids) = incoming_edges.get(&info.id) {
+                            //     if let Some(source_id) = source_ids.first() {
+                            //         if let Some(mut node_receivers) = receivers.remove(source_id) {
+                            //             let rx = node_receivers.remove(0);
+                            //             if let Some(node) = node_map.get(&info.id) {
+                            //                 GLOBAL_SINK_MANAGER
+                            //                     .insert_rx(&node.id.unwrap(), rx)
+                            //                     .await
+                            //                     .unwrap();
+                            //             }
+                            //         }
+                            //     }
+                            // }
                         }
                         // "merge" => {
                         //     if let Some(source_ids) = incoming_edges.get(&osi.id) {

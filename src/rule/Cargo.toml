@@ -4,12 +4,14 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 message = { workspace = true }
+common = { workspace = true }
+connectors = { workspace = true }
+
 tokio = { workspace = true }
 tracing = { workspace = true }
 types = { workspace = true }
 uuid = { workspace = true }
 functions = { workspace = true }
-common = { workspace = true }
 serde_json = { workspace = true }
+anyhow = { workspace = true }
