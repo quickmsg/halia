@@ -39,14 +39,9 @@ impl DeviceManager {
         Ok(())
     }
 
-    pub async fn persistence_create_device(
-        &self,
-        device_id: Uuid,
-        data: String,
-    ) -> HaliaResult<()> {
+    async fn persistence_create_device(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
         let req: CreateDeviceReq = serde_json::from_str(&data)?;
-        self.create_device(device_id, &req).await?;
-        Ok(())
+        self.create_device(device_id, &req).await
     }
 
     async fn create_device(&self, device_id: Uuid, req: &CreateDeviceReq) -> HaliaResult<()> {

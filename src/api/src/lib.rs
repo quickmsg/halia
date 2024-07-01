@@ -64,8 +64,8 @@ pub async fn start() {
         .nest("/api", device_routes())
         .nest("/api/device/:device_id", group_routes())
         .nest("/api/device/:device_id/group/:group_id", point_routes())
-        .nest("/api", source_routes())
-        .nest("/api", sink_routes())
+        // .nest("/api", source_routes())
+        // .nest("/api", sink_routes())
         .nest("/api", rule_routes())
         .layer(
             CorsLayer::new()
@@ -111,23 +111,42 @@ fn point_routes() -> Router {
         .route("/points", delete(device::delete_points))
 }
 
-fn source_routes() -> Router {
-    Router::new()
-        .route("/source", post(source::create))
-        .route("/source/search", get(source::search))
-        .route("/source/:id", get(source::read))
-        .route("/srouce/:id", put(source::update))
-        .route("/srouce/:id", delete(source::delete))
-        .nest("/source/:source_id/mqtt", mqtt_routes())
-}
+// fn source_routes() -> Router {
+//     Router::new()
+//         .route("/source", post(source::create))
+//         .route("/source/search", get(source::search))
+//         .route("/source/:id", get(source::read))
+//         .route("/srouce/:id", put(source::update))
+//         .route("/srouce/:id", delete(source::delete))
+//         .nest("/source/:source_id/mqtt", mqtt_routes())
+// }
 
-fn sink_routes() -> Router {
-    Router::new()
-        .route("/sink", post(sink::create))
-        .route("/sinks", get(sink::list))
-        .route("/sink/:id", get(sink::read))
-        .route("/sink/:id", put(sink::update))
-        .route("/sink/:id", delete(sink::delete))
+// fn sink_routes() -> Router {
+//     Router::new()
+//         .route("/sink", post(sink::create))
+//         .route("/sinks", get(sink::list))
+//         .route("/sink/:id", get(sink::read))
+//         .route("/sink/:id", put(sink::update))
+//         .route("/sink/:id", delete(sink::delete))
+// }
+
+fn connector_routes() -> Router {
+    Router::new().nest(
+        "/connector",
+        Router::new()
+            .route("/", post(rule::create))
+            .route("/search", get(rule::create))
+            .route("/:connector_id", put(rule::create))
+            .route("/:connector_id", delete(rule::create))
+            .nest(
+                "/:connector_id/source",
+                Router::new()
+                    .route("/", post(rule::create))
+                    .route("/search", get(rule::create))
+                    .route("/:source_id", put(rule::create))
+                    .route("/:source_id", delete(rule::create)),
+            ),
+    )
 }
 
 fn rule_routes() -> Router {
@@ -141,10 +160,10 @@ fn rule_routes() -> Router {
         .route("/rule/:id", delete(rule::delete))
 }
 
-fn mqtt_routes() -> Router {
-    Router::new()
-        .route("/topic", post(mqtt::create))
-        .route("/topic/search", get(mqtt::search))
-        .route("/topic/:topic_id", put(mqtt::update))
-        .route("/topic/:topic_id", delete(mqtt::delete))
-}
+// fn mqtt_routes() -> Router {
+//     Router::new()
+//         .route("/topic", post(mqtt::create))
+//         .route("/topic/search", get(mqtt::search))
+//         .route("/topic/:topic_id", put(mqtt::update))
+//         .route("/topic/:topic_id", delete(mqtt::delete))
+// }
