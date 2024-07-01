@@ -48,8 +48,11 @@ pub(crate) enum Command {
 }
 
 impl Group {
-    pub fn new(device_id: Uuid, group_id: Uuid, conf: &CreateGroupReq) -> Self {
-        Group {
+    pub fn new(device_id: Uuid, group_id: Uuid, conf: &CreateGroupReq) -> Result<Self> {
+        if conf.interval == 0 {
+            bail!("group interval must > 0")
+        }
+        Ok(Group {
             id: group_id,
             device_id,
             name: conf.name.clone(),
@@ -57,7 +60,7 @@ impl Group {
             points: RwLock::new(HashMap::new()),
             tx: None,
             ref_cnt: 0,
-        }
+        })
     }
 
     pub fn run(&self, mut cmd_rx: broadcast::Receiver<Command>, read_tx: mpsc::Sender<Uuid>) {

@@ -5,7 +5,6 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use modbus::device::Modbus;
 use serde::Serialize;
 use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::{broadcast, RwLock};
@@ -52,7 +51,7 @@ impl DeviceManager {
 
     async fn create_device(&self, device_id: Uuid, req: &CreateDeviceReq) -> HaliaResult<()> {
         let device = match req.r#type.as_str() {
-            modbus::device::TYPE => match Modbus::new(device_id, req) {
+            modbus::TYPE => match modbus::new(device_id, req) {
                 Ok(device) => device,
                 Err(e) => {
                     debug!("create device err:{}", e);
