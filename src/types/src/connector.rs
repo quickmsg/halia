@@ -7,3 +7,14 @@ pub struct CreateConnectorReq {
     pub name: String,
     pub conf: Value,
 }
+
+#[derive(Serialize)]
+pub struct SearchConnectorResp {
+    pub total: usize,
+    pub data: Vec<SearchConnectorItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchConnectorItemResp {
+
+}

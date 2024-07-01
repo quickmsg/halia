@@ -490,9 +490,15 @@ dependencies = [
 name = "connectors"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common",
+ "message",
+ "rumqttc",
  "rumqttd",
+ "serde",
+ "serde_json",
  "tokio",
+ "tracing",
  "types",
  "uuid",
 ]

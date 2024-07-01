@@ -1,11 +1,12 @@
 use std::{sync::LazyLock, vec};
 
-use common::error::HaliaResult;
+use common::error::{HaliaError, HaliaResult};
 use tokio::sync::RwLock;
-use types::connector::CreateConnectorReq;
+use tracing::debug;
+use types::connector::{CreateConnectorReq, SearchConnectorResp};
 use uuid::Uuid;
 
-pub mod mqtt_v311_client;
+mod mqtt_v311_client;
 pub mod mqtt_v311_server;
 
 pub struct ConnectorManager {
@@ -21,7 +22,26 @@ enum Connector {
 }
 
 impl ConnectorManager {
-    pub async fn create(&self, id: Option<Uuid>, req: CreateConnectorReq) -> HaliaResult<()> {
+    pub async fn create(&self, id: Option<Uuid>, req: &CreateConnectorReq) -> HaliaResult<()> {
+        let result = match req.r#type.as_str() {
+            mqtt_v311_client::TYPE => mqtt_v311_client::new(req),
+            _ => todo!(),
+        };
+        match result {
+            Ok(connector) => {
+                self.connectors.write().await.push(connector);
+                Ok(())
+            }
+            Err(e) => {
+                debug!("{e}");
+                Err(HaliaError::ConfErr)
+            }
+        }
+    }
+
+    pub async fn search(&self, page: usize, size: usize) -> SearchConnectorResp {
         todo!()
     }
+
+    pub async fn subscribe(&self, connector_id: Uuid, item_id: Uuid) {}
 }

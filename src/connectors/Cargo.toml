@@ -5,8 +5,15 @@ edition.workspace = true
 
 [dependencies]
 rumqttd = "0.19.0"
+rumqttc = "0.24.0"
 
 tokio = { workspace = true }
 types = { workspace = true }
 common = { workspace = true }
+message = { workspace = true }
+
 uuid = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
