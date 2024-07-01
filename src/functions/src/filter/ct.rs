@@ -1,5 +1,5 @@
-use anyhow::{bail, Result};
-use message::{MessageValue, Message};
+use anyhow::Result;
+use message::{Message, MessageValue};
 use serde::{Deserialize, Serialize};
 
 use super::Filter;
@@ -14,12 +14,14 @@ impl Ct {
         let conf: Conf = serde_json::from_value(conf)?;
         let value = match conf.value {
             serde_json::Value::Number(number) => {
-                if let Some(int) = number.as_i64() {
+                if let Some(uint) = number.as_u64() {
+                    TargetValue::Uint(uint)
+                } else if let Some(int) = number.as_i64() {
                     TargetValue::Int(int)
                 } else if let Some(float) = number.as_f64() {
                     TargetValue::Float(float)
                 } else {
-                    bail!("parse value failed")
+                    unreachable!()
                 }
             }
             serde_json::Value::String(string) => {
@@ -54,6 +56,7 @@ struct Conf {
 
 enum TargetValue {
     Int(i64),
+    Uint(u64),
     Float(f64),
     Boolean(bool),
     String(String),
@@ -68,47 +71,34 @@ impl Filter for Ct {
         match msg.get(&self.field) {
             Some(value) => match value {
                 MessageValue::Array(values) => match &self.value {
+                    TargetValue::Uint(rhs) => {
+                        for item in values {
+                            match item {
+                                MessageValue::Int64(lhs) => {
+                                    if *lhs > 0 && *lhs as u64 == *rhs {
+                                        return true;
+                                    }
+                                }
+                                MessageValue::Uint64(lhs) => {
+                                    if *lhs == *rhs {
+                                        return true;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        false
+                    }
                     TargetValue::Int(rhs) => {
                         for item in values {
                             match item {
-                                MessageValue::Int8(i8) => {
-                                    if *i8 as i64 == *rhs {
+                                MessageValue::Int64(lhs) => {
+                                    if *lhs == *rhs {
                                         return true;
                                     }
                                 }
-                                MessageValue::Int16(i16) => {
-                                    if *i16 as i64 == *rhs {
-                                        return true;
-                                    }
-                                }
-                                MessageValue::Int32(i32) => {
-                                    if *i32 as i64 == *rhs {
-                                        return true;
-                                    }
-                                }
-                                MessageValue::Int64(i64) => {
-                                    if *i64 == *rhs {
-                                        return true;
-                                    }
-                                }
-                                MessageValue::Uint8(u8) => {
-                                    if *u8 as i64 == *rhs {
-                                        return true;
-                                    }
-                                }
-                                MessageValue::Uint16(u16) => {
-                                    if *u16 as i64 == *rhs {
-                                        return true;
-                                    }
-                                }
-                                MessageValue::Uint32(u32) => {
-                                    if *u32 as i64 == *rhs {
-                                        return true;
-                                    }
-                                }
-                                MessageValue::Uint64(u64) => {
-                                    // TODO
-                                    if *u64 as i64 == *rhs {
+                                MessageValue::Uint64(lhs) => {
+                                    if *lhs <= i64::MAX as u64 && *lhs as i64 == *rhs {
                                         return true;
                                     }
                                 }
@@ -120,11 +110,6 @@ impl Filter for Ct {
                     TargetValue::Float(rhs) => {
                         for item in values {
                             match item {
-                                MessageValue::Float32(f32) => {
-                                    if *f32 as f64 == *rhs {
-                                        return true;
-                                    }
-                                }
                                 MessageValue::Float64(f64) => {
                                     if *f64 == *rhs {
                                         return true;
@@ -161,7 +146,6 @@ impl Filter for Ct {
                         }
                         false
                     }
-                    TargetValue::Array(_) => todo!(),
                     TargetValue::Null => {
                         for item in values {
                             match item {
@@ -171,6 +155,7 @@ impl Filter for Ct {
                         }
                         false
                     }
+                    TargetValue::Array(_) => todo!(),
                     TargetValue::Object(_) => todo!(),
                     TargetValue::Field(field) => {
                         todo!()

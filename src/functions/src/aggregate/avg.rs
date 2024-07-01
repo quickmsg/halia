@@ -20,39 +20,11 @@ impl Aggregater for Avg {
         for message in messages {
             match message.get(&self.field) {
                 Some(value) => match value {
-                    MessageValue::Int8(value) => {
-                        sum += *value as f64;
-                        count += 1;
-                    }
-                    MessageValue::Int16(value) => {
-                        sum += *value as f64;
-                        count += 1;
-                    }
-                    MessageValue::Int32(value) => {
-                        sum += *value as f64;
-                        count += 1;
-                    }
                     MessageValue::Int64(value) => {
                         sum += *value as f64;
                         count += 1;
                     }
-                    MessageValue::Uint8(value) => {
-                        sum += *value as f64;
-                        count += 1;
-                    }
-                    MessageValue::Uint16(value) => {
-                        sum += *value as f64;
-                        count += 1;
-                    }
-                    MessageValue::Uint32(value) => {
-                        sum += *value as f64;
-                        count += 1;
-                    }
                     MessageValue::Uint64(value) => {
-                        sum += *value as f64;
-                        count += 1;
-                    }
-                    MessageValue::Float32(value) => {
                         sum += *value as f64;
                         count += 1;
                     }

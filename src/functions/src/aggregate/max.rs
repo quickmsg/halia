@@ -18,47 +18,12 @@ impl Aggregater for Max {
         for message in messages {
             match message.get(&self.field) {
                 Some(value) => match value {
-                    MessageValue::Int8(value) => {
-                        if *value as f64 > max {
-                            max = *value as f64
-                        }
-                    }
-                    MessageValue::Int16(value) => {
-                        if *value as f64 > max {
-                            max = *value as f64
-                        }
-                    }
-                    MessageValue::Int32(value) => {
-                        if *value as f64 > max {
-                            max = *value as f64
-                        }
-                    }
                     MessageValue::Int64(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }
                     }
-                    MessageValue::Uint8(value) => {
-                        if *value as f64 > max {
-                            max = *value as f64
-                        }
-                    }
-                    MessageValue::Uint16(value) => {
-                        if *value as f64 > max {
-                            max = *value as f64
-                        }
-                    }
-                    MessageValue::Uint32(value) => {
-                        if *value as f64 > max {
-                            max = *value as f64
-                        }
-                    }
                     MessageValue::Uint64(value) => {
-                        if *value as f64 > max {
-                            max = *value as f64
-                        }
-                    }
-                    MessageValue::Float32(value) => {
                         if *value as f64 > max {
                             max = *value as f64
                         }

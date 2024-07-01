@@ -258,9 +258,9 @@ impl DataType {
                     _ => return MessageValue::Null,
                 };
                 if *endian == Endian::LittleEndian {
-                    MessageValue::Int8(data[0] as i8)
+                    MessageValue::Int64(data[0] as i64)
                 } else {
-                    MessageValue::Int8(data[1] as i8)
+                    MessageValue::Int64(data[1] as i64)
                 }
             }
             DataType::Uint8(endian) => {
@@ -269,9 +269,9 @@ impl DataType {
                     _ => return MessageValue::Null,
                 };
                 if *endian == Endian::LittleEndian {
-                    MessageValue::Uint8(data[0] as u8)
+                    MessageValue::Uint64(data[0] as u64)
                 } else {
-                    MessageValue::Uint8(data[1] as u8)
+                    MessageValue::Uint64(data[1] as u64)
                 }
             }
             DataType::Int16(endian) => {
@@ -282,7 +282,7 @@ impl DataType {
                 if *endian == Endian::BigEndian {
                     data.swap(0, 1);
                 }
-                MessageValue::Int16(i16::from_be_bytes(data))
+                MessageValue::Int64(i16::from_be_bytes(data) as i64)
             }
             DataType::Uint16(endian) => {
                 let mut data = match data.as_slice() {
@@ -292,7 +292,7 @@ impl DataType {
                 if *endian == Endian::BigEndian {
                     data.swap(0, 1);
                 }
-                MessageValue::Uint16(u16::from_be_bytes(data))
+                MessageValue::Uint64(u16::from_be_bytes(data) as u64)
             }
             DataType::Int32(endian0, endian1) => {
                 let mut data = match data.as_slice() {
@@ -307,7 +307,7 @@ impl DataType {
                     data.swap(0, 2);
                     data.swap(1, 3);
                 }
-                MessageValue::Int32(i32::from_be_bytes(data))
+                MessageValue::Int64(i32::from_be_bytes(data) as i64)
             }
             DataType::Uint32(endian0, endian1) => {
                 let mut data = match data.as_slice() {
@@ -322,7 +322,7 @@ impl DataType {
                     data.swap(0, 2);
                     data.swap(1, 3);
                 }
-                MessageValue::Uint32(u32::from_be_bytes(data))
+                MessageValue::Uint64(u32::from_be_bytes(data) as u64)
             }
             DataType::Int64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
@@ -375,7 +375,7 @@ impl DataType {
                     data.swap(0, 2);
                     data.swap(1, 3);
                 }
-                MessageValue::Float32(f32::from_be_bytes(data))
+                MessageValue::Float64(f32::from_be_bytes(data) as f64)
             }
             DataType::Float64(endian0, endian1) => {
                 let mut data = match data.as_slice() {
