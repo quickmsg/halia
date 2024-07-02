@@ -25,8 +25,8 @@ pub async fn init() -> Result<(), io::Error> {
     super::create_dir(get_dir()).await
 }
 
-pub async fn insert(id: &Uuid, data: &String) -> Result<(), io::Error> {
-    super::insert(get_file(), id, data).await?;
+pub async unsafe fn insert(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+    super::insert(get_file(), id, std::str::from_utf8_unchecked(data)).await?;
     super::create_dir(get_dir().join(id.to_string())).await
 }
 

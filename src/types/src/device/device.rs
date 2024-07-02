@@ -39,6 +39,7 @@ pub struct SearchDeviceItemResp {
     pub on: bool,
     pub err: bool,
     pub rtt: u16,
+    pub conf: Value,
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]

@@ -11,6 +11,10 @@ pub enum HaliaError {
     Existed,
     ConfErr,
     Disconnect,
+    // 设备已关闭
+    DeviceStoped,
+    // 设备连接错误
+    DeviceDisconnect,
 }
 
 impl From<std::fmt::Error> for HaliaError {
@@ -41,12 +45,14 @@ impl Display for HaliaError {
             HaliaError::Existed => write!(f, "已存在"),
             HaliaError::ConfErr => write!(f, "配置错误"),
             HaliaError::Disconnect => write!(f, "连接断开"),
+            HaliaError::DeviceStoped => write!(f, "设备已关闭"),
+            HaliaError::DeviceDisconnect => write!(f, "设备已断开连接"),
         }
     }
 }
 
 impl HaliaError {
-    pub fn code(&self) -> u8 {
+    pub fn code(&self) -> u16 {
         match self {
             HaliaError::NotFound => 1,
             HaliaError::ProtocolNotSupported => 2,
@@ -55,6 +61,8 @@ impl HaliaError {
             HaliaError::Existed => 5,
             HaliaError::ConfErr => 6,
             HaliaError::Disconnect => 7,
+            HaliaError::DeviceStoped => 1001,
+            HaliaError::DeviceDisconnect => 1002,
         }
     }
 }

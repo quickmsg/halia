@@ -55,7 +55,7 @@ impl Rule {
                         "source" => {
                             if let Some(node) = node_map.get(&info.first_id) {
                                 let receiver = GLOBAL_CONNECTOR_MANAGER
-                                    .subscribe(node.id.unwrap(), node.item_id)
+                                    .subscribe(&node.id.unwrap(), node.item_id)
                                     .await
                                     .unwrap();
                                 receivers.insert(info.first_id, vec![receiver]);

@@ -59,13 +59,6 @@ impl DeviceManager {
         Ok(())
     }
 
-    pub async fn read_device(&self, device_id: Uuid) -> HaliaResult<DeviceDetailResp> {
-        match self.devices.read().await.get(&device_id) {
-            Some(device) => Ok(device.get_detail().await),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
     pub async fn update_device(&self, device_id: Uuid, data: &Bytes) -> HaliaResult<()> {
         let req: UpdateDeviceReq = serde_json::from_slice(data)?;
         match self.devices.write().await.get_mut(&device_id) {
@@ -122,7 +115,7 @@ impl DeviceManager {
         let mut err_cnt = 0;
         let mut close_cnt = 0;
         for device in self.devices.read().await.values() {
-            let info = device.get_info();
+            let info = device.get_info().await;
 
             if *&info.err {
                 err_cnt += 1;
@@ -436,8 +429,7 @@ pub struct DeviceInfo {
 #[async_trait]
 trait Device: Sync + Send {
     // device
-    async fn get_detail(&self) -> DeviceDetailResp;
-    fn get_info(&self) -> SearchDeviceItemResp;
+    async fn get_info(&self) -> SearchDeviceItemResp;
     async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self);
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()>;

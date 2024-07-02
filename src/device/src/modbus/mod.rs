@@ -246,7 +246,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    fn get_info(&self) -> SearchDeviceItemResp {
+    async fn get_info(&self) -> SearchDeviceItemResp {
         SearchDeviceItemResp {
             id: self.id,
             name: self.name.clone(),
@@ -254,14 +254,6 @@ impl Device for Modbus {
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on.load(Ordering::SeqCst),
             err: self.err.load(Ordering::SeqCst),
-        }
-    }
-
-    async fn get_detail(&self) -> DeviceDetailResp {
-        DeviceDetailResp {
-            id: self.id,
-            r#type: &TYPE,
-            name: self.name.clone(),
             conf: json!(&self.conf.lock().await.clone()),
         }
     }
@@ -497,6 +489,13 @@ impl Device for Modbus {
         point_id: Uuid,
         req: &WritePointValueReq,
     ) -> HaliaResult<()> {
+        if self.on.load(Ordering::SeqCst) == false {
+            return Err(HaliaError::DeviceStoped);
+        }
+        if self.err.load(Ordering::SeqCst) == true {
+            return Err(HaliaError::DeviceDisconnect);
+        }
+
         let _ = self
             .write_tx
             .as_ref()

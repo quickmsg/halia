@@ -20,3 +20,9 @@ pub struct SearchConnectorItemResp {
     pub name: String,
     pub conf: Value,
 }
+
+#[derive(Serialize)]
+pub struct SearchSourceResp {
+    pub total: usize,
+    pub data: Vec<Value>,
+}

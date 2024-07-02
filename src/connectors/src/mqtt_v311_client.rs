@@ -2,12 +2,14 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use bytes::Bytes;
+use common::error::HaliaResult;
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::error;
-use types::connector::{CreateConnectorReq, SearchConnectorItemResp};
+use types::connector::{CreateConnectorReq, SearchConnectorItemResp, SearchSourceResp};
 use uuid::Uuid;
 
 use crate::Connector;
@@ -25,13 +27,20 @@ pub(crate) struct MqttV311 {
     client: Option<AsyncClient>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 struct Topic {
     pub id: Uuid,
     pub topic: String,
     pub qos: u8,
+    #[serde(skip)]
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: u8,
+}
+
+#[derive(Deserialize)]
+struct TopicConf {
+    pub topic: String,
+    pub qos: u8,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -152,8 +161,8 @@ impl MqttV311 {
 
 #[async_trait]
 impl Connector for MqttV311 {
-    fn get_id(&self) -> Uuid {
-        todo!()
+    fn get_id(&self) -> &Uuid {
+        &self.id
     }
 
     fn get_info(&self) -> SearchConnectorItemResp {
@@ -169,6 +178,34 @@ impl Connector for MqttV311 {
         item_id: Option<Uuid>,
     ) -> Result<broadcast::Receiver<MessageBatch>> {
         todo!()
+    }
+
+    async fn create_source(&self, req: &Bytes) -> HaliaResult<()> {
+        let topic_conf: TopicConf = serde_json::from_slice(req)?;
+        self.source_topics.write().await.push(Topic {
+            id: Uuid::new_v4(),
+            topic: topic_conf.topic,
+            qos: topic_conf.qos,
+            tx: None,
+            ref_cnt: 0,
+        });
+
+        Ok(())
+    }
+
+    async fn search_source(&self, page: usize, size: usize) -> HaliaResult<SearchSourceResp> {
+        let mut total = 0;
+        let mut i = 0;
+        let mut data = vec![];
+        for topic in self.source_topics.read().await.iter() {
+            if i >= (page - 1) * size && i < page * size {
+                data.push(serde_json::to_value(topic).unwrap());
+            }
+            total += 1;
+            i += 1;
+        }
+
+        Ok(SearchSourceResp { total, data })
     }
 }
 

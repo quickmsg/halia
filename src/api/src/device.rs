@@ -22,13 +22,6 @@ pub(crate) async fn create_device(body: Bytes) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn read_device(Path(device_id): Path<Uuid>) -> AppResp<DeviceDetailResp> {
-    match GLOBAL_DEVICE_MANAGER.read_device(device_id).await {
-        Ok(resp) => AppResp::with_data(resp),
-        Err(e) => e.into(),
-    }
-}
-
 pub(crate) async fn search_device(pagination: Query<Pagination>) -> AppResp<SearchDeviceResp> {
     AppResp::with_data(
         GLOBAL_DEVICE_MANAGER

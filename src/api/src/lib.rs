@@ -15,7 +15,7 @@ mod rule;
 
 #[derive(Serialize, Debug)]
 pub(crate) struct AppResp<T> {
-    code: u8,
+    code: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<T>,
 }
