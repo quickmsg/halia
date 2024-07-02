@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize, Clone)]
 pub struct CreateConnectorReq {
@@ -16,6 +17,7 @@ pub struct SearchConnectorResp {
 
 #[derive(Serialize)]
 pub struct SearchConnectorItemResp {
+    pub id: Uuid,
     pub r#type: &'static str,
     pub name: String,
     pub conf: Value,

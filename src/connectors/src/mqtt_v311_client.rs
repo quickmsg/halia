@@ -167,6 +167,7 @@ impl Connector for MqttV311 {
 
     fn get_info(&self) -> SearchConnectorItemResp {
         SearchConnectorItemResp {
+            id: self.id,
             r#type: TYPE,
             name: self.name.clone(),
             conf: serde_json::to_value(&self.conf).unwrap(),

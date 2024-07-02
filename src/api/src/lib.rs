@@ -120,7 +120,7 @@ fn connector_routes() -> Router {
                 "/:connector_id/source",
                 Router::new()
                     .route("/", post(connector::create_source))
-                    .route("/search", get(connector::search_sinks))
+                    .route("/search", get(connector::search_sources))
                     .route("/:source_id", put(connector::update_source))
                     .route("/:source_id", delete(connector::delete_source)),
             )

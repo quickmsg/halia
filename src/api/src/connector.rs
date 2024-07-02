@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, Query},
 };
 use connectors::GLOBAL_CONNECTOR_MANAGER;
-use types::connector::SearchConnectorResp;
+use types::connector::{SearchConnectorResp, SearchSourceResp};
 use uuid::Uuid;
 
 use crate::{AppResp, Pagination};
@@ -45,21 +45,27 @@ pub(crate) async fn delete_connector(Path(connector_id): Path<Uuid>) -> AppResp<
     }
 }
 
-pub(crate) async fn create_source(body: Bytes) -> AppResp<()> {
-    todo!()
-    // match GLOBAL_CONNECTOR_MANAGER.api_create_connector(&body).await {
-    //     Ok(()) => AppResp::new(),
-    //     Err(e) => e.into(),
-    // }
+pub(crate) async fn create_source(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_CONNECTOR_MANAGER
+        .create_source(&connector_id, &body)
+        .await
+    {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
 }
 
-pub(crate) async fn search_sources(pagination: Query<Pagination>) -> AppResp<SearchConnectorResp> {
-    todo!()
-    // AppResp::with_data(
-    //     GLOBAL_CONNECTOR_MANAGER
-    //         .search_connectors(pagination.p, pagination.s)
-    //         .await,
-    // )
+pub(crate) async fn search_sources(
+    Path(connector_id): Path<Uuid>,
+    pagination: Query<Pagination>,
+) -> AppResp<SearchSourceResp> {
+    match GLOBAL_CONNECTOR_MANAGER
+        .search_source(&connector_id, pagination.p, pagination.s)
+        .await
+    {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
 }
 
 pub(crate) async fn update_source(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
