@@ -12,7 +12,6 @@ use crate::stream::start_stream;
 pub(crate) struct Rule {
     pub id: Uuid,
     pub status: Status,
-    // pub rxs: Vec<broadcast::Receiver<MessageBatch>>,
     pub req: CreateRuleReq,
     pub stop_signal: broadcast::Sender<()>,
 }
@@ -23,7 +22,6 @@ impl Rule {
         Ok(Self {
             id,
             status: Status::Stopped,
-            // rxs: todo!(),
             req: req.clone(),
             stop_signal,
         })
@@ -48,6 +46,7 @@ impl Rule {
             &mut tmp_incoming_edges,
             &mut tmp_outgoing_edges,
         )?;
+
         for stream_info in stream_infos {
             for info in stream_info {
                 match info.r#type {
@@ -84,12 +83,27 @@ impl Rule {
                             if let Some(source_ids) = incoming_edges.get(&info.id) {
                                 if let Some(source_id) = source_ids.first() {
                                     if let Some(mut node_receivers) = receivers.remove(source_id) {
-                                        let rx = node_receivers.remove(0);
+                                        let mut rx = node_receivers.remove(0);
                                         if let Some(node) = node_map.get(&info.id) {
-                                            GLOBAL_CONNECTOR_MANAGER
-                                                .publish(&node.id.unwrap(), rx)
+                                            // TODO 解决动态多个channel监听的问题
+                                            let tx = GLOBAL_CONNECTOR_MANAGER
+                                                .publish(&node.id.unwrap(), node.item_id)
                                                 .await
                                                 .unwrap();
+
+                                            tokio::spawn(async move {
+                                                loop {
+                                                    match rx.recv().await {
+                                                        Ok(mb) => {
+                                                            let _ = tx.send(mb).await;
+                                                        }
+                                                        Err(_) => {
+                                                            debug!("recv err");
+                                                            return;
+                                                        }
+                                                    };
+                                                }
+                                            });
                                         }
                                     }
                                 }

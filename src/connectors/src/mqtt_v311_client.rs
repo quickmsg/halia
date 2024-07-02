@@ -333,6 +333,7 @@ impl Sink {
             2 => QoS::ExactlyOnce,
             _ => unreachable!(),
         };
+
         tokio::spawn(async move {
             loop {
                 match rx.recv().await {

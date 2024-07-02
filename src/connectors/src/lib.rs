@@ -6,12 +6,12 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use rumqttc::tokio_rustls::rustls::internal::msgs;
 use std::{sync::LazyLock, vec};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
 use types::connector::{
-    CreateConnectorReq, SearchConnectorItemResp, SearchConnectorResp, SearchSinkResp, SearchSourceResp
+    CreateConnectorReq, SearchConnectorItemResp, SearchConnectorResp, SearchSinkResp,
+    SearchSourceResp,
 };
 use uuid::Uuid;
 
@@ -152,6 +152,20 @@ impl ConnectorManager {
         for connector in self.connectors.write().await.iter_mut() {
             if connector.get_id() == connector_id {
                 return connector.subscribe(item_id).await;
+            }
+        }
+
+        bail!("not find")
+    }
+
+    pub async fn publish(
+        &self,
+        connector_id: &Uuid,
+        item_id: Option<Uuid>,
+    ) -> Result<mpsc::Sender<MessageBatch>> {
+        for connector in self.connectors.write().await.iter_mut() {
+            if connector.get_id() == connector_id {
+                return connector.publish(item_id).await;
             }
         }
 
