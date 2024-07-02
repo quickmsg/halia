@@ -21,6 +21,22 @@ impl MessageBatch {
             _ => bail!("not support type"),
         }
     }
+
+    pub fn to_json(&self) -> Vec<u8> {
+        let messages = self.get_messages();
+        if messages.len() == 0 {
+            vec![]
+        } else if messages.len() == 1 {
+            let value: serde_json::Value = messages[0].value.clone().into();
+            serde_json::to_vec(&value).unwrap()
+        } else {
+            let mut values: Vec<serde_json::Value> = vec![];
+            for message in messages {
+                values.push(message.value.clone().into())
+            }
+            serde_json::to_vec(&values).unwrap()
+        }
+    }
 }
 
 impl From<serde_json::Value> for Message {

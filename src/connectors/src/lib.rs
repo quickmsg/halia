@@ -6,11 +6,12 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
+use rumqttc::tokio_rustls::rustls::internal::msgs;
 use std::{sync::LazyLock, vec};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
 use types::connector::{
-    CreateConnectorReq, SearchConnectorItemResp, SearchConnectorResp, SearchSourceResp,
+    CreateConnectorReq, SearchConnectorItemResp, SearchConnectorResp, SearchSinkResp, SearchSourceResp
 };
 use uuid::Uuid;
 
@@ -34,12 +35,18 @@ pub trait Connector: Sync + Send {
 
     async fn create_source(&self, req: &Bytes) -> HaliaResult<()>;
 
-    async fn search_source(&self, page: usize, size: usize) -> HaliaResult<SearchSourceResp>;
+    async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourceResp>;
 
     async fn subscribe(
         &mut self,
-        item_id: Option<Uuid>,
+        source_id: Option<Uuid>,
     ) -> Result<broadcast::Receiver<MessageBatch>>;
+
+    async fn create_sink(&self, req: &Bytes) -> HaliaResult<()>;
+
+    async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinkResp>;
+
+    async fn publish(&mut self, sink_id: Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>>;
 }
 
 impl ConnectorManager {
@@ -132,7 +139,7 @@ impl ConnectorManager {
             .iter()
             .find(|c| c.get_id() == connector_id)
         {
-            Some(c) => c.search_source(page, size).await,
+            Some(c) => c.search_sources(page, size).await,
             None => Err(HaliaError::NotFound),
         }
     }

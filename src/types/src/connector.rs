@@ -28,3 +28,9 @@ pub struct SearchSourceResp {
     pub total: usize,
     pub data: Vec<Value>,
 }
+
+#[derive(Serialize)]
+pub struct SearchSinkResp {
+    pub total: usize,
+    pub data: Vec<Value>,
+}
