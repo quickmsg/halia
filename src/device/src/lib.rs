@@ -10,7 +10,9 @@ use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error};
 use types::device::{
-    device::{CreateDeviceReq, SearchDeviceItemResp, SearchDeviceResp, UpdateDeviceReq},
+    device::{
+        CreateDeviceReq, SearchDeviceItemResp, SearchDeviceResp, SearchSinksResp, UpdateDeviceReq,
+    },
     group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
@@ -270,6 +272,25 @@ impl DeviceManager {
             None => Err(HaliaError::NotFound),
         }
     }
+
+    pub async fn create_sink(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => device.create_sink(req).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn search_sinks(
+        &self,
+        device_id: Uuid,
+        page: usize,
+        size: usize,
+    ) -> HaliaResult<SearchSinksResp> {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => Ok(device.search_sinks(page, size).await),
+            None => Err(HaliaError::NotFound),
+        }
+    }
 }
 
 // recover
@@ -476,8 +497,8 @@ trait Device: Sync + Send {
 
     async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()>;
 
-    async fn create_sink(&mut self) -> HaliaResult<()>;
-    async fn search_sinks(&mut self) -> HaliaResult<()>;
+    async fn create_sink(&mut self, req: Bytes) -> HaliaResult<()>;
+    async fn search_sinks(&mut self, page: usize, size: usize) -> SearchSinksResp;
     async fn update_sink(&mut self) -> HaliaResult<()>;
     async fn delete_sink(&mut self) -> HaliaResult<()>;
 }

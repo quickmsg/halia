@@ -7,7 +7,7 @@ use common::error::HaliaError;
 use device::GLOBAL_DEVICE_MANAGER;
 use tracing::debug;
 use types::device::{
-    device::SearchDeviceResp,
+    device::{SearchDeviceResp, SearchSinksResp},
     group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
@@ -180,6 +180,26 @@ pub(crate) async fn delete_points(
         .await
     {
         Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn create_sink(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.create_sink(device_id, req).await {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn search_sinks(
+    Path(device_id): Path<Uuid>,
+    pagination: Query<Pagination>,
+) -> AppResp<SearchSinksResp> {
+    match GLOBAL_DEVICE_MANAGER
+        .search_sinks(device_id, pagination.p, pagination.s)
+        .await
+    {
+        Ok(data) => AppResp::with_data(data),
         Err(e) => e.into(),
     }
 }

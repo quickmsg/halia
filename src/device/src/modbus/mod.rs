@@ -1,15 +1,16 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
-use futures::io::Sink;
 use group::Group;
 use message::MessageBatch;
 use protocol::modbus::client::{rtu, tcp, Context};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sink::{Sink, SinkConf};
 use std::{
     net::{IpAddr, SocketAddr},
     sync::{
@@ -27,7 +28,7 @@ use tokio::{
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error};
 use types::device::{
-    device::{CreateDeviceReq, Mode, SearchDeviceItemResp, UpdateDeviceReq},
+    device::{CreateDeviceReq, Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
@@ -555,12 +556,29 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_sink(&mut self) -> HaliaResult<()> {
-        todo!()
+    async fn create_sink(&mut self, req: Bytes) -> HaliaResult<()> {
+        let conf: SinkConf = serde_json::from_slice(&req)?;
+        let sink = sink::new(Uuid::new_v4(), conf)?;
+        // TODO
+        sink.run();
+        self.sinks.push(sink);
+        Ok(())
     }
 
-    async fn search_sinks(&mut self) -> HaliaResult<()> {
-        todo!()
+    async fn search_sinks(&mut self, page: usize, size: usize) -> SearchSinksResp {
+        let mut data = vec![];
+        let mut i = 0;
+        for sink in self.sinks.iter().skip((page - 1) * size) {
+            data.push(sink.search());
+            i += 1;
+            if i >= size {
+                break;
+            }
+        }
+        SearchSinksResp {
+            total: self.sinks.len(),
+            data,
+        }
     }
 
     async fn update_sink(&mut self) -> HaliaResult<()> {

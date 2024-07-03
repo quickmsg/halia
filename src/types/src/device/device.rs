@@ -40,3 +40,9 @@ pub enum Mode {
     Client,
     Server,
 }
+
+#[derive(Serialize)]
+pub struct SearchSinksResp {
+    pub total: usize,
+    pub data: Vec<Value>,
+}

@@ -104,6 +104,14 @@ fn device_routes() -> Router {
                             .route("/:point_id/value", put(device::write_point))
                             .route("/", delete(device::delete_points)),
                     ),
+            )
+            .nest(
+                "/:device_id/sink",
+                Router::new()
+                    .route("/", post(device::create_sink))
+                    .route("/search", get(device::search_sinks))
+                    .route("/:sink_id", put(device::search_group))
+                    .route("/:sink_id", delete(device::search_group)),
             ),
     )
 }
