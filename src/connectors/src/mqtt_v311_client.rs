@@ -95,23 +95,28 @@ pub fn new(id: Uuid, req: CreateConnectorReq) -> Result<Box<dyn Connector>> {
 }
 
 impl MqttV311 {
-    pub fn run(&mut self) {
+    pub async fn run(&mut self) {
         let mqtt_options =
             MqttOptions::new(self.conf.id.clone(), self.conf.host.clone(), self.conf.port);
 
-        let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
+        let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
+        let sources = self.sources.clone();
+        for source in sources.read().await.iter() {
+            let _ = client
+                .subscribe(source.topic.clone(), QoS::AtLeastOnce)
+                .await;
+        }
         self.client = Some(client);
 
-        let topics = self.sources.clone();
         tokio::spawn(async move {
             loop {
                 match event_loop.poll().await {
                     Ok(Event::Incoming(Incoming::Publish(p))) => {
                         match MessageBatch::from_json(p.payload) {
                             Ok(msg) => {
-                                for topic in topics.write().await.iter_mut() {
-                                    if matches(&topic.topic, &p.topic) {
-                                        match &topic.tx {
+                                for source in sources.write().await.iter_mut() {
+                                    if matches(&source.topic, &p.topic) {
+                                        match &source.tx {
                                             Some(tx) => {
                                                 let _ = tx.send(msg.clone());
                                             }
@@ -289,7 +294,7 @@ impl Connector for MqttV311 {
         };
 
         if !self.status {
-            self.run();
+            self.run().await;
         }
 
         for sink in self.sinks.write().await.iter_mut() {
