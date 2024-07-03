@@ -33,7 +33,7 @@ pub enum Area {
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
-pub(crate) struct Conf {
+pub struct Conf {
     pub r#type: DataType,
     pub slave: u8,
     pub area: Area,

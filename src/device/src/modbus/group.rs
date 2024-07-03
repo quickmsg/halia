@@ -28,7 +28,7 @@ use uuid::Uuid;
 use super::point::Point;
 
 #[derive(Debug)]
-pub(crate) struct Group {
+pub struct Group {
     pub id: Uuid,
     pub name: String,
     pub interval: u64,

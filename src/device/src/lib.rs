@@ -10,15 +10,14 @@ use std::{collections::HashMap, sync::LazyLock};
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, error};
 use types::device::{
-    device::{
-        CreateDeviceReq, DeviceDetailResp, SearchDeviceItemResp, SearchDeviceResp, UpdateDeviceReq,
-    },
+    device::{CreateDeviceReq, SearchDeviceItemResp, SearchDeviceResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
 
-pub mod modbus;
+mod modbus;
+mod opcua;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
     devices: RwLock::new(HashMap::new()),

@@ -26,7 +26,7 @@ use tokio::{
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, error};
 use types::device::{
-    device::{CreateDeviceReq, DeviceDetailResp, Mode, SearchDeviceItemResp, UpdateDeviceReq},
+    device::{CreateDeviceReq, Mode, SearchDeviceItemResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
@@ -35,8 +35,8 @@ use uuid::Uuid;
 use crate::Device;
 
 pub(crate) const TYPE: &str = "modbus";
-pub mod group;
-pub mod point;
+mod group;
+mod point;
 
 #[derive(Debug)]
 struct Modbus {

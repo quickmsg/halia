@@ -16,14 +16,6 @@ pub struct UpdateDeviceReq {
 }
 
 #[derive(Serialize)]
-pub struct DeviceDetailResp {
-    pub id: Uuid,
-    pub r#type: &'static str,
-    pub name: String,
-    pub conf: Value,
-}
-
-#[derive(Serialize)]
 pub struct SearchDeviceResp {
     pub total: usize,
     pub err_cnt: usize,
