@@ -22,13 +22,13 @@ fn get_file() -> PathBuf {
 }
 
 pub async fn init() -> Result<(), io::Error> {
-    super::create_dir(get_dir()).await
+    fs::create_dir_all(get_dir()).await
 }
 
 pub async unsafe fn insert(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
     let data = format!("{}{}{}", 0, DELIMITER, std::str::from_utf8_unchecked(data));
     super::insert(get_file(), id, &data).await?;
-    super::create_dir(get_dir().join(id.to_string())).await
+    fs::create_dir_all(get_dir().join(id.to_string())).await
 }
 
 pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {

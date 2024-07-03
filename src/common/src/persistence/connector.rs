@@ -13,6 +13,9 @@ use uuid::Uuid;
 
 use super::DELIMITER;
 
+static SOURCE_FILE: &str = "source";
+static SINK_FILE: &str = "sink";
+
 fn get_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(super::CONNECTOR_DIR)
 }
@@ -21,17 +24,68 @@ fn get_file() -> PathBuf {
     get_dir().join(super::DATA_FILE)
 }
 
+fn get_source_file(connector_id: &Uuid) -> PathBuf {
+    get_dir().join(connector_id.to_string()).join(SOURCE_FILE)
+}
+
+fn get_sink_file(connector_id: &Uuid) -> PathBuf {
+    get_dir().join(connector_id.to_string()).join(SINK_FILE)
+}
+
 pub async fn init() -> Result<(), io::Error> {
-    super::create_dir(get_dir()).await
+    fs::create_dir_all(get_dir()).await?;
+    super::create_file(get_file()).await
 }
 
-pub async unsafe fn insert(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
-    super::insert(get_file(), id, std::str::from_utf8_unchecked(data)).await?;
-    super::create_dir(get_dir().join(id.to_string())).await
+pub async fn insert_connector(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+    unsafe {
+        super::insert(get_file(), id, std::str::from_utf8_unchecked(data)).await?;
+    }
+    fs::create_dir(get_dir().join(id.to_string())).await?;
+    super::create_file(get_dir().join(id.to_string()).join(SOURCE_FILE)).await?;
+    super::create_file(get_dir().join(id.to_string()).join(SINK_FILE)).await
 }
 
-pub async fn read() -> Result<Vec<(Uuid, String)>, io::Error> {
+pub async fn insert_source(
+    connector_id: &Uuid,
+    source_id: &Uuid,
+    data: &Bytes,
+) -> Result<(), io::Error> {
+    unsafe {
+        super::insert(
+            get_source_file(connector_id),
+            source_id,
+            std::str::from_utf8_unchecked(data),
+        )
+        .await
+    }
+}
+
+pub async fn insert_sink(
+    connector_id: &Uuid,
+    sink_id: &Uuid,
+    data: &Bytes,
+) -> Result<(), io::Error> {
+    unsafe {
+        super::insert(
+            get_sink_file(connector_id),
+            sink_id,
+            std::str::from_utf8_unchecked(data),
+        )
+        .await
+    }
+}
+
+pub async fn read_connectors() -> Result<Vec<(Uuid, String)>, io::Error> {
     super::read(get_file()).await
+}
+
+pub async fn read_sources(connector_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_dir().join(connector_id.to_string()).join(SOURCE_FILE)).await
+}
+
+pub async fn read_sinks(connector_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_dir().join(connector_id.to_string()).join(SINK_FILE)).await
 }
 
 pub async unsafe fn update(id: &Uuid, conf: &Bytes) -> Result<(), io::Error> {

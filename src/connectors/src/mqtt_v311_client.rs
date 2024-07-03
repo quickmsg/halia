@@ -14,7 +14,7 @@ use types::connector::{
 };
 use uuid::Uuid;
 
-use crate::Connector;
+use crate::{save_sink, Connector};
 
 pub(crate) const TYPE: &str = "mqtt_v3.1.1";
 
@@ -145,6 +145,32 @@ impl MqttV311 {
             }
         });
     }
+
+    async fn do_create_source(&self, id: Uuid, topic_conf: TopicConf) -> HaliaResult<()> {
+        self.sources.write().await.push(Source {
+            id,
+            topic: topic_conf.topic,
+            qos: topic_conf.qos,
+            tx: None,
+            ref_cnt: 0,
+        });
+
+        Ok(())
+    }
+
+    async fn do_create_sink(&self, id: Uuid, topic_conf: TopicConf) -> HaliaResult<()> {
+        self.sinks.write().await.push(Sink {
+            id,
+            topic: topic_conf.topic,
+            qos: topic_conf.qos,
+            tx: None,
+            ref_cnt: 0,
+            client: None,
+            rx: None,
+        });
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -197,15 +223,14 @@ impl Connector for MqttV311 {
 
     async fn create_source(&self, req: &Bytes) -> HaliaResult<()> {
         let topic_conf: TopicConf = serde_json::from_slice(req)?;
-        self.sources.write().await.push(Source {
-            id: Uuid::new_v4(),
-            topic: topic_conf.topic,
-            qos: topic_conf.qos,
-            tx: None,
-            ref_cnt: 0,
-        });
+        let source_id = Uuid::new_v4();
+        super::save_source(&self.id, &source_id, req).await?;
+        self.do_create_source(source_id, topic_conf).await
+    }
 
-        Ok(())
+    async fn recover_source(&self, id: Uuid, req: String) {
+        let topic_conf: TopicConf = serde_json::from_str(&req).unwrap();
+        let _ = self.do_create_source(id, topic_conf).await;
     }
 
     async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourceResp> {
@@ -225,17 +250,14 @@ impl Connector for MqttV311 {
 
     async fn create_sink(&self, req: &Bytes) -> HaliaResult<()> {
         let topic_conf: TopicConf = serde_json::from_slice(req)?;
-        self.sinks.write().await.push(Sink {
-            client: None,
-            id: Uuid::new_v4(),
-            topic: topic_conf.topic,
-            qos: topic_conf.qos,
-            ref_cnt: 0,
-            rx: None,
-            tx: None,
-        });
+        let sink_id = Uuid::new_v4();
+        save_sink(&self.id, &sink_id, req).await?;
+        self.do_create_sink(sink_id, topic_conf).await
+    }
 
-        Ok(())
+    async fn recover_sink(&self, id: Uuid, req: String) {
+        let topic_conf: TopicConf = serde_json::from_str(&req).unwrap();
+        let _ = self.do_create_sink(id, topic_conf).await;
     }
 
     async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinkResp> {

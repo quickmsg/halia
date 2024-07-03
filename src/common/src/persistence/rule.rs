@@ -21,7 +21,8 @@ fn get_file() -> PathBuf {
 }
 
 pub async fn init() -> Result<(), io::Error> {
-    super::create_dir(get_dir()).await
+    fs::create_dir_all(get_dir()).await?;
+    super::create_file(get_file()).await
 }
 
 pub async fn insert(id: &Uuid, data: &String) -> Result<(), io::Error> {

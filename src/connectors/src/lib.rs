@@ -6,7 +6,7 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use std::{sync::LazyLock, vec};
+use std::{io, sync::LazyLock, vec};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
 use types::connector::{
@@ -30,46 +30,24 @@ pub static GLOBAL_CONNECTOR_MANAGER: LazyLock<ConnectorManager> =
 #[async_trait]
 pub trait Connector: Sync + Send {
     fn get_id(&self) -> &Uuid;
-
     fn get_info(&self) -> SearchConnectorItemResp;
 
     async fn create_source(&self, req: &Bytes) -> HaliaResult<()>;
-
+    async fn recover_source(&self, id: Uuid, req: String);
     async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourceResp>;
-
     async fn subscribe(
         &mut self,
         source_id: Option<Uuid>,
     ) -> Result<broadcast::Receiver<MessageBatch>>;
 
     async fn create_sink(&self, req: &Bytes) -> HaliaResult<()>;
-
+    async fn recover_sink(&self, id: Uuid, req: String);
     async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinkResp>;
-
     async fn publish(&mut self, sink_id: Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>>;
 }
 
 impl ConnectorManager {
-    pub async fn api_create_connector(&self, body: &Bytes) -> HaliaResult<()> {
-        let req: CreateConnectorReq = serde_json::from_slice(body)?;
-        let connector_id = Uuid::new_v4();
-        self.create_connector(connector_id, req).await?;
-        unsafe {
-            persistence::connector::insert(&connector_id, body).await?;
-        }
-        Ok(())
-    }
-
-    async fn persistence_create_connector(
-        &self,
-        connector_id: Uuid,
-        data: String,
-    ) -> HaliaResult<()> {
-        let req: CreateConnectorReq = serde_json::from_str(&data)?;
-        self.create_connector(connector_id, req).await
-    }
-
-    async fn create_connector(
+    async fn do_create_connector(
         &self,
         connector_id: Uuid,
         req: CreateConnectorReq,
@@ -89,6 +67,18 @@ impl ConnectorManager {
                 Err(HaliaError::ConfErr)
             }
         }
+    }
+}
+
+impl ConnectorManager {
+    pub async fn create_connector(&self, body: &Bytes) -> HaliaResult<()> {
+        let req: CreateConnectorReq = serde_json::from_slice(body)?;
+        let connector_id = Uuid::new_v4();
+        self.do_create_connector(connector_id, req).await?;
+        if let Err(e) = save_connector(&connector_id, body).await {
+            error!("insert to file err :{e:?}");
+        }
+        Ok(())
     }
 
     pub async fn search_connectors(&self, page: usize, size: usize) -> SearchConnectorResp {
@@ -114,6 +104,19 @@ impl ConnectorManager {
     }
 
     pub async fn create_source(&self, connector_id: &Uuid, req: &Bytes) -> HaliaResult<()> {
+        match self
+            .connectors
+            .read()
+            .await
+            .iter()
+            .find(|c| c.get_id() == connector_id)
+        {
+            Some(c) => c.create_source(req).await,
+            None => Err(HaliaError::ProtocolNotSupported),
+        }
+    }
+
+    pub async fn re_source(&self, connector_id: &Uuid, req: &Bytes) -> HaliaResult<()> {
         match self
             .connectors
             .read()
@@ -171,16 +174,73 @@ impl ConnectorManager {
 
         bail!("not find")
     }
+
+    pub async fn create_sink(&self, connector_id: &Uuid, req: &Bytes) -> HaliaResult<()> {
+        match self
+            .connectors
+            .read()
+            .await
+            .iter()
+            .find(|c| c.get_id() == connector_id)
+        {
+            Some(c) => c.create_sink(req).await,
+            None => Err(HaliaError::ProtocolNotSupported),
+        }
+    }
+
+    pub async fn search_sinks(
+        &self,
+        connector_id: &Uuid,
+        page: usize,
+        size: usize,
+    ) -> HaliaResult<SearchSinkResp> {
+        match self
+            .connectors
+            .read()
+            .await
+            .iter()
+            .find(|c| c.get_id() == connector_id)
+        {
+            Some(c) => c.search_sinks(page, size).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
 }
 
 impl ConnectorManager {
     pub async fn recover(&self) -> HaliaResult<()> {
-        match persistence::connector::read().await {
+        match persistence::connector::read_connectors().await {
             Ok(connectors) => {
-                for (id, data) in connectors {
-                    if let Err(e) = self.persistence_create_connector(id, data).await {
-                        error!("{}", e);
-                        return Err(e.into());
+                for (connector_id, data) in connectors {
+                    let req: CreateConnectorReq = serde_json::from_str(&data)?;
+                    self.do_create_connector(connector_id, req).await?;
+                    match self
+                        .connectors
+                        .read()
+                        .await
+                        .iter()
+                        .find(|c| c.get_id() == &connector_id)
+                    {
+                        Some(c) => {
+                            match persistence::connector::read_sources(&connector_id).await {
+                                Ok(sources) => {
+                                    for (source_id, data) in sources {
+                                        c.recover_source(source_id, data).await;
+                                    }
+                                }
+                                Err(e) => return Err(e.into()),
+                            }
+
+                            match persistence::connector::read_sinks(&connector_id).await {
+                                Ok(sinks) => {
+                                    for (sink_id, data) in sinks {
+                                        c.recover_sink(sink_id, data).await;
+                                    }
+                                }
+                                Err(e) => return Err(e.into()),
+                            }
+                        }
+                        None => unreachable!(),
                     }
                 }
 
@@ -194,8 +254,23 @@ impl ConnectorManager {
                         return Err(e.into());
                     }
                 },
-                _ => todo!(),
+                _ => {
+                    error!("{e}");
+                    return Err(e.into());
+                }
             },
         }
     }
+}
+
+async fn save_connector(id: &Uuid, req: &Bytes) -> Result<(), io::Error> {
+    persistence::connector::insert_connector(&id, req).await
+}
+
+async fn save_source(connector_id: &Uuid, source_id: &Uuid, req: &Bytes) -> Result<(), io::Error> {
+    persistence::connector::insert_source(connector_id, source_id, req).await
+}
+
+async fn save_sink(connector_id: &Uuid, sink_id: &Uuid, req: &Bytes) -> Result<(), io::Error> {
+    persistence::connector::insert_sink(connector_id, sink_id, req).await
 }

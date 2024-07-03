@@ -57,12 +57,11 @@ async fn insert(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
     file.flush().await
 }
 
-async fn create_dir(path: PathBuf) -> Result<(), io::Error> {
-    fs::create_dir_all(&path).await?;
+async fn create_file(path: PathBuf) -> Result<(), io::Error> {
     let file = OpenOptions::new()
         .create(true)
         .write(true)
-        .open(path.join(DATA_FILE))
+        .open(path)
         .await?;
     file.set_permissions(Permissions::from_mode(0o666)).await
 }
