@@ -27,7 +27,7 @@ pub async fn init() -> Result<(), io::Error> {
 
 pub async fn insert(id: &Uuid, data: &String) -> Result<(), io::Error> {
     let data = format!("{}{}{}", Status::Stopped, DELIMITER, data);
-    super::insert(Path::new(ROOT_DIR).to_path_buf(), id, &data).await
+    super::insert(get_file(), id, &data).await
 }
 
 pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {

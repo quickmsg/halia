@@ -68,9 +68,12 @@ pub(crate) async fn search_sources(
     }
 }
 
-pub(crate) async fn update_source(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+pub(crate) async fn update_source(
+    Path((connector_id, source_id)): Path<(Uuid, Uuid)>,
+    body: Bytes,
+) -> AppResp<()> {
     match GLOBAL_CONNECTOR_MANAGER
-        .update_connector(connector_id, &body)
+        .update_source(&connector_id, source_id, &body)
         .await
     {
         Ok(_) => AppResp::new(),

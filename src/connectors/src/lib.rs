@@ -36,6 +36,8 @@ pub trait Connector: Sync + Send {
     async fn create_source(&self, req: &Bytes) -> HaliaResult<()>;
     async fn recover_source(&self, id: Uuid, req: String);
     async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourceResp>;
+    async fn update_source(&self, source_id: Uuid, req: &Bytes) -> HaliaResult<()>;
+
     async fn subscribe(
         &mut self,
         source_id: Option<Uuid>,
@@ -117,19 +119,6 @@ impl ConnectorManager {
         }
     }
 
-    pub async fn re_source(&self, connector_id: &Uuid, req: &Bytes) -> HaliaResult<()> {
-        match self
-            .connectors
-            .read()
-            .await
-            .iter()
-            .find(|c| c.get_id() == connector_id)
-        {
-            Some(c) => c.create_source(req).await,
-            None => Err(HaliaError::ProtocolNotSupported),
-        }
-    }
-
     pub async fn search_source(
         &self,
         connector_id: &Uuid,
@@ -144,6 +133,24 @@ impl ConnectorManager {
             .find(|c| c.get_id() == connector_id)
         {
             Some(c) => c.search_sources(page, size).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn update_source(
+        &self,
+        connector_id: &Uuid,
+        source_id: Uuid,
+        req: &Bytes,
+    ) -> HaliaResult<()> {
+        match self
+            .connectors
+            .read()
+            .await
+            .iter()
+            .find(|c| c.get_id() == connector_id)
+        {
+            Some(c) => c.update_source(source_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }

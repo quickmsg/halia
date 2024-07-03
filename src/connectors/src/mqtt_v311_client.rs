@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use common::error::HaliaResult;
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};
@@ -96,6 +96,7 @@ pub fn new(id: Uuid, req: CreateConnectorReq) -> Result<Box<dyn Connector>> {
 
 impl MqttV311 {
     pub async fn run(&mut self) {
+        self.status = true;
         let mqtt_options =
             MqttOptions::new(self.conf.id.clone(), self.conf.host.clone(), self.conf.port);
 
@@ -103,7 +104,7 @@ impl MqttV311 {
         let sources = self.sources.clone();
         for source in sources.read().await.iter() {
             let _ = client
-                .subscribe(source.topic.clone(), QoS::AtLeastOnce)
+                .subscribe(source.topic.clone(), get_mqtt_qos(source.qos))
                 .await;
         }
         self.client = Some(client);
@@ -137,7 +138,9 @@ impl MqttV311 {
                             rumqttc::ConnectionError::NetworkTimeout => todo!(),
                             rumqttc::ConnectionError::FlushTimeout => todo!(),
                             rumqttc::ConnectionError::Tls(_) => todo!(),
-                            rumqttc::ConnectionError::Io(_) => todo!(),
+                            rumqttc::ConnectionError::Io(e) => {
+                                error!("mqtt connection refused:{:?}", e);
+                            }
                             rumqttc::ConnectionError::ConnectionRefused(e) => {
                                 error!("mqtt connection refused:{:?}", e);
                             }
@@ -159,6 +162,18 @@ impl MqttV311 {
     }
 
     async fn do_create_source(&self, id: Uuid, topic_conf: TopicConf) -> HaliaResult<()> {
+        if self.status {
+            if let Err(e) = self
+                .client
+                .as_ref()
+                .unwrap()
+                .subscribe(topic_conf.topic.clone(), get_mqtt_qos(topic_conf.qos))
+                .await
+            {
+                error!("client subscribe err:{e}");
+            }
+        }
+
         self.sources.write().await.push(Source {
             id,
             topic: topic_conf.topic,
@@ -210,7 +225,7 @@ impl Connector for MqttV311 {
         };
 
         if !self.status {
-            self.run();
+            self.run().await;
         }
 
         for source in self.sources.write().await.iter_mut() {
@@ -258,6 +273,51 @@ impl Connector for MqttV311 {
         }
 
         Ok(SearchSourceResp { total, data })
+    }
+
+    async fn update_source(&self, source_id: Uuid, req: &Bytes) -> HaliaResult<()> {
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|s| s.id == source_id)
+        {
+            Some(s) => {
+                let topic_conf: TopicConf = serde_json::from_slice(req)?;
+                if s.topic == topic_conf.topic && s.qos == topic_conf.qos {
+                    return Ok(());
+                }
+
+                if self.status {
+                    if let Err(e) = self
+                        .client
+                        .as_ref()
+                        .unwrap()
+                        .unsubscribe(s.topic.clone())
+                        .await
+                    {
+                        error!("unsubscribe err:{e}");
+                    }
+
+                    if let Err(e) = self
+                        .client
+                        .as_ref()
+                        .unwrap()
+                        .subscribe(topic_conf.topic.clone(), get_mqtt_qos(s.qos))
+                        .await
+                    {
+                        error!("subscribe err:{e}");
+                    }
+                }
+
+                s.topic = topic_conf.topic;
+                s.qos = topic_conf.qos;
+
+                Ok(())
+            }
+            None => Err(HaliaError::ProtocolNotSupported),
+        }
     }
 
     async fn create_sink(&self, req: &Bytes) -> HaliaResult<()> {
@@ -379,5 +439,14 @@ impl Sink {
                 }
             }
         });
+    }
+}
+
+fn get_mqtt_qos(qos: u8) -> QoS {
+    match qos {
+        0 => QoS::AtLeastOnce,
+        1 => QoS::AtMostOnce,
+        2 => QoS::ExactlyOnce,
+        _ => unreachable!(),
     }
 }

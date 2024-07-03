@@ -94,7 +94,49 @@ impl RuleManager {
 }
 
 impl RuleManager {
-    pub async fn recover(&self) -> Result<()> {
+    pub async fn recover(&self) -> HaliaResult<()> {
+        match persistence::rule::read().await {
+            Ok(rules) => {
+                for (id, status, data) in rules {
+                    let req: CreateRuleReq = serde_json::from_str(&data)?;
+                    self.create(Some(id), req).await?;
+                    match status {
+                        persistence::Status::Stopped => {}
+                        persistence::Status::Runing => {
+                            // TODO start this rule
+                        }
+                    }
+                }
+            }
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    if let Err(e) = persistence::rule::init().await {
+                        error!("{e}");
+                        return Err(e.into());
+                    }
+                }
+                std::io::ErrorKind::PermissionDenied => todo!(),
+                std::io::ErrorKind::ConnectionRefused => todo!(),
+                std::io::ErrorKind::ConnectionReset => todo!(),
+                std::io::ErrorKind::ConnectionAborted => todo!(),
+                std::io::ErrorKind::NotConnected => todo!(),
+                std::io::ErrorKind::AddrInUse => todo!(),
+                std::io::ErrorKind::AddrNotAvailable => todo!(),
+                std::io::ErrorKind::BrokenPipe => todo!(),
+                std::io::ErrorKind::AlreadyExists => todo!(),
+                std::io::ErrorKind::WouldBlock => todo!(),
+                std::io::ErrorKind::InvalidInput => todo!(),
+                std::io::ErrorKind::InvalidData => todo!(),
+                std::io::ErrorKind::TimedOut => todo!(),
+                std::io::ErrorKind::WriteZero => todo!(),
+                std::io::ErrorKind::Interrupted => todo!(),
+                std::io::ErrorKind::Unsupported => todo!(),
+                std::io::ErrorKind::UnexpectedEof => todo!(),
+                std::io::ErrorKind::OutOfMemory => todo!(),
+                std::io::ErrorKind::Other => todo!(),
+                _ => todo!(),
+            },
+        }
         Ok(())
     }
 }
