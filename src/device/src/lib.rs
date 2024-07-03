@@ -475,4 +475,9 @@ trait Device: Sync + Send {
         -> HaliaResult<broadcast::Receiver<MessageBatch>>;
 
     async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()>;
+
+    async fn create_sink(&mut self) -> HaliaResult<()>;
+    async fn search_sinks(&mut self) -> HaliaResult<()>;
+    async fn update_sink(&mut self) -> HaliaResult<()>;
+    async fn delete_sink(&mut self) -> HaliaResult<()>;
 }

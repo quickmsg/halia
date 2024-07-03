@@ -4,6 +4,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
+use futures::io::Sink;
 use group::Group;
 use message::MessageBatch;
 use protocol::modbus::client::{rtu, tcp, Context};
@@ -37,6 +38,7 @@ use crate::Device;
 pub(crate) const TYPE: &str = "modbus";
 mod group;
 mod point;
+mod sink;
 
 #[derive(Debug)]
 struct Modbus {
@@ -52,6 +54,8 @@ struct Modbus {
     read_tx: Option<mpsc::Sender<Uuid>>,
     write_tx: Option<mpsc::Sender<(Uuid, Uuid, Value)>>,
     ref_cnt: usize,
+
+    sinks: Vec<Sink>,
 }
 
 #[derive(Debug)]
@@ -137,6 +141,8 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
         read_tx: None,
         write_tx: None,
         ref_cnt: 0,
+
+        sinks: vec![],
     }))
 }
 
@@ -547,6 +553,22 @@ impl Device for Modbus {
             Some(group) => Ok(group.unsubscribe()),
             None => todo!(),
         }
+    }
+
+    async fn create_sink(&mut self) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn search_sinks(&mut self) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn update_sink(&mut self) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn delete_sink(&mut self) -> HaliaResult<()> {
+        todo!()
     }
 }
 
