@@ -1,3 +1,4 @@
+#![feature(duration_constants)]
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -152,6 +153,7 @@ impl ConnectorManager {
         connector_id: &Uuid,
         item_id: Option<Uuid>,
     ) -> Result<broadcast::Receiver<MessageBatch>> {
+        debug!("{},{:?}", connector_id, item_id);
         for connector in self.connectors.write().await.iter_mut() {
             if connector.get_id() == connector_id {
                 return connector.subscribe(item_id).await;

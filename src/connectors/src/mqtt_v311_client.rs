@@ -7,7 +7,10 @@ use common::error::HaliaResult;
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::{
+    sync::{broadcast, mpsc, RwLock},
+    time,
+};
 use tracing::{debug, error};
 use types::connector::{
     CreateConnectorReq, SearchConnectorItemResp, SearchSinkResp, SearchSourceResp,
@@ -93,9 +96,8 @@ pub fn new(id: Uuid, req: CreateConnectorReq) -> Result<Box<dyn Connector>> {
 
 impl MqttV311 {
     pub fn run(&mut self) {
-        let mut mqtt_options =
+        let mqtt_options =
             MqttOptions::new(self.conf.id.clone(), self.conf.host.clone(), self.conf.port);
-        mqtt_options.set_keep_alive(Duration::from_secs(5));
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 10);
         self.client = Some(client);
@@ -124,15 +126,20 @@ impl MqttV311 {
                     Ok(_) => (),
                     Err(e) => {
                         match e {
-                            rumqttc::ConnectionError::MqttState(_) => todo!(),
+                            rumqttc::ConnectionError::MqttState(e) => {
+                                error!("mqtt connection refused:{:?}", e);
+                            }
                             rumqttc::ConnectionError::NetworkTimeout => todo!(),
                             rumqttc::ConnectionError::FlushTimeout => todo!(),
                             rumqttc::ConnectionError::Tls(_) => todo!(),
                             rumqttc::ConnectionError::Io(_) => todo!(),
-                            rumqttc::ConnectionError::ConnectionRefused(_) => todo!(),
+                            rumqttc::ConnectionError::ConnectionRefused(e) => {
+                                error!("mqtt connection refused:{:?}", e);
+                            }
                             rumqttc::ConnectionError::NotConnAck(_) => todo!(),
                             rumqttc::ConnectionError::RequestsDone => todo!(),
                         }
+                        time::sleep(10 * Duration::SECOND).await;
                         // if let ConnectionError::Timeout(_) = e {
                         //     continue;
                         // }
