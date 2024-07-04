@@ -13,26 +13,54 @@ use uuid::Uuid;
 
 use super::{Status, DELIMITER};
 
+static DEVICE_FILE: &str = "device";
+static GROUP_FILE: &str = "group";
+static SINK_FILE: &str = "sink";
+static POINT_FILE: &str = "point";
+
 fn get_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(super::DEVICE_DIR)
 }
 
-fn get_file() -> PathBuf {
-    get_dir().join(super::DATA_FILE)
+fn get_device_file() -> PathBuf {
+    get_dir().join(DEVICE_FILE)
+}
+
+fn get_group_file(device_id: &Uuid) -> PathBuf {
+    get_dir().join(device_id.to_string()).join(GROUP_FILE)
+}
+
+fn get_point_file(device_id: &Uuid, group_id: &Uuid) -> PathBuf {
+    get_dir()
+        .join(device_id.to_string())
+        .join(group_id.to_string())
+        .join(POINT_FILE)
+}
+
+fn get_sink_file(device_id: &Uuid) -> PathBuf {
+    get_dir().join(device_id.to_string()).join(SINK_FILE)
 }
 
 pub async fn init() -> Result<(), io::Error> {
-    fs::create_dir_all(get_dir()).await
+    fs::create_dir_all(get_dir()).await?;
+    super::create_file(get_dir().join(DEVICE_FILE)).await
 }
 
-pub async unsafe fn insert(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
-    let data = format!("{}{}{}", 0, DELIMITER, std::str::from_utf8_unchecked(data));
-    super::insert(get_file(), id, &data).await?;
+pub async fn insert_device(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+    unsafe {
+        let data = format!(
+            "{}{}{}",
+            Status::Stopped,
+            DELIMITER,
+            std::str::from_utf8_unchecked(data)
+        );
+        super::insert(get_device_file(), id, &data).await?;
+    }
     fs::create_dir_all(get_dir().join(id.to_string())).await
 }
 
-pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
-    let datas = super::read(get_file()).await?;
+pub async fn read_devices() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
+    let datas = super::read(get_device_file()).await?;
     let mut devices = vec![];
     for (id, data) in datas {
         let pos = data.find(DELIMITER).expect("数据文件损坏");
@@ -44,7 +72,7 @@ pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
         let status = match status {
             0 => Status::Stopped,
             1 => Status::Runing,
-            _ => unreachable!(),
+            _ => panic!("数据文件损坏"),
         };
         devices.push((id, status, device.to_string()))
     }
@@ -52,8 +80,8 @@ pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
     Ok(devices)
 }
 
-pub async unsafe fn update_conf(id: Uuid, conf: &Bytes) -> Result<(), io::Error> {
-    let path = get_file();
+pub async unsafe fn update_device_conf(id: Uuid, conf: &Bytes) -> Result<(), io::Error> {
+    let path = get_device_file();
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -94,8 +122,8 @@ pub async unsafe fn update_conf(id: Uuid, conf: &Bytes) -> Result<(), io::Error>
     Ok(())
 }
 
-pub async fn update_status(id: Uuid, status: Status) -> Result<(), io::Error> {
-    let path = get_file();
+pub async fn update_device_status(id: Uuid, status: Status) -> Result<(), io::Error> {
+    let path = get_device_file();
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -135,7 +163,108 @@ pub async fn update_status(id: Uuid, status: Status) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub async fn delete(id: &Uuid) -> Result<(), io::Error> {
-    super::delete(get_file(), id).await?;
+pub async fn delete_device(id: &Uuid) -> Result<(), io::Error> {
+    super::delete(get_device_file(), id).await?;
     fs::remove_dir_all(get_dir().join(id.to_string())).await
+}
+
+pub async fn insert_group(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    data: &Bytes,
+) -> Result<(), io::Error> {
+    unsafe {
+        super::insert(
+            get_group_file(device_id),
+            group_id,
+            std::str::from_utf8_unchecked(data),
+        )
+        .await?;
+    }
+    fs::create_dir(
+        get_dir()
+            .join(device_id.to_string())
+            .join(group_id.to_string()),
+    )
+    .await?;
+    super::create_file(get_dir().join(device_id.to_string()).join(GROUP_FILE)).await
+}
+
+pub async fn read_groups(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_group_file(device_id)).await
+}
+
+pub async fn update_group(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    super::update(get_group_file(device_id), group_id, data).await
+}
+
+pub async fn delete_group(device_id: &Uuid, group_id: &Uuid) -> Result<(), io::Error> {
+    super::delete(get_group_file(device_id), group_id).await
+}
+
+pub async fn insert_point(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    point_id: &Uuid,
+    data: &Bytes,
+) -> Result<(), io::Error> {
+    unsafe {
+        super::insert(
+            get_point_file(device_id, group_id),
+            point_id,
+            std::str::from_utf8_unchecked(data),
+        )
+        .await
+    }
+}
+
+pub async fn read_points(
+    device_id: &Uuid,
+    group_id: &Uuid,
+) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_point_file(device_id, group_id)).await
+}
+
+pub async fn update_point(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    point_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    super::update(get_point_file(device_id, group_id), point_id, data).await
+}
+
+pub async fn delete_point(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    point_id: &Uuid,
+) -> Result<(), io::Error> {
+    super::delete(get_point_file(device_id, group_id), point_id).await
+}
+
+pub async fn insert_sink(device_id: &Uuid, sink_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+    unsafe {
+        super::insert(
+            get_sink_file(device_id),
+            sink_id,
+            std::str::from_utf8_unchecked(data),
+        )
+        .await
+    }
+}
+
+pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_sink_file(device_id)).await
+}
+
+pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    super::update(get_sink_file(device_id), sink_id, data).await
+}
+
+pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
+    super::delete(get_sink_file(device_id), sink_id).await
 }

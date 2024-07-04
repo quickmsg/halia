@@ -265,23 +265,23 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_group(
-        &mut self,
-        group_id: Option<Uuid>,
-        req: &CreateGroupReq,
-    ) -> HaliaResult<()> {
-        let (group_id, create) = match group_id {
-            Some(group_id) => (group_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+    async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {
+        // let (group_id, create) = match group_id {
+        //     Some(group_id) => (group_id, false),
+        //     None => (Uuid::new_v4(), true),
+        // };
 
-        if create {
-            if let Err(e) =
-                persistence::group::insert(&self.id, &group_id, &serde_json::to_string(&req)?).await
-            {
-                error!("wirte group to file err:{}", e);
-            }
-        }
+        // if create {
+        //     if let Err(e) = persistence::device::insert_group(
+        //         &self.id,
+        //         &group_id,
+        //         &serde_json::to_string(&req)?,
+        //     )
+        //     .await
+        //     {
+        //         error!("wirte group to file err:{}", e);
+        //     }
+        // }
 
         match Group::new(self.id, group_id, &req) {
             Ok(group) => {
@@ -307,7 +307,7 @@ impl Device for Modbus {
             .await
             .retain(|group| group_id != group.id);
 
-        persistence::group::delete(&self.id, &group_id).await?;
+        persistence::device::delete_group(&self.id, &group_id).await?;
         match self
             .group_signal_tx
             .as_ref()
@@ -428,7 +428,8 @@ impl Device for Modbus {
             None => return Err(HaliaError::NotFound),
         };
 
-        persistence::group::update(&self.id, &group_id, &serde_json::to_string(&req)?).await?;
+        persistence::device::update_group(&self.id, &group_id, &serde_json::to_string(&req)?)
+            .await?;
 
         Ok(())
     }
@@ -436,7 +437,7 @@ impl Device for Modbus {
     async fn create_point(
         &self,
         group_id: Uuid,
-        point_id: Option<Uuid>,
+        point_id: Uuid,
         req: CreatePointReq,
     ) -> HaliaResult<()> {
         match self
@@ -520,7 +521,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.delete_points(point_ids).await,
+            Some(group) => Ok(group.delete_points(point_ids).await),
             None => Err(HaliaError::NotFound),
         }
     }
@@ -556,9 +557,9 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_sink(&mut self, req: Bytes) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: Uuid, req: Bytes) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_slice(&req)?;
-        let sink = sink::new(Uuid::new_v4(), conf)?;
+        let sink = sink::new(sink_id, conf)?;
         // TODO
         sink.run();
         self.sinks.push(sink);

@@ -8,15 +8,15 @@ use device::GLOBAL_DEVICE_MANAGER;
 use tracing::debug;
 use types::device::{
     device::{SearchDeviceResp, SearchSinksResp},
-    group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
+    group::{SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
 
 use crate::{AppResp, DeleteIdsQuery, Pagination};
 
-pub(crate) async fn create_device(body: Bytes) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER.api_create_device(&body).await {
+pub(crate) async fn create_device(req: Bytes) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.create_device(&req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
@@ -58,14 +58,8 @@ pub(crate) async fn delete_device(Path(device_id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn create_group(
-    Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateGroupReq>,
-) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER
-        .create_group(device_id, None, req)
-        .await
-    {
+pub(crate) async fn create_group(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.create_group(device_id, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
@@ -109,10 +103,10 @@ pub(crate) async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>
 
 pub(crate) async fn create_point(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreatePointReq>,
+    req: Bytes,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
-        .create_point(device_id, group_id, None, req)
+        .create_point(device_id, group_id, req)
         .await
     {
         Ok(()) => AppResp::new(),

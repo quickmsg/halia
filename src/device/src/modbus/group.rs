@@ -133,31 +133,9 @@ impl Group {
         }
     }
 
-    pub async fn create_point(
-        &self,
-        point_id: Option<Uuid>,
-        req: CreatePointReq,
-    ) -> HaliaResult<()> {
-        let (point_id, create) = match point_id {
-            Some(point_id) => (point_id, false),
-            None => (Uuid::new_v4(), true),
-        };
-
+    pub async fn create_point(&self, point_id: Uuid, req: CreatePointReq) -> HaliaResult<()> {
         let point = Point::new(req.clone(), point_id)?;
         self.points.write().await.insert(point_id, point);
-        if create {
-            if let Err(e) = persistence::point::insert(
-                &self.device_id,
-                &self.id,
-                &point_id,
-                &serde_json::to_string(&req)?,
-            )
-            .await
-            {
-                error!("insert point err:{}", e);
-            }
-        }
-
         Ok(())
     }
 
@@ -187,13 +165,13 @@ impl Group {
             None => return Err(HaliaError::NotFound),
         };
 
-        persistence::point::update(
-            &self.device_id,
-            &self.id,
-            &point_id,
-            &serde_json::to_string(req)?,
-        )
-        .await?;
+        // persistence::point::update(
+        //     &self.device_id,
+        //     &self.id,
+        //     &point_id,
+        //     &serde_json::to_string(req)?,
+        // )
+        // .await?;
 
         Ok(())
     }
@@ -202,12 +180,8 @@ impl Group {
         self.points.read().await.len()
     }
 
-    pub async fn delete_points(&self, ids: Vec<Uuid>) -> HaliaResult<()> {
+    pub async fn delete_points(&self, ids: Vec<Uuid>) {
         self.points.write().await.retain(|id, _| !ids.contains(id));
-        for id in ids {
-            persistence::point::delete(&self.device_id, &self.id, &id).await?;
-        }
-        Ok(())
     }
 
     pub async fn read_points_value(

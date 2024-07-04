@@ -30,22 +30,7 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn api_create_device(&self, body: &Bytes) -> HaliaResult<()> {
-        let req: CreateDeviceReq = serde_json::from_slice(body)?;
-        let device_id = Uuid::new_v4();
-        self.create_device(device_id.clone(), &req).await?;
-        unsafe {
-            persistence::device::insert(&device_id, body).await?;
-        }
-        Ok(())
-    }
-
-    async fn persistence_create_device(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
-        let req: CreateDeviceReq = serde_json::from_str(&data)?;
-        self.create_device(device_id, &req).await
-    }
-
-    async fn create_device(&self, device_id: Uuid, req: &CreateDeviceReq) -> HaliaResult<()> {
+    async fn do_create_device(&self, device_id: Uuid, req: &CreateDeviceReq) -> HaliaResult<()> {
         let device = match req.r#type.as_str() {
             modbus::TYPE => match modbus::new(device_id, req) {
                 Ok(device) => device,
@@ -60,6 +45,59 @@ impl DeviceManager {
         Ok(())
     }
 
+    async fn do_create_group(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        req: CreateGroupReq,
+    ) -> HaliaResult<()> {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => {
+                device.create_group(group_id, &req).await?;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    async fn do_create_point(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        point_id: Uuid,
+        req: CreatePointReq,
+    ) -> HaliaResult<()> {
+        match self.devices.read().await.get(&device_id) {
+            Some(device) => {
+                device.create_point(group_id, point_id, req).await?;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    async fn do_create_sink(&self, device_id: Uuid, sink_id: Uuid, req: Bytes) -> HaliaResult<()> {
+        match self.devices.write().await.get_mut(&device_id) {
+            Some(device) => device.create_sink(sink_id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+}
+
+impl DeviceManager {
+    pub async fn create_device(&self, body: &Bytes) -> HaliaResult<()> {
+        let req: CreateDeviceReq = serde_json::from_slice(body)?;
+        let device_id = Uuid::new_v4();
+        self.do_create_device(device_id.clone(), &req).await?;
+        persistence::device::insert_device(&device_id, body).await?;
+        Ok(())
+    }
+
+    async fn recover_device(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
+        let req: CreateDeviceReq = serde_json::from_str(&data)?;
+        self.do_create_device(device_id, &req).await
+    }
+
     pub async fn update_device(&self, device_id: Uuid, data: &Bytes) -> HaliaResult<()> {
         let req: UpdateDeviceReq = serde_json::from_slice(data)?;
         match self.devices.write().await.get_mut(&device_id) {
@@ -70,7 +108,7 @@ impl DeviceManager {
         }
 
         // data json解析成功的情况下，必定可以转换为string，这是安全的
-        unsafe { persistence::device::update_conf(device_id, data) }.await?;
+        unsafe { persistence::device::update_device_conf(device_id, data) }.await?;
         Ok(())
     }
 
@@ -84,8 +122,11 @@ impl DeviceManager {
                         return Err(e);
                     }
                 }
-                match persistence::device::update_status(device_id, persistence::Status::Runing)
-                    .await
+                match persistence::device::update_device_status(
+                    device_id,
+                    persistence::Status::Runing,
+                )
+                .await
                 {
                     Ok(_) => Ok(()),
                     Err(e) => {
@@ -102,7 +143,8 @@ impl DeviceManager {
         match self.devices.write().await.get_mut(&device_id) {
             Some(device) => {
                 device.stop().await;
-                persistence::device::update_status(device_id, persistence::Status::Stopped).await?;
+                persistence::device::update_device_status(device_id, persistence::Status::Stopped)
+                    .await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound),
@@ -146,27 +188,16 @@ impl DeviceManager {
         };
 
         self.devices.write().await.remove(&device_id);
-        persistence::device::delete(&device_id).await?;
+        persistence::device::delete_device(&device_id).await?;
 
         Ok(())
     }
-}
 
-// group
-impl DeviceManager {
-    pub async fn create_group(
-        &self,
-        device_id: Uuid,
-        group_id: Option<Uuid>,
-        req: CreateGroupReq,
-    ) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
-            Some(device) => {
-                device.create_group(group_id, &req).await?;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+    pub async fn create_group(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
+        let group_id = Uuid::new_v4();
+        persistence::device::insert_group(&device_id, &group_id, &req).await?;
+        let req: CreateGroupReq = serde_json::from_slice(&req)?;
+        self.do_create_group(device_id, group_id, req).await
     }
 
     pub async fn search_group(
@@ -202,23 +233,25 @@ impl DeviceManager {
             None => Err(HaliaError::NotFound),
         }
     }
-}
 
-// point
-impl DeviceManager {
     pub async fn create_point(
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        point_id: Option<Uuid>,
-        req: CreatePointReq,
+        req: Bytes,
     ) -> HaliaResult<()> {
-        match self.devices.read().await.get(&device_id) {
-            Some(device) => {
-                device.create_point(group_id, point_id, req).await?;
-                Ok(())
+        let point_id = Uuid::new_v4();
+        let creaet_point_req = serde_json::from_slice(&req)?;
+        self.do_create_point(device_id, group_id, point_id, creaet_point_req)
+            .await?;
+        match persistence::device::insert_point(&device_id, &group_id, &point_id, &req).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                error!("写入点位失败:{e:?}");
+                self.delete_points(device_id, group_id, vec![point_id])
+                    .await?;
+                return Err(HaliaError::IoErr);
             }
-            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -274,9 +307,15 @@ impl DeviceManager {
     }
 
     pub async fn create_sink(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
-            Some(device) => device.create_sink(req).await,
-            None => Err(HaliaError::NotFound),
+        let sink_id = Uuid::new_v4();
+        self.do_create_sink(device_id, sink_id, req.clone()).await?;
+        match persistence::device::insert_sink(&device_id, &sink_id, &req).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                error!("sink写入文件失败:{e:?}");
+                // TODO delete
+                Err(e.into())
+            }
         }
     }
 
@@ -296,10 +335,10 @@ impl DeviceManager {
 // recover
 impl DeviceManager {
     pub async fn recover(&self) -> HaliaResult<()> {
-        match persistence::device::read().await {
+        match persistence::device::read_devices().await {
             Ok(devices) => {
                 for (id, status, data) in devices {
-                    if let Err(e) = self.persistence_create_device(id, data).await {
+                    if let Err(e) = self.recover_device(id, data).await {
                         error!("{}", e);
                         return Err(e.into());
                     }
@@ -352,30 +391,24 @@ impl DeviceManager {
     }
 
     async fn recover_group(&self, device_id: Uuid) -> HaliaResult<()> {
-        let groups = match persistence::group::read(&device_id).await {
+        let groups = match persistence::device::read_groups(&device_id).await {
             Ok(groups) => groups,
             Err(e) => {
                 error!("read device:{} group from file err:{}", device_id, e);
                 return Err(e.into());
             }
         };
-        let groups: Vec<(Option<Uuid>, CreateGroupReq)> = groups
-            .into_iter()
-            .map(|(id, data)| {
-                let req: CreateGroupReq = serde_json::from_str(data.as_str()).unwrap();
-                (Some(id), req)
-            })
-            .collect();
 
         for (group_id, req) in groups {
-            if let Err(e) = self.create_group(device_id, group_id, req).await {
+            let req: CreateGroupReq = serde_json::from_str(&req)?;
+            if let Err(e) = self.do_create_group(device_id, group_id, req).await {
                 error!(
                     "create device:{} group:{:?} err:{} ",
                     device_id, group_id, e
                 );
                 return Err(e);
             }
-            if let Err(e) = self.recover_points(device_id, group_id.unwrap()).await {
+            if let Err(e) = self.recover_points(device_id, group_id).await {
                 error!(
                     "recover device:{} group:{:?} err:{}",
                     device_id, group_id, e
@@ -388,7 +421,7 @@ impl DeviceManager {
     }
 
     async fn recover_points(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        let points = match persistence::point::read(&device_id, &group_id).await {
+        let points = match persistence::device::read_points(&device_id, &group_id).await {
             Ok(points) => points,
             Err(e) => {
                 error!(
@@ -398,17 +431,11 @@ impl DeviceManager {
                 return Err(e.into());
             }
         };
-        let points: Vec<(Option<Uuid>, CreatePointReq)> = points
-            .into_iter()
-            .map(|(id, data)| {
-                let req: CreatePointReq = serde_json::from_str(data.as_str()).unwrap();
-                (Some(id), req)
-            })
-            .collect();
 
         for (point_id, point) in points {
+            let req: CreatePointReq = serde_json::from_str(&point)?;
             if let Err(e) = self
-                .create_point(device_id, group_id, point_id, point)
+                .do_create_point(device_id, group_id, point_id, req)
                 .await
             {
                 return Err(e);
@@ -457,9 +484,10 @@ trait Device: Sync + Send {
     // group
     async fn create_group(
         &mut self,
-        group_id: Option<Uuid>,
+        group_id: Uuid,
         create_group: &CreateGroupReq,
     ) -> HaliaResult<()>;
+
     async fn read_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp>;
     async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()>;
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()>;
@@ -468,7 +496,7 @@ trait Device: Sync + Send {
     async fn create_point(
         &self,
         group_id: Uuid,
-        point_id: Option<Uuid>,
+        point_id: Uuid,
         req: CreatePointReq,
     ) -> HaliaResult<()>;
 
@@ -497,7 +525,7 @@ trait Device: Sync + Send {
 
     async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()>;
 
-    async fn create_sink(&mut self, req: Bytes) -> HaliaResult<()>;
+    async fn create_sink(&mut self, sink_id: Uuid, req: Bytes) -> HaliaResult<()>;
     async fn search_sinks(&mut self, page: usize, size: usize) -> SearchSinksResp;
     async fn update_sink(&mut self) -> HaliaResult<()>;
     async fn delete_sink(&mut self) -> HaliaResult<()>;

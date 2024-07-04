@@ -7,16 +7,14 @@ use std::{
 };
 
 use tokio::{
-    fs::{self, OpenOptions},
+    fs::OpenOptions,
     io::{AsyncReadExt, AsyncWriteExt},
 };
 use uuid::Uuid;
 
 pub mod connector;
 pub mod device;
-pub mod group;
 pub mod message;
-pub mod point;
 pub mod rule;
 
 static ROOT_DIR: &str = "storage";
