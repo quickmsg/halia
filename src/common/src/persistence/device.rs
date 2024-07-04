@@ -46,7 +46,7 @@ pub async fn init() -> Result<(), io::Error> {
     super::create_file(get_dir().join(DEVICE_FILE)).await
 }
 
-pub async fn insert_device(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+pub async fn insert_device(device_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
     unsafe {
         let data = format!(
             "{}{}{}",
@@ -54,9 +54,11 @@ pub async fn insert_device(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
             DELIMITER,
             std::str::from_utf8_unchecked(data)
         );
-        super::insert(get_device_file(), id, &data).await?;
+        super::insert(get_device_file(), device_id, &data).await?;
     }
-    fs::create_dir_all(get_dir().join(id.to_string())).await
+    fs::create_dir_all(get_dir().join(device_id.to_string())).await?;
+    super::create_file(get_group_file(device_id)).await?;
+    super::create_file(get_sink_file(device_id)).await
 }
 
 pub async fn read_devices() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
@@ -187,7 +189,13 @@ pub async fn insert_group(
             .join(group_id.to_string()),
     )
     .await?;
-    super::create_file(get_dir().join(device_id.to_string()).join(GROUP_FILE)).await
+    super::create_file(
+        get_dir()
+            .join(device_id.to_string())
+            .join(group_id.to_string())
+            .join(POINT_FILE),
+    )
+    .await
 }
 
 pub async fn read_groups(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use bytes::Bytes;
+use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
@@ -7,7 +8,7 @@ use common::{
 use message::MessageBatch;
 use serde::Serialize;
 use std::{collections::HashMap, sync::LazyLock};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
 use types::device::{
     device::{
@@ -91,11 +92,6 @@ impl DeviceManager {
         self.do_create_device(device_id.clone(), &req).await?;
         persistence::device::insert_device(&device_id, body).await?;
         Ok(())
-    }
-
-    async fn recover_device(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
-        let req: CreateDeviceReq = serde_json::from_str(&data)?;
-        self.do_create_device(device_id, &req).await
     }
 
     pub async fn update_device(&self, device_id: Uuid, data: &Bytes) -> HaliaResult<()> {
@@ -195,9 +191,12 @@ impl DeviceManager {
 
     pub async fn create_group(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
         let group_id = Uuid::new_v4();
+        let create_group_req: CreateGroupReq = serde_json::from_slice(&req)?;
+        self.do_create_group(device_id, group_id, create_group_req)
+            .await?;
+        // TODO 插入失败删除group
         persistence::device::insert_group(&device_id, &group_id, &req).await?;
-        let req: CreateGroupReq = serde_json::from_slice(&req)?;
-        self.do_create_group(device_id, group_id, req).await
+        Ok(())
     }
 
     pub async fn search_group(
@@ -334,6 +333,11 @@ impl DeviceManager {
 
 // recover
 impl DeviceManager {
+    async fn recover_device(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
+        let req: CreateDeviceReq = serde_json::from_str(&data)?;
+        self.do_create_device(device_id, &req).await
+    }
+
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::device::read_devices().await {
             Ok(devices) => {
@@ -522,11 +526,11 @@ trait Device: Sync + Send {
 
     async fn subscribe(&mut self, group_id: Uuid)
         -> HaliaResult<broadcast::Receiver<MessageBatch>>;
-
     async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()>;
 
-    async fn create_sink(&mut self, sink_id: Uuid, req: Bytes) -> HaliaResult<()>;
-    async fn search_sinks(&mut self, page: usize, size: usize) -> SearchSinksResp;
-    async fn update_sink(&mut self) -> HaliaResult<()>;
-    async fn delete_sink(&mut self) -> HaliaResult<()>;
+    async fn create_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()>;
+    async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
+    async fn update_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()>;
+    async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()>;
+    async fn publish(&self, sink_id: Uuid) -> Result<mpsc::Sender<MessageBatch>>;
 }

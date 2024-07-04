@@ -1,5 +1,8 @@
 use common::error::{HaliaError, HaliaResult};
+use message::MessageBatch;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+use tracing::debug;
 use types::device::datatype::DataType;
 use uuid::Uuid;
 
@@ -7,10 +10,13 @@ use super::point::Area;
 
 #[derive(Debug)]
 pub struct Sink {
-    id: Uuid,
+    pub id: Uuid,
     points: Vec<Point>,
     conf: SinkConf,
+    pub tx: Option<mpsc::Sender<MessageBatch>>,
 }
+
+pub struct Command {}
 
 pub fn new(id: Uuid, conf: SinkConf) -> HaliaResult<Sink> {
     let mut points = vec![];
@@ -18,11 +24,28 @@ pub fn new(id: Uuid, conf: SinkConf) -> HaliaResult<Sink> {
         let point = Point::new(point_conf)?;
         points.push(point);
     }
-    Ok(Sink { id, points, conf })
+    Ok(Sink {
+        id,
+        points,
+        conf,
+        tx: None,
+    })
 }
 
 impl Sink {
-    pub fn run(&self) {}
+    pub fn run(&self, mut rx: mpsc::Receiver<MessageBatch>) {
+        tokio::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Some(mb) => {
+                        debug!("{mb:?}");
+                        //
+                    }
+                    None => return,
+                }
+            }
+        });
+    }
 
     pub fn search(&self) -> serde_json::Value {
         let resp = SinkSearchResp {
