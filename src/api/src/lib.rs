@@ -60,7 +60,7 @@ struct Pagination {
 pub async fn start() {
     let app = Router::new()
         .nest("/api", device_routes())
-        .nest("/api", connector_routes())
+        .nest("/api", app_routes())
         .nest("/api", rule_routes())
         .layer(
             CorsLayer::new()
@@ -116,16 +116,16 @@ fn device_routes() -> Router {
     )
 }
 
-fn connector_routes() -> Router {
+fn app_routes() -> Router {
     Router::new().nest(
-        "/connector",
+        "/app",
         Router::new()
             .route("/", post(apps::create_connector))
             .route("/search", get(apps::search_connectors))
-            .route("/:connector_id", put(apps::update_connector))
-            .route("/:connector_id", delete(apps::delete_connector))
+            .route("/:app_id", put(apps::update_connector))
+            .route("/:app_id", delete(apps::delete_connector))
             .nest(
-                "/:connector_id/source",
+                "/:app_id/source",
                 Router::new()
                     .route("/", post(apps::create_source))
                     .route("/search", get(apps::search_sources))
@@ -133,7 +133,7 @@ fn connector_routes() -> Router {
                     .route("/:source_id", delete(apps::delete_source)),
             )
             .nest(
-                "/:connector_id/sink",
+                "/:app_id/sink",
                 Router::new()
                     .route("/", post(apps::create_sink))
                     .route("/search", get(apps::search_sinks))

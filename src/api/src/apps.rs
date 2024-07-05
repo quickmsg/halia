@@ -25,36 +25,33 @@ pub(crate) async fn search_connectors(
     )
 }
 
-pub(crate) async fn update_connector(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER
-        .update_connector(connector_id, &body)
-        .await
-    {
+pub(crate) async fn update_connector(Path(app_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.update_connector(app_id, &body).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn delete_connector(Path(connector_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.delete_connector(connector_id).await {
+pub(crate) async fn delete_connector(Path(app_id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.delete_connector(app_id).await {
         Ok(_) => todo!(),
         Err(_) => todo!(),
     }
 }
 
-pub(crate) async fn create_source(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.create_source(&connector_id, &body).await {
+pub(crate) async fn create_source(Path(app_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.create_source(&app_id, &body).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn search_sources(
-    Path(connector_id): Path<Uuid>,
+    Path(app_id): Path<Uuid>,
     pagination: Query<Pagination>,
 ) -> AppResp<SearchSourceResp> {
     match GLOBAL_APP_MANAGER
-        .search_source(&connector_id, pagination.p, pagination.s)
+        .search_source(&app_id, pagination.p, pagination.s)
         .await
     {
         Ok(data) => AppResp::with_data(data),
@@ -63,11 +60,11 @@ pub(crate) async fn search_sources(
 }
 
 pub(crate) async fn update_source(
-    Path((connector_id, source_id)): Path<(Uuid, Uuid)>,
+    Path((app_id, source_id)): Path<(Uuid, Uuid)>,
     body: Bytes,
 ) -> AppResp<()> {
     match GLOBAL_APP_MANAGER
-        .update_source(&connector_id, source_id, &body)
+        .update_source(&app_id, source_id, &body)
         .await
     {
         Ok(_) => AppResp::new(),
@@ -75,26 +72,26 @@ pub(crate) async fn update_source(
     }
 }
 
-pub(crate) async fn delete_source(Path(connector_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.delete_connector(connector_id).await {
+pub(crate) async fn delete_source(Path(app_id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.delete_connector(app_id).await {
         Ok(_) => todo!(),
         Err(_) => todo!(),
     }
 }
 
-pub(crate) async fn create_sink(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.create_sink(&connector_id, &body).await {
+pub(crate) async fn create_sink(Path(app_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.create_sink(&app_id, &body).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn search_sinks(
-    Path(connector_id): Path<Uuid>,
+    Path(app_id): Path<Uuid>,
     pagination: Query<Pagination>,
 ) -> AppResp<SearchSinkResp> {
     match GLOBAL_APP_MANAGER
-        .search_sinks(&connector_id, pagination.p, pagination.s)
+        .search_sinks(&app_id, pagination.p, pagination.s)
         .await
     {
         Ok(data) => AppResp::with_data(data),
@@ -102,18 +99,15 @@ pub(crate) async fn search_sinks(
     }
 }
 
-pub(crate) async fn update_sink(Path(connector_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER
-        .update_connector(connector_id, &body)
-        .await
-    {
+pub(crate) async fn update_sink(Path(app_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.update_connector(app_id, &body).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn delete_sink(Path(connector_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.delete_connector(connector_id).await {
+pub(crate) async fn delete_sink(Path(app_id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.delete_connector(app_id).await {
         Ok(_) => todo!(),
         Err(_) => todo!(),
     }

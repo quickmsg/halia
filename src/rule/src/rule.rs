@@ -56,6 +56,7 @@ impl Rule {
                     RuleNodeType::Source => {
                         let node = node_map.get(&info.first_id).unwrap();
                         let source: CreateRuleSource = serde_json::from_value(node.conf.clone())?;
+                        debug!("{:?}", source);
                         let receiver = match source.r#type {
                             types::rule::CreateRuleSourceType::Device => GLOBAL_DEVICE_MANAGER
                                 .subscribe(&source.id, &source.source_id.unwrap())
@@ -68,25 +69,53 @@ impl Rule {
                         };
                         receivers.insert(info.first_id, vec![receiver]);
                     }
-                    // "window" => {
-                    //     if let Some(source_ids) = incoming_edges.get(&info.id) {
-                    //         if let Some(source_id) = source_ids.first() {
-                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
-                    //                 let rx = node_receivers.remove(0);
-                    //                 let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
-                    //                 receivers.insert(info.id, vec![nrx]);
+                    RuleNodeType::Window => {
+                        // "window" => {
+                        //     if let Some(source_ids) = incoming_edges.get(&info.id) {
+                        //         if let Some(source_id) = source_ids.first() {
+                        //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                        //                 let rx = node_receivers.remove(0);
+                        //                 let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
+                        //                 receivers.insert(info.id, vec![nrx]);
 
-                    //                 if let Some(node) = node_map.get(&info.id) {
-                    //                     let mut window =
-                    //                         Window::new(node.conf.clone(), rx, tx)?;
-                    //                     tokio::spawn(async move {
-                    //                         window.run().await;
-                    //                     });
-                    //                 }
-                    //             }
-                    //         }
-                    //     }
-                    // }
+                        //                 if let Some(node) = node_map.get(&info.id) {
+                        //                     let mut window =
+                        //                         Window::new(node.conf.clone(), rx, tx)?;
+                        //                     tokio::spawn(async move {
+                        //                         window.run().await;
+                        //                     });
+                        //                 }
+                        //             }
+                        //         }
+                        //     }
+                        // }
+                    }
+                    RuleNodeType::Merge => {
+                        // if let Some(source_ids) = incoming_edges.get(&osi.id) {
+                        //     debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);
+                        //     let mut rxs = Vec::new();
+                        //     for source_id in source_ids {
+                        //         if let Some(mut node_receivers) = receivers.remove(source_id) {
+                        //             let rx = node_receivers.remove(0);
+                        //             rxs.push(rx);
+                        //         }
+                        //     }
+                        //     debug!("source receivers len:{}", rxs.len());
+                        //     let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
+                        //     receivers.insert(osi.id, vec![nrx]);
+                        //     if let Some(node) = node_map.get(&osi.id) {
+                        //         match Merge::new(node.conf.clone(), rxs, tx) {
+                        //             Ok(mut merge) => {
+                        //                 tokio::spawn(async move {
+                        //                     merge.run().await;
+                        //                 });
+                        //             }
+                        //             Err(e) => error!("create merge err:{}", e),
+                        //         }
+                        //     }
+                        // }
+                    }
+
                     RuleNodeType::Sink => {
                         if let Some(source_ids) = incoming_edges.get(&info.id) {
                             if let Some(source_id) = source_ids.first() {
@@ -124,31 +153,7 @@ impl Rule {
                             }
                         }
                     }
-                    // "merge" => {
-                    //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
-                    //         debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);
-                    //         let mut rxs = Vec::new();
-                    //         for source_id in source_ids {
-                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
-                    //                 let rx = node_receivers.remove(0);
-                    //                 rxs.push(rx);
-                    //             }
-                    //         }
-                    //         debug!("source receivers len:{}", rxs.len());
-                    //         let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
-                    //         receivers.insert(osi.id, vec![nrx]);
-                    //         if let Some(node) = node_map.get(&osi.id) {
-                    //             match Merge::new(node.conf.clone(), rxs, tx) {
-                    //                 Ok(mut merge) => {
-                    //                     tokio::spawn(async move {
-                    //                         merge.run().await;
-                    //                     });
-                    //                 }
-                    //                 Err(e) => error!("create merge err:{}", e),
-                    //             }
-                    //         }
-                    //     }
-                    // }
+
                     // "join" => {
                     //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
                     //         let mut rxs = Vec::new();
@@ -166,7 +171,9 @@ impl Rule {
                     //         });
                     //     }
                     // }
-                    _ => unreachable!(),
+                    _ => {
+                        debug!("{:?}", info.r#type);
+                    }
                 }
                 // None => {
                 //     if let Some(source_ids) = incoming_edges.get(&info.first_id) {
@@ -263,7 +270,12 @@ fn get_stream_info(
                 osi.r#type = RuleNodeType::Source;
                 return Ok(osi);
             }
-            RuleNodeType::Sink => {}
+            RuleNodeType::Sink => {
+                osi.r#type = RuleNodeType::Sink;
+                return Ok(osi);
+            }
+            RuleNodeType::Merge => {}
+            RuleNodeType::Window => {}
             // "sink" => {
             //     osi.r#type = Some("sink".to_string());
             //     return Ok(osi);

@@ -28,14 +28,14 @@ pub enum RuleNodeType {
     Sink,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CreateRuleSource {
     pub r#type: CreateRuleSourceType,
     pub id: Uuid,
     pub source_id: Option<Uuid>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum CreateRuleSourceType {
     Device,

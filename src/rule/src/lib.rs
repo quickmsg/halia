@@ -40,18 +40,16 @@ impl RuleManager {
         Ok(())
     }
 
+    // TODO
     pub async fn search(&self, page: usize, size: usize) -> HaliaResult<Vec<ListRuleResp>> {
-        // Ok(self
-        //     .rules
-        //     .read()
-        //     .await
-        //     .iter()
-        //     .map(|(id, rule)| ListRuleResp {
-        //         id: id.clone(),
-        //         name: rule.req.name.clone(),
-        //     })
-        //     .collect())
-        todo!()
+        let mut data = vec![];
+        for rule in self.rules.read().await.iter() {
+            data.push(ListRuleResp {
+                id: rule.id,
+                name: rule.req.name.clone(),
+            })
+        }
+        Ok(data)
     }
 
     pub async fn read(&self, id: Uuid) -> HaliaResult<CreateRuleReq> {

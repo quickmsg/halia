@@ -4,6 +4,8 @@ use bytes::Bytes;
 use common::error::{HaliaError, HaliaResult};
 use group::Group;
 use message::MessageBatch;
+use opcua::server::prelude::DataType;
+use point::Area;
 use protocol::modbus::client::{rtu, tcp, Context};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -684,3 +686,12 @@ async fn write_point_value(
 
     true
 }
+
+struct WritePointEvent {
+    pub area: Area,
+    pub address: u16,
+    pub data_type: DataType,
+    pub value: serde_json::Value,
+}
+
+async fn sink_write_value() {}
