@@ -44,7 +44,7 @@ pub trait Connector: Sync + Send {
     async fn create_sink(&self, req: &Bytes) -> HaliaResult<()>;
     async fn recover_sink(&self, id: Uuid, req: String);
     async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinkResp>;
-    async fn publish(&mut self, sink_id: Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>>;
+    async fn publish(&mut self, sink_id: &Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>>;
 }
 
 impl AppManager {
@@ -167,7 +167,7 @@ impl AppManager {
     pub async fn publish(
         &self,
         connector_id: &Uuid,
-        item_id: Option<Uuid>,
+        item_id: &Option<Uuid>,
     ) -> Result<mpsc::Sender<MessageBatch>> {
         for connector in self.apps.write().await.iter_mut() {
             if connector.get_id() == connector_id {
@@ -212,7 +212,7 @@ impl AppManager {
 
 impl AppManager {
     pub async fn recover(&self) -> HaliaResult<()> {
-        match persistence::connector::read_connectors().await {
+        match persistence::apps::read_connectors().await {
             Ok(connectors) => {
                 for (connector_id, data) in connectors {
                     let req: CreateAppReq = serde_json::from_str(&data)?;
@@ -225,7 +225,7 @@ impl AppManager {
                         .find(|c| c.get_id() == &connector_id)
                     {
                         Some(c) => {
-                            match persistence::connector::read_sources(&connector_id).await {
+                            match persistence::apps::read_sources(&connector_id).await {
                                 Ok(sources) => {
                                     for (source_id, data) in sources {
                                         c.recover_source(source_id, data).await;
@@ -234,7 +234,7 @@ impl AppManager {
                                 Err(e) => return Err(e.into()),
                             }
 
-                            match persistence::connector::read_sinks(&connector_id).await {
+                            match persistence::apps::read_sinks(&connector_id).await {
                                 Ok(sinks) => {
                                     for (sink_id, data) in sinks {
                                         c.recover_sink(sink_id, data).await;
@@ -250,7 +250,7 @@ impl AppManager {
                 Ok(())
             }
             Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => match persistence::connector::init().await {
+                std::io::ErrorKind::NotFound => match persistence::apps::init().await {
                     Ok(_) => Ok(()),
                     Err(e) => {
                         error!("{e}");
@@ -267,13 +267,13 @@ impl AppManager {
 }
 
 async fn save_connector(id: &Uuid, req: &Bytes) -> Result<(), io::Error> {
-    persistence::connector::insert_connector(&id, req).await
+    persistence::apps::insert_connector(&id, req).await
 }
 
 async fn save_source(connector_id: &Uuid, source_id: &Uuid, req: &Bytes) -> Result<(), io::Error> {
-    persistence::connector::insert_source(connector_id, source_id, req).await
+    persistence::apps::insert_source(connector_id, source_id, req).await
 }
 
 async fn save_sink(connector_id: &Uuid, sink_id: &Uuid, req: &Bytes) -> Result<(), io::Error> {
-    persistence::connector::insert_sink(connector_id, sink_id, req).await
+    persistence::apps::insert_sink(connector_id, sink_id, req).await
 }

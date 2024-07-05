@@ -1870,6 +1870,7 @@ dependencies = [
  "anyhow",
  "apps",
  "common",
+ "device",
  "functions",
  "message",
  "serde_json",

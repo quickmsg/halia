@@ -42,10 +42,18 @@ pub enum CreateRuleSourceType {
     App,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct CreateRuleSink {
-    pub r#type: String,
+    pub r#type: CreateRuleSinkType,
     pub id: Uuid,
-    pub source_id: Option<Uuid>,
+    pub sink_id: Option<Uuid>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CreateRuleSinkType {
+    Device,
+    App,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

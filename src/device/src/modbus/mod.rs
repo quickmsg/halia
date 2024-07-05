@@ -514,7 +514,7 @@ impl Device for Modbus {
 
     async fn subscribe(
         &mut self,
-        group_id: Uuid,
+        group_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         self.ref_cnt += 1;
         match self
@@ -522,7 +522,7 @@ impl Device for Modbus {
             .write()
             .await
             .iter_mut()
-            .find(|group| group.id == group_id)
+            .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.subscribe()),
             None => todo!(),
@@ -576,13 +576,13 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn publish(&self, sink_id: Uuid) -> Result<mpsc::Sender<MessageBatch>> {
+    async fn publish(&self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self
             .sinks
             .write()
             .await
             .iter_mut()
-            .find(|sink| sink.id == sink_id)
+            .find(|sink| sink.id == *sink_id)
         {
             Some(sink) => match &sink.tx {
                 Some(tx) => return Ok(tx.clone()),
@@ -594,7 +594,7 @@ impl Device for Modbus {
                     Ok(tx_clone)
                 }
             },
-            None => bail!("not find"),
+            None => Err(HaliaError::NotFound),
         }
     }
 }

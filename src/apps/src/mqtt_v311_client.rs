@@ -12,9 +12,7 @@ use tokio::{
     time,
 };
 use tracing::{debug, error};
-use types::apps::{
-    CreateAppReq, SearchConnectorItemResp, SearchSinkResp, SearchSourceResp,
-};
+use types::apps::{CreateAppReq, SearchConnectorItemResp, SearchSinkResp, SearchSourceResp};
 use uuid::Uuid;
 
 use crate::{save_sink, Connector};
@@ -344,7 +342,7 @@ impl Connector for MqttV311 {
         Ok(SearchSinkResp { total, data })
     }
 
-    async fn publish(&mut self, sink_id: Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>> {
+    async fn publish(&mut self, sink_id: &Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>> {
         let sink_id = match sink_id {
             Some(id) => id,
             None => bail!("mqtt动作id为空"),
@@ -355,7 +353,7 @@ impl Connector for MqttV311 {
         }
 
         for sink in self.sinks.write().await.iter_mut() {
-            if sink.id == sink_id {
+            if sink.id == *sink_id {
                 match &sink.tx {
                     Some(tx) => {
                         return Ok(tx.clone());

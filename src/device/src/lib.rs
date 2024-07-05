@@ -559,15 +559,15 @@ impl DeviceManager {
 impl DeviceManager {
     pub async fn subscribe(
         &self,
-        device_id: Uuid,
-        group_id: Uuid,
+        device_id: &Uuid,
+        group_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self
             .devices
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| device.get_id() == *device_id)
         {
             Some(device) => device.subscribe(group_id).await,
             None => Err(HaliaError::NotFound),
@@ -583,6 +583,23 @@ impl DeviceManager {
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => device.unsubscribe(group_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn publish(
+        &self,
+        device_id: &Uuid,
+        group_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.publish(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -643,13 +660,15 @@ trait Device: Sync + Send {
     ) -> HaliaResult<()>;
     async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()>;
 
-    async fn subscribe(&mut self, group_id: Uuid)
-        -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+    async fn subscribe(
+        &mut self,
+        group_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
     async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()>;
 
     async fn create_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()>;
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
     async fn update_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()>;
     async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()>;
-    async fn publish(&self, sink_id: Uuid) -> Result<mpsc::Sender<MessageBatch>>;
+    async fn publish(&self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }

@@ -1,9 +1,13 @@
 use anyhow::Result;
 use apps::GLOBAL_APP_MANAGER;
+use device::GLOBAL_DEVICE_MANAGER;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
-use types::rule::{CreateRuleNode, CreateRuleReq, CreateRuleSource, RuleNodeType, Status};
+use types::rule::{
+    CreateRuleNode, CreateRuleReq, CreateRuleSink, CreateRuleSinkType, CreateRuleSource,
+    RuleNodeType, Status,
+};
 use uuid::Uuid;
 
 // use crate::stream::start_stream;
@@ -52,16 +56,17 @@ impl Rule {
                     RuleNodeType::Source => {
                         let node = node_map.get(&info.first_id).unwrap();
                         let source: CreateRuleSource = serde_json::from_value(node.conf.clone())?;
-                        match source.r#type {
-                            types::rule::CreateRuleSourceType::Device => {}
-                            types::rule::CreateRuleSourceType::App => {
-                                let receiver = GLOBAL_APP_MANAGER
-                                    .subscribe(&source.id, source.source_id)
-                                    .await
-                                    .unwrap();
-                                receivers.insert(info.first_id, vec![receiver]);
-                            }
-                        }
+                        let receiver = match source.r#type {
+                            types::rule::CreateRuleSourceType::Device => GLOBAL_DEVICE_MANAGER
+                                .subscribe(&source.id, &source.source_id.unwrap())
+                                .await
+                                .unwrap(),
+                            types::rule::CreateRuleSourceType::App => GLOBAL_APP_MANAGER
+                                .subscribe(&source.id, source.source_id)
+                                .await
+                                .unwrap(),
+                        };
+                        receivers.insert(info.first_id, vec![receiver]);
                     }
                     // "window" => {
                     //     if let Some(source_ids) = incoming_edges.get(&info.id) {
@@ -82,35 +87,43 @@ impl Rule {
                     //         }
                     //     }
                     // }
-                    // RuleNodeType::Sink => {
-                    //     if let Some(source_ids) = incoming_edges.get(&info.id) {
-                    //         if let Some(source_id) = source_ids.first() {
-                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
-                    //                 let mut rx = node_receivers.remove(0);
-                    //                 if let Some(node) = node_map.get(&info.id) {
-                    //                     let tx = GLOBAL_APP_MANAGER
-                    //                         .publish(&node.id.unwrap(), node.item_id)
-                    //                         .await
-                    //                         .unwrap();
+                    RuleNodeType::Sink => {
+                        if let Some(source_ids) = incoming_edges.get(&info.id) {
+                            if let Some(source_id) = source_ids.first() {
+                                if let Some(mut node_receivers) = receivers.remove(source_id) {
+                                    let mut rx = node_receivers.remove(0);
 
-                    //                     tokio::spawn(async move {
-                    //                         loop {
-                    //                             match rx.recv().await {
-                    //                                 Ok(mb) => {
-                    //                                     let _ = tx.send(mb).await;
-                    //                                 }
-                    //                                 Err(_) => {
-                    //                                     debug!("recv err");
-                    //                                     return;
-                    //                                 }
-                    //                             };
-                    //                         }
-                    //                     });
-                    //                 }
-                    //             }
-                    //         }
-                    //     }
-                    // }
+                                    let node = node_map.get(&info.id).unwrap();
+                                    let sink: CreateRuleSink =
+                                        serde_json::from_value(node.conf.clone())?;
+                                    let tx = match sink.r#type {
+                                        CreateRuleSinkType::Device => GLOBAL_DEVICE_MANAGER
+                                            .publish(&sink.id, &sink.sink_id.unwrap())
+                                            .await
+                                            .unwrap(),
+                                        CreateRuleSinkType::App => GLOBAL_APP_MANAGER
+                                            .publish(&sink.id, &sink.sink_id)
+                                            .await
+                                            .unwrap(),
+                                    };
+
+                                    tokio::spawn(async move {
+                                        loop {
+                                            match rx.recv().await {
+                                                Ok(mb) => {
+                                                    let _ = tx.send(mb).await;
+                                                }
+                                                Err(_) => {
+                                                    debug!("recv err");
+                                                    return;
+                                                }
+                                            };
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
                     // "merge" => {
                     //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
                     //         debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);

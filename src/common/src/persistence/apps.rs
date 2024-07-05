@@ -17,7 +17,7 @@ static SOURCE_FILE: &str = "source";
 static SINK_FILE: &str = "sink";
 
 fn get_dir() -> PathBuf {
-    Path::new(super::ROOT_DIR).join(super::CONNECTOR_DIR)
+    Path::new(super::ROOT_DIR).join(super::APP_DIR)
 }
 
 fn get_file() -> PathBuf {

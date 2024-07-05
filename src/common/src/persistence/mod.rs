@@ -12,15 +12,15 @@ use tokio::{
 };
 use uuid::Uuid;
 
-pub mod connector;
+pub mod apps;
 pub mod device;
 pub mod message;
 pub mod rule;
 
 static ROOT_DIR: &str = "storage";
-static DEVICE_DIR: &str = "device";
-static CONNECTOR_DIR: &str = "connector";
-static RULE_DIR: &str = "rule";
+static DEVICE_DIR: &str = "devices";
+static APP_DIR: &str = "apps";
+static RULE_DIR: &str = "rules";
 static DATA_FILE: &str = "data";
 static DELIMITER: char = '|';
 
