@@ -193,11 +193,11 @@ impl Serialize for DataType {
                     .serialize(serializer)
             }
             DataType::Int64(endian1, endian2) => {
-                serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
+                serde_json::json!({"type": "int64", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
             DataType::Uint64(endian1, endian2) => {
-                serde_json::json!({"type": "int32", "endian": [endian1, endian2]})
+                serde_json::json!({"type": "uint64", "endian": [endian1, endian2]})
                     .serialize(serializer)
             }
             DataType::Float32(endian1, endian2) => {

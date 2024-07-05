@@ -25,7 +25,7 @@ pub(crate) async fn create_device(req: Bytes) -> AppResp<()> {
 pub(crate) async fn search_device(pagination: Query<Pagination>) -> AppResp<SearchDeviceResp> {
     AppResp::with_data(
         GLOBAL_DEVICE_MANAGER
-            .search_device(pagination.p, pagination.s)
+            .search_devices(pagination.p, pagination.s)
             .await,
     )
 }
@@ -70,7 +70,7 @@ pub(crate) async fn search_group(
     pagination: Query<Pagination>,
 ) -> AppResp<SearchGroupResp> {
     match GLOBAL_DEVICE_MANAGER
-        .search_group(device_id, pagination.p, pagination.s)
+        .search_groups(device_id, pagination.p, pagination.s)
         .await
     {
         Ok(groups) => AppResp::with_data(groups),

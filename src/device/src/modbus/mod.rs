@@ -5,7 +5,6 @@ use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
-use futures::executor::block_on;
 use group::Group;
 use message::MessageBatch;
 use protocol::modbus::client::{rtu, tcp, Context};
@@ -81,6 +80,7 @@ struct EthernetConf {
     ip: String,
     port: u16,
     interval: u64,
+    desc: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
@@ -114,6 +114,7 @@ struct SerialConf {
     baud_rate: u32,
     data_bits: u8,
     parity: u8,
+    desc: Option<String>,
 }
 
 pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
@@ -239,6 +240,10 @@ impl Modbus {
 
 #[async_trait]
 impl Device for Modbus {
+    fn get_id(&self) -> Uuid {
+        self.id
+    }
+
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()> {
         let update_conf: Conf = serde_json::from_value(req.conf.clone())?;
 
@@ -267,24 +272,7 @@ impl Device for Modbus {
     }
 
     async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {
-        // let (group_id, create) = match group_id {
-        //     Some(group_id) => (group_id, false),
-        //     None => (Uuid::new_v4(), true),
-        // };
-
-        // if create {
-        //     if let Err(e) = persistence::device::insert_group(
-        //         &self.id,
-        //         &group_id,
-        //         &serde_json::to_string(&req)?,
-        //     )
-        //     .await
-        //     {
-        //         error!("wirte group to file err:{}", e);
-        //     }
-        // }
-
-        match Group::new(self.id, group_id, &req) {
+        match Group::new(group_id, &req) {
             Ok(group) => {
                 if self.on.load(Ordering::SeqCst) {
                     let stop_signal = self.group_signal_tx.as_ref().unwrap().subscribe();
@@ -377,13 +365,14 @@ impl Device for Modbus {
         self.write_tx = None;
     }
 
-    async fn read_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp> {
+    async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp> {
         let mut resps = Vec::new();
         for group in self
             .groups
             .read()
             .await
             .iter()
+            .rev()
             .skip(((page - 1) * size) as usize)
         {
             resps.push({
@@ -392,6 +381,7 @@ impl Device for Modbus {
                     name: group.name.clone(),
                     interval: group.interval,
                     point_count: group.get_points_num().await as u8,
+                    desc: group.desc.clone(),
                 }
             });
             if resps.len() == size as usize {
@@ -466,7 +456,7 @@ impl Device for Modbus {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => Ok(group.search_point(page, size).await),
+            Some(group) => Ok(group.search_points(page, size).await),
             None => Err(HaliaError::NotFound),
         }
     }

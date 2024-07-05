@@ -38,7 +38,7 @@ pub struct Conf {
     pub slave: u8,
     pub area: Area,
     pub address: u16,
-    pub describe: Option<String>,
+    pub desc: Option<String>,
 }
 
 impl Point {

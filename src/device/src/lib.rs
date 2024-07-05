@@ -1,13 +1,13 @@
+use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
 use message::MessageBatch;
 use serde::Serialize;
-use std::{collections::HashMap, sync::LazyLock};
+use std::sync::LazyLock;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
 use types::device::{
@@ -23,11 +23,11 @@ mod modbus;
 mod opcua;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
-    devices: RwLock::new(HashMap::new()),
+    devices: RwLock::new(vec![]),
 });
 
 pub struct DeviceManager {
-    devices: RwLock<HashMap<Uuid, Box<dyn Device>>>,
+    devices: RwLock<Vec<Box<dyn Device>>>,
 }
 
 impl DeviceManager {
@@ -42,7 +42,7 @@ impl DeviceManager {
             },
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
-        self.devices.write().await.insert(device_id, device);
+        self.devices.write().await.push(device);
         Ok(())
     }
 
@@ -52,7 +52,13 @@ impl DeviceManager {
         group_id: Uuid,
         req: CreateGroupReq,
     ) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => {
                 device.create_group(group_id, &req).await?;
                 Ok(())
@@ -68,7 +74,13 @@ impl DeviceManager {
         point_id: Uuid,
         req: CreatePointReq,
     ) -> HaliaResult<()> {
-        match self.devices.read().await.get(&device_id) {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => {
                 device.create_point(group_id, point_id, req).await?;
                 Ok(())
@@ -78,7 +90,13 @@ impl DeviceManager {
     }
 
     async fn do_create_sink(&self, device_id: Uuid, sink_id: Uuid, req: Bytes) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.create_sink(sink_id, req).await,
             None => Err(HaliaError::NotFound),
         }
@@ -96,7 +114,13 @@ impl DeviceManager {
 
     pub async fn update_device(&self, device_id: Uuid, data: &Bytes) -> HaliaResult<()> {
         let req: UpdateDeviceReq = serde_json::from_slice(data)?;
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => {
                 device.update(&req).await?;
             }
@@ -109,7 +133,13 @@ impl DeviceManager {
     }
 
     pub async fn start_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => {
                 match device.start().await {
                     Ok(_) => {}
@@ -136,7 +166,13 @@ impl DeviceManager {
     }
 
     pub async fn stop_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => {
                 device.stop().await;
                 persistence::device::update_device_status(device_id, persistence::Status::Stopped)
@@ -147,13 +183,13 @@ impl DeviceManager {
         }
     }
 
-    pub async fn search_device(&self, page: usize, size: usize) -> SearchDeviceResp {
+    pub async fn search_devices(&self, page: usize, size: usize) -> SearchDeviceResp {
         let mut resp = vec![];
         let mut i = 0;
         let mut total = 0;
         let mut err_cnt = 0;
         let mut close_cnt = 0;
-        for device in self.devices.read().await.values() {
+        for device in self.devices.read().await.iter().rev() {
             let info = device.get_info().await;
 
             if *&info.err {
@@ -178,12 +214,21 @@ impl DeviceManager {
     }
 
     pub async fn delete_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.stop().await,
             None => return Err(HaliaError::NotFound),
         };
 
-        self.devices.write().await.remove(&device_id);
+        self.devices
+            .write()
+            .await
+            .retain(|device| device.get_id() != device_id);
         persistence::device::delete_device(&device_id).await?;
 
         Ok(())
@@ -199,14 +244,20 @@ impl DeviceManager {
         Ok(())
     }
 
-    pub async fn search_group(
+    pub async fn search_groups(
         &self,
         device_id: Uuid,
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchGroupResp> {
-        match self.devices.read().await.get(&device_id) {
-            Some(device) => device.read_groups(page, size).await,
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.search_groups(page, size).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -217,7 +268,13 @@ impl DeviceManager {
         group_id: Uuid,
         req: &UpdateGroupReq,
     ) -> HaliaResult<()> {
-        match self.devices.read().await.get(&device_id) {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.update_group(group_id, req).await,
             None => {
                 debug!("未找到设备");
@@ -227,7 +284,13 @@ impl DeviceManager {
     }
 
     pub async fn delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.delete_group(group_id).await,
             None => Err(HaliaError::NotFound),
         }
@@ -261,7 +324,13 @@ impl DeviceManager {
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchPointResp> {
-        match self.devices.read().await.get(&device_id) {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.search_point(group_id, page, size).await,
             None => Err(HaliaError::NotFound),
         }
@@ -274,7 +343,13 @@ impl DeviceManager {
         point_id: Uuid,
         req: &CreatePointReq,
     ) -> HaliaResult<()> {
-        match self.devices.read().await.get(&device_id) {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.update_point(group_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
@@ -287,7 +362,13 @@ impl DeviceManager {
         point_id: Uuid,
         req: &WritePointValueReq,
     ) -> HaliaResult<()> {
-        match self.devices.read().await.get(&device_id) {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.write_point_value(group_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
@@ -299,7 +380,13 @@ impl DeviceManager {
         group_id: Uuid,
         point_ids: Vec<Uuid>,
     ) -> HaliaResult<()> {
-        match self.devices.read().await.get(&device_id) {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.delete_points(group_id, point_ids).await,
             None => Err(HaliaError::NotFound),
         }
@@ -324,7 +411,13 @@ impl DeviceManager {
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchSinksResp> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => Ok(device.search_sinks(page, size).await),
             None => Err(HaliaError::NotFound),
         }
@@ -456,14 +549,26 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.subscribe(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
     pub async fn unsubscribe(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        match self.devices.write().await.get_mut(&device_id) {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
             Some(device) => device.unsubscribe(group_id).await,
             None => Err(HaliaError::NotFound),
         }
@@ -480,6 +585,7 @@ pub struct DeviceInfo {
 #[async_trait]
 trait Device: Sync + Send {
     // device
+    fn get_id(&self) -> Uuid;
     async fn get_info(&self) -> SearchDeviceItemResp;
     async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self);
@@ -492,7 +598,7 @@ trait Device: Sync + Send {
         create_group: &CreateGroupReq,
     ) -> HaliaResult<()>;
 
-    async fn read_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp>;
+    async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp>;
     async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()>;
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()>;
 

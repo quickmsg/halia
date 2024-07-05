@@ -5,6 +5,7 @@ use uuid::Uuid;
 pub struct CreateGroupReq {
     pub name: String,
     pub interval: u64,
+    pub desc: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -25,4 +26,5 @@ pub struct SearchGroupItemResp {
     pub name: String,
     pub point_count: u8,
     pub interval: u64,
+    pub desc: Option<String>,
 }

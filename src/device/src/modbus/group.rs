@@ -1,12 +1,8 @@
 use anyhow::{bail, Result};
-use common::{
-    error::{HaliaError, HaliaResult},
-    persistence,
-};
+use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
 use std::{
-    collections::HashMap,
     sync::{
         atomic::{AtomicU16, Ordering},
         Arc,
@@ -32,10 +28,10 @@ pub struct Group {
     pub id: Uuid,
     pub name: String,
     pub interval: u64,
-    pub points: RwLock<HashMap<Uuid, Point>>,
-    pub device_id: Uuid,
+    pub points: RwLock<Vec<Point>>,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
+    pub desc: Option<String>,
 }
 
 #[derive(Clone)]
@@ -48,18 +44,18 @@ pub(crate) enum Command {
 }
 
 impl Group {
-    pub fn new(device_id: Uuid, group_id: Uuid, conf: &CreateGroupReq) -> Result<Self> {
+    pub fn new(group_id: Uuid, conf: &CreateGroupReq) -> Result<Self> {
         if conf.interval == 0 {
             bail!("group interval must > 0")
         }
         Ok(Group {
             id: group_id,
-            device_id,
             name: conf.name.clone(),
             interval: conf.interval,
-            points: RwLock::new(HashMap::new()),
+            points: RwLock::new(vec![]),
             tx: None,
             ref_cnt: 0,
+            desc: conf.desc.clone(),
         })
     }
 
@@ -135,20 +131,27 @@ impl Group {
 
     pub async fn create_point(&self, point_id: Uuid, req: CreatePointReq) -> HaliaResult<()> {
         let point = Point::new(req.clone(), point_id)?;
-        self.points.write().await.insert(point_id, point);
+        self.points.write().await.push(point);
         Ok(())
     }
 
-    pub async fn search_point(&self, page: usize, size: usize) -> SearchPointResp {
+    pub async fn search_points(&self, page: usize, size: usize) -> SearchPointResp {
         let mut resps = vec![];
-        for (_, point) in self.points.read().await.iter().skip((page - 1) * size) {
+        for point in self
+            .points
+            .read()
+            .await
+            .iter()
+            .rev()
+            .skip((page - 1) * size)
+        {
             resps.push(SearchPointItemResp {
                 id: point.id.clone(),
                 name: point.name.clone(),
                 conf: serde_json::json!(point.conf),
                 value: point.value.clone(),
             });
-            if resps.len() == 0 {
+            if resps.len() == size {
                 break;
             }
         }
@@ -160,20 +163,16 @@ impl Group {
     }
 
     pub async fn update_point(&self, point_id: Uuid, req: &CreatePointReq) -> HaliaResult<()> {
-        match self.points.write().await.get_mut(&point_id) {
-            Some(point) => point.update(req).await?,
+        match self
+            .points
+            .write()
+            .await
+            .iter_mut()
+            .find(|point| point.id == point_id)
+        {
+            Some(point) => point.update(req).await,
             None => return Err(HaliaError::NotFound),
-        };
-
-        // persistence::point::update(
-        //     &self.device_id,
-        //     &self.id,
-        //     &point_id,
-        //     &serde_json::to_string(req)?,
-        // )
-        // .await?;
-
-        Ok(())
+        }
     }
 
     pub async fn get_points_num(&self) -> usize {
@@ -181,7 +180,10 @@ impl Group {
     }
 
     pub async fn delete_points(&self, ids: Vec<Uuid>) {
-        self.points.write().await.retain(|id, _| !ids.contains(id));
+        self.points
+            .write()
+            .await
+            .retain(|point| !ids.contains(&point.id));
     }
 
     pub async fn read_points_value(
@@ -191,7 +193,7 @@ impl Group {
         rtt: &Arc<AtomicU16>,
     ) -> Result<()> {
         let mut msg = Message::default();
-        for (_, point) in self.points.write().await.iter_mut() {
+        for point in self.points.write().await.iter_mut() {
             let now = Instant::now();
             match point.read(ctx).await {
                 Ok(data) => {
@@ -224,7 +226,13 @@ impl Group {
         rtt: &Arc<AtomicU16>,
     ) {
         let now = Instant::now();
-        match self.points.write().await.get_mut(&point_id) {
+        match self
+            .points
+            .write()
+            .await
+            .iter_mut()
+            .find(|point| point.id == point_id)
+        {
             Some(point) => match point.write(ctx, value).await {
                 Ok(_) => rtt.store(now.elapsed().as_millis() as u16, Ordering::SeqCst),
                 Err(e) => error!("write err :{}", e),
