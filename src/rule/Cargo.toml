@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 message = { workspace = true }
 common = { workspace = true }
-connectors = { workspace = true }
+apps = { workspace = true }
 
 tokio = { workspace = true }
 tracing = { workspace = true }

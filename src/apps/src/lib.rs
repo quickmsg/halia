@@ -10,9 +10,8 @@ use message::MessageBatch;
 use std::{io, sync::LazyLock, vec};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
-use types::connector::{
-    CreateConnectorReq, SearchConnectorItemResp, SearchConnectorResp, SearchSinkResp,
-    SearchSourceResp,
+use types::apps::{
+    CreateAppReq, SearchConnectorItemResp, SearchConnectorResp, SearchSinkResp, SearchSourceResp,
 };
 use uuid::Uuid;
 
@@ -53,7 +52,7 @@ impl ConnectorManager {
     async fn do_create_connector(
         &self,
         connector_id: Uuid,
-        req: CreateConnectorReq,
+        req: CreateAppReq,
     ) -> HaliaResult<()> {
         let connector = match req.r#type.as_str() {
             mqtt_v311_client::TYPE => mqtt_v311_client::new(connector_id, req),
@@ -75,7 +74,7 @@ impl ConnectorManager {
 
 impl ConnectorManager {
     pub async fn create_connector(&self, body: &Bytes) -> HaliaResult<()> {
-        let req: CreateConnectorReq = serde_json::from_slice(body)?;
+        let req: CreateAppReq = serde_json::from_slice(body)?;
         let connector_id = Uuid::new_v4();
         self.do_create_connector(connector_id, req).await?;
         if let Err(e) = save_connector(&connector_id, body).await {
@@ -221,7 +220,7 @@ impl ConnectorManager {
         match persistence::connector::read_connectors().await {
             Ok(connectors) => {
                 for (connector_id, data) in connectors {
-                    let req: CreateConnectorReq = serde_json::from_str(&data)?;
+                    let req: CreateAppReq = serde_json::from_str(&data)?;
                     self.do_create_connector(connector_id, req).await?;
                     match self
                         .connectors

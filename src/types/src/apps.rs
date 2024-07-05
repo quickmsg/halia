@@ -3,7 +3,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Serialize, Clone)]
-pub struct CreateConnectorReq {
+pub struct CreateAppReq {
     pub r#type: String,
     pub name: String,
     pub conf: Value,

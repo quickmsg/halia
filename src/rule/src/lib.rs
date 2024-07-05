@@ -62,22 +62,23 @@ impl RuleManager {
     }
 
     pub async fn start(&self, id: Uuid) -> HaliaResult<()> {
-        match self
-            .rules
-            .write()
-            .await
-            .iter_mut()
-            .find(|rule| rule.id == id)
-        {
-            Some(rule) => match rule.start().await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    error!("rule send err :{}", e);
-                    return Err(HaliaError::Existed);
-                }
-            },
-            None => return Err(HaliaError::NotFound),
-        }
+        todo!()
+        // match self
+        //     .rules
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|rule| rule.id == id)
+        // {
+        //     Some(rule) => match rule.start().await {
+        //         Ok(_) => Ok(()),
+        //         Err(e) => {
+        //             error!("rule send err :{}", e);
+        //             return Err(HaliaError::Existed);
+        //         }
+        //     },
+        //     None => return Err(HaliaError::NotFound),
+        // }
     }
 
     pub async fn stop(&self, id: Uuid) -> HaliaResult<()> {

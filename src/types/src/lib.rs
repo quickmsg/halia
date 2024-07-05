@@ -1,3 +1,3 @@
-pub mod connector;
+pub mod apps;
 pub mod device;
 pub mod rule;

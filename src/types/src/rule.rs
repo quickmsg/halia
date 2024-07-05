@@ -22,14 +22,24 @@ pub struct CreateRuleNode {
 #[serde(rename_all = "snake_case")]
 pub enum RuleNodeType {
     Source,
+    Merge,
+    Window,
     Operator,
     Sink,
 }
 
-pub struct CreaetRuleSource {
-    pub r#type: String,
+#[derive(Serialize, Deserialize)]
+pub struct CreateRuleSource {
+    pub r#type: CreateRuleSourceType,
     pub id: Uuid,
     pub source_id: Option<Uuid>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CreateRuleSourceType {
+    Device,
+    App,
 }
 
 pub struct CreateRuleSink {

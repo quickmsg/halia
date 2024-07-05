@@ -123,15 +123,34 @@ checksum = "25bdb32cbbdce2b519a9cd7df3a678443100e265d5e25ca763b7572a5104f5f3"
 name = "api"
 version = "0.1.0"
 dependencies = [
+ "apps",
  "axum 0.7.5",
  "common",
- "connectors",
  "device",
  "rule",
  "serde",
  "serde_json",
  "tokio",
  "tower-http",
+ "tracing",
+ "types",
+ "uuid",
+]
+
+[[package]]
+name = "apps"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "common",
+ "message",
+ "rumqttc",
+ "rumqttd",
+ "serde",
+ "serde_json",
+ "tokio",
  "tracing",
  "types",
  "uuid",
@@ -513,25 +532,6 @@ dependencies = [
  "serde_json",
  "toml",
  "yaml-rust",
-]
-
-[[package]]
-name = "connectors"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "common",
- "message",
- "rumqttc",
- "rumqttd",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "types",
- "uuid",
 ]
 
 [[package]]
@@ -1868,8 +1868,8 @@ name = "rule"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "apps",
  "common",
- "connectors",
  "functions",
  "message",
  "serde_json",
@@ -2204,7 +2204,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "api",
- "connectors",
+ "apps",
  "device",
  "rule",
  "tokio",

@@ -1,14 +1,12 @@
 use anyhow::Result;
 use connectors::GLOBAL_CONNECTOR_MANAGER;
-use core::error::Source;
-use message::MessageBatch;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
-use types::rule::{CreateRuleNode, CreateRuleReq, RuleNodeType, Status};
+use types::rule::{CreateRuleNode, CreateRuleReq, CreateRuleSource, RuleNodeType, Status};
 use uuid::Uuid;
 
-use crate::stream::start_stream;
+// use crate::stream::start_stream;
 
 pub(crate) struct Rule {
     pub id: Uuid,
@@ -51,129 +49,135 @@ impl Rule {
         for stream_info in stream_infos {
             for info in stream_info {
                 match info.r#type {
-                    Some(r#type) => match r#type.as_str() {
-                        "source" => {
-                            if let Some(node) = node_map.get(&info.first_id) {
-                                let receiver = GLOBAL_CONNECTOR_MANAGER
-                                    .subscribe(&node.id.unwrap(), node.item_id)
-                                    .await
-                                    .unwrap();
-                                receivers.insert(info.first_id, vec![receiver]);
+                    RuleNodeType::Source => {
+                        let node = node_map.get(&info.first_id).unwrap();
+                        let source: CreateRuleSource = serde_json::from_value(node.conf)?;
+                        match source.r#type {
+                            types::rule::CreateRuleSourceType::Device =>  {
+
+                            }
+                            types::rule::CreateRuleSourceType::App => {
+
                             }
                         }
-                        // "window" => {
-                        //     if let Some(source_ids) = incoming_edges.get(&info.id) {
-                        //         if let Some(source_id) = source_ids.first() {
-                        //             if let Some(mut node_receivers) = receivers.remove(source_id) {
-                        //                 let rx = node_receivers.remove(0);
-                        //                 let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
-                        //                 receivers.insert(info.id, vec![nrx]);
+                        let receiver = GLOBAL_CONNECTOR_MANAGER
+                            .subscribe(&node.id.unwrap(), node.item_id)
+                            .await
+                            .unwrap();
+                        receivers.insert(info.first_id, vec![receiver]);
+                    }
+                    // "window" => {
+                    //     if let Some(source_ids) = incoming_edges.get(&info.id) {
+                    //         if let Some(source_id) = source_ids.first() {
+                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                    //                 let rx = node_receivers.remove(0);
+                    //                 let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
+                    //                 receivers.insert(info.id, vec![nrx]);
 
-                        //                 if let Some(node) = node_map.get(&info.id) {
-                        //                     let mut window =
-                        //                         Window::new(node.conf.clone(), rx, tx)?;
-                        //                     tokio::spawn(async move {
-                        //                         window.run().await;
-                        //                     });
-                        //                 }
-                        //             }
-                        //         }
-                        //     }
-                        // }
-                        "sink" => {
-                            if let Some(source_ids) = incoming_edges.get(&info.id) {
-                                if let Some(source_id) = source_ids.first() {
-                                    if let Some(mut node_receivers) = receivers.remove(source_id) {
-                                        let mut rx = node_receivers.remove(0);
-                                        if let Some(node) = node_map.get(&info.id) {
-                                            // TODO 解决动态多个channel监听的问题
-                                            let tx = GLOBAL_CONNECTOR_MANAGER
-                                                .publish(&node.id.unwrap(), node.item_id)
-                                                .await
-                                                .unwrap();
-
-                                            tokio::spawn(async move {
-                                                loop {
-                                                    match rx.recv().await {
-                                                        Ok(mb) => {
-                                                            let _ = tx.send(mb).await;
-                                                        }
-                                                        Err(_) => {
-                                                            debug!("recv err");
-                                                            return;
-                                                        }
-                                                    };
-                                                }
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // "merge" => {
-                        //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
-                        //         debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);
-                        //         let mut rxs = Vec::new();
-                        //         for source_id in source_ids {
-                        //             if let Some(mut node_receivers) = receivers.remove(source_id) {
-                        //                 let rx = node_receivers.remove(0);
-                        //                 rxs.push(rx);
-                        //             }
-                        //         }
-                        //         debug!("source receivers len:{}", rxs.len());
-                        //         let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
-                        //         receivers.insert(osi.id, vec![nrx]);
-                        //         if let Some(node) = node_map.get(&osi.id) {
-                        //             match Merge::new(node.conf.clone(), rxs, tx) {
-                        //                 Ok(mut merge) => {
-                        //                     tokio::spawn(async move {
-                        //                         merge.run().await;
-                        //                     });
-                        //                 }
-                        //                 Err(e) => error!("create merge err:{}", e),
-                        //             }
-                        //         }
-                        //     }
-                        // }
-                        // "join" => {
-                        //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
-                        //         let mut rxs = Vec::new();
-                        //         for source_id in source_ids {
-                        //             if let Some(mut node_receivers) = receivers.remove(source_id) {
-                        //                 let rx = node_receivers.remove(0);
-                        //                 rxs.push(rx);
-                        //             }
-                        //         }
-                        //         let (tx, nrx) = broadcast::channel::<Message>(10);
-                        //         receivers.insert(osi.id, vec![nrx]);
-                        //         let mut join = Join::new(None, rxs, tx)?;
-                        //         tokio::spawn(async move {
-                        //             join.run().await;
-                        //         });
-                        //     }
-                        // }
-                        _ => unreachable!(),
-                    },
-                    None => {
-                        if let Some(source_ids) = incoming_edges.get(&info.first_id) {
+                    //                 if let Some(node) = node_map.get(&info.id) {
+                    //                     let mut window =
+                    //                         Window::new(node.conf.clone(), rx, tx)?;
+                    //                     tokio::spawn(async move {
+                    //                         window.run().await;
+                    //                     });
+                    //                 }
+                    //             }
+                    //         }
+                    //     }
+                    // }
+                    RuleNodeType::Sink => {
+                        if let Some(source_ids) = incoming_edges.get(&info.id) {
                             if let Some(source_id) = source_ids.first() {
                                 if let Some(mut node_receivers) = receivers.remove(source_id) {
-                                    let rx = node_receivers.remove(0);
-                                    let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
-                                    receivers.insert(info.last_id, vec![nrx]);
+                                    let mut rx = node_receivers.remove(0);
+                                    if let Some(node) = node_map.get(&info.id) {
+                                        // TODO 解决动态多个channel监听的问题
+                                        let tx = GLOBAL_CONNECTOR_MANAGER
+                                            .publish(&node.id.unwrap(), node.item_id)
+                                            .await
+                                            .unwrap();
 
-                                    let mut nodes = Vec::new();
-                                    for id in info.ids.iter() {
-                                        nodes.push(node_map.get(id).unwrap());
+                                        tokio::spawn(async move {
+                                            loop {
+                                                match rx.recv().await {
+                                                    Ok(mb) => {
+                                                        let _ = tx.send(mb).await;
+                                                    }
+                                                    Err(_) => {
+                                                        debug!("recv err");
+                                                        return;
+                                                    }
+                                                };
+                                            }
+                                        });
                                     }
-
-                                    debug!("create_graph_nodes:{:?}", nodes);
-                                    start_stream(nodes, rx, tx, self.stop_signal.subscribe()).await;
                                 }
                             }
                         }
                     }
+                    // "merge" => {
+                    //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
+                    //         debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);
+                    //         let mut rxs = Vec::new();
+                    //         for source_id in source_ids {
+                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                    //                 let rx = node_receivers.remove(0);
+                    //                 rxs.push(rx);
+                    //             }
+                    //         }
+                    //         debug!("source receivers len:{}", rxs.len());
+                    //         let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
+                    //         receivers.insert(osi.id, vec![nrx]);
+                    //         if let Some(node) = node_map.get(&osi.id) {
+                    //             match Merge::new(node.conf.clone(), rxs, tx) {
+                    //                 Ok(mut merge) => {
+                    //                     tokio::spawn(async move {
+                    //                         merge.run().await;
+                    //                     });
+                    //                 }
+                    //                 Err(e) => error!("create merge err:{}", e),
+                    //             }
+                    //         }
+                    //     }
+                    // }
+                    // "join" => {
+                    //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
+                    //         let mut rxs = Vec::new();
+                    //         for source_id in source_ids {
+                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                    //                 let rx = node_receivers.remove(0);
+                    //                 rxs.push(rx);
+                    //             }
+                    //         }
+                    //         let (tx, nrx) = broadcast::channel::<Message>(10);
+                    //         receivers.insert(osi.id, vec![nrx]);
+                    //         let mut join = Join::new(None, rxs, tx)?;
+                    //         tokio::spawn(async move {
+                    //             join.run().await;
+                    //         });
+                    //     }
+                    // }
+                    _ => unreachable!(),
                 }
+                // None => {
+                //     if let Some(source_ids) = incoming_edges.get(&info.first_id) {
+                //         if let Some(source_id) = source_ids.first() {
+                //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                //                 let rx = node_receivers.remove(0);
+                //                 let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
+                //                 receivers.insert(info.last_id, vec![nrx]);
+
+                //                 let mut nodes = Vec::new();
+                //                 for id in info.ids.iter() {
+                //                     nodes.push(node_map.get(id).unwrap());
+                //                 }
+
+                //                 debug!("create_graph_nodes:{:?}", nodes);
+                //                 start_stream(nodes, rx, tx, self.stop_signal.subscribe()).await;
+                //             }
+                //         }
+                //     }
+                // }
             }
         }
 
@@ -190,7 +194,7 @@ impl Rule {
 
 #[derive(Debug)]
 struct StreamInfo {
-    r#type: Option<String>,
+    r#type: RuleNodeType,
     id: usize,
     first_id: usize,
     last_id: usize,
@@ -240,19 +244,17 @@ fn get_stream_info(
         first_id: id,
         last_id: id,
         ids: Vec::new(),
-        r#type: None,
+        r#type: RuleNodeType::Operator,
     };
     osi.ids.push(id);
 
     if let Some(node) = node_map.get(&id) {
         match node.r#type {
             RuleNodeType::Source => {
-                osi.r#type = Some("source".to_string());
+                osi.r#type = RuleNodeType::Source;
                 return Ok(osi);
             }
-            RuleNodeType::Sink => {
-
-            }
+            RuleNodeType::Sink => {}
             // "sink" => {
             //     osi.r#type = Some("sink".to_string());
             //     return Ok(osi);
@@ -286,12 +288,12 @@ fn get_stream_info(
                         (Some(outgoing_nodes), Some(incoming_nodes)) => {
                             if outgoing_nodes.len() == 1 && incoming_nodes.len() == 1 {
                                 if let Some(node) = node_map.get(&current_id) {
-                                    match node.r#type.as_str() {
-                                        "source" | "sink" | "window" | "join" | "merge" => {
-                                            break;
-                                        }
-                                        _ => {}
-                                    }
+                                    // match node.r#type.as_str() {
+                                    //     "source" | "sink" | "window" | "join" | "merge" => {
+                                    //         break;
+                                    //     }
+                                    //     _ => {}
+                                    // }
                                 }
                                 osi.last_id = current_id;
                                 osi.ids.push(current_id);
@@ -302,12 +304,12 @@ fn get_stream_info(
                         (Some(outgoing_nodes), None) => {
                             if outgoing_nodes.len() == 1 {
                                 if let Some(node) = node_map.get(&current_id) {
-                                    match node.r#type.as_str() {
-                                        "source" | "sink" | "window" | "join" | "merge" => {
-                                            break;
-                                        }
-                                        _ => {}
-                                    }
+                                    // match node.r#type.as_str() {
+                                    //     "source" | "sink" | "window" | "join" | "merge" => {
+                                    //         break;
+                                    //     }
+                                    //     _ => {}
+                                    // }
                                 }
                                 osi.last_id = current_id;
                                 osi.ids.push(current_id);
@@ -318,12 +320,12 @@ fn get_stream_info(
                         (None, Some(incoming_nodes)) => {
                             if incoming_nodes.len() == 1 {
                                 if let Some(node) = node_map.get(&current_id) {
-                                    match node.r#type.as_str() {
-                                        "source" | "sink" | "window" | "join" | "merge" => {
-                                            break;
-                                        }
-                                        _ => {}
-                                    }
+                                    // match node.r#type.as_str() {
+                                    //     "source" | "sink" | "window" | "join" | "merge" => {
+                                    //         break;
+                                    //     }
+                                    //     _ => {}
+                                    // }
                                 }
                                 osi.last_id = current_id;
                                 osi.ids.push(current_id);

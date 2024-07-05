@@ -8,7 +8,7 @@ types = { workspace = true }
 device = { workspace = true }
 common = { workspace = true }
 rule = { workspace = true }
-connectors = { workspace = true }
+apps = { workspace = true }
 
 axum = { version = "0.7.5", features = ["macros", "query"] }
 tracing = { workspace = true }

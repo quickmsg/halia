@@ -12,8 +12,8 @@ use tokio::{
     time,
 };
 use tracing::{debug, error};
-use types::connector::{
-    CreateConnectorReq, SearchConnectorItemResp, SearchSinkResp, SearchSourceResp,
+use types::apps::{
+    CreateAppReq, SearchConnectorItemResp, SearchSinkResp, SearchSourceResp,
 };
 use uuid::Uuid;
 
@@ -79,7 +79,7 @@ struct PasswordConf {
     password: String,
 }
 
-pub fn new(id: Uuid, req: CreateConnectorReq) -> Result<Box<dyn Connector>> {
+pub fn new(id: Uuid, req: CreateAppReq) -> Result<Box<dyn Connector>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
     Ok(Box::new(MqttV311 {
         id,
