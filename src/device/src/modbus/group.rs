@@ -179,7 +179,7 @@ impl Group {
         self.points.read().await.len()
     }
 
-    pub async fn delete_points(&self, ids: Vec<Uuid>) {
+    pub async fn delete_points(&self, ids: &Vec<Uuid>) {
         self.points
             .write()
             .await

@@ -80,10 +80,10 @@ pub(crate) async fn search_group(
 
 pub(crate) async fn update_group(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<UpdateGroupReq>,
+    req: Bytes,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
-        .update_group(device_id, group_id, &req)
+        .update_group(device_id, group_id, req)
         .await
     {
         Ok(()) => AppResp::new(),

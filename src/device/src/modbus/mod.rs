@@ -1,10 +1,7 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use common::{
-    error::{HaliaError, HaliaResult},
-    persistence,
-};
+use common::error::{HaliaError, HaliaResult};
 use group::Group;
 use message::MessageBatch;
 use protocol::modbus::client::{rtu, tcp, Context};
@@ -296,15 +293,16 @@ impl Device for Modbus {
             .await
             .retain(|group| group_id != group.id);
 
-        persistence::device::delete_group(&self.id, &group_id).await?;
-        match self
-            .group_signal_tx
-            .as_ref()
-            .unwrap()
-            .send(group::Command::Stop(group_id))
-        {
-            Ok(_) => {}
-            Err(e) => error!("group send stop singla err:{}", e),
+        if self.on.load(Ordering::SeqCst) {
+            match self
+                .group_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(group::Command::Stop(group_id))
+            {
+                Ok(_) => {}
+                Err(e) => error!("group send stop singla err:{}", e),
+            }
         }
 
         Ok(())
@@ -394,7 +392,7 @@ impl Device for Modbus {
         })
     }
 
-    async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()> {
+    async fn update_group(&self, group_id: Uuid, req: UpdateGroupReq) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -418,9 +416,6 @@ impl Device for Modbus {
             }
             None => return Err(HaliaError::NotFound),
         };
-
-        persistence::device::update_group(&self.id, &group_id, &serde_json::to_string(&req)?)
-            .await?;
 
         Ok(())
     }
@@ -504,13 +499,13 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> HaliaResult<()> {
+    async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()> {
         match self
             .groups
             .write()
             .await
             .iter_mut()
-            .find(|group| group.id == group_id)
+            .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.delete_points(point_ids).await),
             None => Err(HaliaError::NotFound),
@@ -551,8 +546,6 @@ impl Device for Modbus {
     async fn create_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_slice(&req)?;
         let sink = sink::new(sink_id, conf)?;
-        // TODO
-        // sink.run();
         self.sinks.write().await.push(sink);
         Ok(())
     }

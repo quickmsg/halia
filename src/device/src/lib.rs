@@ -266,7 +266,7 @@ impl DeviceManager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        req: &UpdateGroupReq,
+        req: Bytes,
     ) -> HaliaResult<()> {
         match self
             .devices
@@ -275,7 +275,12 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.update_group(group_id, req).await,
+            Some(device) => {
+                let update_group_req: UpdateGroupReq = serde_json::from_slice(&req)?;
+                device.update_group(group_id, update_group_req).await?;
+                persistence::device::update_group(&device_id, &group_id, req).await?;
+                Ok(())
+            }
             None => {
                 debug!("未找到设备");
                 Err(HaliaError::NotFound)
@@ -291,7 +296,11 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.delete_group(group_id).await,
+            Some(device) => {
+                device.delete_group(group_id).await?;
+                persistence::device::delete_group(&device_id, &group_id).await?;
+                Ok(())
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -387,7 +396,11 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.delete_points(group_id, point_ids).await,
+            Some(device) => {
+                device.delete_points(&group_id, &point_ids).await?;
+                let _ = persistence::device::delete_points(&device_id, &group_id, &point_ids).await;
+                Ok(())
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -599,7 +612,7 @@ trait Device: Sync + Send {
     ) -> HaliaResult<()>;
 
     async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp>;
-    async fn update_group(&self, group_id: Uuid, req: &UpdateGroupReq) -> HaliaResult<()>;
+    async fn update_group(&self, group_id: Uuid, req: UpdateGroupReq) -> HaliaResult<()>;
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()>;
 
     // points
@@ -628,7 +641,7 @@ trait Device: Sync + Send {
         point_id: Uuid,
         req: &WritePointValueReq,
     ) -> HaliaResult<()>;
-    async fn delete_points(&self, group_id: Uuid, point_ids: Vec<Uuid>) -> HaliaResult<()>;
+    async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()>;
 
     async fn subscribe(&mut self, group_id: Uuid)
         -> HaliaResult<broadcast::Receiver<MessageBatch>>;

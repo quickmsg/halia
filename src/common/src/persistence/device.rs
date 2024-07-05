@@ -1,6 +1,7 @@
 use std::{
     io,
     path::{Path, PathBuf},
+    str::from_utf8_unchecked,
 };
 
 use bytes::Bytes;
@@ -202,12 +203,15 @@ pub async fn read_groups(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Er
     super::read(get_group_file(device_id)).await
 }
 
-pub async fn update_group(
-    device_id: &Uuid,
-    group_id: &Uuid,
-    data: &String,
-) -> Result<(), io::Error> {
-    super::update(get_group_file(device_id), group_id, data).await
+pub async fn update_group(device_id: &Uuid, group_id: &Uuid, data: Bytes) -> Result<(), io::Error> {
+    unsafe {
+        super::update(
+            get_group_file(device_id),
+            group_id,
+            std::str::from_utf8_unchecked(&data),
+        )
+        .await
+    }
 }
 
 pub async fn delete_group(device_id: &Uuid, group_id: &Uuid) -> Result<(), io::Error> {
@@ -246,12 +250,16 @@ pub async fn update_point(
     super::update(get_point_file(device_id, group_id), point_id, data).await
 }
 
-pub async fn delete_point(
+pub async fn delete_points(
     device_id: &Uuid,
     group_id: &Uuid,
-    point_id: &Uuid,
+    point_ids: &Vec<Uuid>,
 ) -> Result<(), io::Error> {
-    super::delete(get_point_file(device_id, group_id), point_id).await
+    debug!("point file:{:?}", get_point_file(device_id, group_id));
+    for point_id in point_ids {
+        super::delete(get_point_file(device_id, group_id), point_id).await?;
+    }
+    Ok(())
 }
 
 pub async fn insert_sink(device_id: &Uuid, sink_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
