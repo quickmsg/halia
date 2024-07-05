@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
-mod connector;
+mod apps;
 mod device;
 mod rule;
 
@@ -120,25 +120,25 @@ fn connector_routes() -> Router {
     Router::new().nest(
         "/connector",
         Router::new()
-            .route("/", post(connector::create_connector))
-            .route("/search", get(connector::search_connectors))
-            .route("/:connector_id", put(connector::update_connector))
-            .route("/:connector_id", delete(connector::delete_connector))
+            .route("/", post(apps::create_connector))
+            .route("/search", get(apps::search_connectors))
+            .route("/:connector_id", put(apps::update_connector))
+            .route("/:connector_id", delete(apps::delete_connector))
             .nest(
                 "/:connector_id/source",
                 Router::new()
-                    .route("/", post(connector::create_source))
-                    .route("/search", get(connector::search_sources))
-                    .route("/:source_id", put(connector::update_source))
-                    .route("/:source_id", delete(connector::delete_source)),
+                    .route("/", post(apps::create_source))
+                    .route("/search", get(apps::search_sources))
+                    .route("/:source_id", put(apps::update_source))
+                    .route("/:source_id", delete(apps::delete_source)),
             )
             .nest(
                 "/:connector_id/sink",
                 Router::new()
-                    .route("/", post(connector::create_sink))
-                    .route("/search", get(connector::search_sinks))
-                    .route("/:sink_id", put(connector::update_sink))
-                    .route("/:sink_id", delete(connector::delete_sink)),
+                    .route("/", post(apps::create_sink))
+                    .route("/search", get(apps::search_sinks))
+                    .route("/:sink_id", put(apps::update_sink))
+                    .route("/:sink_id", delete(apps::delete_sink)),
             ),
     )
 }

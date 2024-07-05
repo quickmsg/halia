@@ -1,5 +1,5 @@
 use anyhow::Result;
-use connectors::GLOBAL_CONNECTOR_MANAGER;
+use apps::GLOBAL_APP_MANAGER;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
@@ -51,20 +51,17 @@ impl Rule {
                 match info.r#type {
                     RuleNodeType::Source => {
                         let node = node_map.get(&info.first_id).unwrap();
-                        let source: CreateRuleSource = serde_json::from_value(node.conf)?;
+                        let source: CreateRuleSource = serde_json::from_value(node.conf.clone())?;
                         match source.r#type {
-                            types::rule::CreateRuleSourceType::Device =>  {
-
-                            }
+                            types::rule::CreateRuleSourceType::Device => {}
                             types::rule::CreateRuleSourceType::App => {
-
+                                let receiver = GLOBAL_APP_MANAGER
+                                    .subscribe(&source.id, source.source_id)
+                                    .await
+                                    .unwrap();
+                                receivers.insert(info.first_id, vec![receiver]);
                             }
                         }
-                        let receiver = GLOBAL_CONNECTOR_MANAGER
-                            .subscribe(&node.id.unwrap(), node.item_id)
-                            .await
-                            .unwrap();
-                        receivers.insert(info.first_id, vec![receiver]);
                     }
                     // "window" => {
                     //     if let Some(source_ids) = incoming_edges.get(&info.id) {
@@ -85,36 +82,35 @@ impl Rule {
                     //         }
                     //     }
                     // }
-                    RuleNodeType::Sink => {
-                        if let Some(source_ids) = incoming_edges.get(&info.id) {
-                            if let Some(source_id) = source_ids.first() {
-                                if let Some(mut node_receivers) = receivers.remove(source_id) {
-                                    let mut rx = node_receivers.remove(0);
-                                    if let Some(node) = node_map.get(&info.id) {
-                                        // TODO 解决动态多个channel监听的问题
-                                        let tx = GLOBAL_CONNECTOR_MANAGER
-                                            .publish(&node.id.unwrap(), node.item_id)
-                                            .await
-                                            .unwrap();
+                    // RuleNodeType::Sink => {
+                    //     if let Some(source_ids) = incoming_edges.get(&info.id) {
+                    //         if let Some(source_id) = source_ids.first() {
+                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                    //                 let mut rx = node_receivers.remove(0);
+                    //                 if let Some(node) = node_map.get(&info.id) {
+                    //                     let tx = GLOBAL_APP_MANAGER
+                    //                         .publish(&node.id.unwrap(), node.item_id)
+                    //                         .await
+                    //                         .unwrap();
 
-                                        tokio::spawn(async move {
-                                            loop {
-                                                match rx.recv().await {
-                                                    Ok(mb) => {
-                                                        let _ = tx.send(mb).await;
-                                                    }
-                                                    Err(_) => {
-                                                        debug!("recv err");
-                                                        return;
-                                                    }
-                                                };
-                                            }
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    //                     tokio::spawn(async move {
+                    //                         loop {
+                    //                             match rx.recv().await {
+                    //                                 Ok(mb) => {
+                    //                                     let _ = tx.send(mb).await;
+                    //                                 }
+                    //                                 Err(_) => {
+                    //                                     debug!("recv err");
+                    //                                     return;
+                    //                                 }
+                    //                             };
+                    //                         }
+                    //                     });
+                    //                 }
+                    //             }
+                    //         }
+                    //     }
+                    // }
                     // "merge" => {
                     //     if let Some(source_ids) = incoming_edges.get(&osi.id) {
                     //         debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);

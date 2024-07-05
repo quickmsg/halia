@@ -1,5 +1,5 @@
 use anyhow::Result;
-use connectors::GLOBAL_CONNECTOR_MANAGER;
+use apps::GLOBAL_APP_MANAGER;
 use device::GLOBAL_DEVICE_MANAGER;
 use rule::GLOBAL_RULE_MANAGER;
 use tracing::{info, Level};
@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
-    GLOBAL_CONNECTOR_MANAGER.recover().await.unwrap();
+    GLOBAL_APP_MANAGER.recover().await.unwrap();
     GLOBAL_RULE_MANAGER.recover().await.unwrap();
 
     info!("server starting...");

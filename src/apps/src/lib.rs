@@ -18,14 +18,13 @@ use uuid::Uuid;
 mod mqtt_v311_client;
 pub mod mqtt_v311_server;
 
-pub struct ConnectorManager {
-    connectors: RwLock<Vec<Box<dyn Connector>>>,
+pub struct AppManager {
+    apps: RwLock<Vec<Box<dyn Connector>>>,
 }
 
-pub static GLOBAL_CONNECTOR_MANAGER: LazyLock<ConnectorManager> =
-    LazyLock::new(|| ConnectorManager {
-        connectors: RwLock::new(vec![]),
-    });
+pub static GLOBAL_APP_MANAGER: LazyLock<AppManager> = LazyLock::new(|| AppManager {
+    apps: RwLock::new(vec![]),
+});
 
 #[async_trait]
 pub trait Connector: Sync + Send {
@@ -48,12 +47,8 @@ pub trait Connector: Sync + Send {
     async fn publish(&mut self, sink_id: Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>>;
 }
 
-impl ConnectorManager {
-    async fn do_create_connector(
-        &self,
-        connector_id: Uuid,
-        req: CreateAppReq,
-    ) -> HaliaResult<()> {
+impl AppManager {
+    async fn do_create_connector(&self, connector_id: Uuid, req: CreateAppReq) -> HaliaResult<()> {
         let connector = match req.r#type.as_str() {
             mqtt_v311_client::TYPE => mqtt_v311_client::new(connector_id, req),
             _ => return Err(HaliaError::ProtocolNotSupported),
@@ -61,7 +56,7 @@ impl ConnectorManager {
 
         match connector {
             Ok(connector) => {
-                self.connectors.write().await.push(connector);
+                self.apps.write().await.push(connector);
                 Ok(())
             }
             Err(e) => {
@@ -72,7 +67,7 @@ impl ConnectorManager {
     }
 }
 
-impl ConnectorManager {
+impl AppManager {
     pub async fn create_connector(&self, body: &Bytes) -> HaliaResult<()> {
         let req: CreateAppReq = serde_json::from_slice(body)?;
         let connector_id = Uuid::new_v4();
@@ -87,7 +82,7 @@ impl ConnectorManager {
         let mut resp = vec![];
         let mut i = 0;
         let mut total = 0;
-        for connector in self.connectors.read().await.iter() {
+        for connector in self.apps.read().await.iter() {
             if i >= (page - 1) * size && i < page * size {
                 resp.push(connector.get_info());
             }
@@ -107,7 +102,7 @@ impl ConnectorManager {
 
     pub async fn create_source(&self, connector_id: &Uuid, req: &Bytes) -> HaliaResult<()> {
         match self
-            .connectors
+            .apps
             .read()
             .await
             .iter()
@@ -125,7 +120,7 @@ impl ConnectorManager {
         size: usize,
     ) -> HaliaResult<SearchSourceResp> {
         match self
-            .connectors
+            .apps
             .read()
             .await
             .iter()
@@ -143,7 +138,7 @@ impl ConnectorManager {
         req: &Bytes,
     ) -> HaliaResult<()> {
         match self
-            .connectors
+            .apps
             .read()
             .await
             .iter()
@@ -160,7 +155,7 @@ impl ConnectorManager {
         item_id: Option<Uuid>,
     ) -> Result<broadcast::Receiver<MessageBatch>> {
         debug!("{},{:?}", connector_id, item_id);
-        for connector in self.connectors.write().await.iter_mut() {
+        for connector in self.apps.write().await.iter_mut() {
             if connector.get_id() == connector_id {
                 return connector.subscribe(item_id).await;
             }
@@ -174,7 +169,7 @@ impl ConnectorManager {
         connector_id: &Uuid,
         item_id: Option<Uuid>,
     ) -> Result<mpsc::Sender<MessageBatch>> {
-        for connector in self.connectors.write().await.iter_mut() {
+        for connector in self.apps.write().await.iter_mut() {
             if connector.get_id() == connector_id {
                 return connector.publish(item_id).await;
             }
@@ -185,7 +180,7 @@ impl ConnectorManager {
 
     pub async fn create_sink(&self, connector_id: &Uuid, req: &Bytes) -> HaliaResult<()> {
         match self
-            .connectors
+            .apps
             .read()
             .await
             .iter()
@@ -203,7 +198,7 @@ impl ConnectorManager {
         size: usize,
     ) -> HaliaResult<SearchSinkResp> {
         match self
-            .connectors
+            .apps
             .read()
             .await
             .iter()
@@ -215,7 +210,7 @@ impl ConnectorManager {
     }
 }
 
-impl ConnectorManager {
+impl AppManager {
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::connector::read_connectors().await {
             Ok(connectors) => {
@@ -223,7 +218,7 @@ impl ConnectorManager {
                     let req: CreateAppReq = serde_json::from_str(&data)?;
                     self.do_create_connector(connector_id, req).await?;
                     match self
-                        .connectors
+                        .apps
                         .read()
                         .await
                         .iter()
