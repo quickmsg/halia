@@ -10,7 +10,6 @@ use tokio::{
     fs::OpenOptions,
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use tracing::debug;
 use uuid::Uuid;
 
 pub mod connector;
@@ -124,14 +123,11 @@ async fn delete(path: impl AsRef<Path>, id: &Uuid) -> Result<(), io::Error> {
     }
 
     let mut lines: Vec<&str> = buf.split("\n").collect();
-    debug!("{:?}", lines);
-
     let id = id.to_string();
     lines.retain(|line| match line.find(DELIMITER) {
         Some(pos) => id != &line[..pos],
         None => false,
     });
-    debug!("{:?}", lines);
 
     let buf = lines.join("\n");
     let mut file = OpenOptions::new()

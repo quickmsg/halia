@@ -399,7 +399,7 @@ impl DataType {
             DataType::String(len, single, endian) => match (single, endian) {
                 (true, Endian::BigEndian) => {
                     let mut new_data = vec![];
-                    for i in 0..*len {
+                    for i in 0..*len*2 {
                         if i % 2 != 0 {
                             new_data.push(data[i as usize]);
                         }
@@ -411,7 +411,7 @@ impl DataType {
                 }
                 (true, Endian::LittleEndian) => {
                     let mut new_data = vec![];
-                    for i in 0..*len {
+                    for i in 0..*len*2 {
                         if i % 2 == 0 {
                             new_data.push(data[i as usize]);
                         }
@@ -422,7 +422,7 @@ impl DataType {
                     }
                 }
                 (false, Endian::BigEndian) => {
-                    for i in 0..*len {
+                    for i in 0..*len*2 {
                         if i % 2 == 0 {
                             data.swap((i * 2) as usize, (i * 2 + 1) as usize);
                         }
@@ -591,6 +591,7 @@ impl DataType {
                 Some(value) => {
                     let mut new_data = vec![];
                     let data = value.as_bytes();
+                    debug!("{:?}", data);
                     match (single, endian) {
                         (true, Endian::BigEndian) => {
                             for byte in data {
