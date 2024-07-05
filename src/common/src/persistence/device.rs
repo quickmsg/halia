@@ -1,7 +1,6 @@
 use std::{
     io,
     path::{Path, PathBuf},
-    str::from_utf8_unchecked,
 };
 
 use bytes::Bytes;

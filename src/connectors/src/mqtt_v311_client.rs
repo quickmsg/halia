@@ -50,8 +50,6 @@ struct Sink {
     pub topic: String,
     pub qos: u8,
     #[serde(skip)]
-    pub rx: Option<mpsc::Receiver<MessageBatch>>,
-    #[serde(skip)]
     pub tx: Option<mpsc::Sender<MessageBatch>>,
     pub ref_cnt: u8,
 }
@@ -193,7 +191,6 @@ impl MqttV311 {
             tx: None,
             ref_cnt: 0,
             client: None,
-            rx: None,
         });
 
         Ok(())

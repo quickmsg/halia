@@ -146,7 +146,7 @@ fn connector_routes() -> Router {
 fn rule_routes() -> Router {
     Router::new()
         .route("/rule", post(rule::create))
-        .route("/rules", get(rule::list))
+        .route("/rules", get(rule::search))
         .route("/rule/:id", get(rule::read))
         .route("/rule/:id/start", put(rule::start))
         .route("/rule/:id/stop", put(rule::stop))

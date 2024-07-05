@@ -1,10 +1,9 @@
-use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
 use rule::Rule;
-use std::{collections::HashMap, sync::LazyLock};
+use std::sync::LazyLock;
 use tokio::sync::RwLock;
 use tracing::error;
 use types::rule::{CreateRuleReq, ListRuleResp};
@@ -14,11 +13,11 @@ mod rule;
 mod stream;
 
 pub static GLOBAL_RULE_MANAGER: LazyLock<RuleManager> = LazyLock::new(|| RuleManager {
-    rules: RwLock::new(HashMap::new()),
+    rules: RwLock::new(vec![]),
 });
 
 pub struct RuleManager {
-    rules: RwLock<HashMap<Uuid, Rule>>,
+    rules: RwLock<Vec<Rule>>,
 }
 
 impl RuleManager {
@@ -36,33 +35,40 @@ impl RuleManager {
                 error!("write rule to file err: {}", e);
             }
         }
-        self.rules.write().await.insert(id, rule);
+        self.rules.write().await.push(rule);
 
         Ok(())
     }
 
-    pub async fn list(&self) -> HaliaResult<Vec<ListRuleResp>> {
-        Ok(self
-            .rules
-            .read()
-            .await
-            .iter()
-            .map(|(id, rule)| ListRuleResp {
-                id: id.clone(),
-                name: rule.req.name.clone(),
-            })
-            .collect())
+    pub async fn search(&self, page: usize, size: usize) -> HaliaResult<Vec<ListRuleResp>> {
+        // Ok(self
+        //     .rules
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .map(|(id, rule)| ListRuleResp {
+        //         id: id.clone(),
+        //         name: rule.req.name.clone(),
+        //     })
+        //     .collect())
+        todo!()
     }
 
     pub async fn read(&self, id: Uuid) -> HaliaResult<CreateRuleReq> {
-        match self.rules.read().await.get(&id) {
+        match self.rules.read().await.iter().find(|rule| rule.id == id) {
             Some(rule) => Ok(rule.req.clone()),
             None => return Err(HaliaError::NotFound),
         }
     }
 
     pub async fn start(&self, id: Uuid) -> HaliaResult<()> {
-        match self.rules.write().await.get_mut(&id) {
+        match self
+            .rules
+            .write()
+            .await
+            .iter_mut()
+            .find(|rule| rule.id == id)
+        {
             Some(rule) => match rule.start().await {
                 Ok(_) => Ok(()),
                 Err(e) => {
@@ -75,17 +81,29 @@ impl RuleManager {
     }
 
     pub async fn stop(&self, id: Uuid) -> HaliaResult<()> {
-        match self.rules.write().await.get_mut(&id) {
+        match self
+            .rules
+            .write()
+            .await
+            .iter_mut()
+            .find(|rule| rule.id == id)
+        {
             Some(rule) => Ok(rule.stop()),
             None => return Err(HaliaError::NotFound),
         }
     }
 
     pub async fn delete(&self, id: Uuid) -> HaliaResult<()> {
-        match self.rules.write().await.get_mut(&id) {
+        match self
+            .rules
+            .write()
+            .await
+            .iter_mut()
+            .find(|rule| rule.id == id)
+        {
             Some(rule) => {
                 rule.stop();
-                self.rules.write().await.remove(&id);
+                // TODO delete
                 Ok(())
             }
             None => return Err(HaliaError::NotFound),

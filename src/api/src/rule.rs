@@ -1,9 +1,12 @@
-use axum::{extract::Path, Json};
+use axum::{
+    extract::{Path, Query},
+    Json,
+};
 use rule::GLOBAL_RULE_MANAGER;
 use types::rule::{CreateRuleReq, ListRuleResp};
 use uuid::Uuid;
 
-use crate::AppResp;
+use crate::{AppResp, Pagination};
 
 pub(crate) async fn create(Json(req): Json<CreateRuleReq>) -> AppResp<()> {
     match GLOBAL_RULE_MANAGER.create(None, req).await {
@@ -12,8 +15,8 @@ pub(crate) async fn create(Json(req): Json<CreateRuleReq>) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn list() -> AppResp<Vec<ListRuleResp>> {
-    match GLOBAL_RULE_MANAGER.list().await {
+pub(crate) async fn search(pagination: Query<Pagination>) -> AppResp<Vec<ListRuleResp>> {
+    match GLOBAL_RULE_MANAGER.search(pagination.p, pagination.s).await {
         Ok(data) => AppResp::with_data(data),
         Err(e) => e.into(),
     }

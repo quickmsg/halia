@@ -8,7 +8,7 @@ use device::GLOBAL_DEVICE_MANAGER;
 use tracing::debug;
 use types::device::{
     device::{SearchDeviceResp, SearchSinksResp},
-    group::{SearchGroupResp, UpdateGroupReq},
+    group::SearchGroupResp,
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
 };
 use uuid::Uuid;
