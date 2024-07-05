@@ -14,11 +14,28 @@ pub struct CreateRuleReq {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateRuleNode {
     pub index: usize,
-    pub id: Option<Uuid>,
-    pub item_id: Option<Uuid>,
-    pub r#type: String,
-    pub name: Option<String>,
+    pub r#type: RuleNodeType,
     pub conf: Value,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleNodeType {
+    Source,
+    Operator,
+    Sink,
+}
+
+pub struct CreaetRuleSource {
+    pub r#type: String,
+    pub id: Uuid,
+    pub source_id: Option<Uuid>,
+}
+
+pub struct CreateRuleSink {
+    pub r#type: String,
+    pub id: Uuid,
+    pub source_id: Option<Uuid>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -52,26 +69,26 @@ impl CreateRuleReq {
         (incoming_edges, outgoing_edges)
     }
 
-    pub fn get_ids_by_type(&self, r#type: &str) -> Vec<Uuid> {
-        self.nodes
-            .iter()
-            .filter(|node| node.r#type.as_str() == r#type)
-            .map(|node| node.id.unwrap())
-            .collect()
-    }
+    // pub fn get_ids_by_type(&self, r#type: &str) -> Vec<Uuid> {
+    //     self.nodes
+    //         .iter()
+    //         .filter(|node| node.r#type.as_str() == r#type)
+    //         .map(|node| node.id.unwrap())
+    //         .collect()
+    // }
 
-    pub fn get_operator_ids(&self) -> Vec<Uuid> {
-        self.nodes
-            .iter()
-            .filter(|node| match node.r#type.as_str() {
-                "source" => false,
-                "sink" => false,
-                // "window" => false,
-                _ => true,
-            })
-            .map(|node| node.id.unwrap())
-            .collect()
-    }
+    // pub fn get_operator_ids(&self) -> Vec<Uuid> {
+    //     self.nodes
+    //         .iter()
+    //         .filter(|node| match node.r#type.as_str() {
+    //             "source" => false,
+    //             "sink" => false,
+    //             // "window" => false,
+    //             _ => true,
+    //         })
+    //         .map(|node| node.id.unwrap())
+    //         .collect()
+    // }
 }
 
 pub enum Node {

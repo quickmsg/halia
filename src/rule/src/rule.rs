@@ -1,10 +1,11 @@
 use anyhow::Result;
 use connectors::GLOBAL_CONNECTOR_MANAGER;
+use core::error::Source;
 use message::MessageBatch;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
-use types::rule::{CreateRuleNode, CreateRuleReq, Status};
+use types::rule::{CreateRuleNode, CreateRuleReq, RuleNodeType, Status};
 use uuid::Uuid;
 
 use crate::stream::start_stream;
@@ -244,27 +245,30 @@ fn get_stream_info(
     osi.ids.push(id);
 
     if let Some(node) = node_map.get(&id) {
-        match node.r#type.as_str() {
-            "source" => {
+        match node.r#type {
+            RuleNodeType::Source => {
                 osi.r#type = Some("source".to_string());
                 return Ok(osi);
             }
-            "sink" => {
-                osi.r#type = Some("sink".to_string());
-                return Ok(osi);
+            RuleNodeType::Sink => {
+
             }
-            "window" => {
-                osi.r#type = Some("window".to_string());
-                return Ok(osi);
-            }
-            "join" => {
-                osi.r#type = Some("join".to_string());
-                return Ok(osi);
-            }
-            "merge" => {
-                osi.r#type = Some("merge".to_string());
-                return Ok(osi);
-            }
+            // "sink" => {
+            //     osi.r#type = Some("sink".to_string());
+            //     return Ok(osi);
+            // }
+            // "window" => {
+            //     osi.r#type = Some("window".to_string());
+            //     return Ok(osi);
+            // }
+            // "join" => {
+            //     osi.r#type = Some("join".to_string());
+            //     return Ok(osi);
+            // }
+            // "merge" => {
+            //     osi.r#type = Some("merge".to_string());
+            //     return Ok(osi);
+            // }
             _ => {}
         }
     }
