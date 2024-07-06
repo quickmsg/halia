@@ -108,7 +108,6 @@ pub async unsafe fn update_device_conf(id: Uuid, conf: &Bytes) -> Result<(), io:
                 DELIMITER,
                 std::str::from_utf8_unchecked(conf)
             );
-            debug!("{}", new_line);
             *line = new_line.as_str();
             break;
         }

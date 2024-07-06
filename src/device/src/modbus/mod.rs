@@ -271,9 +271,11 @@ impl Device for Modbus {
             self.name = req.name.clone();
         }
 
-        *self.conf.lock().await = update_conf.clone();
+        *self.conf.lock().await = update_conf;
         if self.on.load(Ordering::SeqCst) {
-            let _ = self.signal_tx.as_ref().unwrap().send(Command::Update);
+            if let Err(e) = self.signal_tx.as_ref().unwrap().send(Command::Update).await {
+                debug!("device signal command send err:{:?}", e);
+            }
         }
 
         Ok(())
