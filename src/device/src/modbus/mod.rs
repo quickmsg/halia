@@ -11,7 +11,7 @@ use protocol::modbus::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sink::{Sink, SinkConf};
+use sink::{SinkConf, SinkManager};
 use std::{
     net::{IpAddr, SocketAddr},
     sync::{
@@ -58,7 +58,8 @@ struct Modbus {
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
     ref_cnt: usize,
 
-    sinks: RwLock<Vec<Sink>>,
+    sink_manager: SinkManager,
+    sink_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 #[derive(Debug)]
@@ -148,8 +149,8 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
         read_tx: None,
         write_tx: None,
         ref_cnt: 0,
-
-        sinks: RwLock::new(vec![]),
+        sink_manager: SinkManager::new(),
+        sink_tx: None,
     }))
 }
 
@@ -572,25 +573,12 @@ impl Device for Modbus {
 
     async fn create_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_slice(req)?;
-        let sink = sink::new(sink_id, conf)?;
-        self.sinks.write().await.push(sink);
+        self.sink_manager.add_sink(sink_id, conf).await?;
         Ok(())
     }
 
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
-        let mut data = vec![];
-        let mut i = 0;
-        for sink in self.sinks.read().await.iter().skip((page - 1) * size) {
-            data.push(sink.search());
-            i += 1;
-            if i >= size {
-                break;
-            }
-        }
-        SearchSinksResp {
-            total: self.sinks.read().await.len(),
-            data,
-        }
+        self.sink_manager.search_sinks(page, size).await
     }
 
     async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
@@ -598,30 +586,21 @@ impl Device for Modbus {
     }
 
     async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()> {
-        // TODO 检查是否被引用
-        self.sinks.write().await.retain(|sink| sink.id != sink_id);
-        Ok(())
+        self.sink_manager.delete_sink(sink_id).await
     }
 
-    async fn publish(&self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self
-            .sinks
-            .write()
-            .await
-            .iter_mut()
-            .find(|sink| sink.id == *sink_id)
-        {
-            Some(sink) => match &sink.tx {
-                Some(tx) => return Ok(tx.clone()),
-                None => {
-                    let (tx, rx) = mpsc::channel::<MessageBatch>(16);
-                    let tx_clone = tx.clone();
-                    sink.tx = Some(tx);
-                    sink.run(rx, self.write_tx.as_ref().unwrap().clone());
-                    Ok(tx_clone)
-                }
-            },
-            None => Err(HaliaError::NotFound),
+    // TODO
+    async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match &self.sink_tx {
+            Some(tx) => return Ok(tx.clone()),
+            None => {
+                let (tx, rx) = mpsc::channel::<MessageBatch>(16);
+                let tx_clone = tx.clone();
+                self.sink_tx = Some(tx);
+                self.sink_manager
+                    .run(rx, self.write_tx.as_ref().unwrap().clone());
+                Ok(tx_clone)
+            }
         }
     }
 }

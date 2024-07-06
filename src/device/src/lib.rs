@@ -732,5 +732,5 @@ trait Device: Sync + Send {
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
     async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()>;
     async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()>;
-    async fn publish(&self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
+    async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }

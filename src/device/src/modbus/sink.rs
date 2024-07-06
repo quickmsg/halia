@@ -4,99 +4,151 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tracing::debug;
-use types::device::datatype::DataType;
+use types::device::{datatype::DataType, device::SearchSinksResp};
 use uuid::Uuid;
 
 use super::{point::Area, WritePointEvent};
 
 #[derive(Debug)]
-pub struct Sink {
-    pub id: Uuid,
-    points: Arc<RwLock<Vec<Point>>>,
-    conf: SinkConf,
-    pub tx: Option<mpsc::Sender<MessageBatch>>,
+pub struct SinkManager {
+    sinks: Arc<RwLock<Vec<Sink>>>,
 }
 
-pub enum Command {
-    Stop,
-}
-
-pub fn new(id: Uuid, conf: SinkConf) -> HaliaResult<Sink> {
-    let mut points = vec![];
-    for point_conf in &conf.points {
-        let point = Point::new(point_conf)?;
-        points.push(point);
+impl SinkManager {
+    pub fn new() -> Self {
+        SinkManager {
+            sinks: Arc::new(RwLock::new(vec![])),
+        }
     }
-    Ok(Sink {
-        id,
-        points: Arc::new(RwLock::new(points)),
-        conf,
-        tx: None,
-    })
-}
 
-impl Sink {
-    pub fn run(&self, mut rx: mpsc::Receiver<MessageBatch>, tx: mpsc::Sender<WritePointEvent>) {
-        let points = self.points.clone();
+    pub async fn add_sink(&self, id: Uuid, conf: SinkConf) -> HaliaResult<()> {
+        let mut points = vec![];
+        for point_conf in &conf.points {
+            let point = Point::new(point_conf)?;
+            points.push(point);
+        }
+        self.sinks.write().await.push(Sink {
+            id,
+            points: Arc::new(RwLock::new(points)),
+            conf,
+        });
+
+        Ok(())
+    }
+
+    pub async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
+        let mut data = vec![];
+        let mut i = 0;
+        for sink in self.sinks.read().await.iter().rev().skip((page - 1) * size) {
+            data.push(sink.search());
+            i += 1;
+            if i >= size {
+                break;
+            }
+        }
+        SearchSinksResp {
+            total: self.sinks.read().await.len(),
+            data,
+        }
+    }
+
+    pub async fn update_sink(&self, sink_id: Uuid, conf: SinkConf) -> HaliaResult<()> {
+        match self
+            .sinks
+            .write()
+            .await
+            .iter_mut()
+            .find(|sink| sink.id == sink_id)
+        {
+            Some(sink) => {
+                self.delete_sink(sink_id).await?;
+                self.add_sink(sink_id, conf).await?;
+                Ok(())
+            }
+            None => todo!(),
+        }
+    }
+
+    pub async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()> {
+        self.sinks.write().await.retain(|sink| sink.id != sink_id);
+        Ok(())
+    }
+
+    pub fn run(
+        &self,
+        // mut command_rx: mpsc::Receiver<Command>,
+        mut rx: mpsc::Receiver<MessageBatch>,
+        tx: mpsc::Sender<WritePointEvent>,
+    ) {
+        let sinks = self.sinks.clone();
         tokio::spawn(async move {
             loop {
                 match rx.recv().await {
                     Some(mb) => {
-                        for point in points.read().await.iter() {
-                            let value = match &point.value {
-                                TargetValue::Int(n) => serde_json::json!(n),
-                                TargetValue::Uint(un) => serde_json::json!(un),
-                                TargetValue::Float(f) => serde_json::json!(f),
-                                TargetValue::Boolean(b) => serde_json::json!(b),
-                                TargetValue::String(s) => serde_json::json!(s),
-                                TargetValue::Null => serde_json::Value::Null,
-                                TargetValue::Field(field) => {
-                                    let messages = mb.get_messages();
-                                    if messages.len() > 0 {
-                                        match messages[0].get(field) {
-                                            Some(value) => match value {
-                                                message::MessageValue::Null => {
-                                                    serde_json::Value::Null
+                        if let Some(sink_id) = mb.get_sink_id() {
+                            match sinks.read().await.iter().find(|sink| sink.id == *sink_id) {
+                                Some(sink) => {
+                                    for point in sink.points.read().await.iter() {
+                                        let value = match &point.value {
+                                            TargetValue::Int(n) => serde_json::json!(n),
+                                            TargetValue::Uint(un) => serde_json::json!(un),
+                                            TargetValue::Float(f) => serde_json::json!(f),
+                                            TargetValue::Boolean(b) => serde_json::json!(b),
+                                            TargetValue::String(s) => serde_json::json!(s),
+                                            TargetValue::Null => serde_json::Value::Null,
+                                            TargetValue::Field(field) => {
+                                                let messages = mb.get_messages();
+                                                if messages.len() > 0 {
+                                                    match messages[0].get(field) {
+                                                        Some(value) => match value {
+                                                            message::MessageValue::Null => {
+                                                                serde_json::Value::Null
+                                                            }
+                                                            message::MessageValue::Boolean(b) => {
+                                                                serde_json::json!(b)
+                                                            }
+                                                            message::MessageValue::Int64(n) => {
+                                                                serde_json::json!(n)
+                                                            }
+                                                            message::MessageValue::Uint64(ui) => {
+                                                                serde_json::json!(ui)
+                                                            }
+                                                            message::MessageValue::Float64(f) => {
+                                                                serde_json::json!(f)
+                                                            }
+                                                            message::MessageValue::String(s) => {
+                                                                serde_json::json!(s)
+                                                            }
+                                                            message::MessageValue::Bytes(_) => {
+                                                                todo!()
+                                                            }
+                                                            _ => continue,
+                                                        },
+                                                        None => continue,
+                                                    }
+                                                } else {
+                                                    continue;
                                                 }
-                                                message::MessageValue::Boolean(b) => {
-                                                    serde_json::json!(b)
-                                                }
-                                                message::MessageValue::Int64(n) => {
-                                                    serde_json::json!(n)
-                                                }
-                                                message::MessageValue::Uint64(ui) => {
-                                                    serde_json::json!(ui)
-                                                }
-                                                message::MessageValue::Float64(f) => {
-                                                    serde_json::json!(f)
-                                                }
-                                                message::MessageValue::String(s) => {
-                                                    serde_json::json!(s)
-                                                }
-                                                message::MessageValue::Bytes(_) => todo!(),
-                                                _ => continue,
-                                            },
-                                            None => continue,
+                                            }
+                                        };
+
+                                        match WritePointEvent::new(
+                                            point.slave,
+                                            point.area.clone(),
+                                            point.address,
+                                            point.r#type.clone(),
+                                            value,
+                                        ) {
+                                            Ok(wpe) => {
+                                                let _ = tx.send(wpe).await;
+                                            }
+                                            Err(e) => {
+                                                debug!("value is err");
+                                            }
                                         }
-                                    } else {
-                                        continue;
                                     }
                                 }
-                            };
-
-                            match WritePointEvent::new(
-                                point.slave,
-                                point.area.clone(),
-                                point.address,
-                                point.r#type.clone(),
-                                value,
-                            ) {
-                                Ok(wpe) => {
-                                    let _ = tx.send(wpe).await;
-                                }
-                                Err(e) => {
-                                    debug!("value is err");
-                                }
+                                None => {}
                             }
                         }
                     }
@@ -105,7 +157,21 @@ impl Sink {
             }
         });
     }
+}
 
+#[derive(Debug)]
+pub struct Sink {
+    pub id: Uuid,
+    points: Arc<RwLock<Vec<Point>>>,
+    conf: SinkConf,
+}
+
+pub enum Command {
+    Start,
+    Stop,
+}
+
+impl Sink {
     pub fn search(&self) -> serde_json::Value {
         let resp = SinkSearchResp {
             id: self.id.clone(),
