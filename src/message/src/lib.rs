@@ -66,15 +66,8 @@ impl Default for Message {
 pub enum MessageValue {
     Null,
     Boolean(bool),
-    // Int8(i8),
-    // Int16(i16),
-    // Int32(i32),
     Int64(i64),
-    // Uint8(u8),
-    // Uint16(u16),
-    // Uint32(u32),
     Uint64(u64),
-    // Float32(f32),
     Float64(f64),
     String(String),
     Bytes(Vec<u8>),
@@ -90,12 +83,10 @@ impl MessageValue {
         pointer
             .split("->")
             .map(|x| x.replace("~1", "/").replace("~0", "~"))
-            .try_fold(self, |target, token| {
-                match target {
-                    MessageValue::Object(map) => map.get(&token),
-                    MessageValue::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
-                    _ => None,
-                }
+            .try_fold(self, |target, token| match target {
+                MessageValue::Object(map) => map.get(&token),
+                MessageValue::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
+                _ => None,
             })
     }
 

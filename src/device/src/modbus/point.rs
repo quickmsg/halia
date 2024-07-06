@@ -1,17 +1,13 @@
-use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
 use message::MessageValue;
 use protocol::modbus::{
-    client::{Context, Reader, Writer},
+    client::{Context, Reader},
     SlaveContext,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::{debug, warn};
-use types::device::{
-    datatype::{DataType, Endian},
-    point::CreatePointReq,
-};
+use tracing::warn;
+use types::device::{datatype::DataType, point::CreatePointReq};
 use uuid::Uuid;
 
 #[derive(Debug)]

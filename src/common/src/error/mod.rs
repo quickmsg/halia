@@ -15,6 +15,10 @@ pub enum HaliaError {
     DeviceStoped,
     // 设备连接错误
     DeviceDisconnect,
+
+    // DEVICE
+    DevicePointNotSupportWriteMethod,
+    DevicePointWriteValueErr,
 }
 
 impl From<std::fmt::Error> for HaliaError {
@@ -47,6 +51,9 @@ impl Display for HaliaError {
             HaliaError::Disconnect => write!(f, "连接断开"),
             HaliaError::DeviceStoped => write!(f, "设备已关闭"),
             HaliaError::DeviceDisconnect => write!(f, "设备已断开连接"),
+
+            HaliaError::DevicePointNotSupportWriteMethod => write!(f, "点位不支持写"),
+            HaliaError::DevicePointWriteValueErr => write!(f, "点位写入值错误"),
         }
     }
 }
@@ -63,6 +70,8 @@ impl HaliaError {
             HaliaError::Disconnect => 7,
             HaliaError::DeviceStoped => 1001,
             HaliaError::DeviceDisconnect => 1002,
+            HaliaError::DevicePointNotSupportWriteMethod => 1003,
+            HaliaError::DevicePointWriteValueErr => 1004,
         }
     }
 }

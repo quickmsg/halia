@@ -5,6 +5,7 @@ use message::MessageValue;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use tracing::debug;
+use std::convert::TryInto;
 
 #[derive(Debug, Clone)]
 pub enum DataType {
@@ -457,7 +458,13 @@ impl DataType {
                 None => bail!("value is wrong"),
             },
             DataType::Int8(_) => match data.as_i64() {
-                Some(value) => Ok((value as u8).to_be_bytes().to_vec()),
+                Some(value) => {
+   let value:u8 =           match value.try_into() {
+                        Ok(value) => value,
+                        Err(e) => bail!("value is wrong :{}", e),
+                    };
+Ok(value.to_be_bytes().to_vec())
+                } 
                 None => bail!("value is wrong"),
             },
             DataType::Uint8(_) => match data.as_i64() {

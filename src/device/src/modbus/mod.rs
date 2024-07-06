@@ -244,7 +244,7 @@ impl Modbus {
         group_id: Uuid,
         point_id: Uuid,
         value: serde_json::Value,
-    ) -> Result<WritePointEvent> {
+    ) -> HaliaResult<WritePointEvent> {
         match self
             .groups
             .read()
@@ -253,7 +253,7 @@ impl Modbus {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.get_write_point_event(point_id, value).await,
-            None => bail!("not find"),
+            None => Err(HaliaError::NotFound),
         }
     }
 }
@@ -687,79 +687,90 @@ async fn read_group_points(
     Ok(())
 }
 
-struct WritePointEvent {
+pub struct WritePointEvent {
     pub slave: u8,
     pub area: Area,
     pub address: u16,
     pub data_type: DataType,
-    pub value: serde_json::Value,
+    pub data: Vec<u8>,
+}
+
+impl WritePointEvent {
+    pub fn new(
+        slave: u8,
+        area: Area,
+        address: u16,
+        data_type: DataType,
+        value: serde_json::Value,
+    ) -> HaliaResult<Self> {
+        match area {
+            Area::InputDiscrete | Area::InputRegisters => {
+                return Err(HaliaError::DevicePointNotSupportWriteMethod)
+            }
+            _ => {}
+        }
+
+        let data = match data_type.encode(value) {
+            Ok(data) => data,
+            Err(e) => {
+                debug!("encode value err :{}", e);
+                return Err(HaliaError::DevicePointWriteValueErr);
+            }
+        };
+
+        Ok(WritePointEvent {
+            slave,
+            area,
+            address,
+            data_type,
+            data,
+        })
+    }
 }
 
 async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
     ctx.set_slave(wpe.slave);
-    Ok(match wpe.area {
+    match wpe.area {
         Area::Coils => match wpe.data_type {
-            DataType::Bool(_) => match wpe.data_type.encode(wpe.value) {
-                Ok(data) => match ctx.write_single_coil(wpe.address, data[0]).await {
-                    Ok(res) => match res {
-                        Ok(_) => return Ok(()),
-                        Err(e) => {
-                            warn!("modbus protocl exception:{}", e);
-                            return Ok(());
-                        }
-                    },
-                    Err(e) => return Err(e.into()),
+            DataType::Bool(_) => match ctx.write_single_coil(wpe.address, wpe.data[0]).await {
+                Ok(res) => match res {
+                    Ok(_) => return Ok(()),
+                    Err(e) => {
+                        warn!("modbus protocl exception:{}", e);
+                        return Ok(());
+                    }
                 },
-                Err(e) => bail!("encode err:{}", e),
+                Err(e) => return Err(e.into()),
             },
-            _ => bail!("not support type"),
+            _ => bail!("not support"),
         },
         Area::HoldingRegisters => match wpe.data_type {
             DataType::Bool(pos) => {
-                match wpe.data_type.encode(wpe.value) {
-                    Ok(data) => {
-                        let and_mask = !(1 << pos.unwrap());
-                        let or_mask = (data[0] as u16) << pos.unwrap();
-                        match ctx
-                            .masked_write_register(wpe.address, and_mask, or_mask)
-                            .await
-                        {
-                            Ok(res) => match res {
-                                Ok(_) => return Ok(()),
-                                Err(_) => {
-                                    // todo log error
-                                    return Ok(());
-                                }
-                            },
-                            Err(e) => bail!("{}", e),
+                let and_mask = !(1 << pos.unwrap());
+                let or_mask = (wpe.data[0] as u16) << pos.unwrap();
+                match ctx
+                    .masked_write_register(wpe.address, and_mask, or_mask)
+                    .await
+                {
+                    Ok(res) => match res {
+                        Ok(_) => return Ok(()),
+                        Err(_) => {
+                            // todo log error
+                            return Ok(());
                         }
-                    }
-                    Err(e) => bail!("encode err :{}", e),
+                    },
+                    Err(e) => bail!("{}", e),
                 }
             }
             DataType::Int8(endian) | DataType::Uint8(endian) => {
-                if let Ok(data) = wpe.data_type.encode(wpe.value) {
-                    let (and_mask, or_mask) = match endian {
-                        Endian::LittleEndian => (0x00FF, (data[0] as u16) << 8),
-                        Endian::BigEndian => (0xFF00, data[0] as u16),
-                    };
-                    match ctx
-                        .masked_write_register(wpe.address, and_mask, or_mask)
-                        .await
-                    {
-                        Ok(res) => match res {
-                            Ok(_) => return Ok(()),
-                            Err(e) => {
-                                warn!("modbus protocol exception:{}", e);
-                                return Ok(());
-                            }
-                        },
-                        Err(e) => bail!("{}", e),
-                    }
-                }
-            }
-            DataType::Int16(_) | DataType::Uint16(_) => match wpe.data_type.encode(wpe.value) {
-                Ok(data) => match ctx.write_single_register(wpe.address, &data).await {
+                let (and_mask, or_mask) = match endian {
+                    Endian::LittleEndian => (0x00FF, (wpe.data[0] as u16) << 8),
+                    Endian::BigEndian => (0xFF00, wpe.data[0] as u16),
+                };
+                match ctx
+                    .masked_write_register(wpe.address, and_mask, or_mask)
+                    .await
+                {
                     Ok(res) => match res {
                         Ok(_) => return Ok(()),
                         Err(e) => {
@@ -768,9 +779,20 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
                         }
                     },
                     Err(e) => bail!("{}", e),
-                },
-                Err(e) => bail!("encode err:{}", e),
-            },
+                }
+            }
+            DataType::Int16(_) | DataType::Uint16(_) => {
+                match ctx.write_single_register(wpe.address, &wpe.data).await {
+                    Ok(res) => match res {
+                        Ok(_) => return Ok(()),
+                        Err(e) => {
+                            warn!("modbus protocol exception:{}", e);
+                            return Ok(());
+                        }
+                    },
+                    Err(e) => bail!("{}", e),
+                }
+            }
             DataType::Int32(_, _)
             | DataType::Uint32(_, _)
             | DataType::Int64(_, _)
@@ -778,8 +800,8 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
             | DataType::Float32(_, _)
             | DataType::Float64(_, _)
             | DataType::String(_, _, _)
-            | DataType::Bytes(_, _, _) => match wpe.data_type.encode(wpe.value) {
-                Ok(data) => match ctx.write_multiple_registers(wpe.address, &data).await {
+            | DataType::Bytes(_, _, _) => {
+                match ctx.write_multiple_registers(wpe.address, &wpe.data).await {
                     Ok(res) => match res {
                         Ok(_) => return Ok(()),
                         Err(e) => {
@@ -788,10 +810,9 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
                         }
                     },
                     Err(e) => bail!("{}", e),
-                },
-                Err(e) => bail!("encode err :{}", e),
-            },
+                }
+            }
         },
         _ => bail!("not support area"),
-    })
+    }
 }

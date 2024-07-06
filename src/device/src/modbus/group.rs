@@ -221,7 +221,7 @@ impl Group {
         &self,
         point_id: Uuid,
         value: serde_json::Value,
-    ) -> Result<WritePointEvent> {
+    ) -> HaliaResult<WritePointEvent> {
         match self
             .points
             .read()
@@ -229,14 +229,14 @@ impl Group {
             .iter()
             .find(|point| point.id == point_id)
         {
-            Some(point) => Ok(WritePointEvent {
-                slave: point.conf.slave,
-                area: point.conf.area.clone(),
-                address: point.conf.address,
-                data_type: point.conf.r#type.clone(),
-                value: value,
-            }),
-            None => bail!("not found"),
+            Some(point) => WritePointEvent::new(
+                point.conf.slave,
+                point.conf.area.clone(),
+                point.conf.address,
+                point.conf.r#type.clone(),
+                value,
+            ),
+            None => Err(HaliaError::NotFound),
         }
     }
 }

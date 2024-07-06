@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tracing::debug;
 use types::device::datatype::DataType;
@@ -82,14 +81,21 @@ impl Sink {
                                     }
                                 }
                             };
-                            let wpe = WritePointEvent {
-                                slave: point.slave,
-                                area: point.area.clone(),
-                                address: point.address,
-                                data_type: point.r#type.clone(),
+
+                            match WritePointEvent::new(
+                                point.slave,
+                                point.area.clone(),
+                                point.address,
+                                point.r#type.clone(),
                                 value,
-                            };
-                            let _ = tx.send(wpe).await;
+                            ) {
+                                Ok(wpe) => {
+                                    let _ = tx.send(wpe).await;
+                                }
+                                Err(e) => {
+                                    debug!("value is err");
+                                }
+                            }
                         }
                     }
                     None => return,
