@@ -253,7 +253,6 @@ pub async fn delete_points(
     group_id: &Uuid,
     point_ids: &Vec<Uuid>,
 ) -> Result<(), io::Error> {
-    debug!("point file:{:?}", get_point_file(device_id, group_id));
     for point_id in point_ids {
         super::delete(get_point_file(device_id, group_id), point_id).await?;
     }

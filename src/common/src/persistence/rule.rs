@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use bytes::Bytes;
 use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
@@ -25,9 +26,16 @@ pub async fn init() -> Result<(), io::Error> {
     super::create_file(get_file()).await
 }
 
-pub async fn insert(id: &Uuid, data: &String) -> Result<(), io::Error> {
-    let data = format!("{}{}{}", Status::Stopped, DELIMITER, data);
-    super::insert(get_file(), id, &data).await
+pub async fn insert(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+    unsafe {
+        let data = format!(
+            "{}{}{}",
+            Status::Stopped,
+            DELIMITER,
+            std::str::from_utf8_unchecked(data)
+        );
+        super::insert(get_file(), id, &data).await
+    }
 }
 
 pub async fn read() -> Result<Vec<(Uuid, Status, String)>, io::Error> {

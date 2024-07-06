@@ -10,7 +10,6 @@ use tokio::{
     fs::OpenOptions,
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use tracing::debug;
 use uuid::Uuid;
 
 pub mod apps;
@@ -50,7 +49,6 @@ impl Display for Status {
 }
 
 async fn insert(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
-    debug!("{path:?},{data:?}");
     let mut file = OpenOptions::new().append(true).open(path).await?;
     file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
         .await?;
@@ -100,7 +98,6 @@ async fn update(path: impl AsRef<Path>, id: &Uuid, data: &str) -> Result<(), io:
 
     let new_line = format!("{}{}{}", id, DELIMITER, data);
     let mut lines: Vec<&str> = buf.split("\n").collect();
-    debug!("lines :{:?}", lines);
     for line in lines.iter_mut() {
         if line.len() > 0 {
             let split_pos = line.find(DELIMITER).expect("数据文件损坏");

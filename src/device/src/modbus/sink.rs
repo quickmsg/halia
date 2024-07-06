@@ -61,11 +61,16 @@ impl SinkManager {
             .find(|sink| sink.id == sink_id)
         {
             Some(sink) => {
-                self.delete_sink(sink_id).await?;
-                self.add_sink(sink_id, conf).await?;
+                let mut points = vec![];
+                for point_conf in &conf.points {
+                    let point = Point::new(point_conf)?;
+                    points.push(point);
+                }
+                *sink.points.write().await = points;
+                sink.conf = conf;
                 Ok(())
             }
-            None => todo!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -239,8 +244,7 @@ impl Point {
                 } else if let Some(float) = n.as_f64() {
                     TargetValue::Float(float)
                 } else {
-                    // TODO
-                    return Err(HaliaError::NotFound);
+                    unreachable!()
                 }
             }
             serde_json::Value::String(s) => {
@@ -250,8 +254,6 @@ impl Point {
                     TargetValue::Field(s.clone())
                 }
             }
-            // serde_json::Value::Array(_) => todo!(),
-            // serde_json::Value::Object(_) => todo!(),
             _ => return Err(HaliaError::ConfErr),
         };
 

@@ -11,7 +11,7 @@ use protocol::modbus::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sink::{SinkConf, SinkManager};
+use sink::{Sink, SinkConf, SinkManager};
 use std::{
     net::{IpAddr, SocketAddr},
     sync::{
@@ -573,8 +573,7 @@ impl Device for Modbus {
 
     async fn create_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_slice(req)?;
-        self.sink_manager.add_sink(sink_id, conf).await?;
-        Ok(())
+        self.sink_manager.add_sink(sink_id, conf).await
     }
 
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
@@ -582,7 +581,8 @@ impl Device for Modbus {
     }
 
     async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
-        todo!()
+        let conf: SinkConf = serde_json::from_slice(req)?;
+        self.sink_manager.update_sink(sink_id, conf).await
     }
 
     async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()> {

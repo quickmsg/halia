@@ -1,5 +1,6 @@
 use anyhow::Result;
 use apps::GLOBAL_APP_MANAGER;
+use common::error::HaliaResult;
 use device::GLOBAL_DEVICE_MANAGER;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
@@ -20,7 +21,7 @@ pub(crate) struct Rule {
 }
 
 impl Rule {
-    pub async fn create(id: Uuid, req: &CreateRuleReq) -> Result<Self> {
+    pub async fn create(id: Uuid, req: &CreateRuleReq) -> HaliaResult<Self> {
         let (stop_signal, _) = broadcast::channel::<()>(1);
         Ok(Self {
             id,

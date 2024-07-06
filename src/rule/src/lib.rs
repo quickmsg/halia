@@ -1,4 +1,6 @@
+use bytes::Bytes;
 use common::{
+    check_page_size,
     error::{HaliaError, HaliaResult},
     persistence,
 };
@@ -21,21 +23,22 @@ pub struct RuleManager {
 }
 
 impl RuleManager {
-    pub async fn create(&self, id: Option<Uuid>, req: CreateRuleReq) -> HaliaResult<()> {
-        let (id, persistence) = match id {
-            Some(id) => (id, false),
-            None => (Uuid::new_v4(), true),
-        };
-
-        let rule = Rule::create(id, &req).await.unwrap();
-        if persistence {
-            if let Err(e) =
-                persistence::rule::insert(&id, &serde_json::to_string(&req).unwrap()).await
-            {
-                error!("write rule to file err: {}", e);
-            }
+    async fn do_create_rule(&self, id: Uuid, req: &CreateRuleReq) -> HaliaResult<()> {
+        match Rule::create(id, req).await {
+            Ok(rule) => Ok(self.rules.write().await.push(rule)),
+            Err(e) => Err(e.into()),
         }
-        self.rules.write().await.push(rule);
+    }
+}
+
+impl RuleManager {
+    pub async fn create(&self, req: Bytes) -> HaliaResult<()> {
+        let id = Uuid::new_v4();
+        let create_rule_req: CreateRuleReq = serde_json::from_slice(&req)?;
+        self.do_create_rule(id, &create_rule_req).await?;
+        if let Err(e) = persistence::rule::insert(&id, &req).await {
+            error!("write rule to file err: {}", e);
+        }
 
         Ok(())
     }
@@ -43,11 +46,15 @@ impl RuleManager {
     // TODO
     pub async fn search(&self, page: usize, size: usize) -> HaliaResult<Vec<ListRuleResp>> {
         let mut data = vec![];
-        for rule in self.rules.read().await.iter() {
-            data.push(ListRuleResp {
-                id: rule.id,
-                name: rule.req.name.clone(),
-            })
+        let mut i = 0;
+        for rule in self.rules.read().await.iter().rev() {
+            if check_page_size(i, page, size) {
+                data.push(ListRuleResp {
+                    id: rule.id,
+                    name: rule.req.name.clone(),
+                })
+            }
+            i += 1;
         }
         Ok(data)
     }
@@ -115,7 +122,7 @@ impl RuleManager {
             Ok(rules) => {
                 for (id, status, data) in rules {
                     let req: CreateRuleReq = serde_json::from_str(&data)?;
-                    self.create(Some(id), req).await?;
+                    self.do_create_rule(id, &req).await?;
                     match status {
                         persistence::Status::Stopped => {}
                         persistence::Status::Runing => {

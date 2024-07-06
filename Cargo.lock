@@ -1870,6 +1870,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "apps",
+ "bytes",
  "common",
  "device",
  "functions",

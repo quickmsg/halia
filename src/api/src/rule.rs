@@ -1,6 +1,6 @@
 use axum::{
+    body::Bytes,
     extract::{Path, Query},
-    Json,
 };
 use rule::GLOBAL_RULE_MANAGER;
 use types::rule::{CreateRuleReq, ListRuleResp};
@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 use crate::{AppResp, Pagination};
 
-pub(crate) async fn create(Json(req): Json<CreateRuleReq>) -> AppResp<()> {
-    match GLOBAL_RULE_MANAGER.create(None, req).await {
+pub(crate) async fn create(req: Bytes) -> AppResp<()> {
+    match GLOBAL_RULE_MANAGER.create(req).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
