@@ -16,7 +16,6 @@ use types::apps::{
 use uuid::Uuid;
 
 mod mqtt_v311_client;
-pub mod mqtt_v311_server;
 
 pub struct AppManager {
     apps: RwLock<Vec<Box<dyn Connector>>>,
