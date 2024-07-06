@@ -21,7 +21,7 @@ use types::device::{
 };
 use uuid::Uuid;
 
-use super::point::Point;
+use super::{point::Point, WritePointEvent};
 
 #[derive(Debug)]
 pub struct Group {
@@ -217,28 +217,26 @@ impl Group {
         Ok(())
     }
 
-    pub async fn write(
+    pub async fn get_write_point_event(
         &self,
-        ctx: &mut Context,
-        interval: u64,
         point_id: Uuid,
         value: serde_json::Value,
-        rtt: &Arc<AtomicU16>,
-    ) {
-        let now = Instant::now();
+    ) -> Result<WritePointEvent> {
         match self
             .points
-            .write()
+            .read()
             .await
-            .iter_mut()
+            .iter()
             .find(|point| point.id == point_id)
         {
-            Some(point) => match point.write(ctx, value).await {
-                Ok(_) => rtt.store(now.elapsed().as_millis() as u16, Ordering::SeqCst),
-                Err(e) => error!("write err :{}", e),
-            },
-            None => error!("not find point id :{}", point_id),
+            Some(point) => Ok(WritePointEvent {
+                slave: point.conf.slave,
+                area: point.conf.area.clone(),
+                address: point.conf.address,
+                data_type: point.conf.r#type.clone(),
+                value: value,
+            }),
+            None => bail!("not found"),
         }
-        time::sleep(Duration::from_millis(interval)).await;
     }
 }

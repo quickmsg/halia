@@ -4,9 +4,11 @@ use bytes::Bytes;
 use common::error::{HaliaError, HaliaResult};
 use group::Group;
 use message::MessageBatch;
-use opcua::server::prelude::DataType;
 use point::Area;
-use protocol::modbus::client::{rtu, tcp, Context};
+use protocol::modbus::{
+    client::{rtu, tcp, Context, Writer},
+    SlaveContext,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sink::{Sink, SinkConf};
@@ -25,8 +27,9 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use types::device::{
+    datatype::{DataType, Endian},
     device::{CreateDeviceReq, Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp, WritePointValueReq},
@@ -52,7 +55,7 @@ struct Modbus {
     group_signal_tx: Option<broadcast::Sender<group::Command>>,
     signal_tx: Option<mpsc::Sender<Command>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
-    write_tx: Option<mpsc::Sender<(Uuid, Uuid, Value)>>,
+    write_tx: Option<mpsc::Sender<WritePointEvent>>,
     ref_cnt: usize,
 
     sinks: RwLock<Vec<Sink>>,
@@ -153,7 +156,7 @@ impl Modbus {
         &self,
         mut signal_rx: mpsc::Receiver<Command>,
         mut read_rx: mpsc::Receiver<Uuid>,
-        mut write_rx: mpsc::Receiver<(Uuid, Uuid, Value)>,
+        mut write_rx: mpsc::Receiver<WritePointEvent>,
     ) {
         let conf = self.conf.clone();
         let groups = self.groups.clone();
@@ -233,6 +236,24 @@ impl Modbus {
             Ok((rtu::attach(port), conf.interval))
         } else {
             panic!("no conf for modubs");
+        }
+    }
+
+    async fn get_write_point_event(
+        &self,
+        group_id: Uuid,
+        point_id: Uuid,
+        value: serde_json::Value,
+    ) -> Result<WritePointEvent> {
+        match self
+            .groups
+            .read()
+            .await
+            .iter()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => group.get_write_point_event(point_id, value).await,
+            None => bail!("not find"),
         }
     }
 }
@@ -323,7 +344,7 @@ impl Device for Modbus {
         let (read_tx, read_rx) = mpsc::channel::<Uuid>(20);
         self.read_tx = Some(read_tx);
 
-        let (write_tx, write_rx) = mpsc::channel::<(Uuid, Uuid, Value)>(10);
+        let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
         self.write_tx = Some(write_tx);
 
         let (group_signal_tx, _) = broadcast::channel::<group::Command>(20);
@@ -483,7 +504,7 @@ impl Device for Modbus {
         &self,
         group_id: Uuid,
         point_id: Uuid,
-        req: &WritePointValueReq,
+        value: serde_json::Value,
     ) -> HaliaResult<()> {
         if self.on.load(Ordering::SeqCst) == false {
             return Err(HaliaError::DeviceStoped);
@@ -492,13 +513,13 @@ impl Device for Modbus {
             return Err(HaliaError::DeviceDisconnect);
         }
 
-        let _ = self
-            .write_tx
-            .as_ref()
-            .unwrap()
-            .send((group_id, point_id, req.value.clone()))
-            .await;
-        Ok(())
+        match self.get_write_point_event(group_id, point_id, value).await {
+            Ok(wpe) => {
+                let _ = self.write_tx.as_ref().unwrap().send(wpe).await;
+                Ok(())
+            }
+            Err(e) => return Err(HaliaError::IoErr),
+        }
     }
 
     async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()> {
@@ -605,7 +626,7 @@ async fn run_event_loop(
     mut ctx: Context,
     rtt: &Arc<AtomicU16>,
     signal_rx: &mut mpsc::Receiver<Command>,
-    write_rx: &mut mpsc::Receiver<(Uuid, Uuid, Value)>,
+    write_rx: &mut mpsc::Receiver<WritePointEvent>,
     read_rx: &mut mpsc::Receiver<Uuid>,
     groups: Arc<RwLock<Vec<Group>>>,
     interval: u64,
@@ -622,10 +643,11 @@ async fn run_event_loop(
                 }
             }
 
-            point = write_rx.recv() => {
-                if let Some(point) = point {
-                    if !write_point_value(&mut ctx, &groups, point.0, point.1, point.2, interval, rtt).await {
-                        return
+            wpe = write_rx.recv() => {
+                if let Some(wpe) = wpe {
+                    match write_value(&mut ctx, wpe).await {
+                        Ok(_) => {}
+                        Err(_) => {}
                     }
                 }
                 if interval > 0 {
@@ -665,33 +687,111 @@ async fn read_group_points(
     Ok(())
 }
 
-async fn write_point_value(
-    ctx: &mut Context,
-    groups: &RwLock<Vec<Group>>,
-    group_id: Uuid,
-    point_id: Uuid,
-    value: Value,
-    interval: u64,
-    rtt: &Arc<AtomicU16>,
-) -> bool {
-    if let Some(group) = groups
-        .read()
-        .await
-        .iter()
-        .find(|group| group.id == group_id)
-    {
-        group.write(ctx, interval, point_id, value, rtt).await;
-        return true;
-    }
-
-    true
-}
-
 struct WritePointEvent {
+    pub slave: u8,
     pub area: Area,
     pub address: u16,
     pub data_type: DataType,
     pub value: serde_json::Value,
 }
 
-async fn sink_write_value() {}
+async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
+    ctx.set_slave(wpe.slave);
+    Ok(match wpe.area {
+        Area::Coils => match wpe.data_type {
+            DataType::Bool(_) => match wpe.data_type.encode(wpe.value) {
+                Ok(data) => match ctx.write_single_coil(wpe.address, data[0]).await {
+                    Ok(res) => match res {
+                        Ok(_) => return Ok(()),
+                        Err(e) => {
+                            warn!("modbus protocl exception:{}", e);
+                            return Ok(());
+                        }
+                    },
+                    Err(e) => return Err(e.into()),
+                },
+                Err(e) => bail!("encode err:{}", e),
+            },
+            _ => bail!("not support type"),
+        },
+        Area::HoldingRegisters => match wpe.data_type {
+            DataType::Bool(pos) => {
+                match wpe.data_type.encode(wpe.value) {
+                    Ok(data) => {
+                        let and_mask = !(1 << pos.unwrap());
+                        let or_mask = (data[0] as u16) << pos.unwrap();
+                        match ctx
+                            .masked_write_register(wpe.address, and_mask, or_mask)
+                            .await
+                        {
+                            Ok(res) => match res {
+                                Ok(_) => return Ok(()),
+                                Err(_) => {
+                                    // todo log error
+                                    return Ok(());
+                                }
+                            },
+                            Err(e) => bail!("{}", e),
+                        }
+                    }
+                    Err(e) => bail!("encode err :{}", e),
+                }
+            }
+            DataType::Int8(endian) | DataType::Uint8(endian) => {
+                if let Ok(data) = wpe.data_type.encode(wpe.value) {
+                    let (and_mask, or_mask) = match endian {
+                        Endian::LittleEndian => (0x00FF, (data[0] as u16) << 8),
+                        Endian::BigEndian => (0xFF00, data[0] as u16),
+                    };
+                    match ctx
+                        .masked_write_register(wpe.address, and_mask, or_mask)
+                        .await
+                    {
+                        Ok(res) => match res {
+                            Ok(_) => return Ok(()),
+                            Err(e) => {
+                                warn!("modbus protocol exception:{}", e);
+                                return Ok(());
+                            }
+                        },
+                        Err(e) => bail!("{}", e),
+                    }
+                }
+            }
+            DataType::Int16(_) | DataType::Uint16(_) => match wpe.data_type.encode(wpe.value) {
+                Ok(data) => match ctx.write_single_register(wpe.address, &data).await {
+                    Ok(res) => match res {
+                        Ok(_) => return Ok(()),
+                        Err(e) => {
+                            warn!("modbus protocol exception:{}", e);
+                            return Ok(());
+                        }
+                    },
+                    Err(e) => bail!("{}", e),
+                },
+                Err(e) => bail!("encode err:{}", e),
+            },
+            DataType::Int32(_, _)
+            | DataType::Uint32(_, _)
+            | DataType::Int64(_, _)
+            | DataType::Uint64(_, _)
+            | DataType::Float32(_, _)
+            | DataType::Float64(_, _)
+            | DataType::String(_, _, _)
+            | DataType::Bytes(_, _, _) => match wpe.data_type.encode(wpe.value) {
+                Ok(data) => match ctx.write_multiple_registers(wpe.address, &data).await {
+                    Ok(res) => match res {
+                        Ok(_) => return Ok(()),
+                        Err(e) => {
+                            warn!("modbus protocol exception:{}", e);
+                            return Ok(());
+                        }
+                    },
+                    Err(e) => bail!("{}", e),
+                },
+                Err(e) => bail!("encode err :{}", e),
+            },
+        },
+        _ => bail!("not support area"),
+    })
+}

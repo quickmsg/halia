@@ -147,7 +147,7 @@ pub(crate) async fn write_point(
 ) -> AppResp<()> {
     debug!("update_point:{:?}", req);
     match GLOBAL_DEVICE_MANAGER
-        .write_point_value(device_id, group_id, point_id, &req)
+        .write_point_value(device_id, group_id, point_id, req)
         .await
     {
         Ok(()) => AppResp::new(),

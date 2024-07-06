@@ -369,7 +369,7 @@ impl DeviceManager {
         device_id: Uuid,
         group_id: Uuid,
         point_id: Uuid,
-        req: &WritePointValueReq,
+        req: WritePointValueReq,
     ) -> HaliaResult<()> {
         match self
             .devices
@@ -378,7 +378,11 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.write_point_value(group_id, point_id, req).await,
+            Some(device) => {
+                device
+                    .write_point_value(group_id, point_id, req.value)
+                    .await
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -656,7 +660,7 @@ trait Device: Sync + Send {
         &self,
         group_id: Uuid,
         point_id: Uuid,
-        req: &WritePointValueReq,
+        value: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()>;
 
