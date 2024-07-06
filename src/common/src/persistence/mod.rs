@@ -10,6 +10,7 @@ use tokio::{
     fs::OpenOptions,
     io::{AsyncReadExt, AsyncWriteExt},
 };
+use tracing::debug;
 use uuid::Uuid;
 
 pub mod apps;
@@ -96,12 +97,15 @@ async fn update(path: impl AsRef<Path>, id: &Uuid, data: &str) -> Result<(), io:
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
-    let new_line = format!("{}{}{}\n", id, DELIMITER, data);
+    let new_line = format!("{}{}{}", id, DELIMITER, data);
     let mut lines: Vec<&str> = buf.split("\n").collect();
+    debug!("lines :{:?}", lines);
     for line in lines.iter_mut() {
-        let split_pos = line.find(DELIMITER).expect("数据文件损坏");
-        if line[..split_pos].parse::<Uuid>().expect("文件") == *id {
-            *line = new_line.as_str();
+        if line.len() > 0 {
+            let split_pos = line.find(DELIMITER).expect("数据文件损坏");
+            if line[..split_pos].parse::<Uuid>().expect("文件") == *id {
+                *line = new_line.as_str();
+            }
         }
     }
 

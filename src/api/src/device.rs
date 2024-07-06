@@ -5,7 +5,6 @@ use axum::{
 };
 use common::error::HaliaError;
 use device::GLOBAL_DEVICE_MANAGER;
-use tracing::debug;
 use types::device::{
     device::{SearchDeviceResp, SearchSinksResp},
     group::SearchGroupResp,
@@ -131,7 +130,6 @@ pub(crate) async fn update_point(
     Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(req): Json<CreatePointReq>,
 ) -> AppResp<()> {
-    debug!("update_point:{:?}", req);
     match GLOBAL_DEVICE_MANAGER
         .update_point(device_id, group_id, point_id, &req)
         .await
@@ -145,7 +143,6 @@ pub(crate) async fn write_point(
     Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(req): Json<WritePointValueReq>,
 ) -> AppResp<()> {
-    debug!("update_point:{:?}", req);
     match GLOBAL_DEVICE_MANAGER
         .write_point_value(device_id, group_id, point_id, req)
         .await

@@ -48,15 +48,15 @@ pub trait Connector: Sync + Send {
 }
 
 impl AppManager {
-    async fn do_create_connector(&self, connector_id: Uuid, req: CreateAppReq) -> HaliaResult<()> {
-        let connector = match req.r#type.as_str() {
-            mqtt_v311_client::TYPE => mqtt_v311_client::new(connector_id, req),
+    async fn do_create_app(&self, app_id: Uuid, req: CreateAppReq) -> HaliaResult<()> {
+        let app = match req.r#type.as_str() {
+            mqtt_v311_client::TYPE => mqtt_v311_client::new(app_id, req),
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
-        match connector {
-            Ok(connector) => {
-                self.apps.write().await.push(connector);
+        match app {
+            Ok(app) => {
+                self.apps.write().await.push(app);
                 Ok(())
             }
             Err(e) => {
@@ -68,17 +68,17 @@ impl AppManager {
 }
 
 impl AppManager {
-    pub async fn create_connector(&self, body: &Bytes) -> HaliaResult<()> {
+    pub async fn create_app(&self, body: &Bytes) -> HaliaResult<()> {
         let req: CreateAppReq = serde_json::from_slice(body)?;
         let connector_id = Uuid::new_v4();
-        self.do_create_connector(connector_id, req).await?;
-        if let Err(e) = save_connector(&connector_id, body).await {
+        self.do_create_app(connector_id, req).await?;
+        if let Err(e) = save_app(&connector_id, body).await {
             error!("insert to file err :{e:?}");
         }
         Ok(())
     }
 
-    pub async fn search_connectors(&self, page: usize, size: usize) -> SearchConnectorResp {
+    pub async fn search_apps(&self, page: usize, size: usize) -> SearchConnectorResp {
         let mut resp = vec![];
         let mut i = 0;
         let mut total = 0;
@@ -92,11 +92,11 @@ impl AppManager {
         SearchConnectorResp { total, data: resp }
     }
 
-    pub async fn update_connector(&self, id: Uuid, body: &Bytes) -> HaliaResult<()> {
+    pub async fn update_app(&self, id: Uuid, body: &Bytes) -> HaliaResult<()> {
         todo!()
     }
 
-    pub async fn delete_connector(&self, id: Uuid) -> HaliaResult<()> {
+    pub async fn delete_app(&self, id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 
@@ -216,7 +216,7 @@ impl AppManager {
             Ok(connectors) => {
                 for (connector_id, data) in connectors {
                     let req: CreateAppReq = serde_json::from_str(&data)?;
-                    self.do_create_connector(connector_id, req).await?;
+                    self.do_create_app(connector_id, req).await?;
                     match self
                         .apps
                         .read()
@@ -266,7 +266,7 @@ impl AppManager {
     }
 }
 
-async fn save_connector(id: &Uuid, req: &Bytes) -> Result<(), io::Error> {
+async fn save_app(id: &Uuid, req: &Bytes) -> Result<(), io::Error> {
     persistence::apps::insert_connector(&id, req).await
 }
 

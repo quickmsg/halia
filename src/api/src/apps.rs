@@ -8,32 +8,30 @@ use uuid::Uuid;
 
 use crate::{AppResp, Pagination};
 
-pub(crate) async fn create_connector(body: Bytes) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.create_connector(&body).await {
+pub(crate) async fn create_app(body: Bytes) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.create_app(&body).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn search_connectors(
-    pagination: Query<Pagination>,
-) -> AppResp<SearchConnectorResp> {
+pub(crate) async fn search_apps(pagination: Query<Pagination>) -> AppResp<SearchConnectorResp> {
     AppResp::with_data(
         GLOBAL_APP_MANAGER
-            .search_connectors(pagination.p, pagination.s)
+            .search_apps(pagination.p, pagination.s)
             .await,
     )
 }
 
-pub(crate) async fn update_connector(Path(app_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.update_connector(app_id, &body).await {
+pub(crate) async fn update_app(Path(app_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.update_app(app_id, &body).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn delete_connector(Path(app_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.delete_connector(app_id).await {
+pub(crate) async fn delete_app(Path(app_id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_APP_MANAGER.delete_app(app_id).await {
         Ok(_) => todo!(),
         Err(_) => todo!(),
     }
@@ -73,7 +71,7 @@ pub(crate) async fn update_source(
 }
 
 pub(crate) async fn delete_source(Path(app_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.delete_connector(app_id).await {
+    match GLOBAL_APP_MANAGER.delete_app(app_id).await {
         Ok(_) => todo!(),
         Err(_) => todo!(),
     }
@@ -100,14 +98,14 @@ pub(crate) async fn search_sinks(
 }
 
 pub(crate) async fn update_sink(Path(app_id): Path<Uuid>, body: Bytes) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.update_connector(app_id, &body).await {
+    match GLOBAL_APP_MANAGER.update_app(app_id, &body).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn delete_sink(Path(app_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_APP_MANAGER.delete_connector(app_id).await {
+    match GLOBAL_APP_MANAGER.delete_app(app_id).await {
         Ok(_) => todo!(),
         Err(_) => todo!(),
     }

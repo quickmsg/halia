@@ -120,10 +120,10 @@ fn app_routes() -> Router {
     Router::new().nest(
         "/app",
         Router::new()
-            .route("/", post(apps::create_connector))
-            .route("/search", get(apps::search_connectors))
-            .route("/:app_id", put(apps::update_connector))
-            .route("/:app_id", delete(apps::delete_connector))
+            .route("/", post(apps::create_app))
+            .route("/search", get(apps::search_apps))
+            .route("/:app_id", put(apps::update_app))
+            .route("/:app_id", delete(apps::delete_app))
             .nest(
                 "/:app_id/source",
                 Router::new()
