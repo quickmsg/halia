@@ -5,6 +5,7 @@ use uuid::Uuid;
 pub struct CreateGroupReq {
     pub name: String,
     pub interval: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }
 
@@ -26,5 +27,6 @@ pub struct SearchGroupItemResp {
     pub name: String,
     pub point_count: u8,
     pub interval: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }

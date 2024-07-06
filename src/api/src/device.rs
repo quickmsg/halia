@@ -182,7 +182,7 @@ pub(crate) async fn create_sink(Path(device_id): Path<Uuid>, req: Bytes) -> AppR
     }
 }
 
-pub(crate) async fn search_sinks(
+pub async fn search_sinks(
     Path(device_id): Path<Uuid>,
     pagination: Query<Pagination>,
 ) -> AppResp<SearchSinksResp> {
@@ -191,6 +191,26 @@ pub(crate) async fn search_sinks(
         .await
     {
         Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
+}
+
+pub async fn update_sink(
+    Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
+    req: Bytes,
+) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER
+        .update_sink(device_id, sink_id, req)
+        .await
+    {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.delete_sink(device_id, sink_id).await {
+        Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }

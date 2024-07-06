@@ -82,6 +82,7 @@ struct EthernetConf {
     ip: String,
     port: u16,
     interval: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     desc: Option<String>,
 }
 
@@ -116,6 +117,7 @@ struct SerialConf {
     baud_rate: u32,
     data_bits: u8,
     parity: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
     desc: Option<String>,
 }
 
@@ -568,8 +570,8 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()> {
-        let conf: SinkConf = serde_json::from_slice(&req)?;
+    async fn create_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
+        let conf: SinkConf = serde_json::from_slice(req)?;
         let sink = sink::new(sink_id, conf)?;
         self.sinks.write().await.push(sink);
         Ok(())
@@ -591,7 +593,7 @@ impl Device for Modbus {
         }
     }
 
-    async fn update_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()> {
+    async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
         todo!()
     }
 

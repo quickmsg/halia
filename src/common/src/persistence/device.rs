@@ -275,8 +275,15 @@ pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Err
     super::read(get_sink_file(device_id)).await
 }
 
-pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
-    super::update(get_sink_file(device_id), sink_id, data).await
+pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+    unsafe {
+        super::update(
+            get_sink_file(device_id),
+            sink_id,
+            std::str::from_utf8_unchecked(&data),
+        )
+        .await
+    }
 }
 
 pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {

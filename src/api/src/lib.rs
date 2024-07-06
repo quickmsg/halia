@@ -110,8 +110,8 @@ fn device_routes() -> Router {
                 Router::new()
                     .route("/", post(device::create_sink))
                     .route("/search", get(device::search_sinks))
-                    .route("/:sink_id", put(device::search_group))
-                    .route("/:sink_id", delete(device::search_group)),
+                    .route("/:sink_id", put(device::update_sink))
+                    .route("/:sink_id", delete(device::delete_sink)),
             ),
     )
 }

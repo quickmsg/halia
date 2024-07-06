@@ -17,7 +17,9 @@ pub struct Sink {
     pub tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
-pub struct Command {}
+pub enum Command {
+    Stop,
+}
 
 pub fn new(id: Uuid, conf: SinkConf) -> HaliaResult<Sink> {
     let mut points = vec![];

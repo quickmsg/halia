@@ -19,5 +19,6 @@ async fn main() -> Result<()> {
 
     info!("server starting...");
     api::start().await;
+
     Ok(())
 }

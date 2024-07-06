@@ -34,6 +34,7 @@ pub struct Conf {
     pub slave: u8,
     pub area: Area,
     pub address: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }
 

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use common::{
@@ -89,7 +88,7 @@ impl DeviceManager {
         }
     }
 
-    async fn do_create_sink(&self, device_id: Uuid, sink_id: Uuid, req: Bytes) -> HaliaResult<()> {
+    async fn do_create_sink(&self, device_id: Uuid, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -411,7 +410,7 @@ impl DeviceManager {
 
     pub async fn create_sink(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
         let sink_id = Uuid::new_v4();
-        self.do_create_sink(device_id, sink_id, req.clone()).await?;
+        self.do_create_sink(device_id, sink_id, &req).await?;
         match persistence::device::insert_sink(&device_id, &sink_id, &req).await {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -433,9 +432,44 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
+            .rev()
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => Ok(device.search_sinks(page, size).await),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn update_sink(&self, device_id: Uuid, sink_id: Uuid, req: Bytes) -> HaliaResult<()> {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => {
+                device.update_sink(sink_id, &req).await?;
+                persistence::device::update_sink(&device_id, &sink_id, &req).await?;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn delete_sink(&self, device_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => {
+                device.delete_sink(sink_id).await?;
+                persistence::device::delete_sink(&device_id, &sink_id).await?;
+                Ok(())
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -456,8 +490,12 @@ impl DeviceManager {
                         error!("{}", e);
                         return Err(e.into());
                     }
-                    if let Err(e) = self.recover_group(id).await {
+                    if let Err(e) = self.recover_groups(id).await {
                         error!("recover group err:{}", e);
+                        return Err(e.into());
+                    }
+                    if let Err(e) = self.recover_sinks(id).await {
+                        error!("recover sink err:{}", e);
                         return Err(e.into());
                     }
                     if status == persistence::Status::Runing {
@@ -504,7 +542,7 @@ impl DeviceManager {
         }
     }
 
-    async fn recover_group(&self, device_id: Uuid) -> HaliaResult<()> {
+    async fn recover_groups(&self, device_id: Uuid) -> HaliaResult<()> {
         let groups = match persistence::device::read_groups(&device_id).await {
             Ok(groups) => groups,
             Err(e) => {
@@ -527,6 +565,26 @@ impl DeviceManager {
                     "recover device:{} group:{:?} err:{}",
                     device_id, group_id, e
                 );
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn recover_sinks(&self, device_id: Uuid) -> HaliaResult<()> {
+        let sinks = match persistence::device::read_sinks(&device_id).await {
+            Ok(sinks) => sinks,
+            Err(e) => {
+                error!("read device:{} sinks from file err:{}", device_id, e);
+                return Err(e.into());
+            }
+        };
+
+        for (sink_id, req) in sinks {
+            let data = Bytes::from(req);
+            if let Err(e) = self.do_create_sink(device_id, sink_id, &data).await {
+                error!("create device:{} sink:{:?} err:{} ", device_id, sink_id, e);
                 return Err(e);
             }
         }
@@ -670,9 +728,9 @@ trait Device: Sync + Send {
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
     async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()>;
 
-    async fn create_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()>;
+    async fn create_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()>;
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
-    async fn update_sink(&self, sink_id: Uuid, req: Bytes) -> HaliaResult<()>;
+    async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()>;
     async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()>;
     async fn publish(&self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }
