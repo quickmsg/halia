@@ -1,17 +1,19 @@
+use std::sync::Arc;
+
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use tracing::debug;
 use types::device::datatype::DataType;
 use uuid::Uuid;
 
-use super::point::Area;
+use super::{point::Area, WritePointEvent};
 
 #[derive(Debug)]
 pub struct Sink {
     pub id: Uuid,
-    points: Vec<Point>,
+    points: Arc<RwLock<Vec<Point>>>,
     conf: SinkConf,
     pub tx: Option<mpsc::Sender<MessageBatch>>,
 }
@@ -26,20 +28,69 @@ pub fn new(id: Uuid, conf: SinkConf) -> HaliaResult<Sink> {
     }
     Ok(Sink {
         id,
-        points,
+        points: Arc::new(RwLock::new(points)),
         conf,
         tx: None,
     })
 }
 
 impl Sink {
-    pub fn run(&self, mut rx: mpsc::Receiver<MessageBatch>) {
+    pub fn run(&self, mut rx: mpsc::Receiver<MessageBatch>, tx: mpsc::Sender<WritePointEvent>) {
+        let points = self.points.clone();
         tokio::spawn(async move {
             loop {
                 match rx.recv().await {
                     Some(mb) => {
-                        debug!("{mb:?}");
-                        //
+                        for point in points.read().await.iter() {
+                            let value = match &point.value {
+                                TargetValue::Int(n) => serde_json::json!(n),
+                                TargetValue::Uint(un) => serde_json::json!(un),
+                                TargetValue::Float(f) => serde_json::json!(f),
+                                TargetValue::Boolean(b) => serde_json::json!(b),
+                                TargetValue::String(s) => serde_json::json!(s),
+                                TargetValue::Null => serde_json::Value::Null,
+                                TargetValue::Field(field) => {
+                                    let messages = mb.get_messages();
+                                    if messages.len() > 0 {
+                                        match messages[0].get(field) {
+                                            Some(value) => match value {
+                                                message::MessageValue::Null => {
+                                                    serde_json::Value::Null
+                                                }
+                                                message::MessageValue::Boolean(b) => {
+                                                    serde_json::json!(b)
+                                                }
+                                                message::MessageValue::Int64(n) => {
+                                                    serde_json::json!(n)
+                                                }
+                                                message::MessageValue::Uint64(ui) => {
+                                                    serde_json::json!(ui)
+                                                }
+                                                message::MessageValue::Float64(f) => {
+                                                    serde_json::json!(f)
+                                                }
+                                                message::MessageValue::String(s) => {
+                                                    serde_json::json!(s)
+                                                }
+                                                message::MessageValue::Bytes(_) => todo!(),
+                                                _ => continue,
+                                            },
+                                            None => continue,
+                                        }
+                                    } else {
+                                        continue;
+                                    }
+                                }
+                            };
+                            let wpe = WritePointEvent {
+                                slave: point.slave,
+                                area: point.area.clone(),
+                                address: point.address,
+                                data_type: point.r#type.clone(),
+                                value,
+                            };
+                            let _ = tx.send(wpe).await;
+                        }
                     }
                     None => return,
                 }
@@ -118,7 +169,13 @@ impl Point {
                     return Err(HaliaError::NotFound);
                 }
             }
-            serde_json::Value::String(s) => TargetValue::String(s.clone()),
+            serde_json::Value::String(s) => {
+                if s.starts_with("'") && s.ends_with("'") && s.len() >= 3 {
+                    TargetValue::String(s.trim_start_matches("'").trim_end_matches("'").to_string())
+                } else {
+                    TargetValue::Field(s.clone())
+                }
+            }
             // serde_json::Value::Array(_) => todo!(),
             // serde_json::Value::Object(_) => todo!(),
             _ => return Err(HaliaError::ConfErr),

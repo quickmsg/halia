@@ -91,7 +91,6 @@ impl MessageValue {
             .split("->")
             .map(|x| x.replace("~1", "/").replace("~0", "~"))
             .try_fold(self, |target, token| {
-                println!("{:?}, {:?}", target, token);
                 match target {
                     MessageValue::Object(map) => map.get(&token),
                     MessageValue::Array(list) => parse_index(&token).and_then(|x| list.get(x)),

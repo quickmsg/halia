@@ -10,7 +10,7 @@ use protocol::modbus::{
     SlaveContext,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use sink::{Sink, SinkConf};
 use std::{
     net::{IpAddr, SocketAddr},
@@ -32,7 +32,7 @@ use types::device::{
     datatype::{DataType, Endian},
     device::{CreateDeviceReq, Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
-    point::{CreatePointReq, SearchPointResp, WritePointValueReq},
+    point::{CreatePointReq, SearchPointResp},
 };
 use uuid::Uuid;
 
@@ -613,7 +613,7 @@ impl Device for Modbus {
                     let (tx, rx) = mpsc::channel::<MessageBatch>(16);
                     let tx_clone = tx.clone();
                     sink.tx = Some(tx);
-                    sink.run(rx);
+                    sink.run(rx, self.write_tx.as_ref().unwrap().clone());
                     Ok(tx_clone)
                 }
             },
