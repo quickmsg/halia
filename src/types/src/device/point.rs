@@ -5,6 +5,7 @@ use uuid::Uuid;
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreatePointReq {
     pub name: String,
+    pub desc: Option<String>,
     pub conf: Value,
 }
 

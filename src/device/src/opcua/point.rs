@@ -1,17 +1,31 @@
-use serde::{Deserialize, Serialize};
+use common::error::HaliaResult;
+use opcua::types::NodeId;
 use serde_json::Value;
+use types::device::point::CreatePointReq;
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub(crate) struct Point {
+pub struct Point {
     pub id: Uuid,
-    pub conf: Conf,
     pub name: String,
-    pub quantity: u16,
+    pub node_id: NodeId,
+    pub desc: Option<String>,
     pub value: Value,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct Conf {
-    pub namespace: usize,
+impl Point {
+    pub fn new(id: Uuid, req: CreatePointReq) -> HaliaResult<Point> {
+        let node_id: NodeId = serde_json::from_value(req.conf)?;
+        Ok(Point {
+            id,
+            name: req.name,
+            node_id,
+            desc: req.desc,
+            value: Value::Null,
+        })
+    }
+
+    pub async fn update(&mut self, req: &CreatePointReq) -> HaliaResult<()> {
+        todo!()
+    }
 }
