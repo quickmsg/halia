@@ -31,17 +31,20 @@ pub struct DeviceManager {
 
 impl DeviceManager {
     async fn do_create_device(&self, device_id: Uuid, req: &CreateDeviceReq) -> HaliaResult<()> {
-        let device = match req.r#type.as_str() {
-            modbus::TYPE => match modbus::new(device_id, req) {
-                Ok(device) => device,
-                Err(e) => {
-                    debug!("create device err:{}", e);
-                    return Err(e);
-                }
-            },
+        let new_resp = match req.r#type.as_str() {
+            modbus::TYPE => modbus::new(device_id, req),
+            opcua::TYPE => opcua::new(device_id, req),
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
-        self.devices.write().await.push(device);
+
+        match new_resp {
+            Ok(device) => self.devices.write().await.push(device),
+            Err(e) => {
+                debug!("create device err:{}", e);
+                return Err(e);
+            }
+        }
+
         Ok(())
     }
 

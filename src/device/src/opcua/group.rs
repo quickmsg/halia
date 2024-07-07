@@ -9,6 +9,10 @@ use std::{
 use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch};
+use opcua::{
+    client::Session,
+    types::{QualifiedName, ReadValueId, TimestampsToReturn, UAString},
+};
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -37,7 +41,7 @@ pub struct Group {
     pub id: Uuid,
     pub name: String,
     pub interval: u64,
-    pub points: RwLock<Vec<Point>>,
+    pub points: Arc<RwLock<Vec<Point>>>,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
     pub desc: Option<String>,
@@ -52,16 +56,17 @@ impl Group {
             id: group_id,
             name: conf.name.clone(),
             interval: conf.interval,
-            points: RwLock::new(vec![]),
+            points: Arc::new(RwLock::new(vec![])),
             tx: None,
             ref_cnt: 0,
             desc: conf.desc.clone(),
         })
     }
 
-    pub fn run(&self, mut cmd_rx: broadcast::Receiver<Command>, read_tx: mpsc::Sender<Uuid>) {
+    pub fn run(&self, session: Arc<Session>, mut cmd_rx: broadcast::Receiver<Command>) {
         let interval = self.interval;
         let group_id = self.id;
+        let points = self.points.clone();
         tokio::spawn(async move {
             let mut pause = false;
             let mut interval = time::interval(Duration::from_millis(interval));
@@ -95,8 +100,17 @@ impl Group {
 
                     _ = interval.tick() => {
                         if !pause {
-                            if let Err(e) = read_tx.send(group_id).await {
-                                debug!("group send point info err :{}", e);
+                            let mut nodes = vec![];
+                            for point in points.read().await.iter() {
+                                nodes.push(ReadValueId{ node_id: point.node_id.clone(), attribute_id: 13, index_range: UAString::null(), data_encoding: QualifiedName::null() })
+                            }
+                            match session.read(&nodes, TimestampsToReturn::Both, 2000.0).await {
+                                Ok(resp) => {
+                                    debug!("{resp:?}");
+                                }
+                                Err(e) => {
+                                    error!("{e:?}");
+                                }
                             }
                         }
                     }
@@ -185,10 +199,6 @@ impl Group {
             .write()
             .await
             .retain(|point| !ids.contains(&point.id));
-    }
-
-    pub async fn get_node_ids(&self) -> Result<()> {
-        todo!()
     }
 
     // pub async fn read_points_value(

@@ -1,8 +1,12 @@
 use async_trait::async_trait;
 use bytes::Bytes;
-use common::error::HaliaResult;
+use common::error::{HaliaError, HaliaResult};
 use group::Group;
 use message::MessageBatch;
+use opcua::{
+    client::{ClientBuilder, IdentityToken, Session},
+    types::EndpointDescription,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::{
@@ -12,7 +16,7 @@ use std::sync::{
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use types::device::{
     device::{CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
-    group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
+    group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
     point::{CreatePointReq, SearchPointResp},
 };
 use uuid::Uuid;
@@ -30,6 +34,8 @@ struct OpcUa {
     err: Arc<AtomicBool>,
     conf: Arc<Mutex<Conf>>,
     groups: Arc<RwLock<Vec<Group>>>,
+    session: Option<Arc<Session>>,
+    group_signal_tx: Option<broadcast::Sender<group::Command>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -52,6 +58,8 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
         err: Arc::new(AtomicBool::new(false)),
         conf: Arc::new(Mutex::new(conf)),
         groups: Arc::new(RwLock::new(vec![])),
+        session: None,
+        group_signal_tx: None,
     }))
 }
 
@@ -74,7 +82,31 @@ impl Device for OpcUa {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        todo!()
+        let mut client = ClientBuilder::new()
+            .application_name("test")
+            .application_uri("aasda")
+            .session_retry_limit(3)
+            .client()
+            .unwrap();
+
+        let endpoint: EndpointDescription =
+            EndpointDescription::from(self.conf.lock().await.url.as_ref());
+
+        let (session, event_loop) = match client
+            .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
+            .await
+        {
+            Ok((session, event_loop)) => (session, event_loop),
+            Err(e) => return Err(common::error::HaliaError::DeviceDisconnect),
+        };
+
+        let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
+        self.group_signal_tx = Some(group_signal_tx);
+
+        event_loop.spawn();
+        session.wait_for_connection().await;
+        self.session = Some(session);
+        Ok(())
     }
 
     async fn stop(&mut self) {
@@ -85,16 +117,51 @@ impl Device for OpcUa {
         todo!()
     }
 
-    // group
     async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {
         match Group::new(group_id, &req) {
-            Ok(_) => todo!(),
+            Ok(group) => {
+                if self.on.load(Ordering::SeqCst) {
+                    group.run(
+                        self.session.as_ref().unwrap().clone(),
+                        self.group_signal_tx.as_ref().unwrap().subscribe(),
+                    );
+                }
+
+                self.groups.write().await.push(group);
+
+                Ok(())
+            }
             Err(_) => todo!(),
         }
     }
 
     async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp> {
-        todo!()
+        let mut resps = Vec::new();
+        for group in self
+            .groups
+            .read()
+            .await
+            .iter()
+            .rev()
+            .skip(((page - 1) * size) as usize)
+        {
+            resps.push({
+                SearchGroupItemResp {
+                    id: group.id,
+                    name: group.name.clone(),
+                    interval: group.interval,
+                    point_count: group.get_points_num().await as u8,
+                    desc: group.desc.clone(),
+                }
+            });
+            if resps.len() == size as usize {
+                break;
+            }
+        }
+        Ok(SearchGroupResp {
+            total: self.groups.read().await.len(),
+            data: resps,
+        })
     }
 
     async fn update_group(&self, group_id: Uuid, req: UpdateGroupReq) -> HaliaResult<()> {
@@ -112,7 +179,16 @@ impl Device for OpcUa {
         point_id: Uuid,
         req: CreatePointReq,
     ) -> HaliaResult<()> {
-        todo!()
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => group.create_point(point_id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn search_point(
