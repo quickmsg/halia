@@ -82,6 +82,7 @@ impl Device for OpcUa {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
+        opcua::console_logging::init();
         let mut client = ClientBuilder::new()
             .application_name("test")
             .application_uri("aasda")
