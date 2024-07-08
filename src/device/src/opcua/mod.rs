@@ -103,9 +103,18 @@ impl Device for OpcUa {
         let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
         self.group_signal_tx = Some(group_signal_tx);
 
-        event_loop.spawn();
+        tokio::spawn(event_loop.run());
         session.wait_for_connection().await;
+        let session_clone = session.clone();
         self.session = Some(session);
+
+        for group in self.groups.write().await.iter_mut() {
+            group.run(
+                session_clone.clone(),
+                self.group_signal_tx.as_ref().unwrap().subscribe(),
+            );
+        }
+
         Ok(())
     }
 

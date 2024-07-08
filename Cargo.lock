@@ -1462,7 +1462,7 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 [[package]]
 name = "opcua"
 version = "0.13.0"
-source = "git+https://github.com/locka99/opcua#b6648bb44a81a7cfe5c72ff3560f426ff7bb9c8f"
+source = "git+https://github.com/n1ce37/opcua?rev=617cc97#617cc97fd72bab36348c03bed71c4a5f6eb1d0ec"
 dependencies = [
  "arc-swap",
  "base64 0.21.7",
