@@ -210,7 +210,24 @@ impl Device for OpcUa {
     }
 
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()> {
-        todo!()
+        self.groups
+            .write()
+            .await
+            .retain(|group| group_id != group.id);
+
+        if self.on.load(Ordering::SeqCst) {
+            match self
+                .group_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(group::Command::Stop(group_id))
+            {
+                Ok(_) => {}
+                Err(e) => error!("group send stop singla err:{}", e),
+            }
+        }
+
+        Ok(())
     }
 
     // points
@@ -265,11 +282,32 @@ impl Device for OpcUa {
         point_id: Uuid,
         value: serde_json::Value,
     ) -> HaliaResult<()> {
-        todo!()
+        match self
+            .groups
+            .read()
+            .await
+            .iter()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => group.update_point(point_id, req).await,
+            None => {
+                debug!("未找到组");
+                Err(HaliaError::NotFound)
+            }
+        }
     }
 
     async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()> {
-        todo!()
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == *group_id)
+        {
+            Some(group) => Ok(group.delete_points(point_ids).await),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn subscribe(
