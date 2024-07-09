@@ -2,7 +2,6 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use common::error::{HaliaError, HaliaResult};
-use futures::select;
 use group::Group;
 use message::MessageBatch;
 use opcua::{
@@ -18,7 +17,10 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::{
+    select,
+    sync::{broadcast, mpsc, RwLock},
+};
 use tracing::{debug, error};
 use types::device::{
     device::{CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
@@ -43,6 +45,7 @@ struct OpcUa {
     session: Option<Arc<Session>>,
     group_signal_tx: Option<broadcast::Sender<group::Command>>,
     ua_signal_tx: Option<broadcast::Sender<()>>,
+    read_tx: Option<mpsc::Sender<Arc<Uuid>>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -67,6 +70,7 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
         session: None,
         group_signal_tx: None,
         ua_signal_tx: None,
+        read_tx: None,
     }))
 }
 
@@ -74,9 +78,9 @@ impl OpcUa {
     async fn run(&self) {
         let conf = self.conf.clone();
         let groups = self.groups.clone();
-        let (ua_signal_tx, ua_signal_rx) = mpsc::channel::<()>(1);
+        let (ua_signal_tx, mut ua_signal_rx) = mpsc::channel::<()>(1);
         tokio::spawn(async move {
-            let (signal_tx, signal_rx) = mpsc::channel::<StatusCode>(1);
+            let (signal_tx, mut signal_rx) = mpsc::channel::<StatusCode>(1);
             let now_conf = conf.read().await;
             // match OpcUa::get_session(&now_conf, signal_tx).await {
             //     Ok(session) => todo!(),
@@ -84,16 +88,16 @@ impl OpcUa {
             // }
 
             loop {
-                // select! {
-                //     _ = ua_signal_rx.recv() => {
-                //         return;
-                //     }
+                select! {
+                    _ = ua_signal_rx.recv() => {
+                        return
+                    }
 
-                //     status_code = signal_rx.recv() => {
-                //         // todo
-                //         return;
-                //     }
-                // }
+                    status_code = signal_rx.recv() => {
+                        // todo
+                        return
+                    }
+                }
             }
         });
     }
@@ -169,11 +173,15 @@ impl Device for OpcUa {
 
         session.wait_for_connection().await;
         let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
+
+        let (read_tx, read_rx) = mpsc::channel::<Arc<Uuid>>(16);
+
         for group in self.groups.write().await.iter_mut() {
-            group.run(session.clone(), group_signal_tx.subscribe());
+            group.run(group_signal_tx.subscribe(), read_tx.clone());
         }
         self.session = Some(session);
         self.group_signal_tx = Some(group_signal_tx);
+        self.read_tx = Some(read_tx);
 
         Ok(())
     }
@@ -191,8 +199,8 @@ impl Device for OpcUa {
             Ok(group) => {
                 if self.on.load(Ordering::SeqCst) {
                     group.run(
-                        self.session.as_ref().unwrap().clone(),
                         self.group_signal_tx.as_ref().unwrap().subscribe(),
+                        self.read_tx.as_ref().unwrap().clone(),
                     );
                 }
 

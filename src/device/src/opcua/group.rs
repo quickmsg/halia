@@ -8,10 +8,10 @@ use opcua::{
 use std::{sync::Arc, time::Duration};
 use tokio::{
     select,
-    sync::{broadcast, RwLock, RwLockWriteGuard},
+    sync::{broadcast, mpsc, RwLock, RwLockWriteGuard},
     time,
 };
-use tracing::{debug, error};
+use tracing::error;
 use types::device::{
     group::{CreateGroupReq, UpdateGroupReq},
     point::{CreatePointReq, SearchPointItemResp, SearchPointResp},
@@ -53,10 +53,10 @@ impl Group {
         })
     }
 
-    pub fn run(&self, session: Arc<Session>, mut cmd_rx: broadcast::Receiver<Command>) {
+    pub fn run(&self, mut cmd_rx: broadcast::Receiver<Command>, read_tx: mpsc::Sender<Arc<Uuid>>) {
         let interval = self.interval;
         let group_id = self.id;
-        let points = self.points.clone();
+        let group_id = Arc::new(group_id);
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
@@ -66,11 +66,11 @@ impl Group {
                         match signal {
                             Ok(cmd) => {
                                 match cmd {
-                                    Command::Stop(id) => if id == group_id {
+                                    Command::Stop(id) => if id == *group_id {
                                         return
                                     }
                                     Command::Update(id, duraion) => {
-                                        if id == group_id {
+                                        if id == *group_id {
                                             interval = time::interval(Duration::from_millis(duraion));
                                         }
                                     }
@@ -81,7 +81,7 @@ impl Group {
                     }
 
                     _ = interval.tick() => {
-                        Group::read_points(&session, points.write().await).await;
+                        read_tx.send(group_id.clone());
                     }
                 }
             }
