@@ -214,3 +214,10 @@ pub async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppR
         Err(e) => e.into(),
     }
 }
+
+pub async fn add_subscription(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.add_subscription(device_id, req).await {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}

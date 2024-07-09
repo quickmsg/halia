@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use common::error::{HaliaError, HaliaResult};
@@ -17,6 +18,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+use tracing::{debug, error};
 use types::device::{
     device::{CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
     group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
@@ -66,6 +68,42 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
     }))
 }
 
+impl OpcUa {
+    async fn run(&self) {
+        let conf = self.conf.lock().await;
+        match OpcUa::get_session(&conf).await {
+            Ok(session) => todo!(),
+            Err(_) => todo!(),
+        }
+    }
+
+    async fn get_session(conf: &Conf) -> Result<Arc<Session>> {
+        let mut client = ClientBuilder::new()
+            .application_name("test")
+            .application_uri("aasda")
+            .trust_server_certs(true)
+            .session_retry_limit(3)
+            .create_sample_keypair(true)
+            .keep_alive_interval(Duration::from_millis(100))
+            .client()
+            .unwrap();
+
+        let endpoint: EndpointDescription = EndpointDescription::from(conf.url.as_ref());
+
+        let (session, event_loop) = match client
+            .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
+            .await
+        {
+            Ok((session, event_loop)) => (session, event_loop),
+            Err(e) => bail!("connect error {e:?}"),
+        };
+
+        event_loop.spwan();
+        session.wait_for_connection().await;
+        Ok(session)
+    }
+}
+
 #[async_trait]
 impl Device for OpcUa {
     fn get_id(&self) -> Uuid {
@@ -85,7 +123,6 @@ impl Device for OpcUa {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        opcua::console_logging::init();
         let mut client = ClientBuilder::new()
             .application_name("test")
             .application_uri("aasda")
@@ -107,21 +144,14 @@ impl Device for OpcUa {
             Err(e) => return Err(common::error::HaliaError::DeviceDisconnect),
         };
 
-        let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
-        self.group_signal_tx = Some(group_signal_tx);
-
         event_loop.spwan();
-
         session.wait_for_connection().await;
-        let session_clone = session.clone();
-        self.session = Some(session);
-
+        let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
         for group in self.groups.write().await.iter_mut() {
-            group.run(
-                session_clone.clone(),
-                self.group_signal_tx.as_ref().unwrap().subscribe(),
-            );
+            group.run(session.clone(), group_signal_tx.subscribe());
         }
+        self.session = Some(session);
+        self.group_signal_tx = Some(group_signal_tx);
 
         Ok(())
     }
@@ -282,19 +312,20 @@ impl Device for OpcUa {
         point_id: Uuid,
         value: serde_json::Value,
     ) -> HaliaResult<()> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.update_point(point_id, req).await,
-            None => {
-                debug!("未找到组");
-                Err(HaliaError::NotFound)
-            }
-        }
+        todo!()
+        // match self
+        //     .groups
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|group| group.id == group_id)
+        // {
+        //     Some(group) => group.update_point(point_id, req).await,
+        //     None => {
+        //         debug!("未找到组");
+        //         Err(HaliaError::NotFound)
+        //     }
+        // }
     }
 
     async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()> {
@@ -339,5 +370,10 @@ impl Device for OpcUa {
 
     async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         todo!()
+    }
+
+    async fn add_subscription(&self, req: Bytes) -> HaliaResult<()> {
+        // TODO
+        Err(HaliaError::ParseErr)
     }
 }

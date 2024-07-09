@@ -1,7 +1,7 @@
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, post, put, Route},
     Json, Router,
 };
 use common::error::HaliaError;
@@ -112,6 +112,10 @@ fn device_routes() -> Router {
                     .route("/search", get(device::search_sinks))
                     .route("/:sink_id", put(device::update_sink))
                     .route("/:sink_id", delete(device::delete_sink)),
+            )
+            .nest(
+                "/:device_id/subscription",
+                Router::new().route("/", post(device::add_subscription)),
             ),
     )
 }

@@ -1,21 +1,14 @@
-use std::{
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
-
 use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
-use message::{Message, MessageBatch};
+use message::MessageBatch;
 use opcua::{
     client::Session,
     types::{QualifiedName, ReadValueId, TimestampsToReturn, UAString},
 };
+use std::{sync::Arc, time::Duration};
 use tokio::{
     select,
-    sync::{broadcast, RwLock},
+    sync::{broadcast, RwLock, RwLockWriteGuard},
     time,
 };
 use tracing::{debug, error};
@@ -30,10 +23,7 @@ use super::point::Point;
 #[derive(Clone)]
 pub(crate) enum Command {
     Stop(Uuid),
-    Pause,
-    Restart,
     Update(Uuid, u64),
-    StopAll,
 }
 
 #[derive(Debug)]
@@ -68,7 +58,6 @@ impl Group {
         let group_id = self.id;
         let points = self.points.clone();
         tokio::spawn(async move {
-            let mut pause = false;
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
                 select! {
@@ -77,20 +66,13 @@ impl Group {
                         match signal {
                             Ok(cmd) => {
                                 match cmd {
-                                    Command::Stop(id) =>  if id == group_id {
-                                        debug!("group {} stop.", group_id);
+                                    Command::Stop(id) => if id == group_id {
                                         return
                                     }
-                                    Command::Pause => pause = true,
-                                    Command::Restart => pause = false,
                                     Command::Update(id, duraion) => {
                                         if id == group_id {
                                             interval = time::interval(Duration::from_millis(duraion));
                                         }
-                                    }
-                                    Command::StopAll => {
-                                        debug!("group {} stop.", group_id);
-                                        return
                                     }
                                 }
                             }
@@ -99,22 +81,7 @@ impl Group {
                     }
 
                     _ = interval.tick() => {
-                        if !pause {
-                            let mut nodes = vec![];
-                            for point in points.read().await.iter() {
-                                nodes.push(ReadValueId{ node_id: point.node_id.clone(), attribute_id: 13, index_range: UAString::null(), data_encoding: QualifiedName::null() })
-                            }
-                            match session.read(&nodes, TimestampsToReturn::Both, 2000.0).await {
-                                Ok(mut data_values) => {
-                                    for point in points.write().await.iter_mut().rev() {
-                                        point.write(data_values.pop());
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("{e:?}");
-                                }
-                            }
-                        }
+                        Group::read_points(&session, points.write().await).await;
                     }
                 }
             }
@@ -200,5 +167,27 @@ impl Group {
             .write()
             .await
             .retain(|point| !ids.contains(&point.id));
+    }
+
+    async fn read_points(session: &Arc<Session>, mut points: RwLockWriteGuard<'_, Vec<Point>>) {
+        let mut nodes = vec![];
+        for point in points.iter() {
+            nodes.push(ReadValueId {
+                node_id: point.node_id.clone(),
+                attribute_id: 13,
+                index_range: UAString::null(),
+                data_encoding: QualifiedName::null(),
+            })
+        }
+        match session.read(&nodes, TimestampsToReturn::Both, 2000.0).await {
+            Ok(mut data_values) => {
+                for point in points.iter_mut().rev() {
+                    point.write(data_values.pop());
+                }
+            }
+            Err(e) => {
+                error!("{e:?}");
+            }
+        }
     }
 }

@@ -476,6 +476,18 @@ impl DeviceManager {
             None => Err(HaliaError::NotFound),
         }
     }
+    pub async fn add_subscription(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.add_subscription(req).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
 }
 
 // recover
@@ -692,10 +704,26 @@ trait Device: Sync + Send {
         group_id: Uuid,
         create_group: &CreateGroupReq,
     ) -> HaliaResult<()>;
-
     async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp>;
     async fn update_group(&self, group_id: Uuid, req: UpdateGroupReq) -> HaliaResult<()>;
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()>;
+
+    async fn add_subscription(&self, req: Bytes) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn update_subscription(
+        &self,
+        subscription_id: Uuid,
+        req: serde_json::Value,
+    ) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn search_subscriptions(&self, page: usize, size: usize) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn delete_subscription(&self, subscription_id: Uuid) -> HaliaResult<()> {
+        Err(HaliaError::NotFound)
+    }
 
     // points
     async fn create_point(
