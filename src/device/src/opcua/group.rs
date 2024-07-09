@@ -15,7 +15,7 @@ use opcua::{
 };
 use tokio::{
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, RwLock},
     time,
 };
 use tracing::{debug, error};
@@ -105,8 +105,10 @@ impl Group {
                                 nodes.push(ReadValueId{ node_id: point.node_id.clone(), attribute_id: 13, index_range: UAString::null(), data_encoding: QualifiedName::null() })
                             }
                             match session.read(&nodes, TimestampsToReturn::Both, 2000.0).await {
-                                Ok(resp) => {
-                                    debug!("{resp:?}");
+                                Ok(mut data_values) => {
+                                    for point in points.write().await.iter_mut().rev() {
+                                        point.write(data_values.pop());
+                                    }
                                 }
                                 Err(e) => {
                                     error!("{e:?}");
@@ -162,9 +164,8 @@ impl Group {
             resps.push(SearchPointItemResp {
                 id: point.id.clone(),
                 name: point.name.clone(),
-                // TODO
                 conf: serde_json::json!(point.node_id),
-                value: point.value.clone(),
+                value: serde_json::to_value(&point.value).unwrap(),
             });
             if resps.len() == size {
                 break;

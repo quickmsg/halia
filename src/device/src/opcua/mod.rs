@@ -182,7 +182,31 @@ impl Device for OpcUa {
     }
 
     async fn update_group(&self, group_id: Uuid, req: UpdateGroupReq) -> HaliaResult<()> {
-        todo!()
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => {
+                if group.interval != req.interval && self.on.load(Ordering::SeqCst) {
+                    if let Err(e) = self
+                        .group_signal_tx
+                        .as_ref()
+                        .unwrap()
+                        .send(group::Command::Update(group_id, req.interval))
+                    {
+                        error!("group_signals send err :{}", e);
+                    }
+                }
+
+                group.update(&req);
+            }
+            None => return Err(HaliaError::NotFound),
+        };
+
+        Ok(())
     }
 
     async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()> {
@@ -214,7 +238,16 @@ impl Device for OpcUa {
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchPointResp> {
-        todo!()
+        match self
+            .groups
+            .read()
+            .await
+            .iter()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => Ok(group.search_points(page, size).await),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn update_point(

@@ -1,6 +1,5 @@
 use common::error::HaliaResult;
-use opcua::types::NodeId;
-use serde_json::Value;
+use opcua::types::{DataValue, NodeId, Variant};
 use types::device::point::CreatePointReq;
 use uuid::Uuid;
 
@@ -10,7 +9,7 @@ pub struct Point {
     pub name: String,
     pub node_id: NodeId,
     pub desc: Option<String>,
-    pub value: Value,
+    pub value: Option<Variant>,
 }
 
 impl Point {
@@ -21,11 +20,18 @@ impl Point {
             name: req.name,
             node_id,
             desc: req.desc,
-            value: Value::Null,
+            value: Some(Variant::Empty),
         })
     }
 
     pub async fn update(&mut self, req: &CreatePointReq) -> HaliaResult<()> {
         todo!()
+    }
+
+    pub fn write(&mut self, data_value: Option<DataValue>) {
+        match data_value {
+            Some(data_value) => self.value = data_value.value,
+            None => self.value = None,
+        }
     }
 }
