@@ -9,9 +9,12 @@ use opcua::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
 };
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use types::device::{
@@ -86,7 +89,10 @@ impl Device for OpcUa {
         let mut client = ClientBuilder::new()
             .application_name("test")
             .application_uri("aasda")
+            .trust_server_certs(true)
             .session_retry_limit(3)
+            .create_sample_keypair(true)
+            .keep_alive_interval(Duration::from_millis(100))
             .client()
             .unwrap();
 
@@ -104,7 +110,8 @@ impl Device for OpcUa {
         let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
         self.group_signal_tx = Some(group_signal_tx);
 
-        tokio::spawn(event_loop.run());
+        event_loop.spwan();
+
         session.wait_for_connection().await;
         let session_clone = session.clone();
         self.session = Some(session);
