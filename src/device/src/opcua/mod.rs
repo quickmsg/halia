@@ -20,6 +20,8 @@ use std::{
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
+    task::JoinHandle,
+    time,
 };
 use tracing::{debug, error};
 use types::device::{
@@ -42,10 +44,11 @@ struct OpcUa {
     err: Arc<AtomicBool>,
     conf: Arc<RwLock<Conf>>,
     groups: Arc<RwLock<Vec<Group>>>,
-    session: Option<Arc<Session>>,
+    session: Arc<RwLock<Option<Arc<Session>>>>,
     group_signal_tx: Option<broadcast::Sender<group::Command>>,
     ua_signal_tx: Option<broadcast::Sender<()>>,
-    read_tx: Option<mpsc::Sender<Arc<Uuid>>>,
+
+    read_points_tx: Option<mpsc::Sender<Arc<Uuid>>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -67,42 +70,49 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
         err: Arc::new(AtomicBool::new(false)),
         conf: Arc::new(RwLock::new(conf)),
         groups: Arc::new(RwLock::new(vec![])),
-        session: None,
+        session: Arc::new(RwLock::new(None)),
         group_signal_tx: None,
         ua_signal_tx: None,
-        read_tx: None,
+        read_points_tx: None,
     }))
 }
 
 impl OpcUa {
     async fn run(&self) {
+        // let (ua_signal_tx, mut ua_signal_rx) = mpsc::channel::<()>(1);
         let conf = self.conf.clone();
-        let groups = self.groups.clone();
-        let (ua_signal_tx, mut ua_signal_rx) = mpsc::channel::<()>(1);
+        let session = self.session.clone();
         tokio::spawn(async move {
-            let (signal_tx, mut signal_rx) = mpsc::channel::<StatusCode>(1);
             let now_conf = conf.read().await;
-            // match OpcUa::get_session(&now_conf, signal_tx).await {
-            //     Ok(session) => todo!(),
-            //     Err(_) => todo!(),
-            // }
 
             loop {
-                select! {
-                    _ = ua_signal_rx.recv() => {
-                        return
+                match OpcUa::get_session(&now_conf).await {
+                    Ok((s, handle)) => {
+                        session.write().await.replace(s);
+                        match handle.await {
+                            Ok(status_code) => match status_code {
+                                StatusCode::Good => return,
+                                _ => {
+                                    *session.write().await = None;
+                                    debug!("here");
+                                }
+                            },
+                            Err(_) => {
+                                debug!("here");
+                            }
+                        }
                     }
-
-                    status_code = signal_rx.recv() => {
-                        // todo
-                        return
+                    Err(e) => {
+                        // TODO select
+                        error!("connect error :{e:?}");
+                        time::sleep(Duration::from_secs(5)).await;
                     }
                 }
             }
         });
     }
 
-    async fn get_session(conf: &Conf, signal_tx: mpsc::Sender<StatusCode>) -> Result<Arc<Session>> {
+    async fn get_session(conf: &Conf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
         let mut client = ClientBuilder::new()
             .application_name("test")
             .application_uri("aasda")
@@ -123,9 +133,9 @@ impl OpcUa {
             Err(e) => bail!("connect error {e:?}"),
         };
 
-        tokio::task::spawn(event_loop.run(signal_tx));
+        let handle = event_loop.spawn();
         session.wait_for_connection().await;
-        Ok(session)
+        Ok((session, handle))
     }
 }
 
@@ -148,40 +158,12 @@ impl Device for OpcUa {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        let mut client = ClientBuilder::new()
-            .application_name("test")
-            .application_uri("aasda")
-            .trust_server_certs(true)
-            .session_retry_limit(3)
-            .create_sample_keypair(true)
-            .keep_alive_interval(Duration::from_millis(100))
-            .client()
-            .unwrap();
-
-        let endpoint: EndpointDescription =
-            EndpointDescription::from(self.conf.read().await.url.as_ref());
-
-        let (session, event_loop) = match client
-            .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
-            .await
-        {
-            Ok((session, event_loop)) => (session, event_loop),
-            Err(e) => return Err(common::error::HaliaError::DeviceDisconnect),
-        };
-
-        let (signal_tx, signal_rx) = mpsc::channel::<StatusCode>(1);
-
-        session.wait_for_connection().await;
+        self.run().await;
         let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
-
-        let (read_tx, read_rx) = mpsc::channel::<Arc<Uuid>>(16);
-
         for group in self.groups.write().await.iter_mut() {
-            group.run(group_signal_tx.subscribe(), read_tx.clone());
+            group.run(self.session.clone(), group_signal_tx.subscribe());
         }
-        self.session = Some(session);
         self.group_signal_tx = Some(group_signal_tx);
-        self.read_tx = Some(read_tx);
 
         Ok(())
     }
@@ -199,8 +181,8 @@ impl Device for OpcUa {
             Ok(group) => {
                 if self.on.load(Ordering::SeqCst) {
                     group.run(
+                        self.session.clone(),
                         self.group_signal_tx.as_ref().unwrap().subscribe(),
-                        self.read_tx.as_ref().unwrap().clone(),
                     );
                 }
 

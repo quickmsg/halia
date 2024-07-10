@@ -5,13 +5,16 @@ use opcua::{
     client::Session,
     types::{QualifiedName, ReadValueId, TimestampsToReturn, UAString},
 };
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, RwLockReadGuard},
+    time::Duration,
+};
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock, RwLockWriteGuard},
     time,
 };
-use tracing::error;
+use tracing::{debug, error};
 use types::device::{
     group::{CreateGroupReq, UpdateGroupReq},
     point::{CreatePointReq, SearchPointItemResp, SearchPointResp},
@@ -53,10 +56,14 @@ impl Group {
         })
     }
 
-    pub fn run(&self, mut cmd_rx: broadcast::Receiver<Command>, read_tx: mpsc::Sender<Arc<Uuid>>) {
+    pub fn run(
+        &self,
+        session: Arc<RwLock<Option<Arc<Session>>>>,
+        mut cmd_rx: broadcast::Receiver<Command>,
+    ) {
         let interval = self.interval;
         let group_id = self.id;
-        let group_id = Arc::new(group_id);
+        let points = self.points.clone();
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
@@ -66,11 +73,11 @@ impl Group {
                         match signal {
                             Ok(cmd) => {
                                 match cmd {
-                                    Command::Stop(id) => if id == *group_id {
+                                    Command::Stop(id) => if id == group_id {
                                         return
                                     }
                                     Command::Update(id, duraion) => {
-                                        if id == *group_id {
+                                        if id == group_id {
                                             interval = time::interval(Duration::from_millis(duraion));
                                         }
                                     }
@@ -81,7 +88,12 @@ impl Group {
                     }
 
                     _ = interval.tick() => {
-                        read_tx.send(group_id.clone());
+                        match session.read().await.as_ref() {
+                            Some(session) => {
+                                Group::read_points(session, points.write().await).await;
+                            }
+                            None => {},
+                        }
                     }
                 }
             }
@@ -169,7 +181,8 @@ impl Group {
             .retain(|point| !ids.contains(&point.id));
     }
 
-    async fn read_points(session: &Arc<Session>, mut points: RwLockWriteGuard<'_, Vec<Point>>) {
+    async fn read_points(session: &Session, mut points: RwLockWriteGuard<'_, Vec<Point>>) {
+        debug!("read points");
         let mut nodes = vec![];
         for point in points.iter() {
             nodes.push(ReadValueId {
