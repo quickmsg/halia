@@ -57,6 +57,11 @@ struct Password {
     password: String,
 }
 
+enum Command {
+    Stop,
+    Update,
+}
+
 pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
     Ok(Box::new(OpcUa {
@@ -319,7 +324,16 @@ impl Device for OpcUa {
         point_id: Uuid,
         req: &CreatePointReq,
     ) -> HaliaResult<()> {
-        todo!()
+        match self
+            .groups
+            .read()
+            .await
+            .iter()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => group.update_point(point_id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn write_point_value(

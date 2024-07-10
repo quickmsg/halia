@@ -5,6 +5,7 @@ pub type HaliaResult<T, E = HaliaError> = result::Result<T, E>;
 #[derive(Debug)]
 pub enum HaliaError {
     NotFound,
+    NotFoundGroup,
     ProtocolNotSupported,
     ParseErr,
     IoErr,
@@ -54,6 +55,7 @@ impl Display for HaliaError {
 
             HaliaError::DevicePointNotSupportWriteMethod => write!(f, "点位不支持写"),
             HaliaError::DevicePointWriteValueErr => write!(f, "点位写入值错误"),
+            HaliaError::NotFoundGroup => todo!(),
         }
     }
 }
@@ -72,6 +74,7 @@ impl HaliaError {
             HaliaError::DeviceDisconnect => 1002,
             HaliaError::DevicePointNotSupportWriteMethod => 1003,
             HaliaError::DevicePointWriteValueErr => 1004,
+            HaliaError::NotFoundGroup => 1005,
         }
     }
 }
