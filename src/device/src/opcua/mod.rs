@@ -18,7 +18,6 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    select,
     sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
     time,
@@ -46,9 +45,6 @@ struct OpcUa {
     groups: Arc<RwLock<Vec<Group>>>,
     session: Arc<RwLock<Option<Arc<Session>>>>,
     group_signal_tx: Option<broadcast::Sender<group::Command>>,
-    ua_signal_tx: Option<broadcast::Sender<()>>,
-
-    read_points_tx: Option<mpsc::Sender<Arc<Uuid>>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -72,8 +68,6 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
         groups: Arc::new(RwLock::new(vec![])),
         session: Arc::new(RwLock::new(None)),
         group_signal_tx: None,
-        ua_signal_tx: None,
-        read_points_tx: None,
     }))
 }
 
@@ -158,6 +152,11 @@ impl Device for OpcUa {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
+        if self.on.load(Ordering::SeqCst) {
+            return Ok(());
+        } else {
+            self.on.store(true, Ordering::SeqCst);
+        }
         self.run().await;
         let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
         for group in self.groups.write().await.iter_mut() {
@@ -169,6 +168,11 @@ impl Device for OpcUa {
     }
 
     async fn stop(&mut self) {
+        if !self.on.load(Ordering::SeqCst) {
+            return;
+        } else {
+            self.on.store(false, Ordering::SeqCst);
+        }
         todo!()
     }
 
