@@ -57,11 +57,6 @@ struct Password {
     password: String,
 }
 
-enum Command {
-    Stop,
-    Update,
-}
-
 pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
     Ok(Box::new(OpcUa {
@@ -78,9 +73,9 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
 
 impl OpcUa {
     async fn run(&self) {
-        // let (ua_signal_tx, mut ua_signal_rx) = mpsc::channel::<()>(1);
         let conf = self.conf.clone();
         let session = self.session.clone();
+        let on = self.on.clone();
         tokio::spawn(async move {
             let now_conf = conf.read().await;
 
@@ -90,14 +85,19 @@ impl OpcUa {
                         session.write().await.replace(s);
                         match handle.await {
                             Ok(status_code) => match status_code {
-                                StatusCode::Good => return,
+                                StatusCode::Good => {
+                                    if !on.load(Ordering::SeqCst) {
+                                        return;
+                                    }
+                                }
                                 _ => {
                                     *session.write().await = None;
+                                    // 设备关闭后会跳到这里
                                     debug!("here");
                                 }
                             },
                             Err(_) => {
-                                debug!("here");
+                                debug!("connect err :here");
                             }
                         }
                     }
@@ -178,11 +178,57 @@ impl Device for OpcUa {
         } else {
             self.on.store(false, Ordering::SeqCst);
         }
-        todo!()
+
+        match self
+            .group_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(group::Command::StopAll)
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!("send stop all command err :{}", e);
+            }
+        }
+
+        match self
+            .session
+            .write()
+            .await
+            .as_ref()
+            .unwrap()
+            .disconnect()
+            .await
+        {
+            Ok(_) => {
+                debug!("session disconnect success");
+            }
+            Err(e) => {
+                debug!("err code is :{}", e);
+            }
+        }
     }
 
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()> {
-        todo!()
+        let new_conf: Conf = serde_json::from_value(req.conf.clone())?;
+        if self.name != req.name {
+            self.name = req.name.clone();
+        }
+
+        let mut conf = self.conf.write().await;
+        if conf.url != new_conf.url {
+            conf.url = new_conf.url;
+            let _ = self
+                .session
+                .write()
+                .await
+                .as_ref()
+                .unwrap()
+                .disconnect()
+                .await;
+        }
+
+        Ok(())
     }
 
     async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {

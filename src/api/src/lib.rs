@@ -1,7 +1,7 @@
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put, Route},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use common::error::HaliaError;

@@ -5,13 +5,10 @@ use opcua::{
     client::Session,
     types::{QualifiedName, ReadValueId, TimestampsToReturn, UAString},
 };
-use std::{
-    sync::{Arc, RwLockReadGuard},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use tokio::{
     select,
-    sync::{broadcast, mpsc, RwLock, RwLockWriteGuard},
+    sync::{broadcast, RwLock, RwLockWriteGuard},
     time,
 };
 use tracing::{debug, error};
@@ -27,6 +24,7 @@ use super::point::Point;
 pub(crate) enum Command {
     Stop(Uuid),
     Update(Uuid, u64),
+    StopAll,
 }
 
 #[derive(Debug)]
@@ -74,6 +72,9 @@ impl Group {
                             Ok(cmd) => {
                                 match cmd {
                                     Command::Stop(id) => if id == group_id {
+                                        return
+                                    }
+                                    Command::StopAll => {
                                         return
                                     }
                                     Command::Update(id, duraion) => {
