@@ -11,7 +11,7 @@ use protocol::modbus::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sink::{Sink, SinkConf, SinkManager};
+use sink::{SinkConf, SinkManager};
 use std::{
     net::{IpAddr, SocketAddr},
     sync::{

@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 mod modbus;
 mod opcua;
+mod coap;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
     devices: RwLock::new(vec![]),
