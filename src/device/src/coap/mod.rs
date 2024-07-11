@@ -7,6 +7,7 @@ use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, StatusCode},
 };
+use protocol::coap::client::UdpCoAPClient;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -22,10 +23,8 @@ use tokio::{
     time,
 };
 use tracing::{debug, error};
-use types::device::{
-    device::{CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
-    group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
-    point::{CreatePointReq, SearchPointResp},
+use types::device::device::{
+    CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq,
 };
 use uuid::Uuid;
 
@@ -153,6 +152,17 @@ impl Device for OpcUa {
         }
         self.run().await;
 
+        let client = UdpCoAPClient::new_udp("127.0.0.1:5683").await.unwrap();
+        let observe_channel = client
+            .observe("/hello/put", |msg| {
+                println!(
+                    "resource changed {}",
+                    String::from_utf8(msg.payload).unwrap()
+                );
+            })
+            .await
+            .unwrap();
+
         Ok(())
     }
 
@@ -221,6 +231,4 @@ impl Device for OpcUa {
         // TODO
         Err(HaliaError::ParseErr)
     }
-
-
 }
