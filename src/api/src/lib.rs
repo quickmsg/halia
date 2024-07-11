@@ -114,8 +114,8 @@ fn device_routes() -> Router {
                     .route("/:sink_id", delete(device::delete_sink)),
             )
             .nest(
-                "/:device_id/subscription",
-                Router::new().route("/", post(device::add_subscription)),
+                "/:device_id/source",
+                Router::new().route("/", post(device::add_source)),
             ),
     )
 }
