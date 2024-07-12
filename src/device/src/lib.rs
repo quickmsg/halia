@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    persistence::{self, Status},
 };
 use message::MessageBatch;
 use serde::Serialize;
@@ -35,11 +35,16 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    async fn do_create_device(&self, device_id: Uuid, req: &CreateDeviceReq) -> HaliaResult<()> {
+    async fn do_create_device(
+        &self,
+        device_id: Uuid,
+        req: &CreateDeviceReq,
+        bytes: Bytes,
+    ) -> HaliaResult<()> {
         let new_resp = match req.r#type.as_str() {
             modbus::TYPE => modbus::new(device_id, req),
             opcua::TYPE => opcua::new(device_id, req),
-            coap::TYPE => coap::new(device_id, req),
+            coap::TYPE => coap::new(device_id, req, bytes).await,
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
@@ -112,11 +117,11 @@ impl DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn create_device(&self, body: &Bytes) -> HaliaResult<()> {
-        let req: CreateDeviceReq = serde_json::from_slice(body)?;
+    pub async fn create_device(&self, body: Bytes) -> HaliaResult<()> {
+        let req: CreateDeviceReq = serde_json::from_slice(&body)?;
         let device_id = Uuid::new_v4();
-        self.do_create_device(device_id.clone(), &req).await?;
-        persistence::device::insert_device(&device_id, body).await?;
+        self.do_create_device(device_id.clone(), &req, body).await?;
+        // persistence::device::insert_device(&device_id, body).await?;
         Ok(())
     }
 
@@ -549,33 +554,18 @@ impl DeviceManager {
 // recover
 impl DeviceManager {
     async fn recover_device(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
-        let req: CreateDeviceReq = serde_json::from_str(&data)?;
-        self.do_create_device(device_id, &req).await
+        Ok(())
+        // let req: CreateDeviceReq = serde_json::from_str(&data)?;
+        // self.do_create_device(device_id, &req).await
     }
 
     pub async fn recover(&self) -> HaliaResult<()> {
-        return Ok(());
-
         match persistence::device::read_devices().await {
             Ok(devices) => {
                 for (id, status, data) in devices {
                     if let Err(e) = self.recover_device(id, data).await {
                         error!("{}", e);
                         return Err(e.into());
-                    }
-                    if let Err(e) = self.recover_groups(id).await {
-                        error!("recover group err:{}", e);
-                        return Err(e.into());
-                    }
-                    if let Err(e) = self.recover_sinks(id).await {
-                        error!("recover sink err:{}", e);
-                        return Err(e.into());
-                    }
-                    if status == persistence::Status::Runing {
-                        if let Err(e) = self.start_device(id).await {
-                            error!("start device err:{}", e);
-                            return Err(e.into());
-                        }
                     }
                 }
 
@@ -751,6 +741,10 @@ pub struct DeviceInfo {
 trait Device: Sync + Send {
     // device
     fn get_id(&self) -> Uuid;
+
+    // 从持久化系统中恢复
+    async fn recover(&mut self, status: Status) -> HaliaResult<()>;
+
     async fn get_info(&self) -> SearchDeviceItemResp;
     async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self);

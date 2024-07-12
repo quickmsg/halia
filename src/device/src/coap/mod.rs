@@ -1,7 +1,10 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence::{self, Status},
+};
 use message::MessageBatch;
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
@@ -51,8 +54,14 @@ struct Conf {
     port: u16,
 }
 
-pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
+pub async fn create(id: Uuid, req: &CreateDeviceReq, bytes: Bytes) -> HaliaResult<Box<dyn Device>> {
+}
+
+pub async fn recover(id: Uuid, data: String) {}
+
+async fn new(id: Uuid, req: &CreateDeviceReq, bytes: Bytes) -> HaliaResult<Box<dyn Device>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
+    persistence::device::insert_coap_device(&id, &bytes).await?;
     Ok(Box::new(Coap {
         id,
         name: req.name.clone(),
@@ -112,6 +121,15 @@ impl Device for Coap {
         self.id
     }
 
+    async fn recover(&mut self, status: Status) -> HaliaResult<()> {
+        let paths = persistence::device::read_coap_paths(&self.id).await?;
+        for (id, data) in paths {
+            let path = path::recover(id, data).await?;
+            self.paths.write().await.push(path);
+        }
+        Ok(())
+    }
+
     async fn get_info(&self) -> SearchDeviceItemResp {
         SearchDeviceItemResp {
             id: self.id,
@@ -148,7 +166,7 @@ impl Device for Coap {
     }
 
     async fn add_path(&mut self, id: Uuid, req: Bytes) -> HaliaResult<()> {
-        let mut path = path::new(id, req)?;
+        let mut path = path::create(self.id.as_ref(), id, req).await?;
         if self.on.load(Ordering::SeqCst) {
             path.start(self.client.clone()).await;
         }

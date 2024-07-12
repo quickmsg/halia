@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use common::error::{HaliaError, HaliaResult};
+use common::{error::{HaliaError, HaliaResult}, persistence::Status};
 use group::Group;
 use message::MessageBatch;
 use opcua::{
@@ -142,6 +142,10 @@ impl OpcUa {
 impl Device for OpcUa {
     fn get_id(&self) -> Uuid {
         self.id
+    }
+
+    async fn recover(&mut self, status: Status) -> HaliaResult<()> {
+        todo!()
     }
 
     async fn get_info(&self) -> SearchDeviceItemResp {

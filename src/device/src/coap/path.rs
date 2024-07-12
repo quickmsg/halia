@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
-use common::error::HaliaResult;
+use common::{error::HaliaResult, persistence};
 use protocol::coap::{
     client::UdpCoAPClient,
     request::{Method, RequestBuilder},
@@ -37,16 +37,27 @@ struct Request {
     interval: u64,
 }
 
-pub fn new(id: Uuid, conf: Bytes) -> HaliaResult<Path> {
-    let conf: Conf = serde_json::from_slice(&conf)?;
-    Ok(Path {
-        id,
-        conf,
-        stop_signal_tx: None,
-    })
+pub async fn create(device_id: &Uuid, id: Uuid, req: Bytes) -> HaliaResult<Path> {
+    let conf: Conf = serde_json::from_slice(&req)?;
+    persistence::device::insert_coap_path(device_id, &id, &req).await?;
+    Path::new(id, conf)
+}
+
+pub async fn recover(id: Uuid, data: String) -> HaliaResult<Path> {
+    let conf: Conf = serde_json::from_str(&data)?;
+    Path::new(id, conf)
 }
 
 impl Path {
+    // TODO 配置校验
+    fn new(id: Uuid, conf: Conf) -> HaliaResult<Path> {
+        Ok(Path {
+            id,
+            conf,
+            stop_signal_tx: None,
+        })
+    }
+
     pub async fn start(&mut self, client: Arc<RwLock<Option<UdpCoAPClient>>>) {
         let (tx, mut rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(tx);

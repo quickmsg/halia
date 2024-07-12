@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use common::error::{HaliaError, HaliaResult};
+use common::{error::{HaliaError, HaliaResult}, persistence::Status};
 use group::Group;
 use message::MessageBatch;
 use point::Area;
@@ -122,7 +122,7 @@ struct SerialConf {
     desc: Option<String>,
 }
 
-pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
+pub fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
     if let Some(ethernet) = &conf.ethernet {
         if !ethernet.validate() {
@@ -266,6 +266,11 @@ impl Device for Modbus {
     fn get_id(&self) -> Uuid {
         self.id
     }
+
+    async fn recover(&mut self ,status: Status) -> HaliaResult<()> {
+        todo!()
+    }
+
 
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()> {
         let update_conf: Conf = serde_json::from_value(req.conf.clone())?;

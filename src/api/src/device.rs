@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{AppResp, DeleteIdsQuery, Pagination};
 
 pub(crate) async fn create_device(req: Bytes) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER.create_device(&req).await {
+    match GLOBAL_DEVICE_MANAGER.create_device(req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }

@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub struct CreateDeviceReq {
     pub r#type: String,
     pub name: String,
+    pub desc: Option<String>,
     pub conf: Value,
 }
 

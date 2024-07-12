@@ -8,15 +8,14 @@ use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use tracing::debug;
 use uuid::Uuid;
 
 use super::{Status, DELIMITER};
 
-static DEVICE_FILE: &str = "device";
-static GROUP_FILE: &str = "group";
-static SINK_FILE: &str = "sink";
-static POINT_FILE: &str = "point";
+static DEVICE_FILE: &str = "devices";
+static GROUP_FILE: &str = "groups";
+static SINK_FILE: &str = "sinks";
+static POINT_FILE: &str = "points";
 
 fn get_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(super::DEVICE_DIR)
@@ -46,7 +45,34 @@ pub async fn init() -> Result<(), io::Error> {
     super::create_file(get_dir().join(DEVICE_FILE)).await
 }
 
-pub async fn insert_device(device_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+pub async fn insert_coap_device(device_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+    insert_device(device_id, data).await?;
+    let base_dir = get_dir().join(device_id.to_string());
+    super::create_file(base_dir.join("paths")).await?;
+    super::create_file(base_dir.join("sources")).await?;
+    super::create_file(base_dir.join("sinks")).await
+}
+
+pub async fn insert_coap_path(
+    device_id: &Uuid,
+    path_id: &Uuid,
+    data: &Bytes,
+) -> Result<(), io::Error> {
+    unsafe {
+        super::insert(
+            get_dir().join(device_id.to_string()).join("paths"),
+            path_id,
+            std::str::from_utf8_unchecked(data),
+        )
+        .await
+    }
+}
+
+pub async fn read_coap_paths(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_dir().join(device_id.to_string()).join("paths")).await
+}
+
+async fn insert_device(device_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
     unsafe {
         let data = format!(
             "{}{}{}",
@@ -56,9 +82,9 @@ pub async fn insert_device(device_id: &Uuid, data: &Bytes) -> Result<(), io::Err
         );
         super::insert(get_device_file(), device_id, &data).await?;
     }
-    fs::create_dir_all(get_dir().join(device_id.to_string())).await?;
-    super::create_file(get_group_file(device_id)).await?;
-    super::create_file(get_sink_file(device_id)).await
+    fs::create_dir_all(get_dir().join(device_id.to_string())).await
+    // super::create_file(get_group_file(device_id)).await?;
+    // super::create_file(get_sink_file(device_id)).await
 }
 
 pub async fn read_devices() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
