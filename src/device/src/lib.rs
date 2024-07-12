@@ -569,18 +569,17 @@ impl DeviceManager {
     ) -> HaliaResult<()> {
         let req: CreateDeviceReq = serde_json::from_str(&data)?;
         let resp = match req.r#type.as_str() {
-            // modbus::TYPE => modbus::new(device_id, req),
-            // opcua::TYPE => opcua::new(device_id, req),
-            coap::TYPE => {
-                let mut device = coap::new(device_id, req)?;
-                device.recover(status).await?;
-                Ok(device)
-            }
+            modbus::TYPE => modbus::new(device_id, req),
+            opcua::TYPE => opcua::new(device_id, req),
+            coap::TYPE => coap::new(device_id, req),
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
         match resp {
-            Ok(device) => self.devices.write().await.push(device),
+            Ok(mut device) => {
+                device.recover(status).await?;
+                self.devices.write().await.push(device);
+            }
             Err(e) => {
                 debug!("recover device err:{}", e);
                 return Err(e);

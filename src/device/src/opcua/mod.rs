@@ -60,7 +60,7 @@ struct Password {
     password: String,
 }
 
-pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
+pub(crate) fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
     Ok(Box::new(OpcUa {
         id,
