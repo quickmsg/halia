@@ -225,8 +225,11 @@ pub async fn add_source(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> 
     }
 }
 
-pub(crate) async fn add_path(Path(device_id): Path<Uuid>, req: String) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER.add_path(device_id, req).await {
+pub(crate) async fn create_path(Path(device_id): Path<Uuid>, req: String) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER
+        .create_path(device_id, None, req)
+        .await
+    {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }

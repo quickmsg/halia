@@ -1,4 +1,3 @@
-use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use common::{
@@ -6,26 +5,15 @@ use common::{
     persistence::{self, Status},
 };
 use message::MessageBatch;
-use opcua::{
-    client::{ClientBuilder, IdentityToken, Session},
-    types::{EndpointDescription, StatusCode},
-};
 use path::Path;
-use protocol::coap::client::{CoAPClient, UdpCoAPClient, UdpTransport};
+use protocol::coap::client::UdpCoAPClient;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
-use tokio::{
-    sync::{broadcast, mpsc, RwLock},
-    task::JoinHandle,
-    time,
-};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
 use types::{
     device::device::{CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
@@ -35,8 +23,9 @@ use uuid::Uuid;
 
 use crate::Device;
 
-pub(crate) const TYPE: &str = "coap";
+pub const TYPE: &str = "coap";
 mod path;
+mod sink;
 
 struct Coap {
     id: Uuid,
@@ -54,7 +43,7 @@ struct Conf {
     port: u16,
 }
 
-pub async fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
+pub fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
     Ok(Box::new(Coap {
         id,
@@ -81,32 +70,6 @@ impl Coap {
             }
         }
     }
-
-    // async fn get_session(conf: &Conf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
-    //     let mut client = ClientBuilder::new()
-    //         .application_name("test")
-    //         .application_uri("aasda")
-    //         .trust_server_certs(true)
-    //         .session_retry_limit(3)
-    //         .create_sample_keypair(true)
-    //         .keep_alive_interval(Duration::from_millis(100))
-    //         .client()
-    //         .unwrap();
-
-    //     let endpoint: EndpointDescription = EndpointDescription::from(conf.url.as_ref());
-
-    //     let (session, event_loop) = match client
-    //         .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
-    //         .await
-    //     {
-    //         Ok((session, event_loop)) => (session, event_loop),
-    //         Err(e) => bail!("connect error {e:?}"),
-    //     };
-
-    //     let handle = event_loop.spawn();
-    //     session.wait_for_connection().await;
-    //     Ok((session, handle))
-    // }
 }
 
 #[async_trait]
@@ -120,6 +83,9 @@ impl Device for Coap {
         for (id, data) in paths {
             let path = path::new(id, &data).await?;
             self.paths.write().await.push(path);
+        }
+        if status == Status::Runing {
+            self.start().await;
         }
         Ok(())
     }
@@ -136,15 +102,16 @@ impl Device for Coap {
         }
     }
 
-    async fn start(&mut self) -> HaliaResult<()> {
+    async fn start(&mut self) {
         if self.on.load(Ordering::SeqCst) {
-            return Ok(());
+            return;
         } else {
             self.on.store(true, Ordering::SeqCst);
         }
         self.run().await;
-
-        Ok(())
+        for path in self.paths.write().await.iter_mut() {
+            path.start(self.client.clone()).await;
+        }
     }
 
     async fn stop(&mut self) {
@@ -159,8 +126,8 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn add_path(&mut self, id: Uuid, req: String) -> HaliaResult<()> {
-        let mut path = path::new(id, &req).await?;
+    async fn add_path(&mut self, path_id: Uuid, data: &String) -> HaliaResult<()> {
+        let mut path = path::new(path_id, &data).await?;
         if self.on.load(Ordering::SeqCst) {
             path.start(self.client.clone()).await;
         }

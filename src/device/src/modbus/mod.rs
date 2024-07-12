@@ -1,7 +1,10 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use common::{error::{HaliaError, HaliaResult}, persistence::Status};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence::Status,
+};
 use group::Group;
 use message::MessageBatch;
 use point::Area;
@@ -38,7 +41,7 @@ use uuid::Uuid;
 
 use crate::Device;
 
-pub(crate) const TYPE: &str = "modbus";
+pub const TYPE: &str = "modbus";
 mod group;
 mod point;
 mod sink;
@@ -122,7 +125,7 @@ struct SerialConf {
     desc: Option<String>,
 }
 
-pub fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
+pub fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
     if let Some(ethernet) = &conf.ethernet {
         if !ethernet.validate() {
@@ -267,10 +270,9 @@ impl Device for Modbus {
         self.id
     }
 
-    async fn recover(&mut self ,status: Status) -> HaliaResult<()> {
+    async fn recover(&mut self, status: Status) -> HaliaResult<()> {
         todo!()
     }
-
 
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()> {
         let update_conf: Conf = serde_json::from_value(req.conf.clone())?;
@@ -341,9 +343,9 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn start(&mut self) -> HaliaResult<()> {
+    async fn start(&mut self) {
         if self.on.load(Ordering::SeqCst) {
-            return Ok(());
+            return;
         } else {
             self.on.store(true, Ordering::SeqCst);
         }
@@ -367,7 +369,6 @@ impl Device for Modbus {
             let read_tx = self.read_tx.as_ref().unwrap().clone();
             group.run(stop_signal, read_tx);
         }
-        Ok(())
     }
 
     async fn stop(&mut self) {

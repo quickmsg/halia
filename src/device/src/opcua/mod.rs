@@ -1,7 +1,10 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use common::{error::{HaliaError, HaliaResult}, persistence::Status};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence::Status,
+};
 use group::Group;
 use message::MessageBatch;
 use opcua::{
@@ -160,9 +163,9 @@ impl Device for OpcUa {
         }
     }
 
-    async fn start(&mut self) -> HaliaResult<()> {
+    async fn start(&mut self) {
         if self.on.load(Ordering::SeqCst) {
-            return Ok(());
+            return;
         } else {
             self.on.store(true, Ordering::SeqCst);
         }
@@ -172,8 +175,6 @@ impl Device for OpcUa {
             group.run(self.session.clone(), group_signal_tx.subscribe());
         }
         self.group_signal_tx = Some(group_signal_tx);
-
-        Ok(())
     }
 
     async fn stop(&mut self) {

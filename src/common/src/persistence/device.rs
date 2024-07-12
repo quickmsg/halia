@@ -53,23 +53,29 @@ pub async fn insert_coap_device(device_id: &Uuid, data: &String) -> Result<(), i
     super::create_file(base_dir.join("sinks")).await
 }
 
-// pub async fn insert_coap_path(
-//     device_id: &Uuid,
-//     path_id: &Uuid,
-//     data: &Bytes,
-// ) -> Result<(), io::Error> {
-//     unsafe {
-//         super::insert(
-//             get_dir().join(device_id.to_string()).join("paths"),
-//             path_id,
-//             std::str::from_utf8_unchecked(data),
-//         )
-//         .await
-//     }
-// }
+pub async fn insert_coap_path(
+    device_id: &Uuid,
+    path_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    super::insert(
+        get_dir().join(device_id.to_string()).join("paths"),
+        path_id,
+        data,
+    )
+    .await
+}
 
 pub async fn read_coap_paths(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
     super::read(get_dir().join(device_id.to_string()).join("paths")).await
+}
+
+pub async fn insert_modbus_device(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    insert_device(device_id, data).await?;
+    let base_dir = get_dir().join(device_id.to_string());
+    super::create_file(base_dir.join("groups")).await?;
+    super::create_file(base_dir.join("sources")).await?;
+    super::create_file(base_dir.join("sinks")).await
 }
 
 async fn insert_device(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
