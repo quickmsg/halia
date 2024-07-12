@@ -773,6 +773,20 @@ trait Device: Sync + Send {
         Err(HaliaError::ProtocolNotSupported)
     }
 
+    // coap协议
+    async fn add_path(&self, _req: Bytes) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn update_path(&self, _req: Bytes) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn delete_path(&self, _req: Bytes) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+
     async fn subscribe(&mut self, id: &Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
     async fn unsubscribe(&mut self, id: Uuid) -> HaliaResult<()>;
 
@@ -781,8 +795,4 @@ trait Device: Sync + Send {
     async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()>;
     async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()>;
     async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
-
-    async fn add_path(&self, req: Bytes) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
 }

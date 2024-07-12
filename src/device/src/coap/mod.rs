@@ -184,6 +184,19 @@ impl Device for OpcUa {
         Ok(())
     }
 
+    async fn add_path(&self, _req: Bytes) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn update_path(&self, _req: Bytes) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn delete_path(&self, _req: Bytes) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+
     async fn subscribe(&mut self, id: &Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         todo!()
     }
