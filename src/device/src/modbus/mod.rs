@@ -152,7 +152,7 @@ pub fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
         read_tx: None,
         write_tx: None,
         ref_cnt: 0,
-        sink_manager: SinkManager::new(),
+        sink_manager: sink::new(),
         sink_tx: None,
     }))
 }
@@ -577,9 +577,8 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
-        let conf: SinkConf = serde_json::from_slice(req)?;
-        self.sink_manager.add_sink(sink_id, conf).await
+    async fn create_sink(&self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
+        self.sink_manager.create_sink(sink_id, data).await
     }
 
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
@@ -603,8 +602,8 @@ impl Device for Modbus {
                 let (tx, rx) = mpsc::channel::<MessageBatch>(16);
                 let tx_clone = tx.clone();
                 self.sink_tx = Some(tx);
-                self.sink_manager
-                    .run(rx, self.write_tx.as_ref().unwrap().clone());
+                // self.sink_manager
+                //     .run(rx, self.write_tx.as_ref().unwrap().clone());
                 Ok(tx_clone)
             }
         }

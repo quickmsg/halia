@@ -107,7 +107,7 @@ impl DeviceManager {
                 }
                 Ok(device)
             }
-            // opcua::TYPE => opcua::new(device_id, req),
+            opcua::TYPE => opcua::new(device_id, req),
             coap::TYPE => {
                 let device = coap::new(device_id, req)?;
                 if new {
@@ -143,8 +143,6 @@ impl DeviceManager {
             None => return Err(HaliaError::NotFound),
         }
 
-        return Ok(());
-        // data json解析成功的情况下，必定可以转换为string，这是安全的
         unsafe { persistence::device::update_device_conf(device_id, data) }.await?;
         Ok(())
     }
@@ -420,9 +418,9 @@ impl DeviceManager {
         }
     }
 
-    pub async fn create_sink(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
+    pub async fn create_sink(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
         let sink_id = Uuid::new_v4();
-        self.do_create_sink(device_id, sink_id, &req).await?;
+        self.do_create_sink(device_id, sink_id, &data).await?;
         match persistence::device::insert_sink(&device_id, &sink_id, &req).await {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -870,7 +868,7 @@ trait Device: Sync + Send {
     async fn subscribe(&mut self, id: &Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
     async fn unsubscribe(&mut self, id: Uuid) -> HaliaResult<()>;
 
-    async fn create_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()>;
+    async fn create_sink(&self, sink_id: Uuid, data: &String) -> HaliaResult<()>;
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
     async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()>;
     async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()>;
