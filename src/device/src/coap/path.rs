@@ -37,14 +37,8 @@ struct Request {
     interval: u64,
 }
 
-pub async fn create(device_id: &Uuid, id: Uuid, req: Bytes) -> HaliaResult<Path> {
-    let conf: Conf = serde_json::from_slice(&req)?;
-    persistence::device::insert_coap_path(device_id, &id, &req).await?;
-    Path::new(id, conf)
-}
-
-pub async fn recover(id: Uuid, data: String) -> HaliaResult<Path> {
-    let conf: Conf = serde_json::from_str(&data)?;
+pub async fn new(id: Uuid, req: &String) -> HaliaResult<Path> {
+    let conf: Conf = serde_json::from_str(req)?;
     Path::new(id, conf)
 }
 

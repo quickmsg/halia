@@ -45,7 +45,7 @@ pub async fn init() -> Result<(), io::Error> {
     super::create_file(get_dir().join(DEVICE_FILE)).await
 }
 
-pub async fn insert_coap_device(device_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
+pub async fn insert_coap_device(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
     insert_device(device_id, data).await?;
     let base_dir = get_dir().join(device_id.to_string());
     super::create_file(base_dir.join("paths")).await?;
@@ -53,35 +53,32 @@ pub async fn insert_coap_device(device_id: &Uuid, data: &Bytes) -> Result<(), io
     super::create_file(base_dir.join("sinks")).await
 }
 
-pub async fn insert_coap_path(
-    device_id: &Uuid,
-    path_id: &Uuid,
-    data: &Bytes,
-) -> Result<(), io::Error> {
-    unsafe {
-        super::insert(
-            get_dir().join(device_id.to_string()).join("paths"),
-            path_id,
-            std::str::from_utf8_unchecked(data),
-        )
-        .await
-    }
-}
+// pub async fn insert_coap_path(
+//     device_id: &Uuid,
+//     path_id: &Uuid,
+//     data: &Bytes,
+// ) -> Result<(), io::Error> {
+//     unsafe {
+//         super::insert(
+//             get_dir().join(device_id.to_string()).join("paths"),
+//             path_id,
+//             std::str::from_utf8_unchecked(data),
+//         )
+//         .await
+//     }
+// }
 
 pub async fn read_coap_paths(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
     super::read(get_dir().join(device_id.to_string()).join("paths")).await
 }
 
-async fn insert_device(device_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
-    unsafe {
-        let data = format!(
-            "{}{}{}",
-            Status::Stopped,
-            DELIMITER,
-            std::str::from_utf8_unchecked(data)
-        );
-        super::insert(get_device_file(), device_id, &data).await?;
-    }
+async fn insert_device(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    super::insert(
+        get_device_file(),
+        device_id,
+        &format!("{}{}{}", Status::Stopped, DELIMITER, data),
+    )
+    .await?;
     fs::create_dir_all(get_dir().join(device_id.to_string())).await
     // super::create_file(get_group_file(device_id)).await?;
     // super::create_file(get_sink_file(device_id)).await
@@ -198,16 +195,9 @@ pub async fn delete_device(id: &Uuid) -> Result<(), io::Error> {
 pub async fn insert_group(
     device_id: &Uuid,
     group_id: &Uuid,
-    data: &Bytes,
+    data: &String,
 ) -> Result<(), io::Error> {
-    unsafe {
-        super::insert(
-            get_group_file(device_id),
-            group_id,
-            std::str::from_utf8_unchecked(data),
-        )
-        .await?;
-    }
+    super::insert(get_group_file(device_id), group_id, data).await?;
     fs::create_dir(
         get_dir()
             .join(device_id.to_string())
@@ -246,16 +236,9 @@ pub async fn insert_point(
     device_id: &Uuid,
     group_id: &Uuid,
     point_id: &Uuid,
-    data: &Bytes,
+    data: &String,
 ) -> Result<(), io::Error> {
-    unsafe {
-        super::insert(
-            get_point_file(device_id, group_id),
-            point_id,
-            std::str::from_utf8_unchecked(data),
-        )
-        .await
-    }
+    super::insert(get_point_file(device_id, group_id), point_id, data).await
 }
 
 pub async fn read_points(

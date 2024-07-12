@@ -17,8 +17,8 @@ use uuid::Uuid;
 
 use crate::{AppResp, DeleteIdsQuery, Pagination};
 
-pub(crate) async fn create_device(req: Bytes) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER.create_device(req).await {
+pub(crate) async fn create_device(req: String) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.create_device(None, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
@@ -60,7 +60,7 @@ pub(crate) async fn delete_device(Path(device_id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn create_group(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> {
+pub(crate) async fn create_group(Path(device_id): Path<Uuid>, req: String) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER.create_group(device_id, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
@@ -105,7 +105,7 @@ pub(crate) async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>
 
 pub(crate) async fn create_point(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    req: Bytes,
+    req: String,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
         .create_point(device_id, group_id, req)
@@ -225,7 +225,7 @@ pub async fn add_source(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> 
     }
 }
 
-pub(crate) async fn add_path(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> {
+pub(crate) async fn add_path(Path(device_id): Path<Uuid>, req: String) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER.add_path(device_id, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),

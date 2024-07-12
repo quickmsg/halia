@@ -35,30 +35,6 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    async fn do_create_device(
-        &self,
-        device_id: Uuid,
-        req: &CreateDeviceReq,
-        bytes: Bytes,
-    ) -> HaliaResult<()> {
-        let new_resp = match req.r#type.as_str() {
-            modbus::TYPE => modbus::new(device_id, req),
-            opcua::TYPE => opcua::new(device_id, req),
-            coap::TYPE => coap::new(device_id, req, bytes).await,
-            _ => return Err(HaliaError::ProtocolNotSupported),
-        };
-
-        match new_resp {
-            Ok(device) => self.devices.write().await.push(device),
-            Err(e) => {
-                debug!("create device err:{}", e);
-                return Err(e);
-            }
-        }
-
-        Ok(())
-    }
-
     async fn do_create_group(
         &self,
         device_id: Uuid,
@@ -117,11 +93,32 @@ impl DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn create_device(&self, body: Bytes) -> HaliaResult<()> {
-        let req: CreateDeviceReq = serde_json::from_slice(&body)?;
-        let device_id = Uuid::new_v4();
-        self.do_create_device(device_id.clone(), &req, body).await?;
-        // persistence::device::insert_device(&device_id, body).await?;
+    pub async fn create_device(&self, device_id: Option<Uuid>, data: String) -> HaliaResult<()> {
+        let (device_id, new) = match device_id {
+            Some(device_id) => (device_id, false),
+            None => (Uuid::new_v4(), true),
+        };
+        let req: CreateDeviceReq = serde_json::from_str(&data)?;
+        let resp = match req.r#type.as_str() {
+            // modbus::TYPE => modbus::new(device_id, req),
+            // opcua::TYPE => opcua::new(device_id, req),
+            coap::TYPE => {
+                let device = coap::new(device_id, req).await?;
+                if new {
+                    persistence::device::insert_coap_device(&device_id, &data).await?;
+                }
+                Ok(device)
+            }
+            _ => return Err(HaliaError::ProtocolNotSupported),
+        };
+
+        match resp {
+            Ok(device) => self.devices.write().await.push(device),
+            Err(e) => {
+                debug!("create device err:{}", e);
+                return Err(e);
+            }
+        }
         Ok(())
     }
 
@@ -250,13 +247,13 @@ impl DeviceManager {
         Ok(())
     }
 
-    pub async fn create_group(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
+    pub async fn create_group(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
         let group_id = Uuid::new_v4();
-        let create_group_req: CreateGroupReq = serde_json::from_slice(&req)?;
+        let create_group_req: CreateGroupReq = serde_json::from_str(&data)?;
         self.do_create_group(device_id, group_id, create_group_req)
             .await?;
         // TODO 插入失败删除group
-        persistence::device::insert_group(&device_id, &group_id, &req).await?;
+        // persistence::device::insert_group(&device_id, &group_id, &req).await?;
         Ok(())
     }
 
@@ -325,10 +322,10 @@ impl DeviceManager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        req: Bytes,
+        req: String,
     ) -> HaliaResult<()> {
         let point_id = Uuid::new_v4();
-        let creaet_point_req = serde_json::from_slice(&req)?;
+        let creaet_point_req = serde_json::from_str(&req)?;
         self.do_create_point(device_id, group_id, point_id, creaet_point_req)
             .await?;
         match persistence::device::insert_point(&device_id, &group_id, &point_id, &req).await {
@@ -503,7 +500,7 @@ impl DeviceManager {
         }
     }
 
-    pub async fn add_path(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
+    pub async fn add_path(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -511,10 +508,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => {
-                let path_id = Uuid::new_v4();
-                device.add_path(path_id, req).await
-            }
+            Some(device) => device.add_path(Uuid::new_v4(), data).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -824,7 +818,7 @@ trait Device: Sync + Send {
     }
 
     // coap协议
-    async fn add_path(&mut self, _id: Uuid, _req: Bytes) -> HaliaResult<()> {
+    async fn add_path(&mut self, _id: Uuid, _data: String) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
     async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<SearchResp> {
