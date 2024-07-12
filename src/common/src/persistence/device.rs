@@ -274,15 +274,8 @@ pub async fn delete_points(
     Ok(())
 }
 
-pub async fn insert_sink(device_id: &Uuid, sink_id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
-    unsafe {
-        super::insert(
-            get_sink_file(device_id),
-            sink_id,
-            std::str::from_utf8_unchecked(data),
-        )
-        .await
-    }
+pub async fn insert_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    super::insert(get_sink_file(device_id), sink_id, data).await
 }
 
 pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {

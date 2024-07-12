@@ -77,19 +77,6 @@ impl DeviceManager {
             None => Err(HaliaError::NotFound),
         }
     }
-
-    async fn do_create_sink(&self, device_id: Uuid, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => device.create_sink(sink_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
 }
 
 impl DeviceManager {
@@ -418,17 +405,34 @@ impl DeviceManager {
         }
     }
 
-    pub async fn create_sink(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
-        let sink_id = Uuid::new_v4();
-        self.do_create_sink(device_id, sink_id, &data).await?;
-        match persistence::device::insert_sink(&device_id, &sink_id, &req).await {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                error!("sink写入文件失败:{e:?}");
-                // TODO delete
-                Err(e.into())
+    pub async fn create_sink(
+        &self,
+        device_id: Uuid,
+        sink_id: Option<Uuid>,
+        data: String,
+    ) -> HaliaResult<()> {
+        let (sink_id, new) = match sink_id {
+            Some(sink_id) => (sink_id, true),
+            None => (Uuid::new_v4(), false),
+        };
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.create_sink(sink_id, &data).await?,
+            None => return Err(HaliaError::NotFound),
+        }
+        if new {
+            if let Err(e) = persistence::device::insert_sink(&device_id, &sink_id, &data).await {
+                debug!("create sink err :{e}");
+                self.delete_sink(device_id, sink_id).await;
             }
         }
+
+        Ok(())
     }
 
     pub async fn search_sinks(
@@ -672,9 +676,8 @@ impl DeviceManager {
             }
         };
 
-        for (sink_id, req) in sinks {
-            let data = Bytes::from(req);
-            if let Err(e) = self.do_create_sink(device_id, sink_id, &data).await {
+        for (sink_id, data) in sinks {
+            if let Err(e) = self.create_sink(device_id, Some(sink_id), data).await {
                 error!("create device:{} sink:{:?} err:{} ", device_id, sink_id, e);
                 return Err(e);
             }

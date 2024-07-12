@@ -178,8 +178,11 @@ pub(crate) async fn delete_points(
     }
 }
 
-pub(crate) async fn create_sink(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER.create_sink(device_id, req).await {
+pub(crate) async fn create_sink(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER
+        .create_sink(device_id, None, data)
+        .await
+    {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }

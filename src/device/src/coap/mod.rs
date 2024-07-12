@@ -186,7 +186,7 @@ impl Device for Coap {
         todo!()
     }
 
-    async fn create_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
+    async fn create_sink(&self, sink_id: Uuid, req: &String) -> HaliaResult<()> {
         todo!()
     }
 

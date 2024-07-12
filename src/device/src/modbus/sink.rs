@@ -2,7 +2,7 @@ use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::debug;
 use types::device::{datatype::DataType, device::SearchSinksResp};
