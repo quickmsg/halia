@@ -131,6 +131,7 @@ impl DeviceManager {
             None => return Err(HaliaError::NotFound),
         }
 
+        return Ok(());
         // data json解析成功的情况下，必定可以转换为string，这是安全的
         unsafe { persistence::device::update_device_conf(device_id, data) }.await?;
         Ok(())
@@ -152,6 +153,8 @@ impl DeviceManager {
                         return Err(e);
                     }
                 }
+
+                return Ok(());
                 match persistence::device::update_device_status(
                     device_id,
                     persistence::Status::Runing,
@@ -490,6 +493,23 @@ impl DeviceManager {
             None => Err(HaliaError::NotFound),
         }
     }
+
+    pub async fn add_path(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => {
+                let path_id = Uuid::new_v4();
+                device.add_path(path_id, req).await?;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
 }
 
 // recover
@@ -500,6 +520,8 @@ impl DeviceManager {
     }
 
     pub async fn recover(&self) -> HaliaResult<()> {
+        return Ok(());
+
         match persistence::device::read_devices().await {
             Ok(devices) => {
                 for (id, status, data) in devices {
@@ -774,7 +796,7 @@ trait Device: Sync + Send {
     }
 
     // coap协议
-    async fn add_path(&self, _req: Bytes) -> HaliaResult<()> {
+    async fn add_path(&mut self, _id: Uuid, _req: Bytes) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
     async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<()> {

@@ -106,6 +106,10 @@ fn device_routes() -> Router {
                     ),
             )
             .nest(
+                "/:device_id/path",
+                Router::new().route("/", post(device::add_path)),
+            )
+            .nest(
                 "/:device_id/sink",
                 Router::new()
                     .route("/", post(device::create_sink))

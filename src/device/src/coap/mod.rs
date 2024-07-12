@@ -7,6 +7,8 @@ use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, StatusCode},
 };
+use path::Path;
+use protocol::coap::client::{CoAPClient, UdpCoAPClient, UdpTransport};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -32,101 +34,79 @@ use crate::Device;
 pub(crate) const TYPE: &str = "coap";
 mod path;
 
-struct OpcUa {
+struct Coap {
     id: Uuid,
     name: String,
     on: Arc<AtomicBool>,
     err: Arc<AtomicBool>,
     conf: Arc<RwLock<Conf>>,
-    session: Arc<RwLock<Option<Arc<Session>>>>,
+    client: Arc<RwLock<Option<UdpCoAPClient>>>,
+    paths: Vec<Path>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
 struct Conf {
-    url: String,
+    host: String,
+    port: u16,
 }
 
 pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
     let conf: Conf = serde_json::from_value(req.conf.clone())?;
-    Ok(Box::new(OpcUa {
+    Ok(Box::new(Coap {
         id,
         name: req.name.clone(),
         on: Arc::new(AtomicBool::new(false)),
         err: Arc::new(AtomicBool::new(false)),
         conf: Arc::new(RwLock::new(conf)),
-        session: Arc::new(RwLock::new(None)),
+        client: Arc::new(RwLock::new(None)),
+        paths: vec![],
     }))
 }
 
-impl OpcUa {
+impl Coap {
     async fn run(&self) {
         let conf = self.conf.clone();
-        let session = self.session.clone();
         let on = self.on.clone();
-        tokio::spawn(async move {
-            let now_conf = conf.read().await;
+        let client =
+            UdpCoAPClient::new_udp((conf.read().await.host.clone(), conf.read().await.port)).await;
 
-            loop {
-                match OpcUa::get_session(&now_conf).await {
-                    Ok((s, handle)) => {
-                        session.write().await.replace(s);
-                        match handle.await {
-                            Ok(status_code) => match status_code {
-                                StatusCode::Good => {
-                                    if !on.load(Ordering::SeqCst) {
-                                        return;
-                                    }
-                                }
-                                _ => {
-                                    *session.write().await = None;
-                                    // 设备关闭后会跳到这里
-                                    debug!("here");
-                                }
-                            },
-                            Err(_) => {
-                                debug!("connect err :here");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        // TODO select
-                        error!("connect error :{e:?}");
-                        time::sleep(Duration::from_secs(5)).await;
-                    }
-                }
+        match client {
+            Ok(client) => *self.client.write().await = Some(client),
+            Err(e) => {
+                error!("create client err :{}", e);
             }
-        });
+        }
     }
 
-    async fn get_session(conf: &Conf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
-        let mut client = ClientBuilder::new()
-            .application_name("test")
-            .application_uri("aasda")
-            .trust_server_certs(true)
-            .session_retry_limit(3)
-            .create_sample_keypair(true)
-            .keep_alive_interval(Duration::from_millis(100))
-            .client()
-            .unwrap();
+    // async fn get_session(conf: &Conf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
+    //     let mut client = ClientBuilder::new()
+    //         .application_name("test")
+    //         .application_uri("aasda")
+    //         .trust_server_certs(true)
+    //         .session_retry_limit(3)
+    //         .create_sample_keypair(true)
+    //         .keep_alive_interval(Duration::from_millis(100))
+    //         .client()
+    //         .unwrap();
 
-        let endpoint: EndpointDescription = EndpointDescription::from(conf.url.as_ref());
+    //     let endpoint: EndpointDescription = EndpointDescription::from(conf.url.as_ref());
 
-        let (session, event_loop) = match client
-            .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
-            .await
-        {
-            Ok((session, event_loop)) => (session, event_loop),
-            Err(e) => bail!("connect error {e:?}"),
-        };
+    //     let (session, event_loop) = match client
+    //         .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
+    //         .await
+    //     {
+    //         Ok((session, event_loop)) => (session, event_loop),
+    //         Err(e) => bail!("connect error {e:?}"),
+    //     };
 
-        let handle = event_loop.spawn();
-        session.wait_for_connection().await;
-        Ok((session, handle))
-    }
+    //     let handle = event_loop.spawn();
+    //     session.wait_for_connection().await;
+    //     Ok((session, handle))
+    // }
 }
 
 #[async_trait]
-impl Device for OpcUa {
+impl Device for Coap {
     fn get_id(&self) -> Uuid {
         self.id
     }
@@ -163,30 +143,18 @@ impl Device for OpcUa {
     }
 
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()> {
-        let new_conf: Conf = serde_json::from_value(req.conf.clone())?;
-        if self.name != req.name {
-            self.name = req.name.clone();
-        }
-
-        let mut conf = self.conf.write().await;
-        if conf.url != new_conf.url {
-            conf.url = new_conf.url;
-            let _ = self
-                .session
-                .write()
-                .await
-                .as_ref()
-                .unwrap()
-                .disconnect()
-                .await;
-        }
-
         Ok(())
     }
 
-    async fn add_path(&self, _req: Bytes) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
+    async fn add_path(&mut self, id: Uuid, req: Bytes) -> HaliaResult<()> {
+        let path = path::new(id, req)?;
+        if self.on.load(Ordering::SeqCst) {
+            path.run(self.client.clone()).await;
+        }
+        self.paths.push(path);
+        Ok(())
     }
+
     async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
