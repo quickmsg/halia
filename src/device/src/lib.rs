@@ -35,6 +35,7 @@ impl DeviceManager {
         let new_resp = match req.r#type.as_str() {
             modbus::TYPE => modbus::new(device_id, req),
             opcua::TYPE => opcua::new(device_id, req),
+            coap::TYPE => coap::new(device_id, req),
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
@@ -717,66 +718,63 @@ trait Device: Sync + Send {
         Err(HaliaError::ProtocolNotSupported)
     }
 
-    async fn add_subscription(&self, req: Bytes) -> HaliaResult<()> {
+    async fn add_subscription(&self, _req: Bytes) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
     async fn update_subscription(
         &self,
-        subscription_id: Uuid,
-        req: serde_json::Value,
+        _subscription_id: Uuid,
+        _req: serde_json::Value,
     ) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
-    async fn search_subscriptions(&self, page: usize, size: usize) -> HaliaResult<()> {
+    async fn search_subscriptions(&self, _page: usize, _size: usize) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
-    async fn delete_subscription(&self, subscription_id: Uuid) -> HaliaResult<()> {
+    async fn delete_subscription(&self, _subscription_id: Uuid) -> HaliaResult<()> {
         Err(HaliaError::NotFound)
     }
 
     // points
     async fn create_point(
         &self,
-        group_id: Uuid,
-        point_id: Uuid,
-        req: CreatePointReq,
+        _group_id: Uuid,
+        _point_id: Uuid,
+        _req: CreatePointReq,
     ) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
 
     async fn search_point(
         &self,
-        group_id: Uuid,
-        page: usize,
-        size: usize,
+        _group_id: Uuid,
+        _page: usize,
+        _size: usize,
     ) -> HaliaResult<SearchPointResp> {
         Err(HaliaError::ProtocolNotSupported)
     }
     async fn update_point(
         &self,
-        group_id: Uuid,
-        point_id: Uuid,
-        req: &CreatePointReq,
+        _group_id: Uuid,
+        _point_id: Uuid,
+        _req: &CreatePointReq,
     ) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
     async fn write_point_value(
         &self,
-        group_id: Uuid,
-        point_id: Uuid,
-        value: serde_json::Value,
+        _group_id: Uuid,
+        _point_id: Uuid,
+        _value: serde_json::Value,
     ) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
-    async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()> {
+    async fn delete_points(&self, _group_id: &Uuid, _point_ids: &Vec<Uuid>) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
 
-    async fn subscribe(
-        &mut self,
-        group_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
-    async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()>;
+    async fn subscribe(&mut self, id: &Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+    async fn unsubscribe(&mut self, id: Uuid) -> HaliaResult<()>;
 
     async fn create_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()>;
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
