@@ -305,11 +305,10 @@ impl Device for Modbus {
 
     async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {
         match Group::new(group_id, &req) {
-            Ok(group) => {
+            Ok(mut group) => {
                 if self.on.load(Ordering::SeqCst) {
-                    let stop_signal = self.group_signal_tx.as_ref().unwrap().subscribe();
                     let read_tx = self.read_tx.as_ref().unwrap().clone();
-                    group.run(stop_signal, read_tx);
+                    group.start(read_tx);
                 }
                 self.groups.write().await.push(group);
 
@@ -364,10 +363,9 @@ impl Device for Modbus {
 
         self.run(signal_rx, read_rx, write_rx).await;
 
-        for group in self.groups.read().await.iter() {
-            let stop_signal = self.group_signal_tx.as_ref().unwrap().subscribe();
+        for group in self.groups.write().await.iter_mut() {
             let read_tx = self.read_tx.as_ref().unwrap().clone();
-            group.run(stop_signal, read_tx);
+            group.start(read_tx);
         }
     }
 
@@ -446,12 +444,19 @@ impl Device for Modbus {
                     }
                 }
 
-                group.update(&req);
+                match group.update(&req) {
+                    Ok(restart) => {
+                        if restart && self.on.load(Ordering::SeqCst) {
+                            group.stop().await;
+                            group.start(self.read_tx.as_ref().unwrap().clone());
+                        }
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
+                }
             }
-            None => return Err(HaliaError::NotFound),
-        };
-
-        Ok(())
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn create_point(

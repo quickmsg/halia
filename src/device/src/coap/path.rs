@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
-use common::{error::HaliaResult, persistence};
+use common::error::HaliaResult;
 use protocol::coap::{
     client::UdpCoAPClient,
     request::{Method, RequestBuilder},
@@ -9,7 +9,7 @@ use protocol::coap::{
 use serde::{Deserialize, Serialize};
 use tokio::{
     select,
-    sync::{mpsc, oneshot, RwLock},
+    sync::{mpsc, RwLock},
     time,
 };
 use tracing::debug;
