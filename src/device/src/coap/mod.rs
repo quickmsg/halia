@@ -24,8 +24,9 @@ use tokio::{
     time,
 };
 use tracing::{debug, error};
-use types::device::device::{
-    CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq,
+use types::{
+    device::device::{CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
+    SearchResp,
 };
 use uuid::Uuid;
 
@@ -41,7 +42,7 @@ struct Coap {
     err: Arc<AtomicBool>,
     conf: Arc<RwLock<Conf>>,
     client: Arc<RwLock<Option<UdpCoAPClient>>>,
-    paths: Vec<Path>,
+    paths: RwLock<Vec<Path>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -59,7 +60,7 @@ pub(crate) fn new(id: Uuid, req: &CreateDeviceReq) -> HaliaResult<Box<dyn Device
         err: Arc::new(AtomicBool::new(false)),
         conf: Arc::new(RwLock::new(conf)),
         client: Arc::new(RwLock::new(None)),
-        paths: vec![],
+        paths: RwLock::new(vec![]),
     }))
 }
 
@@ -147,20 +148,53 @@ impl Device for Coap {
     }
 
     async fn add_path(&mut self, id: Uuid, req: Bytes) -> HaliaResult<()> {
-        let path = path::new(id, req)?;
+        let mut path = path::new(id, req)?;
         if self.on.load(Ordering::SeqCst) {
-            path.run(self.client.clone()).await;
+            path.start(self.client.clone()).await;
         }
-        self.paths.push(path);
+        self.paths.write().await.push(path);
         Ok(())
     }
 
-    async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
+    async fn search_paths(&self, page: usize, size: usize) -> HaliaResult<SearchResp> {
+        let mut data = vec![];
+        let mut i = 0;
+        for path in self.paths.read().await.iter().skip((page - 1) * size) {
+            data.push(json!(path.id));
+            i += 1;
+            if i == size {
+                break;
+            }
+        }
+        Ok(SearchResp {
+            total: self.paths.read().await.len(),
+            data,
+        })
     }
-    async fn update_path(&self, _req: Bytes) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
+
+    async fn update_path(&self, path_id: Uuid, req: Bytes) -> HaliaResult<()> {
+        match self
+            .paths
+            .write()
+            .await
+            .iter_mut()
+            .find(|path| path.id == path_id)
+        {
+            Some(path) => match path.update(req).await {
+                Ok(restart) => {
+                    if self.on.load(Ordering::SeqCst) && !self.err.load(Ordering::SeqCst) && restart
+                    {
+                        path.stop().await;
+                        path.start(self.client.clone()).await;
+                    }
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            },
+            None => Err(HaliaError::NotFound),
+        }
     }
+
     async fn delete_path(&self, _req: Bytes) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }

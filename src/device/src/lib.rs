@@ -9,12 +9,16 @@ use serde::Serialize;
 use std::sync::LazyLock;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
-use types::device::{
+use types::{
     device::{
-        CreateDeviceReq, SearchDeviceItemResp, SearchDeviceResp, SearchSinksResp, UpdateDeviceReq,
+        device::{
+            CreateDeviceReq, SearchDeviceItemResp, SearchDeviceResp, SearchSinksResp,
+            UpdateDeviceReq,
+        },
+        group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
+        point::{CreatePointReq, SearchPointResp, WritePointValueReq},
     },
-    group::{CreateGroupReq, SearchGroupResp, UpdateGroupReq},
-    point::{CreatePointReq, SearchPointResp, WritePointValueReq},
+    SearchResp,
 };
 use uuid::Uuid;
 
@@ -504,9 +508,39 @@ impl DeviceManager {
         {
             Some(device) => {
                 let path_id = Uuid::new_v4();
-                device.add_path(path_id, req).await?;
-                Ok(())
+                device.add_path(path_id, req).await
             }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn search_paths(
+        &self,
+        device_id: Uuid,
+        page: usize,
+        size: usize,
+    ) -> HaliaResult<SearchResp> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.search_paths(page, size).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn update_path(&self, device_id: Uuid, path_id: Uuid, req: Bytes) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.update_path(path_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -799,10 +833,10 @@ trait Device: Sync + Send {
     async fn add_path(&mut self, _id: Uuid, _req: Bytes) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
-    async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<()> {
+    async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<SearchResp> {
         Err(HaliaError::ProtocolNotSupported)
     }
-    async fn update_path(&self, _req: Bytes) -> HaliaResult<()> {
+    async fn update_path(&self, _path_id: Uuid, _req: Bytes) -> HaliaResult<()> {
         Err(HaliaError::ProtocolNotSupported)
     }
     async fn delete_path(&self, _req: Bytes) -> HaliaResult<()> {

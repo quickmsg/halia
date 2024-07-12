@@ -5,10 +5,13 @@ use axum::{
 };
 use common::error::HaliaError;
 use device::GLOBAL_DEVICE_MANAGER;
-use types::device::{
-    device::{SearchDeviceResp, SearchSinksResp},
-    group::SearchGroupResp,
-    point::{CreatePointReq, SearchPointResp, WritePointValueReq},
+use types::{
+    device::{
+        device::{SearchDeviceResp, SearchSinksResp},
+        group::SearchGroupResp,
+        point::{CreatePointReq, SearchPointResp, WritePointValueReq},
+    },
+    SearchResp,
 };
 use uuid::Uuid;
 
@@ -224,6 +227,32 @@ pub async fn add_source(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> 
 
 pub(crate) async fn add_path(Path(device_id): Path<Uuid>, req: Bytes) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER.add_path(device_id, req).await {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn search_paths(
+    Path(device_id): Path<Uuid>,
+    pagination: Query<Pagination>,
+) -> AppResp<SearchResp> {
+    match GLOBAL_DEVICE_MANAGER
+        .search_paths(device_id, pagination.p, pagination.s)
+        .await
+    {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
+}
+
+pub(crate) async fn update_path(
+    Path((device_id, path_id)): Path<(Uuid, Uuid)>,
+    req: Bytes,
+) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER
+        .update_path(device_id, path_id, req)
+        .await
+    {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
