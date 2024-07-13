@@ -4,7 +4,7 @@ use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
 use std::{
     sync::{
-        atomic::{AtomicU16, Ordering},
+        atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
     },
     time::{Duration, Instant},
@@ -53,7 +53,7 @@ impl Group {
         })
     }
 
-    pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>) {
+    pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>, err: Arc<AtomicBool>) {
         let (tx, mut rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(tx);
         let interval = self.interval;
@@ -69,8 +69,10 @@ impl Group {
                     }
 
                     _ = interval.tick() => {
-                        if let Err(e) = read_tx.send(group_id).await {
-                            debug!("group send point info err :{}", e);
+                        if !err.load(Ordering::SeqCst) {
+                            if let Err(e) = read_tx.send(group_id).await {
+                                debug!("group send point info err :{}", e);
+                            }
                         }
                     }
                 }

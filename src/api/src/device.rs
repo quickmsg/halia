@@ -60,8 +60,11 @@ pub(crate) async fn delete_device(Path(device_id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn create_group(Path(device_id): Path<Uuid>, req: String) -> AppResp<()> {
-    match GLOBAL_DEVICE_MANAGER.create_group(device_id, req).await {
+pub(crate) async fn create_group(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER
+        .create_group(device_id, None, data)
+        .await
+    {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }

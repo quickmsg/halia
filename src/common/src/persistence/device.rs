@@ -74,7 +74,6 @@ pub async fn insert_modbus_device(device_id: &Uuid, data: &String) -> Result<(),
     insert_device(device_id, data).await?;
     let base_dir = get_dir().join(device_id.to_string());
     super::create_file(base_dir.join("groups")).await?;
-    super::create_file(base_dir.join("sources")).await?;
     super::create_file(base_dir.join("sinks")).await
 }
 

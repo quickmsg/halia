@@ -35,27 +35,6 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    async fn do_create_group(
-        &self,
-        device_id: Uuid,
-        group_id: Uuid,
-        req: CreateGroupReq,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                device.create_group(group_id, &req).await?;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
     async fn do_create_point(
         &self,
         device_id: Uuid,
@@ -230,14 +209,33 @@ impl DeviceManager {
         Ok(())
     }
 
-    pub async fn create_group(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
-        let group_id = Uuid::new_v4();
-        let create_group_req: CreateGroupReq = serde_json::from_str(&data)?;
-        self.do_create_group(device_id, group_id, create_group_req)
-            .await?;
-        // TODO 插入失败删除group
-        // persistence::device::insert_group(&device_id, &group_id, &req).await?;
-        Ok(())
+    pub async fn create_group(
+        &self,
+        device_id: Uuid,
+        group_id: Option<Uuid>,
+        data: String,
+    ) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => {
+                let (group_id, new) = match group_id {
+                    Some(group_id) => (group_id, false),
+                    None => (Uuid::new_v4(), true),
+                };
+                let create_group_req: CreateGroupReq = serde_json::from_str(&data)?;
+                device.create_group(group_id, &create_group_req).await?;
+                if new {
+                    persistence::device::insert_group(&device_id, &group_id, &data).await?;
+                }
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn search_groups(
@@ -651,9 +649,8 @@ impl DeviceManager {
             }
         };
 
-        for (group_id, req) in groups {
-            let req: CreateGroupReq = serde_json::from_str(&req)?;
-            if let Err(e) = self.do_create_group(device_id, group_id, req).await {
+        for (group_id, data) in groups {
+            if let Err(e) = self.create_group(device_id, Some(group_id), data).await {
                 error!(
                     "create device:{} group:{:?} err:{} ",
                     device_id, group_id, e

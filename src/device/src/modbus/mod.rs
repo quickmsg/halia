@@ -65,12 +65,6 @@ struct Modbus {
     sink_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
-#[derive(Debug)]
-enum Command {
-    Stop,
-    Update,
-}
-
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
 struct Conf {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -233,7 +227,8 @@ impl Device for Modbus {
         if self.conf != update_conf {
             self.conf = update_conf;
             if self.on.load(Ordering::SeqCst) {
-                // restart
+                self.stop().await;
+                self.start().await;
             }
         }
 
@@ -257,7 +252,7 @@ impl Device for Modbus {
             Ok(mut group) => {
                 if self.on.load(Ordering::SeqCst) {
                     let read_tx = self.read_tx.as_ref().unwrap().clone();
-                    group.start(read_tx);
+                    group.start(read_tx, self.err.clone());
                 }
                 self.groups.write().await.push(group);
 
@@ -300,42 +295,37 @@ impl Device for Modbus {
             return;
         }
 
-        let (signal_tx, signal_rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(signal_tx);
+        debug!("设备开启");
 
-        let (read_tx, read_rx) = mpsc::channel::<Uuid>(20);
+        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+        let (read_tx, mut read_rx) = mpsc::channel::<Uuid>(16);
         self.read_tx = Some(read_tx);
-
-        let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
+        let (write_tx, mut write_rx) = mpsc::channel::<WritePointEvent>(16);
         self.write_tx = Some(write_tx);
 
         let conf = self.conf.clone();
         let groups = self.groups.clone();
-        let err = self.err.clone();
         let on = self.on.clone();
+        let err = self.err.clone();
         let rtt = self.rtt.clone();
         tokio::spawn(async move {
             loop {
-                err.store(true, Ordering::SeqCst);
                 match Modbus::get_context(&conf).await {
-                    Ok((ctx, interval)) => {
+                    Ok((mut ctx, interval)) => {
                         err.store(false, Ordering::SeqCst);
                         loop {
                             select! {
                                 biased;
-                                command = signal_rx.recv() => {
-                                    if let Some(command) = command {
-                                        match command {
-                                            Command::Stop => return,
-                                            Command::Update => return,
-                                        }
-                                    }
+                                _ = stop_signal_rx.recv() => {
+                                    return
                                 }
 
                                 wpe = write_rx.recv() => {
                                     if let Some(wpe) = wpe {
                                         match write_value(&mut ctx, wpe).await {
                                             Ok(_) => {}
+                                            // TODO 识别连接断开
                                             Err(_) => {}
                                         }
                                     }
@@ -346,15 +336,16 @@ impl Device for Modbus {
 
                                 group_id = read_rx.recv() => {
                                    if let Some(group_id) = group_id {
-                                        if let Err(_) = read_group_points(&mut ctx, &groups, group_id, interval, rtt).await {
-                                           return
+                                        if let Err(_) = read_group_points(&mut ctx, &groups, group_id, interval, &rtt).await {
+                                           err.store(true, Ordering::SeqCst);
+                                           break
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    Err(_) => error!("连接失败"),
+                    Err(_) => debug!("modbus尝试连接失败"),
                 }
 
                 if !on.load(Ordering::SeqCst) {
@@ -367,7 +358,7 @@ impl Device for Modbus {
 
         for group in self.groups.write().await.iter_mut() {
             let read_tx = self.read_tx.as_ref().unwrap().clone();
-            group.start(read_tx);
+            group.start(read_tx, self.err.clone());
         }
     }
 
@@ -379,18 +370,19 @@ impl Device for Modbus {
             return;
         }
 
+        debug!("设备停止");
+
         for group in self.groups.write().await.iter_mut() {
             group.stop().await;
         }
-
         self.stop_signal_tx
             .as_ref()
             .unwrap()
             .send(())
             .await
             .unwrap();
-        self.stop_signal_tx = None;
 
+        self.stop_signal_tx = None;
         self.read_tx = None;
         self.write_tx = None;
     }
@@ -436,7 +428,7 @@ impl Device for Modbus {
                 Ok(restart) => {
                     if restart && self.on.load(Ordering::SeqCst) {
                         group.stop().await;
-                        group.start(self.read_tx.as_ref().unwrap().clone());
+                        group.start(self.read_tx.as_ref().unwrap().clone(), self.err.clone());
                     }
                     Ok(())
                 }
@@ -641,50 +633,6 @@ impl Device for Modbus {
                 // self.sink_manager
                 //     .run(rx, self.write_tx.as_ref().unwrap().clone());
                 Ok(tx_clone)
-            }
-        }
-    }
-}
-
-async fn run_event_loop(
-    mut ctx: Context,
-    rtt: &Arc<AtomicU16>,
-    signal_rx: &mut mpsc::Receiver<Command>,
-    write_rx: &mut mpsc::Receiver<WritePointEvent>,
-    read_rx: &mut mpsc::Receiver<Uuid>,
-    groups: Arc<RwLock<Vec<Group>>>,
-    interval: u64,
-) {
-    loop {
-        select! {
-            biased;
-            command = signal_rx.recv() => {
-                if let Some(command) = command {
-                    match command {
-                        Command::Stop => return,
-                        Command::Update => return,
-                    }
-                }
-            }
-
-            wpe = write_rx.recv() => {
-                if let Some(wpe) = wpe {
-                    match write_value(&mut ctx, wpe).await {
-                        Ok(_) => {}
-                        Err(_) => {}
-                    }
-                }
-                if interval > 0 {
-                    time::sleep(Duration::from_millis(interval)).await;
-                }
-            }
-
-            group_id = read_rx.recv() => {
-               if let Some(group_id) = group_id {
-                    if let Err(_) = read_group_points(&mut ctx, &groups, group_id, interval, rtt).await {
-                       return
-                    }
-                }
             }
         }
     }
