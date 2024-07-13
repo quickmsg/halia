@@ -14,7 +14,6 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
-async-trait = { workspace = true }
 message = { workspace = true }
 protocol = { workspace = true }
 byteorder = "1.5.0"

@@ -83,50 +83,8 @@ fn device_routes() -> Router {
     Router::new().nest(
         "/device",
         Router::new()
-            // .route("/", post(device::create_device))
             .route("/", get(device::search_devices))
-            .nest("/", modbus_routes())
-            // .route("/:device_id/start", put(device::start_device))
-            // .route("/:device_id/stop", put(device::stop_device))
-            // .route("/:device_id", put(device::update_device))
-            // .route("/:device_id", delete(device::delete_device))
-            // .nest("/:device_id", modbus_routes())
-            .nest(
-                "/:device_id/group",
-                Router::new()
-                    .route("/", post(device::create_group))
-                    .route("/search", get(device::search_group))
-                    .route("/:group_id", put(device::update_group))
-                    .route("/:group_id", delete(device::delete_group))
-                    .nest(
-                        "/:group_id/point",
-                        Router::new()
-                            .route("/", post(device::create_point))
-                            .route("/search", get(device::search_point))
-                            .route("/:point_id", put(device::update_point))
-                            .route("/:point_id/value", put(device::write_point))
-                            .route("/", delete(device::delete_points)),
-                    ),
-            )
-            .nest(
-                "/:device_id/path",
-                Router::new()
-                    .route("/", post(device::create_path))
-                    .route("/", get(device::search_paths))
-                    .route("/:path_id", put(device::update_path)),
-            )
-            .nest(
-                "/:device_id/sink",
-                Router::new()
-                    .route("/", post(device::create_sink))
-                    .route("/search", get(device::search_sinks))
-                    .route("/:sink_id", put(device::update_sink))
-                    .route("/:sink_id", delete(device::delete_sink)),
-            )
-            .nest(
-                "/:device_id/source",
-                Router::new().route("/", post(device::add_source)),
-            ),
+            .nest("/", modbus_routes()),
     )
 }
 

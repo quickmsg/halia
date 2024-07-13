@@ -94,7 +94,8 @@ impl Group {
         self.stop_signal_tx = None;
     }
 
-    pub fn update(&mut self, req: &UpdateGroupReq) -> HaliaResult<bool> {
+    pub fn update(&mut self, data: String) -> HaliaResult<bool> {
+        let req: UpdateGroupReq = serde_json::from_str(&data)?;
         self.name = req.name.clone();
         self.interval = req.interval;
         Ok(true)
@@ -153,7 +154,7 @@ impl Group {
         }
     }
 
-    pub async fn update_point(&self, point_id: Uuid, req: &CreatePointReq) -> HaliaResult<()> {
+    pub async fn update_point(&self, point_id: Uuid, data: String) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -161,7 +162,7 @@ impl Group {
             .iter_mut()
             .find(|point| point.id == point_id)
         {
-            Some(point) => point.update(req).await,
+            Some(point) => point.update(data).await,
             None => return Err(HaliaError::NotFound),
         }
     }
@@ -170,7 +171,7 @@ impl Group {
         self.points.read().await.len()
     }
 
-    pub async fn delete_points(&self, ids: &Vec<Uuid>) {
+    pub async fn delete_points(&self, ids: Vec<Uuid>) {
         self.points
             .write()
             .await
@@ -211,8 +212,9 @@ impl Group {
     pub async fn get_write_point_event(
         &self,
         point_id: Uuid,
-        value: serde_json::Value,
+        value: String,
     ) -> HaliaResult<WritePointEvent> {
+        let value: serde_json::Value = serde_json::from_str(&value)?;
         match self
             .points
             .read()

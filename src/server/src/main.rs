@@ -13,7 +13,7 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
+    // GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
     GLOBAL_APP_MANAGER.recover().await.unwrap();
     GLOBAL_RULE_MANAGER.recover().await.unwrap();
 

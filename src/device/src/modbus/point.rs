@@ -55,7 +55,8 @@ impl Point {
         })
     }
 
-    pub async fn update(&mut self, req: &CreatePointReq) -> HaliaResult<()> {
+    pub async fn update(&mut self, data: String) -> HaliaResult<()> {
+        let req: CreatePointReq = serde_json::from_str(&data)?;
         let conf: Conf = serde_json::from_value(req.conf.clone())?;
         self.quantity = conf.r#type.get_quantity();
         self.conf = conf;

@@ -15,8 +15,8 @@ use uuid::Uuid;
 pub mod apps;
 pub mod device;
 pub mod message;
-pub mod rule;
 pub mod modbus;
+pub mod rule;
 
 static ROOT_DIR: &str = "storage";
 static DEVICE_DIR: &str = "devices";
@@ -50,6 +50,13 @@ impl Display for Status {
 }
 
 async fn insert(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
+    let mut file = OpenOptions::new().append(true).open(path).await?;
+    file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
+        .await?;
+    file.flush().await
+}
+
+async fn create(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().append(true).open(path).await?;
     file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
         .await?;

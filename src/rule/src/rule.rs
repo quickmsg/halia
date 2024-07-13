@@ -59,14 +59,15 @@ impl Rule {
                         let source: CreateRuleSource = serde_json::from_value(node.conf.clone())?;
                         debug!("{:?}", source);
                         let receiver = match source.r#type {
-                            types::rule::CreateRuleSourceType::Device => GLOBAL_DEVICE_MANAGER
-                                .subscribe(&source.id, &source.source_id.unwrap())
-                                .await
-                                .unwrap(),
+                            // types::rule::CreateRuleSourceType::Device => GLOBAL_DEVICE_MANAGER
+                            //     .subscribe(&source.id, &source.source_id.unwrap())
+                            //     .await
+                            //     .unwrap(),
                             types::rule::CreateRuleSourceType::App => GLOBAL_APP_MANAGER
                                 .subscribe(&source.id, source.source_id)
                                 .await
                                 .unwrap(),
+                                _ => todo!(),
                         };
                         receivers.insert(info.first_id, vec![receiver]);
                     }
@@ -127,14 +128,15 @@ impl Rule {
                                     let sink: CreateRuleSink =
                                         serde_json::from_value(node.conf.clone())?;
                                     let tx = match sink.r#type {
-                                        CreateRuleSinkType::Device => GLOBAL_DEVICE_MANAGER
-                                            .publish(&sink.id, &sink.sink_id.unwrap())
-                                            .await
-                                            .unwrap(),
+                                        // CreateRuleSinkType::Device => GLOBAL_DEVICE_MANAGER
+                                        //     .publish(&sink.id, &sink.sink_id.unwrap())
+                                        //     .await
+                                        //     .unwrap(),
                                         CreateRuleSinkType::App => GLOBAL_APP_MANAGER
                                             .publish(&sink.id, &sink.sink_id)
                                             .await
                                             .unwrap(),
+                                        _ => todo!(),
                                     };
 
                                     tokio::spawn(async move {
