@@ -29,11 +29,14 @@ use tokio::{
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, warn};
-use types::device::{
-    datatype::{DataType, Endian},
-    device::{CreateDeviceReq, Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
-    group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
-    point::{CreatePointReq, SearchPointResp},
+use types::{
+    apps::SearchSinkResp,
+    device::{
+        datatype::{DataType, Endian},
+        device::{CreateDeviceReq, Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
+        group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
+        point::{CreatePointReq, SearchPointResp},
+    },
 };
 use uuid::Uuid;
 
@@ -554,6 +557,22 @@ impl Modbus {
             Some(group) => Ok(group.delete_points(point_ids).await),
             None => Err(HaliaError::NotFound),
         }
+    }
+
+    pub async fn create_sink(&mut self, sink_id: Option<Uuid>, data: String) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
+        todo!()
+    }
+
+    pub async fn update_sink(&mut self, sink_id: Uuid, data: String) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+        todo!()
     }
 
     async fn recover(&mut self, status: Status) -> HaliaResult<()> {
