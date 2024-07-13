@@ -16,6 +16,7 @@ pub mod apps;
 pub mod device;
 pub mod message;
 pub mod rule;
+pub mod modbus;
 
 static ROOT_DIR: &str = "storage";
 static DEVICE_DIR: &str = "devices";

@@ -37,7 +37,13 @@ pub struct Group {
 }
 
 impl Group {
-    pub fn new(group_id: Uuid, conf: &CreateGroupReq) -> Result<Self> {
+    pub fn new(group_id: Option<Uuid>, data: String) -> Result<Self> {
+        let group_id = match group_id {
+            Some(group_id) => group_id,
+            None => Uuid::new_v4(),
+        };
+
+        let conf: CreateGroupReq = serde_json::from_str(&data)?;
         if conf.interval == 0 {
             bail!("group interval must > 0")
         }
@@ -113,7 +119,8 @@ impl Group {
         }
     }
 
-    pub async fn create_point(&self, point_id: Uuid, req: CreatePointReq) -> HaliaResult<()> {
+    pub async fn create_point(&self, point_id: Option<Uuid>, data: String) -> HaliaResult<()> {
+        let req: CreatePointReq = serde_json::from_str(&data)?;
         let point = Point::new(req.clone(), point_id)?;
         self.points.write().await.push(point);
         Ok(())

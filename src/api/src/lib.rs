@@ -173,11 +173,15 @@ fn modbus_routes() -> Router {
         "/modbus",
         Router::new()
             .route("/", post(modbus::create))
+            .route("/:device_id", put(modbus::update))
+            .route("/:device_id/start", put(modbus::start))
+            .route("/:device_id/stop", put(modbus::stop))
+            .route("/:device_id/delete", delete(modbus::delete))
             .nest(
-                "/group",
+                "/:device_id/group",
                 Router::new()
                     .route("/", post(modbus::create_group))
-                    .route("/search", get(modbus::search_groups))
+                    .route("/", get(modbus::search_groups))
                     .route("/:group_id", put(modbus::update_group))
                     .route("/:group_id", delete(modbus::delete_group))
                     .nest(

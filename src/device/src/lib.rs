@@ -44,7 +44,7 @@ impl DeviceManager {
         let mut total = 0;
         let mut err_cnt = 0;
         let mut close_cnt = 0;
-        for (r#type, device_id) in self.devices.read().await.iter().skip((page - 1) * size) {
+        for (r#type, device_id) in self.devices.read().await.iter().rev() {
             match r#type {
                 &modbus::TYPE => {
                     match self
@@ -87,23 +87,14 @@ impl DeviceManager {
 // for modbus
 impl DeviceManager {
     pub async fn modbus_create(&self, device_id: Option<Uuid>, data: String) -> HaliaResult<()> {
-        let (device_id, new) = match device_id {
-            Some(device_id) => (device_id, false),
-            None => (Uuid::new_v4(), true),
-        };
-        match modbus::new(device_id, &data) {
+        match modbus::new(device_id, &data).await {
             Ok(device) => {
-                self.devices.write().await.push((modbus::TYPE, device_id));
+                self.devices.write().await.push((modbus::TYPE, device.id));
                 self.modbus_devices.write().await.push(device);
                 Ok(())
-                // TODO 持久化
             }
             Err(e) => Err(e),
         }
-    }
-
-    pub async fn modbus_search(&self, device_id: Uuid) -> HaliaResult<()> {
-        todo!()
     }
 
     pub async fn modbus_update(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
@@ -111,7 +102,19 @@ impl DeviceManager {
     }
 
     pub async fn modbus_start(&self, device_id: Uuid) -> HaliaResult<()> {
-        todo!()
+        match self
+            .modbus_devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.id == device_id)
+        {
+            Some(device) => {
+                device.start().await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn modbus_stop(&self, device_id: Uuid) -> HaliaResult<()> {
@@ -128,7 +131,16 @@ impl DeviceManager {
         group_id: Option<Uuid>,
         data: String,
     ) -> HaliaResult<()> {
-        todo!()
+        match self
+            .modbus_devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.id == device_id)
+        {
+            Some(device) => device.create_group(group_id, data).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn modbus_search_groups(
@@ -150,6 +162,35 @@ impl DeviceManager {
     }
 
     pub async fn modbus_delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_create_group_point(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        point_id: Option<Uuid>,
+        data: String,
+    ) -> HaliaResult<()> {
+        match self
+            .modbus_devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.id == device_id)
+        {
+            Some(device) => device.create_group_point(group_id, point_id, data).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn modbus_search_group_points(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        page: usize,
+        size: usize,
+    ) -> HaliaResult<()> {
         todo!()
     }
 }
@@ -371,20 +412,16 @@ impl DeviceManager {
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchGroupResp> {
-        // match self
-        //     .devices
-        //     .read()
-        //     .await
-        //     .iter()
-        //     .find(|device| device.get_id() == device_id)
-        // {
-        //     Some(device) => {
-        //         todo!()
-        //         // device.search_groups(page, size).await;
-        //     }
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
+        match self
+            .modbus_devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.id == device_id)
+        {
+            Some(device) => device.search_groups(page, size).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn update_group(

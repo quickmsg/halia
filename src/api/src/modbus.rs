@@ -24,9 +24,28 @@ pub async fn create(data: String) -> AppResp<()> {
     }
 }
 
+pub async fn update(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
+    todo!()
+}
+
+pub async fn start(Path(device_id): Path<Uuid>) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.modbus_start(device_id).await {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub async fn stop(Path(device_id): Path<Uuid>) -> AppResp<()> {
+    todo!()
+}
+
+pub async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
+    todo!()
+}
+
 pub async fn create_group(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
-        .create_group(device_id, None, data)
+        .modbus_create_group(device_id, None, data)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -72,10 +91,10 @@ pub(crate) async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>
 
 pub(crate) async fn create_group_point(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    req: String,
+    data: String,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
-        .create_point(device_id, group_id, req)
+        .modbus_create_group_point(device_id, group_id, None, data)
         .await
     {
         Ok(()) => AppResp::new(),

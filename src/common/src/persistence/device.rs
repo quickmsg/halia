@@ -17,11 +17,19 @@ static GROUP_FILE: &str = "groups";
 static SINK_FILE: &str = "sinks";
 static POINT_FILE: &str = "points";
 
-fn get_dir() -> PathBuf {
+pub(crate) fn get_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(super::DEVICE_DIR)
 }
 
-fn get_device_file() -> PathBuf {
+pub(crate) fn get_device_dir() -> PathBuf {
+    Path::new(super::ROOT_DIR).join(super::DEVICE_DIR)
+}
+
+pub(crate) fn get_device_file() -> PathBuf {
+    get_dir().join(DEVICE_FILE)
+}
+
+pub(crate) fn get_device_file_path() -> PathBuf {
     get_dir().join(DEVICE_FILE)
 }
 

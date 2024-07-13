@@ -39,11 +39,15 @@ pub struct Conf {
 }
 
 impl Point {
-    pub fn new(req: CreatePointReq, id: Uuid) -> HaliaResult<Point> {
+    pub fn new(req: CreatePointReq, id: Option<Uuid>) -> HaliaResult<Point> {
+        let point_id = match id {
+            Some(id) => id,
+            None => Uuid::new_v4(),
+        };
         let conf: Conf = serde_json::from_value(req.conf)?;
         let quantity = conf.r#type.get_quantity();
         Ok(Point {
-            id,
+            id: point_id,
             conf,
             name: req.name,
             quantity,
