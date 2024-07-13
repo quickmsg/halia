@@ -14,7 +14,7 @@ use tokio::{
     sync::{broadcast, mpsc, RwLock},
     time,
 };
-use tracing::{debug, error};
+use tracing::debug;
 use types::device::{
     group::{CreateGroupReq, UpdateGroupReq},
     point::{CreatePointReq, SearchPointItemResp, SearchPointResp},
@@ -34,15 +34,6 @@ pub struct Group {
     pub desc: Option<String>,
 
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
-}
-
-#[derive(Clone)]
-pub(crate) enum Command {
-    Stop(Uuid),
-    Pause,
-    Restart,
-    Update(Uuid, u64),
-    StopAll,
 }
 
 impl Group {

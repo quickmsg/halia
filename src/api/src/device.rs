@@ -203,10 +203,10 @@ pub async fn search_sinks(
 
 pub async fn update_sink(
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
-    req: Bytes,
+    data: String,
 ) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
-        .update_sink(device_id, sink_id, req)
+        .update_sink(device_id, sink_id, data)
         .await
     {
         Ok(_) => AppResp::new(),

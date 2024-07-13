@@ -433,7 +433,7 @@ impl Device for OpcUa {
         todo!()
     }
 
-    async fn create_sink(&self, sink_id: Uuid, req: &String) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: Uuid, req: &String) -> HaliaResult<()> {
         todo!()
     }
 
@@ -441,11 +441,11 @@ impl Device for OpcUa {
         todo!()
     }
 
-    async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
+    async fn update_sink(&mut self, sink_id: Uuid, req: &String) -> HaliaResult<()> {
         todo!()
     }
 
-    async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()> {
+    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 

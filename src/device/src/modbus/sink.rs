@@ -10,80 +10,18 @@ use uuid::Uuid;
 
 use super::{point::Area, WritePointEvent};
 
-#[derive(Debug)]
-pub struct SinkManager {
-    sinks: RwLock<Vec<Sink>>,
-}
-
-pub fn new() -> SinkManager {
-    SinkManager {
-        sinks: RwLock::new(vec![]),
-    }
-}
-
-impl SinkManager {
-    pub async fn create_sink(&self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
-        let sink = Sink::new(sink_id, data)?;
-        self.sinks.write().await.push(sink);
-        Ok(())
-    }
-
-    pub async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
-        let mut data = vec![];
-        let mut i = 0;
-        for sink in self.sinks.read().await.iter().rev().skip((page - 1) * size) {
-            data.push(sink.get_info().await);
-            i += 1;
-            if i >= size {
-                break;
-            }
-        }
-        SearchSinksResp {
-            total: self.sinks.read().await.len(),
-            data,
-        }
-    }
-
-    pub async fn update_sink(&self, sink_id: Uuid, conf: SinkConf) -> HaliaResult<()> {
-        match self
-            .sinks
-            .write()
-            .await
-            .iter_mut()
-            .find(|sink| sink.id == sink_id)
-        {
-            Some(sink) => {
-                // let mut points = vec![];
-                // for point_conf in &conf.points {
-                //     let point = Point::new(point_conf)?;
-                //     points.push(point);
-                // }
-                // *sink.points.write().await = points;
-                // sink.conf = conf;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()> {
-        self.sinks.write().await.retain(|sink| sink.id != sink_id);
-        Ok(())
-    }
-
-    pub async fn create_point(&self, sink_id: Uuid, data: String) -> HaliaResult<()> {
-        match self
-            .sinks
-            .write()
-            .await
-            .iter_mut()
-            .find(|sink| sink.id == sink_id)
-        {
-            Some(sink) => sink.create_point(data),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-}
+// pub async fn create_point(&self, sink_id: Uuid, data: String) -> HaliaResult<()> {
+//     match self
+//         .sinks
+//         .write()
+//         .await
+//         .iter_mut()
+//         .find(|sink| sink.id == sink_id)
+//     {
+//         Some(sink) => sink.create_point(data),
+//         None => Err(HaliaError::NotFound),
+//     }
+// }
 
 #[derive(Debug)]
 pub struct Sink {
