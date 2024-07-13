@@ -29,7 +29,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 use types::device::{
     datatype::{DataType, Endian},
     device::{CreateDeviceReq, Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
@@ -62,7 +62,6 @@ struct Modbus {
     ref_cnt: usize,
 
     sinks: Vec<Sink>,
-    sink_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
@@ -145,7 +144,6 @@ pub fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
         write_tx: None,
         ref_cnt: 0,
         sinks: vec![],
-        sink_tx: None,
         stop_signal_tx: None,
     }))
 }
@@ -605,35 +603,36 @@ impl Device for Modbus {
         Ok(())
     }
 
-    // async fn create_sink(&self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
-    //     self.sink_manager.create_sink(sink_id, data).await
-    // }
+    async fn create_sink_item(
+        &mut self,
+        sink_id: Uuid,
+        item_id: Uuid,
+        data: &String,
+    ) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => match sink.create_point(item_id, data).await {
+                Ok(_) => {
+                    sink.stop().await;
+                    sink.start(self.write_tx.as_ref().unwrap().clone());
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            },
+            None => Err(HaliaError::NotFound),
+        }
+    }
 
-    // async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
-    //     self.sink_manager.search_sinks(page, size).await
-    // }
-
-    // async fn update_sink(&self, sink_id: Uuid, req: &Bytes) -> HaliaResult<()> {
-    //     let conf: SinkConf = serde_json::from_slice(req)?;
-    //     self.sink_manager.update_sink(sink_id, conf).await
-    // }
-
-    // async fn delete_sink(&self, sink_id: Uuid) -> HaliaResult<()> {
-    //     self.sink_manager.delete_sink(sink_id).await
-    // }
-
-    // TODO
     async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match &self.sink_tx {
-            Some(tx) => return Ok(tx.clone()),
-            None => {
-                let (tx, rx) = mpsc::channel::<MessageBatch>(16);
-                let tx_clone = tx.clone();
-                self.sink_tx = Some(tx);
-                // self.sink_manager
-                //     .run(rx, self.write_tx.as_ref().unwrap().clone());
-                Ok(tx_clone)
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => {
+                if sink.on.load(Ordering::SeqCst) {
+                    sink.start(self.write_tx.as_ref().unwrap().clone());
+                    sink.publish()
+                } else {
+                    Err(HaliaError::NotFound)
+                }
             }
+            None => Err(HaliaError::NotFound),
         }
     }
 }

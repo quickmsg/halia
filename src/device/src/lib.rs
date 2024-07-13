@@ -877,7 +877,23 @@ trait Device: Sync + Send {
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
     async fn update_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()>;
-    // async fn create_sink_item(&mut self, sink_id: Uuid, item_id: Uuid, data: &String) -> HaliaResult<()>;
+    async fn create_sink_item(
+        &mut self,
+        sink_id: Uuid,
+        item_id: Uuid,
+        data: &String,
+    ) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn search_sink_items(&self, _page: usize, _size: usize) -> HaliaResult<()> {
+        Err(HaliaError::ProtocolNotSupported)
+    }
+    async fn update_sink_item(&mut self, sink_id: Uuid, item_id: &String) -> HaliaResult<()> {
+        Err(HaliaError::DevicePointNotSupportWriteMethod)
+    }
+    async fn delete_sink_items(&mut self, sink_id: Uuid, item_ids: Vec<Uuid>) -> HaliaResult<()> {
+        Err(HaliaError::DevicePointNotSupportWriteMethod)
+    }
 
     async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }
