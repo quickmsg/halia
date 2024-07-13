@@ -22,9 +22,9 @@ use types::{
 };
 use uuid::Uuid;
 
-mod coap;
+// mod coap;
 mod modbus;
-mod opcua;
+// mod opcua;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
     devices: RwLock::new(vec![]),
@@ -50,8 +50,9 @@ impl DeviceManager {
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => {
-                device.create_point(group_id, point_id, req).await?;
-                Ok(())
+                todo!()
+                // device.create_point(group_id, point_id, req).await?;
+                // Ok(())
             }
             None => Err(HaliaError::NotFound),
         }
@@ -73,14 +74,14 @@ impl DeviceManager {
                 }
                 Ok(device)
             }
-            opcua::TYPE => opcua::new(device_id, req),
-            coap::TYPE => {
-                let device = coap::new(device_id, req)?;
-                if new {
-                    persistence::device::insert_coap_device(&device_id, &data).await?;
-                }
-                Ok(device)
-            }
+            // opcua::TYPE => opcua::new(device_id, req),
+            // coap::TYPE => {
+            //     let device = coap::new(device_id, req)?;
+            //     if new {
+            //         persistence::device::insert_coap_device(&device_id, &data).await?;
+            //     }
+            //     Ok(device)
+            // }
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
@@ -228,7 +229,7 @@ impl DeviceManager {
                     None => (Uuid::new_v4(), true),
                 };
                 let create_group_req: CreateGroupReq = serde_json::from_str(&data)?;
-                device.create_group(group_id, &create_group_req).await?;
+                // device.create_group(group_id, &create_group_req).await?;
                 if new {
                     persistence::device::insert_group(&device_id, &group_id, &data).await?;
                 }
@@ -251,7 +252,10 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.search_groups(page, size).await,
+            Some(device) => {
+                todo!()
+                // device.search_groups(page, size).await;
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -271,7 +275,7 @@ impl DeviceManager {
         {
             Some(device) => {
                 let update_group_req: UpdateGroupReq = serde_json::from_slice(&req)?;
-                device.update_group(group_id, update_group_req).await?;
+                // device.update_group(group_id, update_group_req).await?;
                 persistence::device::update_group(&device_id, &group_id, req).await?;
                 Ok(())
             }
@@ -291,7 +295,7 @@ impl DeviceManager {
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => {
-                device.delete_group(group_id).await?;
+                // device.delete_group(group_id).await?;
                 persistence::device::delete_group(&device_id, &group_id).await?;
                 Ok(())
             }
@@ -334,7 +338,10 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.search_point(group_id, page, size).await,
+            Some(device) => {
+                todo!()
+                //  device.search_point(group_id, page, size).await,
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -353,7 +360,10 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.update_point(group_id, point_id, req).await,
+            Some(device) => {
+                todo!()
+                // device.update_point(group_id, point_id, req).await,
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -373,9 +383,10 @@ impl DeviceManager {
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => {
-                device
-                    .write_point_value(group_id, point_id, req.value)
-                    .await
+                todo!()
+                // device
+                //     .write_point_value(group_id, point_id, req.value)
+                //     .await
             }
             None => Err(HaliaError::NotFound),
         }
@@ -395,7 +406,7 @@ impl DeviceManager {
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => {
-                device.delete_points(&group_id, &point_ids).await?;
+                // device.delete_points(&group_id, &point_ids).await?;
                 let _ = persistence::device::delete_points(&device_id, &group_id, &point_ids).await;
                 Ok(())
             }
@@ -420,7 +431,10 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.create_sink(sink_id, &data).await?,
+            Some(device) => {
+                todo!()
+                // device.create_sink(sink_id, &data).await?,
+            }
             None => return Err(HaliaError::NotFound),
         }
         if new {
@@ -447,7 +461,10 @@ impl DeviceManager {
             .rev()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => Ok(device.search_sinks(page, size).await),
+            Some(device) => {
+                todo!()
+                // Ok(device.search_sinks(page, size).await),
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -466,7 +483,7 @@ impl DeviceManager {
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => {
-                device.update_sink(sink_id, &data).await?;
+                // device.update_sink(sink_id, &data).await?;
                 // persistence::device::update_sink(&device_id, &sink_id, &data).await?;
                 Ok(())
             }
@@ -483,7 +500,7 @@ impl DeviceManager {
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => {
-                device.delete_sink(sink_id).await?;
+                // device.delete_sink(sink_id).await?;
                 persistence::device::delete_sink(&device_id, &sink_id).await?;
                 Ok(())
             }
@@ -498,7 +515,10 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.add_subscription(req).await,
+            Some(device) => {
+                todo!()
+                //  device.add_subscription(req).await,
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -521,7 +541,7 @@ impl DeviceManager {
                     Some(path_id) => (path_id, false),
                     None => (Uuid::new_v4(), true),
                 };
-                device.add_path(path_id, &data).await?;
+                // device.add_path(path_id, &data).await?;
                 if new {
                     persistence::device::insert_coap_path(&device_id, &path_id, &data).await?;
                 }
@@ -545,7 +565,10 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.search_paths(page, size).await,
+            Some(device) => {
+                todo!()
+                //  device.search_paths(page, size).await,
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -558,7 +581,10 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.update_path(path_id, req).await,
+            Some(device) => {
+                todo!()
+                // device.update_path(path_id, req).await,
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -575,8 +601,8 @@ impl DeviceManager {
         let req: CreateDeviceReq = serde_json::from_str(&data)?;
         let resp = match req.r#type.as_str() {
             modbus::TYPE => modbus::new(device_id, req),
-            opcua::TYPE => opcua::new(device_id, req),
-            coap::TYPE => coap::new(device_id, req),
+            // opcua::TYPE => opcua::new(device_id, req),
+            // coap::TYPE => coap::new(device_id, req),
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 
@@ -727,7 +753,10 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == *device_id)
         {
-            Some(device) => device.subscribe(group_id).await,
+            Some(device) => {
+                todo!()
+                // device.subscribe(group_id).await,
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -740,7 +769,10 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.unsubscribe(group_id).await,
+            Some(device) => {
+                todo!()
+                // device.unsubscribe(group_id).await,
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -757,7 +789,10 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == *device_id)
         {
-            Some(device) => device.publish(group_id).await,
+            Some(device) => {
+                todo!()
+                // device.publish(group_id).await,
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -784,116 +819,116 @@ trait Device: Sync + Send {
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()>;
 
     // group
-    async fn create_group(
-        &mut self,
-        _group_id: Uuid,
-        _create_group: &CreateGroupReq,
-    ) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn search_groups(&self, _page: usize, _size: usize) -> HaliaResult<SearchGroupResp> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn update_group(&self, _group_id: Uuid, _req: UpdateGroupReq) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn delete_group(&self, _group_id: Uuid) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
+    // async fn create_group(
+    //     &mut self,
+    //     _group_id: Uuid,
+    //     _create_group: &CreateGroupReq,
+    // ) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn search_groups(&self, _page: usize, _size: usize) -> HaliaResult<SearchGroupResp> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn update_group(&self, _group_id: Uuid, _req: UpdateGroupReq) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn delete_group(&self, _group_id: Uuid) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
 
-    async fn add_subscription(&self, _req: Bytes) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn update_subscription(
-        &self,
-        _subscription_id: Uuid,
-        _req: serde_json::Value,
-    ) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn search_subscriptions(&self, _page: usize, _size: usize) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn delete_subscription(&self, _subscription_id: Uuid) -> HaliaResult<()> {
-        Err(HaliaError::NotFound)
-    }
+    // async fn add_subscription(&self, _req: Bytes) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn update_subscription(
+    //     &self,
+    //     _subscription_id: Uuid,
+    //     _req: serde_json::Value,
+    // ) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn search_subscriptions(&self, _page: usize, _size: usize) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn delete_subscription(&self, _subscription_id: Uuid) -> HaliaResult<()> {
+    //     Err(HaliaError::NotFound)
+    // }
 
     // points
-    async fn create_point(
-        &self,
-        _group_id: Uuid,
-        _point_id: Uuid,
-        _req: CreatePointReq,
-    ) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
+    // async fn create_point(
+    //     &self,
+    //     _group_id: Uuid,
+    //     _point_id: Uuid,
+    //     _req: CreatePointReq,
+    // ) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
 
-    async fn search_point(
-        &self,
-        _group_id: Uuid,
-        _page: usize,
-        _size: usize,
-    ) -> HaliaResult<SearchPointResp> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn update_point(
-        &self,
-        _group_id: Uuid,
-        _point_id: Uuid,
-        _req: &CreatePointReq,
-    ) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn write_point_value(
-        &self,
-        _group_id: Uuid,
-        _point_id: Uuid,
-        _value: serde_json::Value,
-    ) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn delete_points(&self, _group_id: &Uuid, _point_ids: &Vec<Uuid>) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
+    // async fn search_point(
+    //     &self,
+    //     _group_id: Uuid,
+    //     _page: usize,
+    //     _size: usize,
+    // ) -> HaliaResult<SearchPointResp> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn update_point(
+    //     &self,
+    //     _group_id: Uuid,
+    //     _point_id: Uuid,
+    //     _req: &CreatePointReq,
+    // ) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn write_point_value(
+    //     &self,
+    //     _group_id: Uuid,
+    //     _point_id: Uuid,
+    //     _value: serde_json::Value,
+    // ) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn delete_points(&self, _group_id: &Uuid, _point_ids: &Vec<Uuid>) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
 
-    // coap协议
-    async fn add_path(&mut self, _id: Uuid, _data: &String) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<SearchResp> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn update_path(&self, _path_id: Uuid, _req: Bytes) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn delete_path(&self, _req: Bytes) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
+    // // coap协议
+    // async fn add_path(&mut self, _id: Uuid, _data: &String) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn search_paths(&self, _page: usize, _size: usize) -> HaliaResult<SearchResp> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn update_path(&self, _path_id: Uuid, _req: Bytes) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn delete_path(&self, _req: Bytes) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
 
-    async fn subscribe(&mut self, id: &Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
-    async fn unsubscribe(&mut self, id: Uuid) -> HaliaResult<()>;
+    // async fn subscribe(&mut self, id: &Uuid) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+    // async fn unsubscribe(&mut self, id: Uuid) -> HaliaResult<()>;
 
-    async fn create_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()>;
-    async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
-    async fn update_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()>;
-    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()>;
-    async fn create_sink_item(
-        &mut self,
-        sink_id: Uuid,
-        item_id: Uuid,
-        data: &String,
-    ) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn search_sink_items(&self, _page: usize, _size: usize) -> HaliaResult<()> {
-        Err(HaliaError::ProtocolNotSupported)
-    }
-    async fn update_sink_item(&mut self, sink_id: Uuid, item_id: &String) -> HaliaResult<()> {
-        Err(HaliaError::DevicePointNotSupportWriteMethod)
-    }
-    async fn delete_sink_items(&mut self, sink_id: Uuid, item_ids: Vec<Uuid>) -> HaliaResult<()> {
-        Err(HaliaError::DevicePointNotSupportWriteMethod)
-    }
+    // async fn create_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()>;
+    // async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp;
+    // async fn update_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()>;
+    // async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()>;
+    // async fn create_sink_item(
+    //     &mut self,
+    //     sink_id: Uuid,
+    //     item_id: Uuid,
+    //     data: &String,
+    // ) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn search_sink_items(&self, _page: usize, _size: usize) -> HaliaResult<()> {
+    //     Err(HaliaError::ProtocolNotSupported)
+    // }
+    // async fn update_sink_item(&mut self, sink_id: Uuid, item_id: &String) -> HaliaResult<()> {
+    //     Err(HaliaError::DevicePointNotSupportWriteMethod)
+    // }
+    // async fn delete_sink_items(&mut self, sink_id: Uuid, item_ids: Vec<Uuid>) -> HaliaResult<()> {
+    //     Err(HaliaError::DevicePointNotSupportWriteMethod)
+    // }
 
-    async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
+    // async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }

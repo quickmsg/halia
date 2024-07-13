@@ -245,45 +245,45 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {
-        match Group::new(group_id, &req) {
-            Ok(mut group) => {
-                if self.on.load(Ordering::SeqCst) {
-                    let read_tx = self.read_tx.as_ref().unwrap().clone();
-                    group.start(read_tx, self.err.clone());
-                }
-                self.groups.write().await.push(group);
+    // async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {
+    //     match Group::new(group_id, &req) {
+    //         Ok(mut group) => {
+    //             if self.on.load(Ordering::SeqCst) {
+    //                 let read_tx = self.read_tx.as_ref().unwrap().clone();
+    //                 group.start(read_tx, self.err.clone());
+    //             }
+    //             self.groups.write().await.push(group);
 
-                Ok(())
-            }
-            Err(e) => {
-                debug!("{}", e);
-                return Err(HaliaError::ConfErr);
-            }
-        }
-    }
+    //             Ok(())
+    //         }
+    //         Err(e) => {
+    //             debug!("{}", e);
+    //             return Err(HaliaError::ConfErr);
+    //         }
+    //     }
+    // }
 
-    async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()> {
-        if self.on.load(Ordering::SeqCst) {
-            match self
-                .groups
-                .write()
-                .await
-                .iter_mut()
-                .find(|group| group.id == group_id)
-            {
-                Some(group) => group.stop().await,
-                None => return Err(HaliaError::NotFound),
-            }
-        }
+    // async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()> {
+    //     if self.on.load(Ordering::SeqCst) {
+    //         match self
+    //             .groups
+    //             .write()
+    //             .await
+    //             .iter_mut()
+    //             .find(|group| group.id == group_id)
+    //         {
+    //             Some(group) => group.stop().await,
+    //             None => return Err(HaliaError::NotFound),
+    //         }
+    //     }
 
-        self.groups
-            .write()
-            .await
-            .retain(|group| group_id != group.id);
+    //     self.groups
+    //         .write()
+    //         .await
+    //         .retain(|group| group_id != group.id);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     async fn start(&mut self) {
         if let Err(_) = self
@@ -385,256 +385,256 @@ impl Device for Modbus {
         self.write_tx = None;
     }
 
-    async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp> {
-        let mut resps = Vec::new();
-        for group in self
-            .groups
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip(((page - 1) * size) as usize)
-        {
-            resps.push({
-                SearchGroupItemResp {
-                    id: group.id,
-                    name: group.name.clone(),
-                    interval: group.interval,
-                    point_count: group.get_points_num().await as u8,
-                    desc: group.desc.clone(),
-                }
-            });
-            if resps.len() == size as usize {
-                break;
-            }
-        }
-        Ok(SearchGroupResp {
-            total: self.groups.read().await.len(),
-            data: resps,
-        })
-    }
+    // async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp> {
+    //     let mut resps = Vec::new();
+    //     for group in self
+    //         .groups
+    //         .read()
+    //         .await
+    //         .iter()
+    //         .rev()
+    //         .skip(((page - 1) * size) as usize)
+    //     {
+    //         resps.push({
+    //             SearchGroupItemResp {
+    //                 id: group.id,
+    //                 name: group.name.clone(),
+    //                 interval: group.interval,
+    //                 point_count: group.get_points_num().await as u8,
+    //                 desc: group.desc.clone(),
+    //             }
+    //         });
+    //         if resps.len() == size as usize {
+    //             break;
+    //         }
+    //     }
+    //     Ok(SearchGroupResp {
+    //         total: self.groups.read().await.len(),
+    //         data: resps,
+    //     })
+    // }
 
-    async fn update_group(&self, group_id: Uuid, req: UpdateGroupReq) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => match group.update(&req) {
-                Ok(restart) => {
-                    if restart && self.on.load(Ordering::SeqCst) {
-                        group.stop().await;
-                        group.start(self.read_tx.as_ref().unwrap().clone(), self.err.clone());
-                    }
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            },
-            None => Err(HaliaError::NotFound),
-        }
-    }
+    // async fn update_group(&self, group_id: Uuid, req: UpdateGroupReq) -> HaliaResult<()> {
+    //     match self
+    //         .groups
+    //         .write()
+    //         .await
+    //         .iter_mut()
+    //         .find(|group| group.id == group_id)
+    //     {
+    //         Some(group) => match group.update(&req) {
+    //             Ok(restart) => {
+    //                 if restart && self.on.load(Ordering::SeqCst) {
+    //                     group.stop().await;
+    //                     group.start(self.read_tx.as_ref().unwrap().clone(), self.err.clone());
+    //                 }
+    //                 Ok(())
+    //             }
+    //             Err(e) => Err(e),
+    //         },
+    //         None => Err(HaliaError::NotFound),
+    //     }
+    // }
 
-    async fn create_point(
-        &self,
-        group_id: Uuid,
-        point_id: Uuid,
-        req: CreatePointReq,
-    ) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.create_point(point_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
+    // async fn create_point(
+    //     &self,
+    //     group_id: Uuid,
+    //     point_id: Uuid,
+    //     req: CreatePointReq,
+    // ) -> HaliaResult<()> {
+    //     match self
+    //         .groups
+    //         .write()
+    //         .await
+    //         .iter_mut()
+    //         .find(|group| group.id == group_id)
+    //     {
+    //         Some(group) => group.create_point(point_id, req).await,
+    //         None => Err(HaliaError::NotFound),
+    //     }
+    // }
 
-    async fn search_point(
-        &self,
-        group_id: Uuid,
-        page: usize,
-        size: usize,
-    ) -> HaliaResult<SearchPointResp> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => Ok(group.search_points(page, size).await),
-            None => Err(HaliaError::NotFound),
-        }
-    }
+    // async fn search_point(
+    //     &self,
+    //     group_id: Uuid,
+    //     page: usize,
+    //     size: usize,
+    // ) -> HaliaResult<SearchPointResp> {
+    //     match self
+    //         .groups
+    //         .read()
+    //         .await
+    //         .iter()
+    //         .find(|group| group.id == group_id)
+    //     {
+    //         Some(group) => Ok(group.search_points(page, size).await),
+    //         None => Err(HaliaError::NotFound),
+    //     }
+    // }
 
-    async fn update_point(
-        &self,
-        group_id: Uuid,
-        point_id: Uuid,
-        req: &CreatePointReq,
-    ) -> HaliaResult<()> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.update_point(point_id, req).await,
-            None => {
-                debug!("未找到组");
-                Err(HaliaError::NotFound)
-            }
-        }
-    }
+    // async fn update_point(
+    //     &self,
+    //     group_id: Uuid,
+    //     point_id: Uuid,
+    //     req: &CreatePointReq,
+    // ) -> HaliaResult<()> {
+    //     match self
+    //         .groups
+    //         .read()
+    //         .await
+    //         .iter()
+    //         .find(|group| group.id == group_id)
+    //     {
+    //         Some(group) => group.update_point(point_id, req).await,
+    //         None => {
+    //             debug!("未找到组");
+    //             Err(HaliaError::NotFound)
+    //         }
+    //     }
+    // }
 
-    async fn write_point_value(
-        &self,
-        group_id: Uuid,
-        point_id: Uuid,
-        value: serde_json::Value,
-    ) -> HaliaResult<()> {
-        if self.on.load(Ordering::SeqCst) == false {
-            return Err(HaliaError::DeviceStoped);
-        }
-        if self.err.load(Ordering::SeqCst) == true {
-            return Err(HaliaError::DeviceDisconnect);
-        }
+    // async fn write_point_value(
+    //     &self,
+    //     group_id: Uuid,
+    //     point_id: Uuid,
+    //     value: serde_json::Value,
+    // ) -> HaliaResult<()> {
+    //     if self.on.load(Ordering::SeqCst) == false {
+    //         return Err(HaliaError::DeviceStoped);
+    //     }
+    //     if self.err.load(Ordering::SeqCst) == true {
+    //         return Err(HaliaError::DeviceDisconnect);
+    //     }
 
-        match self.get_write_point_event(group_id, point_id, value).await {
-            Ok(wpe) => {
-                let _ = self.write_tx.as_ref().unwrap().send(wpe).await;
-                Ok(())
-            }
-            Err(e) => return Err(HaliaError::IoErr),
-        }
-    }
+    //     match self.get_write_point_event(group_id, point_id, value).await {
+    //         Ok(wpe) => {
+    //             let _ = self.write_tx.as_ref().unwrap().send(wpe).await;
+    //             Ok(())
+    //         }
+    //         Err(e) => return Err(HaliaError::IoErr),
+    //     }
+    // }
 
-    async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == *group_id)
-        {
-            Some(group) => Ok(group.delete_points(point_ids).await),
-            None => Err(HaliaError::NotFound),
-        }
-    }
+    // async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()> {
+    //     match self
+    //         .groups
+    //         .write()
+    //         .await
+    //         .iter_mut()
+    //         .find(|group| group.id == *group_id)
+    //     {
+    //         Some(group) => Ok(group.delete_points(point_ids).await),
+    //         None => Err(HaliaError::NotFound),
+    //     }
+    // }
 
-    async fn subscribe(
-        &mut self,
-        group_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        self.ref_cnt += 1;
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == *group_id)
-        {
-            Some(group) => Ok(group.subscribe()),
-            None => todo!(),
-        }
-    }
+    // async fn subscribe(
+    //     &mut self,
+    //     group_id: &Uuid,
+    // ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+    //     self.ref_cnt += 1;
+    //     match self
+    //         .groups
+    //         .write()
+    //         .await
+    //         .iter_mut()
+    //         .find(|group| group.id == *group_id)
+    //     {
+    //         Some(group) => Ok(group.subscribe()),
+    //         None => todo!(),
+    //     }
+    // }
 
-    async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()> {
-        self.ref_cnt -= 1;
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => Ok(group.unsubscribe()),
-            None => todo!(),
-        }
-    }
+    // async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()> {
+    //     self.ref_cnt -= 1;
+    //     match self
+    //         .groups
+    //         .write()
+    //         .await
+    //         .iter_mut()
+    //         .find(|group| group.id == group_id)
+    //     {
+    //         Some(group) => Ok(group.unsubscribe()),
+    //         None => todo!(),
+    //     }
+    // }
 
-    async fn create_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
-        let sink = Sink::new(sink_id, data)?;
-        self.sinks.push(sink);
-        Ok(())
-    }
+    // async fn create_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
+    //     let sink = Sink::new(sink_id, data)?;
+    //     self.sinks.push(sink);
+    //     Ok(())
+    // }
 
-    async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
-        let mut data = vec![];
-        let mut i = 0;
-        for sink in self.sinks.iter().rev().skip((page - 1) * size) {
-            data.push(sink.get_info().await);
-            i += 1;
-            if i >= size {
-                break;
-            }
-        }
-        SearchSinksResp {
-            total: self.sinks.len(),
-            data,
-        }
-    }
+    // async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
+    //     let mut data = vec![];
+    //     let mut i = 0;
+    //     for sink in self.sinks.iter().rev().skip((page - 1) * size) {
+    //         data.push(sink.get_info().await);
+    //         i += 1;
+    //         if i >= size {
+    //             break;
+    //         }
+    //     }
+    //     SearchSinksResp {
+    //         total: self.sinks.len(),
+    //         data,
+    //     }
+    // }
 
-    async fn update_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => {
-                // let mut points = vec![];
-                // for point_conf in &conf.points {
-                //     let point = Point::new(point_conf)?;
-                //     points.push(point);
-                // }
-                // *sink.points.write().await = points;
-                // sink.conf = conf;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
-    }
+    // async fn update_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
+    //     match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+    //         Some(sink) => {
+    //             // let mut points = vec![];
+    //             // for point_conf in &conf.points {
+    //             //     let point = Point::new(point_conf)?;
+    //             //     points.push(point);
+    //             // }
+    //             // *sink.points.write().await = points;
+    //             // sink.conf = conf;
+    //             Ok(())
+    //         }
+    //         None => Err(HaliaError::NotFound),
+    //     }
+    // }
 
-    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        // TODO stop
-        self.sinks.retain(|sink| sink.id != sink_id);
-        Ok(())
-    }
+    // async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+    //     // TODO stop
+    //     self.sinks.retain(|sink| sink.id != sink_id);
+    //     Ok(())
+    // }
 
-    async fn create_sink_item(
-        &mut self,
-        sink_id: Uuid,
-        item_id: Uuid,
-        data: &String,
-    ) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => match sink.create_point(item_id, data).await {
-                Ok(_) => {
-                    sink.stop().await;
-                    sink.start(self.write_tx.as_ref().unwrap().clone());
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            },
-            None => Err(HaliaError::NotFound),
-        }
-    }
+    // async fn create_sink_item(
+    //     &mut self,
+    //     sink_id: Uuid,
+    //     item_id: Uuid,
+    //     data: &String,
+    // ) -> HaliaResult<()> {
+    //     match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+    //         Some(sink) => match sink.create_point(item_id, data).await {
+    //             Ok(_) => {
+    //                 sink.stop().await;
+    //                 sink.start(self.write_tx.as_ref().unwrap().clone());
+    //                 Ok(())
+    //             }
+    //             Err(e) => Err(e),
+    //         },
+    //         None => Err(HaliaError::NotFound),
+    //     }
+    // }
 
-    async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => {
-                if sink.on.load(Ordering::SeqCst) {
-                    sink.start(self.write_tx.as_ref().unwrap().clone());
-                    sink.publish()
-                } else {
-                    Err(HaliaError::NotFound)
-                }
-            }
-            None => Err(HaliaError::NotFound),
-        }
-    }
+    // async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    //     match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+    //         Some(sink) => {
+    //             if sink.on.load(Ordering::SeqCst) {
+    //                 sink.start(self.write_tx.as_ref().unwrap().clone());
+    //                 sink.publish()
+    //             } else {
+    //                 Err(HaliaError::NotFound)
+    //             }
+    //         }
+    //         None => Err(HaliaError::NotFound),
+    //     }
+    // }
 }
 
 async fn read_group_points(

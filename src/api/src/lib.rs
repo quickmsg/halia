@@ -11,6 +11,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 mod apps;
 mod device;
+mod modbus;
 mod rule;
 
 #[derive(Serialize, Debug)]
@@ -88,6 +89,7 @@ fn device_routes() -> Router {
             .route("/:device_id/stop", put(device::stop_device))
             .route("/:device_id", put(device::update_device))
             .route("/:device_id", delete(device::delete_device))
+            .nest("/:device_id", modbus_routes())
             .nest(
                 "/:device_id/group",
                 Router::new()
@@ -163,4 +165,44 @@ fn rule_routes() -> Router {
         .route("/rule/:id/stop", put(rule::stop))
         .route("/rule/:id", put(rule::update))
         .route("/rule/:id", delete(rule::delete))
+}
+
+fn modbus_routes() -> Router {
+    Router::new().nest(
+        "/modbus",
+        Router::new()
+            .nest(
+                "/group",
+                Router::new()
+                    .route("/", post(modbus::create_group))
+                    .route("/search", get(modbus::search_groups))
+                    .route("/:group_id", put(modbus::update_group))
+                    .route("/:group_id", delete(modbus::delete_group))
+                    .nest(
+                        "/:group_id/point",
+                        Router::new()
+                            .route("/", post(modbus::create_group_point))
+                            .route("/", get(modbus::search_group_points))
+                            .route("/:point_id", put(modbus::update_group_point))
+                            .route("/:point_id/value", post(modbus::write_group_point_value))
+                            .route("/", delete(modbus::delete_group_points)),
+                    ),
+            )
+            .nest(
+                "/sink",
+                Router::new()
+                    .route("/", post(modbus::create_sink))
+                    .route("/", get(modbus::search_sinks))
+                    .route("/:sink_id", put(modbus::update_sink))
+                    .route("/:sink_id", delete(modbus::delete_sink))
+                    .nest(
+                        "/:sink_id/point",
+                        Router::new()
+                            .route("/", post(modbus::create_sink_point))
+                            .route("/", get(modbus::search_sink_points))
+                            .route("/:point_id", put(modbus::update_sink_point))
+                            .route("/", delete(modbus::delete_sink_points)),
+                    ),
+            ),
+    )
 }
