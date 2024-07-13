@@ -83,13 +83,14 @@ fn device_routes() -> Router {
     Router::new().nest(
         "/device",
         Router::new()
-            .route("/", post(device::create_device))
-            .route("/search", get(device::search_device))
-            .route("/:device_id/start", put(device::start_device))
-            .route("/:device_id/stop", put(device::stop_device))
-            .route("/:device_id", put(device::update_device))
-            .route("/:device_id", delete(device::delete_device))
-            .nest("/:device_id", modbus_routes())
+            // .route("/", post(device::create_device))
+            .route("/", get(device::search_devices))
+            .nest("/", modbus_routes())
+            // .route("/:device_id/start", put(device::start_device))
+            // .route("/:device_id/stop", put(device::stop_device))
+            // .route("/:device_id", put(device::update_device))
+            // .route("/:device_id", delete(device::delete_device))
+            // .nest("/:device_id", modbus_routes())
             .nest(
                 "/:device_id/group",
                 Router::new()
@@ -171,6 +172,7 @@ fn modbus_routes() -> Router {
     Router::new().nest(
         "/modbus",
         Router::new()
+            .route("/", post(modbus::create))
             .nest(
                 "/group",
                 Router::new()

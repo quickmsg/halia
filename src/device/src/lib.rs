@@ -5,6 +5,7 @@ use common::{
     persistence::{self, Status},
 };
 use message::MessageBatch;
+use modbus::Modbus;
 use serde::Serialize;
 use std::sync::LazyLock;
 use tokio::sync::{broadcast, mpsc, RwLock};
@@ -28,10 +29,129 @@ mod modbus;
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
     devices: RwLock::new(vec![]),
+    modbus_devices: RwLock::new(vec![]),
 });
 
 pub struct DeviceManager {
-    devices: RwLock<Vec<Box<dyn Device>>>,
+    devices: RwLock<Vec<(&'static str, Uuid)>>,
+    modbus_devices: RwLock<Vec<Modbus>>,
+}
+
+impl DeviceManager {
+    pub async fn search_devices(&self, page: usize, size: usize) -> SearchDeviceResp {
+        let mut data = vec![];
+        let mut i = 0;
+        let mut total = 0;
+        let mut err_cnt = 0;
+        let mut close_cnt = 0;
+        for (r#type, device_id) in self.devices.read().await.iter().skip((page - 1) * size) {
+            match r#type {
+                &modbus::TYPE => {
+                    match self
+                        .modbus_devices
+                        .read()
+                        .await
+                        .iter()
+                        .find(|device| device.id == *device_id)
+                    {
+                        Some(device) => {
+                            let info = device.get_info();
+                            if *&info.err {
+                                err_cnt += 1;
+                            }
+                            if !*&info.on {
+                                close_cnt += 1;
+                            }
+                            if i >= (page - 1) * size && i < page * size {
+                                data.push(info);
+                            }
+                            total += 1;
+                            i += 1;
+                        }
+                        None => panic!("无法获取modbus设备"),
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        SearchDeviceResp {
+            total,
+            err_cnt,
+            close_cnt,
+            data,
+        }
+    }
+}
+
+// for modbus
+impl DeviceManager {
+    pub async fn modbus_create(&self, device_id: Option<Uuid>, data: String) -> HaliaResult<()> {
+        let (device_id, new) = match device_id {
+            Some(device_id) => (device_id, false),
+            None => (Uuid::new_v4(), true),
+        };
+        match modbus::new(device_id, &data) {
+            Ok(device) => {
+                self.devices.write().await.push((modbus::TYPE, device_id));
+                self.modbus_devices.write().await.push(device);
+                Ok(())
+                // TODO 持久化
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn modbus_search(&self, device_id: Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_update(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_start(&self, device_id: Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_stop(&self, device_id: Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_delete(&self, devie_id: Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_create_group(
+        &self,
+        device_id: Uuid,
+        group_id: Option<Uuid>,
+        data: String,
+    ) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_search_groups(
+        &self,
+        device_id: Uuid,
+        page: usize,
+        size: usize,
+    ) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_update_group(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        data: String,
+    ) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn modbus_delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
+        todo!()
+    }
 }
 
 impl DeviceManager {
@@ -42,20 +162,21 @@ impl DeviceManager {
         point_id: Uuid,
         req: CreatePointReq,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device.create_point(group_id, point_id, req).await?;
-                // Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        todo!()
+        // match self
+        //     .devices
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device.create_point(group_id, point_id, req).await?;
+        //         // Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
     }
 }
 
@@ -66,146 +187,150 @@ impl DeviceManager {
             None => (Uuid::new_v4(), true),
         };
         let req: CreateDeviceReq = serde_json::from_str(&data)?;
-        let resp = match req.r#type.as_str() {
-            modbus::TYPE => {
-                let device = modbus::new(device_id, req)?;
-                if new {
-                    persistence::device::insert_modbus_device(&device_id, &data).await?;
-                }
-                Ok(device)
-            }
-            // opcua::TYPE => opcua::new(device_id, req),
-            // coap::TYPE => {
-            //     let device = coap::new(device_id, req)?;
-            //     if new {
-            //         persistence::device::insert_coap_device(&device_id, &data).await?;
-            //     }
-            //     Ok(device)
-            // }
-            _ => return Err(HaliaError::ProtocolNotSupported),
-        };
+        // let resp = match req.r#type.as_str() {
+        //     modbus::TYPE => {
+        //         let device = modbus::new(device_id, req)?;
+        //         if new {
+        //             persistence::device::insert_modbus_device(&device_id, &data).await?;
+        //         }
+        //         Ok(device)
+        //     }
+        //     // opcua::TYPE => opcua::new(device_id, req),
+        //     // coap::TYPE => {
+        //     //     let device = coap::new(device_id, req)?;
+        //     //     if new {
+        //     //         persistence::device::insert_coap_device(&device_id, &data).await?;
+        //     //     }
+        //     //     Ok(device)
+        //     // }
+        //     _ => return Err(HaliaError::ProtocolNotSupported),
+        // };
 
-        match resp {
-            Ok(device) => self.devices.write().await.push(device),
-            Err(e) => {
-                debug!("create device err:{}", e);
-                return Err(e);
-            }
-        }
+        // match resp {
+        //     Ok(device) => self.devices.write().await.push(device),
+        //     Err(e) => {
+        //         debug!("create device err:{}", e);
+        //         return Err(e);
+        //     }
+        // }
         Ok(())
     }
 
     pub async fn update_device(&self, device_id: Uuid, data: &Bytes) -> HaliaResult<()> {
-        let req: UpdateDeviceReq = serde_json::from_slice(data)?;
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                device.update(&req).await?;
-            }
-            None => return Err(HaliaError::NotFound),
-        }
+        // let req: UpdateDeviceReq = serde_json::from_slice(data)?;
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         device.update(&req).await?;
+        //     }
+        //     None => return Err(HaliaError::NotFound),
+        // }
 
-        unsafe { persistence::device::update_device_conf(device_id, data) }.await?;
-        Ok(())
+        // unsafe { persistence::device::update_device_conf(device_id, data) }.await?;
+        // Ok(())
+        todo!()
     }
 
     pub async fn start_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                device.start().await;
-                match persistence::device::update_device_status(
-                    device_id,
-                    persistence::Status::Runing,
-                )
-                .await
-                {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        error!("storage update device err:{}", e);
-                        Err(e.into())
-                    }
-                }
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         device.start().await;
+        //         match persistence::device::update_device_status(
+        //             device_id,
+        //             persistence::Status::Runing,
+        //         )
+        //         .await
+        //         {
+        //             Ok(_) => Ok(()),
+        //             Err(e) => {
+        //                 error!("storage update device err:{}", e);
+        //                 Err(e.into())
+        //             }
+        //         }
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn stop_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                device.stop().await;
-                persistence::device::update_device_status(device_id, persistence::Status::Stopped)
-                    .await?;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         device.stop().await;
+        //         persistence::device::update_device_status(device_id, persistence::Status::Stopped)
+        //             .await?;
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
-    pub async fn search_devices(&self, page: usize, size: usize) -> SearchDeviceResp {
-        let mut resp = vec![];
-        let mut i = 0;
-        let mut total = 0;
-        let mut err_cnt = 0;
-        let mut close_cnt = 0;
-        for device in self.devices.read().await.iter().rev() {
-            let info = device.get_info().await;
+    // pub async fn search_devices(&self, page: usize, size: usize) -> SearchDeviceResp {
+    // let mut resp = vec![];
+    // let mut i = 0;
+    // let mut total = 0;
+    // let mut err_cnt = 0;
+    // let mut close_cnt = 0;
+    // for device in self.devices.read().await.iter().rev() {
+    //     let info = device.get_info().await;
 
-            if *&info.err {
-                err_cnt += 1;
-            }
-            if !*&info.on {
-                close_cnt += 1;
-            }
-            if i >= (page - 1) * size && i < page * size {
-                resp.push(info);
-            }
-            total += 1;
-            i += 1;
-        }
+    //     if *&info.err {
+    //         err_cnt += 1;
+    //     }
+    //     if !*&info.on {
+    //         close_cnt += 1;
+    //     }
+    //     if i >= (page - 1) * size && i < page * size {
+    //         resp.push(info);
+    //     }
+    //     total += 1;
+    //     i += 1;
+    // }
 
-        SearchDeviceResp {
-            total,
-            err_cnt,
-            close_cnt,
-            data: resp,
-        }
-    }
+    // SearchDeviceResp {
+    //     total,
+    //     err_cnt,
+    //     close_cnt,
+    //     data: resp,
+    // }
+    // todo!()
+    // }
 
     pub async fn delete_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => device.stop().await,
-            None => return Err(HaliaError::NotFound),
-        };
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => device.stop().await,
+        //     None => return Err(HaliaError::NotFound),
+        // };
 
-        self.devices
-            .write()
-            .await
-            .retain(|device| device.get_id() != device_id);
-        persistence::device::delete_device(&device_id).await?;
+        // self.devices
+        //     .write()
+        //     .await
+        //     .retain(|device| device.get_id() != device_id);
+        // persistence::device::delete_device(&device_id).await?;
 
         Ok(())
     }
@@ -216,27 +341,28 @@ impl DeviceManager {
         group_id: Option<Uuid>,
         data: String,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                let (group_id, new) = match group_id {
-                    Some(group_id) => (group_id, false),
-                    None => (Uuid::new_v4(), true),
-                };
-                let create_group_req: CreateGroupReq = serde_json::from_str(&data)?;
-                // device.create_group(group_id, &create_group_req).await?;
-                if new {
-                    persistence::device::insert_group(&device_id, &group_id, &data).await?;
-                }
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         let (group_id, new) = match group_id {
+        //             Some(group_id) => (group_id, false),
+        //             None => (Uuid::new_v4(), true),
+        //         };
+        //         let create_group_req: CreateGroupReq = serde_json::from_str(&data)?;
+        //         // device.create_group(group_id, &create_group_req).await?;
+        //         if new {
+        //             persistence::device::insert_group(&device_id, &group_id, &data).await?;
+        //         }
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn search_groups(
@@ -245,19 +371,20 @@ impl DeviceManager {
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchGroupResp> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device.search_groups(page, size).await;
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device.search_groups(page, size).await;
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn update_group(
@@ -266,41 +393,43 @@ impl DeviceManager {
         group_id: Uuid,
         req: Bytes,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                let update_group_req: UpdateGroupReq = serde_json::from_slice(&req)?;
-                // device.update_group(group_id, update_group_req).await?;
-                persistence::device::update_group(&device_id, &group_id, req).await?;
-                Ok(())
-            }
-            None => {
-                debug!("未找到设备");
-                Err(HaliaError::NotFound)
-            }
-        }
+        // match self
+        //     .devices
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         let update_group_req: UpdateGroupReq = serde_json::from_slice(&req)?;
+        //         // device.update_group(group_id, update_group_req).await?;
+        //         persistence::device::update_group(&device_id, &group_id, req).await?;
+        //         Ok(())
+        //     }
+        //     None => {
+        //         debug!("未找到设备");
+        //         Err(HaliaError::NotFound)
+        //     }
+        // }
+        todo!()
     }
 
     pub async fn delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                // device.delete_group(group_id).await?;
-                persistence::device::delete_group(&device_id, &group_id).await?;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         // device.delete_group(group_id).await?;
+        //         persistence::device::delete_group(&device_id, &group_id).await?;
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn create_point(
@@ -331,19 +460,20 @@ impl DeviceManager {
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchPointResp> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                //  device.search_point(group_id, page, size).await,
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         //  device.search_point(group_id, page, size).await,
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn update_point(
@@ -353,19 +483,20 @@ impl DeviceManager {
         point_id: Uuid,
         req: &CreatePointReq,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device.update_point(group_id, point_id, req).await,
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device.update_point(group_id, point_id, req).await,
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn write_point_value(
@@ -375,21 +506,22 @@ impl DeviceManager {
         point_id: Uuid,
         req: WritePointValueReq,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device
-                //     .write_point_value(group_id, point_id, req.value)
-                //     .await
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device
+        //         //     .write_point_value(group_id, point_id, req.value)
+        //         //     .await
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn delete_points(
@@ -398,20 +530,21 @@ impl DeviceManager {
         group_id: Uuid,
         point_ids: Vec<Uuid>,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                // device.delete_points(&group_id, &point_ids).await?;
-                let _ = persistence::device::delete_points(&device_id, &group_id, &point_ids).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         // device.delete_points(&group_id, &point_ids).await?;
+        //         let _ = persistence::device::delete_points(&device_id, &group_id, &point_ids).await;
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn create_sink(
@@ -424,19 +557,19 @@ impl DeviceManager {
             Some(sink_id) => (sink_id, true),
             None => (Uuid::new_v4(), false),
         };
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device.create_sink(sink_id, &data).await?,
-            }
-            None => return Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device.create_sink(sink_id, &data).await?,
+        //     }
+        //     None => return Err(HaliaError::NotFound),
+        // }
         if new {
             if let Err(e) = persistence::device::insert_sink(&device_id, &sink_id, &data).await {
                 debug!("create sink err :{e}");
@@ -453,20 +586,21 @@ impl DeviceManager {
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchSinksResp> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .rev()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                // Ok(device.search_sinks(page, size).await),
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .rev()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // Ok(device.search_sinks(page, size).await),
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn update_sink(
@@ -475,52 +609,55 @@ impl DeviceManager {
         sink_id: Uuid,
         data: String,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                // device.update_sink(sink_id, &data).await?;
-                // persistence::device::update_sink(&device_id, &sink_id, &data).await?;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         // device.update_sink(sink_id, &data).await?;
+        //         // persistence::device::update_sink(&device_id, &sink_id, &data).await?;
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn delete_sink(&self, device_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                // device.delete_sink(sink_id).await?;
-                persistence::device::delete_sink(&device_id, &sink_id).await?;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         // device.delete_sink(sink_id).await?;
+        //         persistence::device::delete_sink(&device_id, &sink_id).await?;
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
     pub async fn add_subscription(&self, device_id: Uuid, req: Bytes) -> HaliaResult<()> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                //  device.add_subscription(req).await,
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         //  device.add_subscription(req).await,
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn create_path(
@@ -529,27 +666,28 @@ impl DeviceManager {
         path_id: Option<Uuid>,
         data: String,
     ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                let (path_id, new) = match path_id {
-                    Some(path_id) => (path_id, false),
-                    None => (Uuid::new_v4(), true),
-                };
-                // device.add_path(path_id, &data).await?;
-                if new {
-                    persistence::device::insert_coap_path(&device_id, &path_id, &data).await?;
-                }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         let (path_id, new) = match path_id {
+        //             Some(path_id) => (path_id, false),
+        //             None => (Uuid::new_v4(), true),
+        //         };
+        //         // device.add_path(path_id, &data).await?;
+        //         if new {
+        //             persistence::device::insert_coap_path(&device_id, &path_id, &data).await?;
+        //         }
 
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn search_paths(
@@ -558,35 +696,37 @@ impl DeviceManager {
         page: usize,
         size: usize,
     ) -> HaliaResult<SearchResp> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                //  device.search_paths(page, size).await,
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         //  device.search_paths(page, size).await,
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn update_path(&self, device_id: Uuid, path_id: Uuid, req: Bytes) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device.update_path(path_id, req).await,
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device.update_path(path_id, req).await,
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 }
 
@@ -599,23 +739,23 @@ impl DeviceManager {
         data: String,
     ) -> HaliaResult<()> {
         let req: CreateDeviceReq = serde_json::from_str(&data)?;
-        let resp = match req.r#type.as_str() {
-            modbus::TYPE => modbus::new(device_id, req),
-            // opcua::TYPE => opcua::new(device_id, req),
-            // coap::TYPE => coap::new(device_id, req),
-            _ => return Err(HaliaError::ProtocolNotSupported),
-        };
+        // let resp = match req.r#type.as_str() {
+        //     // modbus::TYPE => modbus::new(device_id, req),
+        //     // opcua::TYPE => opcua::new(device_id, req),
+        //     // coap::TYPE => coap::new(device_id, req),
+        //     _ => return Err(HaliaError::ProtocolNotSupported),
+        // };
 
-        match resp {
-            Ok(mut device) => {
-                device.recover(status).await?;
-                self.devices.write().await.push(device);
-            }
-            Err(e) => {
-                debug!("recover device err:{}", e);
-                return Err(e);
-            }
-        }
+        // match resp {
+        //     Ok(mut device) => {
+        //         device.recover(status).await?;
+        //         // self.devices.write().await.push(device);
+        //     }
+        //     Err(e) => {
+        //         debug!("recover device err:{}", e);
+        //         return Err(e);
+        //     }
+        // }
 
         Ok(())
     }
@@ -746,35 +886,37 @@ impl DeviceManager {
         device_id: &Uuid,
         group_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == *device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device.subscribe(group_id).await,
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == *device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device.subscribe(group_id).await,
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn unsubscribe(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device.unsubscribe(group_id).await,
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device.unsubscribe(group_id).await,
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     pub async fn publish(
@@ -782,19 +924,20 @@ impl DeviceManager {
         device_id: &Uuid,
         group_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| device.get_id() == *device_id)
-        {
-            Some(device) => {
-                todo!()
-                // device.publish(group_id).await,
-            }
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .devices
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|device| device.get_id() == *device_id)
+        // {
+        //     Some(device) => {
+        //         todo!()
+        //         // device.publish(group_id).await,
+        //     }
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 }
 
@@ -813,7 +956,6 @@ trait Device: Sync + Send {
     // 从持久化系统中恢复
     async fn recover(&mut self, status: Status) -> HaliaResult<()>;
 
-    async fn get_info(&self) -> SearchDeviceItemResp;
     async fn start(&mut self);
     async fn stop(&mut self);
     async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()>;

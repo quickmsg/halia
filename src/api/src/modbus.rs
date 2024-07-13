@@ -17,7 +17,14 @@ use uuid::Uuid;
 
 use crate::{AppResp, DeleteIdsQuery, Pagination};
 
-pub(crate) async fn create_group(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
+pub async fn create(data: String) -> AppResp<()> {
+    match GLOBAL_DEVICE_MANAGER.modbus_create(None, data).await {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+pub async fn create_group(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
     match GLOBAL_DEVICE_MANAGER
         .create_group(device_id, None, data)
         .await
@@ -27,7 +34,7 @@ pub(crate) async fn create_group(Path(device_id): Path<Uuid>, data: String) -> A
     }
 }
 
-pub(crate) async fn search_groups(
+pub async fn search_groups(
     Path(device_id): Path<Uuid>,
     pagination: Query<Pagination>,
 ) -> AppResp<SearchGroupResp> {

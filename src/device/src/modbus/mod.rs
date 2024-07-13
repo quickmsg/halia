@@ -46,8 +46,8 @@ mod point;
 mod sink;
 
 #[derive(Debug)]
-struct Modbus {
-    id: Uuid,
+pub struct Modbus {
+    pub id: Uuid,
     name: String,
     on: Arc<AtomicBool>,  // true:开启 false:关闭
     err: Arc<AtomicBool>, // true:错误 false:正常
@@ -118,8 +118,8 @@ struct SerialConf {
     desc: Option<String>,
 }
 
-pub fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
-    let conf: Conf = serde_json::from_value(req.conf.clone())?;
+pub fn new(id: Uuid, data: &String) -> HaliaResult<Modbus> {
+    let conf: Conf = serde_json::from_str(data)?;
     if let Some(ethernet) = &conf.ethernet {
         if !ethernet.validate() {
             return Err(HaliaError::ConfErr);
@@ -132,9 +132,9 @@ pub fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
         return Err(HaliaError::ConfErr);
     }
 
-    Ok(Box::new(Modbus {
+    Ok(Modbus {
         id,
-        name: req.name.clone(),
+        name: "xx".to_string(),
         on: Arc::new(AtomicBool::new(false)),
         err: Arc::new(AtomicBool::new(false)),
         rtt: Arc::new(AtomicU16::new(9999)),
@@ -145,10 +145,22 @@ pub fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
         ref_cnt: 0,
         sinks: vec![],
         stop_signal_tx: None,
-    }))
+    })
 }
 
 impl Modbus {
+    pub fn get_info(&self) -> SearchDeviceItemResp {
+        SearchDeviceItemResp {
+            id: self.id,
+            name: self.name.clone(),
+            r#type: TYPE,
+            rtt: self.rtt.load(Ordering::SeqCst),
+            on: self.on.load(Ordering::SeqCst),
+            err: self.err.load(Ordering::SeqCst),
+            conf: json!(&self.conf),
+        }
+    }
+
     async fn get_context(conf: &Conf) -> HaliaResult<(Context, u64)> {
         if let Some(conf) = &conf.ethernet {
             let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
@@ -231,18 +243,6 @@ impl Device for Modbus {
         }
 
         Ok(())
-    }
-
-    async fn get_info(&self) -> SearchDeviceItemResp {
-        SearchDeviceItemResp {
-            id: self.id,
-            name: self.name.clone(),
-            r#type: TYPE,
-            rtt: self.rtt.load(Ordering::SeqCst),
-            on: self.on.load(Ordering::SeqCst),
-            err: self.err.load(Ordering::SeqCst),
-            conf: json!(&self.conf),
-        }
     }
 
     // async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {

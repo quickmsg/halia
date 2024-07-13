@@ -24,7 +24,7 @@ pub(crate) async fn create_device(req: String) -> AppResp<()> {
     }
 }
 
-pub(crate) async fn search_device(pagination: Query<Pagination>) -> AppResp<SearchDeviceResp> {
+pub(crate) async fn search_devices(pagination: Query<Pagination>) -> AppResp<SearchDeviceResp> {
     AppResp::with_data(
         GLOBAL_DEVICE_MANAGER
             .search_devices(pagination.p, pagination.s)
