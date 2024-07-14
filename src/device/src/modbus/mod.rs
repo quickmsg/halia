@@ -42,6 +42,7 @@ use uuid::Uuid;
 
 pub const TYPE: &str = "modbus";
 mod group;
+pub mod manager;
 mod point;
 mod sink;
 
@@ -120,46 +121,46 @@ struct SerialConf {
     desc: Option<String>,
 }
 
-pub async fn new(device_id: Option<Uuid>, data: &String) -> HaliaResult<Modbus> {
-    let (device_id, new) = match device_id {
-        Some(device_id) => (device_id, false),
-        None => (Uuid::new_v4(), true),
-    };
-
-    let conf: Conf = serde_json::from_str(data)?;
-    if let Some(ethernet) = &conf.ethernet {
-        if !ethernet.validate() {
-            return Err(HaliaError::ConfErr);
-        }
-    } else if let Some(serial) = &conf.serial {
-        if !serial.validate() {
-            return Err(HaliaError::ConfErr);
-        }
-    } else {
-        return Err(HaliaError::ConfErr);
-    }
-
-    if new {
-        persistence::modbus::create(&device_id, &data).await?;
-    }
-
-    Ok(Modbus {
-        id: device_id,
-        name: "xx".to_string(),
-        on: Arc::new(AtomicBool::new(false)),
-        err: Arc::new(AtomicBool::new(false)),
-        rtt: Arc::new(AtomicU16::new(9999)),
-        conf,
-        groups: Arc::new(RwLock::new(Vec::new())),
-        read_tx: None,
-        write_tx: None,
-        ref_cnt: 0,
-        sinks: vec![],
-        stop_signal_tx: None,
-    })
-}
-
 impl Modbus {
+    pub async fn new(device_id: Option<Uuid>, data: &String) -> HaliaResult<Modbus> {
+        let (device_id, new) = match device_id {
+            Some(device_id) => (device_id, false),
+            None => (Uuid::new_v4(), true),
+        };
+
+        let conf: Conf = serde_json::from_str(data)?;
+        if let Some(ethernet) = &conf.ethernet {
+            if !ethernet.validate() {
+                return Err(HaliaError::ConfErr);
+            }
+        } else if let Some(serial) = &conf.serial {
+            if !serial.validate() {
+                return Err(HaliaError::ConfErr);
+            }
+        } else {
+            return Err(HaliaError::ConfErr);
+        }
+
+        if new {
+            persistence::modbus::create(&device_id, &data).await?;
+        }
+
+        Ok(Modbus {
+            id: device_id,
+            name: "xx".to_string(),
+            on: Arc::new(AtomicBool::new(false)),
+            err: Arc::new(AtomicBool::new(false)),
+            rtt: Arc::new(AtomicU16::new(9999)),
+            conf,
+            groups: Arc::new(RwLock::new(Vec::new())),
+            read_tx: None,
+            write_tx: None,
+            ref_cnt: 0,
+            sinks: vec![],
+            stop_signal_tx: None,
+        })
+    }
+
     pub fn search(&self) -> SearchDeviceItemResp {
         SearchDeviceItemResp {
             id: self.id,
