@@ -29,14 +29,11 @@ use tokio::{
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, warn};
-use types::{
-    apps::SearchSinkResp,
-    device::{
-        datatype::{DataType, Endian},
-        device::{CreateDeviceReq, Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
-        group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
-        point::{CreatePointReq, SearchPointResp},
-    },
+use types::device::{
+    datatype::{DataType, Endian},
+    device::{Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
+    group::SearchGroupResp,
+    point::SearchPointResp,
 };
 use uuid::Uuid;
 
@@ -73,7 +70,6 @@ struct Conf {
     ethernet: Option<EthernetConf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     serial: Option<SerialConf>,
-    desc: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
@@ -83,8 +79,6 @@ struct EthernetConf {
     ip: String,
     port: u16,
     interval: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    desc: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
@@ -118,8 +112,6 @@ struct SerialConf {
     baud_rate: u32,
     data_bits: u8,
     parity: u8,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    desc: Option<String>,
 }
 
 impl Modbus {
@@ -191,26 +183,37 @@ impl Modbus {
     pub async fn update(&mut self, data: String) -> HaliaResult<()> {
         let update_conf: Conf = serde_json::from_str(&data)?;
 
-        if self.conf != update_conf {
-            self.conf = update_conf;
-            if self.on.load(Ordering::SeqCst) {
-                self.stop().await;
-                self.start().await;
-            }
+        let mut restart = false;
+        if (self.conf.ethernet != update_conf.ethernet || self.conf.serial != update_conf.serial)
+            && self.on.load(Ordering::SeqCst)
+        {
+            restart = true;
         }
+
+        self.conf = update_conf;
+        if restart {
+            self.stop(true).await?;
+            self.start(true).await?;
+        }
+
+        persistence::device::update_device_conf(&self.id, &data).await?;
 
         Ok(())
     }
 
-    pub async fn start(&mut self) {
+    pub async fn start(&mut self, restart: bool) -> HaliaResult<()> {
         if let Err(_) = self
             .on
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         {
-            return;
+            return Ok(());
         }
 
         debug!("设备开启");
+
+        if !restart {
+            persistence::device::update_device_status(&self.id, Status::Runing).await?;
+        }
 
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -233,6 +236,8 @@ impl Modbus {
                             select! {
                                 biased;
                                 _ = stop_signal_rx.recv() => {
+                                    debug!("here");
+                                    on.store(false, Ordering::SeqCst);
                                     return
                                 }
 
@@ -275,17 +280,22 @@ impl Modbus {
             let read_tx = self.read_tx.as_ref().unwrap().clone();
             group.start(read_tx, self.err.clone());
         }
+
+        Ok(())
     }
 
-    pub async fn stop(&mut self) {
+    pub async fn stop(&mut self, restart: bool) -> HaliaResult<()> {
         if let Err(_) = self
             .on
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
         {
-            return;
+            return Ok(());
         }
 
         debug!("设备停止");
+        if !restart {
+            persistence::device::update_device_status(&self.id, Status::Stopped).await?;
+        }
 
         for group in self.groups.write().await.iter_mut() {
             group.stop().await;
@@ -300,6 +310,8 @@ impl Modbus {
         self.stop_signal_tx = None;
         self.read_tx = None;
         self.write_tx = None;
+
+        Ok(())
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
@@ -412,15 +424,7 @@ impl Modbus {
             .rev()
             .skip(((page - 1) * size) as usize)
         {
-            resps.push({
-                SearchGroupItemResp {
-                    id: group.id,
-                    name: group.name.clone(),
-                    interval: group.interval,
-                    point_count: group.get_points_num().await as u8,
-                    desc: group.desc.clone(),
-                }
-            });
+            resps.push(group.search());
             if resps.len() == size as usize {
                 break;
             }
@@ -462,15 +466,16 @@ impl Modbus {
                 .iter_mut()
                 .find(|group| group.id == group_id)
             {
-                Some(group) => group.stop().await,
+                Some(group) => {
+                    group.stop().await;
+                    self.groups
+                        .write()
+                        .await
+                        .retain(|group| group.id != group_id);
+                }
                 None => return Err(HaliaError::NotFound),
             }
         }
-
-        self.groups
-            .write()
-            .await
-            .retain(|group| group_id != group.id);
 
         Ok(())
     }

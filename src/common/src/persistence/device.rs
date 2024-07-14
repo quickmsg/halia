@@ -108,7 +108,7 @@ pub async fn read_devices() -> Result<Vec<(Uuid, Vec<String>)>, io::Error> {
     Ok(devices)
 }
 
-pub async unsafe fn update_device_conf(id: Uuid, conf: &Bytes) -> Result<(), io::Error> {
+pub async fn update_device_conf(id: &Uuid, conf: &String) -> Result<(), io::Error> {
     let path = get_device_file();
     let mut file = OpenOptions::new()
         .read(true)
@@ -120,21 +120,20 @@ pub async unsafe fn update_device_conf(id: Uuid, conf: &Bytes) -> Result<(), io:
 
     let new_line;
     let mut lines: Vec<&str> = buf.split("\n").collect();
+    let id_str = id.to_string();
     for line in lines.iter_mut() {
-        let fields: Vec<&str> = line.split(DELIMITER).collect();
-        if fields.len() != 3 {
-            panic!("数据文件损坏");
-        }
-        if fields[0].parse::<Uuid>().expect("数据文件损坏") == id {
+        if line[..36] == id_str {
+            let fields: Vec<&str> = line.split(DELIMITER).collect();
+            if fields.len() != 4 {
+                panic!("数据文件损坏");
+            }
+
             new_line = format!(
-                "{}{}{}{}{}",
-                fields[0],
-                DELIMITER,
-                fields[1],
-                DELIMITER,
-                std::str::from_utf8_unchecked(conf)
+                "{}{}{}{}{}{}{}",
+                fields[0], DELIMITER, fields[1], DELIMITER, fields[2], DELIMITER, conf,
             );
             *line = new_line.as_str();
+
             break;
         }
     }
@@ -149,7 +148,7 @@ pub async unsafe fn update_device_conf(id: Uuid, conf: &Bytes) -> Result<(), io:
     Ok(())
 }
 
-pub async fn update_device_status(id: Uuid, status: Status) -> Result<(), io::Error> {
+pub async fn update_device_status(id: &Uuid, status: Status) -> Result<(), io::Error> {
     let path = get_device_file();
     let mut file = OpenOptions::new()
         .read(true)
@@ -163,17 +162,19 @@ pub async fn update_device_status(id: Uuid, status: Status) -> Result<(), io::Er
     let mut lines: Vec<&str> = buf.split("\n").collect();
     for line in lines.iter_mut() {
         let fields: Vec<&str> = line.split(DELIMITER).collect();
-        if fields.len() != 3 {
+        if fields.len() != 4 {
             panic!("数据文件损坏");
         }
-        if fields[0].parse::<Uuid>().expect("数据文件损坏") == id {
+        if fields[0].parse::<Uuid>().expect("数据文件损坏") == *id {
             new_line = format!(
-                "{}{}{}{}{}",
+                "{}{}{}{}{}{}{}",
                 fields[0],
+                DELIMITER,
+                fields[1],
                 DELIMITER,
                 status.to_string(),
                 DELIMITER,
-                fields[2]
+                fields[3]
             );
             *line = new_line.as_str();
             break;

@@ -5,6 +5,8 @@ use common::{
 };
 use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU16, Ordering},
@@ -18,10 +20,7 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::device::{
-    group::{CreateGroupReq, UpdateGroupReq},
-    point::{SearchPointItemResp, SearchPointResp},
-};
+use types::device::point::{SearchPointItemResp, SearchPointResp};
 use uuid::Uuid;
 
 use super::{group_point::Point, WritePointEvent};
@@ -29,15 +28,27 @@ use super::{group_point::Point, WritePointEvent};
 #[derive(Debug)]
 pub struct Group {
     pub id: Uuid,
-    pub name: String,
-    pub interval: u64,
+    pub conf: Conf,
+
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
-    pub desc: Option<String>,
-
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
 
     pub points: Vec<Point>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Conf {
+    pub name: String,
+    pub interval: u64,
+    pub desc: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct SearchInfo {
+    pub id: Uuid,
+    pub conf: Conf,
+    pub point_cnt: usize,
 }
 
 impl Group {
@@ -47,7 +58,7 @@ impl Group {
             None => (Uuid::new_v4(), true),
         };
 
-        let conf: CreateGroupReq = serde_json::from_str(&data)?;
+        let conf: Conf = serde_json::from_str(&data)?;
         if conf.interval == 0 {
             bail!("group interval must > 0")
         }
@@ -58,12 +69,10 @@ impl Group {
 
         Ok(Group {
             id: group_id,
-            name: conf.name.clone(),
-            interval: conf.interval,
+            conf,
             points: vec![],
             tx: None,
             ref_cnt: 0,
-            desc: conf.desc.clone(),
             stop_signal_tx: None,
         })
     }
@@ -80,10 +89,19 @@ impl Group {
         }
     }
 
+    pub fn search(&self) -> serde_json::Value {
+        json!(SearchInfo {
+            id: self.id.clone(),
+            conf: self.conf.clone(),
+            point_cnt: self.points.len(),
+        })
+    }
+
     pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>, err: Arc<AtomicBool>) {
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
-        let interval = self.interval;
+
+        let interval = self.conf.interval;
         let group_id = self.id.clone();
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
@@ -116,10 +134,13 @@ impl Group {
     }
 
     pub fn update(&mut self, data: String) -> HaliaResult<bool> {
-        let req: UpdateGroupReq = serde_json::from_str(&data)?;
-        self.name = req.name.clone();
-        self.interval = req.interval;
-        Ok(true)
+        let update_conf: Conf = serde_json::from_str(&data)?;
+        let mut restart = false;
+        if self.conf.interval != update_conf.interval {
+            restart = true;
+        }
+        self.conf = update_conf;
+        Ok(restart)
     }
 
     pub fn subscribe(&mut self) -> broadcast::Receiver<MessageBatch> {
@@ -182,10 +203,6 @@ impl Group {
             Some(point) => point.update(device_id, &self.id, data).await,
             None => return Err(HaliaError::NotFound),
         }
-    }
-
-    pub async fn get_points_num(&self) -> usize {
-        self.points.len()
     }
 
     pub async fn delete_points(&mut self, ids: Vec<Uuid>) {

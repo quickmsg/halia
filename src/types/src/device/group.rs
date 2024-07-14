@@ -18,7 +18,7 @@ pub struct UpdateGroupReq {
 #[derive(Serialize)]
 pub struct SearchGroupResp {
     pub total: usize,
-    pub data: Vec<SearchGroupItemResp>,
+    pub data: Vec<serde_json::Value>,
 }
 
 #[derive(Serialize)]

@@ -85,7 +85,32 @@ impl DeviceManager {
                 }
                 Ok(())
             }
-            Err(e) => Err(e.into()),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => match persistence::device::init().await {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(e.into()),
+                },
+                std::io::ErrorKind::PermissionDenied => todo!(),
+                std::io::ErrorKind::ConnectionRefused => todo!(),
+                std::io::ErrorKind::ConnectionReset => todo!(),
+                std::io::ErrorKind::ConnectionAborted => todo!(),
+                std::io::ErrorKind::NotConnected => todo!(),
+                std::io::ErrorKind::AddrInUse => todo!(),
+                std::io::ErrorKind::AddrNotAvailable => todo!(),
+                std::io::ErrorKind::BrokenPipe => todo!(),
+                std::io::ErrorKind::AlreadyExists => todo!(),
+                std::io::ErrorKind::WouldBlock => todo!(),
+                std::io::ErrorKind::InvalidInput => todo!(),
+                std::io::ErrorKind::InvalidData => todo!(),
+                std::io::ErrorKind::TimedOut => todo!(),
+                std::io::ErrorKind::WriteZero => todo!(),
+                std::io::ErrorKind::Interrupted => todo!(),
+                std::io::ErrorKind::Unsupported => todo!(),
+                std::io::ErrorKind::UnexpectedEof => todo!(),
+                std::io::ErrorKind::OutOfMemory => todo!(),
+                std::io::ErrorKind::Other => todo!(),
+                _ => todo!(),
+            },
         }
     }
 }
