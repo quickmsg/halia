@@ -20,7 +20,7 @@ use tokio::{
 use tracing::debug;
 use types::device::{
     group::{CreateGroupReq, UpdateGroupReq},
-    point::{CreatePointReq, SearchPointItemResp, SearchPointResp},
+    point::{SearchPointItemResp, SearchPointResp},
 };
 use uuid::Uuid;
 
@@ -66,6 +66,18 @@ impl Group {
             desc: conf.desc.clone(),
             stop_signal_tx: None,
         })
+    }
+
+    pub async fn recover(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        match persistence::modbus::read_group_points(device_id, &self.id).await {
+            Ok(points) => {
+                for (point_id, data) in points {
+                    self.create_point(device_id, Some(point_id), data).await?;
+                }
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>, err: Arc<AtomicBool>) {
@@ -160,9 +172,14 @@ impl Group {
         }
     }
 
-    pub async fn update_point(&mut self, point_id: Uuid, data: String) -> HaliaResult<()> {
+    pub async fn update_point(
+        &mut self,
+        device_id: &Uuid,
+        point_id: Uuid,
+        data: String,
+    ) -> HaliaResult<()> {
         match self.points.iter_mut().find(|point| point.id == point_id) {
-            Some(point) => point.update(data).await,
+            Some(point) => point.update(device_id, &self.id, data).await,
             None => return Err(HaliaError::NotFound),
         }
     }

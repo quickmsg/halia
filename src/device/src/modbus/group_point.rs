@@ -68,10 +68,19 @@ impl Point {
         })
     }
 
-    pub async fn update(&mut self, data: String) -> HaliaResult<()> {
+    pub async fn update(
+        &mut self,
+        device_id: &Uuid,
+        group_id: &Uuid,
+        data: String,
+    ) -> HaliaResult<()> {
         let conf: Conf = serde_json::from_str(&data)?;
+
+        persistence::modbus::update_group_point(device_id, group_id, &self.id, &data).await?;
+
         self.quantity = conf.r#type.get_quantity();
         self.conf = conf;
+
         Ok(())
     }
 

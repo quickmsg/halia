@@ -2,10 +2,16 @@ use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use types::device::{device::SearchSinksResp, group::SearchGroupResp, point::SearchPointResp};
+use types::device::{
+    device::{SearchDeviceItemResp, SearchSinksResp},
+    group::SearchGroupResp,
+    point::SearchPointResp,
+};
 use uuid::Uuid;
 
-use super::Modbus;
+use crate::GLOBAL_DEVICE_MANAGER;
+
+use super::{Modbus, TYPE};
 
 pub static GLOBAL_MODBUS_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     devices: DashMap::new(),
@@ -19,8 +25,23 @@ pub struct Manager {
 impl Manager {
     pub async fn create(&self, device_id: Option<Uuid>, data: String) -> HaliaResult<()> {
         let device = Modbus::new(device_id, &data).await?;
+        GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
         self.devices.insert(device.id, device);
         Ok(())
+    }
+
+    pub async fn recover(&self, device_id: &Uuid) -> HaliaResult<()> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.recover().await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub fn search(&self, device_id: &Uuid) -> HaliaResult<SearchDeviceItemResp> {
+        match self.devices.get(device_id) {
+            Some(device) => Ok(device.search()),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn update(&self, device_id: Uuid, data: String) -> HaliaResult<()> {

@@ -97,22 +97,12 @@ async fn insert_device(device_id: &Uuid, data: &String) -> Result<(), io::Error>
     // super::create_file(get_sink_file(device_id)).await
 }
 
-pub async fn read_devices() -> Result<Vec<(Uuid, Status, String)>, io::Error> {
+pub async fn read_devices() -> Result<Vec<(Uuid, Vec<String>)>, io::Error> {
     let datas = super::read(get_device_file()).await?;
     let mut devices = vec![];
-    for (id, data) in datas {
-        let pos = data.find(DELIMITER).expect("数据文件损坏");
-        let status = &data[..pos];
-        let device = &data[pos + 1..];
-        let status = status
-            .parse::<u8>()
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "数据文件损坏"))?;
-        let status = match status {
-            0 => Status::Stopped,
-            1 => Status::Runing,
-            _ => panic!("数据文件损坏"),
-        };
-        devices.push((id, status, device.to_string()))
+    for (id, raw_data) in datas {
+        let data = raw_data.split(DELIMITER).map(|s| s.to_string()).collect();
+        devices.push((id, data))
     }
 
     Ok(devices)

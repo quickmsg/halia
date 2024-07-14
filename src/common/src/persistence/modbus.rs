@@ -33,7 +33,14 @@ pub async fn create(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
     super::create(
         get_device_file_path(),
         device_id,
-        &format!("{}{}{}", Status::Stopped, DELIMITER, data),
+        &format!(
+            "{}{}{}{}{}",
+            "modbus",
+            DELIMITER,
+            Status::Stopped,
+            DELIMITER,
+            data
+        ),
     )
     .await?;
 
@@ -79,9 +86,26 @@ pub async fn create_group_point(
     .await
 }
 
-pub async fn read_group_points() {}
+pub async fn read_group_points(
+    device_id: &Uuid,
+    group_id: &Uuid,
+) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_group_point_file_path(device_id, group_id)).await
+}
 
-pub async fn update_group_point() {}
+pub async fn update_group_point(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    point_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    super::update(
+        get_group_point_file_path(device_id, group_id),
+        point_id,
+        data,
+    )
+    .await
+}
 
 pub async fn delete_group_points() {}
 

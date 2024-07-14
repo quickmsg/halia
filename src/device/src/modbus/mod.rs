@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence::{self, device, Status},
+    persistence::{self, Status},
 };
 use group::Group;
 use group_point::Area;
@@ -24,7 +24,7 @@ use std::{
 use tokio::{
     net::TcpStream,
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{mpsc, RwLock},
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
@@ -161,6 +161,21 @@ impl Modbus {
             sinks: vec![],
             stop_signal_tx: None,
         })
+    }
+
+    pub async fn recover(&mut self) -> HaliaResult<()> {
+        match persistence::modbus::read_groups(&self.id).await {
+            Ok(groups) => {
+                for (group_id, data) in groups {
+                    self.create_group(Some(group_id), data).await?;
+                }
+                for group in self.groups.write().await.iter_mut() {
+                    group.recover(&self.id).await?;
+                }
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn search(&self) -> SearchDeviceItemResp {
@@ -515,7 +530,7 @@ impl Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.update_point(point_id, data).await,
+            Some(group) => group.update_point(&self.id, point_id, data).await,
             None => {
                 debug!("未找到组");
                 Err(HaliaError::NotFound)
@@ -575,10 +590,6 @@ impl Modbus {
     }
 
     pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
-    async fn recover(&mut self, status: Status) -> HaliaResult<()> {
         todo!()
     }
 }
