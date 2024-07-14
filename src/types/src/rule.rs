@@ -38,7 +38,7 @@ pub struct CreateRuleSource {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum CreateRuleSourceType {
-    Device,
+    Device(String),
     App,
 }
 

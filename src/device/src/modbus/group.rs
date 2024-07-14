@@ -133,14 +133,32 @@ impl Group {
         self.stop_signal_tx = None;
     }
 
-    pub fn update(&mut self, data: String) -> HaliaResult<bool> {
+    pub async fn update(&mut self, device_id: &Uuid, data: String) -> HaliaResult<bool> {
         let update_conf: Conf = serde_json::from_str(&data)?;
+
+        persistence::modbus::update_group(device_id, &self.id, &data).await?;
+
         let mut restart = false;
         if self.conf.interval != update_conf.interval {
             restart = true;
         }
         self.conf = update_conf;
+
         Ok(restart)
+    }
+
+    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        match self.stop_signal_tx {
+            Some(_) => self.stop().await,
+            None => {}
+        }
+        for point in &self.points {
+            point.delete(device_id, &self.id).await?;
+        }
+
+        persistence::modbus::delete_group(device_id, &self.id).await?;
+
+        Ok(())
     }
 
     pub fn subscribe(&mut self) -> broadcast::Receiver<MessageBatch> {
@@ -148,7 +166,7 @@ impl Group {
         match &self.tx {
             Some(tx) => tx.subscribe(),
             None => {
-                let (tx, rx) = broadcast::channel::<MessageBatch>(20);
+                let (tx, rx) = broadcast::channel::<MessageBatch>(16);
                 self.tx = Some(tx);
                 rx
             }
@@ -205,8 +223,18 @@ impl Group {
         }
     }
 
-    pub async fn delete_points(&mut self, ids: Vec<Uuid>) {
-        self.points.retain(|point| !ids.contains(&point.id));
+    pub async fn delete_points(
+        &mut self,
+        device_id: &Uuid,
+        point_ids: Vec<Uuid>,
+    ) -> HaliaResult<()> {
+        for point_id in &point_ids {
+            if let Some(point) = self.points.iter().find(|point| point.id == *point_id) {
+                point.delete(device_id, &self.id).await?;
+            }
+        }
+        self.points.retain(|point| !point_ids.contains(&point.id));
+        Ok(())
     }
 
     pub async fn read_points_value(

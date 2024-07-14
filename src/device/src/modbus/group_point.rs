@@ -84,6 +84,11 @@ impl Point {
         Ok(())
     }
 
+    pub async fn delete(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {
+        persistence::modbus::delete_group_point(device_id, group_id, &self.id).await?;
+        Ok(())
+    }
+
     pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<MessageValue> {
         ctx.set_slave(self.conf.slave);
         match self.conf.area {

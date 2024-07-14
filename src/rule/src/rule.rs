@@ -1,7 +1,10 @@
 use anyhow::Result;
 use apps::GLOBAL_APP_MANAGER;
 use common::error::HaliaResult;
-use device::GLOBAL_DEVICE_MANAGER;
+use device::{
+    modbus::{self, manager::GLOBAL_MODBUS_MANAGER},
+    GLOBAL_DEVICE_MANAGER,
+};
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
@@ -59,15 +62,20 @@ impl Rule {
                         let source: CreateRuleSource = serde_json::from_value(node.conf.clone())?;
                         debug!("{:?}", source);
                         let receiver = match source.r#type {
-                            // types::rule::CreateRuleSourceType::Device => GLOBAL_DEVICE_MANAGER
-                            //     .subscribe(&source.id, &source.source_id.unwrap())
-                            //     .await
-                            //     .unwrap(),
+                            types::rule::CreateRuleSourceType::Device(r#type) => {
+                                match r#type.as_str() {
+                                    modbus::TYPE => GLOBAL_MODBUS_MANAGER
+                                        .subscribe(&source.id, &source.source_id.unwrap())
+                                        .await
+                                        .unwrap(),
+                                    _ => unreachable!(),
+                                }
+                            }
                             types::rule::CreateRuleSourceType::App => GLOBAL_APP_MANAGER
                                 .subscribe(&source.id, source.source_id)
                                 .await
                                 .unwrap(),
-                                _ => todo!(),
+                            _ => todo!(),
                         };
                         receivers.insert(info.first_id, vec![receiver]);
                     }

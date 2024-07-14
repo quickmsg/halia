@@ -1,7 +1,12 @@
 use std::sync::LazyLock;
 
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence::device,
+};
 use dashmap::DashMap;
+use message::MessageBatch;
+use tokio::sync::broadcast;
 use types::device::{
     device::{SearchDeviceItemResp, SearchSinksResp},
     group::SearchGroupResp,
@@ -177,6 +182,24 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.delete_group_points(group_id, point_ids).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn subscribe(
+        &self,
+        device_id: &Uuid,
+        group_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.subscribe(group_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn unsubscribe(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.unsubscribe(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }

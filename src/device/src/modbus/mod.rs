@@ -24,7 +24,11 @@ use std::{
 use tokio::{
     net::TcpStream,
     select,
-    sync::{mpsc, RwLock},
+    sync::{
+        broadcast,
+        mpsc::{self, PermitIterator},
+        RwLock,
+    },
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
@@ -55,7 +59,6 @@ pub struct Modbus {
     rtt: Arc<AtomicU16>,
     conf: Conf,
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
-    ref_cnt: usize,
 
     groups: Arc<RwLock<Vec<Group>>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
@@ -147,7 +150,6 @@ impl Modbus {
             groups: Arc::new(RwLock::new(vec![])),
             read_tx: None,
             write_tx: None,
-            ref_cnt: 0,
             sinks: vec![],
             stop_signal_tx: None,
         })
@@ -315,17 +317,13 @@ impl Modbus {
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        // TODO
-        // if let Err(_) = self
-        //     .on
-        //     .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-        // {
-        //     return;
-        // }
+        if self.on.load(Ordering::SeqCst) {
+            return Err(HaliaError::DeviceRunning);
+        }
 
         debug!("设备删除");
         for group in self.groups.write().await.iter_mut() {
-            group.stop().await;
+            group.delete(&self.id).await?;
         }
         self.stop_signal_tx
             .as_ref()
@@ -333,6 +331,8 @@ impl Modbus {
             .send(())
             .await
             .unwrap();
+
+        persistence::device::delete_device(&self.id).await?;
 
         self.stop_signal_tx = None;
         self.read_tx = None;
@@ -443,7 +443,7 @@ impl Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => match group.update(data) {
+            Some(group) => match group.update(&self.id, data).await {
                 Ok(restart) => {
                     if restart && self.on.load(Ordering::SeqCst) {
                         group.stop().await;
@@ -467,7 +467,7 @@ impl Modbus {
                 .find(|group| group.id == group_id)
             {
                 Some(group) => {
-                    group.stop().await;
+                    group.delete(&self.id).await?;
                     self.groups
                         .write()
                         .await
@@ -571,58 +571,70 @@ impl Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => Ok(group.delete_points(point_ids).await),
+            Some(group) => group.delete_points(&self.id, point_ids).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
+    pub async fn subscribe(
+        &mut self,
+        group_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == *group_id)
+        {
+            Some(group) => Ok(group.subscribe()),
+            None => return Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn unsubscribe(&mut self, group_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == *group_id)
+        {
+            Some(group) => Ok(group.unsubscribe()),
+            None => return Err(HaliaError::NotFound),
+        }
+    }
+
     pub async fn create_sink(&mut self, sink_id: Option<Uuid>, data: String) -> HaliaResult<()> {
-        todo!()
+        match Sink::new(&self.id, sink_id, data).await {
+            Ok(sink) => Ok(self.sinks.push(sink)),
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
-        todo!()
+        let mut data = vec![];
+        for sink in &self.sinks {
+            data.push(sink.search());
+        }
+
+        Ok(SearchSinksResp {
+            total: self.sinks.len(),
+            data,
+        })
     }
 
     pub async fn update_sink(&mut self, sink_id: Uuid, data: String) -> HaliaResult<()> {
-        todo!()
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => sink.update(&self.id, data).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 }
-
-// async fn subscribe(
-//     &mut self,
-//     group_id: &Uuid,
-// ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-//     self.ref_cnt += 1;
-//     match self
-//         .groups
-//         .write()
-//         .await
-//         .iter_mut()
-//         .find(|group| group.id == *group_id)
-//     {
-//         Some(group) => Ok(group.subscribe()),
-//         None => todo!(),
-//     }
-// }
-
-// async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()> {
-//     self.ref_cnt -= 1;
-//     match self
-//         .groups
-//         .write()
-//         .await
-//         .iter_mut()
-//         .find(|group| group.id == group_id)
-//     {
-//         Some(group) => Ok(group.unsubscribe()),
-//         None => todo!(),
-//     }
-// }
 
 // async fn create_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
 //     let sink = Sink::new(sink_id, data)?;

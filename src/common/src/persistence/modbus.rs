@@ -29,6 +29,13 @@ fn get_group_point_file_path(device_id: &Uuid, group_id: &Uuid) -> PathBuf {
         .join(POINT_FILE)
 }
 
+fn get_sink_point_file_path(device_id: &Uuid, sink_id: &Uuid) -> PathBuf {
+    get_device_dir()
+        .join(device_id.to_string())
+        .join(sink_id.to_string())
+        .join(POINT_FILE)
+}
+
 pub async fn create(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
     super::create(
         get_device_file_path(),
@@ -68,9 +75,17 @@ pub async fn read_groups(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Er
     super::read(get_group_file_path(device_id)).await
 }
 
-pub async fn update_group() {}
+pub async fn update_group(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    super::update(get_group_file_path(device_id), group_id, data).await
+}
 
-pub async fn remove_group() {}
+pub async fn delete_group(device_id: &Uuid, group_id: &Uuid) -> Result<(), io::Error> {
+    super::delete(get_group_file_path(device_id), group_id).await
+}
 
 pub async fn create_group_point(
     device_id: &Uuid,
@@ -107,6 +122,33 @@ pub async fn update_group_point(
     .await
 }
 
-pub async fn delete_group_points() {}
+pub async fn delete_group_point(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    point_id: &Uuid,
+) -> Result<(), io::Error> {
+    super::delete(get_group_point_file_path(device_id, group_id), point_id).await
+}
 
-pub async fn create_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) {}
+pub async fn create_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    super::create(get_sink_file_path(device_id), sink_id, data).await?;
+    fs::create_dir(
+        get_device_dir()
+            .join(device_id.to_string())
+            .join(sink_id.to_string()),
+    )
+    .await?;
+    super::create_file(get_sink_point_file_path(device_id, sink_id)).await
+}
+
+pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_sink_file_path(device_id)).await
+}
+
+pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    super::update(get_sink_file_path(device_id), sink_id, data).await
+}
+
+pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
+    super::delete(get_sink_file_path(device_id), sink_id).await
+}
