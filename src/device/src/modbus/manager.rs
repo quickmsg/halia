@@ -212,7 +212,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.create_sink(sink_id, data).await,
-            None => todo!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -224,7 +224,7 @@ impl Manager {
     ) -> HaliaResult<SearchSinksResp> {
         match self.devices.get(&device_id) {
             Some(device) => device.search_sinks(page, size).await,
-            None => todo!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -236,14 +236,14 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.update_sink(sink_id, data).await,
-            None => todo!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
     pub async fn delete_sink(&self, device_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(_) => todo!(),
-            None => todo!(),
+            Some(mut device) => device.delete_sink(sink_id).await,
+            None => Err(HaliaError::NotFound),
         }
     }
 

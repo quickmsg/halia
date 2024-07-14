@@ -636,50 +636,6 @@ impl Modbus {
     }
 }
 
-// async fn create_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
-//     let sink = Sink::new(sink_id, data)?;
-//     self.sinks.push(sink);
-//     Ok(())
-// }
-
-// async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
-//     let mut data = vec![];
-//     let mut i = 0;
-//     for sink in self.sinks.iter().rev().skip((page - 1) * size) {
-//         data.push(sink.get_info().await);
-//         i += 1;
-//         if i >= size {
-//             break;
-//         }
-//     }
-//     SearchSinksResp {
-//         total: self.sinks.len(),
-//         data,
-//     }
-// }
-
-// async fn update_sink(&mut self, sink_id: Uuid, data: &String) -> HaliaResult<()> {
-//     match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-//         Some(sink) => {
-//             // let mut points = vec![];
-//             // for point_conf in &conf.points {
-//             //     let point = Point::new(point_conf)?;
-//             //     points.push(point);
-//             // }
-//             // *sink.points.write().await = points;
-//             // sink.conf = conf;
-//             Ok(())
-//         }
-//         None => Err(HaliaError::NotFound),
-//     }
-// }
-
-// async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-//     // TODO stop
-//     self.sinks.retain(|sink| sink.id != sink_id);
-//     Ok(())
-// }
-
 // async fn create_sink_item(
 //     &mut self,
 //     sink_id: Uuid,
