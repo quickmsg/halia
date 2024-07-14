@@ -84,7 +84,13 @@ pub async fn update_group(
 }
 
 pub async fn delete_group(device_id: &Uuid, group_id: &Uuid) -> Result<(), io::Error> {
-    super::delete(get_group_file_path(device_id), group_id).await
+    super::delete(get_group_file_path(device_id), group_id).await?;
+    fs::remove_dir_all(
+        get_device_dir()
+            .join(device_id.to_string())
+            .join(group_id.to_string()),
+    )
+    .await
 }
 
 pub async fn create_group_point(
@@ -150,7 +156,13 @@ pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Res
 }
 
 pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
-    super::delete(get_sink_file_path(device_id), sink_id).await
+    super::delete(get_sink_file_path(device_id), sink_id).await?;
+    fs::remove_dir_all(
+        get_device_dir()
+            .join(device_id.to_string())
+            .join(sink_id.to_string()),
+    )
+    .await
 }
 
 pub async fn create_sink_point(

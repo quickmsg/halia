@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use bytes::Bytes;
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
@@ -12,15 +11,18 @@ use tokio::{
     time,
 };
 use tracing::{debug, error};
-use types::apps::{CreateAppReq, SearchConnectorItemResp, SearchSinkResp, SearchSourceResp};
+use types::apps::{SearchConnectorItemResp, SearchSinkResp, SearchSourceResp};
 use uuid::Uuid;
 
-use crate::{save_sink, Connector};
+use crate::save_sink;
 
-pub(crate) const TYPE: &str = "mqtt_v3.1.1";
+pub const TYPE: &str = "mqtt_client";
 
-pub(crate) struct MqttV311 {
-    name: String,
+mod manager;
+mod sink;
+mod source;
+
+pub struct MqttClient {
     pub id: Uuid,
     conf: Conf,
     status: bool,
@@ -60,6 +62,7 @@ struct TopicConf {
 
 #[derive(Serialize, Deserialize)]
 struct Conf {
+    name: String,
     id: String,
     timeout: usize,
     keep_alive: usize,
@@ -77,20 +80,27 @@ struct PasswordConf {
     password: String,
 }
 
-pub fn new(id: Uuid, req: CreateAppReq) -> Result<Box<dyn Connector>> {
-    let conf: Conf = serde_json::from_value(req.conf.clone())?;
-    Ok(Box::new(MqttV311 {
-        id,
-        name: req.name,
-        conf,
-        sources: Arc::new(RwLock::new(vec![])),
-        sinks: Arc::new(RwLock::new(vec![])),
-        status: false,
-        client: None,
-    }))
-}
+impl MqttClient {
+    pub fn new(app_id: Option<Uuid>, data: String) -> Result<Self> {
+        let conf: Conf = serde_json::from_str(&data)?;
 
-impl MqttV311 {
+        let (app_id, new) = match app_id {
+            Some(app_id) => (app_id, false),
+            None => (Uuid::new_v4(), true),
+        };
+
+        if new {}
+
+        Ok(Self {
+            id: app_id,
+            conf,
+            sources: Arc::new(RwLock::new(vec![])),
+            sinks: Arc::new(RwLock::new(vec![])),
+            status: false,
+            client: None,
+        })
+    }
+
     pub async fn run(&mut self) {
         self.status = true;
         let mqtt_options =
@@ -195,17 +205,12 @@ impl MqttV311 {
     }
 }
 
-#[async_trait]
-impl Connector for MqttV311 {
-    fn get_id(&self) -> &Uuid {
-        &self.id
-    }
-
+impl MqttClient {
     fn get_info(&self) -> SearchConnectorItemResp {
         SearchConnectorItemResp {
             id: self.id,
             r#type: TYPE,
-            name: self.name.clone(),
+            name: self.conf.name.clone(),
             conf: serde_json::to_value(&self.conf).unwrap(),
         }
     }

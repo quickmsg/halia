@@ -15,7 +15,7 @@ use types::apps::{
 };
 use uuid::Uuid;
 
-mod mqtt_v311_client;
+mod mqtt;
 
 pub struct AppManager {
     apps: RwLock<Vec<Box<dyn Connector>>>,
@@ -49,7 +49,7 @@ pub trait Connector: Sync + Send {
 impl AppManager {
     async fn do_create_app(&self, app_id: Uuid, req: CreateAppReq) -> HaliaResult<()> {
         let app = match req.r#type.as_str() {
-            mqtt_v311_client::TYPE => mqtt_v311_client::new(app_id, req),
+            // mqtt_v311_client::TYPE => mqtt_v311_client::new(app_id, req),
             _ => return Err(HaliaError::ProtocolNotSupported),
         };
 

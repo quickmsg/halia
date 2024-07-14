@@ -190,8 +190,8 @@ impl Modbus {
 
         self.conf = update_conf;
         if restart {
-            self.stop(true).await?;
-            self.start(true).await?;
+            self.stop(false).await?;
+            self.start(false).await?;
         }
 
         persistence::device::update_device_conf(&self.id, &data).await?;
@@ -199,7 +199,7 @@ impl Modbus {
         Ok(())
     }
 
-    pub async fn start(&mut self, restart: bool) -> HaliaResult<()> {
+    pub async fn start(&mut self, update_persistence: bool) -> HaliaResult<()> {
         if let Err(_) = self
             .on
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -209,7 +209,7 @@ impl Modbus {
 
         debug!("设备开启");
 
-        if !restart {
+        if update_persistence {
             persistence::device::update_device_status(&self.id, Status::Runing).await?;
         }
 
@@ -282,7 +282,7 @@ impl Modbus {
         Ok(())
     }
 
-    pub async fn stop(&mut self, restart: bool) -> HaliaResult<()> {
+    pub async fn stop(&mut self, update_persistence: bool) -> HaliaResult<()> {
         if let Err(_) = self
             .on
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
@@ -291,7 +291,7 @@ impl Modbus {
         }
 
         debug!("设备停止");
-        if !restart {
+        if update_persistence {
             persistence::device::update_device_status(&self.id, Status::Stopped).await?;
         }
 
@@ -316,24 +316,9 @@ impl Modbus {
         if self.on.load(Ordering::SeqCst) {
             return Err(HaliaError::DeviceRunning);
         }
-
         debug!("设备删除");
-        for group in self.groups.write().await.iter_mut() {
-            group.delete(&self.id).await?;
-        }
-        self.stop_signal_tx
-            .as_ref()
-            .unwrap()
-            .send(())
-            .await
-            .unwrap();
-
+        self.stop(false).await.unwrap();
         persistence::device::delete_device(&self.id).await?;
-
-        self.stop_signal_tx = None;
-        self.read_tx = None;
-        self.write_tx = None;
-
         Ok(())
     }
 

@@ -152,10 +152,6 @@ impl Group {
             Some(_) => self.stop().await,
             None => {}
         }
-        for point in &self.points {
-            point.delete(device_id, &self.id).await?;
-        }
-
         persistence::modbus::delete_group(device_id, &self.id).await?;
 
         Ok(())

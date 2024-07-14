@@ -134,38 +134,45 @@ fn modbus_routes() -> Router {
             .route("/:device_id", put(modbus::update))
             .route("/:device_id/start", put(modbus::start))
             .route("/:device_id/stop", put(modbus::stop))
-            .route("/:device_id/delete", delete(modbus::delete))
+            .route("/:device_id", delete(modbus::delete))
             .nest(
-                "/:device_id/group",
+                "/:device_id",
                 Router::new()
-                    .route("/", post(modbus::create_group))
-                    .route("/", get(modbus::search_groups))
-                    .route("/:group_id", put(modbus::update_group))
-                    .route("/:group_id", delete(modbus::delete_group))
                     .nest(
-                        "/:group_id/point",
+                        "/group",
                         Router::new()
-                            .route("/", post(modbus::create_group_point))
-                            .route("/", get(modbus::search_group_points))
-                            .route("/:point_id", put(modbus::update_group_point))
-                            .route("/:point_id/value", post(modbus::write_group_point_value))
-                            .route("/", delete(modbus::delete_group_points)),
-                    ),
-            )
-            .nest(
-                "/sink",
-                Router::new()
-                    .route("/", post(modbus::create_sink))
-                    .route("/", get(modbus::search_sinks))
-                    .route("/:sink_id", put(modbus::update_sink))
-                    .route("/:sink_id", delete(modbus::delete_sink))
+                            .route("/", post(modbus::create_group))
+                            .route("/", get(modbus::search_groups))
+                            .route("/:group_id", put(modbus::update_group))
+                            .route("/:group_id", delete(modbus::delete_group))
+                            .nest(
+                                "/:group_id/point",
+                                Router::new()
+                                    .route("/", post(modbus::create_group_point))
+                                    .route("/", get(modbus::search_group_points))
+                                    .route("/:point_id", put(modbus::update_group_point))
+                                    .route(
+                                        "/:point_id/value",
+                                        post(modbus::write_group_point_value),
+                                    )
+                                    .route("/", delete(modbus::delete_group_points)),
+                            ),
+                    )
                     .nest(
-                        "/:sink_id/point",
+                        "/sink",
                         Router::new()
-                            .route("/", post(modbus::create_sink_point))
-                            .route("/", get(modbus::search_sink_points))
-                            .route("/:point_id", put(modbus::update_sink_point))
-                            .route("/", delete(modbus::delete_sink_points)),
+                            .route("/", post(modbus::create_sink))
+                            .route("/", get(modbus::search_sinks))
+                            .route("/:sink_id", put(modbus::update_sink))
+                            .route("/:sink_id", delete(modbus::delete_sink))
+                            .nest(
+                                "/:sink_id/point",
+                                Router::new()
+                                    .route("/", post(modbus::create_sink_point))
+                                    .route("/", get(modbus::search_sink_points))
+                                    .route("/:point_id", put(modbus::update_sink_point))
+                                    .route("/", delete(modbus::delete_sink_points)),
+                            ),
                     ),
             ),
     )
