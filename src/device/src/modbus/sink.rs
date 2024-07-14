@@ -8,7 +8,7 @@ use tracing::{debug, warn};
 use types::device::{datatype::DataType, device::SearchSinksResp};
 use uuid::Uuid;
 
-use super::{point::Area, WritePointEvent};
+use super::{group_point::Area, WritePointEvent};
 
 #[derive(Debug)]
 pub struct Sink {

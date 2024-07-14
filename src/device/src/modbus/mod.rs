@@ -4,8 +4,8 @@ use common::{
     persistence::{self, device, Status},
 };
 use group::Group;
-use message::MessageBatch;
-use point::Area;
+use group_point::Area;
+use message::{MessageBatch, MessageValue};
 use protocol::modbus::{
     client::{rtu, tcp, Context, Writer},
     SlaveContext,
@@ -42,9 +42,10 @@ use uuid::Uuid;
 
 pub const TYPE: &str = "modbus";
 mod group;
+mod group_point;
 pub mod manager;
-mod point;
 mod sink;
+mod sink_point;
 
 #[derive(Debug)]
 pub struct Modbus {
@@ -57,10 +58,11 @@ pub struct Modbus {
 
     rtt: Arc<AtomicU16>,
     conf: Conf,
-    groups: Arc<RwLock<Vec<Group>>>,
-    read_tx: Option<mpsc::Sender<Uuid>>,
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
     ref_cnt: usize,
+
+    groups: Arc<RwLock<Vec<Group>>>,
+    read_tx: Option<mpsc::Sender<Uuid>>,
 
     sinks: Vec<Sink>,
 }
@@ -152,7 +154,7 @@ impl Modbus {
             err: Arc::new(AtomicBool::new(false)),
             rtt: Arc::new(AtomicU16::new(9999)),
             conf,
-            groups: Arc::new(RwLock::new(Vec::new())),
+            groups: Arc::new(RwLock::new(vec![])),
             read_tx: None,
             write_tx: None,
             ref_cnt: 0,
@@ -374,7 +376,7 @@ impl Modbus {
     }
 
     pub async fn create_group(&mut self, group_id: Option<Uuid>, data: String) -> HaliaResult<()> {
-        match Group::new(group_id, data) {
+        match Group::new(&self.id, group_id, data).await {
             Ok(mut group) => {
                 if self.on.load(Ordering::SeqCst) {
                     let read_tx = self.read_tx.as_ref().unwrap().clone();
@@ -420,7 +422,7 @@ impl Modbus {
         })
     }
 
-    pub async fn update_group(&self, group_id: Uuid, data: String) -> HaliaResult<()> {
+    pub async fn update_group(&mut self, group_id: Uuid, data: String) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -442,7 +444,7 @@ impl Modbus {
         }
     }
 
-    pub async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()> {
+    pub async fn delete_group(&mut self, group_id: Uuid) -> HaliaResult<()> {
         if self.on.load(Ordering::SeqCst) {
             match self
                 .groups
@@ -465,7 +467,7 @@ impl Modbus {
     }
 
     pub async fn create_group_point(
-        &self,
+        &mut self,
         group_id: Uuid,
         point_id: Option<Uuid>,
         data: String,
@@ -477,8 +479,8 @@ impl Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.create_point(point_id, data).await,
-            none => Err(HaliaError::NotFound),
+            Some(group) => group.create_point(&self.id, point_id, data).await,
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -501,16 +503,16 @@ impl Modbus {
     }
 
     pub async fn update_group_point(
-        &self,
+        &mut self,
         group_id: Uuid,
         point_id: Uuid,
         data: String,
     ) -> HaliaResult<()> {
         match self
             .groups
-            .read()
+            .write()
             .await
-            .iter()
+            .iter_mut()
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update_point(point_id, data).await,
@@ -544,7 +546,7 @@ impl Modbus {
     }
 
     pub async fn delete_group_points(
-        &self,
+        &mut self,
         group_id: Uuid,
         point_ids: Vec<Uuid>,
     ) -> HaliaResult<()> {
@@ -691,7 +693,7 @@ impl Modbus {
 
 async fn read_group_points(
     ctx: &mut Context,
-    groups: &RwLock<Vec<Group>>,
+    groups: &Arc<RwLock<Vec<Group>>>,
     group_id: Uuid,
     interval: u64,
     rtt: &Arc<AtomicU16>,

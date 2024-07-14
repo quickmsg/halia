@@ -84,14 +84,14 @@ impl Manager {
         data: String,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(device) => device.update_group(group_id, data).await,
+            Some(mut device) => device.update_group(group_id, data).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
     pub async fn delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(device) => device.delete_group(group_id).await,
+            Some(mut device) => device.delete_group(group_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -104,7 +104,7 @@ impl Manager {
         data: String,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(device) => device.create_group_point(group_id, point_id, data).await,
+            Some(mut device) => device.create_group_point(group_id, point_id, data).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -130,7 +130,7 @@ impl Manager {
         data: String,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(device) => device.update_group_point(group_id, point_id, data).await,
+            Some(mut device) => device.update_group_point(group_id, point_id, data).await,
             None => Err(HaliaError::NotFound),
         }
     }

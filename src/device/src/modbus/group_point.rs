@@ -1,4 +1,7 @@
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::MessageValue;
 use protocol::modbus::{
     client::{Context, Reader},
@@ -7,16 +10,26 @@ use protocol::modbus::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::warn;
-use types::device::{datatype::DataType, point::CreatePointReq};
+use types::device::datatype::DataType;
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub(crate) struct Point {
+pub struct Point {
     pub id: Uuid,
     pub conf: Conf,
-    pub name: String,
     pub quantity: u16,
     pub value: Value,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+pub struct Conf {
+    pub name: String,
+    pub r#type: DataType,
+    pub slave: u8,
+    pub area: Area,
+    pub address: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -28,39 +41,37 @@ pub enum Area {
     HoldingRegisters, // 可读写
 }
 
-#[derive(Deserialize, Debug, Clone, Serialize)]
-pub struct Conf {
-    pub r#type: DataType,
-    pub slave: u8,
-    pub area: Area,
-    pub address: u16,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
-}
-
 impl Point {
-    pub fn new(req: CreatePointReq, id: Option<Uuid>) -> HaliaResult<Point> {
-        let point_id = match id {
-            Some(id) => id,
-            None => Uuid::new_v4(),
+    pub async fn new(
+        device_id: &Uuid,
+        group_id: &Uuid,
+        point_id: Option<Uuid>,
+        data: String,
+    ) -> HaliaResult<Point> {
+        let (point_id, new) = match point_id {
+            Some(point_id) => (point_id, false),
+            None => (Uuid::new_v4(), true),
         };
-        let conf: Conf = serde_json::from_value(req.conf)?;
+
+        let conf: Conf = serde_json::from_str(&data)?;
         let quantity = conf.r#type.get_quantity();
+
+        if new {
+            persistence::modbus::create_group_point(device_id, group_id, &point_id, &data).await?;
+        }
+
         Ok(Point {
             id: point_id,
             conf,
-            name: req.name,
             quantity,
             value: Value::Null,
         })
     }
 
     pub async fn update(&mut self, data: String) -> HaliaResult<()> {
-        let req: CreatePointReq = serde_json::from_str(&data)?;
-        let conf: Conf = serde_json::from_value(req.conf.clone())?;
+        let conf: Conf = serde_json::from_str(&data)?;
         self.quantity = conf.r#type.get_quantity();
         self.conf = conf;
-        self.name = req.name.clone();
         Ok(())
     }
 

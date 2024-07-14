@@ -1,5 +1,8 @@
 use anyhow::{bail, Result};
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
 use std::{
@@ -11,7 +14,7 @@ use std::{
 };
 use tokio::{
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, mpsc},
     time,
 };
 use tracing::debug;
@@ -21,37 +24,43 @@ use types::device::{
 };
 use uuid::Uuid;
 
-use super::{point::Point, WritePointEvent};
+use super::{group_point::Point, WritePointEvent};
 
 #[derive(Debug)]
 pub struct Group {
     pub id: Uuid,
     pub name: String,
     pub interval: u64,
-    pub points: RwLock<Vec<Point>>,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
     pub desc: Option<String>,
 
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
+
+    pub points: Vec<Point>,
 }
 
 impl Group {
-    pub fn new(group_id: Option<Uuid>, data: String) -> Result<Self> {
-        let group_id = match group_id {
-            Some(group_id) => group_id,
-            None => Uuid::new_v4(),
+    pub async fn new(device_id: &Uuid, group_id: Option<Uuid>, data: String) -> Result<Self> {
+        let (group_id, new) = match group_id {
+            Some(group_id) => (group_id, false),
+            None => (Uuid::new_v4(), true),
         };
 
         let conf: CreateGroupReq = serde_json::from_str(&data)?;
         if conf.interval == 0 {
             bail!("group interval must > 0")
         }
+
+        if new {
+            persistence::modbus::create_group(device_id, &group_id, &data).await?;
+        }
+
         Ok(Group {
             id: group_id,
             name: conf.name.clone(),
             interval: conf.interval,
-            points: RwLock::new(vec![]),
+            points: vec![],
             tx: None,
             ref_cnt: 0,
             desc: conf.desc.clone(),
@@ -60,8 +69,8 @@ impl Group {
     }
 
     pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>, err: Arc<AtomicBool>) {
-        let (tx, mut rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(tx);
+        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
         let interval = self.interval;
         let group_id = self.id.clone();
         tokio::spawn(async move {
@@ -69,7 +78,7 @@ impl Group {
             loop {
                 select! {
                     biased;
-                    _ = rx.recv() => {
+                    _ = stop_signal_rx.recv() => {
                         debug!("group stop");
                         return
                     }
@@ -120,26 +129,23 @@ impl Group {
         }
     }
 
-    pub async fn create_point(&self, point_id: Option<Uuid>, data: String) -> HaliaResult<()> {
-        let req: CreatePointReq = serde_json::from_str(&data)?;
-        let point = Point::new(req.clone(), point_id)?;
-        self.points.write().await.push(point);
+    pub async fn create_point(
+        &mut self,
+        device_id: &Uuid,
+        point_id: Option<Uuid>,
+        data: String,
+    ) -> HaliaResult<()> {
+        let point = Point::new(device_id, &self.id, point_id, data).await?;
+        self.points.push(point);
         Ok(())
     }
 
     pub async fn search_points(&self, page: usize, size: usize) -> SearchPointResp {
         let mut resps = vec![];
-        for point in self
-            .points
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip((page - 1) * size)
-        {
+        for point in self.points.iter().rev().skip((page - 1) * size) {
             resps.push(SearchPointItemResp {
                 id: point.id.clone(),
-                name: point.name.clone(),
+                name: point.conf.name.clone(),
                 conf: serde_json::json!(point.conf),
                 value: point.value.clone(),
             });
@@ -149,33 +155,24 @@ impl Group {
         }
 
         SearchPointResp {
-            total: self.points.read().await.len(),
+            total: self.points.len(),
             data: resps,
         }
     }
 
-    pub async fn update_point(&self, point_id: Uuid, data: String) -> HaliaResult<()> {
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|point| point.id == point_id)
-        {
+    pub async fn update_point(&mut self, point_id: Uuid, data: String) -> HaliaResult<()> {
+        match self.points.iter_mut().find(|point| point.id == point_id) {
             Some(point) => point.update(data).await,
             None => return Err(HaliaError::NotFound),
         }
     }
 
     pub async fn get_points_num(&self) -> usize {
-        self.points.read().await.len()
+        self.points.len()
     }
 
-    pub async fn delete_points(&self, ids: Vec<Uuid>) {
-        self.points
-            .write()
-            .await
-            .retain(|point| !ids.contains(&point.id));
+    pub async fn delete_points(&mut self, ids: Vec<Uuid>) {
+        self.points.retain(|point| !ids.contains(&point.id));
     }
 
     pub async fn read_points_value(
@@ -185,11 +182,11 @@ impl Group {
         rtt: &Arc<AtomicU16>,
     ) -> Result<()> {
         let mut msg = Message::default();
-        for point in self.points.write().await.iter_mut() {
+        for point in self.points.iter_mut() {
             let now = Instant::now();
             match point.read(ctx).await {
                 Ok(data) => {
-                    msg.add(point.name.clone(), data);
+                    msg.add(point.conf.name.clone(), data);
                 }
                 Err(e) => bail!("连接断开"),
             }
@@ -215,13 +212,7 @@ impl Group {
         value: String,
     ) -> HaliaResult<WritePointEvent> {
         let value: serde_json::Value = serde_json::from_str(&value)?;
-        match self
-            .points
-            .read()
-            .await
-            .iter()
-            .find(|point| point.id == point_id)
-        {
+        match self.points.iter().find(|point| point.id == point_id) {
             Some(point) => WritePointEvent::new(
                 point.conf.slave,
                 point.conf.area.clone(),
