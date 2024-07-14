@@ -136,10 +136,15 @@ impl Rule {
                                     let sink: CreateRuleSink =
                                         serde_json::from_value(node.conf.clone())?;
                                     let tx = match sink.r#type {
-                                        // CreateRuleSinkType::Device => GLOBAL_DEVICE_MANAGER
-                                        //     .publish(&sink.id, &sink.sink_id.unwrap())
-                                        //     .await
-                                        //     .unwrap(),
+                                        CreateRuleSinkType::Device(r#type) => match r#type.as_str()
+                                        {
+                                            modbus::TYPE => GLOBAL_MODBUS_MANAGER
+                                                .publish(&sink.id, &sink.sink_id.unwrap())
+                                                .await
+                                                .unwrap(),
+                                            _ => todo!(),
+                                        },
+
                                         CreateRuleSinkType::App => GLOBAL_APP_MANAGER
                                             .publish(&sink.id, &sink.sink_id)
                                             .await

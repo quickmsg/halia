@@ -32,7 +32,7 @@ pub struct Conf {
     pub desc: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Area {
     InputDiscrete,

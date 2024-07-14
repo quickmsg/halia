@@ -52,7 +52,7 @@ pub struct CreateRuleSink {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CreateRuleSinkType {
-    Device,
+    Device(String),
     App,
 }
 

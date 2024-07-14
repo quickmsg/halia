@@ -152,3 +152,36 @@ pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Res
 pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
     super::delete(get_sink_file_path(device_id), sink_id).await
 }
+
+pub async fn create_sink_point(
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    point_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    super::create(get_sink_point_file_path(device_id, sink_id), point_id, data).await
+}
+
+pub async fn read_sink_points(
+    device_id: &Uuid,
+    sink_id: &Uuid,
+) -> Result<Vec<(Uuid, String)>, io::Error> {
+    super::read(get_sink_point_file_path(device_id, sink_id)).await
+}
+
+pub async fn update_sink_point(
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    point_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    super::update(get_sink_point_file_path(device_id, sink_id), point_id, data).await
+}
+
+pub async fn delete_sink_point(
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    point_id: &Uuid,
+) -> Result<(), io::Error> {
+    super::delete(get_sink_point_file_path(device_id, sink_id), point_id).await
+}

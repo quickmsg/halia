@@ -1,12 +1,9 @@
 use std::sync::LazyLock;
 
-use common::{
-    error::{HaliaError, HaliaResult},
-    persistence::device,
-};
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use types::device::{
     device::{SearchDeviceItemResp, SearchSinksResp},
     group::SearchGroupResp,
@@ -73,10 +70,15 @@ impl Manager {
     pub async fn delete(&self, device_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => {
-                todo!()
+                device.delete().await?;
             }
-            None => Err(HaliaError::NotFound),
-        }
+            None => return Err(HaliaError::NotFound),
+        };
+
+        self.devices.remove(&device_id);
+        GLOBAL_DEVICE_MANAGER.delete(&device_id).await;
+
+        Ok(())
     }
 
     pub async fn create_group(
@@ -255,8 +257,8 @@ impl Manager {
         data: String,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(_) => todo!(),
-            None => todo!(),
+            Some(mut device) => device.create_sink_point(sink_id, point_id, data).await,
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -266,10 +268,10 @@ impl Manager {
         sink_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchPointResp> {
+    ) -> HaliaResult<serde_json::Value> {
         match self.devices.get(&device_id) {
-            Some(_) => todo!(),
-            None => todo!(),
+            Some(device) => device.search_sink_points(sink_id, page, size).await,
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -280,9 +282,9 @@ impl Manager {
         point_id: Uuid,
         data: String,
     ) -> HaliaResult<()> {
-        match self.devices.get(&device_id) {
-            Some(_) => todo!(),
-            None => todo!(),
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.update_sink_point(sink_id, point_id, data).await,
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -292,9 +294,20 @@ impl Manager {
         sink_id: Uuid,
         point_ids: Vec<Uuid>,
     ) -> HaliaResult<()> {
-        match self.devices.get(&device_id) {
-            Some(_) => todo!(),
-            None => todo!(),
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.delete_sink_points(sink_id, point_ids).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn publish(
+        &self,
+        device_id: &Uuid,
+        sink_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.publish(sink_id).await,
+            None => Err(HaliaError::NotFound),
         }
     }
 }

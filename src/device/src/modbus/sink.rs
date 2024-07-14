@@ -5,7 +5,6 @@ use common::{
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::{select, sync::mpsc};
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -18,10 +17,9 @@ use super::{sink_point::Point, WritePointEvent};
 pub struct Sink {
     pub id: Uuid,
     conf: Conf,
-
-    ref_cnt: AtomicUsize,
+    ref_cnt: usize,
     points: Vec<Point>,
-    stop_signal_tx: Option<mpsc::Sender<()>>,
+    pub stop_signal_tx: Option<mpsc::Sender<()>>,
     publish_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
@@ -36,6 +34,12 @@ struct SearchResp {
     id: Uuid,
     conf: Conf,
     point_cnt: usize,
+}
+
+#[derive(Serialize)]
+struct SearchPointsResp {
+    total: usize,
+    data: Vec<serde_json::Value>,
 }
 
 impl Sink {
@@ -54,7 +58,7 @@ impl Sink {
         Ok(Sink {
             id: sink_id,
             conf,
-            ref_cnt: AtomicUsize::new(0),
+            ref_cnt: 0,
             points: vec![],
             stop_signal_tx: None,
             publish_tx: None,
@@ -77,31 +81,90 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn delete(&mut self) {
-
-    }
-
-    pub fn publish(&mut self) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match &self.publish_tx {
-            Some(tx) => Ok(tx.clone()),
-            None => panic!("must start by mod"),
+    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        persistence::modbus::delete_sink(device_id, &self.id).await?;
+        match self.stop_signal_tx {
+            Some(_) => self.stop().await,
+            None => {}
         }
-    }
 
-    pub async fn create_point(&mut self, point_id: Uuid, data: &String) -> HaliaResult<()> {
-        let point = Point::new(data)?;
-        self.points.push(point);
         Ok(())
     }
 
-    // pub fn search(&self) -> serde_json::Value {
-    //     let resp = SinkSearchResp {
-    //         id: self.id.clone(),
-    //         name: self.conf.name.clone(),
-    //         ref_cnt: 0,
-    //     };
-    //     serde_json::to_value(resp).unwrap()
-    // }
+    pub fn publish(&mut self) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        self.ref_cnt += 1;
+        match &self.publish_tx {
+            Some(tx) => Ok(tx.clone()),
+            None => panic!("must start by device"),
+        }
+    }
+
+    pub async fn unpublish(&mut self) {
+        self.ref_cnt -= 1;
+        if self.ref_cnt == 0 {
+            self.stop().await;
+        }
+    }
+
+    pub async fn create_point(
+        &mut self,
+        device_id: &Uuid,
+        point_id: Option<Uuid>,
+        data: String,
+    ) -> HaliaResult<()> {
+        match Point::new(device_id, &self.id, point_id, data).await {
+            Ok(point) => {
+                self.points.push(point);
+                if self.stop_signal_tx.is_some() {
+                    self.stop().await;
+                    // self.start(tx);
+                }
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn search_points(&self, page: usize, size: usize) -> serde_json::Value {
+        let mut data = vec![];
+        let mut i = 0;
+        for point in self.points.iter().rev().skip((page - 1) * size) {
+            data.push(point.search());
+            i += 1;
+            if i == size {
+                break;
+            }
+        }
+
+        serde_json::to_value(SearchPointsResp {
+            total: self.points.len(),
+            data,
+        })
+        .unwrap()
+    }
+
+    pub async fn update_point(&mut self, point_id: Uuid, data: String) -> HaliaResult<bool> {
+        match self.points.iter_mut().find(|point| point.id == point_id) {
+            Some(point) => point.update(data).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn delete_points(
+        &mut self,
+        device_id: &Uuid,
+        point_ids: Vec<Uuid>,
+    ) -> HaliaResult<()> {
+        for point_id in &point_ids {
+            if let Some(point) = self.points.iter().find(|point| point.id == *point_id) {
+                point.delete(device_id, &self.id).await?;
+            }
+        }
+
+        self.points.retain(|point| !point_ids.contains(&point.id));
+
+        Ok(())
+    }
 
     pub fn start(&mut self, tx: mpsc::Sender<WritePointEvent>) {
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
@@ -166,17 +229,17 @@ impl Sink {
                                 };
 
                                 match WritePointEvent::new(
-                                    point.slave,
-                                    point.area.clone(),
-                                    point.address,
-                                    point.r#type.clone(),
+                                    point.conf.slave,
+                                    point.conf.area.clone(),
+                                    point.conf.address,
+                                    point.conf.r#type.clone(),
                                     value,
                                 ) {
                                     Ok(wpe) => {
                                         let _ = tx.send(wpe);
                                     }
                                     Err(e) => {
-                                        debug!("value is err");
+                                        debug!("value is err :{e}");
                                     }
                                 }
                             }
@@ -198,13 +261,4 @@ impl Sink {
             None => {}
         }
     }
-}
-
-#[derive(Serialize)]
-struct SinkSearchResp {
-    id: Uuid,
-    name: String,
-    desc: Option<String>,
-    ref_cnt: usize,
-    point_cnt: usize,
 }

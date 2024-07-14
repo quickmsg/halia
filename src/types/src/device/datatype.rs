@@ -7,7 +7,7 @@ use serde_json::Value;
 use tracing::debug;
 use std::convert::TryInto;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataType {
     Bool(Option<u8>),
     Int8(Endian),

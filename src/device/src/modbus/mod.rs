@@ -5,7 +5,7 @@ use common::{
 };
 use group::Group;
 use group_point::Area;
-use message::{MessageBatch, MessageValue};
+use message::MessageBatch;
 use protocol::modbus::{
     client::{rtu, tcp, Context, Writer},
     SlaveContext,
@@ -24,18 +24,14 @@ use std::{
 use tokio::{
     net::TcpStream,
     select,
-    sync::{
-        broadcast,
-        mpsc::{self, PermitIterator},
-        RwLock,
-    },
+    sync::{broadcast, mpsc, RwLock},
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, warn};
 use types::device::{
     datatype::{DataType, Endian},
-    device::{Mode, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
+    device::{Mode, SearchDeviceItemResp, SearchSinksResp},
     group::SearchGroupResp,
     point::SearchPointResp,
 };
@@ -614,8 +610,13 @@ impl Modbus {
 
     pub async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
         let mut data = vec![];
-        for sink in &self.sinks {
+        let mut i = 0;
+        for sink in self.sinks.iter().rev().skip((page - 1) * size) {
             data.push(sink.search());
+            i += 1;
+            if i == size {
+                break;
+            }
         }
 
         Ok(SearchSinksResp {
@@ -632,42 +633,98 @@ impl Modbus {
     }
 
     pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => {
+                sink.delete(&self.id).await?;
+                self.sinks.retain(|sink| sink.id != sink_id);
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn create_sink_point(
+        &mut self,
+        sink_id: Uuid,
+        point_id: Option<Uuid>,
+        data: String,
+    ) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => {
+                sink.create_point(&self.id, point_id, data).await?;
+                if sink.stop_signal_tx.is_some() {
+                    sink.stop().await;
+                    sink.start(self.write_tx.as_ref().unwrap().clone());
+                }
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn search_sink_points(
+        &self,
+        sink_id: Uuid,
+        page: usize,
+        size: usize,
+    ) -> HaliaResult<serde_json::Value> {
+        match self.sinks.iter().find(|sink| sink.id == sink_id) {
+            Some(sink) => Ok(sink.search_points(page, size).await),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn update_sink_point(
+        &mut self,
+        sink_id: Uuid,
+        point_id: Uuid,
+        data: String,
+    ) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => match sink.update_point(point_id, data).await {
+                Ok(restart) => {
+                    if restart && self.on.load(Ordering::SeqCst) {
+                        sink.stop().await;
+                        sink.start(self.write_tx.as_ref().unwrap().clone());
+                    }
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            },
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn delete_sink_points(
+        &mut self,
+        sink_id: Uuid,
+        point_ids: Vec<Uuid>,
+    ) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => match sink.delete_points(&self.id, point_ids).await {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e),
+            },
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => {
+                if self.on.load(Ordering::SeqCst) && sink.stop_signal_tx.is_none() {
+                    sink.start(self.write_tx.as_ref().unwrap().clone());
+                }
+                sink.publish()
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn unpublish(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 }
-
-// async fn create_sink_item(
-//     &mut self,
-//     sink_id: Uuid,
-//     item_id: Uuid,
-//     data: &String,
-// ) -> HaliaResult<()> {
-//     match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-//         Some(sink) => match sink.create_point(item_id, data).await {
-//             Ok(_) => {
-//                 sink.stop().await;
-//                 sink.start(self.write_tx.as_ref().unwrap().clone());
-//                 Ok(())
-//             }
-//             Err(e) => Err(e),
-//         },
-//         None => Err(HaliaError::NotFound),
-//     }
-// }
-
-// async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-//     match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-//         Some(sink) => {
-//             if sink.on.load(Ordering::SeqCst) {
-//                 sink.start(self.write_tx.as_ref().unwrap().clone());
-//                 sink.publish()
-//             } else {
-//                 Err(HaliaError::NotFound)
-//             }
-//         }
-//         None => Err(HaliaError::NotFound),
-//     }
-// }
 
 async fn read_group_points(
     ctx: &mut Context,

@@ -23,7 +23,7 @@ impl DeviceManager {
         self.devices.write().await.push((r#type, device_id));
     }
 
-    pub async fn search_devices(&self, page: usize, size: usize) -> SearchDeviceResp {
+    pub async fn search(&self, page: usize, size: usize) -> SearchDeviceResp {
         let mut data = vec![];
         let mut i = 0;
         let mut total = 0;
@@ -57,6 +57,10 @@ impl DeviceManager {
             close_cnt,
             data,
         }
+    }
+
+    pub async fn delete(&self, device_id: &Uuid) {
+        self.devices.write().await.retain(|(_, id)| id == device_id);
     }
 
     pub async fn recover(&self) -> HaliaResult<()> {

@@ -1,11 +1,7 @@
 use axum::extract::{Path, Query};
 use common::error::HaliaError;
 use device::modbus::manager::GLOBAL_MODBUS_MANAGER;
-use types::device::{
-    device::SearchSinksResp,
-    group::SearchGroupResp,
-    point::{CreatePointReq, SearchPointResp},
-};
+use types::device::{device::SearchSinksResp, group::SearchGroupResp, point::SearchPointResp};
 use uuid::Uuid;
 
 use crate::{AppResp, DeleteIdsQuery, Pagination};
@@ -225,7 +221,7 @@ pub(crate) async fn create_sink_point(
 pub(crate) async fn search_sink_points(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     pagination: Query<Pagination>,
-) -> AppResp<SearchPointResp> {
+) -> AppResp<serde_json::Value> {
     match GLOBAL_MODBUS_MANAGER
         .search_sink_points(device_id, group_id, pagination.p, pagination.s)
         .await
