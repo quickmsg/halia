@@ -50,7 +50,6 @@ mod sink_point;
 #[derive(Debug)]
 pub struct Modbus {
     pub id: Uuid,
-    name: String,
     on: Arc<AtomicBool>,  // true:开启 false:关闭
     err: Arc<AtomicBool>, // true:错误 false:正常
 
@@ -149,7 +148,6 @@ impl Modbus {
 
         Ok(Modbus {
             id: device_id,
-            name: "xx".to_string(),
             on: Arc::new(AtomicBool::new(false)),
             err: Arc::new(AtomicBool::new(false)),
             rtt: Arc::new(AtomicU16::new(9999)),
@@ -181,7 +179,7 @@ impl Modbus {
     pub fn search(&self) -> SearchDeviceItemResp {
         SearchDeviceItemResp {
             id: self.id,
-            name: self.name.clone(),
+            name: self.conf.name.clone(),
             r#type: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on.load(Ordering::SeqCst),
@@ -192,10 +190,6 @@ impl Modbus {
 
     pub async fn update(&mut self, data: String) -> HaliaResult<()> {
         let update_conf: Conf = serde_json::from_str(&data)?;
-
-        if self.name != update_conf.name {
-            self.name = update_conf.name.clone();
-        }
 
         if self.conf != update_conf {
             self.conf = update_conf;

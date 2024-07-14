@@ -2,7 +2,6 @@ use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
-use tracing::debug;
 use types::device::device::SearchDeviceResp;
 
 use uuid::Uuid;
@@ -83,7 +82,6 @@ impl DeviceManager {
                         }
                         _ => {}
                     }
-                    debug!("{}{:?}", device_id, datas);
                 }
                 Ok(())
             }
