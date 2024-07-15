@@ -1,31 +1,48 @@
+use apps::GLOBAL_APP_MANAGER;
 use axum::{
+    extract::Query,
     routing::{delete, get, post, put},
     Router,
 };
+use types::device::device::SearchDeviceResp;
+
+use crate::{AppResp, Pagination};
+
+mod mqtt_client;
 
 pub fn routes() -> Router {
     Router::new()
-        .route("/", post(apps::create_app))
-        .route("/search", get(apps::search_apps))
-        .route("/:app_id", put(apps::update_app))
-        .route("/:app_id", delete(apps::delete_app))
-        .nest(
-            "/:app_id/source",
-            Router::new()
-                .route("/", post(apps::create_source))
-                .route("/search", get(apps::search_sources))
-                .route("/:source_id", put(apps::update_source))
-                .route("/:source_id", delete(apps::delete_source)),
-        )
-        .nest(
-            "/:app_id/sink",
-            Router::new()
-                .route("/", post(apps::create_sink))
-                .route("/search", get(apps::search_sinks))
-                .route("/:sink_id", put(apps::update_sink))
-                .route("/:sink_id", delete(apps::delete_sink)),
-        )
+        .route("/", get(search_apps))
+        .nest("/mqtt_client", mqtt_client_routes())
+}
+
+async fn search_apps(pagination: Query<Pagination>) -> AppResp<SearchDeviceResp> {
+    AppResp::with_data(GLOBAL_APP_MANAGER.search(pagination.p, pagination.s).await)
 }
 
 fn mqtt_client_routes() -> Router {
+    Router::new()
+        .route("/", post(mqtt_client::create))
+        .route("/:app_id", put(mqtt_client::update))
+        .route("/:app_id", delete(mqtt_client::delete))
+        .nest(
+            "/:app_id",
+            Router::new()
+                .nest(
+                    "/source",
+                    Router::new()
+                        .route("/", post(mqtt_client::create_source))
+                        .route("/", get(mqtt_client::search_sources))
+                        .route("/:source_id", put(mqtt_client::update_source))
+                        .route("/:source_id", delete(mqtt_client::delete_source)),
+                )
+                .nest(
+                    "/sink",
+                    Router::new()
+                        .route("/", post(mqtt_client::create_sink))
+                        .route("/", get(mqtt_client::search_sinks))
+                        .route("/:sink_id", put(mqtt_client::update_sink))
+                        .route("/:sink_id", delete(mqtt_client::delete_sink)),
+                ),
+        )
 }

@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 pub const TYPE: &str = "mqtt_client";
 
-mod manager;
+pub mod manager;
 mod sink;
 mod source;
 

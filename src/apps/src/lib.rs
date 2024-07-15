@@ -4,7 +4,7 @@ use std::{sync::LazyLock, vec};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-mod mqtt;
+pub mod mqtt_client;
 
 pub struct AppManager {
     apps: RwLock<Vec<(&'static str, Uuid)>>,
