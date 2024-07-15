@@ -2,6 +2,7 @@
 use common::error::HaliaResult;
 use std::{sync::LazyLock, vec};
 use tokio::sync::RwLock;
+use types::apps::SearchAppsResp;
 use uuid::Uuid;
 
 pub mod mqtt_client;
@@ -19,7 +20,7 @@ impl AppManager {
         self.apps.write().await.push((r#type, app_id));
     }
 
-    pub async fn search(&self, page: usize, size: usize) -> HaliaResult<()> {
+    pub async fn search(&self, page: usize, size: usize) -> HaliaResult<SearchAppsResp> {
         todo!()
     }
 

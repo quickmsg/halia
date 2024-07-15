@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+pub mod mqtt_client;
+
 #[derive(Deserialize, Debug, Serialize, Clone)]
 pub struct CreateAppReq {
     pub r#type: String,
@@ -10,27 +12,14 @@ pub struct CreateAppReq {
 }
 
 #[derive(Serialize)]
-pub struct SearchConnectorResp {
+pub struct SearchAppsResp {
     pub total: usize,
-    pub data: Vec<SearchConnectorItemResp>,
+    pub data: Vec<SearchAppItemResp>,
 }
 
 #[derive(Serialize)]
-pub struct SearchConnectorItemResp {
+pub struct SearchAppItemResp {
     pub id: Uuid,
     pub r#type: &'static str,
-    pub name: String,
     pub conf: Value,
-}
-
-#[derive(Serialize)]
-pub struct SearchSourceResp {
-    pub total: usize,
-    pub data: Vec<Value>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSinkResp {
-    pub total: usize,
-    pub data: Vec<Value>,
 }

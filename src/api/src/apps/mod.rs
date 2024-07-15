@@ -4,7 +4,7 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use types::device::device::SearchDeviceResp;
+use types::apps::SearchAppsResp;
 
 use crate::{AppResp, Pagination};
 
@@ -16,8 +16,11 @@ pub fn routes() -> Router {
         .nest("/mqtt_client", mqtt_client_routes())
 }
 
-async fn search_apps(pagination: Query<Pagination>) -> AppResp<SearchDeviceResp> {
-    AppResp::with_data(GLOBAL_APP_MANAGER.search(pagination.p, pagination.s).await)
+async fn search_apps(pagination: Query<Pagination>) -> AppResp<SearchAppsResp> {
+    match GLOBAL_APP_MANAGER.search(pagination.p, pagination.s).await {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
 }
 
 fn mqtt_client_routes() -> Router {

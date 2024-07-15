@@ -6,12 +6,16 @@ use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};
+use source::Source;
 use tokio::{
     sync::{broadcast, mpsc, RwLock},
     time,
 };
 use tracing::{debug, error};
-use types::apps::{SearchConnectorItemResp, SearchSinkResp, SearchSourceResp};
+use types::apps::{
+    mqtt_client::{SearchSinksResp, SearchSourcesResp},
+    SearchAppItemResp,
+};
 use uuid::Uuid;
 
 pub const TYPE: &str = "mqtt_client";
@@ -28,16 +32,6 @@ pub struct MqttClient {
     sources: Arc<RwLock<Vec<Source>>>,
     sinks: Arc<RwLock<Vec<Sink>>>,
     client: Option<AsyncClient>,
-}
-
-#[derive(Deserialize, Serialize)]
-struct Source {
-    pub id: Uuid,
-    pub topic: String,
-    pub qos: u8,
-    #[serde(skip)]
-    pub tx: Option<broadcast::Sender<MessageBatch>>,
-    pub ref_cnt: u8,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -204,11 +198,10 @@ impl MqttClient {
 }
 
 impl MqttClient {
-    fn get_info(&self) -> SearchConnectorItemResp {
-        SearchConnectorItemResp {
+    fn search(&self) -> SearchAppItemResp {
+        SearchAppItemResp {
             id: self.id,
             r#type: TYPE,
-            name: self.conf.name.clone(),
             conf: serde_json::to_value(&self.conf).unwrap(),
         }
     }
@@ -257,7 +250,7 @@ impl MqttClient {
         let _ = self.do_create_source(id, topic_conf).await;
     }
 
-    async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourceResp> {
+    async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourcesResp> {
         let mut total = 0;
         let mut i = 0;
         let mut data = vec![];
@@ -269,7 +262,7 @@ impl MqttClient {
             i += 1;
         }
 
-        Ok(SearchSourceResp { total, data })
+        Ok(SearchSourcesResp { total, data })
     }
 
     async fn update_source(&self, source_id: Uuid, req: &Bytes) -> HaliaResult<()> {
@@ -328,7 +321,7 @@ impl MqttClient {
         let _ = self.do_create_sink(id, topic_conf).await;
     }
 
-    async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinkResp> {
+    async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
         let mut total = 0;
         let mut i = 0;
         let mut data = vec![];
@@ -340,7 +333,7 @@ impl MqttClient {
             i += 1;
         }
 
-        Ok(SearchSinkResp { total, data })
+        Ok(SearchSinksResp { total, data })
     }
 
     async fn publish(&mut self, sink_id: &Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>> {
