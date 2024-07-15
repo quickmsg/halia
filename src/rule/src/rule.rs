@@ -71,10 +71,10 @@ impl Rule {
                                     _ => unreachable!(),
                                 }
                             }
-                            types::rule::CreateRuleSourceType::App => GLOBAL_APP_MANAGER
-                                .subscribe(&source.id, source.source_id)
-                                .await
-                                .unwrap(),
+                            // types::rule::CreateRuleSourceType::App => GLOBAL_APP_MANAGER
+                            //     .subscribe(&source.id, source.source_id)
+                            //     .await
+                            //     .unwrap(),
                             _ => todo!(),
                         };
                         receivers.insert(info.first_id, vec![receiver]);
@@ -145,10 +145,10 @@ impl Rule {
                                             _ => todo!(),
                                         },
 
-                                        CreateRuleSinkType::App => GLOBAL_APP_MANAGER
-                                            .publish(&sink.id, &sink.sink_id)
-                                            .await
-                                            .unwrap(),
+                                        // CreateRuleSinkType::App => GLOBAL_APP_MANAGER
+                                        //     .publish(&sink.id, &sink.sink_id)
+                                        //     .await
+                                        //     .unwrap(),
                                         _ => todo!(),
                                     };
 

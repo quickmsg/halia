@@ -14,8 +14,6 @@ use tracing::{debug, error};
 use types::apps::{SearchConnectorItemResp, SearchSinkResp, SearchSourceResp};
 use uuid::Uuid;
 
-use crate::save_sink;
-
 pub const TYPE: &str = "mqtt_client";
 
 mod manager;
@@ -251,7 +249,6 @@ impl MqttClient {
     async fn create_source(&self, req: &Bytes) -> HaliaResult<()> {
         let topic_conf: TopicConf = serde_json::from_slice(req)?;
         let source_id = Uuid::new_v4();
-        super::save_source(&self.id, &source_id, req).await?;
         self.do_create_source(source_id, topic_conf).await
     }
 
@@ -323,7 +320,6 @@ impl MqttClient {
     async fn create_sink(&self, req: &Bytes) -> HaliaResult<()> {
         let topic_conf: TopicConf = serde_json::from_slice(req)?;
         let sink_id = Uuid::new_v4();
-        save_sink(&self.id, &sink_id, req).await?;
         self.do_create_sink(sink_id, topic_conf).await
     }
 

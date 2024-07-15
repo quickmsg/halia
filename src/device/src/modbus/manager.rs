@@ -23,7 +23,6 @@ pub struct Manager {
     devices: DashMap<Uuid, Modbus>,
 }
 
-// for modbus
 impl Manager {
     pub async fn create(&self, device_id: Option<Uuid>, data: String) -> HaliaResult<()> {
         let device = Modbus::new(device_id, &data).await?;
