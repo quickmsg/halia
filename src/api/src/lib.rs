@@ -60,7 +60,7 @@ struct Pagination {
 pub async fn start() {
     let app = Router::new()
         .nest("/api", devices::routes())
-        .nest("/api/app", apps::routes())
+        .nest("/api", apps::routes())
         .nest("/api", rule_routes())
         .layer(
             CorsLayer::new()
@@ -79,12 +79,14 @@ pub(crate) struct DeleteIdsQuery {
 }
 
 fn rule_routes() -> Router {
-    Router::new()
-        .route("/rule", post(rule::create))
-        .route("/rules", get(rule::search))
-        .route("/rule/:id", get(rule::read))
-        .route("/rule/:id/start", put(rule::start))
-        .route("/rule/:id/stop", put(rule::stop))
-        .route("/rule/:id", put(rule::update))
-        .route("/rule/:id", delete(rule::delete))
+    Router::new().nest(
+        "/rule",
+        Router::new()
+            .route("/", post(rule::create))
+            .route("/", get(rule::search))
+            .route("/:id/start", put(rule::start))
+            .route("/:id/stop", put(rule::stop))
+            .route("/:id", put(rule::update))
+            .route("/:id", delete(rule::delete)),
+    )
 }

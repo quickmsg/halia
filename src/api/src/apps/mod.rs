@@ -12,7 +12,7 @@ mod mqtt_client;
 
 pub fn routes() -> Router {
     Router::new()
-        .route("/", get(search_apps))
+        .route("/app", get(search_apps))
         .nest("/mqtt_client", mqtt_client_routes())
 }
 
