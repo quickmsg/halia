@@ -5,9 +5,12 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
 use types::devices::{
-    device::{SearchDeviceItemResp, SearchSinksResp},
-    group::SearchGroupResp,
-    modbus::CreateUpdateModbusReq,
+    device::SearchDeviceItemResp,
+    modbus::{
+        CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
+        CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupsResp, SearchSinkPointsResp,
+        SearchSinksResp,
+    },
     point::SearchPointResp,
 };
 use uuid::Uuid;
@@ -89,10 +92,10 @@ impl Manager {
         &self,
         device_id: Uuid,
         group_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateGroupReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_group(group_id, data).await,
+            Some(mut device) => device.create_group(group_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -102,7 +105,7 @@ impl Manager {
         device_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchGroupResp> {
+    ) -> HaliaResult<SearchGroupsResp> {
         match self.devices.get(&device_id) {
             Some(device) => device.search_groups(page, size).await,
             None => Err(HaliaError::NotFound),
@@ -113,10 +116,10 @@ impl Manager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        data: String,
+        req: CreateUpdateGroupReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_group(group_id, data).await,
+            Some(mut device) => device.update_group(group_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -133,10 +136,10 @@ impl Manager {
         device_id: Uuid,
         group_id: Uuid,
         point_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_group_point(group_id, point_id, data).await,
+            Some(mut device) => device.create_group_point(group_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -159,10 +162,10 @@ impl Manager {
         device_id: Uuid,
         group_id: Uuid,
         point_id: Uuid,
-        data: String,
+        req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_group_point(group_id, point_id, data).await,
+            Some(mut device) => device.update_group_point(group_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -214,10 +217,10 @@ impl Manager {
         &self,
         device_id: Uuid,
         sink_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_sink(sink_id, data).await,
+            Some(mut device) => device.create_sink(sink_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -229,7 +232,7 @@ impl Manager {
         size: usize,
     ) -> HaliaResult<SearchSinksResp> {
         match self.devices.get(&device_id) {
-            Some(device) => device.search_sinks(page, size).await,
+            Some(device) => Ok(device.search_sinks(page, size).await),
             None => Err(HaliaError::NotFound),
         }
     }
@@ -238,10 +241,10 @@ impl Manager {
         &self,
         device_id: Uuid,
         sink_id: Uuid,
-        data: String,
+        req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_sink(sink_id, data).await,
+            Some(mut device) => device.update_sink(sink_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -258,10 +261,10 @@ impl Manager {
         device_id: Uuid,
         sink_id: Uuid,
         point_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateSinkPointReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_sink_point(sink_id, point_id, data).await,
+            Some(mut device) => device.create_sink_point(sink_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -272,7 +275,7 @@ impl Manager {
         sink_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<serde_json::Value> {
+    ) -> HaliaResult<SearchSinkPointsResp> {
         match self.devices.get(&device_id) {
             Some(device) => device.search_sink_points(sink_id, page, size).await,
             None => Err(HaliaError::NotFound),
@@ -284,10 +287,10 @@ impl Manager {
         device_id: Uuid,
         sink_id: Uuid,
         point_id: Uuid,
-        data: String,
+        req: CreateUpdateSinkPointReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_sink_point(sink_id, point_id, data).await,
+            Some(mut device) => device.update_sink_point(sink_id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }

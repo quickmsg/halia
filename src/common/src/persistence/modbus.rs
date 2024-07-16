@@ -1,7 +1,6 @@
 use std::{io, path::PathBuf};
 
 use tokio::fs;
-use types::devices::modbus::CreateUpdateModbusReq;
 use uuid::Uuid;
 
 use super::{
@@ -60,9 +59,9 @@ pub async fn create(device_id: &Uuid, data: String) -> Result<(), io::Error> {
 pub async fn create_group(
     device_id: &Uuid,
     group_id: &Uuid,
-    data: &String,
+    data: String,
 ) -> Result<(), io::Error> {
-    super::create(get_group_file_path(device_id), group_id, data).await?;
+    super::create(get_group_file_path(device_id), group_id, &data).await?;
     fs::create_dir(
         get_device_dir()
             .join(device_id.to_string())
@@ -79,9 +78,9 @@ pub async fn read_groups(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Er
 pub async fn update_group(
     device_id: &Uuid,
     group_id: &Uuid,
-    data: &String,
+    data: String,
 ) -> Result<(), io::Error> {
-    super::update(get_group_file_path(device_id), group_id, data).await
+    super::update(get_group_file_path(device_id), group_id, &data).await
 }
 
 pub async fn delete_group(device_id: &Uuid, group_id: &Uuid) -> Result<(), io::Error> {
@@ -98,12 +97,12 @@ pub async fn create_group_point(
     device_id: &Uuid,
     group_id: &Uuid,
     point_id: &Uuid,
-    data: &String,
+    data: String,
 ) -> Result<(), io::Error> {
     super::create(
         get_group_point_file_path(device_id, group_id),
         point_id,
-        data,
+        &data,
     )
     .await
 }
@@ -119,12 +118,12 @@ pub async fn update_group_point(
     device_id: &Uuid,
     group_id: &Uuid,
     point_id: &Uuid,
-    data: &String,
+    data: String,
 ) -> Result<(), io::Error> {
     super::update(
         get_group_point_file_path(device_id, group_id),
         point_id,
-        data,
+        &data,
     )
     .await
 }
@@ -137,8 +136,8 @@ pub async fn delete_group_point(
     super::delete(get_group_point_file_path(device_id, group_id), point_id).await
 }
 
-pub async fn create_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
-    super::create(get_sink_file_path(device_id), sink_id, data).await?;
+pub async fn create_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+    super::create(get_sink_file_path(device_id), sink_id, &data).await?;
     fs::create_dir(
         get_device_dir()
             .join(device_id.to_string())
@@ -152,8 +151,8 @@ pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Err
     super::read(get_sink_file_path(device_id)).await
 }
 
-pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
-    super::update(get_sink_file_path(device_id), sink_id, data).await
+pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+    super::update(get_sink_file_path(device_id), sink_id, &data).await
 }
 
 pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
@@ -170,9 +169,14 @@ pub async fn create_sink_point(
     device_id: &Uuid,
     sink_id: &Uuid,
     point_id: &Uuid,
-    data: &String,
+    data: String,
 ) -> Result<(), io::Error> {
-    super::create(get_sink_point_file_path(device_id, sink_id), point_id, data).await
+    super::create(
+        get_sink_point_file_path(device_id, sink_id),
+        point_id,
+        &data,
+    )
+    .await
 }
 
 pub async fn read_sink_points(

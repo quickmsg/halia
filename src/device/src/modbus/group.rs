@@ -5,8 +5,6 @@ use common::{
 };
 use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::{
     sync::{
         atomic::{AtomicBool, AtomicU16, Ordering},
@@ -20,7 +18,10 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::devices::point::{SearchPointItemResp, SearchPointResp};
+use types::devices::{
+    modbus::{CreateUpdateGroupPointReq, CreateUpdateGroupReq, SearchGroupsItemResp},
+    point::{SearchPointItemResp, SearchPointResp},
+};
 use uuid::Uuid;
 
 use super::{group_point::Point, WritePointEvent};
@@ -28,7 +29,7 @@ use super::{group_point::Point, WritePointEvent};
 #[derive(Debug)]
 pub struct Group {
     pub id: Uuid,
-    pub conf: Conf,
+    pub conf: CreateUpdateGroupReq,
 
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
@@ -37,39 +38,33 @@ pub struct Group {
     pub points: Vec<Point>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Conf {
-    pub name: String,
-    pub interval: u64,
-    pub desc: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct SearchInfo {
-    pub id: Uuid,
-    pub conf: Conf,
-    pub point_cnt: usize,
-}
-
 impl Group {
-    pub async fn new(device_id: &Uuid, group_id: Option<Uuid>, data: String) -> Result<Self> {
+    pub async fn new(
+        device_id: &Uuid,
+        group_id: Option<Uuid>,
+        req: CreateUpdateGroupReq,
+    ) -> Result<Self> {
         let (group_id, new) = match group_id {
             Some(group_id) => (group_id, false),
             None => (Uuid::new_v4(), true),
         };
 
-        let conf: Conf = serde_json::from_str(&data)?;
-        if conf.interval == 0 {
+        if req.interval == 0 {
             bail!("group interval must > 0")
         }
 
         if new {
-            persistence::modbus::create_group(device_id, &group_id, &data).await?;
+            persistence::modbus::create_group(
+                device_id,
+                &group_id,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
         Ok(Group {
             id: group_id,
-            conf,
+            conf: req,
             points: vec![],
             tx: None,
             ref_cnt: 0,
@@ -81,7 +76,8 @@ impl Group {
         match persistence::modbus::read_group_points(device_id, &self.id).await {
             Ok(points) => {
                 for (point_id, data) in points {
-                    self.create_point(device_id, Some(point_id), data).await?;
+                    let req: CreateUpdateGroupPointReq = serde_json::from_str(&data)?;
+                    self.create_point(device_id, Some(point_id), req).await?;
                 }
                 Ok(())
             }
@@ -89,12 +85,10 @@ impl Group {
         }
     }
 
-    pub fn search(&self) -> serde_json::Value {
-        json!(SearchInfo {
-            id: self.id.clone(),
+    pub fn search(&self) -> SearchGroupsItemResp {
+        SearchGroupsItemResp {
             conf: self.conf.clone(),
-            point_cnt: self.points.len(),
-        })
+        }
     }
 
     pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>, err: Arc<AtomicBool>) {
@@ -133,16 +127,23 @@ impl Group {
         self.stop_signal_tx = None;
     }
 
-    pub async fn update(&mut self, device_id: &Uuid, data: String) -> HaliaResult<bool> {
-        let update_conf: Conf = serde_json::from_str(&data)?;
-
-        persistence::modbus::update_group(device_id, &self.id, &data).await?;
+    pub async fn update(
+        &mut self,
+        device_id: &Uuid,
+        req: CreateUpdateGroupReq,
+    ) -> HaliaResult<bool> {
+        persistence::modbus::update_group(
+            device_id,
+            &self.id,
+            serde_json::to_string(&req).unwrap(),
+        )
+        .await?;
 
         let mut restart = false;
-        if self.conf.interval != update_conf.interval {
+        if self.conf.interval != req.interval {
             restart = true;
         }
-        self.conf = update_conf;
+        self.conf = req;
 
         Ok(restart)
     }
@@ -180,11 +181,12 @@ impl Group {
         &mut self,
         device_id: &Uuid,
         point_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<()> {
-        let point = Point::new(device_id, &self.id, point_id, data).await?;
-        self.points.push(point);
-        Ok(())
+        match Point::new(device_id, &self.id, point_id, req).await {
+            Ok(point) => Ok(self.points.push(point)),
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn search_points(&self, page: usize, size: usize) -> SearchPointResp {
@@ -211,10 +213,10 @@ impl Group {
         &mut self,
         device_id: &Uuid,
         point_id: Uuid,
-        data: String,
+        req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<()> {
         match self.points.iter_mut().find(|point| point.id == point_id) {
-            Some(point) => point.update(device_id, &self.id, data).await,
+            Some(point) => point.update(device_id, &self.id, req).await,
             None => return Err(HaliaError::NotFound),
         }
     }

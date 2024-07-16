@@ -10,7 +10,6 @@ use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
 mod apps;
-mod device;
 mod devices;
 mod rule;
 

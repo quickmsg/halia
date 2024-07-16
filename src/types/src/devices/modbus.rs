@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::datatype::DataType;
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateModbusReq {
     pub name: String,
@@ -49,4 +51,91 @@ pub enum Mode {
 pub enum Encode {
     Tcp,
     RtuOverTcp,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct CreateUpdateGroupReq {
+    pub name: String,
+    pub interval: u64,
+    pub desc: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct SearchGroupsResp {
+    pub total: usize,
+    pub data: Vec<SearchGroupsItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchGroupsItemResp {
+    pub conf: CreateUpdateGroupReq,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+pub struct CreateUpdateGroupPointReq {
+    pub name: String,
+    pub r#type: DataType,
+    pub slave: u8,
+    pub area: Area,
+    pub address: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Area {
+    InputDiscrete,
+    Coils, // 可读写
+    InputRegisters,
+    HoldingRegisters, // 可读写
+}
+
+#[derive(Serialize)]
+pub struct SearchGroupPointsResp {
+    pub total: usize,
+    pub data: Vec<SearchGroupPointsItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchGroupPointsItemResp {
+    pub conf: CreateUpdateGroupPointReq,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct CreateUpdateSinkReq {
+    name: String,
+    desc: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSinksResp {
+    pub total: usize,
+    pub data: Vec<SearchSinksItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSinksItemResp {
+    pub conf: CreateUpdateSinkReq,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct CreateUpdateSinkPointReq {
+    pub r#type: DataType,
+    pub slave: u8,
+    pub area: Area,
+    pub address: u16,
+    pub value: serde_json::Value,
+    pub desc: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSinkPointsResp {
+    pub total: usize,
+    pub data: Vec<SearchSinkPointsItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSinkPointsItemResp {
+    pub conf: CreateUpdateSinkPointReq,
 }

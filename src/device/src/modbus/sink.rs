@@ -4,9 +4,11 @@ use common::{
 };
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tokio::{select, sync::mpsc};
 use tracing::{debug, warn};
+use types::devices::modbus::{
+    CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchSinkPointsResp, SearchSinksItemResp,
+};
 use uuid::Uuid;
 
 use crate::modbus::sink_point::TargetValue;
@@ -16,24 +18,11 @@ use super::{sink_point::Point, WritePointEvent};
 #[derive(Debug)]
 pub struct Sink {
     pub id: Uuid,
-    conf: Conf,
+    conf: CreateUpdateSinkReq,
     ref_cnt: usize,
     points: Vec<Point>,
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
     publish_tx: Option<mpsc::Sender<MessageBatch>>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Conf {
-    name: String,
-    desc: Option<String>,
-}
-
-#[derive(Serialize)]
-struct SearchResp {
-    id: Uuid,
-    conf: Conf,
-    point_cnt: usize,
 }
 
 #[derive(Serialize)]
@@ -43,21 +32,28 @@ struct SearchPointsResp {
 }
 
 impl Sink {
-    pub async fn new(device_id: &Uuid, sink_id: Option<Uuid>, data: String) -> HaliaResult<Self> {
-        let conf: Conf = serde_json::from_str(&data)?;
-
+    pub async fn new(
+        device_id: &Uuid,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<Self> {
         let (sink_id, new) = match sink_id {
             Some(sink_id) => (sink_id, false),
             None => (Uuid::new_v4(), true),
         };
 
         if new {
-            persistence::modbus::create_sink(device_id, &sink_id, &data).await?;
+            persistence::modbus::create_sink(
+                device_id,
+                &sink_id,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
         Ok(Sink {
             id: sink_id,
-            conf,
+            conf: req,
             ref_cnt: 0,
             points: vec![],
             stop_signal_tx: None,
@@ -65,19 +61,15 @@ impl Sink {
         })
     }
 
-    pub fn search(&self) -> serde_json::Value {
-        let resp = SearchResp {
-            id: self.id.clone(),
+    pub fn search(&self) -> SearchSinksItemResp {
+        SearchSinksItemResp {
             conf: self.conf.clone(),
-            point_cnt: self.points.len(),
-        };
-        json!(resp)
+        }
     }
 
-    pub async fn update(&mut self, device_id: &Uuid, data: String) -> HaliaResult<()> {
-        let update_conf: Conf = serde_json::from_str(&data)?;
-        persistence::modbus::update_sink(device_id, &self.id, &data).await?;
-        self.conf = update_conf;
+    pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
+        persistence::modbus::update_sink(device_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
+        self.conf = req;
         Ok(())
     }
 
@@ -110,9 +102,9 @@ impl Sink {
         &mut self,
         device_id: &Uuid,
         point_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateSinkPointReq,
     ) -> HaliaResult<()> {
-        match Point::new(device_id, &self.id, point_id, data).await {
+        match Point::new(device_id, &self.id, point_id, req).await {
             Ok(point) => {
                 self.points.push(point);
                 if self.stop_signal_tx.is_some() {
@@ -125,7 +117,7 @@ impl Sink {
         }
     }
 
-    pub async fn search_points(&self, page: usize, size: usize) -> serde_json::Value {
+    pub async fn search_points(&self, page: usize, size: usize) -> SearchSinkPointsResp {
         let mut data = vec![];
         let mut i = 0;
         for point in self.points.iter().rev().skip((page - 1) * size) {
@@ -136,16 +128,19 @@ impl Sink {
             }
         }
 
-        serde_json::to_value(SearchPointsResp {
+        SearchSinkPointsResp {
             total: self.points.len(),
             data,
-        })
-        .unwrap()
+        }
     }
 
-    pub async fn update_point(&mut self, point_id: Uuid, data: String) -> HaliaResult<bool> {
+    pub async fn update_point(
+        &mut self,
+        point_id: Uuid,
+        req: CreateUpdateSinkPointReq,
+    ) -> HaliaResult<bool> {
         match self.points.iter_mut().find(|point| point.id == point_id) {
-            Some(point) => point.update(data).await,
+            Some(point) => point.update(req).await,
             None => Err(HaliaError::NotFound),
         }
     }

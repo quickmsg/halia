@@ -2,34 +2,14 @@ use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use types::devices::datatype::DataType;
+use types::devices::modbus::{CreateUpdateSinkPointReq, SearchSinkPointsItemResp};
 use uuid::Uuid;
-
-use super::group_point::Area;
 
 #[derive(Debug, Clone)]
 pub struct Point {
     pub id: Uuid,
-    pub conf: Conf,
+    pub conf: CreateUpdateSinkPointReq,
     pub value: TargetValue,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct Conf {
-    pub r#type: DataType,
-    pub slave: u8,
-    pub area: Area,
-    pub address: u16,
-    pub value: serde_json::Value,
-    pub desc: Option<String>,
-}
-
-#[derive(Serialize)]
-struct SearchResp {
-    id: Uuid,
-    conf: Conf,
 }
 
 #[derive(Debug, Clone)]
@@ -48,20 +28,24 @@ impl Point {
         device_id: &Uuid,
         sink_id: &Uuid,
         point_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateSinkPointReq,
     ) -> HaliaResult<Self> {
-        let conf: Conf = serde_json::from_str(&data)?;
-
         let (point_id, new) = match point_id {
             Some(point_id) => (point_id, false),
             None => (Uuid::new_v4(), true),
         };
 
         if new {
-            persistence::modbus::create_sink_point(device_id, sink_id, &point_id, &data).await?;
+            persistence::modbus::create_sink_point(
+                device_id,
+                sink_id,
+                &point_id,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
-        let value = match &conf.value {
+        let value = match &req.value {
             serde_json::Value::Null => TargetValue::Null,
             serde_json::Value::Bool(b) => TargetValue::Boolean(*b),
             serde_json::Value::Number(n) => {
@@ -87,33 +71,29 @@ impl Point {
 
         Ok(Point {
             id: point_id,
-            conf,
+            conf: req,
             value,
         })
     }
 
-    pub fn search(&self) -> serde_json::Value {
-        json!(SearchResp {
-            id: self.id.clone(),
+    pub fn search(&self) -> SearchSinkPointsItemResp {
+        SearchSinkPointsItemResp {
             conf: self.conf.clone(),
-        })
+        }
     }
 
-    pub async fn update(&mut self, data: String) -> HaliaResult<bool> {
-        let update_conf: Conf = serde_json::from_str(&data)?;
-
+    pub async fn update(&mut self, req: CreateUpdateSinkPointReq) -> HaliaResult<bool> {
         let mut restart = false;
-
-        if self.conf.r#type != update_conf.r#type
-            || self.conf.slave != update_conf.slave
-            || self.conf.area != update_conf.area
-            || self.conf.address != update_conf.address
-            || self.conf.value != update_conf.value
+        if self.conf.r#type != req.r#type
+            || self.conf.slave != req.slave
+            || self.conf.area != req.area
+            || self.conf.address != req.address
+            || self.conf.value != req.value
         {
             restart = true;
         }
 
-        self.conf = update_conf;
+        self.conf = req;
 
         Ok(restart)
     }

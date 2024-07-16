@@ -7,38 +7,17 @@ use protocol::modbus::{
     client::{Context, Reader},
     SlaveContext,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::warn;
-use types::devices::datatype::DataType;
+use types::devices::modbus::{Area, CreateUpdateGroupPointReq};
 use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Point {
     pub id: Uuid,
-    pub conf: Conf,
+    pub conf: CreateUpdateGroupPointReq,
     pub quantity: u16,
     pub value: Value,
-}
-
-#[derive(Deserialize, Debug, Clone, Serialize)]
-pub struct Conf {
-    pub name: String,
-    pub r#type: DataType,
-    pub slave: u8,
-    pub area: Area,
-    pub address: u16,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum Area {
-    InputDiscrete,
-    Coils, // 可读写
-    InputRegisters,
-    HoldingRegisters, // 可读写
 }
 
 impl Point {
@@ -46,23 +25,28 @@ impl Point {
         device_id: &Uuid,
         group_id: &Uuid,
         point_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<Point> {
         let (point_id, new) = match point_id {
             Some(point_id) => (point_id, false),
             None => (Uuid::new_v4(), true),
         };
 
-        let conf: Conf = serde_json::from_str(&data)?;
-        let quantity = conf.r#type.get_quantity();
+        let quantity = req.r#type.get_quantity();
 
         if new {
-            persistence::modbus::create_group_point(device_id, group_id, &point_id, &data).await?;
+            persistence::modbus::create_group_point(
+                device_id,
+                group_id,
+                &point_id,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
         Ok(Point {
             id: point_id,
-            conf,
+            conf: req,
             quantity,
             value: Value::Null,
         })
@@ -72,14 +56,18 @@ impl Point {
         &mut self,
         device_id: &Uuid,
         group_id: &Uuid,
-        data: String,
+        req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<()> {
-        let conf: Conf = serde_json::from_str(&data)?;
+        persistence::modbus::update_group_point(
+            device_id,
+            group_id,
+            &self.id,
+            serde_json::to_string(&req).unwrap(),
+        )
+        .await?;
 
-        persistence::modbus::update_group_point(device_id, group_id, &self.id, &data).await?;
-
-        self.quantity = conf.r#type.get_quantity();
-        self.conf = conf;
+        self.quantity = req.r#type.get_quantity();
+        self.conf = req;
 
         Ok(())
     }

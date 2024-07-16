@@ -4,7 +4,6 @@ use common::{
     persistence::{self, Status},
 };
 use group::Group;
-use group_point::Area;
 use message::MessageBatch;
 use protocol::modbus::{
     client::{rtu, tcp, Context, Writer},
@@ -30,9 +29,12 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, warn};
 use types::devices::{
     datatype::{DataType, Endian},
-    device::{Mode, SearchDeviceItemResp, SearchSinksResp},
-    group::SearchGroupResp,
-    modbus::{CreateUpdateModbusReq, Encode},
+    device::SearchDeviceItemResp,
+    modbus::{
+        Area, CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
+        CreateUpdateSinkPointReq, CreateUpdateSinkReq, Encode, SearchGroupsResp,
+        SearchSinkPointsResp, SearchSinksResp,
+    },
     point::SearchPointResp,
 };
 use uuid::Uuid;
@@ -91,7 +93,8 @@ impl Modbus {
         match persistence::modbus::read_groups(&self.id).await {
             Ok(groups) => {
                 for (group_id, data) in groups {
-                    self.create_group(Some(group_id), data).await?;
+                    let req: CreateUpdateGroupReq = serde_json::from_str(&data)?;
+                    self.create_group(Some(group_id), req).await?;
                 }
                 for group in self.groups.write().await.iter_mut() {
                     group.recover(&self.id).await?;
@@ -314,8 +317,12 @@ impl Modbus {
         }
     }
 
-    pub async fn create_group(&mut self, group_id: Option<Uuid>, data: String) -> HaliaResult<()> {
-        match Group::new(&self.id, group_id, data).await {
+    pub async fn create_group(
+        &mut self,
+        group_id: Option<Uuid>,
+        req: CreateUpdateGroupReq,
+    ) -> HaliaResult<()> {
+        match Group::new(&self.id, group_id, req).await {
             Ok(mut group) => {
                 if self.on.load(Ordering::SeqCst) {
                     let read_tx = self.read_tx.as_ref().unwrap().clone();
@@ -332,7 +339,7 @@ impl Modbus {
         }
     }
 
-    pub async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp> {
+    pub async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupsResp> {
         let mut resps = Vec::new();
         for group in self
             .groups
@@ -347,13 +354,17 @@ impl Modbus {
                 break;
             }
         }
-        Ok(SearchGroupResp {
+        Ok(SearchGroupsResp {
             total: self.groups.read().await.len(),
             data: resps,
         })
     }
 
-    pub async fn update_group(&mut self, group_id: Uuid, data: String) -> HaliaResult<()> {
+    pub async fn update_group(
+        &mut self,
+        group_id: Uuid,
+        req: CreateUpdateGroupReq,
+    ) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -361,7 +372,7 @@ impl Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => match group.update(&self.id, data).await {
+            Some(group) => match group.update(&self.id, req).await {
                 Ok(restart) => {
                     if restart && self.on.load(Ordering::SeqCst) {
                         group.stop().await;
@@ -402,7 +413,7 @@ impl Modbus {
         &mut self,
         group_id: Uuid,
         point_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<()> {
         match self
             .groups
@@ -411,7 +422,7 @@ impl Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.create_point(&self.id, point_id, data).await,
+            Some(group) => group.create_point(&self.id, point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -438,7 +449,7 @@ impl Modbus {
         &mut self,
         group_id: Uuid,
         point_id: Uuid,
-        data: String,
+        req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<()> {
         match self
             .groups
@@ -447,11 +458,8 @@ impl Modbus {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.update_point(&self.id, point_id, data).await,
-            None => {
-                debug!("未找到组");
-                Err(HaliaError::NotFound)
-            }
+            Some(group) => group.update_point(&self.id, point_id, req).await,
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -523,14 +531,18 @@ impl Modbus {
         }
     }
 
-    pub async fn create_sink(&mut self, sink_id: Option<Uuid>, data: String) -> HaliaResult<()> {
-        match Sink::new(&self.id, sink_id, data).await {
+    pub async fn create_sink(
+        &mut self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match Sink::new(&self.id, sink_id, req).await {
             Ok(sink) => Ok(self.sinks.push(sink)),
             Err(e) => Err(e),
         }
     }
 
-    pub async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
+    pub async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
         let mut data = vec![];
         let mut i = 0;
         for sink in self.sinks.iter().rev().skip((page - 1) * size) {
@@ -541,15 +553,19 @@ impl Modbus {
             }
         }
 
-        Ok(SearchSinksResp {
+        SearchSinksResp {
             total: self.sinks.len(),
             data,
-        })
+        }
     }
 
-    pub async fn update_sink(&mut self, sink_id: Uuid, data: String) -> HaliaResult<()> {
+    pub async fn update_sink(
+        &mut self,
+        sink_id: Uuid,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(&self.id, data).await,
+            Some(sink) => sink.update(&self.id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -569,11 +585,11 @@ impl Modbus {
         &mut self,
         sink_id: Uuid,
         point_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateSinkPointReq,
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => {
-                sink.create_point(&self.id, point_id, data).await?;
+                sink.create_point(&self.id, point_id, req).await?;
                 if sink.stop_signal_tx.is_some() {
                     sink.stop().await;
                     sink.start(self.write_tx.as_ref().unwrap().clone());
@@ -589,7 +605,7 @@ impl Modbus {
         sink_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<serde_json::Value> {
+    ) -> HaliaResult<SearchSinkPointsResp> {
         match self.sinks.iter().find(|sink| sink.id == sink_id) {
             Some(sink) => Ok(sink.search_points(page, size).await),
             None => Err(HaliaError::NotFound),
@@ -600,10 +616,10 @@ impl Modbus {
         &mut self,
         sink_id: Uuid,
         point_id: Uuid,
-        data: String,
+        req: CreateUpdateSinkPointReq,
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => match sink.update_point(point_id, data).await {
+            Some(sink) => match sink.update_point(point_id, req).await {
                 Ok(restart) => {
                     if restart && self.on.load(Ordering::SeqCst) {
                         sink.stop().await;

@@ -5,7 +5,11 @@ use axum::{
 use common::error::HaliaError;
 use device::modbus::manager::GLOBAL_MODBUS_MANAGER;
 use types::devices::{
-    device::SearchSinksResp, group::SearchGroupResp, modbus::CreateUpdateModbusReq,
+    modbus::{
+        CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
+        CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupsResp, SearchSinkPointsResp,
+        SearchSinksResp,
+    },
     point::SearchPointResp,
 };
 use uuid::Uuid;
@@ -50,9 +54,12 @@ pub async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-pub async fn create_group(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
+pub async fn create_group(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateGroupReq>,
+) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .create_group(device_id, None, data)
+        .create_group(device_id, None, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -63,7 +70,7 @@ pub async fn create_group(Path(device_id): Path<Uuid>, data: String) -> AppResp<
 pub async fn search_groups(
     Path(device_id): Path<Uuid>,
     pagination: Query<Pagination>,
-) -> AppResp<SearchGroupResp> {
+) -> AppResp<SearchGroupsResp> {
     match GLOBAL_MODBUS_MANAGER
         .search_groups(device_id, pagination.p, pagination.s)
         .await
@@ -75,10 +82,10 @@ pub async fn search_groups(
 
 pub(crate) async fn update_group(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    data: String,
+    Json(req): Json<CreateUpdateGroupReq>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .update_group(device_id, group_id, data)
+        .update_group(device_id, group_id, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -96,12 +103,12 @@ pub(crate) async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>
     }
 }
 
-pub(crate) async fn create_group_point(
+pub async fn create_group_point(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    data: String,
+    Json(req): Json<CreateUpdateGroupPointReq>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .create_group_point(device_id, group_id, None, data)
+        .create_group_point(device_id, group_id, None, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -124,10 +131,10 @@ pub(crate) async fn search_group_points(
 
 pub(crate) async fn update_group_point(
     Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
-    data: String,
+    Json(req): Json<CreateUpdateGroupPointReq>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .update_group_point(device_id, group_id, point_id, data)
+        .update_group_point(device_id, group_id, point_id, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -171,9 +178,12 @@ pub async fn delete_group_points(
     }
 }
 
-pub async fn create_sink(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
+pub async fn create_sink(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateSinkReq>,
+) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .create_sink(device_id, None, data)
+        .create_sink(device_id, None, req)
         .await
     {
         Ok(_) => AppResp::new(),
@@ -196,10 +206,10 @@ pub async fn search_sinks(
 
 pub async fn update_sink(
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
-    data: String,
+    Json(req): Json<CreateUpdateSinkReq>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .update_sink(device_id, sink_id, data)
+        .update_sink(device_id, sink_id, req)
         .await
     {
         Ok(_) => AppResp::new(),
@@ -216,7 +226,7 @@ pub async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppR
 
 pub(crate) async fn create_sink_point(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    req: String,
+    Json(req): Json<CreateUpdateSinkPointReq>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
         .create_sink_point(device_id, group_id, None, req)
@@ -230,22 +240,22 @@ pub(crate) async fn create_sink_point(
 pub(crate) async fn search_sink_points(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     pagination: Query<Pagination>,
-) -> AppResp<serde_json::Value> {
+) -> AppResp<SearchSinkPointsResp> {
     match GLOBAL_MODBUS_MANAGER
         .search_sink_points(device_id, group_id, pagination.p, pagination.s)
         .await
     {
-        Ok(values) => AppResp::with_data(values),
+        Ok(data) => AppResp::with_data(data),
         Err(e) => e.into(),
     }
 }
 
 pub(crate) async fn update_sink_point(
     Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
-    data: String,
+    Json(req): Json<CreateUpdateSinkPointReq>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .update_sink_point(device_id, group_id, point_id, data)
+        .update_sink_point(device_id, group_id, point_id, req)
         .await
     {
         Ok(()) => AppResp::new(),
