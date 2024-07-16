@@ -305,11 +305,11 @@ impl MqttClient {
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => match sink.update(&self.id, req).await {
-                Ok(restart) =>  {
-                    if restart && self.on {
-
+                Ok(restart) => {
+                    if restart && sink.stop_signal_tx.is_some() {
+                        sink.restart(self.client.as_ref().unwrap().clone()).await;
                     }
-                    todo!()
+                    Ok(())
                 }
                 Err(e) => Err(e),
             },
