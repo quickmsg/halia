@@ -10,7 +10,7 @@ use protocol::modbus::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::warn;
-use types::device::datatype::DataType;
+use types::devices::datatype::DataType;
 use uuid::Uuid;
 
 #[derive(Debug)]

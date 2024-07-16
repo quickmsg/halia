@@ -56,7 +56,7 @@ async fn insert(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
     file.flush().await
 }
 
-async fn create(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
+pub(crate) async fn create(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().append(true).open(path).await?;
     file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
         .await?;

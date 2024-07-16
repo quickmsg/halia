@@ -4,7 +4,7 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
-use types::device::{
+use types::devices::{
     device::{SearchDeviceItemResp, SearchSinksResp},
     group::SearchGroupResp,
     point::SearchPointResp,

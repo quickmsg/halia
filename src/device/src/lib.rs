@@ -2,7 +2,7 @@ use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
-use types::device::device::SearchDeviceResp;
+use types::devices::device::SearchDeviceResp;
 
 use uuid::Uuid;
 

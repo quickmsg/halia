@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 pub mod apps;
-pub mod device;
+pub mod devices;
 pub mod rule;
 
 #[derive(Serialize)]

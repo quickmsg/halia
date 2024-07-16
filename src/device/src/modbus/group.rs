@@ -20,7 +20,7 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::device::point::{SearchPointItemResp, SearchPointResp};
+use types::devices::point::{SearchPointItemResp, SearchPointResp};
 use uuid::Uuid;
 
 use super::{group_point::Point, WritePointEvent};

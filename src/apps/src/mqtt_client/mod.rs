@@ -1,17 +1,17 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
-use bytes::Bytes;
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};
+use sink::Sink;
 use source::Source;
 use tokio::{
     sync::{broadcast, mpsc, RwLock},
     time,
 };
-use tracing::{debug, error};
+use tracing::error;
 use types::apps::{
     mqtt_client::{SearchSinksResp, SearchSourcesResp},
     SearchAppItemResp,
@@ -27,29 +27,11 @@ mod source;
 pub struct MqttClient {
     pub id: Uuid,
     conf: Conf,
-    status: bool,
+    on: bool,
 
     sources: Arc<RwLock<Vec<Source>>>,
     sinks: Arc<RwLock<Vec<Sink>>>,
     client: Option<AsyncClient>,
-}
-
-#[derive(Deserialize, Serialize)]
-struct Sink {
-    #[serde(skip)]
-    pub client: Option<AsyncClient>,
-    pub id: Uuid,
-    pub topic: String,
-    pub qos: u8,
-    #[serde(skip)]
-    pub tx: Option<mpsc::Sender<MessageBatch>>,
-    pub ref_cnt: u8,
-}
-
-#[derive(Deserialize)]
-struct TopicConf {
-    pub topic: String,
-    pub qos: u8,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -88,13 +70,13 @@ impl MqttClient {
             conf,
             sources: Arc::new(RwLock::new(vec![])),
             sinks: Arc::new(RwLock::new(vec![])),
-            status: false,
+            on: false,
             client: None,
         })
     }
 
-    pub async fn run(&mut self) {
-        self.status = true;
+    pub async fn start(&mut self) {
+        self.on = true;
         let mqtt_options =
             MqttOptions::new(self.conf.id.clone(), self.conf.host.clone(), self.conf.port);
 
@@ -102,7 +84,7 @@ impl MqttClient {
         let sources = self.sources.clone();
         for source in sources.read().await.iter() {
             let _ = client
-                .subscribe(source.topic.clone(), get_mqtt_qos(source.qos))
+                .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
                 .await;
         }
         self.client = Some(client);
@@ -114,7 +96,7 @@ impl MqttClient {
                         match MessageBatch::from_json(p.payload) {
                             Ok(msg) => {
                                 for source in sources.write().await.iter_mut() {
-                                    if matches(&source.topic, &p.topic) {
+                                    if matches(&source.conf.topic, &p.topic) {
                                         match &source.tx {
                                             Some(tx) => {
                                                 let _ = tx.send(msg.clone());
@@ -158,43 +140,6 @@ impl MqttClient {
             }
         });
     }
-
-    async fn do_create_source(&self, id: Uuid, topic_conf: TopicConf) -> HaliaResult<()> {
-        if self.status {
-            if let Err(e) = self
-                .client
-                .as_ref()
-                .unwrap()
-                .subscribe(topic_conf.topic.clone(), get_mqtt_qos(topic_conf.qos))
-                .await
-            {
-                error!("client subscribe err:{e}");
-            }
-        }
-
-        self.sources.write().await.push(Source {
-            id,
-            topic: topic_conf.topic,
-            qos: topic_conf.qos,
-            tx: None,
-            ref_cnt: 0,
-        });
-
-        Ok(())
-    }
-
-    async fn do_create_sink(&self, id: Uuid, topic_conf: TopicConf) -> HaliaResult<()> {
-        self.sinks.write().await.push(Sink {
-            id,
-            topic: topic_conf.topic,
-            qos: topic_conf.qos,
-            tx: None,
-            ref_cnt: 0,
-            client: None,
-        });
-
-        Ok(())
-    }
 }
 
 impl MqttClient {
@@ -215,8 +160,8 @@ impl MqttClient {
             None => bail!("mqtt源id为空"),
         };
 
-        if !self.status {
-            self.run().await;
+        if !self.on {
+            self.start().await;
         }
 
         for source in self.sources.write().await.iter_mut() {
@@ -227,8 +172,7 @@ impl MqttClient {
                         return Ok(rx);
                     }
                     None => {
-                        // TODO maybe not 10
-                        let (tx, rx) = broadcast::channel::<MessageBatch>(10);
+                        let (tx, rx) = broadcast::channel::<MessageBatch>(16);
                         source.tx = Some(tx);
                         return Ok(rx);
                     }
@@ -239,101 +183,104 @@ impl MqttClient {
         bail!("not find topic id")
     }
 
-    async fn create_source(&self, req: &Bytes) -> HaliaResult<()> {
-        let topic_conf: TopicConf = serde_json::from_slice(req)?;
-        let source_id = Uuid::new_v4();
-        self.do_create_source(source_id, topic_conf).await
-    }
+    pub async fn create_source(&self, source_id: Option<Uuid>, data: String) -> HaliaResult<()> {
+        match Source::new(&self.id, source_id, data).await {
+            Ok(source) => {
+                if self.on {
+                    if let Err(e) = self
+                        .client
+                        .as_ref()
+                        .unwrap()
+                        .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
+                        .await
+                    {
+                        error!("client subscribe err:{e}");
+                    }
+                }
 
-    async fn recover_source(&self, id: Uuid, req: String) {
-        let topic_conf: TopicConf = serde_json::from_str(&req).unwrap();
-        let _ = self.do_create_source(id, topic_conf).await;
-    }
+                self.sources.write().await.push(source);
 
-    async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourcesResp> {
-        let mut total = 0;
-        let mut i = 0;
-        let mut data = vec![];
-        for topic in self.sources.read().await.iter() {
-            if i >= (page - 1) * size && i < page * size {
-                data.push(serde_json::to_value(topic).unwrap());
+                Ok(())
             }
-            total += 1;
-            i += 1;
+            Err(e) => Err(e),
         }
-
-        Ok(SearchSourcesResp { total, data })
     }
 
-    async fn update_source(&self, source_id: Uuid, req: &Bytes) -> HaliaResult<()> {
+    // async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourcesResp> {
+    //     let mut total = 0;
+    //     let mut i = 0;
+    //     let mut data = vec![];
+    //     for topic in self.sources.read().await.iter() {
+    //         if i >= (page - 1) * size && i < page * size {
+    //             data.push(serde_json::to_value(topic).unwrap());
+    //         }
+    //         total += 1;
+    //         i += 1;
+    //     }
+
+    //     Ok(SearchSourcesResp { total, data })
+    // }
+
+    async fn update_source(&self, source_id: Uuid, data: String) -> HaliaResult<()> {
         match self
             .sources
             .write()
             .await
             .iter_mut()
-            .find(|s| s.id == source_id)
+            .find(|source| source.id == source_id)
         {
-            Some(s) => {
-                let topic_conf: TopicConf = serde_json::from_slice(req)?;
-                if s.topic == topic_conf.topic && s.qos == topic_conf.qos {
-                    return Ok(());
-                }
+            Some(source) => match source.update(&self.id, data).await {
+                Ok(restart) => {
+                    if self.on && restart {
+                        if let Err(e) = self
+                            .client
+                            .as_ref()
+                            .unwrap()
+                            .unsubscribe(source.conf.topic.clone())
+                            .await
+                        {
+                            error!("unsubscribe err:{e}");
+                        }
 
-                if self.status {
-                    if let Err(e) = self
-                        .client
-                        .as_ref()
-                        .unwrap()
-                        .unsubscribe(s.topic.clone())
-                        .await
-                    {
-                        error!("unsubscribe err:{e}");
+                        if let Err(e) = self
+                            .client
+                            .as_ref()
+                            .unwrap()
+                            .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
+                            .await
+                        {
+                            error!("subscribe err:{e}");
+                        }
                     }
 
-                    if let Err(e) = self
-                        .client
-                        .as_ref()
-                        .unwrap()
-                        .subscribe(topic_conf.topic.clone(), get_mqtt_qos(s.qos))
-                        .await
-                    {
-                        error!("subscribe err:{e}");
-                    }
+                    Ok(())
                 }
-
-                s.topic = topic_conf.topic;
-                s.qos = topic_conf.qos;
-
-                Ok(())
-            }
+                Err(e) => Err(e),
+            },
             None => Err(HaliaError::ProtocolNotSupported),
         }
     }
 
-    async fn create_sink(&self, req: &Bytes) -> HaliaResult<()> {
-        let topic_conf: TopicConf = serde_json::from_slice(req)?;
+    async fn create_sink(&self, data: String) -> HaliaResult<()> {
+        // let topic_conf: TopicConf = serde_json::from_slice(req)?;
         let sink_id = Uuid::new_v4();
-        self.do_create_sink(sink_id, topic_conf).await
-    }
-
-    async fn recover_sink(&self, id: Uuid, req: String) {
-        let topic_conf: TopicConf = serde_json::from_str(&req).unwrap();
-        let _ = self.do_create_sink(id, topic_conf).await;
+        Ok(())
     }
 
     async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
-        let mut total = 0;
-        let mut i = 0;
-        let mut data = vec![];
-        for sink in self.sinks.read().await.iter() {
-            if i >= (page - 1) * size && i < page * size {
-                data.push(serde_json::to_value(sink).unwrap());
-            }
-            total += 1;
-            i += 1;
-        }
+        // let mut total = 0;
+        // let mut i = 0;
+        // let mut data = vec![];
+        // for sink in self.sinks.read().await.iter() {
+        //     if i >= (page - 1) * size && i < page * size {
+        //         data.push(serde_json::to_value(sink).unwrap());
+        //     }
+        //     total += 1;
+        //     i += 1;
+        // }
 
-        Ok(SearchSinksResp { total, data })
+        // Ok(SearchSinksResp { total, data })
+        todo!()
     }
 
     async fn publish(&mut self, sink_id: &Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>> {
@@ -342,24 +289,25 @@ impl MqttClient {
             None => bail!("mqtt动作id为空"),
         };
 
-        if !self.status {
-            self.run().await;
+        if !self.on {
+            self.start().await;
         }
 
         for sink in self.sinks.write().await.iter_mut() {
             if sink.id == *sink_id {
                 match &sink.tx {
                     Some(tx) => {
-                        return Ok(tx.clone());
+                        // return Ok(tx.clone());
+                        todo!()
                     }
                     None => {
                         let (tx, rx) = mpsc::channel::<MessageBatch>(10);
                         if sink.client.is_none() {
                             sink.client = Some(self.client.as_ref().unwrap().clone());
                         }
-                        sink.run(rx);
+                        sink.start(rx);
                         let tx_clone = tx.clone();
-                        sink.tx = Some(tx);
+                        // sink.tx = Some(tx);
                         return Ok(tx_clone);
                     }
                 }
@@ -405,31 +353,7 @@ pub fn matches(topic: &str, filter: &str) -> bool {
     true
 }
 
-impl Sink {
-    fn run(&self, mut rx: mpsc::Receiver<MessageBatch>) {
-        let client = self.client.as_ref().unwrap().clone();
-        let topic = self.topic.clone();
-        let qos = self.qos;
-        let qos = match qos {
-            0 => QoS::AtMostOnce,
-            1 => QoS::AtLeastOnce,
-            2 => QoS::ExactlyOnce,
-            _ => unreachable!(),
-        };
-
-        tokio::spawn(async move {
-            loop {
-                match rx.recv().await {
-                    Some(mb) => match client.publish(&topic, qos, false, mb.to_json()).await {
-                        Ok(_) => debug!("publish msg success"),
-                        Err(e) => error!("publish msg err:{e:?}"),
-                    },
-                    None => return,
-                }
-            }
-        });
-    }
-}
+impl Sink {}
 
 fn get_mqtt_qos(qos: u8) -> QoS {
     match qos {

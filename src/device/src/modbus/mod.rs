@@ -29,7 +29,7 @@ use tokio::{
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, warn};
-use types::device::{
+use types::devices::{
     datatype::{DataType, Endian},
     device::{Mode, SearchDeviceItemResp, SearchSinksResp},
     group::SearchGroupResp,

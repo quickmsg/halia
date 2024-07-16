@@ -1,6 +1,6 @@
 use axum::extract::Query;
 use device::GLOBAL_DEVICE_MANAGER;
-use types::device::device::SearchDeviceResp;
+use types::devices::device::SearchDeviceResp;
 
 use crate::{AppResp, Pagination};
 

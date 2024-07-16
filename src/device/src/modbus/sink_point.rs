@@ -4,7 +4,7 @@ use common::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use types::device::datatype::DataType;
+use types::devices::datatype::DataType;
 use uuid::Uuid;
 
 use super::group_point::Area;

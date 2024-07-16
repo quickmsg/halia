@@ -1,7 +1,7 @@
 use axum::extract::{Path, Query};
 use common::error::HaliaError;
 use device::modbus::manager::GLOBAL_MODBUS_MANAGER;
-use types::device::{device::SearchSinksResp, group::SearchGroupResp, point::SearchPointResp};
+use types::devices::{device::SearchSinksResp, group::SearchGroupResp, point::SearchPointResp};
 use uuid::Uuid;
 
 use crate::{AppResp, DeleteIdsQuery, Pagination};
