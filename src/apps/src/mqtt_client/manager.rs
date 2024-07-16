@@ -2,6 +2,8 @@ use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use message::MessageBatch;
+use tokio::sync::{broadcast, mpsc};
 use types::apps::{
     mqtt_client::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
@@ -106,12 +108,22 @@ impl Manager {
         }
     }
 
-    pub async fn subscribe(&self, app_id: &Uuid, source_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    pub async fn subscribe(
+        &self,
+        app_id: &Uuid,
+        source_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.subscribe(source_id).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn unsubscribe(&self, app_id: &Uuid, source_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.unsubscribe(source_id).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn create_sink(
@@ -157,11 +169,21 @@ impl Manager {
         }
     }
 
-    pub async fn publish(&self, app_id: &Uuid, sink_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    pub async fn publish(
+        &self,
+        app_id: &Uuid,
+        sink_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.publish(sink_id).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn unpublish(&self, app_id: &Uuid, sink_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.unpublish(sink_id).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 }

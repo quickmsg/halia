@@ -11,7 +11,7 @@ pub struct Source {
     pub id: Uuid,
     pub conf: CreateUpdateSourceReq,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
-    pub ref_cnt: u8,
+    pub ref_cnt: usize,
 }
 
 impl Source {
@@ -44,6 +44,7 @@ impl Source {
 
     pub fn search(&self) -> SearchSourcesItemResp {
         SearchSourcesItemResp {
+            id: self.id.clone(),
             conf: self.conf.clone(),
         }
     }
@@ -74,5 +75,24 @@ impl Source {
         persistence::apps::mqtt_client::delete_source(app_id, &self.id).await?;
 
         Ok(())
+    }
+
+    pub fn subscribe(&mut self) -> broadcast::Receiver<MessageBatch> {
+        self.ref_cnt += 1;
+        match &self.tx {
+            Some(tx) => tx.subscribe(),
+            None => {
+                let (tx, rx) = broadcast::channel::<MessageBatch>(16);
+                self.tx = Some(tx);
+                rx
+            }
+        }
+    }
+
+    pub fn unsubscribe(&mut self) {
+        self.ref_cnt -= 1;
+        if self.ref_cnt == 0 {
+            self.tx = None;
+        }
     }
 }

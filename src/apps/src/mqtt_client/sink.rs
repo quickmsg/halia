@@ -14,8 +14,8 @@ pub struct Sink {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
     pub tx: Option<mpsc::Sender<MessageBatch>>,
-    pub ref_cnt: u8,
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
+    pub ref_cnt: usize,
 
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
 }
@@ -70,10 +70,13 @@ impl Sink {
             restart = true;
         }
 
+        self.conf = req;
+
         Ok(restart)
     }
 
     pub fn start(&mut self, client: Arc<AsyncClient>) {
+
         let topic = self.conf.topic.clone();
         let qos = self.conf.qos;
         let qos = match qos {
@@ -150,15 +153,6 @@ impl Sink {
         });
     }
 
-    pub async fn unpublish(&mut self) -> HaliaResult<()> {
-        self.ref_cnt -= 1;
-        if self.ref_cnt == 0 {
-            self.stop().await;
-        }
-
-        Ok(())
-    }
-
     pub async fn stop(&mut self) {
         self.stop_signal_tx
             .as_ref()
@@ -178,5 +172,12 @@ impl Sink {
 
         persistence::apps::mqtt_client::delete_sink(app_id, &self.id).await?;
         Ok(())
+    }
+
+    pub async fn unpublish(&mut self) {
+        self.ref_cnt -= 1;
+        if self.ref_cnt == 0 {
+            self.stop().await;
+        }
     }
 }

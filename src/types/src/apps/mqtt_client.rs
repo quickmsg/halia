@@ -4,7 +4,7 @@ use uuid::Uuid;
 #[derive(Deserialize, Serialize)]
 pub struct CreateUpdateMqttClientReq {
     pub name: String,
-    pub id: String,
+    pub client_id: String,
     pub timeout: usize,
     pub keep_alive: usize,
     pub clean_session: bool,
@@ -29,6 +29,7 @@ pub struct SearchSourcesResp {
 
 #[derive(Serialize)]
 pub struct SearchSourcesItemResp {
+    pub id: Uuid,
     pub conf: CreateUpdateSourceReq,
 }
 
