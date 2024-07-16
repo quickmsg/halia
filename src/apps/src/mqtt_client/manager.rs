@@ -2,9 +2,12 @@ use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use types::apps::mqtt_client::{
-    CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
-    SearchSourcesResp,
+use types::apps::{
+    mqtt_client::{
+        CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+        SearchSourcesResp,
+    },
+    SearchAppsItemResp,
 };
 use uuid::Uuid;
 
@@ -36,8 +39,11 @@ impl Manager {
         todo!()
     }
 
-    pub async fn search(&self, app_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    pub fn search(&self, app_id: &Uuid) -> HaliaResult<SearchAppsItemResp> {
+        match self.apps.get(&app_id) {
+            Some(app) => Ok(app.search()),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn update(&self, app_id: Uuid, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
@@ -87,14 +93,17 @@ impl Manager {
         source_id: Uuid,
         req: CreateUpdateSourceReq,
     ) -> HaliaResult<()> {
-        match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.update_source(source_id, req).await,
+        match self.apps.get(&app_id) {
+            Some(app) => app.update_source(source_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
     pub async fn delete_source(&self, app_id: Uuid, source_id: Uuid) -> HaliaResult<()> {
-        todo!()
+        match self.apps.get(&app_id) {
+            Some(app) => app.delete_source(source_id).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn subscribe(&self, app_id: &Uuid, source_id: &Uuid) -> HaliaResult<()> {

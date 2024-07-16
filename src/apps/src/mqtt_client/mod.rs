@@ -16,7 +16,7 @@ use types::apps::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
         SearchSourcesResp,
     },
-    SearchAppItemResp,
+    SearchAppsItemResp,
 };
 use uuid::Uuid;
 
@@ -32,8 +32,8 @@ pub struct MqttClient {
     on: bool,
 
     sources: Arc<RwLock<Vec<Source>>>,
-    sinks: Arc<RwLock<Vec<Sink>>>,
-    client: Option<AsyncClient>,
+    sinks: Vec<Sink>,
+    client: Option<Arc<AsyncClient>>,
 }
 
 impl MqttClient {
@@ -49,7 +49,7 @@ impl MqttClient {
             id: app_id,
             conf: req,
             sources: Arc::new(RwLock::new(vec![])),
-            sinks: Arc::new(RwLock::new(vec![])),
+            sinks: vec![],
             on: false,
             client: None,
         })
@@ -71,7 +71,7 @@ impl MqttClient {
                 .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
                 .await;
         }
-        self.client = Some(client);
+        self.client = Some(Arc::new(client));
 
         tokio::spawn(async move {
             loop {
@@ -128,11 +128,9 @@ impl MqttClient {
     pub async fn delete(&mut self) -> HaliaResult<()> {
         todo!()
     }
-}
 
-impl MqttClient {
-    fn search(&self) -> SearchAppItemResp {
-        SearchAppItemResp {
+    fn search(&self) -> SearchAppsItemResp {
+        SearchAppsItemResp {
             id: self.id,
             r#type: TYPE,
             conf: serde_json::to_value(&self.conf).unwrap(),
@@ -189,7 +187,6 @@ impl MqttClient {
                         error!("client subscribe err:{e}");
                     }
                 }
-
                 self.sources.write().await.push(source);
 
                 Ok(())
@@ -199,7 +196,6 @@ impl MqttClient {
     }
 
     async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourcesResp> {
-        let mut i = 0;
         let mut data = vec![];
         for source in self
             .sources
@@ -210,8 +206,7 @@ impl MqttClient {
             .skip((page - 1) * size)
         {
             data.push(source.search());
-            i += 1;
-            if i == size {
+            if data.len() == size {
                 break;
             }
         }
@@ -262,14 +257,28 @@ impl MqttClient {
         }
     }
 
+    async fn delete_source(&self, source_id: Uuid) -> HaliaResult<()> {
+        match self
+            .sources
+            .read()
+            .await
+            .iter()
+            .find(|source| source.id == source_id)
+        {
+            Some(source) => source.delete(&self.id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
     async fn create_sink(
-        &self,
+        &mut self,
         sink_id: Option<Uuid>,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
         match Sink::new(&self.id, sink_id, req).await {
             Ok(sink) => {
-                todo!()
+                self.sinks.push(sink);
+                Ok(())
             }
             Err(e) => Err(e),
         }
@@ -277,14 +286,14 @@ impl MqttClient {
 
     async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
         let mut data = vec![];
-        for sink in self.sinks.read().await.iter().rev().skip((page - 1) * size) {
+        for sink in self.sinks.iter().rev().skip((page - 1) * size) {
             data.push(sink.search());
             if data.len() == size {
                 break;
             }
         }
         SearchSinksResp {
-            total: self.sinks.read().await.len(),
+            total: self.sinks.len(),
             data,
         }
     }
@@ -294,45 +303,53 @@ impl MqttClient {
         sink_id: Uuid,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
-        todo!()
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => match sink.update(&self.id, req).await {
+                Ok(restart) =>  {
+                    if restart && self.on {
+
+                    }
+                    todo!()
+                }
+                Err(e) => Err(e),
+            },
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        todo!()
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => {
+                sink.delete(&self.id).await?;
+                self.sinks.retain(|sink| sink.id == sink_id);
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound),
+        }
     }
 
-    async fn publish(&mut self, sink_id: &Option<Uuid>) -> Result<mpsc::Sender<MessageBatch>> {
-        let sink_id = match sink_id {
-            Some(id) => id,
-            None => bail!("mqtt动作id为空"),
-        };
-
+    async fn publish(&mut self, sink_id: Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         if !self.on {
             self.start().await;
         }
 
-        for sink in self.sinks.write().await.iter_mut() {
-            if sink.id == *sink_id {
-                match &sink.tx {
-                    Some(tx) => {
-                        // return Ok(tx.clone());
-                        todo!()
-                    }
-                    None => {
-                        let (tx, rx) = mpsc::channel::<MessageBatch>(10);
-                        if sink.client.is_none() {
-                            sink.client = Some(self.client.as_ref().unwrap().clone());
-                        }
-                        sink.start(rx);
-                        let tx_clone = tx.clone();
-                        // sink.tx = Some(tx);
-                        return Ok(tx_clone);
-                    }
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => {
+                if sink.stop_signal_tx.is_none() {
+                    sink.start(self.client.as_ref().unwrap().clone());
                 }
-            }
-        }
 
-        bail!("not find topic id")
+                Ok(sink.tx.as_ref().unwrap().clone())
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    async fn unpublish(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => sink.unpublish().await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 }
 

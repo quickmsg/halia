@@ -1,17 +1,21 @@
-use common::error::HaliaResult;
+use std::sync::Arc;
+
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::MessageBatch;
 use rumqttc::{AsyncClient, QoS};
-use tokio::sync::mpsc;
-use tracing::{debug, error};
+use tokio::{select, sync::mpsc};
 use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
 pub struct Sink {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
-    pub tx: Option<mpsc::Receiver<MessageBatch>>,
+    pub tx: Option<mpsc::Sender<MessageBatch>>,
     pub ref_cnt: u8,
-    pub client: Option<AsyncClient>,
+    pub stop_signal_tx: Option<mpsc::Sender<()>>,
 }
 
 impl Sink {
@@ -26,7 +30,12 @@ impl Sink {
         };
 
         if new {
-            // 持久化
+            persistence::apps::mqtt_client::create_sink(
+                app_id,
+                &sink_id,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
         Ok(Sink {
@@ -34,7 +43,7 @@ impl Sink {
             conf: req,
             tx: None,
             ref_cnt: 0,
-            client: None,
+            stop_signal_tx: None,
         })
     }
 
@@ -45,10 +54,23 @@ impl Sink {
         }
     }
 
-    pub fn update(&mut self, data: String) {}
+    pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<bool> {
+        persistence::apps::mqtt_client::update_sink(
+            app_id,
+            &self.id,
+            serde_json::to_string(&req).unwrap(),
+        )
+        .await?;
 
-    pub fn start(&self, mut rx: mpsc::Receiver<MessageBatch>) {
-        let client = self.client.as_ref().unwrap().clone();
+        let mut restart = false;
+        if self.conf.topic != req.topic || self.conf.qos != req.qos {
+            restart = true;
+        }
+
+        Ok(restart)
+    }
+
+    pub fn start(&mut self, client: Arc<AsyncClient>) {
         let topic = self.conf.topic.clone();
         let qos = self.conf.qos;
         let qos = match qos {
@@ -58,20 +80,94 @@ impl Sink {
             _ => unreachable!(),
         };
 
+        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+
+        let (tx, mut rx) = mpsc::channel(16);
+        self.tx = Some(tx);
+
         tokio::spawn(async move {
             loop {
-                match rx.recv().await {
-                    Some(mb) => match client.publish(&topic, qos, false, mb.to_json()).await {
-                        Ok(_) => debug!("publish msg success"),
-                        Err(e) => error!("publish msg err:{e:?}"),
-                    },
-                    None => return,
+                select! {
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
+
+                    mb = rx.recv() => {
+                        match mb {
+                            Some(mb) => {
+                                let _ = client.publish(&topic, qos, false, mb.to_json()).await;
+                            }
+                            None => unreachable!(),
+                        }
+                    }
                 }
             }
         });
     }
 
-    pub fn stop() {}
+    // pub async fn restart(&mut self, client: Arc<AsyncClient>) {
+    //     let topic = self.conf.topic.clone();
+    //     let qos = self.conf.qos;
+    //     let qos = match qos {
+    //         0 => QoS::AtMostOnce,
+    //         1 => QoS::AtLeastOnce,
+    //         2 => QoS::ExactlyOnce,
+    //         _ => unreachable!(),
+    //     };
 
-    pub fn delete(&mut self) {}
+    //     let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+    //     self.stop_signal_tx = Some(stop_signal_tx);
+
+    //     // let mut rx = self.tx.as_ref().unwrap().same_channel(other)
+
+    //     tokio::spawn(async move {
+    //         loop {
+    //             select! {
+    //                 _ = stop_signal_rx.recv() => {
+    //                     return
+    //                 }
+
+    //                 mb = rx.recv() => {
+    //                     match mb {
+    //                         Some(mb) => {
+    //                             let _ = client.publish(&topic, qos, false, mb.to_json()).await;
+    //                         }
+    //                         None => unreachable!(),
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     });
+    // }
+
+    pub async fn unpublish(&mut self) -> HaliaResult<()> {
+        self.ref_cnt -= 1;
+        if self.ref_cnt == 0 {
+            self.stop().await;
+        }
+
+        Ok(())
+    }
+
+    pub async fn stop(&mut self) {
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+        self.tx = None;
+        self.stop_signal_tx = None;
+    }
+
+    pub async fn delete(&mut self, app_id: &Uuid) -> HaliaResult<()> {
+        if self.ref_cnt > 0 {
+            // TODO
+            return Err(HaliaError::NotFound);
+        }
+
+        persistence::apps::mqtt_client::delete_sink(app_id, &self.id).await?;
+        Ok(())
+    }
 }

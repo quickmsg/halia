@@ -43,12 +43,12 @@ pub async fn delete_source(app_id: &Uuid, source_id: &Uuid) -> Result<(), io::Er
     delete(get_source_file_path(app_id), source_id).await
 }
 
-pub async fn create_sink(app_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
-    create(get_sink_file_path(app_id), sink_id, data).await
+pub async fn create_sink(app_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+    create(get_sink_file_path(app_id), sink_id, &data).await
 }
 
-pub async fn update_sink(app_id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
-    update(get_sink_file_path(app_id), sink_id, data).await
+pub async fn update_sink(app_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+    update(get_sink_file_path(app_id), sink_id, &data).await
 }
 
 pub async fn delete_sink(app_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {

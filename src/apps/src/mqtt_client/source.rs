@@ -1,4 +1,7 @@
-use common::{error::HaliaResult, persistence};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::MessageBatch;
 use tokio::sync::broadcast;
 use types::apps::mqtt_client::{CreateUpdateSourceReq, SearchSourcesItemResp};
@@ -63,8 +66,11 @@ impl Source {
         Ok(restart)
     }
 
-    pub async fn delete(&mut self, app_id: &Uuid) -> HaliaResult<()> {
-        // TODO 判断引用，是否可以删除
+    pub async fn delete(&self, app_id: &Uuid) -> HaliaResult<()> {
+        if self.ref_cnt > 0 {
+            // TODO
+            return Err(HaliaError::NotFound);
+        }
         persistence::apps::mqtt_client::delete_source(app_id, &self.id).await?;
 
         Ok(())

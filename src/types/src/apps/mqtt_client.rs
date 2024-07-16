@@ -34,8 +34,10 @@ pub struct SearchSourcesItemResp {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSinkReq {
+    pub name: String,
     pub topic: String,
     pub qos: u8,
+    pub desc: Option<String>,
 }
 
 #[derive(Serialize)]
