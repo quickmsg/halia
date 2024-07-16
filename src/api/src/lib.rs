@@ -60,7 +60,7 @@ struct Pagination {
 
 pub async fn start() {
     let app = Router::new()
-        .nest("/api/device", devices::routes())
+        .nest("/api", devices::routes())
         .nest("/api/app", apps::routes())
         .nest("/api", rule_routes())
         .layer(

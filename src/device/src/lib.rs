@@ -2,7 +2,7 @@ use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
-use types::devices::device::SearchDeviceResp;
+use types::devices::{device::SearchDeviceResp, modbus::CreateUpdateModbusReq};
 
 use uuid::Uuid;
 
@@ -66,15 +66,14 @@ impl DeviceManager {
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::device::read_devices().await {
             Ok(devices) => {
-                for (device_id, mut datas) in devices {
+                for (device_id, datas) in devices {
                     if datas.len() != 3 {
                         panic!("数据损坏");
                     }
                     match datas[0].as_str() {
                         modbus::TYPE => {
-                            GLOBAL_MODBUS_MANAGER
-                                .create(Some(device_id), datas.pop().unwrap())
-                                .await?;
+                            let req: CreateUpdateModbusReq = serde_json::from_str(&datas[2])?;
+                            GLOBAL_MODBUS_MANAGER.create(Some(device_id), req).await?;
                             GLOBAL_MODBUS_MANAGER.recover(&device_id).await.unwrap();
                             match datas[1].as_str() {
                                 "0" => {}

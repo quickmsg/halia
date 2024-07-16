@@ -1,20 +1,29 @@
-use axum::extract::{Path, Query};
+use axum::{
+    extract::{Path, Query},
+    Json,
+};
 use common::error::HaliaError;
 use device::modbus::manager::GLOBAL_MODBUS_MANAGER;
-use types::devices::{device::SearchSinksResp, group::SearchGroupResp, point::SearchPointResp};
+use types::devices::{
+    device::SearchSinksResp, group::SearchGroupResp, modbus::CreateUpdateModbusReq,
+    point::SearchPointResp,
+};
 use uuid::Uuid;
 
 use crate::{AppResp, DeleteIdsQuery, Pagination};
 
-pub async fn create(data: String) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.create(None, data).await {
+pub async fn create(Json(req): Json<CreateUpdateModbusReq>) -> AppResp<()> {
+    match GLOBAL_MODBUS_MANAGER.create(None, req).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub async fn update(Path(device_id): Path<Uuid>, data: String) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.update(device_id, data).await {
+pub async fn update(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateModbusReq>,
+) -> AppResp<()> {
+    match GLOBAL_MODBUS_MANAGER.update(device_id, req).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }

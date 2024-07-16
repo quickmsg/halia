@@ -1,6 +1,7 @@
 use std::{io, path::PathBuf};
 
 use tokio::fs;
+use types::devices::modbus::CreateUpdateModbusReq;
 use uuid::Uuid;
 
 use super::{
@@ -36,7 +37,7 @@ fn get_sink_point_file_path(device_id: &Uuid, sink_id: &Uuid) -> PathBuf {
         .join(POINT_FILE)
 }
 
-pub async fn create(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
+pub async fn create(device_id: &Uuid, data: String) -> Result<(), io::Error> {
     super::create(
         get_device_file_path(),
         device_id,
@@ -46,7 +47,7 @@ pub async fn create(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
             DELIMITER,
             Status::Stopped,
             DELIMITER,
-            data
+            data,
         ),
     )
     .await?;

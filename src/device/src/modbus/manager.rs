@@ -7,6 +7,7 @@ use tokio::sync::{broadcast, mpsc};
 use types::devices::{
     device::{SearchDeviceItemResp, SearchSinksResp},
     group::SearchGroupResp,
+    modbus::CreateUpdateModbusReq,
     point::SearchPointResp,
 };
 use uuid::Uuid;
@@ -24,8 +25,12 @@ pub struct Manager {
 }
 
 impl Manager {
-    pub async fn create(&self, device_id: Option<Uuid>, data: String) -> HaliaResult<()> {
-        let device = Modbus::new(device_id, &data).await?;
+    pub async fn create(
+        &self,
+        device_id: Option<Uuid>,
+        req: CreateUpdateModbusReq,
+    ) -> HaliaResult<()> {
+        let device = Modbus::new(device_id, req).await?;
         GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
         self.devices.insert(device.id, device);
         Ok(())
@@ -45,9 +50,9 @@ impl Manager {
         }
     }
 
-    pub async fn update(&self, device_id: Uuid, data: String) -> HaliaResult<()> {
+    pub async fn update(&self, device_id: Uuid, req: CreateUpdateModbusReq) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update(data).await,
+            Some(mut device) => device.update(req).await,
             None => Err(HaliaError::NotFound),
         }
     }

@@ -10,11 +10,10 @@ use protocol::modbus::{
     client::{rtu, tcp, Context, Writer},
     SlaveContext,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sink::Sink;
 use std::{
-    net::{IpAddr, SocketAddr},
+    net::SocketAddr,
     sync::{
         atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
@@ -33,6 +32,7 @@ use types::devices::{
     datatype::{DataType, Endian},
     device::{Mode, SearchDeviceItemResp, SearchSinksResp},
     group::SearchGroupResp,
+    modbus::{CreateUpdateModbusReq, Encode},
     point::SearchPointResp,
 };
 use uuid::Uuid;
@@ -53,7 +53,7 @@ pub struct Modbus {
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
     rtt: Arc<AtomicU16>,
-    conf: Conf,
+    conf: CreateUpdateModbusReq,
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
 
     groups: Arc<RwLock<Vec<Group>>>,
@@ -62,79 +62,15 @@ pub struct Modbus {
     sinks: Vec<Sink>,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
-struct Conf {
-    name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    ethernet: Option<EthernetConf>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    serial: Option<SerialConf>,
-}
-
-#[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
-struct EthernetConf {
-    mode: Mode,
-    encode: Encode,
-    ip: String,
-    port: u16,
-    interval: u64,
-}
-
-#[derive(Deserialize, Serialize, Clone, PartialEq, Debug)]
-#[serde(rename_all = "snake_case")]
-enum Encode {
-    Tcp,
-    Rtu,
-}
-
-impl EthernetConf {
-    fn validate(&self) -> bool {
-        if let Err(_) = self.ip.parse::<IpAddr>() {
-            return false;
-        }
-
-        true
-    }
-}
-
-impl SerialConf {
-    fn validate(&self) -> bool {
-        true
-    }
-}
-
-#[derive(Deserialize, Clone, Serialize, PartialEq, Debug)]
-struct SerialConf {
-    interval: u64,
-    path: String,
-    stop_bits: u8,
-    baud_rate: u32,
-    data_bits: u8,
-    parity: u8,
-}
-
 impl Modbus {
-    pub async fn new(device_id: Option<Uuid>, data: &String) -> HaliaResult<Modbus> {
+    pub async fn new(device_id: Option<Uuid>, req: CreateUpdateModbusReq) -> HaliaResult<Modbus> {
         let (device_id, new) = match device_id {
             Some(device_id) => (device_id, false),
             None => (Uuid::new_v4(), true),
         };
 
-        let conf: Conf = serde_json::from_str(data)?;
-        if let Some(ethernet) = &conf.ethernet {
-            if !ethernet.validate() {
-                return Err(HaliaError::ConfErr);
-            }
-        } else if let Some(serial) = &conf.serial {
-            if !serial.validate() {
-                return Err(HaliaError::ConfErr);
-            }
-        } else {
-            return Err(HaliaError::ConfErr);
-        }
-
         if new {
-            persistence::modbus::create(&device_id, &data).await?;
+            persistence::modbus::create(&device_id, serde_json::to_string(&req).unwrap()).await?;
         }
 
         Ok(Modbus {
@@ -142,7 +78,7 @@ impl Modbus {
             on: Arc::new(AtomicBool::new(false)),
             err: Arc::new(AtomicBool::new(false)),
             rtt: Arc::new(AtomicU16::new(9999)),
-            conf,
+            conf: req,
             groups: Arc::new(RwLock::new(vec![])),
             read_tx: None,
             write_tx: None,
@@ -178,23 +114,19 @@ impl Modbus {
         }
     }
 
-    pub async fn update(&mut self, data: String) -> HaliaResult<()> {
-        let update_conf: Conf = serde_json::from_str(&data)?;
-
+    pub async fn update(&mut self, req: CreateUpdateModbusReq) -> HaliaResult<()> {
         let mut restart = false;
-        if (self.conf.ethernet != update_conf.ethernet || self.conf.serial != update_conf.serial)
-            && self.on.load(Ordering::SeqCst)
-        {
+        if (self.conf.mode != req.mode) && self.on.load(Ordering::SeqCst) {
             restart = true;
         }
 
-        self.conf = update_conf;
+        self.conf = req;
         if restart {
             self.stop(false).await?;
             self.start(false).await?;
         }
 
-        persistence::device::update_device_conf(&self.id, &data).await?;
+        // persistence::device::update_device_conf(&self.id, &data).await?;
 
         Ok(())
     }
@@ -322,40 +254,45 @@ impl Modbus {
         Ok(())
     }
 
-    async fn get_context(conf: &Conf) -> HaliaResult<(Context, u64)> {
-        if let Some(conf) = &conf.ethernet {
-            let socket_addr: SocketAddr = format!("{}:{}", conf.ip, conf.port).parse().unwrap();
-            let transport = TcpStream::connect(socket_addr).await?;
-            match conf.encode {
-                Encode::Tcp => Ok((tcp::attach(transport), conf.interval)),
-                Encode::Rtu => Ok((rtu::attach(transport), conf.interval)),
+    async fn get_context(conf: &CreateUpdateModbusReq) -> HaliaResult<(Context, u64)> {
+        match conf.link_type {
+            types::devices::modbus::LinkType::Ethernet => {
+                let socket_addr: SocketAddr =
+                    format!("{}:{}", conf.host.as_ref().unwrap(), conf.port.unwrap())
+                        .parse()
+                        .unwrap();
+                let transport = TcpStream::connect(socket_addr).await?;
+                match conf.encode.as_ref().unwrap() {
+                    Encode::Tcp => Ok((tcp::attach(transport), conf.interval)),
+                    Encode::RtuOverTcp => Ok((rtu::attach(transport), conf.interval)),
+                }
             }
-        } else if let Some(conf) = &conf.serial {
-            let builder = tokio_serial::new(conf.path.clone(), conf.baud_rate);
-            let mut port = SerialStream::open(&builder).unwrap();
-            match conf.stop_bits {
-                1 => port.set_stop_bits(StopBits::One).unwrap(),
-                2 => port.set_stop_bits(StopBits::Two).unwrap(),
-                _ => unreachable!(),
-            };
-            match conf.data_bits {
-                5 => port.set_data_bits(DataBits::Five).unwrap(),
-                6 => port.set_data_bits(DataBits::Six).unwrap(),
-                7 => port.set_data_bits(DataBits::Seven).unwrap(),
-                8 => port.set_data_bits(DataBits::Eight).unwrap(),
-                _ => unreachable!(),
-            };
+            types::devices::modbus::LinkType::Serial => {
+                let builder =
+                    tokio_serial::new(conf.path.as_ref().unwrap().clone(), conf.baud_rate.unwrap());
+                let mut port = SerialStream::open(&builder).unwrap();
+                match conf.stop_bits.unwrap() {
+                    1 => port.set_stop_bits(StopBits::One).unwrap(),
+                    2 => port.set_stop_bits(StopBits::Two).unwrap(),
+                    _ => unreachable!(),
+                };
+                match conf.data_bits.unwrap() {
+                    5 => port.set_data_bits(DataBits::Five).unwrap(),
+                    6 => port.set_data_bits(DataBits::Six).unwrap(),
+                    7 => port.set_data_bits(DataBits::Seven).unwrap(),
+                    8 => port.set_data_bits(DataBits::Eight).unwrap(),
+                    _ => unreachable!(),
+                };
 
-            match conf.parity {
-                0 => port.set_parity(Parity::None).unwrap(),
-                1 => port.set_parity(Parity::Odd).unwrap(),
-                2 => port.set_parity(Parity::Even).unwrap(),
-                _ => unreachable!(),
-            };
+                match conf.parity.unwrap() {
+                    0 => port.set_parity(Parity::None).unwrap(),
+                    1 => port.set_parity(Parity::Odd).unwrap(),
+                    2 => port.set_parity(Parity::Even).unwrap(),
+                    _ => unreachable!(),
+                };
 
-            Ok((rtu::attach(port), conf.interval))
-        } else {
-            panic!("no conf for modubs");
+                Ok((rtu::attach(port), conf.interval))
+            }
         }
     }
 
