@@ -2,7 +2,7 @@ use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
-use types::devices::{device::SearchDeviceResp, modbus::CreateUpdateModbusReq};
+use types::devices::{modbus::CreateUpdateModbusReq, SearchDevicesResp};
 
 use uuid::Uuid;
 
@@ -23,7 +23,7 @@ impl DeviceManager {
         self.devices.write().await.push((r#type, device_id));
     }
 
-    pub async fn search(&self, page: usize, size: usize) -> SearchDeviceResp {
+    pub async fn search(&self, page: usize, size: usize) -> SearchDevicesResp {
         let mut data = vec![];
         let mut i = 0;
         let mut total = 0;
@@ -51,7 +51,7 @@ impl DeviceManager {
             }
         }
 
-        SearchDeviceResp {
+        SearchDevicesResp {
             total,
             err_cnt,
             close_cnt,

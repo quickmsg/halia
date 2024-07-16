@@ -18,9 +18,8 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::devices::{
-    modbus::{CreateUpdateGroupPointReq, CreateUpdateGroupReq, SearchGroupsItemResp},
-    point::{SearchPointItemResp, SearchPointResp},
+use types::devices::modbus::{
+    CreateUpdateGroupPointReq, CreateUpdateGroupReq, SearchGroupPointsResp, SearchGroupsItemResp,
 };
 use uuid::Uuid;
 
@@ -87,6 +86,7 @@ impl Group {
 
     pub fn search(&self) -> SearchGroupsItemResp {
         SearchGroupsItemResp {
+            id: self.id.clone(),
             conf: self.conf.clone(),
         }
     }
@@ -189,23 +189,18 @@ impl Group {
         }
     }
 
-    pub async fn search_points(&self, page: usize, size: usize) -> SearchPointResp {
-        let mut resps = vec![];
+    pub fn search_points(&self, page: usize, size: usize) -> SearchGroupPointsResp {
+        let mut data = vec![];
         for point in self.points.iter().rev().skip((page - 1) * size) {
-            resps.push(SearchPointItemResp {
-                id: point.id.clone(),
-                name: point.conf.name.clone(),
-                conf: serde_json::json!(point.conf),
-                value: point.value.clone(),
-            });
-            if resps.len() == size {
+            data.push(point.search());
+            if data.len() == size {
                 break;
             }
         }
 
-        SearchPointResp {
+        SearchGroupPointsResp {
             total: self.points.len(),
-            data: resps,
+            data,
         }
     }
 

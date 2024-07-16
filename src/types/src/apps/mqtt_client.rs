@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateUpdateMqttClientReq {
@@ -31,7 +32,7 @@ pub struct SearchSourcesItemResp {
     pub conf: CreateUpdateSourceReq,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSinkReq {
     pub topic: String,
     pub qos: u8,
@@ -45,5 +46,6 @@ pub struct SearchSinksResp {
 
 #[derive(Serialize)]
 pub struct SearchSinksItemResp {
+    pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
 }

@@ -4,7 +4,7 @@ use axum::{
     Router,
 };
 use device::GLOBAL_DEVICE_MANAGER;
-use types::devices::device::SearchDeviceResp;
+use types::devices::SearchDevicesResp;
 
 use crate::{AppResp, Pagination};
 
@@ -19,7 +19,7 @@ pub fn routes() -> Router {
     )
 }
 
-async fn search_devices(pagination: Query<Pagination>) -> AppResp<SearchDeviceResp> {
+async fn search_devices(pagination: Query<Pagination>) -> AppResp<SearchDevicesResp> {
     AppResp::with_data(
         GLOBAL_DEVICE_MANAGER
             .search(pagination.p, pagination.s)

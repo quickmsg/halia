@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::datatype::DataType;
 
@@ -68,6 +69,7 @@ pub struct SearchGroupsResp {
 
 #[derive(Serialize)]
 pub struct SearchGroupsItemResp {
+    pub id: Uuid,
     pub conf: CreateUpdateGroupReq,
 }
 
@@ -99,6 +101,7 @@ pub struct SearchGroupPointsResp {
 
 #[derive(Serialize)]
 pub struct SearchGroupPointsItemResp {
+    pub id: Uuid,
     pub conf: CreateUpdateGroupPointReq,
 }
 
@@ -116,6 +119,7 @@ pub struct SearchSinksResp {
 
 #[derive(Serialize)]
 pub struct SearchSinksItemResp {
+    pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
 }
 
@@ -137,5 +141,6 @@ pub struct SearchSinkPointsResp {
 
 #[derive(Serialize)]
 pub struct SearchSinkPointsItemResp {
+    pub id: Uuid,
     pub conf: CreateUpdateSinkPointReq,
 }

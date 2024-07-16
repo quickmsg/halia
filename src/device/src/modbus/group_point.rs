@@ -9,7 +9,7 @@ use protocol::modbus::{
 };
 use serde_json::Value;
 use tracing::warn;
-use types::devices::modbus::{Area, CreateUpdateGroupPointReq};
+use types::devices::modbus::{Area, CreateUpdateGroupPointReq, SearchGroupPointsItemResp};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -50,6 +50,13 @@ impl Point {
             quantity,
             value: Value::Null,
         })
+    }
+
+    pub fn search(&self) -> SearchGroupPointsItemResp {
+        SearchGroupPointsItemResp {
+            id: self.id.clone(),
+            conf: self.conf.clone(),
+        }
     }
 
     pub async fn update(

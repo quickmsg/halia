@@ -1,6 +1,5 @@
 use common::{error::HaliaResult, persistence};
 use message::MessageBatch;
-use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use types::apps::mqtt_client::{CreateUpdateSourceReq, SearchSourcesItemResp};
 use uuid::Uuid;

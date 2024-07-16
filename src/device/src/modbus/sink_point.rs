@@ -78,6 +78,7 @@ impl Point {
 
     pub fn search(&self) -> SearchSinkPointsItemResp {
         SearchSinkPointsItemResp {
+            id: self.id.clone(),
             conf: self.conf.clone(),
         }
     }

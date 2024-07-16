@@ -5,13 +5,10 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
 use types::devices::{
-    device::SearchDeviceItemResp,
     modbus::{
-        CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
-        CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupsResp, SearchSinkPointsResp,
-        SearchSinksResp,
+        CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq, CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupPointsResp, SearchGroupsResp, SearchSinkPointsResp, SearchSinksResp
     },
-    point::SearchPointResp,
+    SearchDevicesItemResp,
 };
 use uuid::Uuid;
 
@@ -45,7 +42,7 @@ impl Manager {
         }
     }
 
-    pub fn search(&self, device_id: &Uuid) -> HaliaResult<SearchDeviceItemResp> {
+    pub fn search(&self, device_id: &Uuid) -> HaliaResult<SearchDevicesItemResp> {
         match self.devices.get(device_id) {
             Some(device) => Ok(device.search()),
             None => Err(HaliaError::NotFound),
@@ -149,7 +146,7 @@ impl Manager {
         group_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchPointResp> {
+    ) -> HaliaResult<SearchGroupPointsResp> {
         match self.devices.get(&device_id) {
             Some(device) => device.search_group_points(group_id, page, size).await,
             None => Err(HaliaError::NotFound),

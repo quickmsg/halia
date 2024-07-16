@@ -4,20 +4,21 @@ use axum::{
     Json,
 };
 use types::apps::mqtt_client::{
-    CreateUpdateMqttClientReq, CreateUpdateSourceReq, SearchSinksResp, SearchSourcesResp,
+    CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+    SearchSourcesResp,
 };
 use uuid::Uuid;
 
 use crate::{AppResp, Pagination};
 
-pub(crate) async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResp<()> {
+pub async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResp<()> {
     match GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn update(
+pub async fn update(
     Path(app_id): Path<Uuid>,
     Json(req): Json<CreateUpdateMqttClientReq>,
 ) -> AppResp<()> {
@@ -27,14 +28,14 @@ pub(crate) async fn update(
     }
 }
 
-pub(crate) async fn delete(Path(app_id): Path<Uuid>) -> AppResp<()> {
+pub async fn delete(Path(app_id): Path<Uuid>) -> AppResp<()> {
     match GLOBAL_MQTT_CLIENT_MANAGER.delete(app_id).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn create_source(
+pub async fn create_source(
     Path(app_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceReq>,
 ) -> AppResp<()> {
@@ -78,14 +79,17 @@ pub(crate) async fn delete_source(Path((app_id, source_id)): Path<(Uuid, Uuid)>)
         .delete_source(app_id, source_id)
         .await
     {
-        Ok(_) => todo!(),
-        Err(_) => todo!(),
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
     }
 }
 
-pub(crate) async fn create_sink(Path(app_id): Path<Uuid>, data: String) -> AppResp<()> {
+pub(crate) async fn create_sink(
+    Path(app_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateSinkReq>,
+) -> AppResp<()> {
     match GLOBAL_MQTT_CLIENT_MANAGER
-        .create_sink(app_id, None, data)
+        .create_sink(app_id, None, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -108,10 +112,10 @@ pub(crate) async fn search_sinks(
 
 pub(crate) async fn update_sink(
     Path((app_id, sink_id)): Path<(Uuid, Uuid)>,
-    data: String,
+    Json(req): Json<CreateUpdateSinkReq>,
 ) -> AppResp<()> {
     match GLOBAL_MQTT_CLIENT_MANAGER
-        .update_sink(app_id, sink_id, data)
+        .update_sink(app_id, sink_id, req)
         .await
     {
         Ok(_) => AppResp::new(),
@@ -124,7 +128,7 @@ pub(crate) async fn delete_sink(Path((app_id, sink_id)): Path<(Uuid, Uuid)>) -> 
         .delete_sink(app_id, sink_id)
         .await
     {
-        Ok(_) => todo!(),
-        Err(_) => todo!(),
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
     }
 }

@@ -3,7 +3,7 @@ use message::MessageBatch;
 use rumqttc::{AsyncClient, QoS};
 use tokio::sync::mpsc;
 use tracing::{debug, error};
-use types::apps::mqtt_client::CreateUpdateSinkReq;
+use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
 pub struct Sink {
@@ -38,7 +38,12 @@ impl Sink {
         })
     }
 
-    pub fn search(&self) {}
+    pub fn search(&self) -> SearchSinksItemResp {
+        SearchSinksItemResp {
+            id: self.id.clone(),
+            conf: self.conf.clone(),
+        }
+    }
 
     pub fn update(&mut self, data: String) {}
 

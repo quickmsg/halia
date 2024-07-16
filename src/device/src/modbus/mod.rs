@@ -29,13 +29,12 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, warn};
 use types::devices::{
     datatype::{DataType, Endian},
-    device::SearchDeviceItemResp,
     modbus::{
         Area, CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
-        CreateUpdateSinkPointReq, CreateUpdateSinkReq, Encode, SearchGroupsResp,
-        SearchSinkPointsResp, SearchSinksResp,
+        CreateUpdateSinkPointReq, CreateUpdateSinkReq, Encode, SearchGroupPointsResp,
+        SearchGroupsResp, SearchSinkPointsResp, SearchSinksResp,
     },
-    point::SearchPointResp,
+    SearchDevicesItemResp,
 };
 use uuid::Uuid;
 
@@ -105,10 +104,9 @@ impl Modbus {
         }
     }
 
-    pub fn search(&self) -> SearchDeviceItemResp {
-        SearchDeviceItemResp {
-            id: self.id,
-            name: self.conf.name.clone(),
+    pub fn search(&self) -> SearchDevicesItemResp {
+        SearchDevicesItemResp {
+            id: self.id.clone(),
             r#type: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on.load(Ordering::SeqCst),
@@ -432,7 +430,7 @@ impl Modbus {
         group_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchPointResp> {
+    ) -> HaliaResult<SearchGroupPointsResp> {
         match self
             .groups
             .read()
@@ -440,7 +438,7 @@ impl Modbus {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => Ok(group.search_points(page, size).await),
+            Some(group) => Ok(group.search_points(page, size)),
             None => Err(HaliaError::NotFound),
         }
     }

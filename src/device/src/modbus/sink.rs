@@ -3,7 +3,6 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use serde::{Deserialize, Serialize};
 use tokio::{select, sync::mpsc};
 use tracing::{debug, warn};
 use types::devices::modbus::{
@@ -23,12 +22,6 @@ pub struct Sink {
     points: Vec<Point>,
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
     publish_tx: Option<mpsc::Sender<MessageBatch>>,
-}
-
-#[derive(Serialize)]
-struct SearchPointsResp {
-    total: usize,
-    data: Vec<serde_json::Value>,
 }
 
 impl Sink {
@@ -63,6 +56,7 @@ impl Sink {
 
     pub fn search(&self) -> SearchSinksItemResp {
         SearchSinksItemResp {
+            id: self.id.clone(),
             conf: self.conf.clone(),
         }
     }

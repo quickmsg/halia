@@ -3,7 +3,8 @@ use std::sync::LazyLock;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use types::apps::mqtt_client::{
-    CreateUpdateMqttClientReq, CreateUpdateSourceReq, SearchSinksResp, SearchSourcesResp,
+    CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+    SearchSourcesResp,
 };
 use uuid::Uuid;
 
@@ -108,9 +109,12 @@ impl Manager {
         &self,
         app_id: Uuid,
         sink_id: Option<Uuid>,
-        data: String,
+        req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
-        todo!()
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.create_sink(sink_id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn search_sinks(
@@ -120,17 +124,28 @@ impl Manager {
         size: usize,
     ) -> HaliaResult<SearchSinksResp> {
         match self.apps.get(&app_id) {
-            Some(app) => app.search_sinks(page, size).await,
+            Some(app) => Ok(app.search_sinks(page, size).await),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn update_sink(&self, app_id: Uuid, sink_id: Uuid, data: String) -> HaliaResult<()> {
-        todo!()
+    pub async fn update_sink(
+        &self,
+        app_id: Uuid,
+        sink_id: Uuid,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.update_sink(sink_id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn delete_sink(&self, app_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
-        todo!()
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.delete_sink(sink_id).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn publish(&self, app_id: &Uuid, sink_id: &Uuid) -> HaliaResult<()> {

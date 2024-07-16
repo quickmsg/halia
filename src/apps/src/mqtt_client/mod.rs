@@ -275,19 +275,29 @@ impl MqttClient {
         }
     }
 
-    async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
-        // let mut total = 0;
-        // let mut i = 0;
-        // let mut data = vec![];
-        // for sink in self.sinks.read().await.iter() {
-        //     if i >= (page - 1) * size && i < page * size {
-        //         data.push(serde_json::to_value(sink).unwrap());
-        //     }
-        //     total += 1;
-        //     i += 1;
-        // }
+    async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
+        let mut data = vec![];
+        for sink in self.sinks.read().await.iter().rev().skip((page - 1) * size) {
+            data.push(sink.search());
+            if data.len() == size {
+                break;
+            }
+        }
+        SearchSinksResp {
+            total: self.sinks.read().await.len(),
+            data,
+        }
+    }
 
-        // Ok(SearchSinksResp { total, data })
+    pub async fn update_sink(
+        &mut self,
+        sink_id: Uuid,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 

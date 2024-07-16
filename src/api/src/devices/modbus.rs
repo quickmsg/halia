@@ -4,13 +4,10 @@ use axum::{
 };
 use common::error::HaliaError;
 use device::modbus::manager::GLOBAL_MODBUS_MANAGER;
-use types::devices::{
-    modbus::{
-        CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
-        CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupsResp, SearchSinkPointsResp,
-        SearchSinksResp,
-    },
-    point::SearchPointResp,
+use types::devices::modbus::{
+    CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
+    CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupPointsResp, SearchGroupsResp,
+    SearchSinkPointsResp, SearchSinksResp,
 };
 use uuid::Uuid;
 
@@ -116,10 +113,10 @@ pub async fn create_group_point(
     }
 }
 
-pub(crate) async fn search_group_points(
+pub async fn search_group_points(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     pagination: Query<Pagination>,
-) -> AppResp<SearchPointResp> {
+) -> AppResp<SearchGroupPointsResp> {
     match GLOBAL_MODBUS_MANAGER
         .search_group_points(device_id, group_id, pagination.p, pagination.s)
         .await
