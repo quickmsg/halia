@@ -1,29 +1,46 @@
-use anyhow::Result;
+use common::error::HaliaResult;
 use message::MessageBatch;
 use rumqttc::{AsyncClient, QoS};
-use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tracing::{debug, error};
+use types::apps::mqtt_client::CreateUpdateSinkReq;
 use uuid::Uuid;
 
 pub struct Sink {
     pub id: Uuid,
-    pub conf: Conf,
+    pub conf: CreateUpdateSinkReq,
     pub tx: Option<mpsc::Receiver<MessageBatch>>,
     pub ref_cnt: u8,
     pub client: Option<AsyncClient>,
 }
 
-#[derive(Deserialize, Serialize)]
-struct Conf {
-    topic: String,
-    qos: u8,
-}
-
 impl Sink {
-    pub fn new(app_id: &Uuid, sink_id: Option<Uuid>, data: String) -> Result<Self> {
-        todo!()
+    pub async fn new(
+        app_id: &Uuid,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<Self> {
+        let (sink_id, new) = match sink_id {
+            Some(sink_id) => (sink_id, false),
+            None => (Uuid::new_v4(), true),
+        };
+
+        if new {
+            // 持久化
+        }
+
+        Ok(Sink {
+            id: sink_id,
+            conf: req,
+            tx: None,
+            ref_cnt: 0,
+            client: None,
+        })
     }
+
+    pub fn search(&self) {}
+
+    pub fn update(&mut self, data: String) {}
 
     pub fn start(&self, mut rx: mpsc::Receiver<MessageBatch>) {
         let client = self.client.as_ref().unwrap().clone();
@@ -50,10 +67,6 @@ impl Sink {
     }
 
     pub fn stop() {}
-
-    pub fn search(&self) {}
-
-    pub fn update(&mut self, data: String) {}
 
     pub fn delete(&mut self) {}
 }

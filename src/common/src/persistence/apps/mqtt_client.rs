@@ -31,20 +31,12 @@ pub async fn delete_app(app_id: &Uuid) -> Result<(), io::Error> {
     delete(get_app_file_path(), app_id).await
 }
 
-pub async fn create_source(
-    app_id: &Uuid,
-    source_id: &Uuid,
-    data: &String,
-) -> Result<(), io::Error> {
-    create(get_source_file_path(app_id), source_id, data).await
+pub async fn create_source(app_id: &Uuid, source_id: &Uuid, data: String) -> Result<(), io::Error> {
+    create(get_source_file_path(app_id), source_id, &data).await
 }
 
-pub async fn update_source(
-    app_id: &Uuid,
-    source_id: &Uuid,
-    data: &String,
-) -> Result<(), io::Error> {
-    update(get_source_file_path(app_id), source_id, data).await
+pub async fn update_source(app_id: &Uuid, source_id: &Uuid, data: String) -> Result<(), io::Error> {
+    update(get_source_file_path(app_id), source_id, &data).await
 }
 
 pub async fn delete_source(app_id: &Uuid, source_id: &Uuid) -> Result<(), io::Error> {

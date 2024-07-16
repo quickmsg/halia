@@ -35,7 +35,7 @@ fn mqtt_client_routes() -> Router {
                     "/source",
                     Router::new()
                         .route("/", post(mqtt_client::create_source))
-                        // .route("/", get(mqtt_client::search_sources))
+                        .route("/", get(mqtt_client::search_sources))
                         .route("/:source_id", put(mqtt_client::update_source))
                         .route("/:source_id", delete(mqtt_client::delete_source)),
                 )
@@ -43,7 +43,7 @@ fn mqtt_client_routes() -> Router {
                     "/sink",
                     Router::new()
                         .route("/", post(mqtt_client::create_sink))
-                        // .route("/", get(mqtt_client::search_sinks))
+                        .route("/", get(mqtt_client::search_sinks))
                         .route("/:sink_id", put(mqtt_client::update_sink))
                         .route("/:sink_id", delete(mqtt_client::delete_sink)),
                 ),

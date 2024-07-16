@@ -2,57 +2,64 @@ use common::{error::HaliaResult, persistence};
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
+use types::apps::mqtt_client::{CreateUpdateSourceReq, SearchSourcesItemResp};
 use uuid::Uuid;
 
 pub struct Source {
     pub id: Uuid,
-    pub conf: Conf,
+    pub conf: CreateUpdateSourceReq,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: u8,
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct Conf {
-    pub name: String,
-    pub topic: String,
-    pub qos: u8,
-    pub desc: Option<String>,
-}
-
 impl Source {
-    pub async fn new(app_id: &Uuid, source_id: Option<Uuid>, data: String) -> HaliaResult<Self> {
-        let conf: Conf = serde_json::from_str(&data)?;
-
+    pub async fn new(
+        app_id: &Uuid,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceReq,
+    ) -> HaliaResult<Self> {
         let (source_id, new) = match source_id {
             Some(source_id) => (source_id, false),
             None => (Uuid::new_v4(), true),
         };
 
         if new {
-            persistence::apps::mqtt_client::create_source(app_id, &source_id, &data).await?;
+            persistence::apps::mqtt_client::create_source(
+                app_id,
+                &source_id,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
         Ok(Source {
             id: source_id,
-            conf,
+            conf: req,
             tx: None,
             ref_cnt: 0,
         })
     }
 
-    pub fn search(&self) {}
+    pub fn search(&self) -> SearchSourcesItemResp {
+        SearchSourcesItemResp {
+            conf: self.conf.clone(),
+        }
+    }
 
-    pub async fn update(&mut self, app_id: &Uuid, data: String) -> HaliaResult<bool> {
-        let conf: Conf = serde_json::from_str(&data)?;
-
-        persistence::apps::mqtt_client::update_source(app_id, &self.id, &data).await?;
+    pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSourceReq) -> HaliaResult<bool> {
+        persistence::apps::mqtt_client::update_source(
+            app_id,
+            &self.id,
+            serde_json::to_string(&req).unwrap(),
+        )
+        .await?;
 
         let mut restart = false;
-        if self.conf.topic != conf.topic || self.conf.qos != conf.qos {
+        if self.conf.topic != req.topic || self.conf.qos != req.qos {
             restart = true;
         }
 
-        self.conf = conf;
+        self.conf = req;
 
         Ok(restart)
     }

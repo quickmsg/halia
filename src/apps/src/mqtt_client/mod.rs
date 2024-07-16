@@ -4,7 +4,6 @@ use anyhow::{bail, Result};
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
-use serde::{Deserialize, Serialize};
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -13,7 +12,10 @@ use tokio::{
 };
 use tracing::error;
 use types::apps::{
-    mqtt_client::{SearchSinksResp, SearchSourcesResp},
+    mqtt_client::{
+        CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+        SearchSourcesResp,
+    },
     SearchAppItemResp,
 };
 use uuid::Uuid;
@@ -26,7 +28,7 @@ mod source;
 
 pub struct MqttClient {
     pub id: Uuid,
-    conf: Conf,
+    conf: CreateUpdateMqttClientReq,
     on: bool,
 
     sources: Arc<RwLock<Vec<Source>>>,
@@ -34,30 +36,8 @@ pub struct MqttClient {
     client: Option<AsyncClient>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct Conf {
-    name: String,
-    id: String,
-    timeout: usize,
-    keep_alive: usize,
-    clean_session: bool,
-    host: String,
-    port: u16,
-}
-
-// enum Conf {
-//     Password(PasswordConf),
-// }
-
-struct PasswordConf {
-    username: String,
-    password: String,
-}
-
 impl MqttClient {
-    pub fn new(app_id: Option<Uuid>, data: String) -> Result<Self> {
-        let conf: Conf = serde_json::from_str(&data)?;
-
+    pub async fn new(app_id: Option<Uuid>, req: CreateUpdateMqttClientReq) -> HaliaResult<Self> {
         let (app_id, new) = match app_id {
             Some(app_id) => (app_id, false),
             None => (Uuid::new_v4(), true),
@@ -67,12 +47,16 @@ impl MqttClient {
 
         Ok(Self {
             id: app_id,
-            conf,
+            conf: req,
             sources: Arc::new(RwLock::new(vec![])),
             sinks: Arc::new(RwLock::new(vec![])),
             on: false,
             client: None,
         })
+    }
+
+    pub async fn update(&mut self, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
+        todo!()
     }
 
     pub async fn start(&mut self) {
@@ -140,6 +124,10 @@ impl MqttClient {
             }
         });
     }
+
+    pub async fn delete(&mut self) -> HaliaResult<()> {
+        todo!()
+    }
 }
 
 impl MqttClient {
@@ -183,8 +171,12 @@ impl MqttClient {
         bail!("not find topic id")
     }
 
-    pub async fn create_source(&self, source_id: Option<Uuid>, data: String) -> HaliaResult<()> {
-        match Source::new(&self.id, source_id, data).await {
+    pub async fn create_source(
+        &self,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceReq,
+    ) -> HaliaResult<()> {
+        match Source::new(&self.id, source_id, req).await {
             Ok(source) => {
                 if self.on {
                     if let Err(e) = self
@@ -206,22 +198,31 @@ impl MqttClient {
         }
     }
 
-    // async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourcesResp> {
-    //     let mut total = 0;
-    //     let mut i = 0;
-    //     let mut data = vec![];
-    //     for topic in self.sources.read().await.iter() {
-    //         if i >= (page - 1) * size && i < page * size {
-    //             data.push(serde_json::to_value(topic).unwrap());
-    //         }
-    //         total += 1;
-    //         i += 1;
-    //     }
+    async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourcesResp> {
+        let mut i = 0;
+        let mut data = vec![];
+        for source in self
+            .sources
+            .read()
+            .await
+            .iter()
+            .rev()
+            .skip((page - 1) * size)
+        {
+            data.push(source.search());
+            i += 1;
+            if i == size {
+                break;
+            }
+        }
 
-    //     Ok(SearchSourcesResp { total, data })
-    // }
+        Ok(SearchSourcesResp {
+            total: self.sources.read().await.len(),
+            data,
+        })
+    }
 
-    async fn update_source(&self, source_id: Uuid, data: String) -> HaliaResult<()> {
+    async fn update_source(&self, source_id: Uuid, req: CreateUpdateSourceReq) -> HaliaResult<()> {
         match self
             .sources
             .write()
@@ -229,7 +230,7 @@ impl MqttClient {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => match source.update(&self.id, data).await {
+            Some(source) => match source.update(&self.id, req).await {
                 Ok(restart) => {
                     if self.on && restart {
                         if let Err(e) = self
@@ -261,10 +262,17 @@ impl MqttClient {
         }
     }
 
-    async fn create_sink(&self, data: String) -> HaliaResult<()> {
-        // let topic_conf: TopicConf = serde_json::from_slice(req)?;
-        let sink_id = Uuid::new_v4();
-        Ok(())
+    async fn create_sink(
+        &self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match Sink::new(&self.id, sink_id, req).await {
+            Ok(sink) => {
+                todo!()
+            }
+            Err(e) => Err(e),
+        }
     }
 
     async fn search_sinks(&self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
