@@ -1,7 +1,6 @@
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
     Json, Router,
 };
 use common::error::HaliaError;
@@ -61,7 +60,7 @@ pub async fn start() {
     let app = Router::new()
         .nest("/api", devices::routes())
         .nest("/api", apps::routes())
-        .nest("/api", rule_routes())
+        .nest("/api", rule::rule_routes())
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -76,17 +75,4 @@ pub async fn start() {
 #[derive(Deserialize)]
 pub(crate) struct DeleteIdsQuery {
     ids: String,
-}
-
-fn rule_routes() -> Router {
-    Router::new().nest(
-        "/rule",
-        Router::new()
-            .route("/", post(rule::create))
-            .route("/", get(rule::search))
-            .route("/:id/start", put(rule::start))
-            .route("/:id/stop", put(rule::stop))
-            .route("/:id", put(rule::update))
-            .route("/:id", delete(rule::delete)),
-    )
 }

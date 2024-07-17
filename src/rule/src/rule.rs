@@ -1,10 +1,13 @@
 use anyhow::Result;
+use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use common::{error::HaliaResult, persistence};
-use device::modbus::{self, manager::GLOBAL_MODBUS_MANAGER};
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
-use types::rules::{CreateUpdateRuleReq, Node, SearchRulesItemResp};
+use types::rules::{
+    apps::mqtt_client, CreateUpdateRuleReq, Node, NodeType, SearchRulesItemResp, SinkNode,
+    SourceNode,
+};
 use uuid::Uuid;
 
 // use crate::stream::start_stream;
@@ -46,11 +49,11 @@ impl Rule {
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
         let mut node_map = HashMap::<usize, Node>::new();
-        for node in self.req.nodes.iter() {
+        for node in self.conf.nodes.iter() {
             node_map.insert(node.index, node.clone());
         }
 
-        let mut ids: Vec<usize> = self.req.nodes.iter().map(|node| node.index).collect();
+        let mut ids: Vec<usize> = self.conf.nodes.iter().map(|node| node.index).collect();
 
         let mut receivers = HashMap::new();
         let stream_infos = get_stream_infos(
@@ -63,29 +66,50 @@ impl Rule {
         for stream_info in stream_infos {
             for info in stream_info {
                 match info.r#type {
-                    RuleNodeType::Source => {
+                    NodeType::DeviceSource => {
                         let node = node_map.get(&info.first_id).unwrap();
-                        let source: CreateRuleSource = serde_json::from_value(node.conf.clone())?;
-                        debug!("{:?}", source);
-                        let receiver = match source.r#type {
-                            types::rule::CreateRuleSourceType::Device(r#type) => {
-                                match r#type.as_str() {
-                                    modbus::TYPE => GLOBAL_MODBUS_MANAGER
-                                        .subscribe(&source.id, &source.source_id.unwrap())
-                                        .await
-                                        .unwrap(),
-                                    _ => unreachable!(),
-                                }
-                            }
-                            // types::rule::CreateRuleSourceType::App => GLOBAL_APP_MANAGER
-                            //     .subscribe(&source.id, source.source_id)
-                            //     .await
-                            //     .unwrap(),
-                            _ => todo!(),
-                        };
-                        receivers.insert(info.first_id, vec![receiver]);
+                        let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
+                        match source_node.r#type.as_str() {
+                            "xxx" => {}
+                            _ => {}
+                        }
+                        // let receiver = match source.r#type {
+                        //     types::rule::CreateRuleSourceType::Device(r#type) => {
+                        //         match r#type.as_str() {
+                        //             modbus::TYPE => GLOBAL_MODBUS_MANAGER
+                        //                 .subscribe(&source.id, &source.source_id.unwrap())
+                        //                 .await
+                        //                 .unwrap(),
+                        //             _ => unreachable!(),
+                        //         }
+                        //     }
+                        //     // types::rule::CreateRuleSourceType::App => GLOBAL_APP_MANAGER
+                        //     //     .subscribe(&source.id, source.source_id)
+                        //     //     .await
+                        //     //     .unwrap(),
+                        //     _ => todo!(),
+                        // };
+                        // receivers.insert(info.first_id, vec![receiver]);
                     }
-                    RuleNodeType::Window => {
+                    NodeType::AppSource => {
+                        let node = node_map.get(&info.first_id).unwrap();
+                        let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
+                        let rx = match source_node.r#type.as_str() {
+                            "mqtt_client" => {
+                                let source: mqtt_client::Source =
+                                    serde_json::from_value(source_node.conf.clone())?;
+                                GLOBAL_MQTT_CLIENT_MANAGER
+                                    .subscribe(&source.app_id, &source.source_id)
+                                    .await
+                                    .unwrap()
+                            }
+                            _ => {
+                                todo!()
+                            }
+                        };
+                        receivers.insert(info.first_id, vec![rx]);
+                    }
+                    NodeType::Window => {
                         // "window" => {
                         //     if let Some(source_ids) = incoming_edges.get(&info.id) {
                         //         if let Some(source_id) = source_ids.first() {
@@ -106,7 +130,7 @@ impl Rule {
                         //     }
                         // }
                     }
-                    RuleNodeType::Merge => {
+                    NodeType::Merge => {
                         // if let Some(source_ids) = incoming_edges.get(&osi.id) {
                         //     debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);
                         //     let mut rxs = Vec::new();
@@ -132,33 +156,75 @@ impl Rule {
                         // }
                     }
 
-                    RuleNodeType::Sink => {
+                    // NodeType::DeviceSink => {
+                    //     if let Some(source_ids) = incoming_edges.get(&info.id) {
+                    //         if let Some(source_id) = source_ids.first() {
+                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
+                    //                 let mut rx = node_receivers.remove(0);
+
+                    //                 let node = node_map.get(&info.id).unwrap();
+                    //                 let sink: CreateRuleSink =
+                    //                     serde_json::from_value(node.conf.clone())?;
+                    //                 let tx = match sink.r#type {
+                    //                     CreateRuleSinkType::Device(r#type) => match r#type.as_str()
+                    //                     {
+                    //                         modbus::TYPE => GLOBAL_MODBUS_MANAGER
+                    //                             .publish(&sink.id, &sink.sink_id.unwrap())
+                    //                             .await
+                    //                             .unwrap(),
+                    //                         _ => todo!(),
+                    //                     },
+
+                    //                     // CreateRuleSinkType::App => GLOBAL_APP_MANAGER
+                    //                     //     .publish(&sink.id, &sink.sink_id)
+                    //                     //     .await
+                    //                     //     .unwrap(),
+                    //                     _ => todo!(),
+                    //                 };
+
+                    //                 tokio::spawn(async move {
+                    //                     loop {
+                    //                         match rx.recv().await {
+                    //                             Ok(mb) => {
+                    //                                 let _ = tx.send(mb).await;
+                    //                             }
+                    //                             Err(_) => {
+                    //                                 debug!("recv err");
+                    //                                 return;
+                    //                             }
+                    //                         };
+                    //                     }
+                    //                 });
+                    //             }
+                    //         }
+                    //     }
+                    // }
+                    NodeType::AppSink => {
                         if let Some(source_ids) = incoming_edges.get(&info.id) {
                             if let Some(source_id) = source_ids.first() {
                                 if let Some(mut node_receivers) = receivers.remove(source_id) {
                                     let mut rx = node_receivers.remove(0);
 
                                     let node = node_map.get(&info.id).unwrap();
-                                    let sink: CreateRuleSink =
+                                    let sink_node: SinkNode =
                                         serde_json::from_value(node.conf.clone())?;
-                                    let tx = match sink.r#type {
-                                        CreateRuleSinkType::Device(r#type) => match r#type.as_str()
-                                        {
-                                            modbus::TYPE => GLOBAL_MODBUS_MANAGER
-                                                .publish(&sink.id, &sink.sink_id.unwrap())
-                                                .await
-                                                .unwrap(),
-                                            _ => todo!(),
-                                        },
 
-                                        // CreateRuleSinkType::App => GLOBAL_APP_MANAGER
-                                        //     .publish(&sink.id, &sink.sink_id)
-                                        //     .await
-                                        //     .unwrap(),
-                                        _ => todo!(),
+                                    let tx = match sink_node.r#type.as_str() {
+                                        "mqtt_client" => {
+                                            let sink: mqtt_client::Sink =
+                                                serde_json::from_value(sink_node.conf.clone())?;
+                                            GLOBAL_MQTT_CLIENT_MANAGER
+                                                .publish(&sink.app_id, &sink.sink_id)
+                                                .await
+                                                .unwrap()
+                                        }
+                                        _ => {
+                                            todo!()
+                                        }
                                     };
 
                                     tokio::spawn(async move {
+                                        // TODO select stop signal
                                         loop {
                                             match rx.recv().await {
                                                 Ok(mb) => {
@@ -223,8 +289,7 @@ impl Rule {
     }
 
     pub fn stop(&mut self) {
-        self.status = Status::Stopped;
-        if let Err(e) = self.stop_signal.send(()) {
+        if let Err(e) = self.stop_signal.as_ref().unwrap().send(()) {
             error!("rule stop send signal err:{}", e);
         }
     }
@@ -232,7 +297,7 @@ impl Rule {
 
 #[derive(Debug)]
 struct StreamInfo {
-    r#type: RuleNodeType,
+    r#type: NodeType,
     id: usize,
     first_id: usize,
     last_id: usize,
@@ -241,7 +306,7 @@ struct StreamInfo {
 
 fn get_stream_infos(
     ids: &mut Vec<usize>,
-    node_map: &HashMap<usize, CreateRuleNode>,
+    node_map: &HashMap<usize, Node>,
     incoming_edges: &mut HashMap<usize, Vec<usize>>,
     outgoing_edges: &mut HashMap<usize, Vec<usize>>,
 ) -> Result<Vec<Vec<StreamInfo>>> {
@@ -273,7 +338,7 @@ fn get_stream_infos(
 
 fn get_stream_info(
     id: usize,
-    node_map: &HashMap<usize, CreateRuleNode>,
+    node_map: &HashMap<usize, Node>,
     incoming_edges: &HashMap<usize, Vec<usize>>,
     outgoing_edges: &HashMap<usize, Vec<usize>>,
 ) -> Result<StreamInfo> {
@@ -282,38 +347,30 @@ fn get_stream_info(
         first_id: id,
         last_id: id,
         ids: Vec::new(),
-        r#type: RuleNodeType::Operator,
+        r#type: NodeType::Operator,
     };
     osi.ids.push(id);
 
     if let Some(node) = node_map.get(&id) {
         match node.r#type {
-            RuleNodeType::Source => {
-                osi.r#type = RuleNodeType::Source;
+            NodeType::DeviceSource => {
+                osi.r#type = NodeType::DeviceSource;
                 return Ok(osi);
             }
-            RuleNodeType::Sink => {
-                osi.r#type = RuleNodeType::Sink;
+            NodeType::AppSource => {
+                osi.r#type = NodeType::AppSource;
                 return Ok(osi);
             }
-            RuleNodeType::Merge => {}
-            RuleNodeType::Window => {}
-            // "sink" => {
-            //     osi.r#type = Some("sink".to_string());
-            //     return Ok(osi);
-            // }
-            // "window" => {
-            //     osi.r#type = Some("window".to_string());
-            //     return Ok(osi);
-            // }
-            // "join" => {
-            //     osi.r#type = Some("join".to_string());
-            //     return Ok(osi);
-            // }
-            // "merge" => {
-            //     osi.r#type = Some("merge".to_string());
-            //     return Ok(osi);
-            // }
+            NodeType::DeviceSink => {
+                osi.r#type = NodeType::DeviceSink;
+                return Ok(osi);
+            }
+            NodeType::AppSink => {
+                osi.r#type = NodeType::AppSink;
+                return Ok(osi);
+            }
+            NodeType::Merge => {}
+            NodeType::Window => {}
             _ => {}
         }
     }

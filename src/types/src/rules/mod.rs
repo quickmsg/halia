@@ -29,15 +29,23 @@ pub struct Edge {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum NodeType {
-    Source,
+    DeviceSource,
+    AppSource,
     Merge,
     Window,
     Operator,
-    Sink,
+    DeviceSink,
+    AppSink,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SourceNode {
+    pub r#type: String,
+    pub conf: Value,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SinkNode {
     pub r#type: String,
     pub conf: Value,
 }
@@ -116,7 +124,6 @@ pub enum Status {
     Running,
     Stopped,
 }
-
 
 #[derive(Serialize)]
 pub struct SearchRulesResp {

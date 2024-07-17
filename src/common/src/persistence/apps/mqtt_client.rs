@@ -1,6 +1,5 @@
 use std::{fs, io, path::PathBuf};
 
-use tracing::debug;
 use uuid::Uuid;
 
 use crate::persistence::{self, create_file, DELIMITER};

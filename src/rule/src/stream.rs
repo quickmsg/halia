@@ -1,7 +1,6 @@
 use message::MessageBatch;
 use tokio::{select, sync::broadcast};
 use tracing::{debug, error};
-use types::rule::CreateRuleNode;
 
 // pub(crate) async fn start_stream(
 //     nodes: Vec<&CreateRuleNode>,
