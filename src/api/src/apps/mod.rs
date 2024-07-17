@@ -1,18 +1,18 @@
 use apps::GLOBAL_APP_MANAGER;
 use axum::{extract::Query, routing::get, Router};
-use mqtt_client::mqtt_client_routes;
+use mqtt_client_v311::mqtt_client_v311_routes;
 use types::apps::SearchAppsResp;
 
 use crate::{AppResp, Pagination};
 
-mod mqtt_client;
+mod mqtt_client_v311;
 
 pub fn routes() -> Router {
     Router::new().nest(
         "/app",
         Router::new()
             .route("/", get(search_apps))
-            .nest("/mqtt_client", mqtt_client_routes()),
+            .nest("/", mqtt_client_v311_routes()),
     )
 }
 

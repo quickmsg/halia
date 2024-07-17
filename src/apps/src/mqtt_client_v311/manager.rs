@@ -5,7 +5,7 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
 use types::apps::{
-    mqtt_client::{
+    mqtt_client_v311::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
         SearchSourcesResp,
     },
@@ -13,11 +13,11 @@ use types::apps::{
 };
 use uuid::Uuid;
 
-use crate::{mqtt_client::TYPE, GLOBAL_APP_MANAGER};
+use crate::{mqtt_client_v311::TYPE, GLOBAL_APP_MANAGER};
 
 use super::MqttClient;
 
-pub static GLOBAL_MQTT_CLIENT_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
+pub static GLOBAL_MQTT_CLIENT_V311_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     apps: DashMap::new(),
 });
 

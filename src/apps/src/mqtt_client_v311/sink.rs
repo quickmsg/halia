@@ -7,7 +7,7 @@ use common::{
 use message::MessageBatch;
 use rumqttc::{AsyncClient, QoS};
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
+use types::apps::mqtt_client_v311::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
 pub struct Sink {
@@ -76,7 +76,6 @@ impl Sink {
     }
 
     pub fn start(&mut self, client: Arc<AsyncClient>) {
-
         let topic = self.conf.topic.clone();
         let qos = self.conf.qos;
         let qos = match qos {
@@ -123,6 +122,7 @@ impl Sink {
             2 => QoS::ExactlyOnce,
             _ => unreachable!(),
         };
+        let retain = self.conf.retain;
 
         self.stop_signal_tx
             .as_ref()
@@ -143,7 +143,7 @@ impl Sink {
                     mb = rx.recv() => {
                         match mb {
                             Some(mb) => {
-                                let _ = client.publish(&topic, qos, false, mb.to_json()).await;
+                                let _ = client.publish(&topic, qos, retain, mb.to_json()).await;
                             }
                             None => unreachable!(),
                         }

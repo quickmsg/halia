@@ -15,7 +15,7 @@ use tokio::{
 };
 use tracing::error;
 use types::apps::{
-    mqtt_client::{
+    mqtt_client_v311::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
         SearchSourcesResp,
     },

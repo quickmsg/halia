@@ -40,6 +40,7 @@ pub struct CreateUpdateSinkReq {
     pub name: String,
     pub topic: String,
     pub qos: u8,
+    pub retain: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }

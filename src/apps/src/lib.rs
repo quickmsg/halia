@@ -1,13 +1,13 @@
 #![feature(duration_constants)]
 use common::{error::HaliaResult, persistence};
-use mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
+use mqtt_client_v311::manager::GLOBAL_MQTT_CLIENT_V311_MANAGER;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
 use tracing::debug;
 use types::apps::SearchAppsResp;
 use uuid::Uuid;
 
-pub mod mqtt_client;
+pub mod mqtt_client_v311;
 
 pub struct AppManager {
     apps: RwLock<Vec<(&'static str, Uuid)>>,
@@ -26,7 +26,7 @@ impl AppManager {
         let mut data = vec![];
         for (r#type, app_id) in self.apps.read().await.iter().rev() {
             match r#type {
-                &mqtt_client::TYPE => match GLOBAL_MQTT_CLIENT_MANAGER.search(app_id) {
+                &mqtt_client_v311::TYPE => match GLOBAL_MQTT_CLIENT_V311_MANAGER.search(app_id) {
                     Ok(info) => {
                         data.push(info);
                     }
@@ -59,8 +59,8 @@ impl AppManager {
                     assert!(items.len() == 3, "数据错误");
                     let app_id = Uuid::from_str(items[0]).unwrap();
                     match items[1] {
-                        mqtt_client::TYPE => {
-                            GLOBAL_MQTT_CLIENT_MANAGER
+                        mqtt_client_v311::TYPE => {
+                            GLOBAL_MQTT_CLIENT_V311_MANAGER
                                 .create(Some(app_id), serde_json::from_str(items[2]).unwrap())
                                 .await?;
                         }
@@ -68,7 +68,7 @@ impl AppManager {
                     }
                 }
 
-                GLOBAL_MQTT_CLIENT_MANAGER.recover().await?;
+                GLOBAL_MQTT_CLIENT_V311_MANAGER.recover().await?;
 
                 Ok(())
             }
