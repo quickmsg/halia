@@ -120,16 +120,16 @@ impl RuleManager {
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::rule::read().await {
             Ok(rules) => {
-                for (id, status, data) in rules {
-                    let req: CreateRuleReq = serde_json::from_str(&data)?;
-                    self.do_create_rule(id, &req).await?;
-                    match status {
-                        persistence::Status::Stopped => {}
-                        persistence::Status::Runing => {
-                            // TODO start this rule
-                        }
-                    }
-                }
+                // for (id, status, data) in rules {
+                //     let req: CreateRuleReq = serde_json::from_str(&data)?;
+                //     self.do_create_rule(id, &req).await?;
+                //     match status {
+                //         persistence::Status::Stopped => {}
+                //         persistence::Status::Runing => {
+                //             // TODO start this rule
+                //         }
+                //     }
+                // }
             }
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => {

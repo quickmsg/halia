@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    persistence::{self, apps::mqtt_client},
 };
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
@@ -48,8 +48,12 @@ impl MqttClient {
         };
 
         if new {
-            persistence::apps::mqtt_client::create(&app_id, serde_json::to_string(&req).unwrap())
-                .await?;
+            persistence::apps::mqtt_client::create(
+                &app_id,
+                TYPE,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
         Ok(Self {

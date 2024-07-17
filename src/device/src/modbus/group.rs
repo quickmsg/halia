@@ -6,6 +6,7 @@ use common::{
 use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
 use std::{
+    str::FromStr,
     sync::{
         atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
@@ -53,7 +54,7 @@ impl Group {
         }
 
         if new {
-            persistence::modbus::create_group(
+            persistence::devices::modbus::create_group(
                 device_id,
                 &group_id,
                 serde_json::to_string(&req).unwrap(),
@@ -72,10 +73,12 @@ impl Group {
     }
 
     pub async fn recover(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        match persistence::modbus::read_group_points(device_id, &self.id).await {
-            Ok(points) => {
-                for (point_id, data) in points {
-                    let req: CreateUpdateGroupPointReq = serde_json::from_str(&data)?;
+        match persistence::devices::modbus::read_group_points(device_id, &self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    let point_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateGroupPointReq = serde_json::from_str(items[1])?;
                     self.create_point(device_id, Some(point_id), req).await?;
                 }
                 Ok(())
@@ -132,7 +135,7 @@ impl Group {
         device_id: &Uuid,
         req: CreateUpdateGroupReq,
     ) -> HaliaResult<bool> {
-        persistence::modbus::update_group(
+        persistence::devices::modbus::update_group(
             device_id,
             &self.id,
             serde_json::to_string(&req).unwrap(),
@@ -153,7 +156,7 @@ impl Group {
             Some(_) => self.stop().await,
             None => {}
         }
-        persistence::modbus::delete_group(device_id, &self.id).await?;
+        persistence::devices::modbus::delete_group(device_id, &self.id).await?;
 
         Ok(())
     }

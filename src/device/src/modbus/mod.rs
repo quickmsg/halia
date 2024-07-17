@@ -13,6 +13,7 @@ use serde_json::json;
 use sink::Sink;
 use std::{
     net::SocketAddr,
+    str::FromStr,
     sync::{
         atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
@@ -71,7 +72,8 @@ impl Modbus {
         };
 
         if new {
-            persistence::modbus::create(&device_id, serde_json::to_string(&req).unwrap()).await?;
+            persistence::devices::modbus::create(&device_id, serde_json::to_string(&req).unwrap())
+                .await?;
         }
 
         Ok(Modbus {
@@ -89,12 +91,19 @@ impl Modbus {
     }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::modbus::read_groups(&self.id).await {
-            Ok(groups) => {
-                for (group_id, data) in groups {
-                    let req: CreateUpdateGroupReq = serde_json::from_str(&data)?;
+        match persistence::devices::modbus::read_groups(&self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    if items.len() != 2 {
+                        panic!("数据损坏")
+                    }
+
+                    let group_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
                     self.create_group(Some(group_id), req).await?;
                 }
+
                 for group in self.groups.write().await.iter_mut() {
                     group.recover(&self.id).await?;
                 }
@@ -143,7 +152,7 @@ impl Modbus {
         debug!("设备开启");
 
         if update_persistence {
-            persistence::device::update_device_status(&self.id, Status::Runing).await?;
+            persistence::devices::update_device_status(&self.id, Status::Runing).await?;
         }
 
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
@@ -225,7 +234,7 @@ impl Modbus {
 
         debug!("设备停止");
         if update_persistence {
-            persistence::device::update_device_status(&self.id, Status::Stopped).await?;
+            persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
         }
 
         for group in self.groups.write().await.iter_mut() {
@@ -251,7 +260,7 @@ impl Modbus {
         }
         debug!("设备删除");
         self.stop(false).await.unwrap();
-        persistence::device::delete_device(&self.id).await?;
+        persistence::devices::delete_device(&self.id).await?;
         Ok(())
     }
 

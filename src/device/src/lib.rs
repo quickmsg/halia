@@ -1,6 +1,6 @@
 use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
-use std::sync::LazyLock;
+use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
 use types::devices::{modbus::CreateUpdateModbusReq, SearchDevicesResp};
 
@@ -64,18 +64,22 @@ impl DeviceManager {
     }
 
     pub async fn recover(&self) -> HaliaResult<()> {
-        match persistence::device::read_devices().await {
-            Ok(devices) => {
-                for (device_id, datas) in devices {
-                    if datas.len() != 3 {
-                        panic!("数据损坏");
+        match persistence::devices::read_devices().await {
+            Ok(datas) => {
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    if items.len() != 4 {
+                        panic!("数据损坏")
                     }
-                    match datas[0].as_str() {
+
+                    let device_id = Uuid::from_str(items[0]).unwrap();
+
+                    match items[1] {
                         modbus::TYPE => {
-                            let req: CreateUpdateModbusReq = serde_json::from_str(&datas[2])?;
+                            let req: CreateUpdateModbusReq = serde_json::from_str(items[3])?;
                             GLOBAL_MODBUS_MANAGER.create(Some(device_id), req).await?;
                             GLOBAL_MODBUS_MANAGER.recover(&device_id).await.unwrap();
-                            match datas[1].as_str() {
+                            match items[2] {
                                 "0" => {}
                                 "1" => {
                                     GLOBAL_MODBUS_MANAGER.start(device_id).await.unwrap();
@@ -89,7 +93,7 @@ impl DeviceManager {
                 Ok(())
             }
             Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => match persistence::device::init().await {
+                std::io::ErrorKind::NotFound => match persistence::devices::init().await {
                     Ok(_) => Ok(()),
                     Err(e) => Err(e.into()),
                 },

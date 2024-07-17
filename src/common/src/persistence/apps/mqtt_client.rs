@@ -2,7 +2,7 @@ use std::{io, path::PathBuf};
 
 use uuid::Uuid;
 
-use crate::persistence::{create_file, DELIMITER};
+use crate::persistence::{self, create_file, DELIMITER};
 
 use super::{get_app_dir, get_app_file_path};
 
@@ -18,7 +18,7 @@ fn get_sink_file_path(app_id: &Uuid) -> PathBuf {
 }
 
 pub async fn create(app_id: &Uuid, r#type: &str, data: String) -> Result<(), io::Error> {
-    crate::persistence::create(
+    persistence::create(
         get_app_file_path(),
         app_id,
         &format!("{}{}{}", r#type, DELIMITER, data),
@@ -29,29 +29,29 @@ pub async fn create(app_id: &Uuid, r#type: &str, data: String) -> Result<(), io:
 }
 
 pub async fn delete(app_id: &Uuid) -> Result<(), io::Error> {
-    crate::persistence::delete(get_app_file_path(), app_id).await
+    persistence::delete(get_app_file_path(), app_id).await
 }
 
 pub async fn create_source(app_id: &Uuid, source_id: &Uuid, data: String) -> Result<(), io::Error> {
-    crate::persistence::create(get_source_file_path(app_id), source_id, &data).await
+    persistence::create(get_source_file_path(app_id), source_id, &data).await
 }
 
 pub async fn update_source(app_id: &Uuid, source_id: &Uuid, data: String) -> Result<(), io::Error> {
-    crate::persistence::update(get_source_file_path(app_id), source_id, &data).await
+    persistence::update(get_source_file_path(app_id), source_id, &data).await
 }
 
 pub async fn delete_source(app_id: &Uuid, source_id: &Uuid) -> Result<(), io::Error> {
-    crate::persistence::delete(get_source_file_path(app_id), source_id).await
+    persistence::delete(get_source_file_path(app_id), source_id).await
 }
 
 pub async fn create_sink(app_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
-    crate::persistence::create(get_sink_file_path(app_id), sink_id, &data).await
+    persistence::create(get_sink_file_path(app_id), sink_id, &data).await
 }
 
 pub async fn update_sink(app_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
-    crate::persistence::update(get_sink_file_path(app_id), sink_id, &data).await
+    persistence::update(get_sink_file_path(app_id), sink_id, &data).await
 }
 
 pub async fn delete_sink(app_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
-    crate::persistence::delete(get_sink_file_path(app_id), sink_id).await
+    persistence::delete(get_sink_file_path(app_id), sink_id).await
 }

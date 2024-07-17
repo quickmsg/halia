@@ -3,10 +3,9 @@ use std::{io, path::PathBuf};
 use tokio::fs;
 use uuid::Uuid;
 
-use super::{
-    device::{get_device_dir, get_device_file_path},
-    Status, DELIMITER,
-};
+use crate::persistence;
+
+use super::{get_device_dir, get_device_file_path, Status, DELIMITER};
 
 static GROUP_FILE: &str = "groups";
 static SINK_FILE: &str = "sinks";
@@ -37,7 +36,7 @@ fn get_sink_point_file_path(device_id: &Uuid, sink_id: &Uuid) -> PathBuf {
 }
 
 pub async fn create(device_id: &Uuid, data: String) -> Result<(), io::Error> {
-    super::create(
+    crate::persistence::create(
         get_device_file_path(),
         device_id,
         &format!(
@@ -52,8 +51,8 @@ pub async fn create(device_id: &Uuid, data: String) -> Result<(), io::Error> {
     .await?;
 
     fs::create_dir_all(get_device_dir().join(device_id.to_string())).await?;
-    super::create_file(get_group_file_path(device_id)).await?;
-    super::create_file(get_sink_file_path(device_id)).await
+    crate::persistence::create_file(get_group_file_path(device_id)).await?;
+    crate::persistence::create_file(get_sink_file_path(device_id)).await
 }
 
 pub async fn create_group(
@@ -61,18 +60,18 @@ pub async fn create_group(
     group_id: &Uuid,
     data: String,
 ) -> Result<(), io::Error> {
-    super::create(get_group_file_path(device_id), group_id, &data).await?;
+    persistence::create(get_group_file_path(device_id), group_id, &data).await?;
     fs::create_dir(
         get_device_dir()
             .join(device_id.to_string())
             .join(group_id.to_string()),
     )
     .await?;
-    super::create_file(get_group_point_file_path(device_id, group_id)).await
+    persistence::create_file(get_group_point_file_path(device_id, group_id)).await
 }
 
-pub async fn read_groups(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
-    super::read(get_group_file_path(device_id)).await
+pub async fn read_groups(device_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_group_file_path(device_id)).await
 }
 
 pub async fn update_group(
@@ -80,11 +79,11 @@ pub async fn update_group(
     group_id: &Uuid,
     data: String,
 ) -> Result<(), io::Error> {
-    super::update(get_group_file_path(device_id), group_id, &data).await
+    persistence::update(get_group_file_path(device_id), group_id, &data).await
 }
 
 pub async fn delete_group(device_id: &Uuid, group_id: &Uuid) -> Result<(), io::Error> {
-    super::delete(get_group_file_path(device_id), group_id).await?;
+    persistence::delete(get_group_file_path(device_id), group_id).await?;
     fs::remove_dir_all(
         get_device_dir()
             .join(device_id.to_string())
@@ -99,7 +98,7 @@ pub async fn create_group_point(
     point_id: &Uuid,
     data: String,
 ) -> Result<(), io::Error> {
-    super::create(
+    persistence::create(
         get_group_point_file_path(device_id, group_id),
         point_id,
         &data,
@@ -110,8 +109,8 @@ pub async fn create_group_point(
 pub async fn read_group_points(
     device_id: &Uuid,
     group_id: &Uuid,
-) -> Result<Vec<(Uuid, String)>, io::Error> {
-    super::read(get_group_point_file_path(device_id, group_id)).await
+) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_group_point_file_path(device_id, group_id)).await
 }
 
 pub async fn update_group_point(
@@ -120,7 +119,7 @@ pub async fn update_group_point(
     point_id: &Uuid,
     data: String,
 ) -> Result<(), io::Error> {
-    super::update(
+    persistence::update(
         get_group_point_file_path(device_id, group_id),
         point_id,
         &data,
@@ -133,30 +132,30 @@ pub async fn delete_group_point(
     group_id: &Uuid,
     point_id: &Uuid,
 ) -> Result<(), io::Error> {
-    super::delete(get_group_point_file_path(device_id, group_id), point_id).await
+    persistence::delete(get_group_point_file_path(device_id, group_id), point_id).await
 }
 
 pub async fn create_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
-    super::create(get_sink_file_path(device_id), sink_id, &data).await?;
+    persistence::create(get_sink_file_path(device_id), sink_id, &data).await?;
     fs::create_dir(
         get_device_dir()
             .join(device_id.to_string())
             .join(sink_id.to_string()),
     )
     .await?;
-    super::create_file(get_sink_point_file_path(device_id, sink_id)).await
+    persistence::create_file(get_sink_point_file_path(device_id, sink_id)).await
 }
 
-pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<(Uuid, String)>, io::Error> {
-    super::read(get_sink_file_path(device_id)).await
+pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_sink_file_path(device_id)).await
 }
 
 pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
-    super::update(get_sink_file_path(device_id), sink_id, &data).await
+    persistence::update(get_sink_file_path(device_id), sink_id, &data).await
 }
 
 pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
-    super::delete(get_sink_file_path(device_id), sink_id).await?;
+    persistence::delete(get_sink_file_path(device_id), sink_id).await?;
     fs::remove_dir_all(
         get_device_dir()
             .join(device_id.to_string())
@@ -171,7 +170,7 @@ pub async fn create_sink_point(
     point_id: &Uuid,
     data: String,
 ) -> Result<(), io::Error> {
-    super::create(
+    persistence::create(
         get_sink_point_file_path(device_id, sink_id),
         point_id,
         &data,
@@ -179,11 +178,8 @@ pub async fn create_sink_point(
     .await
 }
 
-pub async fn read_sink_points(
-    device_id: &Uuid,
-    sink_id: &Uuid,
-) -> Result<Vec<(Uuid, String)>, io::Error> {
-    super::read(get_sink_point_file_path(device_id, sink_id)).await
+pub async fn read_sink_points(device_id: &Uuid, sink_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_sink_point_file_path(device_id, sink_id)).await
 }
 
 pub async fn update_sink_point(
@@ -192,7 +188,7 @@ pub async fn update_sink_point(
     point_id: &Uuid,
     data: &String,
 ) -> Result<(), io::Error> {
-    super::update(get_sink_point_file_path(device_id, sink_id), point_id, data).await
+    persistence::update(get_sink_point_file_path(device_id, sink_id), point_id, data).await
 }
 
 pub async fn delete_sink_point(
@@ -200,5 +196,5 @@ pub async fn delete_sink_point(
     sink_id: &Uuid,
     point_id: &Uuid,
 ) -> Result<(), io::Error> {
-    super::delete(get_sink_point_file_path(device_id, sink_id), point_id).await
+    persistence::delete(get_sink_point_file_path(device_id, sink_id), point_id).await
 }

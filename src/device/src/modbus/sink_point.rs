@@ -36,7 +36,7 @@ impl Point {
         };
 
         if new {
-            persistence::modbus::create_sink_point(
+            persistence::devices::modbus::create_sink_point(
                 device_id,
                 sink_id,
                 &point_id,
@@ -100,7 +100,7 @@ impl Point {
     }
 
     pub async fn delete(&self, device_id: &Uuid, sink_id: &Uuid) -> HaliaResult<()> {
-        persistence::modbus::delete_sink_point(device_id, sink_id, &self.id).await?;
+        persistence::devices::modbus::delete_sink_point(device_id, sink_id, &self.id).await?;
         Ok(())
     }
 }

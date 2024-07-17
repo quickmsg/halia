@@ -1,7 +1,7 @@
 #![feature(duration_constants)]
 use common::{error::HaliaResult, persistence};
 use mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
-use std::{sync::LazyLock, vec};
+use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
 use types::apps::SearchAppsResp;
 use uuid::Uuid;
@@ -48,11 +48,23 @@ impl AppManager {
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::apps::read_apps().await {
             Ok(datas) => {
-                for (app_id, data) in datas {
-
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    assert!(items.len() == 3, "数据错误");
+                    let app_id = Uuid::from_str(items[0]).unwrap();
+                    match items[1] {
+                        mqtt_client::TYPE => {
+                            GLOBAL_MQTT_CLIENT_MANAGER
+                                .create(Some(app_id), serde_json::from_str(items[2]).unwrap())
+                                .await;
+                        }
+                        _ => {}
+                    }
                 }
+
+                Ok(())
             }
-            Err(_) => todo!(),
+            Err(e) => Err(e.into()),
         }
     }
 }

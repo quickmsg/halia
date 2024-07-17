@@ -35,7 +35,7 @@ impl Point {
         let quantity = req.r#type.get_quantity();
 
         if new {
-            persistence::modbus::create_group_point(
+            persistence::devices::modbus::create_group_point(
                 device_id,
                 group_id,
                 &point_id,
@@ -65,7 +65,7 @@ impl Point {
         group_id: &Uuid,
         req: CreateUpdateGroupPointReq,
     ) -> HaliaResult<()> {
-        persistence::modbus::update_group_point(
+        persistence::devices::modbus::update_group_point(
             device_id,
             group_id,
             &self.id,
@@ -80,7 +80,7 @@ impl Point {
     }
 
     pub async fn delete(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {
-        persistence::modbus::delete_group_point(device_id, group_id, &self.id).await?;
+        persistence::devices::modbus::delete_group_point(device_id, group_id, &self.id).await?;
         Ok(())
     }
 

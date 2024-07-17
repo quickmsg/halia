@@ -36,7 +36,7 @@ impl Sink {
         };
 
         if new {
-            persistence::modbus::create_sink(
+            persistence::devices::modbus::create_sink(
                 device_id,
                 &sink_id,
                 serde_json::to_string(&req).unwrap(),
@@ -62,14 +62,14 @@ impl Sink {
     }
 
     pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        persistence::modbus::update_sink(device_id, &self.id, serde_json::to_string(&req).unwrap())
+        persistence::devices::modbus::update_sink(device_id, &self.id, serde_json::to_string(&req).unwrap())
             .await?;
         self.conf = req;
         Ok(())
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        persistence::modbus::delete_sink(device_id, &self.id).await?;
+        persistence::devices::modbus::delete_sink(device_id, &self.id).await?;
         match self.stop_signal_tx {
             Some(_) => self.stop().await,
             None => {}

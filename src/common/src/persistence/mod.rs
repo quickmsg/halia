@@ -13,17 +13,15 @@ use tokio::{
 use uuid::Uuid;
 
 pub mod apps;
-pub mod device;
+pub mod devices;
 pub mod message;
-pub mod modbus;
 pub mod rule;
 
 static ROOT_DIR: &str = "storage";
 static DEVICE_DIR: &str = "devices";
-static APP_DIR: &str = "apps";
 static RULE_DIR: &str = "rules";
 static DATA_FILE: &str = "data";
-static DELIMITER: char = '|';
+pub static DELIMITER: char = '|';
 
 #[derive(Debug, PartialEq)]
 pub enum Status {
