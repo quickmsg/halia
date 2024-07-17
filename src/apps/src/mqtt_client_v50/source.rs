@@ -26,7 +26,7 @@ impl Source {
         };
 
         if new {
-            persistence::apps::mqtt_client_v311::create_source(
+            persistence::apps::mqtt_client_v50::create_source(
                 app_id,
                 &source_id,
                 serde_json::to_string(&req).unwrap(),
@@ -50,7 +50,7 @@ impl Source {
     }
 
     pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSourceReq) -> HaliaResult<bool> {
-        persistence::apps::mqtt_client_v311::update_source(
+        persistence::apps::mqtt_client_v50::update_source(
             app_id,
             &self.id,
             serde_json::to_string(&req).unwrap(),
@@ -72,7 +72,7 @@ impl Source {
             // TODO
             return Err(HaliaError::NotFound);
         }
-        persistence::apps::mqtt_client_v311::delete_source(app_id, &self.id).await?;
+        persistence::apps::mqtt_client_v50::delete_source(app_id, &self.id).await?;
 
         Ok(())
     }

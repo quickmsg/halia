@@ -1,6 +1,7 @@
 #![feature(duration_constants)]
 use common::{error::HaliaResult, persistence};
 use mqtt_client_v311::manager::GLOBAL_MQTT_CLIENT_V311_MANAGER;
+use mqtt_client_v50::manager::GLOBAL_MQTT_CLIENT_V50_MANAGER;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
 use tracing::debug;
@@ -8,6 +9,7 @@ use types::apps::SearchAppsResp;
 use uuid::Uuid;
 
 pub mod mqtt_client_v311;
+pub mod mqtt_client_v50;
 
 pub struct AppManager {
     apps: RwLock<Vec<(&'static str, Uuid)>>,
@@ -27,6 +29,12 @@ impl AppManager {
         for (r#type, app_id) in self.apps.read().await.iter().rev() {
             match r#type {
                 &mqtt_client_v311::TYPE => match GLOBAL_MQTT_CLIENT_V311_MANAGER.search(app_id) {
+                    Ok(info) => {
+                        data.push(info);
+                    }
+                    Err(e) => return Err(e),
+                },
+                &mqtt_client_v50::TYPE => match GLOBAL_MQTT_CLIENT_V50_MANAGER.search(app_id) {
                     Ok(info) => {
                         data.push(info);
                     }

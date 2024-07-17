@@ -5,7 +5,7 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
+use rumqttc::v5::{AsyncClient, Event, Incoming, MqttOptions};
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -23,7 +23,7 @@ use types::apps::{
 };
 use uuid::Uuid;
 
-pub const TYPE: &str = "mqtt_client_v311";
+pub const TYPE: &str = "mqtt_client_v50";
 
 pub mod manager;
 mod sink;
@@ -167,7 +167,7 @@ impl MqttClient {
                                 match MessageBatch::from_json(p.payload) {
                                     Ok(msg) => {
                                         for source in sources.write().await.iter_mut() {
-                                            if matches(&source.conf.topic, &p.topic) {
+                                            if matches(&source.conf.topic, p.topic.as_str()) {
                                                 match &source.tx {
                                                     Some(tx) => {
                                                         let _ = tx.send(msg.clone());
@@ -183,20 +183,13 @@ impl MqttClient {
                             Ok(_) => (),
                             Err(e) => {
                                 match e {
-                                    rumqttc::ConnectionError::MqttState(e) => {
-                                        error!("mqtt connection refused:{:?}", e);
-                                    }
-                                    rumqttc::ConnectionError::NetworkTimeout => todo!(),
-                                    rumqttc::ConnectionError::FlushTimeout => todo!(),
-                                    rumqttc::ConnectionError::Tls(_) => todo!(),
-                                    rumqttc::ConnectionError::Io(e) => {
-                                        error!("mqtt connection refused:{:?}", e);
-                                    }
-                                    rumqttc::ConnectionError::ConnectionRefused(e) => {
-                                        error!("mqtt connection refused:{:?}", e);
-                                    }
-                                    rumqttc::ConnectionError::NotConnAck(_) => todo!(),
-                                    rumqttc::ConnectionError::RequestsDone => todo!(),
+                                    rumqttc::v5::ConnectionError::MqttState(_) => todo!(),
+                                    rumqttc::v5::ConnectionError::Timeout(_) => todo!(),
+                                    rumqttc::v5::ConnectionError::Tls(_) => todo!(),
+                                    rumqttc::v5::ConnectionError::Io(_) => todo!(),
+                                    rumqttc::v5::ConnectionError::ConnectionRefused(_) => todo!(),
+                                    rumqttc::v5::ConnectionError::NotConnAck(_) => todo!(),
+                                    rumqttc::v5::ConnectionError::RequestsDone => todo!(),
                                 }
                                 time::sleep(10 * Duration::SECOND).await;
                             }

@@ -6,7 +6,8 @@ use std::{
 use tokio::fs;
 use uuid::Uuid;
 
-pub mod mqtt_client;
+pub mod mqtt_client_v311;
+pub mod mqtt_client_v50;
 
 static APP_DIR: &str = "apps";
 
