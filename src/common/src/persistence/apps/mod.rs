@@ -26,14 +26,7 @@ pub async fn init() -> Result<(), io::Error> {
 }
 
 pub async fn read_apps() -> Result<Vec<String>, io::Error> {
-    let raw_datas = super::read(get_app_file_path()).await?;
-
-    let mut datas = vec![];
-    for raw_data in raw_datas {
-        datas.push(raw_data.split(DELIMITER).map(|s| s.to_string()).collect());
-    }
-
-    Ok(datas)
+    super::read(get_app_file_path()).await
 }
 
 pub async fn update_app(app_id: &Uuid, data: String) -> Result<(), io::Error> {

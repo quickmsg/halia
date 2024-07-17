@@ -62,8 +62,12 @@ impl Sink {
     }
 
     pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        persistence::devices::modbus::update_sink(device_id, &self.id, serde_json::to_string(&req).unwrap())
-            .await?;
+        persistence::devices::modbus::update_sink(
+            device_id,
+            &self.id,
+            serde_json::to_string(&req).unwrap(),
+        )
+        .await?;
         self.conf = req;
         Ok(())
     }

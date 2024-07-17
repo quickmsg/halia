@@ -3,6 +3,7 @@ use common::{error::HaliaResult, persistence};
 use mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
+use tracing::debug;
 use types::apps::SearchAppsResp;
 use uuid::Uuid;
 
@@ -52,7 +53,9 @@ impl AppManager {
                     if data.len() == 0 {
                         continue;
                     }
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    debug!("{}", data);
+                    let items: Vec<&str> = data.split(persistence::DELIMITER).collect();
+                    debug!("{:?} {}", items, items.len());
                     assert!(items.len() == 3, "数据错误");
                     let app_id = Uuid::from_str(items[0]).unwrap();
                     match items[1] {
@@ -64,6 +67,8 @@ impl AppManager {
                         _ => {}
                     }
                 }
+
+                GLOBAL_MQTT_CLIENT_MANAGER.recover().await?;
 
                 Ok(())
             }

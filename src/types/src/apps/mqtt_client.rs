@@ -10,6 +10,7 @@ pub struct CreateUpdateMqttClientReq {
     pub clean_session: bool,
     pub host: String,
     pub port: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }
 
@@ -18,6 +19,7 @@ pub struct CreateUpdateSourceReq {
     pub name: String,
     pub topic: String,
     pub qos: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }
 
@@ -38,6 +40,7 @@ pub struct CreateUpdateSinkReq {
     pub name: String,
     pub topic: String,
     pub qos: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }
 

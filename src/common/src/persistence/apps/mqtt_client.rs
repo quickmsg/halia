@@ -1,5 +1,6 @@
-use std::{io, path::PathBuf};
+use std::{fs, io, path::PathBuf};
 
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::persistence::{self, create_file, DELIMITER};
@@ -24,6 +25,7 @@ pub async fn create(app_id: &Uuid, r#type: &str, data: String) -> Result<(), io:
         &format!("{}{}{}", r#type, DELIMITER, data),
     )
     .await?;
+    fs::create_dir(get_app_dir().join(app_id.to_string()))?;
     create_file(get_source_file_path(app_id)).await?;
     create_file(get_sink_file_path(app_id)).await
 }

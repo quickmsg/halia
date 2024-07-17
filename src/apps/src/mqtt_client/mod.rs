@@ -13,7 +13,7 @@ use tokio::{
     sync::{broadcast, mpsc, RwLock},
     time,
 };
-use tracing::error;
+use tracing::{debug, error};
 use types::apps::{
     mqtt_client::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
@@ -71,8 +71,11 @@ impl MqttClient {
         match persistence::apps::mqtt_client::read_sources(&self.id).await {
             Ok(datas) => {
                 for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert!(items.len() == 2, "文件错误");
+                    assert_eq!(items.len(), 2);
                     let source_id = Uuid::from_str(items[0]).unwrap();
                     self.create_source(Some(source_id), serde_json::from_str(items[1]).unwrap())
                         .await?;
@@ -84,8 +87,11 @@ impl MqttClient {
         match persistence::apps::mqtt_client::read_sinks(&self.id).await {
             Ok(datas) => {
                 for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert!(items.len() == 2, "文件错误");
+                    assert_eq!(items.len(), 2);
                     let sink_id = Uuid::from_str(items[0]).unwrap();
                     self.create_sink(Some(sink_id), serde_json::from_str(items[1]).unwrap())
                         .await?;
