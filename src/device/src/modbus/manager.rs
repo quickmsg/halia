@@ -32,6 +32,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         let device = Modbus::new(device_id, req).await?;
         GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
+        self.devices.insert(device.id.clone(), device);
         Ok(())
     }
 

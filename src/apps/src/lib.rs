@@ -1,5 +1,6 @@
 #![feature(duration_constants)]
-use common::error::HaliaResult;
+use common::{error::HaliaResult, persistence};
+use mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use std::{sync::LazyLock, vec};
 use tokio::sync::RwLock;
 use types::apps::SearchAppsResp;
@@ -21,10 +22,37 @@ impl AppManager {
     }
 
     pub async fn search(&self, page: usize, size: usize) -> HaliaResult<SearchAppsResp> {
-        todo!()
+        let mut data = vec![];
+        for (r#type, app_id) in self.apps.read().await.iter().rev() {
+            match r#type {
+                &mqtt_client::TYPE => match GLOBAL_MQTT_CLIENT_MANAGER.search(app_id) {
+                    Ok(info) => {
+                        data.push(info);
+                    }
+                    Err(e) => return Err(e),
+                },
+                _ => {}
+            }
+        }
+
+        Ok(SearchAppsResp {
+            total: self.apps.read().await.len(),
+            data,
+        })
     }
 
     pub async fn delete(&self, app_id: &Uuid) {
         self.apps.write().await.retain(|(_, id)| id == app_id);
+    }
+
+    pub async fn recover(&self) -> HaliaResult<()> {
+        match persistence::apps::read_apps().await {
+            Ok(datas) => {
+                for (app_id, data) in datas {
+
+                }
+            }
+            Err(_) => todo!(),
+        }
     }
 }

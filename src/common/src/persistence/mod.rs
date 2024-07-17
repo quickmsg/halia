@@ -72,27 +72,12 @@ async fn create_file(path: PathBuf) -> Result<(), io::Error> {
     file.set_permissions(Permissions::from_mode(0o666)).await
 }
 
-async fn read(path: impl AsRef<Path>) -> Result<Vec<(Uuid, String)>, io::Error> {
+async fn read(path: impl AsRef<Path>) -> Result<Vec<String>, io::Error> {
     let mut file = OpenOptions::new().read(true).open(path).await?;
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
-    let mut result = vec![];
-    for line in buf.split("\n") {
-        if line.len() == 0 {
-            break;
-        }
-
-        let pos = line.find(DELIMITER).expect("数据文件损坏");
-        let id = &line[..pos];
-        let data = &line[pos + 1..];
-        let id = id
-            .parse::<Uuid>()
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "数据文件损坏"))?;
-        result.push((id, data.to_string()));
-    }
-
-    Ok(result)
+    Ok(buf.split("\n").map(|s| s.to_string()).collect())
 }
 
 async fn update(path: impl AsRef<Path>, id: &Uuid, data: &str) -> Result<(), io::Error> {

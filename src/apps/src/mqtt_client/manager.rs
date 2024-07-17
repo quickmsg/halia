@@ -37,10 +37,6 @@ impl Manager {
         Ok(())
     }
 
-    pub async fn recover(&self, app_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
     pub fn search(&self, app_id: &Uuid) -> HaliaResult<SearchAppsItemResp> {
         match self.apps.get(&app_id) {
             Some(app) => Ok(app.search()),
@@ -59,10 +55,14 @@ impl Manager {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => {
                 app.delete().await?;
-                todo!()
             }
-            None => Err(HaliaError::NotFound),
-        }
+            None => return Err(HaliaError::NotFound),
+        };
+
+        self.apps.remove(&app_id);
+        GLOBAL_APP_MANAGER.delete(&app_id).await;
+
+        Ok(())
     }
 
     pub async fn create_source(

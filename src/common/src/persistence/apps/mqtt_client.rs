@@ -2,7 +2,7 @@ use std::{io, path::PathBuf};
 
 use uuid::Uuid;
 
-use crate::persistence::create_file;
+use crate::persistence::{create_file, DELIMITER};
 
 use super::{get_app_dir, get_app_file_path};
 
@@ -17,8 +17,13 @@ fn get_sink_file_path(app_id: &Uuid) -> PathBuf {
     get_app_dir().join(app_id.to_string()).join(SINK_DIR)
 }
 
-pub async fn create(app_id: &Uuid, data: String) -> Result<(), io::Error> {
-    crate::persistence::create(get_app_file_path(), app_id, &data).await?;
+pub async fn create(app_id: &Uuid, r#type: &str, data: String) -> Result<(), io::Error> {
+    crate::persistence::create(
+        get_app_file_path(),
+        app_id,
+        &format!("{}{}{}", r#type, DELIMITER, data),
+    )
+    .await?;
     create_file(get_source_file_path(app_id)).await?;
     create_file(get_sink_file_path(app_id)).await
 }
