@@ -7,7 +7,6 @@ use serde::Deserialize;
 use serde_json::Value;
 use sum::Sum;
 use tracing::debug;
-use types::rule::Operate;
 
 pub mod avg;
 pub mod max;

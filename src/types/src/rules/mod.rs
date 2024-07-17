@@ -1,26 +1,34 @@
-use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+pub mod apps;
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CreateRuleReq {
+pub struct CreateUpdateRuleReq {
     pub name: String,
-    pub nodes: Vec<CreateRuleNode>,
-    pub edges: Vec<CreateRuleEdge>,
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    pub desc: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CreateRuleNode {
+pub struct Node {
     pub index: usize,
-    pub r#type: RuleNodeType,
+    pub r#type: NodeType,
     pub conf: Value,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Edge {
+    pub source: usize,
+    pub target: usize,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum RuleNodeType {
+pub enum NodeType {
     Source,
     Merge,
     Window,
@@ -29,21 +37,13 @@ pub enum RuleNodeType {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct CreateRuleSource {
-    pub r#type: CreateRuleSourceType,
-    pub id: Uuid,
-    pub source_id: Option<Uuid>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum CreateRuleSourceType {
-    Device(String),
-    App(String),
+pub struct SourceNode {
+    pub r#type: String,
+    pub conf: Value,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct CreateRuleSink {
+pub struct CreateUpdateRuleSink {
     pub r#type: CreateRuleSinkType,
     pub id: Uuid,
     pub sink_id: Option<Uuid>,
@@ -56,19 +56,13 @@ pub enum CreateRuleSinkType {
     App,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct CreateRuleEdge {
-    pub source: usize,
-    pub target: usize,
-}
-
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ListRuleResp {
     pub id: Uuid,
     pub name: String,
 }
 
-impl CreateRuleReq {
+impl CreateUpdateRuleReq {
     pub fn get_edges(&self) -> (HashMap<usize, Vec<usize>>, HashMap<usize, Vec<usize>>) {
         let mut incoming_edges = HashMap::new();
         let mut outgoing_edges = HashMap::new();
@@ -109,15 +103,6 @@ impl CreateRuleReq {
     // }
 }
 
-pub enum Node {
-    // Operate(Box<dyn Operate>),
-    Filter,
-}
-
-pub trait Operate: Send + Sync {
-    fn operate(&self, message_batch: &mut MessageBatch) -> bool;
-}
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateSource {
     pub r#type: String,
@@ -130,4 +115,17 @@ pub struct CreateSource {
 pub enum Status {
     Running,
     Stopped,
+}
+
+
+#[derive(Serialize)]
+pub struct SearchRulesResp {
+    pub total: usize,
+    pub data: Vec<SearchRulesItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchRulesItemResp {
+    pub id: Uuid,
+    pub conf: CreateUpdateRuleReq,
 }

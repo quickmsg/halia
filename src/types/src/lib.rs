@@ -2,7 +2,7 @@ use serde::Serialize;
 
 pub mod apps;
 pub mod devices;
-pub mod rule;
+pub mod rules;
 
 #[derive(Serialize)]
 pub struct SearchResp {

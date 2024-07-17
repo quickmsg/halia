@@ -17,29 +17,22 @@ fn get_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(super::RULE_DIR)
 }
 
-fn get_file() -> PathBuf {
+fn get_file_path() -> PathBuf {
     get_dir().join(super::DATA_FILE)
 }
 
 pub async fn init() -> Result<(), io::Error> {
     fs::create_dir_all(get_dir()).await?;
-    super::create_file(get_file()).await
+    super::create_file(get_file_path()).await
 }
 
-pub async fn insert(id: &Uuid, data: &Bytes) -> Result<(), io::Error> {
-    unsafe {
-        let data = format!(
-            "{}{}{}",
-            Status::Stopped,
-            DELIMITER,
-            std::str::from_utf8_unchecked(data)
-        );
-        super::insert(get_file(), id, &data).await
-    }
+pub async fn create(id: &Uuid, data: String) -> Result<(), io::Error> {
+    let data = format!("{}{}{}", Status::Stopped, DELIMITER, data,);
+    super::create(get_file_path(), id, &data).await
 }
 
 pub async fn read() -> Result<Vec<String>, io::Error> {
-    super::read(Path::new(ROOT_DIR).join(DATA_FILE)).await
+    super::read(get_file_path()).await
 }
 
 pub async fn update_conf(id: Uuid, data: String) -> Result<(), io::Error> {

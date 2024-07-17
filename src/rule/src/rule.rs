@@ -1,45 +1,51 @@
 use anyhow::Result;
-use apps::GLOBAL_APP_MANAGER;
-use common::error::HaliaResult;
-use device::{
-    modbus::{self, manager::GLOBAL_MODBUS_MANAGER},
-    GLOBAL_DEVICE_MANAGER,
-};
+use common::{error::HaliaResult, persistence};
+use device::modbus::{self, manager::GLOBAL_MODBUS_MANAGER};
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
-use types::rule::{
-    CreateRuleNode, CreateRuleReq, CreateRuleSink, CreateRuleSinkType, CreateRuleSource,
-    RuleNodeType, Status,
-};
+use types::rules::{CreateUpdateRuleReq, Node, SearchRulesItemResp};
 use uuid::Uuid;
 
 // use crate::stream::start_stream;
 
 pub(crate) struct Rule {
     pub id: Uuid,
-    pub status: Status,
-    pub req: CreateRuleReq,
-    pub stop_signal: broadcast::Sender<()>,
+    pub conf: CreateUpdateRuleReq,
+    pub stop_signal: Option<broadcast::Sender<()>>,
 }
 
 impl Rule {
-    pub async fn create(id: Uuid, req: &CreateRuleReq) -> HaliaResult<Self> {
-        let (stop_signal, _) = broadcast::channel::<()>(1);
+    pub async fn new(id: Option<Uuid>, req: CreateUpdateRuleReq) -> HaliaResult<Self> {
+        let (id, new) = match id {
+            Some(id) => (id, false),
+            None => (Uuid::new_v4(), true),
+        };
+
+        if new {
+            persistence::rule::create(&id, serde_json::to_string(&req).unwrap()).await?;
+        }
+
         Ok(Self {
             id,
-            status: Status::Stopped,
-            req: req.clone(),
-            stop_signal,
+            conf: req,
+            stop_signal: None,
         })
     }
 
+    pub fn search(&self) -> SearchRulesItemResp {
+        SearchRulesItemResp {
+            id: self.id.clone(),
+            conf: self.conf.clone(),
+        }
+    }
+
     pub async fn start(&mut self) -> Result<()> {
-        let (incoming_edges, outgoing_edges) = self.req.get_edges();
+        let (incoming_edges, outgoing_edges) = self.conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
-        let mut node_map = HashMap::<usize, CreateRuleNode>::new();
+        let mut node_map = HashMap::<usize, Node>::new();
         for node in self.req.nodes.iter() {
             node_map.insert(node.index, node.clone());
         }

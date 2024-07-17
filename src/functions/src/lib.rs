@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use message::MessageBatch;
 
-mod aggregate;
+// mod aggregate;
 mod filter;
 mod field;
 

@@ -1,6 +1,4 @@
-use bytes::Bytes;
 use common::{
-    check_page_size,
     error::{HaliaError, HaliaResult},
     persistence,
 };
@@ -8,7 +6,7 @@ use rule::Rule;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
 use tracing::error;
-use types::rule::{CreateRuleReq, ListRuleResp};
+use types::rules::{CreateUpdateRuleReq, SearchRulesResp};
 use uuid::Uuid;
 
 mod rule;
@@ -23,47 +21,29 @@ pub struct RuleManager {
 }
 
 impl RuleManager {
-    async fn do_create_rule(&self, id: Uuid, req: &CreateRuleReq) -> HaliaResult<()> {
-        match Rule::create(id, req).await {
-            Ok(rule) => Ok(self.rules.write().await.push(rule)),
-            Err(e) => Err(e.into()),
+    pub async fn create(&self, id: Option<Uuid>, req: CreateUpdateRuleReq) -> HaliaResult<()> {
+        match Rule::new(id, req).await {
+            Ok(rule) => {
+                self.rules.write().await.push(rule);
+                Ok(())
+            }
+            Err(e) => Err(e),
         }
-    }
-}
-
-impl RuleManager {
-    pub async fn create(&self, req: Bytes) -> HaliaResult<()> {
-        let id = Uuid::new_v4();
-        let create_rule_req: CreateRuleReq = serde_json::from_slice(&req)?;
-        self.do_create_rule(id, &create_rule_req).await?;
-        if let Err(e) = persistence::rule::insert(&id, &req).await {
-            error!("write rule to file err: {}", e);
-        }
-
-        Ok(())
     }
 
     // TODO
-    pub async fn search(&self, page: usize, size: usize) -> HaliaResult<Vec<ListRuleResp>> {
+    pub async fn search(&self, page: usize, size: usize) -> HaliaResult<SearchRulesResp> {
         let mut data = vec![];
-        let mut i = 0;
-        for rule in self.rules.read().await.iter().rev() {
-            if check_page_size(i, page, size) {
-                data.push(ListRuleResp {
-                    id: rule.id,
-                    name: rule.req.name.clone(),
-                })
+        for rule in self.rules.read().await.iter().rev().skip((page - 1) * size) {
+            data.push(rule.search());
+            if data.len() == size {
+                break;
             }
-            i += 1;
         }
-        Ok(data)
-    }
-
-    pub async fn read(&self, id: Uuid) -> HaliaResult<CreateRuleReq> {
-        match self.rules.read().await.iter().find(|rule| rule.id == id) {
-            Some(rule) => Ok(rule.req.clone()),
-            None => return Err(HaliaError::NotFound),
-        }
+        Ok(SearchRulesResp {
+            total: self.rules.read().await.len(),
+            data,
+        })
     }
 
     pub async fn start(&self, id: Uuid) -> HaliaResult<()> {
@@ -164,7 +144,6 @@ impl RuleManager {
     }
 }
 
-
 // pub trait Operate {
-     
+
 // }
