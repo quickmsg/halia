@@ -67,6 +67,9 @@ impl DeviceManager {
         match persistence::devices::read_devices().await {
             Ok(datas) => {
                 for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     if items.len() != 4 {
                         panic!("数据损坏")

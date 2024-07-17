@@ -36,6 +36,10 @@ pub async fn create_source(app_id: &Uuid, source_id: &Uuid, data: String) -> Res
     persistence::create(get_source_file_path(app_id), source_id, &data).await
 }
 
+pub async fn read_sources(app_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_source_file_path(app_id)).await
+}
+
 pub async fn update_source(app_id: &Uuid, source_id: &Uuid, data: String) -> Result<(), io::Error> {
     persistence::update(get_source_file_path(app_id), source_id, &data).await
 }
@@ -46,6 +50,10 @@ pub async fn delete_source(app_id: &Uuid, source_id: &Uuid) -> Result<(), io::Er
 
 pub async fn create_sink(app_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
     persistence::create(get_sink_file_path(app_id), sink_id, &data).await
+}
+
+pub async fn read_sinks(app_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_sink_file_path(app_id)).await
 }
 
 pub async fn update_sink(app_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {

@@ -49,6 +49,9 @@ impl AppManager {
         match persistence::apps::read_apps().await {
             Ok(datas) => {
                 for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     assert!(items.len() == 3, "数据错误");
                     let app_id = Uuid::from_str(items[0]).unwrap();
@@ -56,7 +59,7 @@ impl AppManager {
                         mqtt_client::TYPE => {
                             GLOBAL_MQTT_CLIENT_MANAGER
                                 .create(Some(app_id), serde_json::from_str(items[2]).unwrap())
-                                .await;
+                                .await?;
                         }
                         _ => {}
                     }
@@ -64,7 +67,13 @@ impl AppManager {
 
                 Ok(())
             }
-            Err(e) => Err(e.into()),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => match persistence::apps::init().await {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(e.into()),
+                },
+                _ => Err(e.into()),
+            },
         }
     }
 }

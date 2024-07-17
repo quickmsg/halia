@@ -1,8 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence::{self, apps::mqtt_client},
+    persistence,
 };
 use message::MessageBatch;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
@@ -65,6 +65,36 @@ impl MqttClient {
             stop_signal_tx: None,
             ref_cnt: 0,
         })
+    }
+
+    pub async fn recover(&mut self) -> HaliaResult<()> {
+        match persistence::apps::mqtt_client::read_sources(&self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    assert!(items.len() == 2, "文件错误");
+                    let source_id = Uuid::from_str(items[0]).unwrap();
+                    self.create_source(Some(source_id), serde_json::from_str(items[1]).unwrap())
+                        .await?;
+                }
+            }
+            Err(e) => return Err(e.into()),
+        }
+
+        match persistence::apps::mqtt_client::read_sinks(&self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    assert!(items.len() == 2, "文件错误");
+                    let sink_id = Uuid::from_str(items[0]).unwrap();
+                    self.create_sink(Some(sink_id), serde_json::from_str(items[1]).unwrap())
+                        .await?;
+                }
+            }
+            Err(e) => return Err(e.into()),
+        }
+
+        Ok(())
     }
 
     pub async fn update(&mut self, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {

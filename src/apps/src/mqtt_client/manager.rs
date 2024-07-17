@@ -37,6 +37,13 @@ impl Manager {
         Ok(())
     }
 
+    pub async fn recover(&self, app_id: &Uuid) -> HaliaResult<()> {
+        match self.apps.get_mut(app_id) {
+            Some(mut app) => app.recover().await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
     pub fn search(&self, app_id: &Uuid) -> HaliaResult<SearchAppsItemResp> {
         match self.apps.get(&app_id) {
             Some(app) => Ok(app.search()),
