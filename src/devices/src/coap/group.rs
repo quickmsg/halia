@@ -1,4 +1,3 @@
-use anyhow::{bail, Result};
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
@@ -7,6 +6,7 @@ use message::MessageBatch;
 use protocol::coap::client::UdpCoAPClient;
 use std::{sync::Arc, time::Duration};
 use tokio::{
+    select,
     sync::{broadcast, mpsc, RwLock},
     time,
 };
@@ -36,14 +36,14 @@ impl Group {
         device_id: &Uuid,
         group_id: Option<Uuid>,
         req: CreateUpdateGroupReq,
-    ) -> Result<Self> {
+    ) -> HaliaResult<Self> {
         let (group_id, new) = match group_id {
             Some(group_id) => (group_id, false),
             None => (Uuid::new_v4(), true),
         };
 
         if req.interval == 0 {
-            bail!("group interval must > 0")
+            // bail!("group interval must > 0")
         }
 
         if new {
@@ -96,25 +96,25 @@ impl Group {
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
-                // select! {
-                //     biased;
-                //     _ = stop_signal_rx.recv() => {
-                //         debug!("group stop");
-                //         return
-                //     }
-                for resource in resources.read().await.iter() {
-                    match client.send(resource.request.clone()).await {
-                        Ok(resp) => {
-                            debug!("{:?}", resp,)
+                select! {
+                    biased;
+                    _ = stop_signal_rx.recv() => {
+                        debug!("group stop");
+                        return
+                    }
+
+
+                _ = interval.tick() => {
+                    for resource in resources.read().await.iter() {
+                        match client.send(resource.request.clone()).await {
+                            Ok(resp) => {
+                                debug!("{:?}", resp,)
+                            }
+                            Err(e) => error!("{}", e),
                         }
-                        Err(e) => error!("{}", e),
                     }
                 }
-
-                // _ = interval.tick() => {
-                //         client.
-                // }
-                // }
+                }
             }
         });
     }
@@ -127,11 +127,7 @@ impl Group {
         self.stop_signal_tx = None;
     }
 
-    pub async fn update(
-        &mut self,
-        device_id: &Uuid,
-        req: CreateUpdateGroupReq,
-    ) -> HaliaResult<bool> {
+    pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateGroupReq) -> HaliaResult<()> {
         persistence::devices::modbus::update_group(
             device_id,
             &self.id,
@@ -144,8 +140,9 @@ impl Group {
             restart = true;
         }
         self.conf = req;
+        // restart
 
-        Ok(restart)
+        Ok(())
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
@@ -212,7 +209,7 @@ impl Group {
     }
 
     pub async fn update_resource(
-        &mut self,
+        &self,
         device_id: &Uuid,
         resource_id: Uuid,
         req: CreateUpdateGroupResourceReq,
@@ -230,17 +227,17 @@ impl Group {
     }
 
     pub async fn delete_resources(
-        &mut self,
+        &self,
         device_id: &Uuid,
         resource_ids: Vec<Uuid>,
     ) -> HaliaResult<()> {
-        for point_id in &resource_ids {
+        for resource_id in &resource_ids {
             if let Some(resource) = self
                 .resources
                 .read()
                 .await
                 .iter()
-                .find(|point| point.id == *point_id)
+                .find(|resource| resource.id == *resource_id)
             {
                 resource.delete(device_id, &self.id).await?;
             }

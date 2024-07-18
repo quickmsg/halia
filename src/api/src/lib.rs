@@ -58,8 +58,8 @@ struct Pagination {
 
 pub async fn start() {
     let app = Router::new()
-        .nest("/api", devices::routes())
-        .nest("/api", apps::routes())
+        .nest("/api/device", devices::routes())
+        .nest("/api/app", apps::routes())
         .nest("/api", rule::rule_routes())
         .layer(
             CorsLayer::new()

@@ -8,12 +8,9 @@ use crate::{AppResp, Pagination};
 mod mqtt_client;
 
 pub fn routes() -> Router {
-    Router::new().nest(
-        "/app",
-        Router::new()
-            .route("/", get(search_apps))
-            .nest("/", mqtt_client_routes()),
-    )
+    Router::new()
+        .route("/", get(search_apps))
+        .nest("/mqtt_client", mqtt_client_routes())
 }
 
 async fn search_apps(pagination: Query<Pagination>) -> AppResp<SearchAppsResp> {

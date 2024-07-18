@@ -13,33 +13,30 @@ use uuid::Uuid;
 use crate::{AppResp, Pagination};
 
 pub fn mqtt_client_routes() -> Router {
-    Router::new().nest(
-        "/mqtt_client",
-        Router::new()
-            .route("/", post(create))
-            .route("/:app_id", put(update))
-            .route("/:app_id", routing::delete(delete))
-            .nest(
-                "/:app_id",
-                Router::new()
-                    .nest(
-                        "/source",
-                        Router::new()
-                            .route("/", post(create_source))
-                            .route("/", get(search_sources))
-                            .route("/:source_id", put(update_source))
-                            .route("/:source_id", routing::delete(delete_source)),
-                    )
-                    .nest(
-                        "/sink",
-                        Router::new()
-                            .route("/", post(create_sink))
-                            .route("/", get(search_sinks))
-                            .route("/:sink_id", put(update_sink))
-                            .route("/:sink_id", routing::delete(delete_sink)),
-                    ),
-            ),
-    )
+    Router::new()
+        .route("/", post(create))
+        .route("/:app_id", put(update))
+        .route("/:app_id", routing::delete(delete))
+        .nest(
+            "/:app_id",
+            Router::new()
+                .nest(
+                    "/source",
+                    Router::new()
+                        .route("/", post(create_source))
+                        .route("/", get(search_sources))
+                        .route("/:source_id", put(update_source))
+                        .route("/:source_id", routing::delete(delete_source)),
+                )
+                .nest(
+                    "/sink",
+                    Router::new()
+                        .route("/", post(create_sink))
+                        .route("/", get(search_sinks))
+                        .route("/:sink_id", put(update_sink))
+                        .route("/:sink_id", routing::delete(delete_sink)),
+                ),
+        )
 }
 
 async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResp<()> {
