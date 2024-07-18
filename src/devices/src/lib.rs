@@ -6,7 +6,7 @@ use types::devices::{modbus::CreateUpdateModbusReq, SearchDevicesResp};
 
 use uuid::Uuid;
 
-// mod coap;
+pub mod coap;
 pub mod modbus;
 // mod opcua;
 

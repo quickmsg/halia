@@ -13,6 +13,7 @@ use super::{Status, DELIMITER};
 
 static DEVICE_FILE: &str = "devices";
 
+pub mod coap;
 pub mod modbus;
 
 pub(crate) fn get_dir() -> PathBuf {

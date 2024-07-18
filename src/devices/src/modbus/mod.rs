@@ -258,7 +258,6 @@ impl Modbus {
             return Err(HaliaError::DeviceRunning);
         }
         debug!("设备删除");
-        self.stop(false).await.unwrap();
         persistence::devices::delete_device(&self.id).await?;
         Ok(())
     }

@@ -1,0 +1,204 @@
+use std::{io, path::PathBuf};
+
+use tokio::fs;
+use uuid::Uuid;
+
+use crate::persistence;
+
+use super::{get_device_dir, get_device_file_path, Status, DELIMITER};
+
+static GROUP_FILE: &str = "groups";
+static RESOURCE_FILE: &str = "resources";
+static SINK_FILE: &str = "sinks";
+
+fn get_group_file_path(device_id: &Uuid) -> PathBuf {
+    get_device_dir()
+        .join(device_id.to_string())
+        .join(GROUP_FILE)
+}
+
+fn get_sink_file_path(device_id: &Uuid) -> PathBuf {
+    get_device_dir().join(device_id.to_string()).join(SINK_FILE)
+}
+
+fn get_group_resource_file_path(device_id: &Uuid, group_id: &Uuid) -> PathBuf {
+    get_device_dir()
+        .join(device_id.to_string())
+        .join(group_id.to_string())
+        .join(RESOURCE_FILE)
+}
+
+fn get_sink_point_file_path(device_id: &Uuid, sink_id: &Uuid) -> PathBuf {
+    get_device_dir()
+        .join(device_id.to_string())
+        .join(sink_id.to_string())
+        .join(RESOURCE_FILE)
+}
+
+pub async fn create(device_id: &Uuid, data: String) -> Result<(), io::Error> {
+    crate::persistence::create(
+        get_device_file_path(),
+        device_id,
+        &format!(
+            "{}{}{}{}{}",
+            "modbus",
+            DELIMITER,
+            Status::Stopped,
+            DELIMITER,
+            data,
+        ),
+    )
+    .await?;
+
+    fs::create_dir_all(get_device_dir().join(device_id.to_string())).await?;
+    crate::persistence::create_file(get_group_file_path(device_id)).await?;
+    crate::persistence::create_file(get_sink_file_path(device_id)).await
+}
+
+pub async fn create_group(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::create(get_group_file_path(device_id), group_id, &data).await?;
+    fs::create_dir(
+        get_device_dir()
+            .join(device_id.to_string())
+            .join(group_id.to_string()),
+    )
+    .await?;
+    persistence::create_file(get_group_resource_file_path(device_id, group_id)).await
+}
+
+pub async fn read_groups(device_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_group_file_path(device_id)).await
+}
+
+pub async fn update_group(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::update(get_group_file_path(device_id), group_id, &data).await
+}
+
+pub async fn delete_group(device_id: &Uuid, group_id: &Uuid) -> Result<(), io::Error> {
+    persistence::delete(get_group_file_path(device_id), group_id).await?;
+    fs::remove_dir_all(
+        get_device_dir()
+            .join(device_id.to_string())
+            .join(group_id.to_string()),
+    )
+    .await
+}
+
+pub async fn create_group_resource(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    resource_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::create(
+        get_group_resource_file_path(device_id, group_id),
+        resource_id,
+        &data,
+    )
+    .await
+}
+
+pub async fn read_group_resources(
+    device_id: &Uuid,
+    group_id: &Uuid,
+) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_group_resource_file_path(device_id, group_id)).await
+}
+
+pub async fn update_group_resource(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    resource_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::update(
+        get_group_resource_file_path(device_id, group_id),
+        resource_id,
+        &data,
+    )
+    .await
+}
+
+pub async fn delete_group_resource(
+    device_id: &Uuid,
+    group_id: &Uuid,
+    resource_id: &Uuid,
+) -> Result<(), io::Error> {
+    persistence::delete(
+        get_group_resource_file_path(device_id, group_id),
+        resource_id,
+    )
+    .await
+}
+
+pub async fn create_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+    persistence::create(get_sink_file_path(device_id), sink_id, &data).await?;
+    fs::create_dir(
+        get_device_dir()
+            .join(device_id.to_string())
+            .join(sink_id.to_string()),
+    )
+    .await?;
+    persistence::create_file(get_sink_point_file_path(device_id, sink_id)).await
+}
+
+pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_sink_file_path(device_id)).await
+}
+
+pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+    persistence::update(get_sink_file_path(device_id), sink_id, &data).await
+}
+
+pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
+    persistence::delete(get_sink_file_path(device_id), sink_id).await?;
+    fs::remove_dir_all(
+        get_device_dir()
+            .join(device_id.to_string())
+            .join(sink_id.to_string()),
+    )
+    .await
+}
+
+pub async fn create_sink_point(
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    point_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::create(
+        get_sink_point_file_path(device_id, sink_id),
+        point_id,
+        &data,
+    )
+    .await
+}
+
+pub async fn read_sink_points(device_id: &Uuid, sink_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_sink_point_file_path(device_id, sink_id)).await
+}
+
+pub async fn update_sink_point(
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    point_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    persistence::update(get_sink_point_file_path(device_id, sink_id), point_id, data).await
+}
+
+pub async fn delete_sink_point(
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    point_id: &Uuid,
+) -> Result<(), io::Error> {
+    persistence::delete(get_sink_point_file_path(device_id, sink_id), point_id).await
+}

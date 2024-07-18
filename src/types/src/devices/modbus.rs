@@ -6,6 +6,7 @@ use super::datatype::DataType;
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateModbusReq {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
     pub link_type: LinkType,
 
