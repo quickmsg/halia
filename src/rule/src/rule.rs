@@ -1,5 +1,5 @@
 use anyhow::Result;
-use apps::mqtt_client_v311::{self, manager::GLOBAL_MQTT_CLIENT_V311_MANAGER};
+use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use common::{error::HaliaResult, persistence};
 use std::collections::HashMap;
 use tokio::sync::broadcast;
@@ -95,10 +95,10 @@ impl Rule {
                         let node = node_map.get(&info.first_id).unwrap();
                         let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
                         let rx = match source_node.r#type.as_str() {
-                            mqtt_client_v311::TYPE => {
+                            apps::mqtt_client::TYPE => {
                                 let source: mqtt_client::Source =
                                     serde_json::from_value(source_node.conf.clone())?;
-                                GLOBAL_MQTT_CLIENT_V311_MANAGER
+                                GLOBAL_MQTT_CLIENT_MANAGER
                                     .subscribe(&source.app_id, &source.source_id)
                                     .await
                                     .unwrap()
@@ -210,10 +210,10 @@ impl Rule {
                                         serde_json::from_value(node.conf.clone())?;
 
                                     let tx = match sink_node.r#type.as_str() {
-                                        mqtt_client_v311::TYPE => {
+                                        apps::mqtt_client::TYPE => {
                                             let sink: mqtt_client::Sink =
                                                 serde_json::from_value(sink_node.conf.clone())?;
-                                            GLOBAL_MQTT_CLIENT_V311_MANAGER
+                                            GLOBAL_MQTT_CLIENT_MANAGER
                                                 .publish(&sink.app_id, &sink.sink_id)
                                                 .await
                                                 .unwrap()

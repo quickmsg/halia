@@ -7,7 +7,7 @@ use common::{
 use message::MessageBatch;
 use rumqttc::{AsyncClient, QoS};
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use types::apps::mqtt_client_v311::{CreateUpdateSinkReq, SearchSinksItemResp};
+use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
 pub struct Sink {
@@ -32,7 +32,7 @@ impl Sink {
         };
 
         if new {
-            persistence::apps::mqtt_client_v311::create_sink(
+            persistence::apps::mqtt_client::create_sink(
                 app_id,
                 &sink_id,
                 serde_json::to_string(&req).unwrap(),
@@ -58,7 +58,7 @@ impl Sink {
     }
 
     pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<bool> {
-        persistence::apps::mqtt_client_v311::update_sink(
+        persistence::apps::mqtt_client::update_sink(
             app_id,
             &self.id,
             serde_json::to_string(&req).unwrap(),
@@ -170,7 +170,7 @@ impl Sink {
             return Err(HaliaError::NotFound);
         }
 
-        persistence::apps::mqtt_client_v311::delete_sink(app_id, &self.id).await?;
+        persistence::apps::mqtt_client::delete_sink(app_id, &self.id).await?;
         Ok(())
     }
 

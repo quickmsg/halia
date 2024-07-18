@@ -5,7 +5,7 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use rumqttc::v5::{AsyncClient, Event, Incoming, MqttOptions};
+use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -15,7 +15,7 @@ use tokio::{
 };
 use tracing::error;
 use types::apps::{
-    mqtt_client_v311::{
+    mqtt_client::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
         SearchSourcesResp,
     },
@@ -23,7 +23,7 @@ use types::apps::{
 };
 use uuid::Uuid;
 
-pub const TYPE: &str = "mqtt_client_v50";
+pub const TYPE: &str = "mqtt_client";
 
 pub mod manager;
 mod sink;
@@ -48,7 +48,7 @@ impl MqttClient {
         };
 
         if new {
-            persistence::apps::mqtt_client_v311::create(
+            persistence::apps::mqtt_client::create(
                 &app_id,
                 TYPE,
                 serde_json::to_string(&req).unwrap(),
@@ -68,7 +68,7 @@ impl MqttClient {
     }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::apps::mqtt_client_v311::read_sources(&self.id).await {
+        match persistence::apps::mqtt_client::read_sources(&self.id).await {
             Ok(datas) => {
                 for data in datas {
                     if data.len() == 0 {
@@ -84,7 +84,7 @@ impl MqttClient {
             Err(e) => return Err(e.into()),
         }
 
-        match persistence::apps::mqtt_client_v311::read_sinks(&self.id).await {
+        match persistence::apps::mqtt_client::read_sinks(&self.id).await {
             Ok(datas) => {
                 for data in datas {
                     if data.len() == 0 {
@@ -167,7 +167,7 @@ impl MqttClient {
                                 match MessageBatch::from_json(p.payload) {
                                     Ok(msg) => {
                                         for source in sources.write().await.iter_mut() {
-                                            if matches(&source.conf.topic, p.topic.as_str()) {
+                                            if matches(&source.conf.topic, &p.topic) {
                                                 match &source.tx {
                                                     Some(tx) => {
                                                         let _ = tx.send(msg.clone());
@@ -183,13 +183,20 @@ impl MqttClient {
                             Ok(_) => (),
                             Err(e) => {
                                 match e {
-                                    rumqttc::v5::ConnectionError::MqttState(_) => todo!(),
-                                    rumqttc::v5::ConnectionError::Timeout(_) => todo!(),
-                                    rumqttc::v5::ConnectionError::Tls(_) => todo!(),
-                                    rumqttc::v5::ConnectionError::Io(_) => todo!(),
-                                    rumqttc::v5::ConnectionError::ConnectionRefused(_) => todo!(),
-                                    rumqttc::v5::ConnectionError::NotConnAck(_) => todo!(),
-                                    rumqttc::v5::ConnectionError::RequestsDone => todo!(),
+                                    rumqttc::ConnectionError::MqttState(e) => {
+                                        error!("mqtt connection refused:{:?}", e);
+                                    }
+                                    rumqttc::ConnectionError::NetworkTimeout => todo!(),
+                                    rumqttc::ConnectionError::FlushTimeout => todo!(),
+                                    rumqttc::ConnectionError::Tls(_) => todo!(),
+                                    rumqttc::ConnectionError::Io(e) => {
+                                        error!("mqtt connection refused:{:?}", e);
+                                    }
+                                    rumqttc::ConnectionError::ConnectionRefused(e) => {
+                                        error!("mqtt connection refused:{:?}", e);
+                                    }
+                                    rumqttc::ConnectionError::NotConnAck(_) => todo!(),
+                                    rumqttc::ConnectionError::RequestsDone => todo!(),
                                 }
                                 time::sleep(10 * Duration::SECOND).await;
                             }
