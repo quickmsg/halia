@@ -88,13 +88,13 @@ impl Sink {
 
     pub fn start_v311(&mut self, client: Arc<AsyncClient>) {
         let topic = self.conf.topic.clone();
-        let qos = self.conf.qos;
-        let qos = match qos {
+        let qos = match self.conf.qos {
             0 => QoS::AtMostOnce,
             1 => QoS::AtLeastOnce,
             2 => QoS::ExactlyOnce,
             _ => unreachable!(),
         };
+        let retain = self.conf.retain;
 
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -112,7 +112,7 @@ impl Sink {
                     mb = rx.recv() => {
                         match mb {
                             Some(mb) => {
-                                let _ = client.publish(&topic, qos, false, mb.to_json()).await;
+                                let _ = client.publish(&topic, qos, retain, mb.to_json()).await;
                             }
                             None => unreachable!(),
                         }
@@ -126,7 +126,13 @@ impl Sink {
 
     pub fn start_v50(&mut self, client: Arc<v5::AsyncClient>) {
         let topic = self.conf.topic.clone();
-        let qos = self.conf.qos;
+        let qos = match self.conf.qos {
+            0 => mqttbytes::QoS::AtMostOnce,
+            1 => mqttbytes::QoS::AtLeastOnce,
+            2 => mqttbytes::QoS::ExactlyOnce,
+            _ => unreachable!(),
+        };
+        let retain = self.conf.retain;
 
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -144,7 +150,7 @@ impl Sink {
                     mb = rx.recv() => {
                         match mb {
                             Some(mb) => {
-                                let _ = client.publish(&topic, mqttbytes::qos(qos).unwrap(), false, mb.to_json()).await;
+                                let _ = client.publish(&topic, qos, retain, mb.to_json()).await;
                             }
                             None => unreachable!(),
                         }
