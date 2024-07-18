@@ -13,7 +13,7 @@ use tokio::{
     sync::{broadcast, mpsc, RwLock},
     time,
 };
-use tracing::error;
+use tracing::{debug, error};
 use types::apps::{
     mqtt_client::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
@@ -155,11 +155,20 @@ impl MqttClient {
     }
 
     async fn start_v311(&mut self) {
-        let mqtt_options = MqttOptions::new(
+        let mut mqtt_options = MqttOptions::new(
             self.conf.client_id.clone(),
             self.conf.host.clone(),
             self.conf.port,
         );
+
+        mqtt_options.set_keep_alive(Duration::from_secs(self.conf.keep_alive));
+
+        if self.conf.username.is_some() && self.conf.password.is_some() {
+            mqtt_options.set_credentials(
+                self.conf.username.as_ref().unwrap().clone(),
+                self.conf.password.as_ref().unwrap().clone(),
+            );
+        }
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
         let sources = self.sources.clone();
@@ -227,11 +236,19 @@ impl MqttClient {
     }
 
     async fn start_v50(&mut self) {
-        let mqtt_options = v5::MqttOptions::new(
+        let mut mqtt_options = v5::MqttOptions::new(
             self.conf.client_id.clone(),
             self.conf.host.clone(),
             self.conf.port,
         );
+        mqtt_options.set_keep_alive(Duration::from_secs(self.conf.keep_alive));
+
+        if self.conf.username.is_some() && self.conf.password.is_some() {
+            mqtt_options.set_credentials(
+                self.conf.username.as_ref().unwrap().clone(),
+                self.conf.password.as_ref().unwrap().clone(),
+            );
+        }
 
         let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
         let sources = self.sources.clone();
@@ -260,16 +277,16 @@ impl MqttClient {
                             Ok(v5::Event::Incoming(v5::Incoming::Publish(p))) => {
                                 match MessageBatch::from_json(p.payload) {
                                     Ok(msg) => {
-                                        for source in sources.write().await.iter_mut() {
-                                            if matches(&source.conf.topic, &p.topic) {
-                                                match &source.tx {
-                                                    Some(tx) => {
-                                                        let _ = tx.send(msg.clone());
-                                                    }
-                                                    None => {}
-                                                }
-                                            }
-                                        }
+                                        // for source in sources.write().await.iter_mut() {
+                                        //     if matches(&source.conf.topic, p.topic) {
+                                        //         match &source.tx {
+                                        //             Some(tx) => {
+                                        //                 let _ = tx.send(msg.clone());
+                                        //             }
+                                        //             None => {}
+                                        //         }
+                                        //     }
+                                        // }
                                     }
                                     Err(e) => error!("Failed to decode msg:{}", e),
                                 }

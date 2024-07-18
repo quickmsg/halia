@@ -6,7 +6,10 @@ use common::{
 };
 use message::MessageBatch;
 use rumqttc::{
-    v5::{self, mqttbytes},
+    v5::{
+        self,
+        mqttbytes::{self, v5::PublishProperties},
+    },
     AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
@@ -19,6 +22,8 @@ pub struct Sink {
     pub tx: Option<mpsc::Sender<MessageBatch>>,
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
     pub ref_cnt: usize,
+
+    pub publish_properties: Option<PublishProperties>,
 
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
 }
@@ -43,6 +48,8 @@ impl Sink {
             .await?;
         }
 
+        let publish_properties = get_publish_properties(&req);
+
         Ok(Sink {
             id: sink_id,
             conf: req,
@@ -50,6 +57,7 @@ impl Sink {
             ref_cnt: 0,
             stop_signal_tx: None,
             join_handle: None,
+            publish_properties,
         })
     }
 
@@ -202,6 +210,8 @@ impl Sink {
 
         let (mut stop_signal_rx, mut rx) = self.join_handle.take().unwrap().await.unwrap();
 
+        let publish_properties = self.publish_properties.clone();
+
         tokio::spawn(async move {
             loop {
                 select! {
@@ -212,7 +222,14 @@ impl Sink {
                     mb = rx.recv() => {
                         match mb {
                             Some(mb) => {
-                                let _ = client.publish(&topic, mqttbytes::qos(qos).unwrap(), retain, mb.to_json()).await;
+                                match &publish_properties {
+                                    Some(pp) => {
+                                        let _ = client.publish_with_properties(&topic, mqttbytes::qos(qos).unwrap(), retain, mb.to_json(), pp.clone()).await;
+                                    }
+                                    None => {
+                                        let _ = client.publish(&topic, mqttbytes::qos(qos).unwrap(), retain, mb.to_json()).await;
+                                    }
+                                }
                             }
                             None => unreachable!(),
                         }
@@ -248,5 +265,54 @@ impl Sink {
         if self.ref_cnt == 0 {
             self.stop().await;
         }
+    }
+}
+
+fn get_publish_properties(req: &CreateUpdateSinkReq) -> Option<PublishProperties> {
+    let mut some = false;
+    let mut pp = PublishProperties {
+        payload_format_indicator: None,
+        message_expiry_interval: None,
+        topic_alias: None,
+        response_topic: None,
+        correlation_data: None,
+        user_properties: vec![],
+        subscription_identifiers: vec![],
+        content_type: None,
+    };
+
+    if let Some(pfi) = req.payload_format_indicator {
+        some = true;
+        pp.payload_format_indicator = Some(pfi);
+    }
+    if let Some(mpi) = req.message_expiry_interval {
+        some = true;
+        pp.message_expiry_interval = Some(mpi);
+    }
+    if let Some(ta) = req.topic_alias {
+        some = true;
+        pp.topic_alias = Some(ta);
+    }
+    if let Some(cd) = &req.correlation_data {
+        some = true;
+        todo!()
+    }
+    if let Some(up) = &req.user_properties {
+        some = true;
+        pp.user_properties = up.clone();
+    }
+    if let Some(si) = &req.subscription_identifiers {
+        some = true;
+        pp.subscription_identifiers = si.clone();
+    }
+    if let Some(ct) = &req.content_type {
+        some = true;
+        pp.content_type = Some(ct.clone());
+    }
+
+    if some {
+        Some(pp)
+    } else {
+        None
     }
 }

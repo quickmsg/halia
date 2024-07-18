@@ -5,7 +5,6 @@ use uuid::Uuid;
 pub struct CreateUpdateMqttClientReq {
     pub name: String,
 
-
     pub client_id: String,
     pub host: String,
     pub port: u16,
@@ -17,7 +16,7 @@ pub struct CreateUpdateMqttClientReq {
 
     pub version: Version,
     pub timeout: usize,
-    pub keep_alive: usize,
+    pub keep_alive: u64,
     pub clean_session: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
@@ -59,6 +58,25 @@ pub struct CreateUpdateSinkReq {
     pub retain: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
+
+    // for v5
+    // 1 开启 0关闭
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_properties: Option<Vec<(String, String)>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload_format_indicator: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_expiry_interval: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic_alias: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_topic: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub correlation_data: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_identifiers: Option<Vec<usize>>,
 }
 
 #[derive(Serialize)]
