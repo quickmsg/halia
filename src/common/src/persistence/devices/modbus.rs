@@ -35,13 +35,13 @@ fn get_sink_point_file_path(device_id: &Uuid, sink_id: &Uuid) -> PathBuf {
         .join(POINT_FILE)
 }
 
-pub async fn create(device_id: &Uuid, data: String) -> Result<(), io::Error> {
+pub async fn create(device_id: &Uuid, r#type: &'static str, data: String) -> Result<(), io::Error> {
     crate::persistence::create(
         get_device_file_path(),
         device_id,
         &format!(
             "{}{}{}{}{}",
-            "modbus",
+            r#type,
             DELIMITER,
             Status::Stopped,
             DELIMITER,

@@ -4,7 +4,7 @@ use common::{
 };
 use message::MessageBatch;
 use protocol::coap::client::UdpCoAPClient;
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -65,20 +65,25 @@ impl Group {
         })
     }
 
-    // pub async fn recover(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-    //     match persistence::devices::modbus::read_group_points(device_id, &self.id).await {
-    //         Ok(datas) => {
-    //             for data in datas {
-    //                 let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-    //                 let point_id = Uuid::from_str(items[0]).unwrap();
-    //                 let req: CreateUpdateGroupPointReq = serde_json::from_str(items[1])?;
-    //                 self.create_point(device_id, Some(point_id), req).await?;
-    //             }
-    //             Ok(())
-    //         }
-    //         Err(e) => Err(e.into()),
-    //     }
-    // }
+    pub async fn recover(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        match persistence::devices::coap::read_group_resources(device_id, &self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    assert_eq!(items.len(), 2);
+                    let resource_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateGroupResourceReq = serde_json::from_str(items[1])?;
+                    self.create_resource(device_id, Some(resource_id), req)
+                        .await?;
+                }
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
 
     pub fn search(&self) -> SearchGroupsItemResp {
         SearchGroupsItemResp {

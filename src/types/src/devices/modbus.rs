@@ -48,7 +48,7 @@ pub enum Mode {
     Server,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Encode {
     Tcp,

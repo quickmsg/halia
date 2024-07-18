@@ -5,7 +5,7 @@ use common::{
 use group::Group;
 use protocol::coap::client::UdpCoAPClient;
 use serde_json::json;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use types::devices::{
     coap::{
         CreateUpdateCoapReq, CreateUpdateGroupReq, CreateUpdateGroupResourceReq,
@@ -38,7 +38,7 @@ impl Coap {
         if new {
             persistence::devices::coap::create(
                 &device_id,
-                &TYPE,
+                TYPE,
                 serde_json::to_string(&req).unwrap(),
             )
             .await?;
@@ -53,15 +53,27 @@ impl Coap {
     }
 
     async fn recover(&mut self) -> HaliaResult<()> {
-        // let paths = persistence::device::read_coap_paths(&self.id).await?;
-        // for (id, data) in paths {
-        //     let path = path::new(id, &data).await?;
-        //     self.paths.write().await.push(path);
-        // }
-        // if status == Status::Runing {
-        //     self.start().await;
-        // }
-        Ok(())
+        match persistence::devices::coap::read_groups(&self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    assert_eq!(items.len(), 2);
+
+                    let group_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
+                    self.create_group(Some(group_id), req).await?;
+                }
+
+                for group in self.groups.iter_mut() {
+                    group.recover(&self.id).await?;
+                }
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn search(&self) -> SearchDevicesItemResp {

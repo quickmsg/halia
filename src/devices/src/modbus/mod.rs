@@ -24,6 +24,7 @@ use tokio::{
     net::TcpStream,
     select,
     sync::{broadcast, mpsc, RwLock},
+    task::JoinHandle,
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
@@ -49,7 +50,6 @@ mod sink_point;
 #[derive(Debug)]
 pub struct Modbus {
     pub id: Uuid,
-    on: Arc<AtomicBool>,  // true:开启 false:关闭
     err: Arc<AtomicBool>, // true:错误 false:正常
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
@@ -58,10 +58,18 @@ pub struct Modbus {
     conf: CreateUpdateModbusReq,
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
 
-    groups: Arc<RwLock<Vec<Group>>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
 
+    groups: Arc<RwLock<Vec<Group>>>,
     sinks: Vec<Sink>,
+
+    handle: Option<
+        JoinHandle<(
+            mpsc::Receiver<()>,
+            mpsc::Receiver<WritePointEvent>,
+            mpsc::Receiver<Uuid>,
+        )>,
+    >,
 }
 
 impl Modbus {
@@ -72,13 +80,16 @@ impl Modbus {
         };
 
         if new {
-            persistence::devices::modbus::create(&device_id, serde_json::to_string(&req).unwrap())
-                .await?;
+            persistence::devices::modbus::create(
+                &device_id,
+                TYPE,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
         Ok(Modbus {
             id: device_id,
-            on: Arc::new(AtomicBool::new(false)),
             err: Arc::new(AtomicBool::new(false)),
             rtt: Arc::new(AtomicU16::new(9999)),
             conf: req,
@@ -87,6 +98,7 @@ impl Modbus {
             write_tx: None,
             sinks: vec![],
             stop_signal_tx: None,
+            handle: None,
         })
     }
 
@@ -105,10 +117,29 @@ impl Modbus {
                 for group in self.groups.write().await.iter_mut() {
                     group.recover(&self.id).await?;
                 }
-                Ok(())
             }
-            Err(e) => Err(e.into()),
+            Err(e) => return Err(e.into()),
         }
+
+        match persistence::devices::modbus::read_sinks(&self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    assert_eq!(items.len(), 2);
+
+                    let sink_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateSinkReq = serde_json::from_str(items[1])?;
+                    self.create_sink(Some(sink_id), req).await?;
+                }
+
+                for sink in self.sinks.iter_mut() {
+                    sink.recover(&self.id).await?;
+                }
+            }
+            Err(e) => return Err(e.into()),
+        }
+
+        Ok(())
     }
 
     pub fn search(&self) -> SearchDevicesItemResp {
@@ -116,7 +147,7 @@ impl Modbus {
             id: self.id.clone(),
             r#type: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
-            on: self.on.load(Ordering::SeqCst),
+            on: self.stop_signal_tx.is_some(),
             err: self.err.load(Ordering::SeqCst),
             conf: json!(&self.conf),
         }
@@ -127,32 +158,50 @@ impl Modbus {
             .await?;
 
         let mut restart = false;
-        if (self.conf.mode != req.mode) && self.on.load(Ordering::SeqCst) {
-            restart = true;
+        match (&self.conf.link_type, &req.link_type) {
+            (
+                types::devices::modbus::LinkType::Ethernet,
+                types::devices::modbus::LinkType::Ethernet,
+            ) => {
+                if self.conf.mode != req.mode
+                    || self.conf.encode != req.encode
+                    || self.conf.host != req.host
+                    || self.conf.port != req.port
+                {
+                    restart = true;
+                }
+            }
+            (
+                types::devices::modbus::LinkType::Serial,
+                types::devices::modbus::LinkType::Serial,
+            ) => {
+                if self.conf.path != req.path
+                    || self.conf.stop_bits != req.stop_bits
+                    || self.conf.baud_rate != req.baud_rate
+                    || self.conf.data_bits != req.data_bits
+                    || self.conf.parity != req.parity
+                {
+                    restart = true;
+                }
+            }
+            _ => restart = true,
         }
 
         self.conf = req;
-        if restart {
-            self.stop(false).await?;
-            self.start(false).await?;
+        if restart && self.stop_signal_tx.is_some() {
+            self.restart().await;
         }
 
         Ok(())
     }
 
-    pub async fn start(&mut self, update_persistence: bool) -> HaliaResult<()> {
-        if let Err(_) = self
-            .on
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        {
+    pub async fn start(&mut self) -> HaliaResult<()> {
+        if self.stop_signal_tx.is_some() {
             return Ok(());
         }
-
         debug!("设备开启");
 
-        if update_persistence {
-            persistence::devices::update_device_status(&self.id, Status::Runing).await?;
-        }
+        persistence::devices::update_device_status(&self.id, Status::Runing).await?;
 
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -163,10 +212,10 @@ impl Modbus {
 
         let conf = self.conf.clone();
         let groups = self.groups.clone();
-        let on = self.on.clone();
         let err = self.err.clone();
         let rtt = self.rtt.clone();
-        tokio::spawn(async move {
+
+        let handle = tokio::spawn(async move {
             loop {
                 match Modbus::get_context(&conf).await {
                     Ok((mut ctx, interval)) => {
@@ -175,9 +224,7 @@ impl Modbus {
                             select! {
                                 biased;
                                 _ = stop_signal_rx.recv() => {
-                                    debug!("here");
-                                    on.store(false, Ordering::SeqCst);
-                                    return
+                                    return (stop_signal_rx, write_rx, read_rx);
                                 }
 
                                 wpe = write_rx.recv() => {
@@ -207,13 +254,12 @@ impl Modbus {
                     Err(_) => debug!("modbus尝试连接失败"),
                 }
 
-                if !on.load(Ordering::SeqCst) {
-                    debug!("device stoped");
-                    return;
-                }
-                time::sleep(Duration::from_secs(3)).await;
+                // TODO 重连时间配置化
+                time::sleep(Duration::from_secs(30)).await;
             }
         });
+
+        self.handle = Some(handle);
 
         for group in self.groups.write().await.iter_mut() {
             let read_tx = self.read_tx.as_ref().unwrap().clone();
@@ -223,18 +269,13 @@ impl Modbus {
         Ok(())
     }
 
-    pub async fn stop(&mut self, update_persistence: bool) -> HaliaResult<()> {
-        if let Err(_) = self
-            .on
-            .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-        {
+    pub async fn stop(&mut self) -> HaliaResult<()> {
+        if self.stop_signal_tx.is_none() {
             return Ok(());
         }
-
         debug!("设备停止");
-        if update_persistence {
-            persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
-        }
+
+        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
 
         for group in self.groups.write().await.iter_mut() {
             group.stop().await;
@@ -249,12 +290,20 @@ impl Modbus {
         self.stop_signal_tx = None;
         self.read_tx = None;
         self.write_tx = None;
+        self.handle = None;
 
         Ok(())
     }
 
+    async fn restart(&mut self) {
+        let (mut stop_signal_rx, mut write_rx, mut read_rx) =
+            self.handle.take().unwrap().await.unwrap();
+
+        // TODO
+    }
+
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        if self.on.load(Ordering::SeqCst) {
+        if self.stop_signal_tx.is_some() {
             return Err(HaliaError::DeviceRunning);
         }
         debug!("设备删除");
@@ -329,7 +378,7 @@ impl Modbus {
     ) -> HaliaResult<()> {
         match Group::new(&self.id, group_id, req).await {
             Ok(mut group) => {
-                if self.on.load(Ordering::SeqCst) {
+                if self.stop_signal_tx.is_some() {
                     let read_tx = self.read_tx.as_ref().unwrap().clone();
                     group.start(read_tx, self.err.clone());
                 }
@@ -379,7 +428,7 @@ impl Modbus {
         {
             Some(group) => match group.update(&self.id, req).await {
                 Ok(restart) => {
-                    if restart && self.on.load(Ordering::SeqCst) {
+                    if restart && self.stop_signal_tx.is_some() {
                         group.stop().await;
                         group.start(self.read_tx.as_ref().unwrap().clone(), self.err.clone());
                     }
@@ -392,23 +441,21 @@ impl Modbus {
     }
 
     pub async fn delete_group(&mut self, group_id: Uuid) -> HaliaResult<()> {
-        if self.on.load(Ordering::SeqCst) {
-            match self
-                .groups
-                .write()
-                .await
-                .iter_mut()
-                .find(|group| group.id == group_id)
-            {
-                Some(group) => {
-                    group.delete(&self.id).await?;
-                    self.groups
-                        .write()
-                        .await
-                        .retain(|group| group.id != group_id);
-                }
-                None => return Err(HaliaError::NotFound),
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == group_id)
+        {
+            Some(group) => {
+                group.delete(&self.id).await?;
+                self.groups
+                    .write()
+                    .await
+                    .retain(|group| group.id != group_id);
             }
+            None => return Err(HaliaError::NotFound),
         }
 
         Ok(())
@@ -474,7 +521,7 @@ impl Modbus {
         point_id: Uuid,
         value: String,
     ) -> HaliaResult<()> {
-        if self.on.load(Ordering::SeqCst) == false {
+        if self.stop_signal_tx.is_none() {
             return Err(HaliaError::DeviceStoped);
         }
         if self.err.load(Ordering::SeqCst) == true {
@@ -626,7 +673,7 @@ impl Modbus {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => match sink.update_point(point_id, req).await {
                 Ok(restart) => {
-                    if restart && self.on.load(Ordering::SeqCst) {
+                    if restart && self.stop_signal_tx.is_some() {
                         sink.stop().await;
                         sink.start(self.write_tx.as_ref().unwrap().clone());
                     }
@@ -655,7 +702,7 @@ impl Modbus {
     pub async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => {
-                if self.on.load(Ordering::SeqCst) && sink.stop_signal_tx.is_none() {
+                if self.stop_signal_tx.is_some() && sink.stop_signal_tx.is_none() {
                     sink.start(self.write_tx.as_ref().unwrap().clone());
                 }
                 sink.publish()
@@ -664,8 +711,11 @@ impl Modbus {
         }
     }
 
-    pub async fn unpublish(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        todo!()
+    pub async fn unpublish(&mut self, sink_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.unpublish().await),
+            None => Err(HaliaError::NotFound),
+        }
     }
 }
 

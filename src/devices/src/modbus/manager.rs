@@ -6,7 +6,9 @@ use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
 use types::devices::{
     modbus::{
-        CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq, CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupPointsResp, SearchGroupsResp, SearchSinkPointsResp, SearchSinksResp
+        CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
+        CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupPointsResp, SearchGroupsResp,
+        SearchSinkPointsResp, SearchSinksResp,
     },
     SearchDevicesItemResp,
 };
@@ -59,14 +61,14 @@ impl Manager {
 
     pub async fn start(&self, device_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.start(true).await,
+            Some(mut device) => device.start().await,
             None => Err(HaliaError::NotFound),
         }
     }
 
     pub async fn stop(&self, device_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.stop(true).await,
+            Some(mut device) => device.stop().await,
             None => Err(HaliaError::NotFound),
         }
     }

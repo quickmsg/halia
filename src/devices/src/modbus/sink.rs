@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
@@ -52,6 +54,21 @@ impl Sink {
             stop_signal_tx: None,
             publish_tx: None,
         })
+    }
+
+    pub async fn recover(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        match persistence::devices::modbus::read_sink_points(device_id, &self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    let point_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateSinkPointReq = serde_json::from_str(items[1])?;
+                    self.create_point(device_id, Some(point_id), req).await?;
+                }
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn search(&self) -> SearchSinksItemResp {
