@@ -4,14 +4,30 @@ use uuid::Uuid;
 #[derive(Deserialize, Serialize)]
 pub struct CreateUpdateMqttClientReq {
     pub name: String,
+
+
     pub client_id: String,
+    pub host: String,
+    pub port: u16,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+
+    pub version: Version,
     pub timeout: usize,
     pub keep_alive: usize,
     pub clean_session: bool,
-    pub host: String,
-    pub port: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Version {
+    V311,
+    V50,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

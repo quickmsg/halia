@@ -5,7 +5,7 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
+use rumqttc::{v5, AsyncClient, Event, Incoming, MqttOptions, QoS};
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -36,7 +36,8 @@ pub struct MqttClient {
 
     sources: Arc<RwLock<Vec<Source>>>,
     sinks: Vec<Sink>,
-    client: Option<Arc<AsyncClient>>,
+    client_v311: Option<Arc<AsyncClient>>,
+    client_v50: Option<Arc<v5::AsyncClient>>,
     ref_cnt: usize,
 }
 
@@ -61,7 +62,8 @@ impl MqttClient {
             conf: req,
             sources: Arc::new(RwLock::new(vec![])),
             sinks: vec![],
-            client: None,
+            client_v311: None,
+            client_v50: None,
             stop_signal_tx: None,
             ref_cnt: 0,
         })
@@ -107,7 +109,8 @@ impl MqttClient {
         persistence::apps::update_app(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
-        if self.conf.client_id != req.client_id
+        if self.conf.version != req.version
+            || self.conf.client_id != req.client_id
             || self.conf.timeout != req.timeout
             || self.conf.keep_alive != req.keep_alive
             || self.conf.clean_session != req.clean_session
@@ -128,14 +131,30 @@ impl MqttClient {
 
             self.start().await;
             for sink in self.sinks.iter_mut() {
-                sink.restart(self.client.as_ref().unwrap().clone()).await;
+                match self.conf.version {
+                    types::apps::mqtt_client::Version::V311 => {
+                        sink.restart_v311(self.client_v311.as_ref().unwrap().clone())
+                            .await
+                    }
+                    types::apps::mqtt_client::Version::V50 => {
+                        sink.restart_v50(self.client_v50.as_ref().unwrap().clone())
+                            .await
+                    }
+                }
             }
         }
 
         Ok(())
     }
 
-    pub async fn start(&mut self) {
+    async fn start(&mut self) {
+        match self.conf.version {
+            types::apps::mqtt_client::Version::V311 => self.start_v311().await,
+            types::apps::mqtt_client::Version::V50 => self.start_v50().await,
+        }
+    }
+
+    async fn start_v311(&mut self) {
         let mqtt_options = MqttOptions::new(
             self.conf.client_id.clone(),
             self.conf.host.clone(),
@@ -149,7 +168,7 @@ impl MqttClient {
                 .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
                 .await;
         }
-        self.client = Some(Arc::new(client));
+        self.client_v311 = Some(Arc::new(client));
 
         let (tx, mut rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(tx);
@@ -207,6 +226,74 @@ impl MqttClient {
         });
     }
 
+    async fn start_v50(&mut self) {
+        let mqtt_options = v5::MqttOptions::new(
+            self.conf.client_id.clone(),
+            self.conf.host.clone(),
+            self.conf.port,
+        );
+
+        let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
+        let sources = self.sources.clone();
+        for source in sources.read().await.iter() {
+            let _ = client
+                .subscribe(
+                    source.conf.topic.clone(),
+                    v5::mqttbytes::qos(source.conf.qos).unwrap(),
+                )
+                .await;
+        }
+        self.client_v50 = Some(Arc::new(client));
+
+        let (tx, mut rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(tx);
+
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = rx.recv() => {
+                        return
+                    }
+
+                    event = event_loop.poll() => {
+                        match event {
+                            Ok(v5::Event::Incoming(v5::Incoming::Publish(p))) => {
+                                match MessageBatch::from_json(p.payload) {
+                                    Ok(msg) => {
+                                        for source in sources.write().await.iter_mut() {
+                                            if matches(&source.conf.topic, &p.topic) {
+                                                match &source.tx {
+                                                    Some(tx) => {
+                                                        let _ = tx.send(msg.clone());
+                                                    }
+                                                    None => {}
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(e) => error!("Failed to decode msg:{}", e),
+                                }
+                            }
+                            Ok(_) => (),
+                            Err(e) => {
+                                match e {
+                                    v5::ConnectionError::MqttState(_) => todo!(),
+                                    v5::ConnectionError::Timeout(_) => todo!(),
+                                    v5::ConnectionError::Tls(_) => todo!(),
+                                    v5::ConnectionError::Io(_) => todo!(),
+                                    v5::ConnectionError::ConnectionRefused(_) => todo!(),
+                                    v5::ConnectionError::NotConnAck(_) => todo!(),
+                                    v5::ConnectionError::RequestsDone => todo!(),
+                                }
+                                time::sleep(10 * Duration::SECOND).await;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     async fn stop(&mut self) {
         // TODO 验证引用
         for sink in self.sinks.iter_mut() {
@@ -219,7 +306,10 @@ impl MqttClient {
             .await
             .unwrap();
         self.stop_signal_tx = None;
-        self.client = None;
+        match self.conf.version {
+            types::apps::mqtt_client::Version::V311 => self.client_v311 = None,
+            types::apps::mqtt_client::Version::V50 => self.client_v50 = None,
+        }
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
@@ -279,14 +369,32 @@ impl MqttClient {
         match Source::new(&self.id, source_id, req).await {
             Ok(source) => {
                 if self.stop_signal_tx.is_some() {
-                    if let Err(e) = self
-                        .client
-                        .as_ref()
-                        .unwrap()
-                        .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
-                        .await
-                    {
-                        error!("client subscribe err:{e}");
+                    match self.conf.version {
+                        types::apps::mqtt_client::Version::V311 => {
+                            if let Err(e) = self
+                                .client_v311
+                                .as_ref()
+                                .unwrap()
+                                .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
+                                .await
+                            {
+                                error!("client subscribe err:{e}");
+                            }
+                        }
+                        types::apps::mqtt_client::Version::V50 => {
+                            if let Err(e) = self
+                                .client_v50
+                                .as_ref()
+                                .unwrap()
+                                .subscribe(
+                                    source.conf.topic.clone(),
+                                    v5::mqttbytes::qos(source.conf.qos).unwrap(),
+                                )
+                                .await
+                            {
+                                error!("client subscribe err:{e}");
+                            }
+                        }
                     }
                 }
                 self.sources.write().await.push(source);
@@ -330,24 +438,55 @@ impl MqttClient {
             Some(source) => match source.update(&self.id, req).await {
                 Ok(restart) => {
                     if self.stop_signal_tx.is_some() && restart {
-                        if let Err(e) = self
-                            .client
-                            .as_ref()
-                            .unwrap()
-                            .unsubscribe(source.conf.topic.clone())
-                            .await
-                        {
-                            error!("unsubscribe err:{e}");
-                        }
+                        match self.conf.version {
+                            types::apps::mqtt_client::Version::V311 => {
+                                if let Err(e) = self
+                                    .client_v311
+                                    .as_ref()
+                                    .unwrap()
+                                    .unsubscribe(source.conf.topic.clone())
+                                    .await
+                                {
+                                    error!("unsubscribe err:{e}");
+                                }
 
-                        if let Err(e) = self
-                            .client
-                            .as_ref()
-                            .unwrap()
-                            .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
-                            .await
-                        {
-                            error!("subscribe err:{e}");
+                                if let Err(e) = self
+                                    .client_v311
+                                    .as_ref()
+                                    .unwrap()
+                                    .subscribe(
+                                        source.conf.topic.clone(),
+                                        get_mqtt_qos(source.conf.qos),
+                                    )
+                                    .await
+                                {
+                                    error!("subscribe err:{e}");
+                                }
+                            }
+                            types::apps::mqtt_client::Version::V50 => {
+                                if let Err(e) = self
+                                    .client_v50
+                                    .as_ref()
+                                    .unwrap()
+                                    .unsubscribe(source.conf.topic.clone())
+                                    .await
+                                {
+                                    error!("unsubscribe err:{e}");
+                                }
+
+                                if let Err(e) = self
+                                    .client_v50
+                                    .as_ref()
+                                    .unwrap()
+                                    .subscribe(
+                                        source.conf.topic.clone(),
+                                        v5::mqttbytes::qos(source.conf.qos).unwrap(),
+                                    )
+                                    .await
+                                {
+                                    error!("subscribe err:{e}");
+                                }
+                            }
                         }
                     }
 
@@ -409,7 +548,16 @@ impl MqttClient {
             Some(sink) => match sink.update(&self.id, req).await {
                 Ok(restart) => {
                     if sink.stop_signal_tx.is_some() && restart {
-                        sink.restart(self.client.as_ref().unwrap().clone()).await;
+                        match self.conf.version {
+                            types::apps::mqtt_client::Version::V311 => {
+                                sink.restart_v311(self.client_v311.as_ref().unwrap().clone())
+                                    .await
+                            }
+                            types::apps::mqtt_client::Version::V50 => {
+                                sink.restart_v50(self.client_v50.as_ref().unwrap().clone())
+                                    .await
+                            }
+                        }
                     }
                     Ok(())
                 }
@@ -438,7 +586,14 @@ impl MqttClient {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => {
                 if sink.stop_signal_tx.is_none() {
-                    sink.start(self.client.as_ref().unwrap().clone());
+                    match self.conf.version {
+                        types::apps::mqtt_client::Version::V311 => {
+                            sink.start_v311(self.client_v311.as_ref().unwrap().clone())
+                        }
+                        types::apps::mqtt_client::Version::V50 => {
+                            sink.start_v50(self.client_v50.as_ref().unwrap().clone())
+                        }
+                    }
                 }
 
                 Ok(sink.tx.as_ref().unwrap().clone())

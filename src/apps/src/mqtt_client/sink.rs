@@ -5,7 +5,10 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use rumqttc::{AsyncClient, QoS};
+use rumqttc::{
+    v5::{self, mqttbytes},
+    AsyncClient, QoS,
+};
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
@@ -75,7 +78,7 @@ impl Sink {
         Ok(restart)
     }
 
-    pub fn start(&mut self, client: Arc<AsyncClient>) {
+    pub fn start_v311(&mut self, client: Arc<AsyncClient>) {
         let topic = self.conf.topic.clone();
         let qos = self.conf.qos;
         let qos = match qos {
@@ -113,7 +116,39 @@ impl Sink {
         self.join_handle = Some(handle);
     }
 
-    pub async fn restart(&mut self, client: Arc<AsyncClient>) {
+    pub fn start_v50(&mut self, client: Arc<v5::AsyncClient>) {
+        let topic = self.conf.topic.clone();
+        let qos = self.conf.qos;
+
+        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+
+        let (tx, mut rx) = mpsc::channel(16);
+        self.tx = Some(tx);
+
+        let handle = tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = stop_signal_rx.recv() => {
+                        return (stop_signal_rx, rx);
+                    }
+
+                    mb = rx.recv() => {
+                        match mb {
+                            Some(mb) => {
+                                let _ = client.publish(&topic, mqttbytes::qos(qos).unwrap(), false, mb.to_json()).await;
+                            }
+                            None => unreachable!(),
+                        }
+                    }
+                }
+            }
+        });
+
+        self.join_handle = Some(handle);
+    }
+
+    pub async fn restart_v311(&mut self, client: Arc<AsyncClient>) {
         let topic = self.conf.topic.clone();
         let qos = self.conf.qos;
         let qos = match qos {
@@ -144,6 +179,40 @@ impl Sink {
                         match mb {
                             Some(mb) => {
                                 let _ = client.publish(&topic, qos, retain, mb.to_json()).await;
+                            }
+                            None => unreachable!(),
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    pub async fn restart_v50(&mut self, client: Arc<v5::AsyncClient>) {
+        let topic = self.conf.topic.clone();
+        let qos = self.conf.qos;
+        let retain = self.conf.retain;
+
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+
+        let (mut stop_signal_rx, mut rx) = self.join_handle.take().unwrap().await.unwrap();
+
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
+
+                    mb = rx.recv() => {
+                        match mb {
+                            Some(mb) => {
+                                let _ = client.publish(&topic, mqttbytes::qos(qos).unwrap(), retain, mb.to_json()).await;
                             }
                             None => unreachable!(),
                         }
