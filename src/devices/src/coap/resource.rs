@@ -35,8 +35,8 @@ impl Resource {
         }
 
         let request = RequestBuilder::new(&req.path, Method::Get)
-            .queries(todo!())
-            .domain(todo!())
+            // .queries(todo!())
+            .domain(req.domain.clone())
             .build();
 
         Ok(Resource {

@@ -36,8 +36,12 @@ impl Coap {
         };
 
         if new {
-            persistence::devices::coap::create(&device_id, serde_json::to_string(&req).unwrap())
-                .await?;
+            persistence::devices::coap::create(
+                &device_id,
+                &TYPE,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
         }
 
         Ok(Coap {
@@ -61,12 +65,13 @@ impl Coap {
     }
 
     pub fn search(&self) -> SearchDevicesItemResp {
+        // TODO
         SearchDevicesItemResp {
             id: self.id.clone(),
             r#type: TYPE,
-            on: todo!(),
-            err: todo!(),
-            rtt: todo!(),
+            on: self.client.is_some(),
+            err: false,
+            rtt: 999,
             conf: json!(&self.conf),
         }
     }

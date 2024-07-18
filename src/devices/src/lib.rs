@@ -1,8 +1,9 @@
+use coap::manager::GLOBAL_COAP_MANAGER;
 use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
-use types::devices::{modbus::CreateUpdateModbusReq, SearchDevicesResp};
+use types::devices::{coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, SearchDevicesResp};
 
 use uuid::Uuid;
 
@@ -30,24 +31,27 @@ impl DeviceManager {
         let mut err_cnt = 0;
         let mut close_cnt = 0;
         for (r#type, device_id) in self.devices.read().await.iter().rev() {
-            match r#type {
-                &modbus::TYPE => match GLOBAL_MODBUS_MANAGER.search(device_id) {
-                    Ok(info) => {
-                        if *&info.err {
-                            err_cnt += 1;
-                        }
-                        if !*&info.on {
-                            close_cnt += 1;
-                        }
-                        if i >= (page - 1) * size && i < page * size {
-                            data.push(info);
-                        }
-                        total += 1;
-                        i += 1;
+            let resp = match r#type {
+                &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id),
+                &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
+                _ => unreachable!(),
+            };
+
+            match resp {
+                Ok(resp) => {
+                    if *&resp.err {
+                        err_cnt += 1;
                     }
-                    Err(e) => panic!("无法获取modbus设备"),
-                },
-                _ => {}
+                    if !*&resp.on {
+                        close_cnt += 1;
+                    }
+                    if i >= (page - 1) * size && i < page * size {
+                        data.push(resp);
+                    }
+                    total += 1;
+                    i += 1;
+                }
+                Err(e) => panic!("无法获取"),
             }
         }
 
@@ -87,6 +91,16 @@ impl DeviceManager {
                                 "1" => {
                                     GLOBAL_MODBUS_MANAGER.start(device_id).await.unwrap();
                                 }
+                                _ => panic!("文件已损坏"),
+                            }
+                        }
+                        coap::TYPE => {
+                            let req: CreateUpdateCoapReq = serde_json::from_str(items[3])?;
+                            GLOBAL_COAP_MANAGER.create(Some(device_id), req).await?;
+                            GLOBAL_COAP_MANAGER.recover(&device_id).await.unwrap();
+                            match items[2] {
+                                "0" => {}
+                                "1" => GLOBAL_COAP_MANAGER.start(device_id).await.unwrap(),
                                 _ => panic!("文件已损坏"),
                             }
                         }
