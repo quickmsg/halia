@@ -1,4 +1,7 @@
+use std::net::SocketAddr;
+
 use common::{error::HaliaResult, persistence};
+use protocol::coap::request::{CoapRequest, Method, RequestBuilder};
 use types::devices::coap::{CreateUpdateGroupResourceReq, SearchGroupResourcesItemResp};
 use uuid::Uuid;
 
@@ -6,6 +9,7 @@ use uuid::Uuid;
 pub struct Resource {
     pub id: Uuid,
     conf: CreateUpdateGroupResourceReq,
+    pub request: CoapRequest<SocketAddr>,
 }
 
 impl Resource {
@@ -30,9 +34,15 @@ impl Resource {
             .await?;
         }
 
+        let request = RequestBuilder::new(&req.path, Method::Get)
+            .queries(todo!())
+            .domain(todo!())
+            .build();
+
         Ok(Resource {
             id: resource_id,
             conf: req,
+            request,
         })
     }
 

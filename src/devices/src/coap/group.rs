@@ -4,19 +4,13 @@ use common::{
     persistence,
 };
 use message::MessageBatch;
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use protocol::coap::client::UdpCoAPClient;
+use std::{sync::Arc, time::Duration};
 use tokio::{
-    select,
     sync::{broadcast, mpsc, RwLock},
     time,
 };
-use tracing::debug;
+use tracing::{debug, error};
 use types::devices::coap::{
     CreateUpdateGroupReq, CreateUpdateGroupResourceReq, SearchGroupResourcesResp,
     SearchGroupsItemResp,
@@ -32,7 +26,7 @@ pub struct Group {
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
 
-    pub resources: RwLock<Vec<Resource>>,
+    pub resources: Arc<RwLock<Vec<Resource>>>,
 
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
 }
@@ -67,7 +61,7 @@ impl Group {
             tx: None,
             ref_cnt: 0,
             stop_signal_tx: None,
-            resources: RwLock::new(vec![]),
+            resources: Arc::new(RwLock::new(vec![])),
         })
     }
 
@@ -93,30 +87,34 @@ impl Group {
         }
     }
 
-    pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>, err: Arc<AtomicBool>) {
+    pub fn start(&mut self, client: Arc<UdpCoAPClient>) {
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let interval = self.conf.interval;
-        let group_id = self.id.clone();
+        let resources = self.resources.clone();
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
-                select! {
-                    biased;
-                    _ = stop_signal_rx.recv() => {
-                        debug!("group stop");
-                        return
-                    }
-
-                    _ = interval.tick() => {
-                        if !err.load(Ordering::SeqCst) {
-                            if let Err(e) = read_tx.send(group_id).await {
-                                debug!("group send point info err :{}", e);
-                            }
+                // select! {
+                //     biased;
+                //     _ = stop_signal_rx.recv() => {
+                //         debug!("group stop");
+                //         return
+                //     }
+                for resource in resources.read().await.iter() {
+                    match client.send(resource.request.clone()).await {
+                        Ok(resp) => {
+                            debug!("{:?}", resp,)
                         }
+                        Err(e) => error!("{}", e),
                     }
                 }
+
+                // _ = interval.tick() => {
+                //         client.
+                // }
+                // }
             }
         });
     }
