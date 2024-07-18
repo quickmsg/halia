@@ -78,6 +78,10 @@ impl RuleManager {
         }
     }
 
+    pub async fn update(&self, id: Uuid, req: CreateUpdateRuleReq) -> HaliaResult<()> {
+        todo!()
+    }
+
     pub async fn delete(&self, id: Uuid) -> HaliaResult<()> {
         match self
             .rules

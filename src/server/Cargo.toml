@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 api = { workspace = true }
-device = { workspace = true }
+devices = { workspace = true }
 rule = { workspace = true }
 apps = { workspace = true }
 

@@ -7,7 +7,7 @@ edition.workspace = true
 message = { workspace = true }
 common = { workspace = true }
 apps = { workspace = true }
-device = { workspace = true }
+devices = { workspace = true }
 
 tokio = { workspace = true }
 tracing = { workspace = true }

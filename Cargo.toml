@@ -4,7 +4,7 @@ members = [
     "src/message",
     "src/server",
     "src/types",
-    "src/device",
+    "src/devices",
     "src/common",
     "src/functions",
     "src/protocol",
@@ -21,7 +21,7 @@ edition = "2021"
 api = { path = "src/api" }
 types = { path = "src/types" }
 message = { path = "src/message" }
-device = { path = "src/device" }
+devices = { path = "src/devices" }
 common = { path = "src/common" }
 protocol = { path = "src/protocol" }
 functions = { path = "src/functions" }

@@ -51,8 +51,7 @@ async fn stop(Path(id): Path<Uuid>) -> AppResp<()> {
 }
 
 async fn update(Path(id): Path<Uuid>, Json(req): Json<CreateUpdateRuleReq>) -> AppResp<()> {
-    // TODO
-    match GLOBAL_RULE_MANAGER.stop(id).await {
+    match GLOBAL_RULE_MANAGER.update(id, req).await {
         Ok(()) => AppResp::new(),
         Err(e) => e.into(),
     }

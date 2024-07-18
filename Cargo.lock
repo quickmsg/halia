@@ -161,7 +161,7 @@ dependencies = [
  "apps",
  "axum 0.7.5",
  "common",
- "device",
+ "devices",
  "rule",
  "serde",
  "serde_json",
@@ -887,7 +887,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "device"
+name = "devices"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2378,7 +2378,7 @@ dependencies = [
  "apps",
  "bytes",
  "common",
- "device",
+ "devices",
  "functions",
  "message",
  "serde_json",
@@ -2742,7 +2742,7 @@ dependencies = [
  "anyhow",
  "api",
  "apps",
- "device",
+ "devices",
  "rule",
  "tokio",
  "tracing",

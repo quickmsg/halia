@@ -3,7 +3,7 @@ use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-use device::GLOBAL_DEVICE_MANAGER;
+use devices::GLOBAL_DEVICE_MANAGER;
 use types::devices::SearchDevicesResp;
 
 use crate::{AppResp, Pagination};

@@ -3,7 +3,7 @@ use axum::{
     Json,
 };
 use common::error::HaliaError;
-use device::modbus::manager::GLOBAL_MODBUS_MANAGER;
+use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
 use types::devices::modbus::{
     CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
     CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupPointsResp, SearchGroupsResp,
