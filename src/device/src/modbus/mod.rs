@@ -95,9 +95,7 @@ impl Modbus {
             Ok(datas) => {
                 for data in datas {
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    if items.len() != 2 {
-                        panic!("数据损坏")
-                    }
+                    assert_eq!(items.len(), 2);
 
                     let group_id = Uuid::from_str(items[0]).unwrap();
                     let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
@@ -125,6 +123,9 @@ impl Modbus {
     }
 
     pub async fn update(&mut self, req: CreateUpdateModbusReq) -> HaliaResult<()> {
+        persistence::devices::update_device_conf(&self.id, serde_json::to_string(&req).unwrap())
+            .await?;
+
         let mut restart = false;
         if (self.conf.mode != req.mode) && self.on.load(Ordering::SeqCst) {
             restart = true;
@@ -135,8 +136,6 @@ impl Modbus {
             self.stop(false).await?;
             self.start(false).await?;
         }
-
-        // persistence::device::update_device_conf(&self.id, &data).await?;
 
         Ok(())
     }

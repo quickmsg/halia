@@ -12,9 +12,6 @@ use uuid::Uuid;
 use super::{Status, DELIMITER};
 
 static DEVICE_FILE: &str = "devices";
-static GROUP_FILE: &str = "groups";
-static SINK_FILE: &str = "sinks";
-static POINT_FILE: &str = "points";
 
 pub mod modbus;
 
@@ -32,21 +29,6 @@ pub(crate) fn get_device_file() -> PathBuf {
 
 pub(crate) fn get_device_file_path() -> PathBuf {
     get_dir().join(DEVICE_FILE)
-}
-
-fn get_group_file(device_id: &Uuid) -> PathBuf {
-    get_dir().join(device_id.to_string()).join(GROUP_FILE)
-}
-
-fn get_point_file(device_id: &Uuid, group_id: &Uuid) -> PathBuf {
-    get_dir()
-        .join(device_id.to_string())
-        .join(group_id.to_string())
-        .join(POINT_FILE)
-}
-
-fn get_sink_file(device_id: &Uuid) -> PathBuf {
-    get_dir().join(device_id.to_string()).join(SINK_FILE)
 }
 
 pub async fn init() -> Result<(), io::Error> {
@@ -102,7 +84,7 @@ pub async fn read_devices() -> Result<Vec<String>, io::Error> {
     super::read(get_device_file()).await
 }
 
-pub async fn update_device_conf(id: &Uuid, conf: &String) -> Result<(), io::Error> {
+pub async fn update_device_conf(id: &Uuid, conf: String) -> Result<(), io::Error> {
     let path = get_device_file();
     let mut file = OpenOptions::new()
         .read(true)
@@ -118,9 +100,7 @@ pub async fn update_device_conf(id: &Uuid, conf: &String) -> Result<(), io::Erro
     for line in lines.iter_mut() {
         if line[..36] == id_str {
             let fields: Vec<&str> = line.split(DELIMITER).collect();
-            if fields.len() != 4 {
-                panic!("数据文件损坏");
-            }
+            assert_eq!(fields.len(), 4);
 
             new_line = format!(
                 "{}{}{}{}{}{}{}",
