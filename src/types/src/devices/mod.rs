@@ -4,6 +4,7 @@ use uuid::Uuid;
 pub mod datatype;
 pub mod modbus;
 pub mod coap;
+pub mod opcua;
 
 #[derive(Serialize)]
 pub struct SearchDevicesResp {

@@ -1,5 +1,3 @@
-use anyhow::{bail, Result};
-use async_trait::async_trait;
 use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
@@ -11,7 +9,6 @@ use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, StatusCode},
 };
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     sync::{
@@ -26,64 +23,52 @@ use tokio::{
     time,
 };
 use tracing::{debug, error};
-use types::device::{
-    device::{CreateDeviceReq, SearchDeviceItemResp, SearchSinksResp, UpdateDeviceReq},
-    group::{CreateGroupReq, SearchGroupItemResp, SearchGroupResp, UpdateGroupReq},
-    point::{CreatePointReq, SearchPointResp},
-};
+use types::devices::opcua::CreateUpdateOpcuaReq;
+
 use uuid::Uuid;
 
-use crate::Device;
-
-pub(crate) const TYPE: &str = "opcua";
+pub const TYPE: &str = "opcua";
 mod group;
-mod point;
+mod group_variable;
 
-struct OpcUa {
+struct Opcua {
     id: Uuid,
-    name: String,
     on: Arc<AtomicBool>,
     err: Arc<AtomicBool>,
-    conf: Arc<RwLock<Conf>>,
+    conf: CreateUpdateOpcuaReq,
     groups: Arc<RwLock<Vec<Group>>>,
     session: Arc<RwLock<Option<Arc<Session>>>>,
     group_signal_tx: Option<broadcast::Sender<group::Command>>,
+
+    stop_signal_tx: Option<mpsc::Sender<()>>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
-struct Conf {
-    url: String,
-}
+impl Opcua {
+    pub fn new(device_id: Option<Uuid>, req: CreateUpdateOpcuaReq) -> HaliaResult<Self> {
+        let (device_id, new) = match device_id {
+            Some(device_id) => (device_id, false),
+            None => (Uuid::new_v4(), true),
+        };
 
-struct Password {
-    username: String,
-    password: String,
-}
+        Ok(Opcua {
+            id: device_id,
+            on: Arc::new(AtomicBool::new(false)),
+            err: Arc::new(AtomicBool::new(false)),
+            conf: req,
+            groups: Arc::new(RwLock::new(vec![])),
+            session: Arc::new(RwLock::new(None)),
+            group_signal_tx: None,
+            stop_signal_tx: None,
+        })
+    }
 
-pub(crate) fn new(id: Uuid, req: CreateDeviceReq) -> HaliaResult<Box<dyn Device>> {
-    let conf: Conf = serde_json::from_value(req.conf.clone())?;
-    Ok(Box::new(OpcUa {
-        id,
-        name: req.name.clone(),
-        on: Arc::new(AtomicBool::new(false)),
-        err: Arc::new(AtomicBool::new(false)),
-        conf: Arc::new(RwLock::new(conf)),
-        groups: Arc::new(RwLock::new(vec![])),
-        session: Arc::new(RwLock::new(None)),
-        group_signal_tx: None,
-    }))
-}
-
-impl OpcUa {
     async fn run(&self) {
         let conf = self.conf.clone();
         let session = self.session.clone();
         let on = self.on.clone();
         tokio::spawn(async move {
-            let now_conf = conf.read().await;
-
             loop {
-                match OpcUa::get_session(&now_conf).await {
+                match OpcUa::get_session(&conf).await {
                     Ok((s, handle)) => {
                         session.write().await.replace(s);
                         match handle.await {
@@ -139,10 +124,7 @@ impl OpcUa {
         session.wait_for_connection().await;
         Ok((session, handle))
     }
-}
 
-#[async_trait]
-impl Device for OpcUa {
     fn get_id(&self) -> Uuid {
         self.id
     }

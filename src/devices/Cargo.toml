@@ -23,4 +23,4 @@ futures-util = "0.3.30"
 thiserror = "1.0.61"
 tokio-serial = { version = "5.4.4" }
 uuid = { workspace = true }
-opcua = { path = "/home/debian/work/opcua/lib", features = ["console-logging"] }
+opcua = "0.12.0"

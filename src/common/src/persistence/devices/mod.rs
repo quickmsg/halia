@@ -15,6 +15,7 @@ static DEVICE_FILE: &str = "devices";
 
 pub mod coap;
 pub mod modbus;
+pub mod opcua;
 
 pub(crate) fn get_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(super::DEVICE_DIR)

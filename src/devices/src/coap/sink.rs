@@ -112,7 +112,15 @@ impl Sink {
         });
     }
 
-    pub fn stop(&mut self) {}
+    pub async fn stop(&mut self) {
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+        self.stop_signal_tx = None;
+    }
 
     pub fn publish(&mut self) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.ref_cnt += 1;

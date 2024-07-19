@@ -8,12 +8,14 @@ use crate::{AppResp, Pagination};
 
 mod coap;
 mod modbus;
+mod opcua;
 
 pub fn routes() -> Router {
     Router::new()
         .route("/", get(search_devices))
         .nest("/modbus", modbus_routes())
         .nest("/coap", coap_routes())
+        .nest("/opcua", opcua_routes())
 }
 
 async fn search_devices(pagination: Query<Pagination>) -> AppResp<SearchDevicesResp> {

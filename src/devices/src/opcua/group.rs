@@ -1,24 +1,20 @@
-use anyhow::{bail, Result};
+use std::{sync::Arc, time::Duration};
+
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
-use opcua::{
-    client::Session,
-    types::{QualifiedName, ReadValueId, TimestampsToReturn, UAString},
-};
-use std::{sync::Arc, time::Duration};
+use opcua::client::Session;
 use tokio::{
     select,
-    sync::{broadcast, RwLock, RwLockWriteGuard},
+    sync::{broadcast, RwLock},
     time,
 };
 use tracing::{debug, error};
-use types::device::{
-    group::{CreateGroupReq, UpdateGroupReq},
-    point::{CreatePointReq, SearchPointItemResp, SearchPointResp},
+use types::devices::opcua::{
+    CreateUpdateGroupReq, CreateUpdateGroupVariableReq, SearchGroupVariablesResp,
 };
 use uuid::Uuid;
 
-use super::point::Point;
+use super::group_variable::Variable;
 
 #[derive(Clone)]
 pub(crate) enum Command {
@@ -30,27 +26,31 @@ pub(crate) enum Command {
 #[derive(Debug)]
 pub struct Group {
     pub id: Uuid,
-    pub name: String,
-    pub interval: u64,
-    pub points: Arc<RwLock<Vec<Point>>>,
+    pub conf: CreateUpdateGroupReq,
+    pub variables: Arc<RwLock<Vec<Variable>>>,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
-    pub desc: Option<String>,
 }
 
 impl Group {
-    pub fn new(group_id: Uuid, conf: &CreateGroupReq) -> Result<Self> {
-        if conf.interval == 0 {
-            bail!("group interval must > 0")
-        }
-        Ok(Group {
+    pub fn new(
+        device_id: &Uuid,
+        group_id: Option<Uuid>,
+        req: CreateUpdateGroupReq,
+    ) -> HaliaResult<Self> {
+        let (group_id, new) = match group_id {
+            Some(group_id) => (group_id, false),
+            None => (Uuid::new_v4(), true),
+        };
+
+        if new {}
+
+        Ok(Self {
             id: group_id,
-            name: conf.name.clone(),
-            interval: conf.interval,
-            points: Arc::new(RwLock::new(vec![])),
+            variables: Arc::new(RwLock::new(vec![])),
             tx: None,
             ref_cnt: 0,
-            desc: conf.desc.clone(),
+            conf: req,
         })
     }
 
@@ -101,9 +101,8 @@ impl Group {
         });
     }
 
-    pub fn update(&mut self, req: &UpdateGroupReq) {
-        self.name = req.name.clone();
-        self.interval = req.interval;
+    pub fn update(&mut self, req: CreateUpdateGroupReq) {
+        todo!()
     }
 
     pub fn subscribe(&mut self) -> broadcast::Receiver<MessageBatch> {
@@ -125,83 +124,96 @@ impl Group {
         }
     }
 
-    pub async fn create_point(&self, point_id: Uuid, req: CreatePointReq) -> HaliaResult<()> {
-        let point = Point::new(point_id, req)?;
-        self.points.write().await.push(point);
+    pub async fn create_variable(
+        &self,
+        device_id: &Uuid,
+        variable_id: Option<Uuid>,
+        req: CreateUpdateGroupVariableReq,
+    ) -> HaliaResult<()> {
+        let variable = Variable::new(device_id, &self.id, variable_id, req).await?;
+        self.variables.write().await.push(variable);
         Ok(())
     }
 
-    pub async fn search_points(&self, page: usize, size: usize) -> SearchPointResp {
+    pub async fn search_variables(&self, page: usize, size: usize) -> SearchGroupVariablesResp {
         let mut resps = vec![];
-        for point in self
-            .points
+        for variable in self
+            .variables
             .read()
             .await
             .iter()
             .rev()
             .skip((page - 1) * size)
         {
-            resps.push(SearchPointItemResp {
-                id: point.id.clone(),
-                name: point.name.clone(),
-                conf: serde_json::json!(point.node_id),
-                value: serde_json::to_value(&point.value).unwrap(),
-            });
+            resps.push(variable.search());
             if resps.len() == size {
                 break;
             }
         }
 
-        SearchPointResp {
-            total: self.points.read().await.len(),
+        SearchGroupVariablesResp {
+            total: self.variables.read().await.len(),
             data: resps,
         }
     }
 
-    pub async fn update_point(&self, point_id: Uuid, req: &CreatePointReq) -> HaliaResult<()> {
+    pub async fn update_variable(
+        &self,
+        variable_id: Uuid,
+        req: CreateUpdateGroupVariableReq,
+    ) -> HaliaResult<()> {
         match self
-            .points
+            .variables
             .write()
             .await
             .iter_mut()
-            .find(|point| point.id == point_id)
+            .find(|variable| variable.id == variable_id)
         {
-            Some(point) => point.update(req).await,
+            Some(variable) => variable.update(req).await,
             None => return Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn get_points_num(&self) -> usize {
-        self.points.read().await.len()
-    }
-
-    pub async fn delete_points(&self, ids: &Vec<Uuid>) {
-        self.points
+    pub async fn delete_variables(&self, variable_ids: Vec<Uuid>) -> HaliaResult<()> {
+        for variable_id in &variable_ids {
+            if let Some(variable) = self
+                .variables
+                .write()
+                .await
+                .iter_mut()
+                .find(|variable| variable.id == *variable_id)
+            {
+                variable.delete().await?;
+            }
+        }
+        self.variables
             .write()
             .await
-            .retain(|point| !ids.contains(&point.id));
+            .retain(|variable| !variable_ids.contains(&variable.id));
+
+        Ok(())
     }
 
-    async fn read_points(session: &Session, mut points: RwLockWriteGuard<'_, Vec<Point>>) {
-        debug!("read points");
-        let mut nodes = vec![];
-        for point in points.iter() {
-            nodes.push(ReadValueId {
-                node_id: point.node_id.clone(),
-                attribute_id: 13,
-                index_range: UAString::null(),
-                data_encoding: QualifiedName::null(),
-            })
-        }
-        match session.read(&nodes, TimestampsToReturn::Both, 2000.0).await {
-            Ok(mut data_values) => {
-                for point in points.iter_mut().rev() {
-                    point.write(data_values.pop());
-                }
-            }
-            Err(e) => {
-                error!("{e:?}");
-            }
-        }
-    }
+    // async fn read_points(session: &Session, mut points: RwLockWriteGuard<'_, Vec<Point>>) {
+    //     debug!("read points");
+    //     let mut nodes = vec![];
+    //     for point in points.iter() {
+    //         nodes.push(ReadValueId {
+    //             node_id: point.node_id.clone(),
+    //             attribute_id: 13,
+    //             index_range: UAString::null(),
+    //             data_encoding: QualifiedName::null(),
+    //         })
+    //     }
+    //     match session.read(&nodes, TimestampsToReturn::Both, 2000.0).await {
+    //         Ok(mut data_values) => {
+    //             for point in points.iter_mut().rev() {
+    //                 point.write(data_values.pop());
+    //             }
+    //         }
+    //         Err(e) => {
+    //             error!("{e:?}");
+    //         }
+    //     }
+    // }
 }
