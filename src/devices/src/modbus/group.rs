@@ -6,10 +6,6 @@ use message::{Message, MessageBatch};
 use protocol::modbus::client::Context;
 use std::{
     str::FromStr,
-    sync::{
-        atomic::{AtomicBool, AtomicU16, Ordering},
-        Arc,
-    },
     time::{Duration, Instant},
 };
 use tokio::{
@@ -75,6 +71,9 @@ impl Group {
         match persistence::devices::modbus::read_group_points(device_id, &self.id).await {
             Ok(datas) => {
                 for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     let point_id = Uuid::from_str(items[0]).unwrap();
                     let req: CreateUpdateGroupPointReq = serde_json::from_str(items[1])?;
@@ -93,7 +92,10 @@ impl Group {
         }
     }
 
-    pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>, err: Arc<AtomicBool>) {
+    pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>) {
+        if self.stop_signal_tx.is_some() {
+            return;
+        }
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
@@ -110,10 +112,8 @@ impl Group {
                     }
 
                     _ = interval.tick() => {
-                        if !err.load(Ordering::SeqCst) {
-                            if let Err(e) = read_tx.send(group_id).await {
-                                debug!("group send point info err :{}", e);
-                            }
+                        if let Err(e) = read_tx.send(group_id).await {
+                            debug!("group send point info err :{}", e);
                         }
                     }
                 }
@@ -122,6 +122,9 @@ impl Group {
     }
 
     pub async fn stop(&mut self) {
+        if self.stop_signal_tx.is_none() {
+            return;
+        }
         match self.stop_signal_tx.as_ref().unwrap().send(()).await {
             Ok(()) => debug!("send stop signal ok"),
             Err(e) => debug!("send stop signal err :{e:?}"),
@@ -236,31 +239,28 @@ impl Group {
         &mut self,
         ctx: &mut Context,
         interval: u64,
-        rtt: &Arc<AtomicU16>,
-    ) -> HaliaResult<()> {
+    ) -> HaliaResult<u16> {
         let mut msg = Message::default();
+        let mut rtt = 0;
         for point in self.points.iter_mut() {
             let now = Instant::now();
             match point.read(ctx).await {
                 Ok(data) => {
                     msg.add(point.conf.name.clone(), data);
                 }
-                Err(e) => return Err(HaliaError::DeviceDisconnect),
+                Err(e) => return Err(e),
             }
-            rtt.store(now.elapsed().as_millis() as u16, Ordering::SeqCst);
+            rtt = now.elapsed().as_millis() as u16;
             time::sleep(Duration::from_millis(interval)).await;
         }
 
         if let Some(tx) = &self.tx {
             let mut mb = MessageBatch::default();
             mb.push_message(msg);
-            if let Err(e) = tx.send(mb) {
-                debug!("unscribe :{}", e);
-                self.tx = None;
-            }
+            let _ = tx.send(mb);
         }
 
-        Ok(())
+        Ok(rtt)
     }
 
     pub async fn get_write_point_event(

@@ -103,6 +103,9 @@ impl Modbus {
         match persistence::devices::modbus::read_groups(&self.id).await {
             Ok(datas) => {
                 for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     assert_eq!(items.len(), 2);
 
@@ -121,6 +124,9 @@ impl Modbus {
         match persistence::devices::modbus::read_sinks(&self.id).await {
             Ok(datas) => {
                 for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     assert_eq!(items.len(), 2);
 
@@ -196,88 +202,79 @@ impl Modbus {
 
         persistence::devices::update_device_status(&self.id, Status::Runing).await?;
 
-        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
-        let (read_tx, mut read_rx) = mpsc::channel::<Uuid>(16);
+        let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
         self.read_tx = Some(read_tx);
-        let (write_tx, mut write_rx) = mpsc::channel::<WritePointEvent>(16);
+        let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
         self.write_tx = Some(write_tx);
 
-        let conf = self.conf.clone();
-        let groups = self.groups.clone();
-        let err = self.err.clone();
-        let rtt = self.rtt.clone();
-
-        let handle = tokio::spawn(async move {
-            loop {
-                match Modbus::get_context(&conf).await {
-                    Ok((mut ctx, interval)) => {
-                        err.store(false, Ordering::SeqCst);
-                        Modbus::event_loop(stop_signal_rx);
-                    }
-                    Err(_) => debug!("modbus尝试连接失败"),
-                }
-
-                // TODO 重连时间配置化
-                time::sleep(Duration::from_secs(30)).await;
-            }
-        });
-
-        self.handle = Some(handle);
-
-        for group in self.groups.write().await.iter_mut() {
-            let read_tx = self.read_tx.as_ref().unwrap().clone();
-            group.start(read_tx, self.err.clone());
-        }
+        self.event_loop(stop_signal_rx, read_rx, write_rx).await;
 
         Ok(())
     }
 
-    async fn event_loop(conf: CreateUpdateModbusReq) {
-        tokio::spawn(async move {
+    async fn event_loop(
+        &mut self,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut read_rx: mpsc::Receiver<Uuid>,
+        mut write_rx: mpsc::Receiver<WritePointEvent>,
+    ) {
+        let conf = self.conf.clone();
+        let interval = self.conf.interval;
+        let groups = self.groups.clone();
+        let rtt = self.rtt.clone();
+        let read_tx = self.read_tx.as_ref().unwrap().clone();
+        let handle = tokio::spawn(async move {
             loop {
-                match Modbus::get_context(&conf).await {
-                    Ok((mut ctx, interval)) => {
-                        err.store(false, Ordering::SeqCst);
-                        Modbus::event_loop(stop_signal_rx);
-                    }
-                    Err(_) => debug!("modbus尝试连接失败"),
-                }
+                match Modbus::connect(&conf).await {
+                    Ok(mut ctx) => {
+                        for group in groups.write().await.iter_mut() {
+                            group.start(read_tx.clone());
+                        }
+                        loop {
+                            select! {
+                                biased;
+                                _ = stop_signal_rx.recv() => {
+                                    return (stop_signal_rx, write_rx, read_rx);
+                                }
 
-                // TODO 重连时间配置化
-                time::sleep(Duration::from_secs(30)).await;
+                                wpe = write_rx.recv() => {
+                                    if let Some(wpe) = wpe {
+                                        if write_value(&mut ctx, wpe).await.is_err() {
+                                            break
+                                        }
+                                    }
+                                    if interval > 0 {
+                                        time::sleep(Duration::from_millis(interval)).await;
+                                    }
+                                }
+
+                                group_id = read_rx.recv() => {
+                                   if let Some(group_id) = group_id {
+                                        match read_group_points(&mut ctx, &groups, group_id, interval).await {
+                                            Ok(last_rtt) => match last_rtt {
+                                                Some(last_rtt) => rtt.store(last_rtt, Ordering::SeqCst),
+                                                None => {}
+                                            }
+                                            Err(_) => break,
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        debug!("{}", e);
+                        for group in groups.write().await.iter_mut() {
+                            group.stop().await;
+                        }
+                        time::sleep(Duration::from_secs(5)).await;
+                    }
+                }
             }
         });
-        loop {
-            select! {
-                biased;
-                _ = stop_signal_rx.recv() => {
-                    return;
-                }
-
-                wpe = write_rx.recv() => {
-                    if let Some(wpe) = wpe {
-                        match write_value(&mut ctx, wpe).await {
-                            Ok(_) => {}
-                            // TODO 识别连接断开
-                            Err(_) => {}
-                        }
-                    }
-                    if interval > 0 {
-                        time::sleep(Duration::from_millis(interval)).await;
-                    }
-                }
-
-                group_id = read_rx.recv() => {
-                   if let Some(group_id) = group_id {
-                        if let Err(_) = read_group_points(&mut ctx, &groups, group_id, interval, &rtt).await {
-                           err.store(true, Ordering::SeqCst);
-                           break
-                        }
-                    }
-                }
-            }
-        }
+        self.handle = Some(handle);
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
@@ -322,7 +319,7 @@ impl Modbus {
         Ok(())
     }
 
-    async fn get_context(conf: &CreateUpdateModbusReq) -> HaliaResult<(Context, u64)> {
+    async fn connect(conf: &CreateUpdateModbusReq) -> HaliaResult<Context> {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
                 let socket_addr: SocketAddr =
@@ -331,8 +328,8 @@ impl Modbus {
                         .unwrap();
                 let transport = TcpStream::connect(socket_addr).await?;
                 match conf.encode.as_ref().unwrap() {
-                    Encode::Tcp => Ok((tcp::attach(transport), conf.interval)),
-                    Encode::RtuOverTcp => Ok((rtu::attach(transport), conf.interval)),
+                    Encode::Tcp => Ok(tcp::attach(transport)),
+                    Encode::RtuOverTcp => Ok(rtu::attach(transport)),
                 }
             }
             types::devices::modbus::LinkType::Serial => {
@@ -359,7 +356,7 @@ impl Modbus {
                     _ => unreachable!(),
                 };
 
-                Ok((rtu::attach(port), conf.interval))
+                Ok(rtu::attach(port))
             }
         }
     }
@@ -391,7 +388,7 @@ impl Modbus {
             Ok(mut group) => {
                 if self.stop_signal_tx.is_some() {
                     let read_tx = self.read_tx.as_ref().unwrap().clone();
-                    group.start(read_tx, self.err.clone());
+                    group.start(read_tx);
                 }
                 self.groups.write().await.push(group);
 
@@ -441,7 +438,7 @@ impl Modbus {
                 Ok(restart) => {
                     if restart && self.stop_signal_tx.is_some() {
                         group.stop().await;
-                        group.start(self.read_tx.as_ref().unwrap().clone(), self.err.clone());
+                        group.start(self.read_tx.as_ref().unwrap().clone());
                     }
                     Ok(())
                 }
@@ -669,20 +666,20 @@ async fn read_group_points(
     groups: &Arc<RwLock<Vec<Group>>>,
     group_id: Uuid,
     interval: u64,
-    rtt: &Arc<AtomicU16>,
-) -> HaliaResult<()> {
+) -> HaliaResult<Option<u16>> {
     if let Some(group) = groups
         .write()
         .await
         .iter_mut()
         .find(|group| group.id == group_id)
     {
-        if let Err(e) = group.read_points_value(ctx, interval, rtt).await {
-            return Err(e);
+        match group.read_points_value(ctx, interval).await {
+            Ok(rtt) => return Ok(Some(rtt)),
+            Err(e) => return Err(e),
         }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 pub struct WritePointEvent {
