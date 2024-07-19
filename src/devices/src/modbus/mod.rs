@@ -213,36 +213,7 @@ impl Modbus {
                 match Modbus::get_context(&conf).await {
                     Ok((mut ctx, interval)) => {
                         err.store(false, Ordering::SeqCst);
-                        loop {
-                            select! {
-                                biased;
-                                _ = stop_signal_rx.recv() => {
-                                    return (stop_signal_rx, write_rx, read_rx);
-                                }
-
-                                wpe = write_rx.recv() => {
-                                    if let Some(wpe) = wpe {
-                                        match write_value(&mut ctx, wpe).await {
-                                            Ok(_) => {}
-                                            // TODO 识别连接断开
-                                            Err(_) => {}
-                                        }
-                                    }
-                                    if interval > 0 {
-                                        time::sleep(Duration::from_millis(interval)).await;
-                                    }
-                                }
-
-                                group_id = read_rx.recv() => {
-                                   if let Some(group_id) = group_id {
-                                        if let Err(_) = read_group_points(&mut ctx, &groups, group_id, interval, &rtt).await {
-                                           err.store(true, Ordering::SeqCst);
-                                           break
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        Modbus::event_loop(stop_signal_rx);
                     }
                     Err(_) => debug!("modbus尝试连接失败"),
                 }
@@ -260,6 +231,53 @@ impl Modbus {
         }
 
         Ok(())
+    }
+
+    async fn event_loop(conf: CreateUpdateModbusReq) {
+        tokio::spawn(async move {
+            loop {
+                match Modbus::get_context(&conf).await {
+                    Ok((mut ctx, interval)) => {
+                        err.store(false, Ordering::SeqCst);
+                        Modbus::event_loop(stop_signal_rx);
+                    }
+                    Err(_) => debug!("modbus尝试连接失败"),
+                }
+
+                // TODO 重连时间配置化
+                time::sleep(Duration::from_secs(30)).await;
+            }
+        });
+        loop {
+            select! {
+                biased;
+                _ = stop_signal_rx.recv() => {
+                    return;
+                }
+
+                wpe = write_rx.recv() => {
+                    if let Some(wpe) = wpe {
+                        match write_value(&mut ctx, wpe).await {
+                            Ok(_) => {}
+                            // TODO 识别连接断开
+                            Err(_) => {}
+                        }
+                    }
+                    if interval > 0 {
+                        time::sleep(Duration::from_millis(interval)).await;
+                    }
+                }
+
+                group_id = read_rx.recv() => {
+                   if let Some(group_id) = group_id {
+                        if let Err(_) = read_group_points(&mut ctx, &groups, group_id, interval, &rtt).await {
+                           err.store(true, Ordering::SeqCst);
+                           break
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {

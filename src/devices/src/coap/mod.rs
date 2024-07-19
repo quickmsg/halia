@@ -16,8 +16,8 @@ use types::devices::{
 use uuid::Uuid;
 
 pub const TYPE: &str = "coap";
-mod group_api;
 mod group;
+mod group_api;
 pub mod manager;
 mod sink;
 
