@@ -188,7 +188,16 @@ impl Modbus {
 
         self.conf = req;
         if restart && self.stop_signal_tx.is_some() {
-            self.restart().await;
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
+
+            let (stop_signal_rx, write_rx, read_rx) = self.handle.take().unwrap().await.unwrap();
+
+            self.event_loop(stop_signal_rx, read_rx, write_rx).await;
         }
 
         Ok(())
@@ -301,13 +310,6 @@ impl Modbus {
         self.handle = None;
 
         Ok(())
-    }
-
-    async fn restart(&mut self) {
-        let (mut stop_signal_rx, mut write_rx, mut read_rx) =
-            self.handle.take().unwrap().await.unwrap();
-
-        // TODO
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
