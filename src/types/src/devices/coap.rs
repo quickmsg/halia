@@ -56,7 +56,7 @@ pub struct SearchGroupAPIsItemResp {
     pub conf: CreateUpdateGroupAPIReq,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSinkReq {}
 
 #[derive(Serialize)]

@@ -3,13 +3,15 @@ use common::{
     persistence::{self, Status},
 };
 use group::Group;
+use message::MessageBatch;
 use protocol::coap::client::UdpCoAPClient;
 use serde_json::json;
 use std::{str::FromStr, sync::Arc};
+use tokio::sync::broadcast;
 use types::devices::{
     coap::{
-        CreateUpdateCoapReq, CreateUpdateGroupAPIReq, CreateUpdateGroupReq, SearchGroupAPIsResp,
-        SearchGroupsResp,
+        CreateUpdateCoapReq, CreateUpdateGroupAPIReq, CreateUpdateGroupReq, CreateUpdateSinkReq,
+        SearchGroupAPIsResp, SearchGroupsResp, SearchSinksResp,
     },
     SearchDevicesItemResp,
 };
@@ -245,5 +247,28 @@ impl Coap {
             Some(group) => group.delete_apis(&self.id, api_ids).await,
             None => Err(HaliaError::NotFound),
         }
+    }
+
+    pub async fn subscribe(
+        &self,
+        group_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        todo!()
+    }
+
+    pub async fn unsubscribe(&self, group_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn create_sink(
+        &mut self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn search_sinks(&mut self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
+        todo!()
     }
 }
