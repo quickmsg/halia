@@ -1,4 +1,3 @@
-use anyhow::{bail, Result};
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
@@ -43,14 +42,14 @@ impl Group {
         device_id: &Uuid,
         group_id: Option<Uuid>,
         req: CreateUpdateGroupReq,
-    ) -> Result<Self> {
+    ) -> HaliaResult<Self> {
         let (group_id, new) = match group_id {
             Some(group_id) => (group_id, false),
             None => (Uuid::new_v4(), true),
         };
 
         if req.interval == 0 {
-            bail!("group interval must > 0")
+            return Err(HaliaError::ConfErr);
         }
 
         if new {
@@ -238,7 +237,7 @@ impl Group {
         ctx: &mut Context,
         interval: u64,
         rtt: &Arc<AtomicU16>,
-    ) -> Result<()> {
+    ) -> HaliaResult<()> {
         let mut msg = Message::default();
         for point in self.points.iter_mut() {
             let now = Instant::now();
@@ -246,7 +245,7 @@ impl Group {
                 Ok(data) => {
                     msg.add(point.conf.name.clone(), data);
                 }
-                Err(e) => bail!("连接断开"),
+                Err(e) => return Err(HaliaError::DeviceDisconnect),
             }
             rtt.store(now.elapsed().as_millis() as u16, Ordering::SeqCst);
             time::sleep(Duration::from_millis(interval)).await;

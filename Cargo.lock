@@ -890,7 +890,6 @@ dependencies = [
 name = "devices"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "byteorder",
  "bytes",
  "common",

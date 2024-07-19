@@ -1,4 +1,3 @@
-use anyhow::{bail, Result};
 use common::{
     error::{HaliaError, HaliaResult},
     persistence::{self, Status},
@@ -725,7 +724,7 @@ async fn read_group_points(
     group_id: Uuid,
     interval: u64,
     rtt: &Arc<AtomicU16>,
-) -> Result<()> {
+) -> HaliaResult<()> {
     if let Some(group) = groups
         .write()
         .await
@@ -781,7 +780,7 @@ impl WritePointEvent {
     }
 }
 
-async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
+async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()> {
     ctx.set_slave(wpe.slave);
     match wpe.area {
         Area::Coils => match wpe.data_type {
@@ -793,9 +792,12 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
                         return Ok(());
                     }
                 },
-                Err(e) => return Err(e.into()),
+                Err(e) => {
+                    debug!("{}", e);
+                    return Err(HaliaError::ConfErr);
+                }
             },
-            _ => bail!("not support"),
+            _ => return Err(HaliaError::ConfErr),
         },
         Area::HoldingRegisters => match wpe.data_type {
             DataType::Bool(pos) => {
@@ -812,7 +814,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
                             return Ok(());
                         }
                     },
-                    Err(e) => bail!("{}", e),
+                    Err(e) => return Err(HaliaError::DeviceDisconnect),
                 }
             }
             DataType::Int8(endian) | DataType::Uint8(endian) => {
@@ -831,7 +833,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
                             return Ok(());
                         }
                     },
-                    Err(e) => bail!("{}", e),
+                    Err(e) => return Err(HaliaError::DeviceDisconnect),
                 }
             }
             DataType::Int16(_) | DataType::Uint16(_) => {
@@ -843,7 +845,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
                             return Ok(());
                         }
                     },
-                    Err(e) => bail!("{}", e),
+                    Err(e) => return Err(HaliaError::DeviceDisconnect),
                 }
             }
             DataType::Int32(_, _)
@@ -862,10 +864,10 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> Result<()> {
                             return Ok(());
                         }
                     },
-                    Err(e) => bail!("{}", e),
+                    Err(e) => return Err(HaliaError::DeviceDisconnect),
                 }
             }
         },
-        _ => bail!("not support area"),
+        _ => return Err(HaliaError::ConfErr),
     }
 }

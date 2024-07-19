@@ -8,6 +8,7 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
+    task::JoinHandle,
     time,
 };
 use tracing::{debug, error};
@@ -19,7 +20,6 @@ use uuid::Uuid;
 
 use super::resource::Resource;
 
-#[derive(Debug)]
 pub struct Group {
     pub id: Uuid,
     pub conf: CreateUpdateGroupReq,
@@ -29,6 +29,8 @@ pub struct Group {
     pub resources: Arc<RwLock<Vec<Resource>>>,
 
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
+
+    handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<UdpCoAPClient>)>>,
 }
 
 impl Group {
@@ -43,7 +45,7 @@ impl Group {
         };
 
         if req.interval == 0 {
-            // bail!("group interval must > 0")
+            return Err(HaliaError::ConfErr);
         }
 
         if new {
@@ -62,6 +64,7 @@ impl Group {
             ref_cnt: 0,
             stop_signal_tx: None,
             resources: Arc::new(RwLock::new(vec![])),
+            handle: None,
         })
     }
 
@@ -92,36 +95,48 @@ impl Group {
         }
     }
 
-    pub fn start(&mut self, client: Arc<UdpCoAPClient>) {
-        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+    pub fn start(&mut self, coap_client: Arc<UdpCoAPClient>) {
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        let interval = self.conf.interval;
+        self.event_loop(coap_client, stop_signal_rx);
+    }
+
+    fn event_loop(
+        &mut self,
+        coap_client: Arc<UdpCoAPClient>,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+    ) {
+        let mut interval = time::interval(Duration::from_millis(self.conf.interval));
         let resources = self.resources.clone();
-        tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_millis(interval));
+        let handle = tokio::spawn(async move {
             loop {
                 select! {
-                    biased;
                     _ = stop_signal_rx.recv() => {
-                        debug!("group stop");
-                        return
+                        return (stop_signal_rx, coap_client);
                     }
 
-
-                _ = interval.tick() => {
-                    for resource in resources.read().await.iter() {
-                        match client.send(resource.request.clone()).await {
-                            Ok(resp) => {
-                                debug!("{:?}", resp,)
-                            }
-                            Err(e) => error!("{}", e),
-                        }
+                    _ = interval.tick() => {
+                        Group::fetch_resources(&coap_client, &resources).await;
                     }
-                }
                 }
             }
         });
+        self.handle = Some(handle);
+    }
+
+    async fn fetch_resources(
+        coap_client: &Arc<UdpCoAPClient>,
+        resources: &Arc<RwLock<Vec<Resource>>>,
+    ) {
+        for resource in resources.read().await.iter() {
+            match coap_client.send(resource.request.clone()).await {
+                Ok(resp) => {
+                    debug!("{:?}", resp,)
+                }
+                Err(e) => error!("{}", e),
+            }
+        }
     }
 
     pub async fn stop(&mut self) {
@@ -145,7 +160,12 @@ impl Group {
             restart = true;
         }
         self.conf = req;
-        // restart
+
+        if restart && self.stop_signal_tx.is_some() {
+            self.stop_signal_tx.as_ref().unwrap().send(()).await;
+            let (stop_signal_rx, coap_client) = self.handle.take().unwrap().await.unwrap();
+            self.event_loop(coap_client, stop_signal_rx);
+        }
 
         Ok(())
     }
