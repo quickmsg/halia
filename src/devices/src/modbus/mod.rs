@@ -14,7 +14,7 @@ use std::{
     net::SocketAddr,
     str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicU16, Ordering},
+        atomic::{AtomicU16, Ordering},
         Arc,
     },
     time::Duration,
@@ -47,7 +47,7 @@ mod sink;
 #[derive(Debug)]
 pub struct Modbus {
     pub id: Uuid,
-    err: Arc<AtomicBool>, // true:错误 false:正常
+    err: Option<String>,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
@@ -87,7 +87,7 @@ impl Modbus {
 
         Ok(Modbus {
             id: device_id,
-            err: Arc::new(AtomicBool::new(false)),
+            err: None,
             rtt: Arc::new(AtomicU16::new(9999)),
             conf: req,
             groups: Arc::new(RwLock::new(vec![])),
@@ -147,7 +147,7 @@ impl Modbus {
             r#type: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.stop_signal_tx.is_some(),
-            err: self.err.load(Ordering::SeqCst),
+            err: self.err.is_some(),
             conf: json!(&self.conf),
         }
     }
@@ -534,7 +534,7 @@ impl Modbus {
         if self.stop_signal_tx.is_none() {
             return Err(HaliaError::DeviceStoped);
         }
-        if self.err.load(Ordering::SeqCst) == true {
+        if self.err.is_some() {
             return Err(HaliaError::DeviceDisconnect);
         }
 
@@ -606,11 +606,9 @@ impl Modbus {
 
     pub async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
         let mut data = vec![];
-        let mut i = 0;
         for sink in self.sinks.iter().rev().skip((page - 1) * size) {
             data.push(sink.search());
-            i += 1;
-            if i == size {
+            if data.len() == size {
                 break;
             }
         }

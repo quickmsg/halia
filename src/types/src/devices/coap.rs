@@ -57,7 +57,19 @@ pub struct SearchGroupAPIsItemResp {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateSinkReq {}
+pub struct CreateUpdateSinkReq {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+
+    pub method: String,
+    pub path: String,
+    pub data: Option<Vec<u8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queries: Option<Vec<(String, String)>>,
+    pub domain: String,
+    pub token: Option<Vec<u8>>,
+}
 
 #[derive(Serialize)]
 pub struct SearchSinksResp {

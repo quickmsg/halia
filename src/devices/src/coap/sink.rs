@@ -1,6 +1,12 @@
+use std::sync::Arc;
+
 use common::{error::HaliaResult, persistence};
-use futures::channel::mpsc;
 use message::MessageBatch;
+use protocol::coap::{
+    client::UdpCoAPClient,
+    request::{Method, RequestBuilder},
+};
+use tokio::{select, sync::mpsc};
 use types::devices::coap::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
@@ -9,6 +15,9 @@ pub struct Sink {
     pub conf: CreateUpdateSinkReq,
 
     ref_cnt: usize,
+
+    stop_signal_tx: Option<mpsc::Sender<()>>,
+    publish_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 impl Sink {
@@ -31,7 +40,13 @@ impl Sink {
             .await?;
         }
 
-        todo!()
+        Ok(Self {
+            id: sink_id,
+            conf: req,
+            ref_cnt: 0,
+            stop_signal_tx: None,
+            publish_tx: None,
+        })
     }
 
     pub fn search(&self) -> SearchSinksItemResp {
@@ -59,6 +74,46 @@ impl Sink {
         todo!()
     }
 
+    pub fn start(&mut self, coap_client: Arc<UdpCoAPClient>) {
+        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+
+        let (publish_tx, mut publish_rx) = mpsc::channel(16);
+        self.publish_tx = Some(publish_tx);
+
+        let method = match &self.conf.method.as_str() {
+            &"POST" => Method::Post,
+            &"PUT" => Method::Put,
+            &"DELETE" => Method::Delete,
+            _ => unreachable!(),
+        };
+
+        let request = RequestBuilder::new(&self.conf.path, method)
+            .domain(self.conf.domain.clone())
+            .build();
+
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
+
+                    mb = publish_rx.recv() => {
+                        if let Some(mb) = mb {
+                            match coap_client.send(request.clone()).await {
+                                Ok(_) => todo!(),
+                                Err(_) => todo!(),
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    pub fn stop(&mut self) {}
+
     pub fn publish(&mut self) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.ref_cnt += 1;
         todo!()
@@ -67,8 +122,4 @@ impl Sink {
     pub async fn unpublish(&mut self) {
         self.ref_cnt -= 1;
     }
-
-    pub fn start(&mut self) {}
-
-    pub fn stop(&mut self) {}
 }

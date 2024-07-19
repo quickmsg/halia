@@ -31,7 +31,6 @@ impl RuleManager {
         }
     }
 
-    // TODO
     pub async fn search(&self, page: usize, size: usize) -> HaliaResult<SearchRulesResp> {
         let mut data = vec![];
         for rule in self.rules.read().await.iter().rev().skip((page - 1) * size) {

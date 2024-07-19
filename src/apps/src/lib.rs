@@ -24,7 +24,7 @@ impl AppManager {
 
     pub async fn search(&self, page: usize, size: usize) -> HaliaResult<SearchAppsResp> {
         let mut data = vec![];
-        for (r#type, app_id) in self.apps.read().await.iter().rev() {
+        for (r#type, app_id) in self.apps.read().await.iter().rev().skip((page - 1) * size) {
             match r#type {
                 &mqtt_client::TYPE => match GLOBAL_MQTT_CLIENT_MANAGER.search(app_id) {
                     Ok(info) => {
@@ -33,6 +33,9 @@ impl AppManager {
                     Err(e) => return Err(e),
                 },
                 _ => {}
+            }
+            if data.len() == size {
+                break;
             }
         }
 

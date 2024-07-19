@@ -6,8 +6,9 @@ use group::Group;
 use message::MessageBatch;
 use protocol::coap::client::UdpCoAPClient;
 use serde_json::json;
+use sink::Sink;
 use std::{str::FromStr, sync::Arc};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use types::devices::{
     coap::{
         CreateUpdateCoapReq, CreateUpdateGroupAPIReq, CreateUpdateGroupReq, CreateUpdateSinkReq,
@@ -28,6 +29,7 @@ pub struct Coap {
     conf: CreateUpdateCoapReq,
     client: Option<Arc<UdpCoAPClient>>,
     groups: Vec<Group>,
+    sinks: Vec<Sink>,
 }
 
 impl Coap {
@@ -51,6 +53,7 @@ impl Coap {
             conf: req,
             client: None,
             groups: vec![],
+            sinks: vec![],
         })
     }
 
@@ -265,10 +268,50 @@ impl Coap {
         sink_id: Option<Uuid>,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
-        todo!()
+        match Sink::new(&self.id, sink_id, req).await {
+            Ok(sink) => Ok(self.sinks.push(sink)),
+            Err(e) => Err(e),
+        }
     }
 
-    pub async fn search_sinks(&mut self, page: usize, size: usize) -> HaliaResult<SearchSinksResp> {
+    pub async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
+        let mut data = vec![];
+        for sink in self.sinks.iter().rev().skip((page - 1) * size) {
+            data.push(sink.search());
+            if data.len() == size {
+                break;
+            }
+        }
+
+        SearchSinksResp {
+            total: self.sinks.len(),
+            data,
+        }
+    }
+
+    pub async fn update_sink(
+        &mut self,
+        sink_id: Uuid,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => sink.update(&self.id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => {
+                sink.delete(&self.id).await?;
+                self.sinks.retain(|sink| sink.id != sink_id);
+                Ok(())
+            }
+            None => todo!(),
+        }
+    }
+
+    pub async fn publish(&self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         todo!()
     }
 }
