@@ -31,7 +31,7 @@ pub struct SearchGroupsItemResp {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateGroupResourceReq {
+pub struct CreateUpdateGroupAPIReq {
     pub name: String,
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -45,13 +45,28 @@ pub struct CreateUpdateGroupResourceReq {
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupResourcesResp {
+pub struct SearchGroupAPIsResp {
     pub total: usize,
-    pub data: Vec<SearchGroupResourcesItemResp>,
+    pub data: Vec<SearchGroupAPIsItemResp>,
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupResourcesItemResp {
+pub struct SearchGroupAPIsItemResp {
     pub id: Uuid,
-    pub conf: CreateUpdateGroupResourceReq,
+    pub conf: CreateUpdateGroupAPIReq,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct CreateUpdateSinkReq {}
+
+#[derive(Serialize)]
+pub struct SearchSinksResp {
+    pub total: usize,
+    pub data: Vec<SearchSinksItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSinksItemResp {
+    pub id: Uuid,
+    pub conf: CreateUpdateSinkReq,
 }

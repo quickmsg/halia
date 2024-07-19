@@ -7,8 +7,7 @@ use tokio::sync::{broadcast, mpsc};
 use types::devices::{
     modbus::{
         CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
-        CreateUpdateSinkPointReq, CreateUpdateSinkReq, SearchGroupPointsResp, SearchGroupsResp,
-        SearchSinkPointsResp, SearchSinksResp,
+        CreateUpdateSinkReq, SearchGroupPointsResp, SearchGroupsResp, SearchSinksResp,
     },
     SearchDevicesItemResp,
 };
@@ -251,57 +250,6 @@ impl Manager {
     pub async fn delete_sink(&self, device_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.delete_sink(sink_id).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn create_sink_point(
-        &self,
-        device_id: Uuid,
-        sink_id: Uuid,
-        point_id: Option<Uuid>,
-        req: CreateUpdateSinkPointReq,
-    ) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_sink_point(sink_id, point_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn search_sink_points(
-        &self,
-        device_id: Uuid,
-        sink_id: Uuid,
-        page: usize,
-        size: usize,
-    ) -> HaliaResult<SearchSinkPointsResp> {
-        match self.devices.get(&device_id) {
-            Some(device) => device.search_sink_points(sink_id, page, size).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn update_sink_point(
-        &self,
-        device_id: Uuid,
-        sink_id: Uuid,
-        point_id: Uuid,
-        req: CreateUpdateSinkPointReq,
-    ) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_sink_point(sink_id, point_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn delete_sink_points(
-        &self,
-        device_id: Uuid,
-        sink_id: Uuid,
-        point_ids: Vec<Uuid>,
-    ) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.delete_sink_points(sink_id, point_ids).await,
             None => Err(HaliaError::NotFound),
         }
     }

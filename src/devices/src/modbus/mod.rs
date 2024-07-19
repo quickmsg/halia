@@ -32,8 +32,7 @@ use types::devices::{
     datatype::{DataType, Endian},
     modbus::{
         Area, CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
-        CreateUpdateSinkPointReq, CreateUpdateSinkReq, Encode, SearchGroupPointsResp,
-        SearchGroupsResp, SearchSinkPointsResp, SearchSinksResp,
+        CreateUpdateSinkReq, Encode, SearchGroupPointsResp, SearchGroupsResp, SearchSinksResp,
     },
     SearchDevicesItemResp,
 };
@@ -44,7 +43,6 @@ mod group;
 mod group_point;
 pub mod manager;
 mod sink;
-mod sink_point;
 
 #[derive(Debug)]
 pub struct Modbus {
@@ -129,10 +127,6 @@ impl Modbus {
                     let sink_id = Uuid::from_str(items[0]).unwrap();
                     let req: CreateUpdateSinkReq = serde_json::from_str(items[1])?;
                     self.create_sink(Some(sink_id), req).await?;
-                }
-
-                for sink in self.sinks.iter_mut() {
-                    sink.recover(&self.id).await?;
                 }
             }
             Err(e) => return Err(e.into()),
@@ -628,72 +622,6 @@ impl Modbus {
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn create_sink_point(
-        &mut self,
-        sink_id: Uuid,
-        point_id: Option<Uuid>,
-        req: CreateUpdateSinkPointReq,
-    ) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => {
-                sink.create_point(&self.id, point_id, req).await?;
-                if sink.stop_signal_tx.is_some() {
-                    sink.stop().await;
-                    sink.start(self.write_tx.as_ref().unwrap().clone());
-                }
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn search_sink_points(
-        &self,
-        sink_id: Uuid,
-        page: usize,
-        size: usize,
-    ) -> HaliaResult<SearchSinkPointsResp> {
-        match self.sinks.iter().find(|sink| sink.id == sink_id) {
-            Some(sink) => Ok(sink.search_points(page, size).await),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn update_sink_point(
-        &mut self,
-        sink_id: Uuid,
-        point_id: Uuid,
-        req: CreateUpdateSinkPointReq,
-    ) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => match sink.update_point(point_id, req).await {
-                Ok(restart) => {
-                    if restart && self.stop_signal_tx.is_some() {
-                        sink.stop().await;
-                        sink.start(self.write_tx.as_ref().unwrap().clone());
-                    }
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            },
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn delete_sink_points(
-        &mut self,
-        sink_id: Uuid,
-        point_ids: Vec<Uuid>,
-    ) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => match sink.delete_points(&self.id, point_ids).await {
-                Ok(_) => Ok(()),
-                Err(e) => Err(e),
-            },
             None => Err(HaliaError::NotFound),
         }
     }

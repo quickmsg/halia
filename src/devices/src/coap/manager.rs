@@ -4,8 +4,8 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use types::devices::{
     coap::{
-        CreateUpdateCoapReq, CreateUpdateGroupReq, CreateUpdateGroupResourceReq,
-        SearchGroupResourcesResp, SearchGroupsResp,
+        CreateUpdateCoapReq, CreateUpdateGroupAPIReq, CreateUpdateGroupReq, SearchGroupAPIsResp,
+        SearchGroupsResp,
     },
     SearchDevicesItemResp,
 };
@@ -127,61 +127,53 @@ impl Manager {
         }
     }
 
-    pub async fn create_group_resource(
+    pub async fn create_group_api(
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        resource_id: Option<Uuid>,
-        req: CreateUpdateGroupResourceReq,
+        api_id: Option<Uuid>,
+        req: CreateUpdateGroupAPIReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => {
-                device
-                    .create_group_resource(group_id, resource_id, req)
-                    .await
-            }
+            Some(mut device) => device.create_group_api(group_id, api_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn search_group_resources(
+    pub async fn search_group_apis(
         &self,
         device_id: Uuid,
         group_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchGroupResourcesResp> {
+    ) -> HaliaResult<SearchGroupAPIsResp> {
         match self.devices.get(&device_id) {
-            Some(device) => device.search_group_resources(group_id, page, size).await,
+            Some(device) => device.search_group_apis(group_id, page, size).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn update_group_resource(
+    pub async fn update_group_api(
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        resource_id: Uuid,
-        req: CreateUpdateGroupResourceReq,
+        api_id: Uuid,
+        req: CreateUpdateGroupAPIReq,
     ) -> HaliaResult<()> {
         match self.devices.get(&device_id) {
-            Some(device) => {
-                device
-                    .update_group_resource(group_id, resource_id, req)
-                    .await
-            }
+            Some(device) => device.update_group_api(group_id, api_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn delete_group_resources(
+    pub async fn delete_group_apis(
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        resource_ids: Vec<Uuid>,
+        api_ids: Vec<Uuid>,
     ) -> HaliaResult<()> {
         match self.devices.get(&device_id) {
-            Some(device) => device.delete_group_resources(group_id, resource_ids).await,
+            Some(device) => device.delete_group_apis(group_id, api_ids).await,
             None => Err(HaliaError::NotFound),
         }
     }

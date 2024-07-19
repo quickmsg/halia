@@ -13,12 +13,11 @@ use tokio::{
 };
 use tracing::{debug, error};
 use types::devices::coap::{
-    CreateUpdateGroupReq, CreateUpdateGroupResourceReq, SearchGroupResourcesResp,
-    SearchGroupsItemResp,
+    CreateUpdateGroupAPIReq, CreateUpdateGroupReq, SearchGroupAPIsResp, SearchGroupsItemResp,
 };
 use uuid::Uuid;
 
-use super::resource::Resource;
+use super::group_api::API;
 
 pub struct Group {
     pub id: Uuid,
@@ -26,7 +25,7 @@ pub struct Group {
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
 
-    pub resources: Arc<RwLock<Vec<Resource>>>,
+    pub apis: Arc<RwLock<Vec<API>>>,
 
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
 
@@ -63,13 +62,13 @@ impl Group {
             tx: None,
             ref_cnt: 0,
             stop_signal_tx: None,
-            resources: Arc::new(RwLock::new(vec![])),
+            apis: Arc::new(RwLock::new(vec![])),
             handle: None,
         })
     }
 
     pub async fn recover(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        match persistence::devices::coap::read_group_resources(device_id, &self.id).await {
+        match persistence::devices::coap::read_group_apis(device_id, &self.id).await {
             Ok(datas) => {
                 for data in datas {
                     if data.len() == 0 {
@@ -77,10 +76,9 @@ impl Group {
                     }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     assert_eq!(items.len(), 2);
-                    let resource_id = Uuid::from_str(items[0]).unwrap();
-                    let req: CreateUpdateGroupResourceReq = serde_json::from_str(items[1])?;
-                    self.create_resource(device_id, Some(resource_id), req)
-                        .await?;
+                    let api_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateGroupAPIReq = serde_json::from_str(items[1])?;
+                    self.create_api(device_id, Some(api_id), req).await?;
                 }
                 Ok(())
             }
@@ -108,7 +106,7 @@ impl Group {
         mut stop_signal_rx: mpsc::Receiver<()>,
     ) {
         let mut interval = time::interval(Duration::from_millis(self.conf.interval));
-        let resources = self.resources.clone();
+        let apis = self.apis.clone();
         let handle = tokio::spawn(async move {
             loop {
                 select! {
@@ -117,7 +115,7 @@ impl Group {
                     }
 
                     _ = interval.tick() => {
-                        Group::fetch_resources(&coap_client, &resources).await;
+                        Group::fetch_apis(&coap_client, &apis).await;
                     }
                 }
             }
@@ -125,12 +123,9 @@ impl Group {
         self.handle = Some(handle);
     }
 
-    async fn fetch_resources(
-        coap_client: &Arc<UdpCoAPClient>,
-        resources: &Arc<RwLock<Vec<Resource>>>,
-    ) {
-        for resource in resources.read().await.iter() {
-            match coap_client.send(resource.request.clone()).await {
+    async fn fetch_apis(coap_client: &Arc<UdpCoAPClient>, apis: &Arc<RwLock<Vec<API>>>) {
+        for api in apis.read().await.iter() {
+            match coap_client.send(api.request.clone()).await {
                 Ok(resp) => {
                     debug!("{:?}", resp,)
                 }
@@ -199,78 +194,61 @@ impl Group {
         }
     }
 
-    pub async fn create_resource(
+    pub async fn create_api(
         &mut self,
         device_id: &Uuid,
-        resource_id: Option<Uuid>,
-        req: CreateUpdateGroupResourceReq,
+        api_id: Option<Uuid>,
+        req: CreateUpdateGroupAPIReq,
     ) -> HaliaResult<()> {
-        match Resource::new(device_id, &self.id, resource_id, req).await {
-            Ok(resource) => Ok(self.resources.write().await.push(resource)),
+        match API::new(device_id, &self.id, api_id, req).await {
+            Ok(api) => Ok(self.apis.write().await.push(api)),
             Err(e) => Err(e),
         }
     }
 
-    pub async fn search_resources(&self, page: usize, size: usize) -> SearchGroupResourcesResp {
+    pub async fn search_apis(&self, page: usize, size: usize) -> SearchGroupAPIsResp {
         let mut data = vec![];
-        for resource in self
-            .resources
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip((page - 1) * size)
-        {
-            data.push(resource.search());
+        for api in self.apis.read().await.iter().rev().skip((page - 1) * size) {
+            data.push(api.search());
             if data.len() == size {
                 break;
             }
         }
 
-        SearchGroupResourcesResp {
-            total: self.resources.read().await.len(),
+        SearchGroupAPIsResp {
+            total: self.apis.read().await.len(),
             data,
         }
     }
 
-    pub async fn update_resource(
+    pub async fn update_api(
         &self,
         device_id: &Uuid,
-        resource_id: Uuid,
-        req: CreateUpdateGroupResourceReq,
+        api_id: Uuid,
+        req: CreateUpdateGroupAPIReq,
     ) -> HaliaResult<()> {
         match self
-            .resources
+            .apis
             .write()
             .await
             .iter_mut()
-            .find(|resource| resource.id == resource_id)
+            .find(|api| api.id == api_id)
         {
-            Some(resource) => resource.update(device_id, &self.id, req).await,
+            Some(api) => api.update(device_id, &self.id, req).await,
             None => return Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn delete_resources(
-        &self,
-        device_id: &Uuid,
-        resource_ids: Vec<Uuid>,
-    ) -> HaliaResult<()> {
-        for resource_id in &resource_ids {
-            if let Some(resource) = self
-                .resources
-                .read()
-                .await
-                .iter()
-                .find(|resource| resource.id == *resource_id)
-            {
-                resource.delete(device_id, &self.id).await?;
+    pub async fn delete_apis(&self, device_id: &Uuid, api_ids: Vec<Uuid>) -> HaliaResult<()> {
+        for api_id in &api_ids {
+            if let Some(api) = self.apis.read().await.iter().find(|api| api.id == *api_id) {
+                api.delete(device_id, &self.id).await?;
             }
         }
-        self.resources
+        self.apis
             .write()
             .await
-            .retain(|resource| !resource_ids.contains(&resource.id));
+            .retain(|api| !api_ids.contains(&api.id));
         Ok(())
     }
 }

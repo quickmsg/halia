@@ -6,8 +6,8 @@ use axum::{
 use common::error::HaliaError;
 use devices::coap::manager::GLOBAL_COAP_MANAGER;
 use types::devices::coap::{
-    CreateUpdateCoapReq, CreateUpdateGroupReq, CreateUpdateGroupResourceReq,
-    SearchGroupResourcesResp, SearchGroupsResp,
+    CreateUpdateCoapReq, CreateUpdateGroupAPIReq, CreateUpdateGroupReq, SearchGroupAPIsResp,
+    SearchGroupsResp,
 };
 use uuid::Uuid;
 
@@ -30,12 +30,12 @@ pub(crate) fn coap_routes() -> Router {
                     .route("/:group_id", put(update_group))
                     .route("/:group_id", routing::delete(delete_group))
                     .nest(
-                        "/:group_id/resource",
+                        "/:group_id/api",
                         Router::new()
-                            .route("/", post(create_group_resource))
-                            .route("/", get(search_group_resources))
-                            .route("/:resource_id", put(update_group_resource))
-                            .route("/", routing::delete(delete_group_resources)),
+                            .route("/", post(create_group_api))
+                            .route("/", get(search_group_apis))
+                            .route("/:api_id", put(update_group_api))
+                            .route("/", routing::delete(delete_group_apis)),
                     ),
             ), // .nest(
                //     "/sink",
@@ -134,12 +134,12 @@ async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>) -> AppRes
     }
 }
 
-async fn create_group_resource(
+async fn create_group_api(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupResourceReq>,
+    Json(req): Json<CreateUpdateGroupAPIReq>,
 ) -> AppResp<()> {
     match GLOBAL_COAP_MANAGER
-        .create_group_resource(device_id, group_id, None, req)
+        .create_group_api(device_id, group_id, None, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -147,12 +147,12 @@ async fn create_group_resource(
     }
 }
 
-async fn search_group_resources(
+async fn search_group_apis(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     pagination: Query<Pagination>,
-) -> AppResp<SearchGroupResourcesResp> {
+) -> AppResp<SearchGroupAPIsResp> {
     match GLOBAL_COAP_MANAGER
-        .search_group_resources(device_id, group_id, pagination.p, pagination.s)
+        .search_group_apis(device_id, group_id, pagination.p, pagination.s)
         .await
     {
         Ok(values) => AppResp::with_data(values),
@@ -160,12 +160,12 @@ async fn search_group_resources(
     }
 }
 
-async fn update_group_resource(
-    Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupResourceReq>,
+async fn update_group_api(
+    Path((device_id, group_id, api_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateGroupAPIReq>,
 ) -> AppResp<()> {
     match GLOBAL_COAP_MANAGER
-        .update_group_resource(device_id, group_id, point_id, req)
+        .update_group_api(device_id, group_id, api_id, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -173,11 +173,11 @@ async fn update_group_resource(
     }
 }
 
-pub async fn delete_group_resources(
+pub async fn delete_group_apis(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Query(query): Query<DeleteIdsQuery>,
 ) -> AppResp<()> {
-    let point_ids: Vec<Uuid> = match query
+    let api_ids: Vec<Uuid> = match query
         .ids
         .split(',')
         .map(|s| s.parse::<Uuid>().map_err(|_e| return HaliaError::ParseErr))
@@ -188,7 +188,7 @@ pub async fn delete_group_resources(
     };
 
     match GLOBAL_COAP_MANAGER
-        .delete_group_resources(device_id, group_id, point_ids)
+        .delete_group_apis(device_id, group_id, api_ids)
         .await
     {
         Ok(()) => AppResp::new(),

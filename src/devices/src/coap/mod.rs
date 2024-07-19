@@ -8,17 +8,17 @@ use serde_json::json;
 use std::{str::FromStr, sync::Arc};
 use types::devices::{
     coap::{
-        CreateUpdateCoapReq, CreateUpdateGroupReq, CreateUpdateGroupResourceReq,
-        SearchGroupResourcesResp, SearchGroupsResp,
+        CreateUpdateCoapReq, CreateUpdateGroupAPIReq, CreateUpdateGroupReq, SearchGroupAPIsResp,
+        SearchGroupsResp,
     },
     SearchDevicesItemResp,
 };
 use uuid::Uuid;
 
 pub const TYPE: &str = "coap";
+mod group_api;
 mod group;
 pub mod manager;
-mod resource;
 mod sink;
 
 pub struct Coap {
@@ -204,50 +204,46 @@ impl Coap {
         }
     }
 
-    pub async fn create_group_resource(
+    pub async fn create_group_api(
         &mut self,
         group_id: Uuid,
-        resource_id: Option<Uuid>,
-        req: CreateUpdateGroupResourceReq,
+        api_id: Option<Uuid>,
+        req: CreateUpdateGroupAPIReq,
     ) -> HaliaResult<()> {
         match self.groups.iter_mut().find(|group| group.id == group_id) {
-            Some(group) => group.create_resource(&self.id, resource_id, req).await,
+            Some(group) => group.create_api(&self.id, api_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn search_group_resources(
+    pub async fn search_group_apis(
         &self,
         group_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchGroupResourcesResp> {
+    ) -> HaliaResult<SearchGroupAPIsResp> {
         match self.groups.iter().find(|group| group.id == group_id) {
-            Some(group) => Ok(group.search_resources(page, size).await),
+            Some(group) => Ok(group.search_apis(page, size).await),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn update_group_resource(
+    pub async fn update_group_api(
         &self,
         group_id: Uuid,
         resource_id: Uuid,
-        req: CreateUpdateGroupResourceReq,
+        req: CreateUpdateGroupAPIReq,
     ) -> HaliaResult<()> {
         match self.groups.iter().find(|group| group.id == group_id) {
-            Some(group) => group.update_resource(&self.id, resource_id, req).await,
+            Some(group) => group.update_api(&self.id, resource_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn delete_group_resources(
-        &self,
-        group_id: Uuid,
-        resource_ids: Vec<Uuid>,
-    ) -> HaliaResult<()> {
+    pub async fn delete_group_apis(&self, group_id: Uuid, api_ids: Vec<Uuid>) -> HaliaResult<()> {
         match self.groups.iter().find(|group| group.id == group_id) {
-            Some(group) => group.delete_resources(&self.id, resource_ids).await,
-            None => todo!(),
+            Some(group) => group.delete_apis(&self.id, api_ids).await,
+            None => Err(HaliaError::NotFound),
         }
     }
 }

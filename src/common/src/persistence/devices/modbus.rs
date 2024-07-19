@@ -155,46 +155,5 @@ pub async fn update_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Resu
 }
 
 pub async fn delete_sink(device_id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
-    persistence::delete(get_sink_file_path(device_id), sink_id).await?;
-    fs::remove_dir_all(
-        get_device_dir()
-            .join(device_id.to_string())
-            .join(sink_id.to_string()),
-    )
-    .await
-}
-
-pub async fn create_sink_point(
-    device_id: &Uuid,
-    sink_id: &Uuid,
-    point_id: &Uuid,
-    data: String,
-) -> Result<(), io::Error> {
-    persistence::create(
-        get_sink_point_file_path(device_id, sink_id),
-        point_id,
-        &data,
-    )
-    .await
-}
-
-pub async fn read_sink_points(device_id: &Uuid, sink_id: &Uuid) -> Result<Vec<String>, io::Error> {
-    persistence::read(get_sink_point_file_path(device_id, sink_id)).await
-}
-
-pub async fn update_sink_point(
-    device_id: &Uuid,
-    sink_id: &Uuid,
-    point_id: &Uuid,
-    data: &String,
-) -> Result<(), io::Error> {
-    persistence::update(get_sink_point_file_path(device_id, sink_id), point_id, data).await
-}
-
-pub async fn delete_sink_point(
-    device_id: &Uuid,
-    sink_id: &Uuid,
-    point_id: &Uuid,
-) -> Result<(), io::Error> {
-    persistence::delete(get_sink_point_file_path(device_id, sink_id), point_id).await
+    persistence::delete(get_sink_file_path(device_id), sink_id).await
 }

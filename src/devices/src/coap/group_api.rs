@@ -2,33 +2,33 @@ use std::net::SocketAddr;
 
 use common::{error::HaliaResult, persistence};
 use protocol::coap::request::{CoapRequest, Method, RequestBuilder};
-use types::devices::coap::{CreateUpdateGroupResourceReq, SearchGroupResourcesItemResp};
+use types::devices::coap::{CreateUpdateGroupAPIReq, SearchGroupAPIsItemResp};
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub struct Resource {
+pub struct API {
     pub id: Uuid,
-    conf: CreateUpdateGroupResourceReq,
+    conf: CreateUpdateGroupAPIReq,
     pub request: CoapRequest<SocketAddr>,
 }
 
-impl Resource {
+impl API {
     pub async fn new(
         device_id: &Uuid,
         group_id: &Uuid,
-        resource_id: Option<Uuid>,
-        req: CreateUpdateGroupResourceReq,
+        api_id: Option<Uuid>,
+        req: CreateUpdateGroupAPIReq,
     ) -> HaliaResult<Self> {
-        let (resource_id, new) = match resource_id {
-            Some(resource_id) => (resource_id, false),
+        let (api_id, new) = match api_id {
+            Some(api_id) => (api_id, false),
             None => (Uuid::new_v4(), true),
         };
 
         if new {
-            persistence::devices::coap::create_group_resource(
+            persistence::devices::coap::create_group_api(
                 device_id,
                 group_id,
-                &resource_id,
+                &api_id,
                 serde_json::to_string(&req).unwrap(),
             )
             .await?;
@@ -39,15 +39,15 @@ impl Resource {
             .domain(req.domain.clone())
             .build();
 
-        Ok(Resource {
-            id: resource_id,
+        Ok(Self {
+            id: api_id,
             conf: req,
             request,
         })
     }
 
-    pub fn search(&self) -> SearchGroupResourcesItemResp {
-        SearchGroupResourcesItemResp {
+    pub fn search(&self) -> SearchGroupAPIsItemResp {
+        SearchGroupAPIsItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
         }
@@ -57,9 +57,9 @@ impl Resource {
         &mut self,
         device_id: &Uuid,
         group_id: &Uuid,
-        req: CreateUpdateGroupResourceReq,
+        req: CreateUpdateGroupAPIReq,
     ) -> HaliaResult<()> {
-        persistence::devices::coap::update_group_resource(
+        persistence::devices::coap::update_group_api(
             device_id,
             group_id,
             &self.id,
@@ -73,7 +73,7 @@ impl Resource {
     }
 
     pub async fn delete(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {
-        persistence::devices::coap::delete_group_resource(device_id, group_id, &self.id).await?;
+        persistence::devices::coap::delete_group_api(device_id, group_id, &self.id).await?;
         Ok(())
     }
 }

@@ -108,8 +108,15 @@ pub struct SearchGroupPointsItemResp {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateSinkReq {
-    name: String,
-    desc: Option<String>,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+
+    pub r#type: DataType,
+    pub slave: u8,
+    pub area: Area,
+    pub address: u16,
+    pub value: serde_json::Value,
 }
 
 #[derive(Serialize)]
@@ -122,26 +129,4 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct CreateUpdateSinkPointReq {
-    pub r#type: DataType,
-    pub slave: u8,
-    pub area: Area,
-    pub address: u16,
-    pub value: serde_json::Value,
-    pub desc: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSinkPointsResp {
-    pub total: usize,
-    pub data: Vec<SearchSinkPointsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSinkPointsItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdateSinkPointReq,
 }
