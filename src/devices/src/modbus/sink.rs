@@ -1,7 +1,4 @@
-use common::{
-    error::{HaliaError, HaliaResult},
-    persistence,
-};
+use common::{error::HaliaResult, json, persistence};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{debug, warn};
@@ -17,18 +14,6 @@ pub struct Sink {
     ref_cnt: usize,
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
     publish_tx: Option<mpsc::Sender<MessageBatch>>,
-    target_value: TargetValue,
-}
-
-#[derive(Debug, Clone)]
-pub enum TargetValue {
-    Int(i64),
-    Uint(u64),
-    Float(f64),
-    Boolean(bool),
-    String(String),
-    Null,
-    Field(String),
 }
 
 impl Sink {
@@ -51,37 +36,12 @@ impl Sink {
             .await?;
         }
 
-        let target_value = match &req.value {
-            serde_json::Value::Null => TargetValue::Null,
-            serde_json::Value::Bool(b) => TargetValue::Boolean(*b),
-            serde_json::Value::Number(n) => {
-                if let Some(uint) = n.as_u64() {
-                    TargetValue::Uint(uint)
-                } else if let Some(int) = n.as_i64() {
-                    TargetValue::Int(int)
-                } else if let Some(float) = n.as_f64() {
-                    TargetValue::Float(float)
-                } else {
-                    unreachable!()
-                }
-            }
-            serde_json::Value::String(s) => {
-                if s.starts_with("'") && s.ends_with("'") && s.len() >= 3 {
-                    TargetValue::String(s.trim_start_matches("'").trim_end_matches("'").to_string())
-                } else {
-                    TargetValue::Field(s.clone())
-                }
-            }
-            _ => return Err(HaliaError::ConfErr),
-        };
-
         Ok(Sink {
             id: sink_id,
             conf: req,
             ref_cnt: 0,
             stop_signal_tx: None,
             publish_tx: None,
-            target_value,
         })
     }
 
@@ -152,8 +112,6 @@ impl Sink {
         self.publish_tx = Some(publish_tx);
 
         let conf = self.conf.clone();
-        let value = self.target_value.clone();
-
         tokio::spawn(async move {
             loop {
                 select! {
@@ -164,7 +122,7 @@ impl Sink {
 
                     mb = publish_rx.recv() => {
                         if let Some(mb) = mb {
-                            Sink::send_write_point_event(mb, &conf, &value, &tx);
+                            Sink::send_write_point_event(mb, &conf, &tx);
                         }
                     }
                 }
@@ -187,48 +145,54 @@ impl Sink {
     fn send_write_point_event(
         mb: MessageBatch,
         conf: &CreateUpdateSinkReq,
-        value: &TargetValue,
         tx: &mpsc::Sender<WritePointEvent>,
     ) {
-        let value = match value {
-            TargetValue::Int(n) => serde_json::json!(n),
-            TargetValue::Uint(un) => serde_json::json!(un),
-            TargetValue::Float(f) => serde_json::json!(f),
-            TargetValue::Boolean(b) => serde_json::json!(b),
-            TargetValue::String(s) => serde_json::json!(s),
-            TargetValue::Null => serde_json::Value::Null,
-            TargetValue::Field(field) => {
-                let messages = mb.get_messages();
-                if messages.len() > 0 {
-                    match messages[0].get(field) {
-                        Some(value) => match value {
-                            message::MessageValue::Null => serde_json::Value::Null,
-                            message::MessageValue::Boolean(b) => {
-                                serde_json::json!(b)
-                            }
-                            message::MessageValue::Int64(n) => {
-                                serde_json::json!(n)
-                            }
-                            message::MessageValue::Uint64(ui) => {
-                                serde_json::json!(ui)
-                            }
-                            message::MessageValue::Float64(f) => {
-                                serde_json::json!(f)
-                            }
-                            message::MessageValue::String(s) => {
-                                serde_json::json!(s)
-                            }
-                            message::MessageValue::Bytes(_) => {
-                                todo!()
-                            }
-                            _ => unreachable!(),
-                        },
-                        None => unreachable!(),
+        let messages = mb.get_messages();
+        if messages.len() < 1 {
+            return;
+        }
+        let message = messages[0];
+
+        let slave = match conf.slave.typ {
+            types::devices::SinkValueType::Const => {
+                match common::json::number::get_u8(&conf.slave.value) {
+                    Some(n) => n,
+                    None => {
+                        warn!("slave只能是number类型");
+                        return;
                     }
-                } else {
-                    unreachable!();
                 }
             }
+            types::devices::SinkValueType::Variable => match conf.slave.value {
+                serde_json::Value::String(field) => match message.get_u8(&field) {
+                    Some(n) => n,
+                    None => return,
+                },
+                _ => {
+                    warn!("字段名称错误");
+                    return;
+                }
+            },
+        };
+
+        let area = match conf.area.typ {
+            types::devices::SinkValueType::Const => match conf.area.value.as_u64() {
+                Some(n) => match n {
+                    1 | 2 | 3 | 4 => n as u8,
+                    _ => {
+                        warn!("area只能是1｜2｜3｜4");
+                        return;
+                    }
+                },
+                None => {
+                    warn!("area只能是number类型");
+                    return;
+                }
+            },
+            types::devices::SinkValueType::Variable => match conf.area.value.as_str() {
+                Some(_) => todo!(),
+                None => todo!(),
+            },
         };
 
         match WritePointEvent::new(

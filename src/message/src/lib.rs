@@ -56,8 +56,29 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn get(&self, field: &String) -> Option<&MessageValue> {
+    pub fn get(&self, field: &str) -> Option<&MessageValue> {
         return self.value.get(&field);
+    }
+
+    pub fn get_u8(&self, field: &str) -> Option<u8> {
+        match self.value.get(field) {
+            Some(value) => match value {
+                MessageValue::Uint64(n) => {
+                    if *n > (u8::MAX as u64) {
+                        None
+                    } else {
+                        Some(*n as u8)
+                    }
+                }
+                MessageValue::Float64(_) => todo!(),
+                MessageValue::String(_) => todo!(),
+                MessageValue::Bytes(_) => todo!(),
+                MessageValue::Array(_) => todo!(),
+                MessageValue::Object(_) => todo!(),
+                _ => None,
+            },
+            None => None,
+        }
     }
 
     pub fn add(&mut self, field: String, value: MessageValue) {

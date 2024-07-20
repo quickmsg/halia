@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
-use super::datatype::DataType;
+use super::{datatype::DataType, SinkValue};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateModbusReq {
@@ -74,24 +75,25 @@ pub struct SearchGroupsItemResp {
     pub conf: CreateUpdateGroupReq,
 }
 
-#[derive(Deserialize, Debug, Clone, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateGroupPointReq {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+
     pub r#type: DataType,
     pub slave: u8,
     pub area: Area,
     pub address: u16,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Deserialize_repr, Serialize_repr, Debug, Clone)]
+#[repr(u8)]
 pub enum Area {
-    InputDiscrete,
-    Coils, // 可读写
-    InputRegisters,
-    HoldingRegisters, // 可读写
+    InputDiscrete = 1,
+    Coils = 2, // 可读写
+    InputRegisters = 3,
+    HoldingRegisters = 4, // 可读写
 }
 
 #[derive(Serialize)]
@@ -113,10 +115,10 @@ pub struct CreateUpdateSinkReq {
     pub desc: Option<String>,
 
     pub r#type: DataType,
-    pub slave: u8,
-    pub area: Area,
-    pub address: u16,
-    pub value: serde_json::Value,
+    pub slave: SinkValue,
+    pub area: SinkValue,
+    pub address: SinkValue,
+    pub value: SinkValue,
 }
 
 #[derive(Serialize)]
