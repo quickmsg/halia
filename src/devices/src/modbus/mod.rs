@@ -157,11 +157,7 @@ impl Modbus {
                 types::devices::modbus::LinkType::Ethernet,
                 types::devices::modbus::LinkType::Ethernet,
             ) => {
-                if self.conf.mode != req.mode
-                    || self.conf.encode != req.encode
-                    || self.conf.host != req.host
-                    || self.conf.port != req.port
-                {
+                if self.conf.ethernet != req.ethernet {
                     restart = true;
                 }
             }
@@ -169,12 +165,7 @@ impl Modbus {
                 types::devices::modbus::LinkType::Serial,
                 types::devices::modbus::LinkType::Serial,
             ) => {
-                if self.conf.path != req.path
-                    || self.conf.stop_bits != req.stop_bits
-                    || self.conf.baud_rate != req.baud_rate
-                    || self.conf.data_bits != req.data_bits
-                    || self.conf.parity != req.parity
-                {
+                if self.conf.serial != req.serial {
                     restart = true;
                 }
             }
@@ -321,26 +312,26 @@ impl Modbus {
     async fn connect(conf: &CreateUpdateModbusReq) -> HaliaResult<Context> {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
-                let socket_addr: SocketAddr =
-                    format!("{}:{}", conf.host.as_ref().unwrap(), conf.port.unwrap())
-                        .parse()
-                        .unwrap();
+                let ethernet = conf.ethernet.as_ref().unwrap();
+                let socket_addr: SocketAddr = format!("{}:{}", ethernet.host, ethernet.port)
+                    .parse()
+                    .unwrap();
                 let transport = TcpStream::connect(socket_addr).await?;
-                match conf.encode.as_ref().unwrap() {
+                match ethernet.encode {
                     Encode::Tcp => Ok(tcp::attach(transport)),
                     Encode::RtuOverTcp => Ok(rtu::attach(transport)),
                 }
             }
             types::devices::modbus::LinkType::Serial => {
-                let builder =
-                    tokio_serial::new(conf.path.as_ref().unwrap().clone(), conf.baud_rate.unwrap());
+                let serial = conf.serial.as_ref().unwrap();
+                let builder = tokio_serial::new(serial.path.clone(), serial.baud_rate);
                 let mut port = SerialStream::open(&builder).unwrap();
-                match conf.stop_bits.unwrap() {
+                match serial.stop_bits {
                     1 => port.set_stop_bits(StopBits::One).unwrap(),
                     2 => port.set_stop_bits(StopBits::Two).unwrap(),
                     _ => unreachable!(),
                 };
-                match conf.data_bits.unwrap() {
+                match serial.data_bits {
                     5 => port.set_data_bits(DataBits::Five).unwrap(),
                     6 => port.set_data_bits(DataBits::Six).unwrap(),
                     7 => port.set_data_bits(DataBits::Seven).unwrap(),
@@ -348,7 +339,7 @@ impl Modbus {
                     _ => unreachable!(),
                 };
 
-                match conf.parity.unwrap() {
+                match serial.parity {
                     0 => port.set_parity(Parity::None).unwrap(),
                     1 => port.set_parity(Parity::Odd).unwrap(),
                     2 => port.set_parity(Parity::Even).unwrap(),
@@ -440,7 +431,7 @@ impl Modbus {
                     point.conf.slave,
                     point.conf.area.clone(),
                     point.conf.address,
-                    point.conf.r#type.clone(),
+                    point.conf.data_type.clone(),
                     value,
                 ) {
                     Ok(wpe) => {

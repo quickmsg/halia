@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub mod coap;
-pub mod datatype;
+// pub mod datatype;
 pub mod modbus;
 pub mod opcua;
 
