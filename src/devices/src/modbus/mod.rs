@@ -45,6 +45,7 @@ mod sink;
 #[derive(Debug)]
 pub struct Modbus {
     pub id: Uuid,
+    on: bool,
     err: Option<String>,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
@@ -85,6 +86,7 @@ impl Modbus {
 
         Ok(Modbus {
             id: device_id,
+            on: false,
             err: None,
             rtt: Arc::new(AtomicU16::new(9999)),
             conf: req,
@@ -189,8 +191,10 @@ impl Modbus {
     }
 
     pub async fn start(&mut self) -> HaliaResult<()> {
-        if self.stop_signal_tx.is_some() {
+        if self.on {
             return Ok(());
+        } else {
+            self.on = true;
         }
         debug!("设备开启");
 
@@ -204,9 +208,8 @@ impl Modbus {
         for point in self.points.write().await.iter_mut() {
             point.start(read_tx.clone()).await;
         }
-
         for sink in self.sinks.iter_mut() {
-            sink.start(write_tx.clone());
+            sink.start(write_tx.clone()).await;
         }
 
         self.read_tx = Some(read_tx);
@@ -283,8 +286,10 @@ impl Modbus {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        if self.stop_signal_tx.is_none() {
+        if !self.on {
             return Ok(());
+        } else {
+            self.on = false;
         }
         debug!("设备停止");
 

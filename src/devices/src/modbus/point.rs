@@ -23,6 +23,7 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct Point {
     pub id: Uuid,
+    on: bool,
     pub conf: CreateUpdatePointReq,
 
     pub quantity: u16,
@@ -62,6 +63,7 @@ impl Point {
 
         Ok(Point {
             id: point_id,
+            on: false,
             conf: req,
             quantity,
             value: Value::Null,
@@ -80,8 +82,10 @@ impl Point {
     }
 
     pub async fn start(&mut self, read_tx: mpsc::Sender<Uuid>) {
-        if self.stop_signal_tx.is_some() {
+        if self.on {
             return;
+        } else {
+            self.on = true;
         }
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
@@ -119,9 +123,12 @@ impl Point {
     }
 
     pub async fn stop(&mut self) {
-        if self.stop_signal_tx.is_none() {
+        if !self.on {
             return;
+        } else {
+            self.on = true;
         }
+
         self.stop_signal_tx
             .as_ref()
             .unwrap()
@@ -166,8 +173,8 @@ impl Point {
         Ok(())
     }
 
-    pub async fn delete(&self, device_id: &Uuid) -> HaliaResult<()> {
-        // TODO stop
+    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        self.stop().await;
         persistence::devices::modbus::delete_point(device_id, &self.id).await?;
         Ok(())
     }
