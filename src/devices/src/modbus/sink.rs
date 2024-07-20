@@ -10,12 +10,11 @@ use super::WritePointEvent;
 #[derive(Debug)]
 pub struct Sink {
     pub id: Uuid,
-    on: bool,
     conf: CreateUpdateSinkReq,
-    ref_cnt: usize,
-    pub stop_signal_tx: Option<mpsc::Sender<()>>,
-    publish_tx: Option<mpsc::Sender<MessageBatch>>,
 
+    pub on: bool,
+
+    stop_signal_tx: Option<mpsc::Sender<()>>,
     handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
@@ -23,6 +22,10 @@ pub struct Sink {
             mpsc::Sender<WritePointEvent>,
         )>,
     >,
+
+    ref_rules: Vec<Uuid>,
+    active_ref_rules: Vec<Uuid>,
+    publish_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 impl Sink {
@@ -49,10 +52,11 @@ impl Sink {
             id: sink_id,
             on: false,
             conf: req,
-            ref_cnt: 0,
             stop_signal_tx: None,
-            publish_tx: None,
             handle: None,
+            ref_rules: vec![],
+            active_ref_rules: vec![],
+            publish_tx: None,
         })
     }
 
@@ -60,6 +64,8 @@ impl Sink {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            ref_rules: self.ref_rules.clone(),
+            active_ref_rules: self.active_ref_rules.clone(),
         }
     }
 
@@ -98,6 +104,11 @@ impl Sink {
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        if self.ref_rules.len() > 0 || self.active_ref_rules.len() > 0 {
+            // TODO
+            return Err(common::error::HaliaError::ConfErr);
+        }
+
         persistence::devices::modbus::delete_sink(device_id, &self.id).await?;
         match self.stop_signal_tx {
             Some(_) => self.stop().await,
@@ -107,19 +118,23 @@ impl Sink {
         Ok(())
     }
 
-    pub fn publish(&mut self) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        self.ref_cnt += 1;
-        match &self.publish_tx {
-            Some(tx) => Ok(tx.clone()),
-            None => panic!("must start by device"),
-        }
+    pub fn pre_publish(&mut self, rule_id: &Uuid) {
+        self.ref_rules.push(rule_id.clone());
     }
 
-    pub async fn unpublish(&mut self) {
-        self.ref_cnt -= 1;
-        if self.ref_cnt == 0 {
-            self.stop().await;
-        }
+    pub fn publish(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
+        self.active_ref_rules.push(rule_id.clone());
+        self.ref_rules.retain(|id| id != rule_id);
+        self.publish_tx.as_ref().unwrap().clone()
+    }
+
+    pub fn pre_unpublish(&mut self, rule_id: &Uuid) {
+        self.ref_rules.retain(|id| id != rule_id);
+    }
+
+    pub fn unpublish(&mut self, rule_id: &Uuid) {
+        self.active_ref_rules.retain(|id| id != rule_id);
+        self.ref_rules.push(rule_id.clone());
     }
 
     pub async fn start(&mut self, tx: mpsc::Sender<WritePointEvent>) {

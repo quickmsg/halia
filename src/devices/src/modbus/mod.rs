@@ -17,7 +17,7 @@ use std::{
         atomic::{AtomicU16, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     net::TcpStream,
@@ -45,20 +45,16 @@ mod sink;
 #[derive(Debug)]
 pub struct Modbus {
     pub id: Uuid,
+    conf: CreateUpdateModbusReq,
+
     on: bool,
     err: Option<String>,
-
     stop_signal_tx: Option<mpsc::Sender<()>>,
-
     rtt: Arc<AtomicU16>,
-    conf: CreateUpdateModbusReq,
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
-
     read_tx: Option<mpsc::Sender<Uuid>>,
-
     points: Arc<RwLock<Vec<Point>>>,
     sinks: Vec<Sink>,
-
     handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
@@ -261,9 +257,11 @@ impl Modbus {
                                    if let Some(point_id) = point_id {
                                         match points.write().await.iter_mut().find(|point| point.id == point_id) {
                                             Some(point) => {
+                                                let now = Instant::now();
                                                 if let Err(_) = point.read(&mut ctx).await {
                                                     break
                                                 }
+                                                rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
                                             }
                                             None => {}
                                         }
@@ -276,6 +274,16 @@ impl Modbus {
                         debug!("{}", e);
                         for point in points.write().await.iter_mut() {
                             point.stop().await;
+                        }
+
+                        let sleep = time::sleep(Duration::from_secs(reconnect));
+                        tokio::pin!(sleep);
+                        select! {
+                            _ = stop_signal_rx.recv() => {
+                                return (stop_signal_rx, write_rx, read_rx);
+                            }
+
+                            _ = &mut sleep => {}
                         }
                         time::sleep(Duration::from_secs(reconnect)).await;
                     }
@@ -458,29 +466,42 @@ impl Modbus {
         }
     }
 
-    pub async fn delete_points(&mut self, point_ids: Vec<Uuid>) -> HaliaResult<()> {
-        for point_id in &point_ids {
-            if let Some(point) = self
-                .points
-                .write()
-                .await
-                .iter_mut()
-                .find(|point| point.id == *point_id)
-            {
-                point.delete(&self.id).await?;
-            }
+    pub async fn delete_point(&mut self, point_id: Uuid) -> HaliaResult<()> {
+        match self
+            .points
+            .write()
+            .await
+            .iter_mut()
+            .find(|point| point.id == point_id)
+        {
+            Some(point) => point.delete(&self.id).await?,
+            None => return Err(HaliaError::NotFound),
         }
 
         self.points
             .write()
             .await
-            .retain(|point| !point_ids.contains(&point.id));
+            .retain(|point| point.id != point_id);
         Ok(())
+    }
+
+    pub async fn pre_subscribe(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .points
+            .write()
+            .await
+            .iter_mut()
+            .find(|point| point.id == *point_id)
+        {
+            Some(point) => Ok(point.pre_subscribe(rule_id)),
+            None => return Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn subscribe(
         &mut self,
         point_id: &Uuid,
+        rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self
             .points
@@ -489,12 +510,17 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.subscribe()),
+            Some(point) => {
+                if !point.on {
+                    return Err(HaliaError::DeviceStoped);
+                }
+                Ok(point.subscribe(rule_id))
+            }
             None => return Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unsubscribe(&mut self, point_id: &Uuid) -> HaliaResult<()> {
+    pub async fn unsubscribe(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -502,7 +528,20 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.unsubscribe()),
+            Some(point) => Ok(point.unsubscribe(rule_id)),
+            None => return Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn after_unsubscribe(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .points
+            .write()
+            .await
+            .iter_mut()
+            .find(|point| point.id == *point_id)
+        {
+            Some(point) => Ok(point.after_unsubscribe(rule_id)),
             None => return Err(HaliaError::NotFound),
         }
     }
@@ -555,21 +594,34 @@ impl Modbus {
         }
     }
 
-    pub async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    pub fn pre_publish(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => {
-                if self.stop_signal_tx.is_some() && sink.stop_signal_tx.is_none() {
-                    sink.start(self.write_tx.as_ref().unwrap().clone());
-                }
-                sink.publish()
-            }
+            Some(sink) => Ok(sink.pre_publish(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unpublish(&mut self, sink_id: &Uuid) -> HaliaResult<()> {
+    pub fn pre_unpublish(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.unpublish().await),
+            Some(sink) => Ok(sink.pre_unpublish(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub fn publish(
+        &mut self,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.publish(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub fn unpublish(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.unpublish(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }
@@ -651,7 +703,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
                             return Ok(());
                         }
                     },
-                    Err(e) => return Err(HaliaError::DeviceDisconnect),
+                    Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
                 }
             }
             Type::Int8 | Type::Uint8 => {
@@ -670,7 +722,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
                             return Ok(());
                         }
                     },
-                    Err(e) => return Err(HaliaError::DeviceDisconnect),
+                    Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
                 }
             }
             Type::Int16 | Type::Uint16 => {
@@ -682,7 +734,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
                             return Ok(());
                         }
                     },
-                    Err(e) => return Err(HaliaError::DeviceDisconnect),
+                    Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
                 }
             }
             Type::Int32
@@ -700,7 +752,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
                         return Ok(());
                     }
                 },
-                Err(e) => return Err(HaliaError::DeviceDisconnect),
+                Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
             },
         },
         _ => return Err(HaliaError::ConfErr),

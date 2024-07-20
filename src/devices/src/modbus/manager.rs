@@ -134,9 +134,21 @@ impl Manager {
         }
     }
 
-    pub async fn delete_points(&self, device_id: Uuid, point_ids: Vec<Uuid>) -> HaliaResult<()> {
+    pub async fn delete_point(&self, device_id: Uuid, point_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.delete_points(point_ids).await,
+            Some(mut device) => device.delete_point(point_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn pre_subscribe(
+        &self,
+        device_id: &Uuid,
+        point_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.pre_subscribe(point_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -144,17 +156,35 @@ impl Manager {
     pub async fn subscribe(
         &self,
         device_id: &Uuid,
-        group_id: &Uuid,
+        point_id: &Uuid,
+        rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.subscribe(group_id).await,
+            Some(mut device) => device.subscribe(point_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unsubscribe(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {
+    pub async fn unsubscribe(
+        &self,
+        device_id: &Uuid,
+        point_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.unsubscribe(group_id).await,
+            Some(mut device) => device.unsubscribe(point_id, rule_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn after_unsubscribe(
+        &self,
+        device_id: &Uuid,
+        point_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.after_unsubscribe(point_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -202,13 +232,50 @@ impl Manager {
         }
     }
 
+    pub async fn pre_publish(
+        &self,
+        device_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.pre_publish(sink_id, rule_id),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
     pub async fn publish(
         &self,
         device_id: &Uuid,
         sink_id: &Uuid,
+        rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.publish(sink_id).await,
+            Some(mut device) => device.publish(sink_id, rule_id),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn pre_unpublish(
+        &self,
+        device_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.pre_unpublish(sink_id, rule_id),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn unpublish(
+        &self,
+        device_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.unpublish(sink_id, rule_id),
             None => Err(HaliaError::NotFound),
         }
     }

@@ -674,6 +674,8 @@ pub struct SearchPointsResp {
 pub struct SearchPointsItemResp {
     pub id: Uuid,
     pub conf: CreateUpdatePointReq,
+    pub ref_rules: Vec<Uuid>,
+    pub active_ref_rules: Vec<Uuid>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -699,4 +701,6 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
+    pub ref_rules: Vec<Uuid>,
+    pub active_ref_rules: Vec<Uuid>,
 }

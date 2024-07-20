@@ -18,6 +18,8 @@ pub enum HaliaError {
     // 设备连接错误
     DeviceDisconnect,
 
+    DeviceConnectErr(String),
+
     // DEVICE
     DevicePointNotSupportWriteMethod,
     DevicePointWriteValueErr,
@@ -58,6 +60,7 @@ impl Display for HaliaError {
             HaliaError::DevicePointWriteValueErr => write!(f, "点位写入值错误"),
             HaliaError::NotFoundGroup => todo!(),
             HaliaError::DeviceRunning => write!(f, "设备运行中"),
+            HaliaError::DeviceConnectErr(_) => todo!(),
         }
     }
 }
@@ -78,6 +81,7 @@ impl HaliaError {
             HaliaError::DevicePointNotSupportWriteMethod => 1003,
             HaliaError::DevicePointWriteValueErr => 1004,
             HaliaError::NotFoundGroup => 1005,
+            HaliaError::DeviceConnectErr(_) => 1006,
         }
     }
 }

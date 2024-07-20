@@ -23,15 +23,16 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct Point {
     pub id: Uuid,
-    on: bool,
+    pub on: bool,
     pub conf: CreateUpdatePointReq,
 
     pub quantity: u16,
     pub value: Value,
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
 
+    pub ref_rules: Vec<Uuid>,
+    pub active_ref_rules: Vec<Uuid>,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
-    pub ref_cnt: usize,
 
     handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>)>>,
 }
@@ -68,8 +69,9 @@ impl Point {
             quantity,
             value: Value::Null,
             stop_signal_tx: None,
+            ref_rules: vec![],
+            active_ref_rules: vec![],
             tx: None,
-            ref_cnt: 0,
             handle: None,
         })
     }
@@ -78,6 +80,8 @@ impl Point {
         SearchPointsItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            ref_rules: self.ref_rules.clone(),
+            active_ref_rules: self.active_ref_rules.clone(),
         }
     }
 
@@ -174,6 +178,10 @@ impl Point {
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        if self.ref_rules.len() > 0 || self.active_ref_rules.len() > 0 {
+            // TODO 引用中
+            return Err(HaliaError::ConfErr);
+        }
         self.stop().await;
         persistence::devices::modbus::delete_point(device_id, &self.id).await?;
         Ok(())
@@ -257,22 +265,22 @@ impl Point {
         Ok(())
     }
 
-    pub fn subscribe(&mut self) -> broadcast::Receiver<MessageBatch> {
-        self.ref_cnt += 1;
-        match &self.tx {
-            Some(tx) => tx.subscribe(),
-            None => {
-                let (tx, rx) = broadcast::channel::<MessageBatch>(16);
-                self.tx = Some(tx);
-                rx
-            }
-        }
+    pub fn pre_subscribe(&mut self, rule_id: &Uuid) {
+        self.ref_rules.push(rule_id.clone());
     }
 
-    pub fn unsubscribe(&mut self) {
-        self.ref_cnt -= 1;
-        if self.ref_cnt == 0 {
-            self.tx = None;
-        }
+    pub fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+        self.ref_rules.retain(|id| id != rule_id);
+        self.active_ref_rules.push(rule_id.clone());
+        self.tx.as_ref().unwrap().subscribe()
+    }
+
+    pub fn unsubscribe(&mut self, rule_id: &Uuid) {
+        self.active_ref_rules.retain(|id| id != rule_id);
+        self.ref_rules.push(rule_id.clone());
+    }
+
+    pub fn after_unsubscribe(&mut self, rule_id: &Uuid) {
+        self.ref_rules.retain(|id| id != rule_id);
     }
 }

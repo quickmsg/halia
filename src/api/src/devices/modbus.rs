@@ -3,7 +3,6 @@ use axum::{
     routing::{self, get, post, put},
     Json, Router,
 };
-use common::error::HaliaError;
 use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
 use types::devices::modbus::{
     CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
@@ -11,7 +10,7 @@ use types::devices::modbus::{
 };
 use uuid::Uuid;
 
-use crate::{AppResp, DeleteIdsQuery, Pagination};
+use crate::{AppResp, Pagination};
 
 pub(crate) fn modbus_routes() -> Router {
     Router::new()
@@ -30,7 +29,7 @@ pub(crate) fn modbus_routes() -> Router {
                         .route("/", get(search_points))
                         .route("/:point_id", put(update_point))
                         .route("/:point_id/value", put(write_point_value))
-                        .route("/", routing::delete(delete_points)),
+                        .route("/:point_id", routing::delete(delete_point)),
                 )
                 .nest(
                     "/sink",
@@ -133,22 +132,9 @@ async fn write_point_value(
     }
 }
 
-async fn delete_points(
-    Path(device_id): Path<Uuid>,
-    Query(query): Query<DeleteIdsQuery>,
-) -> AppResp<()> {
-    let point_ids: Vec<Uuid> = match query
-        .ids
-        .split(',')
-        .map(|s| s.parse::<Uuid>().map_err(|_e| return HaliaError::ParseErr))
-        .collect::<Result<Vec<Uuid>, _>>()
-    {
-        Ok(ids) => ids,
-        Err(e) => return e.into(),
-    };
-
+async fn delete_point(Path((device_id, point_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .delete_points(device_id, point_ids)
+        .delete_point(device_id, point_id)
         .await
     {
         Ok(()) => AppResp::new(),
