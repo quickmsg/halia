@@ -13,6 +13,7 @@ use serde_json::Value;
 use tokio::{
     select,
     sync::{broadcast, mpsc},
+    task::JoinHandle,
     time,
 };
 use tracing::{debug, warn};
@@ -30,6 +31,8 @@ pub struct Point {
 
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
+
+    handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>)>>,
 }
 
 impl Point {
@@ -65,6 +68,7 @@ impl Point {
             stop_signal_tx: None,
             tx: None,
             ref_cnt: 0,
+            handle: None,
         })
     }
 
@@ -75,23 +79,32 @@ impl Point {
         }
     }
 
-    pub fn start(&mut self, read_tx: mpsc::Sender<Uuid>) {
+    pub async fn start(&mut self, read_tx: mpsc::Sender<Uuid>) {
         if self.stop_signal_tx.is_some() {
             return;
         }
 
-        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        let interval = self.conf.interval;
+        self.event_loop(self.conf.interval, stop_signal_rx, read_tx)
+            .await;
+    }
+
+    async fn event_loop(
+        &mut self,
+        interval: u64,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        read_tx: mpsc::Sender<Uuid>,
+    ) {
         let point_id = self.id.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
                 select! {
                     biased;
                     _ = stop_signal_rx.recv() => {
-                        return
+                        return (stop_signal_rx, read_tx);
                     }
 
                     _ = interval.tick() => {
@@ -102,6 +115,7 @@ impl Point {
                 }
             }
         });
+        self.handle = Some(handle);
     }
 
     pub async fn stop(&mut self) {
@@ -125,11 +139,29 @@ impl Point {
         )
         .await?;
 
+        let mut restart = false;
+        if self.conf.interval != req.interval {
+            restart = true;
+        }
+
         self.quantity = match req.data_type.get_quantity() {
             Some(quantity) => quantity,
             None => return Err(HaliaError::ConfErr),
         };
         self.conf = req;
+
+        if self.stop_signal_tx.is_some() && restart {
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
+
+            let (stop_signal_rx, read_tx) = self.handle.take().unwrap().await.unwrap();
+            self.event_loop(self.conf.interval, stop_signal_rx, read_tx)
+                .await;
+        }
 
         Ok(())
     }
@@ -210,7 +242,7 @@ impl Point {
                 message.add(self.conf.name.clone(), message_value);
                 let mut message_batch = MessageBatch::default();
                 message_batch.push_message(message);
-                tx.send(message_batch);
+                tx.send(message_batch).unwrap();
             }
             None => {}
         }

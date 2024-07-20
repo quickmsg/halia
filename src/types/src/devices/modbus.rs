@@ -12,9 +12,14 @@ pub struct CreateUpdateModbusReq {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 
+    // ms
     pub interval: u64,
+    // s
+    pub reconnect: u64,
     pub link_type: LinkType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ethernet: Option<Ethernet>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub serial: Option<Serial>,
 }
 
@@ -72,10 +77,15 @@ pub struct CreateUpdatePointReq {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct DataType {
     pub typ: Type,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub endian0: Option<Endian>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub endian1: Option<Endian>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub len: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub single: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pos: Option<u8>,
 }
 
@@ -597,63 +607,24 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
-            // DataType::Bytes(len, single, endian) => match data {
-            //     Value::Array(arr) => {
-            //         debug!("{arr:?}");
-            //         match single {
-            //             true => {
-            //                 if (*len as usize) < arr.len() {
-            //                     bail!("too long")
-            //                 }
-            //             }
-            //             false => {
-            //                 if (*len as usize) * 2 < arr.len() {
-            //                     bail!("too long")
-            //                 }
-            //             }
-            //         }
+            Type::Bytes => match value {
+                serde_json::Value::Array(arr) => {
+                    debug!("{arr:?}");
+                    let mut data = vec![];
+                    for v in arr {
+                        match v {
+                            serde_json::Value::Number(n) => match n.as_u64() {
+                                Some(v) => data.push(v as u8),
+                                None => bail!("not support"),
+                            },
+                            _ => bail!("not support"),
+                        }
+                    }
 
-            //         let mut data = vec![];
-            //         for v in arr {
-            //             match v {
-            //                 Value::Number(n) => match n.as_u64() {
-            //                     Some(v) => data.push(v as u8),
-            //                     None => bail!("not support"),
-            //                 },
-            //                 _ => bail!("not support"),
-            //             }
-            //         }
-            //         let mut new_data = vec![];
-            //         match (single, endian) {
-            //             (true, Endian::BigEndian) => {
-            //                 for byte in data {
-            //                     new_data.push(0);
-            //                     new_data.push(byte);
-            //                 }
-            //                 return Ok(new_data);
-            //             }
-            //             (true, Endian::LittleEndian) => {
-            //                 for byte in data {
-            //                     new_data.push(byte);
-            //                     new_data.push(0);
-            //                 }
-
-            //                 return Ok(new_data);
-            //             }
-            //             (false, Endian::BigEndian) => {
-            //                 for i in 0..*len {
-            //                     new_data.push(data[(i * 2 + 1) as usize]);
-            //                     new_data.push(data[(i * 2) as usize]);
-            //                 }
-            //                 return Ok(new_data);
-            //             }
-            //             (false, Endian::LittleEndian) => {
-            //                 return Ok(data);
-            //             }
-            //         }
-            //     }
-            //     _ => bail!("not support"),
-            // },
+                    Ok(data)
+                }
+                _ => bail!("not support"),
+            },
             _ => bail!("TODO"),
         }
     }

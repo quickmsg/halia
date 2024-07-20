@@ -198,11 +198,19 @@ impl Modbus {
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
-        let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
-        self.read_tx = Some(read_tx);
-        let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
-        self.write_tx = Some(write_tx);
 
+        let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
+        let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
+        for point in self.points.write().await.iter_mut() {
+            point.start(read_tx.clone()).await;
+        }
+
+        for sink in self.sinks.iter_mut() {
+            sink.start(write_tx.clone());
+        }
+
+        self.read_tx = Some(read_tx);
+        self.write_tx = Some(write_tx);
         self.event_loop(stop_signal_rx, read_rx, write_rx).await;
 
         Ok(())
@@ -217,6 +225,7 @@ impl Modbus {
         let conf = self.conf.clone();
         let interval = self.conf.interval;
         let points = self.points.clone();
+        let reconnect = self.conf.reconnect;
 
         let rtt = self.rtt.clone();
         let read_tx = self.read_tx.as_ref().unwrap().clone();
@@ -265,7 +274,7 @@ impl Modbus {
                         for point in points.write().await.iter_mut() {
                             point.stop().await;
                         }
-                        time::sleep(Duration::from_secs(5)).await;
+                        time::sleep(Duration::from_secs(reconnect)).await;
                     }
                 }
             }
