@@ -54,6 +54,16 @@ impl Message {
         self.value.get(field)
     }
 
+    pub fn get_str(&self, field: &str) -> Option<&String> {
+        match self.value.get(field) {
+            Some(value) => match value {
+                MessageValue::String(s) => Some(s),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn get_u8(&self, field: &str) -> Option<u8> {
         match self.value.get(field) {
             Some(value) => match value {

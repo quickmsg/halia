@@ -2,7 +2,7 @@ use common::{error::HaliaResult, persistence};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{debug, warn};
-use types::devices::modbus::{Area, CreateUpdateSinkReq, SearchSinksItemResp};
+use types::devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
 use super::WritePointEvent;
@@ -175,21 +175,16 @@ impl Sink {
         };
 
         let area = match conf.area.typ {
-            types::devices::SinkValueType::Const => {
-                match common::json::number::get_u8(&conf.area.value) {
-                    Some(n) => match Area::try_from(n) {
-                        Ok(area) => area,
-                        Err(_) => return,
-                    },
-                    None => {
-                        warn!("area只能是number类型");
-                        return;
-                    }
-                }
-            }
+            types::devices::SinkValueType::Const => match &conf.area.value {
+                serde_json::Value::String(s) => match serde_json::from_str(s) {
+                    Ok(area) => area,
+                    Err(_) => return,
+                },
+                _ => return,
+            },
             types::devices::SinkValueType::Variable => match &conf.area.value {
-                serde_json::Value::String(field) => match message.get_u8(field) {
-                    Some(n) => match Area::try_from(n) {
+                serde_json::Value::String(field) => match message.get_str(field) {
+                    Some(s) => match serde_json::from_str(s) {
                         Ok(area) => area,
                         Err(_) => return,
                     },

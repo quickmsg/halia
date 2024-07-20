@@ -29,10 +29,9 @@ use tokio::{
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, warn};
 use types::devices::{
-    datatype::{DataType, Endian},
     modbus::{
-        Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, Encode,
-        SearchPointsResp, SearchSinksResp,
+        Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType, Encode,
+        Endian, SearchPointsResp, SearchSinksResp, Type,
     },
     SearchDevicesItemResp,
 };
@@ -606,8 +605,8 @@ impl WritePointEvent {
 async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()> {
     ctx.set_slave(wpe.slave);
     match wpe.area {
-        Area::Coils => match wpe.data_type {
-            DataType::Bool(_) => match ctx.write_single_coil(wpe.address, wpe.data[0]).await {
+        Area::Coils => match wpe.data_type.typ {
+            Type::Bool => match ctx.write_single_coil(wpe.address, wpe.data[0]).await {
                 Ok(res) => match res {
                     Ok(_) => return Ok(()),
                     Err(e) => {
@@ -622,10 +621,11 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
             },
             _ => return Err(HaliaError::ConfErr),
         },
-        Area::HoldingRegisters => match wpe.data_type {
-            DataType::Bool(pos) => {
-                let and_mask = !(1 << pos.unwrap());
-                let or_mask = (wpe.data[0] as u16) << pos.unwrap();
+        Area::HoldingRegisters => match wpe.data_type.typ {
+            Type::Bool => {
+                let pos = wpe.data_type.pos.as_ref().unwrap();
+                let and_mask = !(1 << pos);
+                let or_mask = (wpe.data[0] as u16) << pos;
                 match ctx
                     .masked_write_register(wpe.address, and_mask, or_mask)
                     .await
@@ -640,10 +640,10 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
                     Err(e) => return Err(HaliaError::DeviceDisconnect),
                 }
             }
-            DataType::Int8(endian) | DataType::Uint8(endian) => {
-                let (and_mask, or_mask) = match endian {
-                    Endian::LittleEndian => (0x00FF, (wpe.data[0] as u16) << 8),
-                    Endian::BigEndian => (0xFF00, wpe.data[0] as u16),
+            Type::Int8 | Type::Uint8 => {
+                let (and_mask, or_mask) = match wpe.data_type.endian0.as_ref().unwrap() {
+                    Endian::Little => (0x00FF, (wpe.data[0] as u16) << 8),
+                    Endian::Big => (0xFF00, wpe.data[0] as u16),
                 };
                 match ctx
                     .masked_write_register(wpe.address, and_mask, or_mask)
@@ -659,7 +659,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
                     Err(e) => return Err(HaliaError::DeviceDisconnect),
                 }
             }
-            DataType::Int16(_) | DataType::Uint16(_) => {
+            Type::Int16 | Type::Uint16 => {
                 match ctx.write_single_register(wpe.address, &wpe.data).await {
                     Ok(res) => match res {
                         Ok(_) => return Ok(()),
@@ -671,25 +671,23 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
                     Err(e) => return Err(HaliaError::DeviceDisconnect),
                 }
             }
-            DataType::Int32(_, _)
-            | DataType::Uint32(_, _)
-            | DataType::Int64(_, _)
-            | DataType::Uint64(_, _)
-            | DataType::Float32(_, _)
-            | DataType::Float64(_, _)
-            | DataType::String(_, _, _)
-            | DataType::Bytes(_, _, _) => {
-                match ctx.write_multiple_registers(wpe.address, &wpe.data).await {
-                    Ok(res) => match res {
-                        Ok(_) => return Ok(()),
-                        Err(e) => {
-                            warn!("modbus protocol exception:{}", e);
-                            return Ok(());
-                        }
-                    },
-                    Err(e) => return Err(HaliaError::DeviceDisconnect),
-                }
-            }
+            Type::Int32
+            | Type::Uint32
+            | Type::Int64
+            | Type::Uint64
+            | Type::Float32
+            | Type::Float64
+            | Type::String
+            | Type::Bytes => match ctx.write_multiple_registers(wpe.address, &wpe.data).await {
+                Ok(res) => match res {
+                    Ok(_) => return Ok(()),
+                    Err(e) => {
+                        warn!("modbus protocol exception:{}", e);
+                        return Ok(());
+                    }
+                },
+                Err(e) => return Err(HaliaError::DeviceDisconnect),
+            },
         },
         _ => return Err(HaliaError::ConfErr),
     }

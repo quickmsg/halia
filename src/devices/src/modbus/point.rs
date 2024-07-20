@@ -43,7 +43,10 @@ impl Point {
             None => (Uuid::new_v4(), true),
         };
 
-        let quantity = req.r#type.get_quantity();
+        let quantity = match req.data_type.get_quantity() {
+            Some(quantity) => quantity,
+            None => return Err(HaliaError::ConfErr),
+        };
 
         if new {
             persistence::devices::modbus::create_point(
@@ -122,7 +125,10 @@ impl Point {
         )
         .await?;
 
-        self.quantity = req.r#type.get_quantity();
+        self.quantity = match req.data_type.get_quantity() {
+            Some(quantity) => quantity,
+            None => return Err(HaliaError::ConfErr),
+        };
         self.conf = req;
 
         Ok(())
@@ -134,7 +140,6 @@ impl Point {
         Ok(())
     }
 
-    // pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<MessageValue> {
     pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<()> {
         ctx.set_slave(self.conf.slave);
         let message_value = match self.conf.area {
@@ -144,7 +149,7 @@ impl Point {
             {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        let value = self.conf.r#type.decode(&mut data);
+                        let value = self.conf.data_type.decode(&mut data);
                         self.value = value.clone().into();
                         value
                     }
@@ -158,7 +163,7 @@ impl Point {
             Area::Coils => match ctx.read_coils(self.conf.address, self.quantity).await {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        let value = self.conf.r#type.decode(&mut data);
+                        let value = self.conf.data_type.decode(&mut data);
                         self.value = value.clone().into();
                         value
                     }
@@ -175,7 +180,7 @@ impl Point {
             {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        let value = self.conf.r#type.decode(&mut data);
+                        let value = self.conf.data_type.decode(&mut data);
                         self.value = value.clone().into();
                         value
                     }
@@ -189,7 +194,7 @@ impl Point {
             {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        let value = self.conf.r#type.decode(&mut data);
+                        let value = self.conf.data_type.decode(&mut data);
                         self.value = value.clone().into();
                         value
                     }
