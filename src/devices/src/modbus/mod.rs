@@ -234,7 +234,7 @@ impl Modbus {
                 match Modbus::connect(&conf).await {
                     Ok(mut ctx) => {
                         for point in points.write().await.iter_mut() {
-                            point.start(read_tx.clone());
+                            point.start(read_tx.clone()).await;
                         }
                         loop {
                             select! {
@@ -367,7 +367,7 @@ impl Modbus {
         match Point::new(&self.id, point_id, req).await {
             Ok(mut point) => {
                 if self.stop_signal_tx.is_some() {
-                    point.start(self.read_tx.as_ref().unwrap().clone());
+                    point.start(self.read_tx.as_ref().unwrap().clone()).await;
                 }
                 self.points.write().await.push(point);
                 Ok(())

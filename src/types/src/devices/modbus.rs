@@ -74,7 +74,7 @@ pub struct CreateUpdatePointReq {
     pub interval: u64,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct DataType {
     pub typ: Type,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -630,7 +630,7 @@ impl DataType {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Type {
     Bool,

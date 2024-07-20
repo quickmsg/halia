@@ -1,6 +1,6 @@
 use common::{error::HaliaResult, persistence};
 use message::MessageBatch;
-use tokio::{select, sync::mpsc};
+use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{debug, warn};
 use types::devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
@@ -10,10 +10,19 @@ use super::WritePointEvent;
 #[derive(Debug)]
 pub struct Sink {
     pub id: Uuid,
+    on: bool,
     conf: CreateUpdateSinkReq,
     ref_cnt: usize,
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
     publish_tx: Option<mpsc::Sender<MessageBatch>>,
+
+    handle: Option<
+        JoinHandle<(
+            mpsc::Receiver<()>,
+            mpsc::Receiver<MessageBatch>,
+            mpsc::Sender<WritePointEvent>,
+        )>,
+    >,
 }
 
 impl Sink {
@@ -38,10 +47,12 @@ impl Sink {
 
         Ok(Sink {
             id: sink_id,
+            on: false,
             conf: req,
             ref_cnt: 0,
             stop_signal_tx: None,
             publish_tx: None,
+            handle: None,
         })
     }
 
@@ -60,22 +71,29 @@ impl Sink {
         )
         .await?;
 
-        // let mut restart = false;
-        // if self.conf.r#type != req.r#type
-        //     || self.conf.slave != req.slave
-        //     || self.conf.area != req.area
-        //     || self.conf.address != req.address
-        //     || self.conf.value != req.value
-        // {
-        //     restart = true;
-        // }
+        let mut restart = false;
+        if self.conf.r#type != req.r#type
+            || self.conf.slave != req.slave
+            || self.conf.area != req.area
+            || self.conf.address != req.address
+            || self.conf.value != req.value
+        {
+            restart = true;
+        }
 
-        // self.conf = req;
-
-        // Ok(restart)
         self.conf = req;
+        if restart && self.on {
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
 
-        // TODO restart
+            let (stop_signal_rx, publish_rx, tx) = self.handle.take().unwrap().await.unwrap();
+            self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.clone())
+                .await;
+        }
         Ok(())
     }
 
@@ -104,20 +122,35 @@ impl Sink {
         }
     }
 
-    pub fn start(&mut self, tx: mpsc::Sender<WritePointEvent>) {
-        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+    pub async fn start(&mut self, tx: mpsc::Sender<WritePointEvent>) {
+        if self.on {
+            return;
+        } else {
+            self.on = true;
+        }
+
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        let (publish_tx, mut publish_rx) = mpsc::channel(16);
+        let (publish_tx, publish_rx) = mpsc::channel(16);
         self.publish_tx = Some(publish_tx);
 
-        let conf = self.conf.clone();
-        tokio::spawn(async move {
+        self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.clone())
+            .await;
+    }
+
+    async fn event_loop(
+        &mut self,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut publish_rx: mpsc::Receiver<MessageBatch>,
+        tx: mpsc::Sender<WritePointEvent>,
+        conf: CreateUpdateSinkReq,
+    ) {
+        let handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        debug!("sink stop");
-                        return
+                        return (stop_signal_rx, publish_rx, tx);
                     }
 
                     mb = publish_rx.recv() => {
@@ -128,9 +161,16 @@ impl Sink {
                 }
             }
         });
+        self.handle = Some(handle);
     }
 
     pub async fn stop(&mut self) {
+        if !self.on {
+            return;
+        } else {
+            self.on = false;
+        }
+
         match &self.stop_signal_tx {
             Some(tx) => {
                 if let Err(e) = tx.send(()).await {
