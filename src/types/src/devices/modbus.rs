@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use message::MessageValue;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use uuid::Uuid;
 
 use super::SinkValue;
@@ -262,68 +263,76 @@ impl DataType {
                 }
                 MessageValue::Float64(f32::from_be_bytes(data) as f64)
             }
-            // DataType::Float64(endian0, endian1) => {
-            //     let mut data = match data.as_slice() {
-            //         [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
-            //         _ => return MessageValue::Null,
-            //     };
-            //     if *endian0 == Endian::LittleEndian {
-            //         data.swap(0, 1);
-            //         data.swap(2, 3);
-            //         data.swap(4, 5);
-            //         data.swap(6, 7);
-            //     }
-            //     if *endian1 == Endian::LittleEndian {
-            //         data.swap(0, 6);
-            //         data.swap(1, 7);
-            //         data.swap(2, 4);
-            //         data.swap(3, 5);
-            //     }
-            //     MessageValue::Float64(f64::from_be_bytes(data))
-            // }
-            // DataType::String(len, single, endian) => match (single, endian) {
-            //     (true, Endian::BigEndian) => {
-            //         let mut new_data = vec![];
-            //         for i in 0..*len * 2 {
-            //             if i % 2 != 0 {
-            //                 new_data.push(data[i as usize]);
-            //             }
-            //         }
-            //         match String::from_utf8(new_data) {
-            //             Ok(string) => return MessageValue::String(string.replace("\0", "")),
-            //             Err(_) => return MessageValue::Null,
-            //         }
-            //     }
-            //     (true, Endian::LittleEndian) => {
-            //         let mut new_data = vec![];
-            //         for i in 0..*len * 2 {
-            //             if i % 2 == 0 {
-            //                 new_data.push(data[i as usize]);
-            //             }
-            //         }
-            //         match String::from_utf8(new_data) {
-            //             Ok(string) => return MessageValue::String(string.replace("\0", "")),
-            //             Err(_) => return MessageValue::Null,
-            //         }
-            //     }
-            //     (false, Endian::BigEndian) => {
-            //         for i in 0..*len * 2 {
-            //             if i % 2 == 0 {
-            //                 data.swap((i * 2) as usize, (i * 2 + 1) as usize);
-            //             }
-            //         }
-            //         match String::from_utf8(data.clone()) {
-            //             Ok(string) => return MessageValue::String(string),
-            //             Err(_) => return MessageValue::Null,
-            //         }
-            //     }
-            //     (false, Endian::LittleEndian) => match String::from_utf8(data.clone()) {
-            //         Ok(string) => return MessageValue::String(string),
-            //         Err(_) => return MessageValue::Null,
-            //     },
-            // },
-            // TODO
-            // DataType::Bytes(_, _, _) => MessageValue::Bytes(data.clone()),
+            Type::Float64 => {
+                let mut data = match data.as_slice() {
+                    [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
+                    _ => return MessageValue::Null,
+                };
+                match self.endian0.as_ref().unwrap() {
+                    Endian::Little => {
+                        data.swap(0, 1);
+                        data.swap(2, 3);
+                        data.swap(4, 5);
+                        data.swap(6, 7);
+                    }
+                    Endian::Big => {}
+                }
+                match self.endian1.as_ref().unwrap() {
+                    Endian::Little => {
+                        data.swap(0, 6);
+                        data.swap(1, 7);
+                        data.swap(2, 4);
+                        data.swap(3, 5);
+                    }
+                    Endian::Big => {}
+                }
+                MessageValue::Float64(f64::from_be_bytes(data))
+            }
+            Type::String => match (
+                self.single.as_ref().unwrap(),
+                self.endian0.as_ref().unwrap(),
+            ) {
+                (true, Endian::Big) => {
+                    let mut new_data = vec![];
+                    for i in 0..*self.len.as_ref().unwrap() * 2 {
+                        if i % 2 != 0 {
+                            new_data.push(data[i as usize]);
+                        }
+                    }
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
+                        Err(_) => return MessageValue::Null,
+                    }
+                }
+                (true, Endian::Little) => {
+                    let mut new_data = vec![];
+                    for i in 0..*self.len.as_ref().unwrap() * 2 {
+                        if i % 2 == 0 {
+                            new_data.push(data[i as usize]);
+                        }
+                    }
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
+                        Err(_) => return MessageValue::Null,
+                    }
+                }
+                (false, Endian::Big) => {
+                    for i in 0..*self.len.as_ref().unwrap() * 2 {
+                        if i % 2 == 0 {
+                            data.swap((i * 2) as usize, (i * 2 + 1) as usize);
+                        }
+                    }
+                    match String::from_utf8(data.clone()) {
+                        Ok(string) => return MessageValue::String(string),
+                        Err(_) => return MessageValue::Null,
+                    }
+                }
+                (false, Endian::Little) => match String::from_utf8(data.clone()) {
+                    Ok(string) => return MessageValue::String(string),
+                    Err(_) => return MessageValue::Null,
+                },
+            },
+            Type::Bytes => MessageValue::Bytes(data.clone()),
             _ => MessageValue::Null,
         }
     }
@@ -440,128 +449,154 @@ impl DataType {
                 }
                 None => bail!("value is wrong"),
             },
-            // DataType::Int64(endian0, endian1) => match data.as_i64() {
-            //     Some(value) => {
-            //         let mut data = value.to_be_bytes();
-            //         if *endian0 == Endian::BigEndian {
-            //             data.swap(0, 6);
-            //             data.swap(1, 7);
-            //             data.swap(2, 4);
-            //             data.swap(3, 5);
-            //         }
-            //         if *endian1 == Endian::BigEndian {
-            //             data.swap(0, 1);
-            //             data.swap(2, 3);
-            //             data.swap(4, 5);
-            //             data.swap(6, 7);
-            //         }
-
-            //         return Ok(data.to_vec());
-            //     }
-            //     None => bail!("value is wrong"),
-            // },
-            // DataType::Uint64(endian0, endian1) => match data.as_i64() {
-            //     Some(value) => {
-            //         let mut data = value.to_be_bytes();
-            //         if *endian0 == Endian::BigEndian {
-            //             data.swap(0, 6);
-            //             data.swap(1, 7);
-            //             data.swap(2, 4);
-            //             data.swap(3, 5);
-            //         }
-            //         if *endian1 == Endian::BigEndian {
-            //             data.swap(0, 1);
-            //             data.swap(2, 3);
-            //             data.swap(4, 5);
-            //             data.swap(6, 7);
-            //         }
-            //         return Ok(data.to_vec());
-            //     }
-            //     None => bail!("value is wrong"),
-            // },
-            // DataType::Float32(endian0, endian1) => match data.as_f64() {
-            //     Some(value) => {
-            //         if value > f32::MAX as f64 {
-            //             bail!("value is wrong, too big")
-            //         };
-            //         let mut data = (value as f32).to_be_bytes();
-            //         if *endian0 == Endian::BigEndian {
-            //             data.swap(0, 2);
-            //             data.swap(1, 3);
-            //         }
-            //         if *endian1 == Endian::BigEndian {
-            //             data.swap(0, 1);
-            //             data.swap(2, 3)
-            //         }
-            //         return Ok(data.to_vec());
-            //     }
-            //     None => bail!("value is wrong"),
-            // },
-            // DataType::Float64(endian0, endian1) => match data.as_f64() {
-            //     Some(value) => {
-            //         let mut data = (value as f32).to_be_bytes();
-            //         if *endian0 == Endian::BigEndian {
-            //             data.swap(0, 6);
-            //             data.swap(1, 7);
-            //             data.swap(2, 4);
-            //             data.swap(3, 5);
-            //         }
-            //         if *endian1 == Endian::BigEndian {
-            //             data.swap(0, 1);
-            //             data.swap(2, 3);
-            //             data.swap(4, 5);
-            //             data.swap(6, 7);
-            //         }
-            //         return Ok(data.to_vec());
-            //     }
-            //     None => bail!("value is wrong"),
-            // },
-            // DataType::String(len, single, endian) => match data.as_str() {
-            //     Some(value) => {
-            //         let mut new_data = vec![];
-            //         let data = value.as_bytes();
-            //         match single {
-            //             true => {
-            //                 if (*len as usize) < data.len() {
-            //                     bail!("too long")
-            //                 }
-            //             }
-            //             false => {
-            //                 if (*len as usize) * 2 < data.len() {
-            //                     bail!("too long")
-            //                 }
-            //             }
-            //         }
-            //         debug!("{:?}", data);
-            //         match (single, endian) {
-            //             (true, Endian::BigEndian) => {
-            //                 for byte in data {
-            //                     new_data.push(0);
-            //                     new_data.push(*byte);
-            //                 }
-            //                 return Ok(new_data);
-            //             }
-            //             (true, Endian::LittleEndian) => {
-            //                 for byte in data {
-            //                     new_data.push(*byte);
-            //                     new_data.push(0);
-            //                 }
-            //                 return Ok(new_data);
-            //             }
-            //             (false, Endian::BigEndian) => {
-            //                 for i in 0..*len {
-            //                     new_data.push(data[(i * 2 + 1) as usize]);
-            //                     new_data.push(data[(i * 2) as usize]);
-            //                 }
-            //                 return Ok(data.to_vec());
-            //             }
-            //             (false, Endian::LittleEndian) => {
-            //                 return Ok(data.to_vec());
-            //             }
-            //         }
-            //     }
-            //     None => bail!("value is wrong"),
-            // },
+            Type::Int64 => match value.as_i64() {
+                Some(value) => {
+                    let mut data = value.to_be_bytes();
+                    match self.endian0.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 6);
+                            data.swap(1, 7);
+                            data.swap(2, 4);
+                            data.swap(3, 5);
+                        }
+                    }
+                    match self.endian1.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 1);
+                            data.swap(2, 3);
+                            data.swap(4, 5);
+                            data.swap(6, 7);
+                        }
+                    }
+                    return Ok(data.to_vec());
+                }
+                None => bail!("value is wrong"),
+            },
+            Type::Uint64 => match value.as_i64() {
+                Some(value) => {
+                    let mut data = value.to_be_bytes();
+                    match self.endian0.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 6);
+                            data.swap(1, 7);
+                            data.swap(2, 4);
+                            data.swap(3, 5);
+                        }
+                    }
+                    match self.endian1.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 1);
+                            data.swap(2, 3);
+                            data.swap(4, 5);
+                            data.swap(6, 7);
+                        }
+                    }
+                    return Ok(data.to_vec());
+                }
+                None => bail!("value is wrong"),
+            },
+            Type::Float32 => match value.as_f64() {
+                Some(value) => {
+                    if value > f32::MAX as f64 {
+                        bail!("value is wrong, too big")
+                    };
+                    let mut data = (value as f32).to_be_bytes();
+                    match self.endian0.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 2);
+                            data.swap(1, 3);
+                        }
+                    }
+                    match self.endian1.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 1);
+                            data.swap(2, 3)
+                        }
+                    }
+                    return Ok(data.to_vec());
+                }
+                None => bail!("value is wrong"),
+            },
+            Type::Float64 => match value.as_f64() {
+                Some(value) => {
+                    let mut data = (value as f32).to_be_bytes();
+                    match self.endian0.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 6);
+                            data.swap(1, 7);
+                            data.swap(2, 4);
+                            data.swap(3, 5);
+                        }
+                    }
+                    match self.endian1.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 1);
+                            data.swap(2, 3);
+                            data.swap(4, 5);
+                            data.swap(6, 7);
+                        }
+                    }
+                    return Ok(data.to_vec());
+                }
+                None => bail!("value is wrong"),
+            },
+            Type::String => match value.as_str() {
+                Some(value) => {
+                    let mut new_data = vec![];
+                    let data = value.as_bytes();
+                    match self.single.as_ref().unwrap() {
+                        true => {
+                            if (*self.len.as_ref().unwrap() as usize) < data.len() {
+                                bail!("too long")
+                            }
+                        }
+                        false => {
+                            if (*self.len.as_ref().unwrap() as usize) * 2 < data.len() {
+                                bail!("too long")
+                            }
+                        }
+                    }
+                    debug!("{:?}", data);
+                    match (
+                        self.single.as_ref().unwrap(),
+                        self.endian0.as_ref().unwrap(),
+                    ) {
+                        (true, Endian::Big) => {
+                            for byte in data {
+                                new_data.push(0);
+                                new_data.push(*byte);
+                            }
+                            return Ok(new_data);
+                        }
+                        (true, Endian::Little) => {
+                            for byte in data {
+                                new_data.push(*byte);
+                                new_data.push(0);
+                            }
+                            return Ok(new_data);
+                        }
+                        (false, Endian::Big) => {
+                            for i in 0..*self.len.as_ref().unwrap() {
+                                new_data.push(data[(i * 2 + 1) as usize]);
+                                new_data.push(data[(i * 2) as usize]);
+                            }
+                            return Ok(data.to_vec());
+                        }
+                        (false, Endian::Little) => {
+                            return Ok(data.to_vec());
+                        }
+                    }
+                }
+                None => bail!("value is wrong"),
+            },
             // DataType::Bytes(len, single, endian) => match data {
             //     Value::Array(arr) => {
             //         debug!("{arr:?}");
@@ -657,20 +692,6 @@ pub enum Area {
     InputRegisters,
     HoldingRegisters, // 可读写
 }
-
-// impl TryFrom<u8> for Area {
-//     type Error = ();
-
-//     fn try_from(value: u8) -> Result<Self, Self::Error> {
-//         match value {
-//             1 => Ok(Area::InputDiscrete),
-//             2 => Ok(Area::Coils),
-//             3 => Ok(Area::InputRegisters),
-//             4 => Ok(Area::HoldingRegisters),
-//             _ => Err(()),
-//         }
-//     }
-// }
 
 #[derive(Serialize)]
 pub struct SearchPointsResp {
