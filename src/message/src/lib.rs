@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use tracing::field;
 use uuid::Uuid;
 
 mod json;
@@ -21,6 +22,10 @@ impl MessageBatch {
 
     pub fn get_messages(&self) -> &Vec<Message> {
         return &self.messages;
+    }
+
+    pub fn take_one_message(&mut self) -> Option<Message> {
+        self.messages.pop()
     }
 
     pub fn get_messages_mut(&mut self) -> &mut Vec<Message> {
@@ -57,7 +62,7 @@ pub struct Message {
 
 impl Message {
     pub fn get(&self, field: &str) -> Option<&MessageValue> {
-        return self.value.get(&field);
+        self.value.get(field)
     }
 
     pub fn get_u8(&self, field: &str) -> Option<u8> {
@@ -70,11 +75,22 @@ impl Message {
                         Some(*n as u8)
                     }
                 }
-                MessageValue::Float64(_) => todo!(),
-                MessageValue::String(_) => todo!(),
-                MessageValue::Bytes(_) => todo!(),
-                MessageValue::Array(_) => todo!(),
-                MessageValue::Object(_) => todo!(),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn get_u16(&self, field: &str) -> Option<u16> {
+        match self.value.get(field) {
+            Some(value) => match value {
+                MessageValue::Uint64(n) => {
+                    if *n > (u16::MAX as u64) {
+                        None
+                    } else {
+                        Some(*n as u16)
+                    }
+                }
                 _ => None,
             },
             None => None,

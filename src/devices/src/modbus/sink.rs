@@ -1,8 +1,8 @@
-use common::{error::HaliaResult, json, persistence};
+use common::{error::HaliaResult, persistence};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{debug, warn};
-use types::devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp};
+use types::devices::modbus::{Area, CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
 use super::WritePointEvent;
@@ -143,15 +143,14 @@ impl Sink {
     }
 
     fn send_write_point_event(
-        mb: MessageBatch,
+        mut mb: MessageBatch,
         conf: &CreateUpdateSinkReq,
         tx: &mpsc::Sender<WritePointEvent>,
     ) {
-        let messages = mb.get_messages();
-        if messages.len() < 1 {
-            return;
-        }
-        let message = messages[0];
+        let message = match mb.take_one_message() {
+            Some(message) => message,
+            None => return,
+        };
 
         let slave = match conf.slave.typ {
             types::devices::SinkValueType::Const => {
@@ -163,8 +162,8 @@ impl Sink {
                     }
                 }
             }
-            types::devices::SinkValueType::Variable => match conf.slave.value {
-                serde_json::Value::String(field) => match message.get_u8(&field) {
+            types::devices::SinkValueType::Variable => match &conf.slave.value {
+                serde_json::Value::String(field) => match message.get_u8(field) {
                     Some(n) => n,
                     None => return,
                 },
@@ -176,32 +175,58 @@ impl Sink {
         };
 
         let area = match conf.area.typ {
-            types::devices::SinkValueType::Const => match conf.area.value.as_u64() {
-                Some(n) => match n {
-                    1 | 2 | 3 | 4 => n as u8,
-                    _ => {
-                        warn!("area只能是1｜2｜3｜4");
+            types::devices::SinkValueType::Const => {
+                match common::json::number::get_u8(&conf.area.value) {
+                    Some(n) => match Area::try_from(n) {
+                        Ok(area) => area,
+                        Err(_) => return,
+                    },
+                    None => {
+                        warn!("area只能是number类型");
                         return;
                     }
-                },
-                None => {
-                    warn!("area只能是number类型");
-                    return;
                 }
-            },
-            types::devices::SinkValueType::Variable => match conf.area.value.as_str() {
-                Some(_) => todo!(),
-                None => todo!(),
+            }
+            types::devices::SinkValueType::Variable => match &conf.area.value {
+                serde_json::Value::String(field) => match message.get_u8(field) {
+                    Some(n) => match Area::try_from(n) {
+                        Ok(area) => area,
+                        Err(_) => return,
+                    },
+                    None => return,
+                },
+                _ => return,
             },
         };
 
-        match WritePointEvent::new(
-            conf.slave,
-            conf.area.clone(),
-            conf.address,
-            conf.r#type.clone(),
-            value,
-        ) {
+        let address = match conf.address.typ {
+            types::devices::SinkValueType::Const => {
+                match common::json::number::get_u16(&conf.address.value) {
+                    Some(n) => n,
+                    None => return,
+                }
+            }
+            types::devices::SinkValueType::Variable => match &conf.address.value {
+                serde_json::Value::String(field) => match message.get_u16(&field) {
+                    Some(address) => address,
+                    None => return,
+                },
+                _ => return,
+            },
+        };
+
+        let value = match conf.value.typ {
+            types::devices::SinkValueType::Const => conf.value.value.clone(),
+            types::devices::SinkValueType::Variable => match &conf.address.value {
+                serde_json::Value::String(field) => match message.get(field) {
+                    Some(v) => v.clone().into(),
+                    None => return,
+                },
+                _ => return,
+            },
+        };
+
+        match WritePointEvent::new(slave, area, address, conf.r#type.clone(), value) {
             Ok(wpe) => {
                 let _ = tx.send(wpe);
             }

@@ -96,6 +96,20 @@ pub enum Area {
     HoldingRegisters = 4, // 可读写
 }
 
+impl TryFrom<u8> for Area {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Area::InputDiscrete),
+            2 => Ok(Area::Coils),
+            3 => Ok(Area::InputRegisters),
+            4 => Ok(Area::HoldingRegisters),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct SearchGroupPointsResp {
     pub total: usize,
