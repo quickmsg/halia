@@ -57,26 +57,7 @@ pub enum Encode {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdateGroupReq {
-    pub name: String,
-    pub interval: u64,
-    pub desc: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct SearchGroupsResp {
-    pub total: usize,
-    pub data: Vec<SearchGroupsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchGroupsItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdateGroupReq,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdateGroupPointReq {
+pub struct CreateUpdatePointReq {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
@@ -85,6 +66,7 @@ pub struct CreateUpdateGroupPointReq {
     pub slave: u8,
     pub area: Area,
     pub address: u16,
+    pub interval: u64,
 }
 
 #[derive(Deserialize_repr, Serialize_repr, Debug, Clone)]
@@ -111,15 +93,15 @@ impl TryFrom<u8> for Area {
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupPointsResp {
+pub struct SearchPointsResp {
     pub total: usize,
-    pub data: Vec<SearchGroupPointsItemResp>,
+    pub data: Vec<SearchPointsItemResp>,
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupPointsItemResp {
+pub struct SearchPointsItemResp {
     pub id: Uuid,
-    pub conf: CreateUpdateGroupPointReq,
+    pub conf: CreateUpdatePointReq,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

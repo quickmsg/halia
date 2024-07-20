@@ -2,8 +2,8 @@ use common::{
     error::{HaliaError, HaliaResult},
     persistence::{self, Status},
 };
-use group::Group;
 use message::MessageBatch;
+use point::Point;
 use protocol::modbus::{
     client::{rtu, tcp, Context, Writer},
     SlaveContext,
@@ -31,17 +31,16 @@ use tracing::{debug, warn};
 use types::devices::{
     datatype::{DataType, Endian},
     modbus::{
-        Area, CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
-        CreateUpdateSinkReq, Encode, SearchGroupPointsResp, SearchGroupsResp, SearchSinksResp,
+        Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, Encode,
+        SearchPointsResp, SearchSinksResp,
     },
     SearchDevicesItemResp,
 };
 use uuid::Uuid;
 
 pub const TYPE: &str = "modbus";
-mod group;
-mod group_point;
 pub mod manager;
+mod point;
 mod sink;
 
 #[derive(Debug)]
@@ -57,7 +56,7 @@ pub struct Modbus {
 
     read_tx: Option<mpsc::Sender<Uuid>>,
 
-    groups: Arc<RwLock<Vec<Group>>>,
+    points: Arc<RwLock<Vec<Point>>>,
     sinks: Vec<Sink>,
 
     handle: Option<
@@ -90,7 +89,7 @@ impl Modbus {
             err: None,
             rtt: Arc::new(AtomicU16::new(9999)),
             conf: req,
-            groups: Arc::new(RwLock::new(vec![])),
+            points: Arc::new(RwLock::new(vec![])),
             read_tx: None,
             write_tx: None,
             sinks: vec![],
@@ -100,7 +99,7 @@ impl Modbus {
     }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::devices::modbus::read_groups(&self.id).await {
+        match persistence::devices::modbus::read_points(&self.id).await {
             Ok(datas) => {
                 for data in datas {
                     if data.len() == 0 {
@@ -109,13 +108,9 @@ impl Modbus {
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     assert_eq!(items.len(), 2);
 
-                    let group_id = Uuid::from_str(items[0]).unwrap();
-                    let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
-                    self.create_group(Some(group_id), req).await?;
-                }
-
-                for group in self.groups.write().await.iter_mut() {
-                    group.recover(&self.id).await?;
+                    let point_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdatePointReq = serde_json::from_str(items[1])?;
+                    self.create_point(Some(point_id), req).await?;
                 }
             }
             Err(e) => return Err(e.into()),
@@ -231,15 +226,16 @@ impl Modbus {
     ) {
         let conf = self.conf.clone();
         let interval = self.conf.interval;
-        let groups = self.groups.clone();
+        let points = self.points.clone();
+
         let rtt = self.rtt.clone();
         let read_tx = self.read_tx.as_ref().unwrap().clone();
         let handle = tokio::spawn(async move {
             loop {
                 match Modbus::connect(&conf).await {
                     Ok(mut ctx) => {
-                        for group in groups.write().await.iter_mut() {
-                            group.start(read_tx.clone());
+                        for point in points.write().await.iter_mut() {
+                            point.start(read_tx.clone());
                         }
                         loop {
                             select! {
@@ -259,14 +255,15 @@ impl Modbus {
                                     }
                                 }
 
-                                group_id = read_rx.recv() => {
-                                   if let Some(group_id) = group_id {
-                                        match read_group_points(&mut ctx, &groups, group_id, interval).await {
-                                            Ok(last_rtt) => match last_rtt {
-                                                Some(last_rtt) => rtt.store(last_rtt, Ordering::SeqCst),
-                                                None => {}
+                                point_id = read_rx.recv() => {
+                                   if let Some(point_id) = point_id {
+                                        match points.write().await.iter_mut().find(|point| point.id == point_id) {
+                                            Some(point) => {
+                                                if let Err(_) = point.read(&mut ctx).await {
+                                                    break
+                                                }
                                             }
-                                            Err(_) => break,
+                                            None => {}
                                         }
                                     }
                                 }
@@ -275,8 +272,8 @@ impl Modbus {
                     }
                     Err(e) => {
                         debug!("{}", e);
-                        for group in groups.write().await.iter_mut() {
-                            group.stop().await;
+                        for point in points.write().await.iter_mut() {
+                            point.stop().await;
                         }
                         time::sleep(Duration::from_secs(5)).await;
                     }
@@ -294,8 +291,8 @@ impl Modbus {
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
 
-        for group in self.groups.write().await.iter_mut() {
-            group.stop().await;
+        for point in self.points.write().await.iter_mut() {
+            point.stop().await;
         }
         self.stop_signal_tx
             .as_ref()
@@ -363,173 +360,66 @@ impl Modbus {
         }
     }
 
-    async fn get_write_point_event(
-        &self,
-        group_id: Uuid,
-        point_id: Uuid,
-        value: String,
-    ) -> HaliaResult<WritePointEvent> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.get_write_point_event(point_id, value).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn create_group(
+    pub async fn create_point(
         &mut self,
-        group_id: Option<Uuid>,
-        req: CreateUpdateGroupReq,
+        point_id: Option<Uuid>,
+        req: CreateUpdatePointReq,
     ) -> HaliaResult<()> {
-        match Group::new(&self.id, group_id, req).await {
-            Ok(mut group) => {
+        match Point::new(&self.id, point_id, req).await {
+            Ok(mut point) => {
                 if self.stop_signal_tx.is_some() {
-                    let read_tx = self.read_tx.as_ref().unwrap().clone();
-                    group.start(read_tx);
+                    point.start(self.read_tx.as_ref().unwrap().clone());
                 }
-                self.groups.write().await.push(group);
-
+                self.points.write().await.push(point);
                 Ok(())
             }
-            Err(e) => {
-                debug!("{}", e);
-                return Err(HaliaError::ConfErr);
-            }
+            Err(_) => todo!(),
         }
     }
 
-    pub async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupsResp> {
-        let mut resps = Vec::new();
-        for group in self
-            .groups
+    pub async fn search_points(&self, page: usize, size: usize) -> SearchPointsResp {
+        let mut data = vec![];
+        for point in self
+            .points
             .read()
             .await
             .iter()
             .rev()
-            .skip(((page - 1) * size) as usize)
+            .skip((page - 1) * size)
         {
-            resps.push(group.search());
-            if resps.len() == size as usize {
+            data.push(point.search());
+            if data.len() == size {
                 break;
             }
         }
-        Ok(SearchGroupsResp {
-            total: self.groups.read().await.len(),
-            data: resps,
-        })
+
+        SearchPointsResp {
+            total: self.points.read().await.len(),
+            data,
+        }
     }
 
-    pub async fn update_group(
+    pub async fn update_point(
         &mut self,
-        group_id: Uuid,
-        req: CreateUpdateGroupReq,
-    ) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => match group.update(&self.id, req).await {
-                Ok(restart) => {
-                    if restart && self.stop_signal_tx.is_some() {
-                        group.stop().await;
-                        group.start(self.read_tx.as_ref().unwrap().clone());
-                    }
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            },
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn delete_group(&mut self, group_id: Uuid) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => {
-                group.delete(&self.id).await?;
-                self.groups
-                    .write()
-                    .await
-                    .retain(|group| group.id != group_id);
-            }
-            None => return Err(HaliaError::NotFound),
-        }
-
-        Ok(())
-    }
-
-    pub async fn create_group_point(
-        &mut self,
-        group_id: Uuid,
-        point_id: Option<Uuid>,
-        req: CreateUpdateGroupPointReq,
-    ) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.create_point(&self.id, point_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn search_group_points(
-        &self,
-        group_id: Uuid,
-        page: usize,
-        size: usize,
-    ) -> HaliaResult<SearchGroupPointsResp> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => Ok(group.search_points(page, size)),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn update_group_point(
-        &mut self,
-        group_id: Uuid,
         point_id: Uuid,
-        req: CreateUpdateGroupPointReq,
+        req: CreateUpdatePointReq,
     ) -> HaliaResult<()> {
         match self
-            .groups
+            .points
             .write()
             .await
             .iter_mut()
-            .find(|group| group.id == group_id)
+            .find(|point| point.id == point_id)
         {
-            Some(group) => group.update_point(&self.id, point_id, req).await,
+            Some(point) => point.update(&self.id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
     pub async fn write_point_value(
         &self,
-        group_id: Uuid,
         point_id: Uuid,
-        value: String,
+        value: serde_json::Value,
     ) -> HaliaResult<()> {
         if self.stop_signal_tx.is_none() {
             return Err(HaliaError::DeviceStoped);
@@ -538,57 +428,77 @@ impl Modbus {
             return Err(HaliaError::DeviceDisconnect);
         }
 
-        match self.get_write_point_event(group_id, point_id, value).await {
-            Ok(wpe) => {
-                let _ = self.write_tx.as_ref().unwrap().send(wpe).await;
-                Ok(())
-            }
-            Err(e) => return Err(e),
-        }
-    }
-
-    pub async fn delete_group_points(
-        &mut self,
-        group_id: Uuid,
-        point_ids: Vec<Uuid>,
-    ) -> HaliaResult<()> {
         match self
-            .groups
-            .write()
+            .points
+            .read()
             .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
+            .iter()
+            .find(|point| point.id == point_id)
         {
-            Some(group) => group.delete_points(&self.id, point_ids).await,
+            Some(point) => {
+                match WritePointEvent::new(
+                    point.conf.slave,
+                    point.conf.area.clone(),
+                    point.conf.address,
+                    point.conf.r#type.clone(),
+                    value,
+                ) {
+                    Ok(wpe) => {
+                        let _ = self.write_tx.as_ref().unwrap().send(wpe).await;
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
+                }
+            }
             None => Err(HaliaError::NotFound),
         }
     }
 
+    pub async fn delete_points(&mut self, point_ids: Vec<Uuid>) -> HaliaResult<()> {
+        for point_id in &point_ids {
+            if let Some(point) = self
+                .points
+                .write()
+                .await
+                .iter_mut()
+                .find(|point| point.id == *point_id)
+            {
+                point.delete(&self.id).await?;
+            }
+        }
+
+        self.points
+            .write()
+            .await
+            .retain(|point| !point_ids.contains(&point.id));
+        Ok(())
+    }
+
     pub async fn subscribe(
         &mut self,
-        group_id: &Uuid,
+        point_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self
-            .groups
+            .points
             .write()
             .await
             .iter_mut()
-            .find(|group| group.id == *group_id)
+            .find(|point| point.id == *point_id)
         {
-            Some(group) => Ok(group.subscribe()),
+            Some(point) => Ok(point.subscribe()),
             None => return Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unsubscribe(&mut self, group_id: &Uuid) -> HaliaResult<()> {
+    pub async fn unsubscribe(&mut self, point_id: &Uuid) -> HaliaResult<()> {
         match self
-            .groups
+            .points
             .write()
             .await
             .iter_mut()
-            .find(|group| group.id == *group_id)
+            .find(|point| point.id == *point_id)
         {
-            Some(group) => Ok(group.unsubscribe()),
+            Some(point) => Ok(point.unsubscribe()),
             None => return Err(HaliaError::NotFound),
         }
     }
@@ -659,27 +569,6 @@ impl Modbus {
             None => Err(HaliaError::NotFound),
         }
     }
-}
-
-async fn read_group_points(
-    ctx: &mut Context,
-    groups: &Arc<RwLock<Vec<Group>>>,
-    group_id: Uuid,
-    interval: u64,
-) -> HaliaResult<Option<u16>> {
-    if let Some(group) = groups
-        .write()
-        .await
-        .iter_mut()
-        .find(|group| group.id == group_id)
-    {
-        match group.read_points_value(ctx, interval).await {
-            Ok(rtt) => return Ok(Some(rtt)),
-            Err(e) => return Err(e),
-        }
-    }
-
-    Ok(None)
 }
 
 pub struct WritePointEvent {

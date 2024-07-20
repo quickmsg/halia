@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use tracing::field;
 use uuid::Uuid;
 
 mod json;
@@ -7,7 +6,6 @@ mod json;
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
     name: String,
-    sink_id: Option<Uuid>,
     messages: Vec<Message>,
 }
 
@@ -35,21 +33,12 @@ impl MessageBatch {
     pub fn push_message(&mut self, message: Message) {
         self.messages.push(message);
     }
-
-    pub fn set_sink_id(&mut self, sink_id: Uuid) {
-        self.sink_id = Some(sink_id)
-    }
-
-    pub fn get_sink_id(&self) -> &Option<Uuid> {
-        &self.sink_id
-    }
 }
 
 impl Default for MessageBatch {
     fn default() -> Self {
         Self {
             name: "_none".to_string(),
-            sink_id: None,
             messages: Default::default(),
         }
     }

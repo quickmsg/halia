@@ -1,4 +1,4 @@
-use coap::manager::GLOBAL_COAP_MANAGER;
+// use coap::manager::GLOBAL_COAP_MANAGER;
 use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use std::{str::FromStr, sync::LazyLock};
@@ -7,7 +7,7 @@ use types::devices::{coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, S
 
 use uuid::Uuid;
 
-pub mod coap;
+// pub mod coap;
 pub mod modbus;
 mod opcua;
 
@@ -33,7 +33,7 @@ impl DeviceManager {
         for (r#type, device_id) in self.devices.read().await.iter().rev() {
             let resp = match r#type {
                 &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id),
-                &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
+                // &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
                 _ => unreachable!(),
             };
 
@@ -94,16 +94,16 @@ impl DeviceManager {
                                 _ => panic!("文件已损坏"),
                             }
                         }
-                        coap::TYPE => {
-                            let req: CreateUpdateCoapReq = serde_json::from_str(items[3])?;
-                            GLOBAL_COAP_MANAGER.create(Some(device_id), req).await?;
-                            GLOBAL_COAP_MANAGER.recover(&device_id).await.unwrap();
-                            match items[2] {
-                                "0" => {}
-                                "1" => GLOBAL_COAP_MANAGER.start(device_id).await.unwrap(),
-                                _ => panic!("文件已损坏"),
-                            }
-                        }
+                        // coap::TYPE => {
+                        //     let req: CreateUpdateCoapReq = serde_json::from_str(items[3])?;
+                        //     GLOBAL_COAP_MANAGER.create(Some(device_id), req).await?;
+                        //     GLOBAL_COAP_MANAGER.recover(&device_id).await.unwrap();
+                        //     match items[2] {
+                        //         "0" => {}
+                        //         "1" => GLOBAL_COAP_MANAGER.start(device_id).await.unwrap(),
+                        //         _ => panic!("文件已损坏"),
+                        //     }
+                        // }
                         _ => {}
                     }
                 }

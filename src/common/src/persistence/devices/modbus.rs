@@ -7,32 +7,17 @@ use crate::persistence;
 
 use super::{get_device_dir, get_device_file_path, Status, DELIMITER};
 
-static GROUP_FILE: &str = "groups";
 static SINK_FILE: &str = "sinks";
 static POINT_FILE: &str = "points";
 
-fn get_group_file_path(device_id: &Uuid) -> PathBuf {
+fn get_point_file_path(device_id: &Uuid) -> PathBuf {
     get_device_dir()
         .join(device_id.to_string())
-        .join(GROUP_FILE)
+        .join(POINT_FILE)
 }
 
 fn get_sink_file_path(device_id: &Uuid) -> PathBuf {
     get_device_dir().join(device_id.to_string()).join(SINK_FILE)
-}
-
-fn get_group_point_file_path(device_id: &Uuid, group_id: &Uuid) -> PathBuf {
-    get_device_dir()
-        .join(device_id.to_string())
-        .join(group_id.to_string())
-        .join(POINT_FILE)
-}
-
-fn get_sink_point_file_path(device_id: &Uuid, sink_id: &Uuid) -> PathBuf {
-    get_device_dir()
-        .join(device_id.to_string())
-        .join(sink_id.to_string())
-        .join(POINT_FILE)
 }
 
 pub async fn create(device_id: &Uuid, r#type: &'static str, data: String) -> Result<(), io::Error> {
@@ -51,99 +36,36 @@ pub async fn create(device_id: &Uuid, r#type: &'static str, data: String) -> Res
     .await?;
 
     fs::create_dir_all(get_device_dir().join(device_id.to_string())).await?;
-    crate::persistence::create_file(get_group_file_path(device_id)).await?;
+    crate::persistence::create_file(get_point_file_path(device_id)).await?;
     crate::persistence::create_file(get_sink_file_path(device_id)).await
 }
 
-pub async fn create_group(
+pub async fn create_point(
     device_id: &Uuid,
-    group_id: &Uuid,
-    data: String,
-) -> Result<(), io::Error> {
-    persistence::create(get_group_file_path(device_id), group_id, &data).await?;
-    fs::create_dir(
-        get_device_dir()
-            .join(device_id.to_string())
-            .join(group_id.to_string()),
-    )
-    .await?;
-    persistence::create_file(get_group_point_file_path(device_id, group_id)).await
-}
-
-pub async fn read_groups(device_id: &Uuid) -> Result<Vec<String>, io::Error> {
-    persistence::read(get_group_file_path(device_id)).await
-}
-
-pub async fn update_group(
-    device_id: &Uuid,
-    group_id: &Uuid,
-    data: String,
-) -> Result<(), io::Error> {
-    persistence::update(get_group_file_path(device_id), group_id, &data).await
-}
-
-pub async fn delete_group(device_id: &Uuid, group_id: &Uuid) -> Result<(), io::Error> {
-    persistence::delete(get_group_file_path(device_id), group_id).await?;
-    fs::remove_dir_all(
-        get_device_dir()
-            .join(device_id.to_string())
-            .join(group_id.to_string()),
-    )
-    .await
-}
-
-pub async fn create_group_point(
-    device_id: &Uuid,
-    group_id: &Uuid,
     point_id: &Uuid,
     data: String,
 ) -> Result<(), io::Error> {
-    persistence::create(
-        get_group_point_file_path(device_id, group_id),
-        point_id,
-        &data,
-    )
-    .await
+    persistence::create(get_point_file_path(device_id), point_id, &data).await
 }
 
-pub async fn read_group_points(
-    device_id: &Uuid,
-    group_id: &Uuid,
-) -> Result<Vec<String>, io::Error> {
-    persistence::read(get_group_point_file_path(device_id, group_id)).await
+pub async fn read_points(device_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_point_file_path(device_id)).await
 }
 
-pub async fn update_group_point(
+pub async fn update_point(
     device_id: &Uuid,
-    group_id: &Uuid,
     point_id: &Uuid,
     data: String,
 ) -> Result<(), io::Error> {
-    persistence::update(
-        get_group_point_file_path(device_id, group_id),
-        point_id,
-        &data,
-    )
-    .await
+    persistence::update(get_point_file_path(device_id), point_id, &data).await
 }
 
-pub async fn delete_group_point(
-    device_id: &Uuid,
-    group_id: &Uuid,
-    point_id: &Uuid,
-) -> Result<(), io::Error> {
-    persistence::delete(get_group_point_file_path(device_id, group_id), point_id).await
+pub async fn delete_point(device_id: &Uuid, point_id: &Uuid) -> Result<(), io::Error> {
+    persistence::delete(get_point_file_path(device_id), point_id).await
 }
 
 pub async fn create_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
-    persistence::create(get_sink_file_path(device_id), sink_id, &data).await?;
-    fs::create_dir(
-        get_device_dir()
-            .join(device_id.to_string())
-            .join(sink_id.to_string()),
-    )
-    .await?;
-    persistence::create_file(get_sink_point_file_path(device_id, sink_id)).await
+    persistence::create(get_sink_file_path(device_id), sink_id, &data).await
 }
 
 pub async fn read_sinks(device_id: &Uuid) -> Result<Vec<String>, io::Error> {

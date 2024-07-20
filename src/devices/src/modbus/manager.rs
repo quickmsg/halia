@@ -6,8 +6,8 @@ use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
 use types::devices::{
     modbus::{
-        CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq,
-        CreateUpdateSinkReq, SearchGroupPointsResp, SearchGroupsResp, SearchSinksResp,
+        CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
+        SearchSinksResp,
     },
     SearchDevicesItemResp,
 };
@@ -86,109 +86,57 @@ impl Manager {
         Ok(())
     }
 
-    pub async fn create_group(
+    pub async fn create_point(
         &self,
         device_id: Uuid,
-        group_id: Option<Uuid>,
-        req: CreateUpdateGroupReq,
-    ) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_group(group_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn search_groups(
-        &self,
-        device_id: Uuid,
-        page: usize,
-        size: usize,
-    ) -> HaliaResult<SearchGroupsResp> {
-        match self.devices.get(&device_id) {
-            Some(device) => device.search_groups(page, size).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn update_group(
-        &self,
-        device_id: Uuid,
-        group_id: Uuid,
-        req: CreateUpdateGroupReq,
-    ) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_group(group_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.delete_group(group_id).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn create_group_point(
-        &self,
-        device_id: Uuid,
-        group_id: Uuid,
         point_id: Option<Uuid>,
-        req: CreateUpdateGroupPointReq,
+        req: CreateUpdatePointReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_group_point(group_id, point_id, req).await,
+            Some(mut device) => device.create_point(point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn search_group_points(
+    pub async fn search_points(
         &self,
         device_id: Uuid,
-        group_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchGroupPointsResp> {
+    ) -> HaliaResult<SearchPointsResp> {
         match self.devices.get(&device_id) {
-            Some(device) => device.search_group_points(group_id, page, size).await,
+            Some(device) => Ok(device.search_points(page, size).await),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn update_group_point(
+    pub async fn update_point(
         &self,
         device_id: Uuid,
-        group_id: Uuid,
         point_id: Uuid,
-        req: CreateUpdateGroupPointReq,
+        req: CreateUpdatePointReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_group_point(group_id, point_id, req).await,
+            Some(mut device) => device.update_point(point_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn write_group_point_value(
+    pub async fn write_point_value(
         &self,
         device_id: Uuid,
-        group_id: Uuid,
         point_id: Uuid,
-        data: String,
+        value: serde_json::Value,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(device) => device.write_point_value(group_id, point_id, data).await,
+            Some(device) => device.write_point_value(point_id, value).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn delete_group_points(
-        &self,
-        device_id: Uuid,
-        group_id: Uuid,
-        point_ids: Vec<Uuid>,
-    ) -> HaliaResult<()> {
+    pub async fn delete_points(&self, device_id: Uuid, point_ids: Vec<Uuid>) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.delete_group_points(group_id, point_ids).await,
+            Some(mut device) => device.delete_points(point_ids).await,
             None => Err(HaliaError::NotFound),
         }
     }

@@ -6,8 +6,8 @@ use axum::{
 use common::error::HaliaError;
 use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
 use types::devices::modbus::{
-    CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq, CreateUpdateSinkReq,
-    SearchGroupPointsResp, SearchGroupsResp, SearchSinksResp,
+    CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
+    SearchSinksResp,
 };
 use uuid::Uuid;
 
@@ -24,21 +24,13 @@ pub(crate) fn modbus_routes() -> Router {
             "/:device_id",
             Router::new()
                 .nest(
-                    "/group",
+                    "/point",
                     Router::new()
-                        .route("/", post(create_group))
-                        .route("/", get(search_groups))
-                        .route("/:group_id", put(update_group))
-                        .route("/:group_id", routing::delete(delete_group))
-                        .nest(
-                            "/:group_id/point",
-                            Router::new()
-                                .route("/", post(create_group_point))
-                                .route("/", get(search_group_points))
-                                .route("/:point_id", put(update_group_point))
-                                .route("/:point_id/value", put(write_group_point_value))
-                                .route("/", routing::delete(delete_group_points)),
-                        ),
+                        .route("/", post(create_point))
+                        .route("/", get(search_points))
+                        .route("/:point_id", put(update_point))
+                        .route("/:point_id/value", put(write_point_value))
+                        .route("/", routing::delete(delete_points)),
                 )
                 .nest(
                     "/sink",
@@ -89,12 +81,12 @@ async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-async fn create_group(
+async fn create_point(
     Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateGroupReq>,
+    Json(req): Json<CreateUpdatePointReq>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .create_group(device_id, None, req)
+        .create_point(device_id, None, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -102,61 +94,12 @@ async fn create_group(
     }
 }
 
-async fn search_groups(
+async fn search_points(
     Path(device_id): Path<Uuid>,
     pagination: Query<Pagination>,
-) -> AppResp<SearchGroupsResp> {
+) -> AppResp<SearchPointsResp> {
     match GLOBAL_MODBUS_MANAGER
-        .search_groups(device_id, pagination.p, pagination.s)
-        .await
-    {
-        Ok(groups) => AppResp::with_data(groups),
-        Err(e) => e.into(),
-    }
-}
-
-async fn update_group(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .update_group(device_id, group_id, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
-
-async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .delete_group(device_id, group_id)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
-
-async fn create_group_point(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupPointReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .create_group_point(device_id, group_id, None, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
-
-async fn search_group_points(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    pagination: Query<Pagination>,
-) -> AppResp<SearchGroupPointsResp> {
-    match GLOBAL_MODBUS_MANAGER
-        .search_group_points(device_id, group_id, pagination.p, pagination.s)
+        .search_points(device_id, pagination.p, pagination.s)
         .await
     {
         Ok(values) => AppResp::with_data(values),
@@ -164,12 +107,12 @@ async fn search_group_points(
     }
 }
 
-async fn update_group_point(
-    Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupPointReq>,
+async fn update_point(
+    Path((device_id, point_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdatePointReq>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .update_group_point(device_id, group_id, point_id, req)
+        .update_point(device_id, point_id, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -177,12 +120,12 @@ async fn update_group_point(
     }
 }
 
-async fn write_group_point_value(
-    Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
-    data: String,
+async fn write_point_value(
+    Path((device_id, point_id)): Path<(Uuid, Uuid)>,
+    Json(value): Json<serde_json::Value>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
-        .write_group_point_value(device_id, group_id, point_id, data)
+        .write_point_value(device_id, point_id, value)
         .await
     {
         Ok(_) => AppResp::new(),
@@ -190,8 +133,8 @@ async fn write_group_point_value(
     }
 }
 
-async fn delete_group_points(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
+async fn delete_points(
+    Path(device_id): Path<Uuid>,
     Query(query): Query<DeleteIdsQuery>,
 ) -> AppResp<()> {
     let point_ids: Vec<Uuid> = match query
@@ -205,7 +148,7 @@ async fn delete_group_points(
     };
 
     match GLOBAL_MODBUS_MANAGER
-        .delete_group_points(device_id, group_id, point_ids)
+        .delete_points(device_id, point_ids)
         .await
     {
         Ok(()) => AppResp::new(),
