@@ -2,6 +2,7 @@ use axum::{extract::Query, routing::get, Router};
 use coap::coap_routes;
 use devices::GLOBAL_DEVICE_MANAGER;
 use modbus::modbus_routes;
+use opcua::opcua_routes;
 use types::devices::SearchDevicesResp;
 
 use crate::{AppResp, Pagination};

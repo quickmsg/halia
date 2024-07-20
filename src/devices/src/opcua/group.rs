@@ -11,6 +11,7 @@ use tokio::{
 use tracing::{debug, error};
 use types::devices::opcua::{
     CreateUpdateGroupReq, CreateUpdateGroupVariableReq, SearchGroupVariablesResp,
+    SearchGroupsItemResp,
 };
 use uuid::Uuid;
 
@@ -54,14 +55,21 @@ impl Group {
         })
     }
 
+    pub fn search(&self) -> SearchGroupsItemResp {
+        SearchGroupsItemResp {
+            id: self.id.clone(),
+            conf: self.conf.clone(),
+        }
+    }
+
     pub fn run(
         &self,
         session: Arc<RwLock<Option<Arc<Session>>>>,
         mut cmd_rx: broadcast::Receiver<Command>,
     ) {
-        let interval = self.interval;
+        let interval = self.conf.interval;
         let group_id = self.id;
-        let points = self.points.clone();
+        let variables = self.variables.clone();
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
@@ -91,7 +99,7 @@ impl Group {
                     _ = interval.tick() => {
                         match session.read().await.as_ref() {
                             Some(session) => {
-                                Group::read_points(session, points.write().await).await;
+                                // Group::read_points(session, points.write().await).await;
                             }
                             None => {},
                         }

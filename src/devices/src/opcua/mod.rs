@@ -23,7 +23,13 @@ use tokio::{
     time,
 };
 use tracing::{debug, error};
-use types::devices::opcua::CreateUpdateOpcuaReq;
+use types::devices::{
+    opcua::{
+        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+        SearchGroupVariablesResp, SearchGroupsResp,
+    },
+    SearchDevicesItemResp,
+};
 
 use uuid::Uuid;
 
@@ -50,6 +56,8 @@ impl Opcua {
             None => (Uuid::new_v4(), true),
         };
 
+        if new {}
+
         Ok(Opcua {
             id: device_id,
             on: Arc::new(AtomicBool::new(false)),
@@ -68,7 +76,7 @@ impl Opcua {
         let on = self.on.clone();
         tokio::spawn(async move {
             loop {
-                match OpcUa::get_session(&conf).await {
+                match Opcua::get_session(&conf).await {
                     Ok((s, handle)) => {
                         session.write().await.replace(s);
                         match handle.await {
@@ -99,7 +107,9 @@ impl Opcua {
         });
     }
 
-    async fn get_session(conf: &Conf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
+    async fn get_session(
+        conf: &CreateUpdateOpcuaReq,
+    ) -> HaliaResult<(Arc<Session>, JoinHandle<StatusCode>)> {
         let mut client = ClientBuilder::new()
             .application_name("test")
             .application_uri("aasda")
@@ -110,14 +120,17 @@ impl Opcua {
             .client()
             .unwrap();
 
-        let endpoint: EndpointDescription = EndpointDescription::from(conf.url.as_ref());
+        let endpoint: EndpointDescription = EndpointDescription::from(conf.host.as_ref());
 
         let (session, event_loop) = match client
             .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
             .await
         {
             Ok((session, event_loop)) => (session, event_loop),
-            Err(e) => bail!("connect error {e:?}"),
+            Err(e) => {
+                // bail!("connect error {e:?}"),
+                todo!()
+            }
         };
 
         let handle = event_loop.spawn();
@@ -133,15 +146,14 @@ impl Opcua {
         todo!()
     }
 
-    async fn get_info(&self) -> SearchDeviceItemResp {
-        SearchDeviceItemResp {
+    fn get_info(&self) -> SearchDevicesItemResp {
+        SearchDevicesItemResp {
             id: self.id,
-            name: self.name.clone(),
             r#type: TYPE,
             on: self.on.load(Ordering::SeqCst),
             err: self.err.load(Ordering::SeqCst),
             rtt: 9999,
-            conf: json!(&self.conf.read().await.clone()),
+            conf: json!(&self.conf),
         }
     }
 
@@ -196,30 +208,34 @@ impl Opcua {
         }
     }
 
-    async fn update(&mut self, req: &UpdateDeviceReq) -> HaliaResult<()> {
-        let new_conf: Conf = serde_json::from_value(req.conf.clone())?;
-        if self.name != req.name {
-            self.name = req.name.clone();
-        }
+    async fn update(&mut self, req: CreateUpdateOpcuaReq) -> HaliaResult<()> {
+        // if self.name != req.name {
+        //     self.name = req.name.clone();
+        // }
 
-        let mut conf = self.conf.write().await;
-        if conf.url != new_conf.url {
-            conf.url = new_conf.url;
-            let _ = self
-                .session
-                .write()
-                .await
-                .as_ref()
-                .unwrap()
-                .disconnect()
-                .await;
-        }
+        // let mut conf = self.conf.write().await;
+        // if conf.url != new_conf.url {
+        //     conf.url = new_conf.url;
+        //     let _ = self
+        //         .session
+        //         .write()
+        //         .await
+        //         .as_ref()
+        //         .unwrap()
+        //         .disconnect()
+        //         .await;
+        // }
+        // restart
 
         Ok(())
     }
 
-    async fn create_group(&mut self, group_id: Uuid, req: &CreateGroupReq) -> HaliaResult<()> {
-        match Group::new(group_id, &req) {
+    async fn create_group(
+        &mut self,
+        group_id: Option<Uuid>,
+        req: CreateUpdateGroupReq,
+    ) -> HaliaResult<()> {
+        match Group::new(&self.id, group_id, req) {
             Ok(group) => {
                 if self.on.load(Ordering::SeqCst) {
                     group.run(
@@ -236,7 +252,7 @@ impl Opcua {
         }
     }
 
-    async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupResp> {
+    async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupsResp> {
         let mut resps = Vec::new();
         for group in self
             .groups
@@ -246,26 +262,18 @@ impl Opcua {
             .rev()
             .skip(((page - 1) * size) as usize)
         {
-            resps.push({
-                SearchGroupItemResp {
-                    id: group.id,
-                    name: group.name.clone(),
-                    interval: group.interval,
-                    point_count: group.get_points_num().await as u8,
-                    desc: group.desc.clone(),
-                }
-            });
+            resps.push(group.search());
             if resps.len() == size as usize {
                 break;
             }
         }
-        Ok(SearchGroupResp {
+        Ok(SearchGroupsResp {
             total: self.groups.read().await.len(),
             data: resps,
         })
     }
 
-    async fn update_group(&self, group_id: Uuid, req: UpdateGroupReq) -> HaliaResult<()> {
+    async fn update_group(&self, group_id: Uuid, req: CreateUpdateGroupReq) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -273,20 +281,7 @@ impl Opcua {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => {
-                if group.interval != req.interval && self.on.load(Ordering::SeqCst) {
-                    if let Err(e) = self
-                        .group_signal_tx
-                        .as_ref()
-                        .unwrap()
-                        .send(group::Command::Update(group_id, req.interval))
-                    {
-                        error!("group_signals send err :{}", e);
-                    }
-                }
-
-                group.update(&req);
-            }
+            Some(group) => group.update(req),
             None => return Err(HaliaError::NotFound),
         };
 
@@ -314,12 +309,11 @@ impl Opcua {
         Ok(())
     }
 
-    // points
-    async fn create_point(
+    async fn create_group_variable(
         &self,
         group_id: Uuid,
-        point_id: Uuid,
-        req: CreatePointReq,
+        variable_id: Option<Uuid>,
+        req: CreateUpdateGroupVariableReq,
     ) -> HaliaResult<()> {
         match self
             .groups
@@ -328,17 +322,17 @@ impl Opcua {
             .iter_mut()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.create_point(point_id, req).await,
+            Some(group) => group.create_variable(&self.id, variable_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    async fn search_point(
+    async fn search_group_variables(
         &self,
         group_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchPointResp> {
+    ) -> HaliaResult<SearchGroupVariablesResp> {
         match self
             .groups
             .read()
@@ -346,16 +340,16 @@ impl Opcua {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => Ok(group.search_points(page, size).await),
+            Some(group) => Ok(group.search_variables(page, size).await),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    async fn update_point(
+    async fn update_group_variable(
         &self,
         group_id: Uuid,
-        point_id: Uuid,
-        req: &CreatePointReq,
+        variable_id: Uuid,
+        req: CreateUpdateGroupVariableReq,
     ) -> HaliaResult<()> {
         match self
             .groups
@@ -364,7 +358,7 @@ impl Opcua {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => group.update_point(point_id, req).await,
+            Some(group) => group.update_variable(variable_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -391,7 +385,11 @@ impl Opcua {
         // }
     }
 
-    async fn delete_points(&self, group_id: &Uuid, point_ids: &Vec<Uuid>) -> HaliaResult<()> {
+    async fn delete_group_variables(
+        &self,
+        group_id: &Uuid,
+        variable_ids: Vec<Uuid>,
+    ) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -399,7 +397,7 @@ impl Opcua {
             .iter_mut()
             .find(|group| group.id == *group_id)
         {
-            Some(group) => Ok(group.delete_points(point_ids).await),
+            Some(group) => group.delete_variables(variable_ids).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -416,10 +414,6 @@ impl Opcua {
     }
 
     async fn create_sink(&mut self, sink_id: Uuid, req: &String) -> HaliaResult<()> {
-        todo!()
-    }
-
-    async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
         todo!()
     }
 
