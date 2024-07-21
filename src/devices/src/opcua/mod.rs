@@ -1,9 +1,8 @@
 use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence::Status,
+    persistence::{self, Status},
 };
-use group::Group;
 use message::MessageBatch;
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
@@ -24,49 +23,54 @@ use tokio::{
 };
 use tracing::{debug, error};
 use types::devices::{
-    opcua::{
-        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-        SearchGroupVariablesResp, SearchGroupsResp,
-    },
+    opcua::{CreateUpdateOpcuaReq, CreateUpdateVariableReq, SearchVariablesResp},
     SearchDevicesItemResp,
 };
+use variable::Variable;
 
 use uuid::Uuid;
 
 pub const TYPE: &str = "opcua";
-mod group;
-mod group_variable;
+pub mod manager;
+mod variable;
 
 struct Opcua {
     id: Uuid,
     on: Arc<AtomicBool>,
     err: Arc<AtomicBool>,
     conf: CreateUpdateOpcuaReq,
-    groups: Arc<RwLock<Vec<Group>>>,
+
+    variables: Vec<Variable>,
+
     session: Arc<RwLock<Option<Arc<Session>>>>,
-    group_signal_tx: Option<broadcast::Sender<group::Command>>,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
 }
 
 impl Opcua {
-    pub fn new(device_id: Option<Uuid>, req: CreateUpdateOpcuaReq) -> HaliaResult<Self> {
+    pub async fn new(device_id: Option<Uuid>, req: CreateUpdateOpcuaReq) -> HaliaResult<Self> {
         let (device_id, new) = match device_id {
             Some(device_id) => (device_id, false),
             None => (Uuid::new_v4(), true),
         };
 
-        if new {}
+        if new {
+            persistence::devices::opcua::create(
+                &device_id,
+                TYPE,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
+        }
 
         Ok(Opcua {
             id: device_id,
             on: Arc::new(AtomicBool::new(false)),
             err: Arc::new(AtomicBool::new(false)),
             conf: req,
-            groups: Arc::new(RwLock::new(vec![])),
             session: Arc::new(RwLock::new(None)),
-            group_signal_tx: None,
             stop_signal_tx: None,
+            variables: vec![],
         })
     }
 
@@ -142,11 +146,11 @@ impl Opcua {
         self.id
     }
 
-    async fn recover(&mut self, status: Status) -> HaliaResult<()> {
+    async fn recover(&mut self) -> HaliaResult<()> {
         todo!()
     }
 
-    fn get_info(&self) -> SearchDevicesItemResp {
+    fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id,
             r#type: TYPE,
@@ -157,37 +161,21 @@ impl Opcua {
         }
     }
 
-    async fn start(&mut self) {
+    async fn start(&mut self) -> HaliaResult<()> {
         if self.on.load(Ordering::SeqCst) {
-            return;
+            return Ok(());
         } else {
             self.on.store(true, Ordering::SeqCst);
         }
         self.run().await;
-        let (group_signal_tx, _) = broadcast::channel::<group::Command>(16);
-        for group in self.groups.write().await.iter_mut() {
-            group.run(self.session.clone(), group_signal_tx.subscribe());
-        }
-        self.group_signal_tx = Some(group_signal_tx);
+        todo!()
     }
 
-    async fn stop(&mut self) {
+    async fn stop(&mut self) -> HaliaResult<()> {
         if !self.on.load(Ordering::SeqCst) {
-            return;
+            return Ok(());
         } else {
             self.on.store(false, Ordering::SeqCst);
-        }
-
-        match self
-            .group_signal_tx
-            .as_ref()
-            .unwrap()
-            .send(group::Command::StopAll)
-        {
-            Ok(_) => {}
-            Err(e) => {
-                error!("send stop all command err :{}", e);
-            }
         }
 
         match self
@@ -206,6 +194,8 @@ impl Opcua {
                 debug!("err code is :{}", e);
             }
         }
+
+        Ok(())
     }
 
     async fn update(&mut self, req: CreateUpdateOpcuaReq) -> HaliaResult<()> {
@@ -230,146 +220,29 @@ impl Opcua {
         Ok(())
     }
 
-    async fn create_group(
+    pub async fn delete(&mut self) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    async fn create_variable(
         &mut self,
-        group_id: Option<Uuid>,
-        req: CreateUpdateGroupReq,
-    ) -> HaliaResult<()> {
-        match Group::new(&self.id, group_id, req) {
-            Ok(group) => {
-                if self.on.load(Ordering::SeqCst) {
-                    group.run(
-                        self.session.clone(),
-                        self.group_signal_tx.as_ref().unwrap().subscribe(),
-                    );
-                }
-
-                self.groups.write().await.push(group);
-
-                Ok(())
-            }
-            Err(_) => todo!(),
-        }
-    }
-
-    async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupsResp> {
-        let mut resps = Vec::new();
-        for group in self
-            .groups
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip(((page - 1) * size) as usize)
-        {
-            resps.push(group.search());
-            if resps.len() == size as usize {
-                break;
-            }
-        }
-        Ok(SearchGroupsResp {
-            total: self.groups.read().await.len(),
-            data: resps,
-        })
-    }
-
-    async fn update_group(&self, group_id: Uuid, req: CreateUpdateGroupReq) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.update(req),
-            None => return Err(HaliaError::NotFound),
-        };
-
-        Ok(())
-    }
-
-    async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()> {
-        self.groups
-            .write()
-            .await
-            .retain(|group| group_id != group.id);
-
-        if self.on.load(Ordering::SeqCst) {
-            match self
-                .group_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(group::Command::Stop(group_id))
-            {
-                Ok(_) => {}
-                Err(e) => error!("group send stop singla err:{}", e),
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn create_group_variable(
-        &self,
-        group_id: Uuid,
         variable_id: Option<Uuid>,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.create_variable(&self.id, variable_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn search_group_variables(
-        &self,
-        group_id: Uuid,
-        page: usize,
-        size: usize,
-    ) -> HaliaResult<SearchGroupVariablesResp> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => Ok(group.search_variables(page, size).await),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn update_group_variable(
-        &self,
-        group_id: Uuid,
-        variable_id: Uuid,
-        req: CreateUpdateGroupVariableReq,
-    ) -> HaliaResult<()> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.update_variable(variable_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn write_point_value(
-        &self,
-        group_id: Uuid,
-        point_id: Uuid,
-        value: serde_json::Value,
-    ) -> HaliaResult<()> {
+        // match self
+        //     .groups
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|group| group.id == group_id)
+        // {
+        //     Some(group) => group.create_variable(&self.id, variable_id, req).await,
+        //     None => Err(HaliaError::NotFound),
+        // }
         todo!()
+    }
+
+    async fn search_variables(&self, page: usize, size: usize) -> HaliaResult<SearchVariablesResp> {
         // match self
         //     .groups
         //     .read()
@@ -377,34 +250,48 @@ impl Opcua {
         //     .iter()
         //     .find(|group| group.id == group_id)
         // {
-        //     Some(group) => group.update_point(point_id, req).await,
-        //     None => {
-        //         debug!("未找到组");
-        //         Err(HaliaError::NotFound)
-        //     }
+        //     Some(group) => Ok(group.search_variables(page, size).await),
+        //     None => Err(HaliaError::NotFound),
         // }
+        todo!()
     }
 
-    async fn delete_group_variables(
-        &self,
-        group_id: &Uuid,
-        variable_ids: Vec<Uuid>,
+    async fn update_variable(
+        &mut self,
+        variable_id: Uuid,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == *group_id)
-        {
-            Some(group) => group.delete_variables(variable_ids).await,
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .groups
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .find(|group| group.id == group_id)
+        // {
+        //     Some(group) => group.update_variable(variable_id, req).await,
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
+    }
+
+    async fn delete_variable(&mut self, variable_id: Uuid) -> HaliaResult<()> {
+        // match self
+        //     .groups
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|group| group.id == *group_id)
+        // {
+        //     Some(group) => group.delete_variables(variable_ids).await,
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     async fn subscribe(
         &mut self,
-        group_id: &Uuid,
+        variable_id: &Uuid,
+        rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         todo!()
     }

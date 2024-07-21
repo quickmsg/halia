@@ -379,7 +379,8 @@ impl Modbus {
     ) -> HaliaResult<()> {
         match Point::new(&self.id, point_id, req).await {
             Ok(mut point) => {
-                if self.stop_signal_tx.is_some() {
+                // TODO 错误判断
+                if self.on {
                     point.start(self.read_tx.as_ref().unwrap().clone()).await;
                 }
                 self.points.write().await.push(point);

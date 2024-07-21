@@ -3,16 +3,11 @@ use axum::{
     routing::{self, get, post, put},
     Json, Router,
 };
-use common::error::HaliaError;
-use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
-use types::devices::modbus::{
-    CreateUpdateGroupPointReq, CreateUpdateGroupReq, CreateUpdateModbusReq, CreateUpdateSinkReq,
-    SearchGroupPointsResp, SearchGroupsResp, SearchSinksResp,
-};
+use devices::opcua::manager::GLOBAL_OPCUA_MANAGER;
+use types::devices::opcua::{CreateUpdateOpcuaReq, CreateUpdateVariableReq, SearchVariablesResp};
 use uuid::Uuid;
 
-use crate::{AppResp, DeleteIdsQuery, Pagination};
-// TODO
+use crate::{AppResp, Pagination};
 
 pub(crate) fn opcua_routes() -> Router {
     Router::new()
@@ -25,139 +20,78 @@ pub(crate) fn opcua_routes() -> Router {
             "/:device_id",
             Router::new()
                 .nest(
-                    "/group",
+                    "/variable",
                     Router::new()
-                        .route("/", post(create_group))
-                        .route("/", get(search_groups))
-                        .route("/:group_id", put(update_group))
-                        .route("/:group_id", routing::delete(delete_group))
-                        .nest(
-                            "/:group_id/variable",
-                            Router::new()
-                                .route("/", post(create_group_point))
-                                .route("/", get(search_group_points))
-                                .route("/:variable_id", put(update_group_point))
-                                .route("/:variable_id/value", put(write_group_point_value))
-                                .route("/", routing::delete(delete_group_points)),
-                        ),
+                        .route("/", post(create_variable))
+                        .route("/", get(search_variables))
+                        .route("/:variable_id", put(update_variable))
+                        // .route("/:variable_id/value", put(write_group_point_value))
+                        .route("/:variable_id", routing::delete(delete_variable)),
                 )
                 .nest(
                     "/sink",
-                    Router::new()
-                        .route("/", post(create_sink))
-                        .route("/", get(search_sinks))
-                        .route("/:sink_id", put(update_sink))
-                        .route("/:sink_id", routing::delete(delete_sink)),
+                    Router::new(), // .route("/", post(create_sink))
+                                   // .route("/", get(search_sinks))
+                                   // .route("/:sink_id", put(update_sink))
+                                   // .route("/:sink_id", routing::delete(delete_sink)),
                 ),
         )
 }
 
-async fn create(Json(req): Json<CreateUpdateModbusReq>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.create(None, req).await {
+async fn create(Json(req): Json<CreateUpdateOpcuaReq>) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER.create(None, req).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-async fn update(
-    Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateModbusReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.update(device_id, req).await {
+async fn update(Path(device_id): Path<Uuid>, Json(req): Json<CreateUpdateOpcuaReq>) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER.update(device_id, req).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 async fn start(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.start(device_id).await {
+    match GLOBAL_OPCUA_MANAGER.start(device_id).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 async fn stop(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.stop(device_id).await {
+    match GLOBAL_OPCUA_MANAGER.stop(device_id).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
 async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.delete(device_id).await {
+    match GLOBAL_OPCUA_MANAGER.delete(device_id).await {
         Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-async fn create_group(
+async fn create_variable(
     Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateGroupReq>,
+    Json(req): Json<CreateUpdateVariableReq>,
 ) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .create_group(device_id, None, req)
+    match GLOBAL_OPCUA_MANAGER
+        .create_variable(device_id, None, req)
         .await
     {
-        Ok(()) => AppResp::new(),
+        Ok(_) => AppResp::new(),
         Err(e) => e.into(),
     }
 }
 
-async fn search_groups(
+async fn search_variables(
     Path(device_id): Path<Uuid>,
     pagination: Query<Pagination>,
-) -> AppResp<SearchGroupsResp> {
-    match GLOBAL_MODBUS_MANAGER
-        .search_groups(device_id, pagination.p, pagination.s)
-        .await
-    {
-        Ok(groups) => AppResp::with_data(groups),
-        Err(e) => e.into(),
-    }
-}
-
-async fn update_group(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .update_group(device_id, group_id, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
-
-async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .delete_group(device_id, group_id)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
-
-async fn create_group_point(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupPointReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .create_group_point(device_id, group_id, None, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
-
-async fn search_group_points(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    pagination: Query<Pagination>,
-) -> AppResp<SearchGroupPointsResp> {
-    match GLOBAL_MODBUS_MANAGER
-        .search_group_points(device_id, group_id, pagination.p, pagination.s)
+) -> AppResp<SearchVariablesResp> {
+    match GLOBAL_OPCUA_MANAGER
+        .search_variables(device_id, pagination.p, pagination.s)
         .await
     {
         Ok(values) => AppResp::with_data(values),
@@ -165,12 +99,12 @@ async fn search_group_points(
     }
 }
 
-async fn update_group_point(
-    Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupPointReq>,
+async fn update_variable(
+    Path((device_id, variable_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateVariableReq>,
 ) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .update_group_point(device_id, group_id, point_id, req)
+    match GLOBAL_OPCUA_MANAGER
+        .update_variable(device_id, variable_id, req)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -178,35 +112,22 @@ async fn update_group_point(
     }
 }
 
-async fn write_group_point_value(
-    Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
-    data: String,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .write_group_point_value(device_id, group_id, point_id, data)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
+// async fn write_group_point_value(
+//     Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
+//     data: String,
+// ) -> AppResp<()> {
+//     match GLOBAL_MODBUS_MANAGER
+//         .write_group_point_value(device_id, group_id, point_id, data)
+//         .await
+//     {
+//         Ok(_) => AppResp::new(),
+//         Err(e) => e.into(),
+//     }
+// }
 
-async fn delete_group_points(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Query(query): Query<DeleteIdsQuery>,
-) -> AppResp<()> {
-    let point_ids: Vec<Uuid> = match query
-        .ids
-        .split(',')
-        .map(|s| s.parse::<Uuid>().map_err(|_e| return HaliaError::ParseErr))
-        .collect::<Result<Vec<Uuid>, _>>()
-    {
-        Ok(ids) => ids,
-        Err(e) => return e.into(),
-    };
-
-    match GLOBAL_MODBUS_MANAGER
-        .delete_group_points(device_id, group_id, point_ids)
+async fn delete_variable(Path((device_id, variable_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER
+        .delete_variable(device_id, variable_id)
         .await
     {
         Ok(()) => AppResp::new(),
@@ -214,48 +135,48 @@ async fn delete_group_points(
     }
 }
 
-async fn create_sink(
-    Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateSinkReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .create_sink(device_id, None, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
+// async fn create_sink(
+//     Path(device_id): Path<Uuid>,
+//     Json(req): Json<CreateUpdateSinkReq>,
+// ) -> AppResp<()> {
+//     match GLOBAL_MODBUS_MANAGER
+//         .create_sink(device_id, None, req)
+//         .await
+//     {
+//         Ok(_) => AppResp::new(),
+//         Err(e) => e.into(),
+//     }
+// }
 
-async fn search_sinks(
-    Path(device_id): Path<Uuid>,
-    pagination: Query<Pagination>,
-) -> AppResp<SearchSinksResp> {
-    match GLOBAL_MODBUS_MANAGER
-        .search_sinks(device_id, pagination.p, pagination.s)
-        .await
-    {
-        Ok(data) => AppResp::with_data(data),
-        Err(e) => e.into(),
-    }
-}
+// async fn search_sinks(
+//     Path(device_id): Path<Uuid>,
+//     pagination: Query<Pagination>,
+// ) -> AppResp<SearchSinksResp> {
+//     match GLOBAL_MODBUS_MANAGER
+//         .search_sinks(device_id, pagination.p, pagination.s)
+//         .await
+//     {
+//         Ok(data) => AppResp::with_data(data),
+//         Err(e) => e.into(),
+//     }
+// }
 
-async fn update_sink(
-    Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateSinkReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
-        .update_sink(device_id, sink_id, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
+// async fn update_sink(
+//     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
+//     Json(req): Json<CreateUpdateSinkReq>,
+// ) -> AppResp<()> {
+//     match GLOBAL_MODBUS_MANAGER
+//         .update_sink(device_id, sink_id, req)
+//         .await
+//     {
+//         Ok(_) => AppResp::new(),
+//         Err(e) => e.into(),
+//     }
+// }
 
-async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.delete_sink(device_id, sink_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
+// async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
+//     match GLOBAL_MODBUS_MANAGER.delete_sink(device_id, sink_id).await {
+//         Ok(_) => AppResp::new(),
+//         Err(e) => e.into(),
+//     }
+// }

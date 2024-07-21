@@ -348,6 +348,7 @@ impl DataType {
     }
 
     pub fn encode(&self, value: serde_json::Value) -> Result<Vec<u8>> {
+        debug!("{}", value);
         match self.typ {
             Type::Bool => match value.as_bool() {
                 Some(value) => {
@@ -674,6 +675,7 @@ pub struct SearchPointsResp {
 pub struct SearchPointsItemResp {
     pub id: Uuid,
     pub conf: CreateUpdatePointReq,
+    pub value: serde_json::Value,
     pub ref_rules: Vec<Uuid>,
     pub active_ref_rules: Vec<Uuid>,
 }

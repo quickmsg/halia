@@ -11,28 +11,8 @@ pub struct CreateUpdateOpcuaReq {
     pub port: u16,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdateGroupReq {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
-    pub interval: u64,
-}
-
-#[derive(Serialize)]
-pub struct SearchGroupsResp {
-    pub total: usize,
-    pub data: Vec<SearchGroupsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchGroupsItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdateGroupReq,
-}
-
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateGroupVariableReq {
+pub struct CreateUpdateVariableReq {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
@@ -41,13 +21,13 @@ pub struct CreateUpdateGroupVariableReq {
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupVariablesResp {
+pub struct SearchVariablesResp {
     pub total: usize,
-    pub data: Vec<SearchGroupVariablesItemResp>,
+    pub data: Vec<SearchVariablesItemResp>,
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupVariablesItemResp {
+pub struct SearchVariablesItemResp {
     pub id: Uuid,
-    pub conf: CreateUpdateGroupVariableReq,
+    pub conf: CreateUpdateVariableReq,
 }
