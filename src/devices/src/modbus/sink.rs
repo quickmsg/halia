@@ -2,7 +2,7 @@ use common::{error::HaliaResult, persistence};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{debug, warn};
-use types::devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp};
+use types::devices::modbus::{CreateUpdateSinkReq, Endian, SearchSinksItemResp, SinkConf, Type};
 use uuid::Uuid;
 
 use super::WritePointEvent;
@@ -78,12 +78,7 @@ impl Sink {
         .await?;
 
         let mut restart = false;
-        if self.conf.r#type != req.r#type
-            || self.conf.slave != req.slave
-            || self.conf.area != req.area
-            || self.conf.address != req.address
-            || self.conf.value != req.value
-        {
+        if self.conf.conf != req.conf {
             restart = true;
         }
 
@@ -97,7 +92,7 @@ impl Sink {
                 .unwrap();
 
             let (stop_signal_rx, publish_rx, tx) = self.handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.clone())
+            self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.conf.clone())
                 .await;
         }
         Ok(())
@@ -150,7 +145,7 @@ impl Sink {
         let (publish_tx, publish_rx) = mpsc::channel(16);
         self.publish_tx = Some(publish_tx);
 
-        self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.clone())
+        self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.conf.clone())
             .await;
     }
 
@@ -159,7 +154,7 @@ impl Sink {
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut publish_rx: mpsc::Receiver<MessageBatch>,
         tx: mpsc::Sender<WritePointEvent>,
-        conf: CreateUpdateSinkReq,
+        conf: SinkConf,
     ) {
         let handle = tokio::spawn(async move {
             loop {
@@ -199,12 +194,75 @@ impl Sink {
 
     fn send_write_point_event(
         mut mb: MessageBatch,
-        conf: &CreateUpdateSinkReq,
+        conf: &SinkConf,
         tx: &mpsc::Sender<WritePointEvent>,
     ) {
         let message = match mb.take_one_message() {
             Some(message) => message,
             None => return,
+        };
+
+        let typ: Type = match conf.typ.typ {
+            types::devices::SinkValueType::Const => match &conf.area.value {
+                serde_json::Value::String(s) => match serde_json::from_str(s) {
+                    Ok(typ) => typ,
+                    Err(_) => return,
+                },
+                _ => return,
+            },
+            types::devices::SinkValueType::Variable => match &conf.area.value {
+                serde_json::Value::String(field) => match message.get_str(field) {
+                    Some(s) => match serde_json::from_str(s) {
+                        Ok(typ) => typ,
+                        Err(_) => return,
+                    },
+                    None => return,
+                },
+                _ => return,
+            },
+        };
+
+        let endian0: Option<Endian> = match &conf.endian0 {
+            Some(endian0) => match endian0.typ {
+                types::devices::SinkValueType::Const => match &endian0.value {
+                    serde_json::Value::String(s) => match serde_json::from_str(s) {
+                        Ok(endian) => endian,
+                        Err(_) => return,
+                    },
+                    _ => return,
+                },
+                types::devices::SinkValueType::Variable => match &conf.area.value {
+                    serde_json::Value::String(field) => match message.get_str(field) {
+                        Some(s) => match serde_json::from_str(s) {
+                            Ok(endian) => endian,
+                            Err(_) => return,
+                        },
+                        None => return,
+                    },
+                    _ => return,
+                },
+            },
+            None => None,
+        };
+
+        let endian1 = match conf.endian1 {
+            Some(_) => todo!(),
+            None => todo!(),
+        };
+
+        let len = match conf.len {
+            Some(_) => todo!(),
+            None => todo!(),
+        };
+
+        let single = match conf.single {
+            Some(_) => todo!(),
+            None => todo!(),
+        };
+
+        let pos = match conf.pos {
+            Some(_) => todo!(),
+            None => todo!(),
         };
 
         let slave = match conf.slave.typ {
@@ -276,7 +334,7 @@ impl Sink {
             },
         };
 
-        match WritePointEvent::new(slave, area, address, conf.r#type.clone(), value) {
+        match WritePointEvent::new(slave, area, address, conf.data_type.clone(), value) {
             Ok(wpe) => {
                 let _ = tx.send(wpe);
             }

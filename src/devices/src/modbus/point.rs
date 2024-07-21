@@ -48,7 +48,7 @@ impl Point {
             None => (Uuid::new_v4(), true),
         };
 
-        let quantity = match req.data_type.get_quantity() {
+        let quantity = match req.conf.data_type.get_quantity() {
             Some(quantity) => quantity,
             None => return Err(HaliaError::ConfErr),
         };
@@ -96,7 +96,7 @@ impl Point {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        self.event_loop(self.conf.interval, stop_signal_rx, read_tx)
+        self.event_loop(self.conf.conf.interval, stop_signal_rx, read_tx)
             .await;
     }
 
@@ -152,11 +152,11 @@ impl Point {
         .await?;
 
         let mut restart = false;
-        if self.conf.interval != req.interval {
+        if self.conf.conf.interval != req.conf.interval {
             restart = true;
         }
 
-        self.quantity = match req.data_type.get_quantity() {
+        self.quantity = match req.conf.data_type.get_quantity() {
             Some(quantity) => quantity,
             None => return Err(HaliaError::ConfErr),
         };
@@ -171,7 +171,7 @@ impl Point {
                 .unwrap();
 
             let (stop_signal_rx, read_tx) = self.handle.take().unwrap().await.unwrap();
-            self.event_loop(self.conf.interval, stop_signal_rx, read_tx)
+            self.event_loop(self.conf.conf.interval, stop_signal_rx, read_tx)
                 .await;
         }
 
@@ -189,15 +189,29 @@ impl Point {
     }
 
     pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<()> {
-        ctx.set_slave(self.conf.slave);
-        let message_value = match self.conf.area {
-            Area::InputDiscrete => match ctx
-                .read_discrete_inputs(self.conf.address, self.quantity)
-                .await
-            {
+        let conf = &self.conf.conf;
+        ctx.set_slave(conf.slave);
+        let message_value = match conf.area {
+            Area::InputDiscrete => {
+                match ctx.read_discrete_inputs(conf.address, self.quantity).await {
+                    Ok(res) => match res {
+                        Ok(mut data) => {
+                            let value = conf.data_type.decode(&mut data);
+                            self.value = value.clone().into();
+                            value
+                        }
+                        Err(e) => {
+                            warn!("modbus protocl exception:{}", e);
+                            return Ok(());
+                        }
+                    },
+                    Err(_) => return Err(HaliaError::Disconnect),
+                }
+            }
+            Area::Coils => match ctx.read_coils(conf.address, self.quantity).await {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        let value = self.conf.data_type.decode(&mut data);
+                        let value = conf.data_type.decode(&mut data);
                         self.value = value.clone().into();
                         value
                     }
@@ -208,41 +222,26 @@ impl Point {
                 },
                 Err(_) => return Err(HaliaError::Disconnect),
             },
-            Area::Coils => match ctx.read_coils(self.conf.address, self.quantity).await {
-                Ok(res) => match res {
-                    Ok(mut data) => {
-                        let value = self.conf.data_type.decode(&mut data);
-                        self.value = value.clone().into();
-                        value
-                    }
-                    Err(e) => {
-                        warn!("modbus protocl exception:{}", e);
-                        return Ok(());
-                    }
-                },
-                Err(_) => return Err(HaliaError::Disconnect),
-            },
-            Area::InputRegisters => match ctx
-                .read_input_registers(self.conf.address, self.quantity)
-                .await
-            {
-                Ok(res) => match res {
-                    Ok(mut data) => {
-                        let value = self.conf.data_type.decode(&mut data);
-                        self.value = value.clone().into();
-                        value
-                    }
-                    Err(_) => return Ok(()),
-                },
-                Err(_) => return Err(HaliaError::Disconnect),
-            },
+            Area::InputRegisters => {
+                match ctx.read_input_registers(conf.address, self.quantity).await {
+                    Ok(res) => match res {
+                        Ok(mut data) => {
+                            let value = conf.data_type.decode(&mut data);
+                            self.value = value.clone().into();
+                            value
+                        }
+                        Err(_) => return Ok(()),
+                    },
+                    Err(_) => return Err(HaliaError::Disconnect),
+                }
+            }
             Area::HoldingRegisters => match ctx
-                .read_holding_registers(self.conf.address, self.quantity)
+                .read_holding_registers(conf.address, self.quantity)
                 .await
             {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        let value = self.conf.data_type.decode(&mut data);
+                        let value = conf.data_type.decode(&mut data);
                         self.value = value.clone().into();
                         value
                     }

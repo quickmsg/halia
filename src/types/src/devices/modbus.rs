@@ -4,22 +4,27 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 use uuid::Uuid;
 
+use crate::BaseConf;
+
 use super::SinkValue;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateModbusReq {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
+    #[serde(flatten)]
+    pub base: BaseConf,
 
     // ms
     pub interval: u64,
     // s
     pub reconnect: u64,
     pub link_type: LinkType,
+
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(flatten)]
     pub ethernet: Option<Ethernet>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(flatten)]
     pub serial: Option<Serial>,
 }
 
@@ -67,6 +72,12 @@ pub struct CreateUpdatePointReq {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 
+    #[serde(flatten)]
+    pub conf: PointConf,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct PointConf {
     pub data_type: DataType,
     pub slave: u8,
     pub area: Area,
@@ -343,7 +354,6 @@ impl DataType {
                 },
             },
             Type::Bytes => MessageValue::Bytes(data.clone()),
-            _ => MessageValue::Null,
         }
     }
 
@@ -656,7 +666,7 @@ pub enum Endian {
     Big,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Area {
     InputDiscrete,
@@ -686,7 +696,24 @@ pub struct CreateUpdateSinkReq {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 
-    pub r#type: DataType,
+    #[serde(flatten)]
+    pub conf: SinkConf,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct SinkConf {
+    pub typ: SinkValue,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endian0: Option<SinkValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endian1: Option<SinkValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub len: Option<SinkValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub single: Option<SinkValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pos: Option<SinkValue>,
+
     pub slave: SinkValue,
     pub area: SinkValue,
     pub address: SinkValue,

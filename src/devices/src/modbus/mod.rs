@@ -450,10 +450,10 @@ impl Modbus {
         {
             Some(point) => {
                 match WritePointEvent::new(
-                    point.conf.slave,
-                    point.conf.area.clone(),
-                    point.conf.address,
-                    point.conf.data_type.clone(),
+                    point.conf.conf.slave,
+                    point.conf.conf.area.clone(),
+                    point.conf.conf.address,
+                    point.conf.conf.data_type.clone(),
                     value,
                 ) {
                     Ok(wpe) => {
