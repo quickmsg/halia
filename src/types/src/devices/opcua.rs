@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::BaseConf;
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateOpcuaReq {
     pub name: String,
@@ -13,11 +15,13 @@ pub struct CreateUpdateOpcuaReq {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateUpdateVariableReq {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
-    // todo
-    // pub node_id: NodeId,
+    pub base: BaseConf,
+    pub conf: VariableConf,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct VariableConf {
+
 }
 
 #[derive(Serialize)]

@@ -31,7 +31,7 @@ use tracing::{debug, warn};
 use types::devices::{
     modbus::{
         Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType, Encode,
-        Endian, SearchPointsResp, SearchSinksResp, Type,
+        Endian, ModbusConf, SearchPointsResp, SearchSinksResp, Type,
     },
     SearchDevicesItemResp,
 };
@@ -149,24 +149,8 @@ impl Modbus {
             .await?;
 
         let mut restart = false;
-        match (&self.conf.link_type, &req.link_type) {
-            (
-                types::devices::modbus::LinkType::Ethernet,
-                types::devices::modbus::LinkType::Ethernet,
-            ) => {
-                if self.conf.ethernet != req.ethernet {
-                    restart = true;
-                }
-            }
-            (
-                types::devices::modbus::LinkType::Serial,
-                types::devices::modbus::LinkType::Serial,
-            ) => {
-                if self.conf.serial != req.serial {
-                    restart = true;
-                }
-            }
-            _ => restart = true,
+        if self.conf.modbus != req.modbus {
+            restart = true;
         }
 
         self.conf = req;
@@ -221,16 +205,16 @@ impl Modbus {
         mut read_rx: mpsc::Receiver<Uuid>,
         mut write_rx: mpsc::Receiver<WritePointEvent>,
     ) {
-        let conf = self.conf.clone();
-        let interval = self.conf.interval;
+        let modbus_conf = self.conf.modbus.clone();
+        let interval = self.conf.modbus.interval;
         let points = self.points.clone();
-        let reconnect = self.conf.reconnect;
+        let reconnect = self.conf.modbus.reconnect;
 
         let rtt = self.rtt.clone();
         let read_tx = self.read_tx.as_ref().unwrap().clone();
         let handle = tokio::spawn(async move {
             loop {
-                match Modbus::connect(&conf).await {
+                match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
                         for point in points.write().await.iter_mut() {
                             point.start(read_tx.clone()).await;
@@ -332,7 +316,7 @@ impl Modbus {
         Ok(())
     }
 
-    async fn connect(conf: &CreateUpdateModbusReq) -> HaliaResult<Context> {
+    async fn connect(conf: &ModbusConf) -> HaliaResult<Context> {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
                 let ethernet = conf.ethernet.as_ref().unwrap();
@@ -452,10 +436,10 @@ impl Modbus {
         {
             Some(point) => {
                 match WritePointEvent::new(
-                    point.conf.conf.slave,
-                    point.conf.conf.area.clone(),
-                    point.conf.conf.address,
-                    point.conf.conf.data_type.clone(),
+                    point.conf.point.slave,
+                    point.conf.point.area.clone(),
+                    point.conf.point.address,
+                    point.conf.point.data_type.clone(),
                     value,
                 ) {
                     Ok(wpe) => {

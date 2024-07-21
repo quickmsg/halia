@@ -48,7 +48,7 @@ impl Point {
             None => (Uuid::new_v4(), true),
         };
 
-        let quantity = match req.conf.data_type.get_quantity() {
+        let quantity = match req.point.data_type.get_quantity() {
             Some(quantity) => quantity,
             None => return Err(HaliaError::ConfErr),
         };
@@ -96,7 +96,7 @@ impl Point {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        self.event_loop(self.conf.conf.interval, stop_signal_rx, read_tx)
+        self.event_loop(self.conf.point.interval, stop_signal_rx, read_tx)
             .await;
     }
 
@@ -152,11 +152,10 @@ impl Point {
         .await?;
 
         let mut restart = false;
-        if self.conf.conf.interval != req.conf.interval {
+        if self.conf.point != req.point {
             restart = true;
         }
-
-        self.quantity = match req.conf.data_type.get_quantity() {
+        self.quantity = match req.point.data_type.get_quantity() {
             Some(quantity) => quantity,
             None => return Err(HaliaError::ConfErr),
         };
@@ -171,7 +170,7 @@ impl Point {
                 .unwrap();
 
             let (stop_signal_rx, read_tx) = self.handle.take().unwrap().await.unwrap();
-            self.event_loop(self.conf.conf.interval, stop_signal_rx, read_tx)
+            self.event_loop(self.conf.point.interval, stop_signal_rx, read_tx)
                 .await;
         }
 
@@ -189,14 +188,17 @@ impl Point {
     }
 
     pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<()> {
-        let conf = &self.conf.conf;
-        ctx.set_slave(conf.slave);
-        let message_value = match conf.area {
+        let point_conf = &self.conf.point;
+        ctx.set_slave(point_conf.slave);
+        let message_value = match point_conf.area {
             Area::InputDiscrete => {
-                match ctx.read_discrete_inputs(conf.address, self.quantity).await {
+                match ctx
+                    .read_discrete_inputs(point_conf.address, self.quantity)
+                    .await
+                {
                     Ok(res) => match res {
                         Ok(mut data) => {
-                            let value = conf.data_type.decode(&mut data);
+                            let value = point_conf.data_type.decode(&mut data);
                             self.value = value.clone().into();
                             value
                         }
@@ -208,10 +210,10 @@ impl Point {
                     Err(_) => return Err(HaliaError::Disconnect),
                 }
             }
-            Area::Coils => match ctx.read_coils(conf.address, self.quantity).await {
+            Area::Coils => match ctx.read_coils(point_conf.address, self.quantity).await {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        let value = conf.data_type.decode(&mut data);
+                        let value = point_conf.data_type.decode(&mut data);
                         self.value = value.clone().into();
                         value
                     }
@@ -223,10 +225,13 @@ impl Point {
                 Err(_) => return Err(HaliaError::Disconnect),
             },
             Area::InputRegisters => {
-                match ctx.read_input_registers(conf.address, self.quantity).await {
+                match ctx
+                    .read_input_registers(point_conf.address, self.quantity)
+                    .await
+                {
                     Ok(res) => match res {
                         Ok(mut data) => {
-                            let value = conf.data_type.decode(&mut data);
+                            let value = point_conf.data_type.decode(&mut data);
                             self.value = value.clone().into();
                             value
                         }
@@ -236,12 +241,12 @@ impl Point {
                 }
             }
             Area::HoldingRegisters => match ctx
-                .read_holding_registers(conf.address, self.quantity)
+                .read_holding_registers(point_conf.address, self.quantity)
                 .await
             {
                 Ok(res) => match res {
                     Ok(mut data) => {
-                        let value = conf.data_type.decode(&mut data);
+                        let value = point_conf.data_type.decode(&mut data);
                         self.value = value.clone().into();
                         value
                     }
@@ -254,7 +259,7 @@ impl Point {
         match &self.tx {
             Some(tx) => {
                 let mut message = Message::default();
-                message.add(self.conf.name.clone(), message_value);
+                message.add(self.conf.base.name.clone(), message_value);
                 let mut message_batch = MessageBatch::default();
                 message_batch.push_message(message);
                 tx.send(message_batch).unwrap();

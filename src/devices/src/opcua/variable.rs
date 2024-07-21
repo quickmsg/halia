@@ -1,7 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use common::{error::HaliaResult, persistence};
-use opcua::{client::Session, types::{DataValue, Variant}};
+use opcua::{
+    client::Session,
+    types::{DataValue, Variant},
+};
 use tokio::{select, sync::mpsc, time};
 use types::devices::opcua::{CreateUpdateVariableReq, SearchVariablesItemResp};
 use uuid::Uuid;
@@ -62,9 +65,15 @@ impl Variable {
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
+        // self.event_loop(self.conf, stop_signal_rx, client).await;
     }
 
-    async fn event_loop(&mut self, interval: u64, mut stop_signal_rx: mpsc::Receiver<()>, client: Arc<Session>) {
+    async fn event_loop(
+        &mut self,
+        interval: u64,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        client: Arc<Session>,
+    ) {
         let handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {

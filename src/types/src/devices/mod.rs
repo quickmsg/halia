@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use uuid::Uuid;
 
 pub mod coap;
@@ -21,17 +21,4 @@ pub struct SearchDevicesItemResp {
     pub err: bool,
     pub rtt: u16,
     pub conf: serde_json::Value,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct SinkValue {
-    pub typ: SinkValueType,
-    pub value: serde_json::Value,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum SinkValueType {
-    Const,
-    Variable,
 }

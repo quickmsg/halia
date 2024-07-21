@@ -10,3 +10,16 @@ pub struct BaseConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct SinkValue {
+    pub typ: SinkValueType,
+    pub value: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SinkValueType {
+    Const,
+    Variable,
+}

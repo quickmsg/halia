@@ -2,8 +2,11 @@ use common::{error::HaliaResult, persistence};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{debug, warn};
-use types::devices::modbus::{
-    Area, CreateUpdateSinkReq, DataType, Endian, SearchSinksItemResp, SinkConf, Type,
+use types::{
+    devices::modbus::{
+        Area, CreateUpdateSinkReq, DataType, Endian, SearchSinksItemResp, SinkConf, Type,
+    },
+    SinkValueType,
 };
 use uuid::Uuid;
 
@@ -80,7 +83,7 @@ impl Sink {
         .await?;
 
         let mut restart = false;
-        if self.conf.conf != req.conf {
+        if self.conf.sink != req.sink {
             restart = true;
         }
 
@@ -94,7 +97,7 @@ impl Sink {
                 .unwrap();
 
             let (stop_signal_rx, publish_rx, tx) = self.handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.conf.clone())
+            self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.sink.clone())
                 .await;
         }
         Ok(())
@@ -147,7 +150,7 @@ impl Sink {
         let (publish_tx, publish_rx) = mpsc::channel(16);
         self.publish_tx = Some(publish_tx);
 
-        self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.conf.clone())
+        self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.sink.clone())
             .await;
     }
 
@@ -156,7 +159,7 @@ impl Sink {
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut publish_rx: mpsc::Receiver<MessageBatch>,
         tx: mpsc::Sender<WritePointEvent>,
-        conf: SinkConf,
+        sink_conf: SinkConf,
     ) {
         let handle = tokio::spawn(async move {
             loop {
@@ -167,7 +170,7 @@ impl Sink {
 
                     mb = publish_rx.recv() => {
                         if let Some(mb) = mb {
-                            Sink::send_write_point_event(mb, &conf, &tx).await;
+                            Sink::send_write_point_event(mb, &sink_conf, &tx).await;
                         }
                     }
                 }
@@ -196,49 +199,44 @@ impl Sink {
 
     async fn send_write_point_event(
         mut mb: MessageBatch,
-        conf: &SinkConf,
+        sink_conf: &SinkConf,
         tx: &mpsc::Sender<WritePointEvent>,
     ) {
-        debug!("{:?}\n{:?}", mb, conf);
         let message = match mb.take_one_message() {
             Some(message) => message,
             None => return,
         };
 
-        let typ: Type = match conf.typ.typ {
-            types::devices::SinkValueType::Const => match &conf.typ.value {
+        let typ: Type = match sink_conf.typ.typ {
+            SinkValueType::Const => match &sink_conf.typ.value {
                 serde_json::Value::String(s) => match serde_json::from_str(s) {
                     Ok(typ) => typ,
                     Err(_) => return,
                 },
                 _ => return,
             },
-            types::devices::SinkValueType::Variable => match &conf.typ.value {
+            SinkValueType::Variable => match &sink_conf.typ.value {
                 serde_json::Value::String(field) => match message.get_str(field) {
-                    Some(s) => {
-                        debug!("{:?}", s);
-                        match Type::try_from(s.as_str()) {
-                            Ok(typ) => typ,
-                            Err(_) => return,
-                        }
-                    }
+                    Some(s) => match Type::try_from(s.as_str()) {
+                        Ok(typ) => typ,
+                        Err(_) => return,
+                    },
                     None => return,
                 },
                 _ => return,
             },
         };
-        debug!("{:?}", typ);
 
-        let endian0: Option<Endian> = match &conf.endian0 {
+        let endian0: Option<Endian> = match &sink_conf.endian0 {
             Some(endian0) => match endian0.typ {
-                types::devices::SinkValueType::Const => match &endian0.value {
+                SinkValueType::Const => match &endian0.value {
                     serde_json::Value::String(s) => match serde_json::from_str(s) {
                         Ok(endian) => endian,
                         Err(_) => return,
                     },
                     _ => return,
                 },
-                types::devices::SinkValueType::Variable => match &endian0.value {
+                SinkValueType::Variable => match &endian0.value {
                     serde_json::Value::String(field) => match message.get_str(field) {
                         Some(s) => match serde_json::from_str(s) {
                             Ok(endian) => endian,
@@ -251,18 +249,17 @@ impl Sink {
             },
             None => None,
         };
-        debug!("{:?}", endian0);
 
-        let endian1 = match &conf.endian1 {
+        let endian1 = match &sink_conf.endian1 {
             Some(endian1) => match endian1.typ {
-                types::devices::SinkValueType::Const => match &endian1.value {
+                SinkValueType::Const => match &endian1.value {
                     serde_json::Value::String(s) => match serde_json::from_str(s) {
                         Ok(endian) => endian,
                         Err(_) => return,
                     },
                     _ => return,
                 },
-                types::devices::SinkValueType::Variable => match &endian1.value {
+                SinkValueType::Variable => match &endian1.value {
                     serde_json::Value::String(field) => match message.get_str(field) {
                         Some(s) => match serde_json::from_str(s) {
                             Ok(endian) => endian,
@@ -275,15 +272,14 @@ impl Sink {
             },
             None => None,
         };
-        debug!("{:?}", endian1);
 
-        let len = match &conf.len {
+        let len = match &sink_conf.len {
             Some(len) => match len.typ {
-                types::devices::SinkValueType::Const => match common::json::get_u16(&len.value) {
+                SinkValueType::Const => match common::json::get_u16(&len.value) {
                     Some(len) => Some(len),
                     None => return,
                 },
-                types::devices::SinkValueType::Variable => match &len.value {
+                SinkValueType::Variable => match &len.value {
                     serde_json::Value::String(field) => match message.get_u16(field) {
                         Some(len) => Some(len),
                         None => return,
@@ -293,15 +289,14 @@ impl Sink {
             },
             None => None,
         };
-        debug!("{:?}", len);
 
-        let single = match &conf.single {
+        let single = match &sink_conf.single {
             Some(single) => match single.typ {
-                types::devices::SinkValueType::Const => match single.value.as_bool() {
+                SinkValueType::Const => match single.value.as_bool() {
                     Some(bool) => Some(bool),
                     None => return,
                 },
-                types::devices::SinkValueType::Variable => match &single.value {
+                SinkValueType::Variable => match &single.value {
                     serde_json::Value::String(s) => match message.get_bool(s) {
                         Some(bool) => Some(bool),
                         None => return,
@@ -311,15 +306,14 @@ impl Sink {
             },
             None => None,
         };
-        debug!("{:?}", single);
 
-        let pos = match &conf.pos {
+        let pos = match &sink_conf.pos {
             Some(pos) => match pos.typ {
-                types::devices::SinkValueType::Const => match common::json::get_u8(&pos.value) {
+                SinkValueType::Const => match common::json::get_u8(&pos.value) {
                     Some(u8) => Some(u8),
                     None => return,
                 },
-                types::devices::SinkValueType::Variable => match &pos.value {
+                SinkValueType::Variable => match &pos.value {
                     serde_json::Value::String(field) => match message.get_u8(field) {
                         Some(u8) => Some(u8),
                         None => return,
@@ -329,38 +323,34 @@ impl Sink {
             },
             None => None,
         };
-        debug!("{:?}", pos);
 
-        let slave = match conf.slave.typ {
-            types::devices::SinkValueType::Const => match common::json::get_u8(&conf.slave.value) {
+        let slave = match sink_conf.slave.typ {
+            SinkValueType::Const => match common::json::get_u8(&sink_conf.slave.value) {
                 Some(n) => n,
                 None => {
-                    warn!("slave只能是number类型");
                     return;
                 }
             },
-            types::devices::SinkValueType::Variable => match &conf.slave.value {
+            SinkValueType::Variable => match &sink_conf.slave.value {
                 serde_json::Value::String(field) => match message.get_u8(field) {
                     Some(n) => n,
                     None => return,
                 },
                 _ => {
-                    warn!("字段名称错误");
                     return;
                 }
             },
         };
-        debug!("{:?}", slave);
 
-        let area: Area = match conf.area.typ {
-            types::devices::SinkValueType::Const => match &conf.area.value {
+        let area: Area = match sink_conf.area.typ {
+            SinkValueType::Const => match &sink_conf.area.value {
                 serde_json::Value::String(s) => match Area::try_from(s.as_str()) {
                     Ok(area) => area,
                     Err(_) => return,
                 },
                 _ => return,
             },
-            types::devices::SinkValueType::Variable => match &conf.area.value {
+            SinkValueType::Variable => match &sink_conf.area.value {
                 serde_json::Value::String(field) => match message.get_str(field) {
                     Some(s) => match Area::try_from(s.as_str()) {
                         Ok(area) => area,
@@ -373,14 +363,12 @@ impl Sink {
         };
         debug!("{:?}", area);
 
-        let address = match conf.address.typ {
-            types::devices::SinkValueType::Const => {
-                match common::json::get_u16(&conf.address.value) {
-                    Some(n) => n,
-                    None => return,
-                }
-            }
-            types::devices::SinkValueType::Variable => match &conf.address.value {
+        let address = match sink_conf.address.typ {
+            SinkValueType::Const => match common::json::get_u16(&sink_conf.address.value) {
+                Some(n) => n,
+                None => return,
+            },
+            SinkValueType::Variable => match &sink_conf.address.value {
                 serde_json::Value::String(field) => match message.get_u16(&field) {
                     Some(address) => address,
                     None => return,
@@ -390,9 +378,9 @@ impl Sink {
         };
         debug!("{:?}", address);
 
-        let value = match conf.value.typ {
-            types::devices::SinkValueType::Const => conf.value.value.clone(),
-            types::devices::SinkValueType::Variable => match &conf.value.value {
+        let value = match sink_conf.value.typ {
+            SinkValueType::Const => sink_conf.value.value.clone(),
+            SinkValueType::Variable => match &sink_conf.value.value {
                 serde_json::Value::String(field) => match message.get(field) {
                     Some(v) => v.clone().into(),
                     None => return,

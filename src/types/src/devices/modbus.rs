@@ -1,18 +1,20 @@
 use anyhow::{bail, Result};
 use message::MessageValue;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 use uuid::Uuid;
 
-use crate::BaseConf;
-
-use super::SinkValue;
+use crate::{BaseConf, SinkValue};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateModbusReq {
     #[serde(flatten)]
     pub base: BaseConf,
+    #[serde(flatten)]
+    pub modbus: ModbusConf,
+}
 
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct ModbusConf {
     // ms
     pub interval: u64,
     // s
@@ -45,7 +47,7 @@ pub struct Serial {
     pub parity: u8,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum LinkType {
     Ethernet,
@@ -68,12 +70,10 @@ pub enum Encode {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdatePointReq {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
-
     #[serde(flatten)]
-    pub conf: PointConf,
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub point: PointConf,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -358,7 +358,6 @@ impl DataType {
     }
 
     pub fn encode(&self, value: serde_json::Value) -> Result<Vec<u8>> {
-        debug!("{}", value);
         match self.typ {
             Type::Bool => match value.as_bool() {
                 Some(value) => {
@@ -585,7 +584,6 @@ impl DataType {
                             }
                         }
                     }
-                    debug!("{:?}", data);
                     match (
                         self.single.as_ref().unwrap(),
                         self.endian0.as_ref().unwrap(),
@@ -620,7 +618,6 @@ impl DataType {
             },
             Type::Bytes => match value {
                 serde_json::Value::Array(arr) => {
-                    debug!("{arr:?}");
                     let mut data = vec![];
                     for v in arr {
                         match v {
@@ -729,12 +726,10 @@ pub struct SearchPointsItemResp {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateSinkReq {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
-
     #[serde(flatten)]
-    pub conf: SinkConf,
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub sink: SinkConf,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
