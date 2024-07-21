@@ -236,6 +236,7 @@ impl Modbus {
                             point.start(read_tx.clone()).await;
                         }
                         loop {
+                            debug!("here");
                             select! {
                                 biased;
                                 _ = stop_signal_rx.recv() => {
@@ -243,6 +244,7 @@ impl Modbus {
                                 }
 
                                 wpe = write_rx.recv() => {
+                                    debug!("here");
                                     if let Some(wpe) = wpe {
                                         if write_value(&mut ctx, wpe).await.is_err() {
                                             break
@@ -553,7 +555,12 @@ impl Modbus {
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
         match Sink::new(&self.id, sink_id, req).await {
-            Ok(sink) => Ok(self.sinks.push(sink)),
+            Ok(mut sink) => {
+                if self.on {
+                    sink.start(self.write_tx.as_ref().unwrap().clone()).await;
+                }
+                Ok(self.sinks.push(sink))
+            }
             Err(e) => Err(e),
         }
     }
@@ -628,6 +635,7 @@ impl Modbus {
     }
 }
 
+#[derive(Debug)]
 pub struct WritePointEvent {
     pub slave: u8,
     pub area: Area,
@@ -670,6 +678,7 @@ impl WritePointEvent {
 }
 
 async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()> {
+    debug!("{:?}", wpe);
     ctx.set_slave(wpe.slave);
     match wpe.area {
         Area::Coils => match wpe.data_type.typ {

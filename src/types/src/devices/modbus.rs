@@ -659,6 +659,29 @@ pub enum Type {
     Bytes,
 }
 
+impl TryFrom<&str> for Type {
+    type Error = ();
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        match value {
+            "bool" => Ok(Type::Bool),
+            "int8" => Ok(Type::Int8),
+            "uint8" => Ok(Type::Uint8),
+            "int16" => Ok(Type::Int16),
+            "uint16" => Ok(Type::Uint16),
+            "int32" => Ok(Type::Int32),
+            "uint32" => Ok(Type::Uint32),
+            "int64" => Ok(Type::Int64),
+            "uint64" => Ok(Type::Uint64),
+            "float32" => Ok(Type::Float32),
+            "float64" => Ok(Type::Float64),
+            "string" => Ok(Type::String),
+            "bytes" => Ok(Type::Bytes),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Endian {
@@ -673,6 +696,20 @@ pub enum Area {
     Coils, // 可读写
     InputRegisters,
     HoldingRegisters, // 可读写
+}
+
+impl TryFrom<&str> for Area {
+    type Error = ();
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        match value {
+            "input_discrete" => Ok(Area::InputDiscrete),
+            "coils" => Ok(Area::Coils),
+            "input_registers" => Ok(Area::InputRegisters),
+            "holding_registers" => Ok(Area::HoldingRegisters),
+            _ => Err(()),
+        }
+    }
 }
 
 #[derive(Serialize)]

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use common::{error::HaliaResult, persistence};
+use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
@@ -156,49 +157,49 @@ impl Rule {
                         // }
                     }
 
-                    // NodeType::DeviceSink => {
-                    //     if let Some(source_ids) = incoming_edges.get(&info.id) {
-                    //         if let Some(source_id) = source_ids.first() {
-                    //             if let Some(mut node_receivers) = receivers.remove(source_id) {
-                    //                 let mut rx = node_receivers.remove(0);
+                    NodeType::DeviceSink => {
+                        if let Some(source_ids) = incoming_edges.get(&info.id) {
+                            if let Some(source_id) = source_ids.first() {
+                                if let Some(mut node_receivers) = receivers.remove(source_id) {
+                                    let mut rx = node_receivers.remove(0);
 
-                    //                 let node = node_map.get(&info.id).unwrap();
-                    //                 let sink: CreateRuleSink =
-                    //                     serde_json::from_value(node.conf.clone())?;
-                    //                 let tx = match sink.r#type {
-                    //                     CreateRuleSinkType::Device(r#type) => match r#type.as_str()
-                    //                     {
-                    //                         modbus::TYPE => GLOBAL_MODBUS_MANAGER
-                    //                             .publish(&sink.id, &sink.sink_id.unwrap())
-                    //                             .await
-                    //                             .unwrap(),
-                    //                         _ => todo!(),
-                    //                     },
+                                    let node = node_map.get(&info.id).unwrap();
+                                    let sink_node: SinkNode =
+                                        serde_json::from_value(node.conf.clone())?;
 
-                    //                     // CreateRuleSinkType::App => GLOBAL_APP_MANAGER
-                    //                     //     .publish(&sink.id, &sink.sink_id)
-                    //                     //     .await
-                    //                     //     .unwrap(),
-                    //                     _ => todo!(),
-                    //                 };
+                                    let tx = match sink_node.r#type.as_str() {
+                                        devices::modbus::TYPE => {
+                                            let sink: types::rules::devices::modbus::Sink =
+                                                serde_json::from_value(sink_node.conf.clone())?;
+                                            GLOBAL_MODBUS_MANAGER
+                                                .publish(
+                                                    &sink.device_id,
+                                                    &sink.sink_id,
+                                                    Uuid::new_v4().as_ref(),
+                                                )
+                                                .await
+                                                .unwrap()
+                                        }
+                                        _ => todo!(),
+                                    };
 
-                    //                 tokio::spawn(async move {
-                    //                     loop {
-                    //                         match rx.recv().await {
-                    //                             Ok(mb) => {
-                    //                                 let _ = tx.send(mb).await;
-                    //                             }
-                    //                             Err(_) => {
-                    //                                 debug!("recv err");
-                    //                                 return;
-                    //                             }
-                    //                         };
-                    //                     }
-                    //                 });
-                    //             }
-                    //         }
-                    //     }
-                    // }
+                                    tokio::spawn(async move {
+                                        loop {
+                                            match rx.recv().await {
+                                                Ok(mb) => {
+                                                    let _ = tx.send(mb).await;
+                                                }
+                                                Err(_) => {
+                                                    debug!("recv err");
+                                                    return;
+                                                }
+                                            };
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
                     NodeType::AppSink => {
                         if let Some(source_ids) = incoming_edges.get(&info.id) {
                             if let Some(source_id) = source_ids.first() {
