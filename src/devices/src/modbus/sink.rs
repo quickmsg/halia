@@ -2,7 +2,9 @@ use common::{error::HaliaResult, persistence};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{debug, warn};
-use types::devices::modbus::{CreateUpdateSinkReq, Endian, SearchSinksItemResp, SinkConf, Type};
+use types::devices::modbus::{
+    CreateUpdateSinkReq, DataType, Endian, SearchSinksItemResp, SinkConf, Type,
+};
 use uuid::Uuid;
 
 use super::WritePointEvent;
@@ -231,7 +233,7 @@ impl Sink {
                     },
                     _ => return,
                 },
-                types::devices::SinkValueType::Variable => match &conf.area.value {
+                types::devices::SinkValueType::Variable => match &endian0.value {
                     serde_json::Value::String(field) => match message.get_str(field) {
                         Some(s) => match serde_json::from_str(s) {
                             Ok(endian) => endian,
@@ -245,36 +247,88 @@ impl Sink {
             None => None,
         };
 
-        let endian1 = match conf.endian1 {
-            Some(_) => todo!(),
-            None => todo!(),
+        let endian1 = match &conf.endian1 {
+            Some(endian1) => match endian1.typ {
+                types::devices::SinkValueType::Const => match &endian1.value {
+                    serde_json::Value::String(s) => match serde_json::from_str(s) {
+                        Ok(endian) => endian,
+                        Err(_) => return,
+                    },
+                    _ => return,
+                },
+                types::devices::SinkValueType::Variable => match &endian1.value {
+                    serde_json::Value::String(field) => match message.get_str(field) {
+                        Some(s) => match serde_json::from_str(s) {
+                            Ok(endian) => endian,
+                            Err(_) => return,
+                        },
+                        None => return,
+                    },
+                    _ => return,
+                },
+            },
+            None => None,
         };
 
-        let len = match conf.len {
-            Some(_) => todo!(),
-            None => todo!(),
+        let len = match &conf.len {
+            Some(len) => match len.typ {
+                types::devices::SinkValueType::Const => match common::json::get_u16(&len.value) {
+                    Some(len) => Some(len),
+                    None => return,
+                },
+                types::devices::SinkValueType::Variable => match &len.value {
+                    serde_json::Value::String(field) => match message.get_u16(field) {
+                        Some(len) => Some(len),
+                        None => return,
+                    },
+                    _ => return,
+                },
+            },
+            None => None,
         };
 
-        let single = match conf.single {
-            Some(_) => todo!(),
-            None => todo!(),
+        let single = match &conf.single {
+            Some(single) => match single.typ {
+                types::devices::SinkValueType::Const => match single.value.as_bool() {
+                    Some(bool) => Some(bool),
+                    None => return,
+                },
+                types::devices::SinkValueType::Variable => match &single.value {
+                    serde_json::Value::String(s) => match message.get_bool(s) {
+                        Some(bool) => Some(bool),
+                        None => return,
+                    },
+                    _ => return,
+                },
+            },
+            None => None,
         };
 
-        let pos = match conf.pos {
-            Some(_) => todo!(),
-            None => todo!(),
+        let pos = match &conf.pos {
+            Some(pos) => match pos.typ {
+                types::devices::SinkValueType::Const => match common::json::get_u8(&pos.value) {
+                    Some(u8) => Some(u8),
+                    None => return,
+                },
+                types::devices::SinkValueType::Variable => match &pos.value {
+                    serde_json::Value::String(field) => match message.get_u8(field) {
+                        Some(u8) => Some(u8),
+                        None => return,
+                    },
+                    _ => return,
+                },
+            },
+            None => None,
         };
 
         let slave = match conf.slave.typ {
-            types::devices::SinkValueType::Const => {
-                match common::json::number::get_u8(&conf.slave.value) {
-                    Some(n) => n,
-                    None => {
-                        warn!("slave只能是number类型");
-                        return;
-                    }
+            types::devices::SinkValueType::Const => match common::json::get_u8(&conf.slave.value) {
+                Some(n) => n,
+                None => {
+                    warn!("slave只能是number类型");
+                    return;
                 }
-            }
+            },
             types::devices::SinkValueType::Variable => match &conf.slave.value {
                 serde_json::Value::String(field) => match message.get_u8(field) {
                     Some(n) => n,
@@ -309,7 +363,7 @@ impl Sink {
 
         let address = match conf.address.typ {
             types::devices::SinkValueType::Const => {
-                match common::json::number::get_u16(&conf.address.value) {
+                match common::json::get_u16(&conf.address.value) {
                     Some(n) => n,
                     None => return,
                 }
@@ -334,7 +388,16 @@ impl Sink {
             },
         };
 
-        match WritePointEvent::new(slave, area, address, conf.data_type.clone(), value) {
+        let data_type = DataType {
+            typ,
+            endian0,
+            endian1,
+            len,
+            single,
+            pos,
+        };
+
+        match WritePointEvent::new(slave, area, address, data_type, value) {
             Ok(wpe) => {
                 let _ = tx.send(wpe);
             }

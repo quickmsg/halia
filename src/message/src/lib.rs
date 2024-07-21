@@ -96,6 +96,16 @@ impl Message {
         }
     }
 
+    pub fn get_bool(&self, field: &str) -> Option<bool> {
+        match self.value.get(field) {
+            Some(value) => match value {
+                MessageValue::Boolean(bool) => Some(*bool),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn add(&mut self, field: String, value: MessageValue) {
         self.value.as_object_mut().unwrap().insert(field, value);
     }
