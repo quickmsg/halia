@@ -60,7 +60,7 @@ pub async fn start() {
     let app = Router::new()
         .nest("/api/device", devices::routes())
         .nest("/api/app", apps::routes())
-        .nest("/api", rule::rule_routes())
+        .nest("/api/rule", rule::rule_routes())
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -70,9 +70,4 @@ pub async fn start() {
 
     let listener = TcpListener::bind("0.0.0.0:13000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
-}
-
-#[derive(Deserialize)]
-pub(crate) struct DeleteIdsQuery {
-    ids: String,
 }

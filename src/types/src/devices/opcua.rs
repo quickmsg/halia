@@ -33,12 +33,10 @@ pub struct VariableConf {
     pub namespace: u16,
     pub identifier_typ: IdentifierType,
     pub identifier: serde_json::Value,
-
-    pub attribute_id: u32,
-    pub index_range: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum IdentifierType {
     Numeric,
     String,

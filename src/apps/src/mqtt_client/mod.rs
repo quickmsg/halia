@@ -302,7 +302,6 @@ impl MqttClient {
                                     v5::ConnectionError::NotConnAck(_) => todo!(),
                                     v5::ConnectionError::RequestsDone => todo!(),
                                 }
-                                time::sleep(10 * Duration::SECOND).await;
                             }
                         }
                     }

@@ -1,6 +1,7 @@
 // use coap::manager::GLOBAL_COAP_MANAGER;
 use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
+use opcua::manager::GLOBAL_OPCUA_MANAGER;
 use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
 use types::devices::{coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, SearchDevicesResp};
@@ -33,6 +34,7 @@ impl DeviceManager {
         for (r#type, device_id) in self.devices.read().await.iter().rev() {
             let resp = match r#type {
                 &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id),
+                &opcua::TYPE => GLOBAL_OPCUA_MANAGER.search(device_id),
                 // &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
                 _ => unreachable!(),
             };

@@ -10,16 +10,13 @@ use uuid::Uuid;
 use crate::{AppResp, Pagination};
 
 pub fn rule_routes() -> Router {
-    Router::new().nest(
-        "/rule",
-        Router::new()
-            .route("/", post(create))
-            .route("/", get(search))
-            .route("/:id/start", put(start))
-            .route("/:id/stop", put(stop))
-            .route("/:id", put(update))
-            .route("/:id", routing::delete(delete)),
-    )
+    Router::new()
+        .route("/", post(create))
+        .route("/", get(search))
+        .route("/:id/start", put(start))
+        .route("/:id/stop", put(stop))
+        .route("/:id", put(update))
+        .route("/:id", routing::delete(delete))
 }
 
 async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResp<()> {
