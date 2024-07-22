@@ -8,7 +8,12 @@ use opcua::{
         TimestampsToReturn, UAString, Variant,
     },
 };
-use tokio::{select, sync::mpsc, task::JoinHandle, time};
+use tokio::{
+    select,
+    sync::{mpsc, RwLock},
+    task::JoinHandle,
+    time,
+};
 use tracing::debug;
 use types::devices::opcua::{CreateUpdateVariableReq, SearchVariablesItemResp};
 use uuid::Uuid;
@@ -20,7 +25,7 @@ pub struct Variable {
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
 
     on: bool,
-    pub value: Option<Variant>,
+    pub value: Arc<RwLock<Option<Variant>>>,
 
     handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<Session>)>>,
 }
@@ -48,17 +53,18 @@ impl Variable {
         Ok(Self {
             id: variable_id,
             conf: req,
-            value: None,
+            value: Arc::new(RwLock::new(None)),
             on: false,
             stop_signal_tx: None,
             handle: None,
         })
     }
 
-    pub fn search(&self) -> SearchVariablesItemResp {
+    pub async fn search(&self) -> SearchVariablesItemResp {
         SearchVariablesItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            value: serde_json::to_value(self.value.read().await.as_ref()).unwrap(),
         }
     }
 
@@ -98,12 +104,12 @@ impl Variable {
         todo!()
     }
 
-    pub fn write(&mut self, data_value: Option<DataValue>) {
-        match data_value {
-            Some(data_value) => self.value = data_value.value,
-            None => self.value = None,
-        }
-    }
+    // pub fn write(&mut self, data_value: Option<DataValue>) {
+    //     match data_value {
+    //         Some(data_value) => self.value = data_value.value,
+    //         None => self.value = None,
+    //     }
+    // }
 
     pub async fn start(&mut self, client: Arc<Session>) {
         if self.on {
@@ -119,6 +125,7 @@ impl Variable {
 
     async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>, client: Arc<Session>) {
         let interval = self.conf.variable_conf.interval;
+        let value = self.value.clone();
 
         let namespace = self.conf.variable_conf.namespace;
         let identifier = match &self.conf.variable_conf.identifier_typ {
@@ -163,7 +170,7 @@ impl Variable {
                     }
 
                     _ = interval.tick() => {
-                        Variable::read_variable(&client, &read_value_id).await;
+                        Variable::read_variable(&client, &read_value_id, &value).await;
                     }
                 }
             }
@@ -171,14 +178,19 @@ impl Variable {
         self.handle = Some(handle);
     }
 
-    async fn read_variable(client: &Arc<Session>, read_value_id: &ReadValueId) {
+    async fn read_variable(
+        client: &Arc<Session>,
+        read_value_id: &ReadValueId,
+        value: &Arc<RwLock<Option<Variant>>>,
+    ) {
         match client
             .read(&[read_value_id.clone()], TimestampsToReturn::Both, 2000.0)
             .await
         {
-            Ok(resp) => {
-                debug!("{:?}", resp);
-            }
+            Ok(mut resp) => match resp.pop() {
+                Some(data_value) => *(value.write().await) = data_value.value,
+                None => {}
+            },
             Err(e) => {
                 debug!("err code :{:?}", e);
             }

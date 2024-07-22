@@ -633,7 +633,6 @@ impl DataType {
                 }
                 _ => bail!("not support"),
             },
-            _ => bail!("TODO"),
         }
     }
 }

@@ -55,4 +55,5 @@ pub struct SearchVariablesItemResp {
     pub id: Uuid,
     #[serde(flatten)]
     pub conf: CreateUpdateVariableReq,
+    pub value: serde_json::Value,
 }

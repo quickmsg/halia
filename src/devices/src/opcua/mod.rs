@@ -258,7 +258,7 @@ impl Opcua {
             .rev()
             .skip((page - 1) * size)
         {
-            data.push(varibale.search());
+            data.push(varibale.search().await);
             if data.len() == size {
                 break;
             }
