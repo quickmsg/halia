@@ -40,11 +40,11 @@ struct Opcua {
     err: Arc<AtomicBool>,
     conf: CreateUpdateOpcuaReq,
 
-    variables: Vec<Variable>,
+    variables: Arc<RwLock<Vec<Variable>>>,
 
     on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    session: Option<Arc<Session>>,
+    session: Arc<RwLock<Option<Arc<Session>>>>,
 }
 
 impl Opcua {
@@ -68,9 +68,9 @@ impl Opcua {
             on: false,
             err: Arc::new(AtomicBool::new(false)),
             conf: req,
-            session: None,
+            session: Arc::new(RwLock::new(None)),
             stop_signal_tx: None,
-            variables: vec![],
+            variables: Arc::new(RwLock::new(vec![])),
         })
     }
 
@@ -140,13 +140,20 @@ impl Opcua {
         let opcua_conf = self.conf.opcua_conf.clone();
         let global_session = self.session.clone();
         let reconnect = self.conf.opcua_conf.reconnect;
+        let variables = self.variables.clone();
         tokio::spawn(async move {
             loop {
                 match Opcua::connect(&opcua_conf).await {
                     Ok((session, join_handle)) => {
+                        for variable in variables.write().await.iter_mut() {
+                            variable.start(session.clone()).await;
+                        }
+
                         *(global_session.write().await) = Some(session);
                         match join_handle.await {
-                            Ok(s) => debug!("{}", s),
+                            Ok(s) => {
+                                debug!("{}", s);
+                            }
                             Err(e) => debug!("{}", e),
                         }
                     }
@@ -229,10 +236,12 @@ impl Opcua {
     ) -> HaliaResult<()> {
         match Variable::new(&self.id, variable_id, req).await {
             Ok(mut variable) => {
-                if self.on {
-                    variable.start(self.session.clone()).await;
+                if self.on && self.session.read().await.is_some() {
+                    variable
+                        .start(self.session.read().await.as_ref().unwrap().clone())
+                        .await;
                 }
-                self.variables.push(variable);
+                self.variables.write().await.push(variable);
                 Ok(())
             }
             Err(e) => Err(e),
@@ -241,7 +250,14 @@ impl Opcua {
 
     async fn search_variables(&self, page: usize, size: usize) -> HaliaResult<SearchVariablesResp> {
         let mut data = vec![];
-        for varibale in self.variables.iter().rev().skip((page - 1) * size) {
+        for varibale in self
+            .variables
+            .read()
+            .await
+            .iter()
+            .rev()
+            .skip((page - 1) * size)
+        {
             data.push(varibale.search());
             if data.len() == size {
                 break;
@@ -249,7 +265,7 @@ impl Opcua {
         }
 
         Ok(SearchVariablesResp {
-            total: self.variables.len(),
+            total: self.variables.read().await.len(),
             data,
         })
     }
@@ -261,6 +277,8 @@ impl Opcua {
     ) -> HaliaResult<()> {
         match self
             .variables
+            .write()
+            .await
             .iter_mut()
             .find(|variable| variable.id == variable_id)
         {
@@ -272,6 +290,8 @@ impl Opcua {
     async fn delete_variable(&mut self, variable_id: Uuid) -> HaliaResult<()> {
         match self
             .variables
+            .write()
+            .await
             .iter_mut()
             .find(|variable| variable.id == variable_id)
         {
@@ -281,7 +301,10 @@ impl Opcua {
             None => return Err(HaliaError::NotFound),
         }
 
-        self.variables.retain(|variable| variable.id != variable_id);
+        self.variables
+            .write()
+            .await
+            .retain(|variable| variable.id != variable_id);
         Ok(())
     }
 

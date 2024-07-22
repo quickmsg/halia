@@ -3,14 +3,12 @@ use std::{sync::Arc, time::Duration};
 use common::{error::HaliaResult, persistence};
 use opcua::{
     client::Session,
-    types::{DataValue, ReadValueId, TimestampsToReturn, Variant},
+    types::{
+        ByteString, DataValue, Guid, Identifier, NodeId, QualifiedName, ReadValueId,
+        TimestampsToReturn, UAString, Variant,
+    },
 };
-use tokio::{
-    select,
-    sync::{mpsc, RwLock},
-    task::JoinHandle,
-    time,
-};
+use tokio::{select, sync::mpsc, task::JoinHandle, time};
 use tracing::debug;
 use types::devices::opcua::{CreateUpdateVariableReq, SearchVariablesItemResp};
 use uuid::Uuid;
@@ -83,9 +81,14 @@ impl Variable {
         self.conf = req;
 
         if self.on && restart {
-            self.stop_signal_tx.as_ref().unwrap().send(()).await;
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
             let (stop_signal_rx, client) = self.handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx, client);
+            self.event_loop(stop_signal_rx, client).await;
         }
 
         Ok(())
@@ -116,13 +119,42 @@ impl Variable {
 
     async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>, client: Arc<Session>) {
         let interval = self.conf.variable_conf.interval;
+
+        let namespace = self.conf.variable_conf.namespace;
+        let identifier = match &self.conf.variable_conf.identifier_typ {
+            types::devices::opcua::IdentifierType::Numeric => {
+                let num: u32 =
+                    serde_json::from_value::<u32>(self.conf.variable_conf.identifier.clone())
+                        .unwrap();
+                Identifier::Numeric(num)
+            }
+            types::devices::opcua::IdentifierType::String => {
+                let s: UAString =
+                    serde_json::from_value(self.conf.variable_conf.identifier.clone()).unwrap();
+                Identifier::String(s)
+            }
+            types::devices::opcua::IdentifierType::Guid => {
+                let guid: Guid =
+                    serde_json::from_value(self.conf.variable_conf.identifier.clone()).unwrap();
+                Identifier::Guid(guid)
+            }
+            types::devices::opcua::IdentifierType::ByteString => {
+                let bs: ByteString =
+                    serde_json::from_value(self.conf.variable_conf.identifier.clone()).unwrap();
+                Identifier::ByteString(bs)
+            }
+        };
         let handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
+
             let read_value_id = ReadValueId {
-                node_id: todo!(),
-                attribute_id: todo!(),
-                index_range: todo!(),
-                data_encoding: todo!(),
+                node_id: NodeId {
+                    namespace,
+                    identifier,
+                },
+                attribute_id: 13,
+                index_range: UAString::null(),
+                data_encoding: QualifiedName::null(),
             };
             loop {
                 select! {

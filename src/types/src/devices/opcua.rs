@@ -29,6 +29,21 @@ pub struct CreateUpdateVariableReq {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct VariableConf {
     pub interval: u64,
+
+    pub namespace: u16,
+    pub identifier_typ: IdentifierType,
+    pub identifier: serde_json::Value,
+
+    pub attribute_id: u32,
+    pub index_range: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub enum IdentifierType {
+    Numeric,
+    String,
+    Guid,
+    ByteString,
 }
 
 #[derive(Serialize)]
