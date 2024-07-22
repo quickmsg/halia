@@ -2,6 +2,8 @@ use anyhow::Result;
 use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use common::{error::HaliaResult, persistence};
 use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
+use functions::merge::merge::Merge;
+use message::MessageBatch;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
@@ -132,29 +134,27 @@ impl Rule {
                         // }
                     }
                     NodeType::Merge => {
-                        // if let Some(source_ids) = incoming_edges.get(&osi.id) {
-                        //     debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &osi.id);
-                        //     let mut rxs = Vec::new();
-                        //     for source_id in source_ids {
-                        //         if let Some(mut node_receivers) = receivers.remove(source_id) {
-                        //             let rx = node_receivers.remove(0);
-                        //             rxs.push(rx);
-                        //         }
-                        //     }
-                        //     debug!("source receivers len:{}", rxs.len());
-                        //     let (tx, nrx) = broadcast::channel::<MessageBatch>(10);
-                        //     receivers.insert(osi.id, vec![nrx]);
-                        //     if let Some(node) = node_map.get(&osi.id) {
-                        //         match Merge::new(node.conf.clone(), rxs, tx) {
-                        //             Ok(mut merge) => {
-                        //                 tokio::spawn(async move {
-                        //                     merge.run().await;
-                        //                 });
-                        //             }
-                        //             Err(e) => error!("create merge err:{}", e),
-                        //         }
-                        //     }
-                        // }
+                        if let Some(source_ids) = incoming_edges.get(&info.id) {
+                            debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &info.id);
+                            let mut rxs = Vec::new();
+                            for source_id in source_ids {
+                                if let Some(mut node_receivers) = receivers.remove(source_id) {
+                                    let rx = node_receivers.remove(0);
+                                    rxs.push(rx);
+                                }
+                            }
+                            debug!("source receivers len:{}", rxs.len());
+                            let (tx, nrx) = broadcast::channel::<MessageBatch>(16);
+                            receivers.insert(info.id, vec![nrx]);
+                            if let Some(node) = node_map.get(&info.id) {
+                                match Merge::new(node.conf.clone(), rxs, tx) {
+                                    Ok(mut merge) => {
+                                        merge.run().await;
+                                    }
+                                    Err(e) => error!("create merge err:{}", e),
+                                }
+                            }
+                        }
                     }
 
                     NodeType::DeviceSink => {

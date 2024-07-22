@@ -1042,10 +1042,13 @@ name = "functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "futures",
  "message",
+ "pin-utils",
  "regex",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
  "types",
 ]

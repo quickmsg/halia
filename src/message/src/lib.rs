@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use uuid::Uuid;
 
 mod json;
 
@@ -106,6 +105,16 @@ impl Message {
         }
     }
 
+    pub fn merge(&mut self, other: Message) {
+        match self.value.as_object_mut() {
+            Some(s_obj) => match other.value.take_object() {
+                Some(o_obj) => s_obj.extend(o_obj),
+                None => {}
+            },
+            None => {}
+        }
+    }
+
     pub fn add(&mut self, field: String, value: MessageValue) {
         self.value.as_object_mut().unwrap().insert(field, value);
     }
@@ -142,9 +151,16 @@ impl MessageValue {
             .map(|x| x.replace("~1", "/").replace("~0", "~"))
             .try_fold(self, |target, token| match target {
                 MessageValue::Object(map) => map.get(&token),
-                MessageValue::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
+                MessageValue::Array(list) => Self::parse_index(&token).and_then(|x| list.get(x)),
                 _ => None,
             })
+    }
+
+    pub fn take_object(self) -> Option<HashMap<String, MessageValue>> {
+        match self {
+            MessageValue::Object(obj) => Some(obj),
+            _ => None,
+        }
     }
 
     pub fn as_object_mut(&mut self) -> Option<&mut HashMap<String, MessageValue>> {
@@ -153,17 +169,17 @@ impl MessageValue {
             _ => None,
         }
     }
+
+    fn parse_index(s: &str) -> Option<usize> {
+        if s.starts_with('+') || (s.starts_with('0') && s.len() != 1) {
+            return None;
+        }
+        s.parse().ok()
+    }
 }
 
 impl Default for MessageValue {
     fn default() -> Self {
         MessageValue::Object(HashMap::new())
     }
-}
-
-fn parse_index(s: &str) -> Option<usize> {
-    if s.starts_with('+') || (s.starts_with('0') && s.len() != 1) {
-        return None;
-    }
-    s.parse().ok()
 }

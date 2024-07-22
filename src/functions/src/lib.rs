@@ -4,6 +4,7 @@ use message::MessageBatch;
 // mod aggregate;
 mod filter;
 mod field;
+pub mod merge;
 
 pub trait Function: Send + Sync {
     fn call(&self, message_batch: &mut MessageBatch);
