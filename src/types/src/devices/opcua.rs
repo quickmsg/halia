@@ -5,23 +5,29 @@ use crate::BaseConf;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateOpcuaReq {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
+    #[serde(flatten)]
+    pub base_conf: BaseConf,
+    #[serde(flatten)]
+    pub opcua_conf: OpcuaConf,
+}
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct OpcuaConf {
     pub host: String,
     pub port: u16,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateUpdateVariableReq {
-    pub base: BaseConf,
-    pub conf: VariableConf,
+    #[serde(flatten)]
+    pub base_conf: BaseConf,
+    #[serde(flatten)]
+    pub variable_conf: VariableConf,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct VariableConf {
-
+    pub interval: u64,
 }
 
 #[derive(Serialize)]
@@ -33,5 +39,6 @@ pub struct SearchVariablesResp {
 #[derive(Serialize)]
 pub struct SearchVariablesItemResp {
     pub id: Uuid,
+    #[serde(flatten)]
     pub conf: CreateUpdateVariableReq,
 }

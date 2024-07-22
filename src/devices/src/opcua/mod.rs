@@ -10,6 +10,7 @@ use opcua::{
 };
 use serde_json::json;
 use std::{
+    env::var,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -17,13 +18,12 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, mpsc},
     task::JoinHandle,
-    time,
 };
-use tracing::{debug, error};
+use tracing::debug;
 use types::devices::{
-    opcua::{CreateUpdateOpcuaReq, CreateUpdateVariableReq, SearchVariablesResp},
+    opcua::{CreateUpdateOpcuaReq, CreateUpdateVariableReq, OpcuaConf, SearchVariablesResp},
     SearchDevicesItemResp,
 };
 use variable::Variable;
@@ -36,15 +36,14 @@ mod variable;
 
 struct Opcua {
     id: Uuid,
-    on: Arc<AtomicBool>,
     err: Arc<AtomicBool>,
     conf: CreateUpdateOpcuaReq,
 
     variables: Vec<Variable>,
 
-    session: Arc<RwLock<Option<Arc<Session>>>>,
-
+    on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
+    session: Option<Arc<Session>>,
 }
 
 impl Opcua {
@@ -65,54 +64,17 @@ impl Opcua {
 
         Ok(Opcua {
             id: device_id,
-            on: Arc::new(AtomicBool::new(false)),
+            on: false,
             err: Arc::new(AtomicBool::new(false)),
             conf: req,
-            session: Arc::new(RwLock::new(None)),
+            session: None,
             stop_signal_tx: None,
             variables: vec![],
         })
     }
 
-    async fn run(&self) {
-        let conf = self.conf.clone();
-        let session = self.session.clone();
-        let on = self.on.clone();
-        tokio::spawn(async move {
-            loop {
-                match Opcua::get_session(&conf).await {
-                    Ok((s, handle)) => {
-                        session.write().await.replace(s);
-                        match handle.await {
-                            Ok(status_code) => match status_code {
-                                StatusCode::Good => {
-                                    if !on.load(Ordering::SeqCst) {
-                                        return;
-                                    }
-                                }
-                                _ => {
-                                    *session.write().await = None;
-                                    // 设备关闭后会跳到这里
-                                    debug!("here");
-                                }
-                            },
-                            Err(_) => {
-                                debug!("connect err :here");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        // TODO select
-                        error!("connect error :{e:?}");
-                        time::sleep(Duration::from_secs(5)).await;
-                    }
-                }
-            }
-        });
-    }
-
-    async fn get_session(
-        conf: &CreateUpdateOpcuaReq,
+    async fn connect(
+        opcua_conf: &OpcuaConf,
     ) -> HaliaResult<(Arc<Session>, JoinHandle<StatusCode>)> {
         let mut client = ClientBuilder::new()
             .application_name("test")
@@ -124,7 +86,7 @@ impl Opcua {
             .client()
             .unwrap();
 
-        let endpoint: EndpointDescription = EndpointDescription::from(conf.host.as_ref());
+        let endpoint: EndpointDescription = EndpointDescription::from(opcua_conf.host.as_ref());
 
         let (session, event_loop) = match client
             .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
@@ -132,18 +94,14 @@ impl Opcua {
         {
             Ok((session, event_loop)) => (session, event_loop),
             Err(e) => {
-                // bail!("connect error {e:?}"),
-                todo!()
+                debug!("{:?}", e);
+                return Err(HaliaError::IoErr);
             }
         };
 
         let handle = event_loop.spawn();
         session.wait_for_connection().await;
         Ok((session, handle))
-    }
-
-    fn get_id(&self) -> Uuid {
-        self.id
     }
 
     async fn recover(&mut self) -> HaliaResult<()> {
@@ -154,7 +112,7 @@ impl Opcua {
         SearchDevicesItemResp {
             id: self.id,
             r#type: TYPE,
-            on: self.on.load(Ordering::SeqCst),
+            on: self.on,
             err: self.err.load(Ordering::SeqCst),
             rtt: 9999,
             conf: json!(&self.conf),
@@ -162,31 +120,41 @@ impl Opcua {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        if self.on.load(Ordering::SeqCst) {
+        if self.on {
             return Ok(());
         } else {
-            self.on.store(true, Ordering::SeqCst);
+            self.on = true;
         }
-        self.run().await;
-        todo!()
+
+        persistence::devices::update_device_status(&self.id, Status::Runing).await?;
+
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+
+        self.event_loop(stop_signal_rx).await;
+        Ok(())
+    }
+
+    async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>) {
+        let opcua_conf = self.conf.opcua_conf.clone();
+        loop {
+            match Opcua::connect(&opcua_conf).await {
+                Ok((session, join_handle)) => {}
+                Err(_) => todo!(),
+            }
+        }
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        if !self.on.load(Ordering::SeqCst) {
+        if !self.on {
             return Ok(());
         } else {
-            self.on.store(false, Ordering::SeqCst);
+            self.on = false;
         }
 
-        match self
-            .session
-            .write()
-            .await
-            .as_ref()
-            .unwrap()
-            .disconnect()
-            .await
-        {
+        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
+
+        match self.session.as_ref().unwrap().disconnect().await {
             Ok(_) => {
                 debug!("session disconnect success");
             }
@@ -229,31 +197,31 @@ impl Opcua {
         variable_id: Option<Uuid>,
         req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
-        // match self
-        //     .groups
-        //     .write()
-        //     .await
-        //     .iter_mut()
-        //     .find(|group| group.id == group_id)
-        // {
-        //     Some(group) => group.create_variable(&self.id, variable_id, req).await,
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
+        match Variable::new(&self.id, variable_id, req).await {
+            Ok(mut variable) => {
+                if self.on {
+                    variable.start(self.session.as_ref().unwrap().clone()).await;
+                }
+                self.variables.push(variable);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     async fn search_variables(&self, page: usize, size: usize) -> HaliaResult<SearchVariablesResp> {
-        // match self
-        //     .groups
-        //     .read()
-        //     .await
-        //     .iter()
-        //     .find(|group| group.id == group_id)
-        // {
-        //     Some(group) => Ok(group.search_variables(page, size).await),
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
+        let mut data = vec![];
+        for varibale in self.variables.iter().rev().skip((page - 1) * size) {
+            data.push(varibale.search());
+            if data.len() == size {
+                break;
+            }
+        }
+
+        Ok(SearchVariablesResp {
+            total: self.variables.len(),
+            data,
+        })
     }
 
     async fn update_variable(
@@ -261,31 +229,30 @@ impl Opcua {
         variable_id: Uuid,
         req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
-        // match self
-        //     .groups
-        //     .read()
-        //     .await
-        //     .iter()
-        //     .find(|group| group.id == group_id)
-        // {
-        //     Some(group) => group.update_variable(variable_id, req).await,
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
+        match self
+            .variables
+            .iter_mut()
+            .find(|variable| variable.id == variable_id)
+        {
+            Some(variable) => variable.update(&self.id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn delete_variable(&mut self, variable_id: Uuid) -> HaliaResult<()> {
-        // match self
-        //     .groups
-        //     .write()
-        //     .await
-        //     .iter_mut()
-        //     .find(|group| group.id == *group_id)
-        // {
-        //     Some(group) => group.delete_variables(variable_ids).await,
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
+        match self
+            .variables
+            .iter_mut()
+            .find(|variable| variable.id == variable_id)
+        {
+            Some(variable) => {
+                variable.delete().await?;
+            }
+            None => return Err(HaliaError::NotFound),
+        }
+
+        self.variables.retain(|variable| variable.id != variable_id);
+        Ok(())
     }
 
     async fn subscribe(
