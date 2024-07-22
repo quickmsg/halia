@@ -10,7 +10,6 @@ use opcua::{
 };
 use serde_json::json;
 use std::{
-    env::var,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -18,8 +17,10 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    sync::{broadcast, mpsc},
+    select,
+    sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
+    time,
 };
 use tracing::debug;
 use types::devices::{
@@ -137,12 +138,33 @@ impl Opcua {
 
     async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>) {
         let opcua_conf = self.conf.opcua_conf.clone();
-        loop {
-            match Opcua::connect(&opcua_conf).await {
-                Ok((session, join_handle)) => {}
-                Err(_) => todo!(),
+        let global_session = self.session.clone();
+        let reconnect = self.conf.opcua_conf.reconnect;
+        tokio::spawn(async move {
+            loop {
+                match Opcua::connect(&opcua_conf).await {
+                    Ok((session, join_handle)) => {
+                        *(global_session.write().await) = Some(session);
+                        match join_handle.await {
+                            Ok(s) => debug!("{}", s),
+                            Err(e) => debug!("{}", e),
+                        }
+                    }
+                    Err(e) => {
+                        let sleep = time::sleep(Duration::from_secs(reconnect));
+                        tokio::pin!(sleep);
+                        select! {
+                            _ = stop_signal_rx.recv() => {
+                                return
+                            }
+
+                            _ = &mut sleep => {}
+                        }
+                        debug!("{e}");
+                    }
+                }
             }
-        }
+        });
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
@@ -154,7 +176,15 @@ impl Opcua {
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
 
-        match self.session.as_ref().unwrap().disconnect().await {
+        match self
+            .session
+            .read()
+            .await
+            .as_ref()
+            .unwrap()
+            .disconnect()
+            .await
+        {
             Ok(_) => {
                 debug!("session disconnect success");
             }
@@ -200,7 +230,7 @@ impl Opcua {
         match Variable::new(&self.id, variable_id, req).await {
             Ok(mut variable) => {
                 if self.on {
-                    variable.start(self.session.as_ref().unwrap().clone()).await;
+                    variable.start(self.session.clone()).await;
                 }
                 self.variables.push(variable);
                 Ok(())

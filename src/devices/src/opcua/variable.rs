@@ -5,7 +5,12 @@ use opcua::{
     client::Session,
     types::{DataValue, ReadValueId, TimestampsToReturn, Variant},
 };
-use tokio::{select, sync::mpsc, task::JoinHandle, time};
+use tokio::{
+    select,
+    sync::{mpsc, RwLock},
+    task::JoinHandle,
+    time,
+};
 use tracing::debug;
 use types::devices::opcua::{CreateUpdateVariableReq, SearchVariablesItemResp};
 use uuid::Uuid;

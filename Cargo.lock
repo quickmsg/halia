@@ -894,7 +894,6 @@ dependencies = [
  "bytes",
  "common",
  "dashmap",
- "futures",
  "futures-util",
  "message",
  "opcua",

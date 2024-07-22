@@ -271,7 +271,6 @@ impl Modbus {
 
                             _ = &mut sleep => {}
                         }
-                        time::sleep(Duration::from_secs(reconnect)).await;
                     }
                 }
             }
