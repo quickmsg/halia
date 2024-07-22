@@ -204,23 +204,23 @@ impl Opcua {
     }
 
     async fn update(&mut self, req: CreateUpdateOpcuaReq) -> HaliaResult<()> {
-        // if self.name != req.name {
-        //     self.name = req.name.clone();
-        // }
+        persistence::devices::update_device_conf(&self.id, serde_json::to_string(&req).unwrap())
+            .await?;
 
-        // let mut conf = self.conf.write().await;
-        // if conf.url != new_conf.url {
-        //     conf.url = new_conf.url;
-        //     let _ = self
-        //         .session
-        //         .write()
-        //         .await
-        //         .as_ref()
-        //         .unwrap()
-        //         .disconnect()
-        //         .await;
-        // }
-        // restart
+        let mut restart = false;
+        if self.conf.opcua_conf != req.opcua_conf {
+            restart = true;
+        }
+        self.conf = req;
+
+        if restart && self.on {
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
+        }
 
         Ok(())
     }
