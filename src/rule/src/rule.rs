@@ -13,8 +13,6 @@ use types::rules::{
 };
 use uuid::Uuid;
 
-// use crate::stream::start_stream;
-
 pub(crate) struct Rule {
     pub id: Uuid,
     pub conf: CreateUpdateRuleReq,
@@ -146,8 +144,8 @@ impl Rule {
                             debug!("source receivers len:{}", rxs.len());
                             let (tx, nrx) = broadcast::channel::<MessageBatch>(16);
                             receivers.insert(info.id, vec![nrx]);
-                            if let Some(node) = node_map.get(&info.id) {
-                                match Merge::new(node.conf.clone(), rxs, tx) {
+                            if let Some(_) = node_map.get(&info.id) {
+                                match Merge::new(rxs, tx) {
                                     Ok(mut merge) => {
                                         merge.run().await;
                                     }
@@ -370,7 +368,10 @@ fn get_stream_info(
                 osi.r#type = NodeType::AppSink;
                 return Ok(osi);
             }
-            NodeType::Merge => {}
+            NodeType::Merge => {
+                osi.r#type = NodeType::Merge;
+                return Ok(osi);
+            }
             NodeType::Window => {}
             _ => {}
         }
