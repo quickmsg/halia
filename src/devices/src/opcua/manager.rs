@@ -3,7 +3,10 @@ use std::sync::LazyLock;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use types::devices::{
-    opcua::{CreateUpdateOpcuaReq, CreateUpdateVariableReq, SearchVariablesResp},
+    opcua::{
+        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+        SearchGroupVariablesResp, SearchGroupsResp,
+    },
     SearchDevicesItemResp,
 };
 use uuid::Uuid;
@@ -81,38 +84,92 @@ impl Manager {
         Ok(())
     }
 
-    pub async fn create_variable(
+    pub async fn create_group(
         &self,
         device_id: Uuid,
-        variable_id: Option<Uuid>,
-        req: CreateUpdateVariableReq,
+        group_id: Option<Uuid>,
+        req: CreateUpdateGroupReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_variable(variable_id, req).await,
+            Some(mut device) => device.create_group(group_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn search_variables(
+    pub async fn search_groups(
         &self,
         device_id: Uuid,
         page: usize,
         size: usize,
-    ) -> HaliaResult<SearchVariablesResp> {
+    ) -> HaliaResult<SearchGroupsResp> {
         match self.devices.get(&device_id) {
-            Some(device) => device.search_variables(page, size).await,
+            Some(device) => device.search_groups(page, size).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn update_variable(
+    pub async fn update_group(
         &self,
         device_id: Uuid,
-        variable_id: Uuid,
-        req: CreateUpdateVariableReq,
+        group_id: Uuid,
+        req: CreateUpdateGroupReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.update_group(group_id, req).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.delete_group(group_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn create_group_variable(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        variable_id: Option<Uuid>,
+        req: CreateUpdateGroupVariableReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_variable(variable_id, req).await,
+            Some(mut device) => {
+                device
+                    .create_group_variable(group_id, variable_id, req)
+                    .await
+            }
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn read_group_variables(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        page: usize,
+        size: usize,
+    ) -> HaliaResult<SearchGroupVariablesResp> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.read_group_variables(group_id, page, size).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn update_group_variable(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        variable_id: Uuid,
+        req: CreateUpdateGroupVariableReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get(&device_id) {
+            Some(device) => {
+                device
+                    .update_group_variable(group_id, variable_id, req)
+                    .await
+            }
             None => Err(HaliaError::NotFound),
         }
     }
@@ -129,9 +186,14 @@ impl Manager {
     //     }
     // }
 
-    pub async fn delete_variable(&self, device_id: Uuid, point_id: Uuid) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.delete_variable(point_id).await,
+    pub async fn delete_group_variable(
+        &self,
+        device_id: Uuid,
+        group_id: Uuid,
+        variable_id: Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.delete_group_variable(group_id, variable_id).await,
             None => Err(HaliaError::NotFound),
         }
     }

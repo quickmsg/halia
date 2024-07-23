@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
 };
 use devices::opcua::manager::GLOBAL_OPCUA_MANAGER;
-use types::devices::opcua::{CreateUpdateOpcuaReq, CreateUpdateVariableReq, SearchVariablesResp};
+use types::devices::opcua::CreateUpdateOpcuaReq;
 use uuid::Uuid;
 
 use crate::{AppResp, Pagination};
@@ -21,12 +21,11 @@ pub(crate) fn opcua_routes() -> Router {
             Router::new()
                 .nest(
                     "/variable",
-                    Router::new()
-                        .route("/", post(create_variable))
-                        .route("/", get(search_variables))
-                        .route("/:variable_id", put(update_variable))
-                        // .route("/:variable_id/value", put(write_group_point_value))
-                        .route("/:variable_id", routing::delete(delete_variable)),
+                    Router::new(), // .route("/", post(create_variable))
+                                   // .route("/", get(search_variables))
+                                   // .route("/:variable_id", put(update_variable))
+                                   // .route("/:variable_id/value", put(write_group_point_value))
+                                   // .route("/:variable_id", routing::delete(delete_variable)),
                 )
                 .nest(
                     "/sink",
@@ -73,44 +72,44 @@ async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-async fn create_variable(
-    Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateVariableReq>,
-) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER
-        .create_variable(device_id, None, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
+// async fn create_variable(
+//     Path(device_id): Path<Uuid>,
+//     Json(req): Json<CreateUpdateVariableReq>,
+// ) -> AppResp<()> {
+//     match GLOBAL_OPCUA_MANAGER
+//         .create_variable(device_id, None, req)
+//         .await
+//     {
+//         Ok(_) => AppResp::new(),
+//         Err(e) => e.into(),
+//     }
+// }
 
-async fn search_variables(
-    Path(device_id): Path<Uuid>,
-    pagination: Query<Pagination>,
-) -> AppResp<SearchVariablesResp> {
-    match GLOBAL_OPCUA_MANAGER
-        .search_variables(device_id, pagination.p, pagination.s)
-        .await
-    {
-        Ok(values) => AppResp::with_data(values),
-        Err(e) => e.into(),
-    }
-}
+// async fn search_variables(
+//     Path(device_id): Path<Uuid>,
+//     pagination: Query<Pagination>,
+// ) -> AppResp<SearchVariablesResp> {
+//     match GLOBAL_OPCUA_MANAGER
+//         .search_variables(device_id, pagination.p, pagination.s)
+//         .await
+//     {
+//         Ok(values) => AppResp::with_data(values),
+//         Err(e) => e.into(),
+//     }
+// }
 
-async fn update_variable(
-    Path((device_id, variable_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateVariableReq>,
-) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER
-        .update_variable(device_id, variable_id, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
+// async fn update_variable(
+//     Path((device_id, variable_id)): Path<(Uuid, Uuid)>,
+//     Json(req): Json<CreateUpdateVariableReq>,
+// ) -> AppResp<()> {
+//     match GLOBAL_OPCUA_MANAGER
+//         .update_variable(device_id, variable_id, req)
+//         .await
+//     {
+//         Ok(()) => AppResp::new(),
+//         Err(e) => e.into(),
+//     }
+// }
 
 // async fn write_group_point_value(
 //     Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
@@ -125,15 +124,15 @@ async fn update_variable(
 //     }
 // }
 
-async fn delete_variable(Path((device_id, variable_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER
-        .delete_variable(device_id, variable_id)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
-}
+// async fn delete_variable(Path((device_id, variable_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
+//     match GLOBAL_OPCUA_MANAGER
+//         .delete_variable(device_id, variable_id)
+//         .await
+//     {
+//         Ok(()) => AppResp::new(),
+//         Err(e) => e.into(),
+//     }
+// }
 
 // async fn create_sink(
 //     Path(device_id): Path<Uuid>,

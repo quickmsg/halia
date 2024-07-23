@@ -87,6 +87,7 @@ pub struct PointConf {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct DataType {
+    #[serde(rename = "type")]
     pub typ: Type,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub single_endian: Option<Endian>,
@@ -733,6 +734,7 @@ pub struct CreateUpdateSinkReq {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SinkConf {
+    #[serde(rename = "type")]
     pub typ: SinkValue,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub single_endian: Option<SinkValue>,

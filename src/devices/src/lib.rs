@@ -4,6 +4,7 @@ use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use opcua::manager::GLOBAL_OPCUA_MANAGER;
 use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
+use tracing::{debug, warn};
 use types::devices::{coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, SearchDevicesResp};
 
 use uuid::Uuid;
@@ -53,7 +54,9 @@ impl DeviceManager {
                     total += 1;
                     i += 1;
                 }
-                Err(e) => panic!("无法获取"),
+                Err(e) => {
+                    warn!("{}", e);
+                }
             }
         }
 
@@ -66,7 +69,7 @@ impl DeviceManager {
     }
 
     pub async fn delete(&self, device_id: &Uuid) {
-        self.devices.write().await.retain(|(_, id)| id == device_id);
+        self.devices.write().await.retain(|(_, id)| id != device_id);
     }
 
     pub async fn recover(&self) -> HaliaResult<()> {
