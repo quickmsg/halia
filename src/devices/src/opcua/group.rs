@@ -146,13 +146,10 @@ impl Group {
             .read(read_value_ids, TimestampsToReturn::Both, 2000.0)
             .await
         {
-            Ok(mut resp) => match resp.pop() {
-                Some(data_value) => {
-                    //  *(value.write().await) = data_value.value,
-                    debug!("{:?}", data_value);
-                }
-                None => {}
-            },
+            Ok(mut resp) => {
+                //  *(value.write().await) = data_value.value,
+                debug!("{:?}", resp);
+            }
             Err(e) => {
                 debug!("err code :{:?}", e);
             }

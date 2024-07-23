@@ -5,7 +5,10 @@ use opcua::manager::GLOBAL_OPCUA_MANAGER;
 use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
-use types::devices::{coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, SearchDevicesResp};
+use types::devices::{
+    coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
+    SearchDevicesResp,
+};
 
 use uuid::Uuid;
 
@@ -95,6 +98,18 @@ impl DeviceManager {
                                 "0" => {}
                                 "1" => {
                                     GLOBAL_MODBUS_MANAGER.start(device_id).await.unwrap();
+                                }
+                                _ => panic!("文件已损坏"),
+                            }
+                        }
+                        opcua::TYPE => {
+                            let req: CreateUpdateOpcuaReq = serde_json::from_str(items[3])?;
+                            GLOBAL_OPCUA_MANAGER.create(Some(device_id), req).await?;
+                            GLOBAL_OPCUA_MANAGER.recover(&device_id).await.unwrap();
+                            match items[2] {
+                                "0" => {}
+                                "1" => {
+                                    GLOBAL_OPCUA_MANAGER.start(device_id).await.unwrap();
                                 }
                                 _ => panic!("文件已损坏"),
                             }

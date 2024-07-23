@@ -30,7 +30,9 @@ pub struct CreateUpdateGroupReq {
 pub struct GroupConf {
     pub interval: u64,
     pub timestamps_to_return: TimestampsToReturn,
-    pub max_age: f64,
+    // pub max_age: f64,
+    // serde_json bug,无法在flatten模式下解析f64
+    pub max_age: i64,
 }
 
 #[derive(Serialize)]
@@ -49,11 +51,11 @@ pub struct SearchGroupsItemResp {
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TimestampsToReturn {
-    Source = 0,
-    Server = 1,
-    Both = 2,
-    Neither = 3,
-    Invalid = 4,
+    Source,
+    Server,
+    Both,
+    Neither,
+    Invalid,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

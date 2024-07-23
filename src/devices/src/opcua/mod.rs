@@ -111,22 +111,27 @@ impl Opcua {
     }
 
     async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::devices::opcua::read_groups(&self.id).await {
-            Ok(datas) => {
-                for data in datas {
-                    if data.len() == 0 {
-                        continue;
-                    }
-
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 2);
-
-                    let variable_id = Uuid::from_str(items[0]).unwrap();
-                    let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
-                    self.create_group(Some(variable_id), req).await?;
-                }
+        let group_datas = persistence::devices::opcua::read_groups(&self.id).await?;
+        for group_data in group_datas {
+            if group_data.len() == 0 {
+                continue;
             }
-            Err(_) => todo!(),
+
+            let items = group_data
+                .split(persistence::DELIMITER)
+                .collect::<Vec<&str>>();
+            assert_eq!(items.len(), 2);
+
+            debug!("{:?}", items);
+
+            let group_id = Uuid::from_str(items[0]).unwrap();
+            debug!(
+                "{:?}",
+                serde_json::from_str::<CreateUpdateGroupReq>(items[1])
+            );
+            let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
+            debug!("here");
+            self.create_group(Some(group_id), req).await?;
         }
 
         Ok(())
