@@ -291,22 +291,22 @@ impl DataType {
                     _ => return MessageValue::Null,
                 };
                 match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {
+                    Endian::Little => {}
+                    Endian::Big => {
                         data.swap(0, 1);
                         data.swap(2, 3);
                         data.swap(4, 5);
                         data.swap(6, 7);
                     }
-                    Endian::Big => {}
                 }
                 match self.double_endian.as_ref().unwrap() {
-                    Endian::Little => {
+                    Endian::Little => {}
+                    Endian::Big => {
                         data.swap(0, 6);
                         data.swap(1, 7);
                         data.swap(2, 4);
                         data.swap(3, 5);
                     }
-                    Endian::Big => {}
                 }
                 MessageValue::Float64(f64::from_be_bytes(data))
             }

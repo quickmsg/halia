@@ -4,7 +4,10 @@ use axum::{
     Json, Router,
 };
 use devices::opcua::manager::GLOBAL_OPCUA_MANAGER;
-use types::devices::opcua::CreateUpdateOpcuaReq;
+use types::devices::opcua::{
+    CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+    SearchGroupVariablesResp, SearchGroupsResp,
+};
 use uuid::Uuid;
 
 use crate::{AppResp, Pagination};
@@ -17,23 +20,28 @@ pub(crate) fn opcua_routes() -> Router {
         .route("/:device_id/stop", put(stop))
         .route("/:device_id", routing::delete(delete))
         .nest(
-            "/:device_id",
+            "/:device_id/group",
             Router::new()
+                .route("/", post(create_group))
+                .route("/", get(search_groups))
+                .route("/:group_id", put(update_group))
+                .route("/:group_id", routing::delete(delete_group))
                 .nest(
-                    "/variable",
-                    Router::new(), // .route("/", post(create_variable))
-                                   // .route("/", get(search_variables))
-                                   // .route("/:variable_id", put(update_variable))
-                                   // .route("/:variable_id/value", put(write_group_point_value))
-                                   // .route("/:variable_id", routing::delete(delete_variable)),
-                )
-                .nest(
-                    "/sink",
-                    Router::new(), // .route("/", post(create_sink))
-                                   // .route("/", get(search_sinks))
-                                   // .route("/:sink_id", put(update_sink))
-                                   // .route("/:sink_id", routing::delete(delete_sink)),
+                    "/:group_id/variable",
+                    Router::new()
+                        .route("/", post(create_group_variable))
+                        .route("/", get(search_group_variables))
+                        .route("/:variable_id", put(update_group_variable))
+                        // .route("/:variable_id/value", put(write_group_variable_value))
+                        .route("/:variable_id", routing::delete(delete_group_variable)),
                 ),
+        )
+        .nest(
+            "/:device_id/sink",
+            Router::new(), // .route("/", post(create_sink))
+                           // .route("/", get(search_sinks))
+                           // .route("/:sink_id", put(update_sink))
+                           // .route("/:sink_id", routing::delete(delete_sink)),
         )
 }
 
@@ -72,44 +80,90 @@ async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
     }
 }
 
-// async fn create_variable(
-//     Path(device_id): Path<Uuid>,
-//     Json(req): Json<CreateUpdateVariableReq>,
-// ) -> AppResp<()> {
-//     match GLOBAL_OPCUA_MANAGER
-//         .create_variable(device_id, None, req)
-//         .await
-//     {
-//         Ok(_) => AppResp::new(),
-//         Err(e) => e.into(),
-//     }
-// }
+async fn create_group(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateGroupReq>,
+) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER
+        .create_group(device_id, None, req)
+        .await
+    {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
 
-// async fn search_variables(
-//     Path(device_id): Path<Uuid>,
-//     pagination: Query<Pagination>,
-// ) -> AppResp<SearchVariablesResp> {
-//     match GLOBAL_OPCUA_MANAGER
-//         .search_variables(device_id, pagination.p, pagination.s)
-//         .await
-//     {
-//         Ok(values) => AppResp::with_data(values),
-//         Err(e) => e.into(),
-//     }
-// }
+async fn search_groups(
+    Path(device_id): Path<Uuid>,
+    pagination: Query<Pagination>,
+) -> AppResp<SearchGroupsResp> {
+    match GLOBAL_OPCUA_MANAGER
+        .search_groups(device_id, pagination.p, pagination.s)
+        .await
+    {
+        Ok(data) => AppResp::with_data(data),
+        Err(e) => e.into(),
+    }
+}
 
-// async fn update_variable(
-//     Path((device_id, variable_id)): Path<(Uuid, Uuid)>,
-//     Json(req): Json<CreateUpdateVariableReq>,
-// ) -> AppResp<()> {
-//     match GLOBAL_OPCUA_MANAGER
-//         .update_variable(device_id, variable_id, req)
-//         .await
-//     {
-//         Ok(()) => AppResp::new(),
-//         Err(e) => e.into(),
-//     }
-// }
+async fn update_group(
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateGroupReq>,
+) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER
+        .update_group(device_id, group_id, req)
+        .await
+    {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER.delete_group(device_id, group_id).await {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+async fn create_group_variable(
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateGroupVariableReq>,
+) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER
+        .create_group_variable(device_id, group_id, None, req)
+        .await
+    {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
+
+async fn search_group_variables(
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
+    pagination: Query<Pagination>,
+) -> AppResp<SearchGroupVariablesResp> {
+    match GLOBAL_OPCUA_MANAGER
+        .search_group_variables(device_id, group_id, pagination.p, pagination.s)
+        .await
+    {
+        Ok(values) => AppResp::with_data(values),
+        Err(e) => e.into(),
+    }
+}
+
+async fn update_group_variable(
+    Path((device_id, group_id, variable_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateGroupVariableReq>,
+) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER
+        .update_group_variable(device_id, group_id, variable_id, req)
+        .await
+    {
+        Ok(()) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
 
 // async fn write_group_point_value(
 //     Path((device_id, group_id, point_id)): Path<(Uuid, Uuid, Uuid)>,
@@ -124,15 +178,17 @@ async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
 //     }
 // }
 
-// async fn delete_variable(Path((device_id, variable_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-//     match GLOBAL_OPCUA_MANAGER
-//         .delete_variable(device_id, variable_id)
-//         .await
-//     {
-//         Ok(()) => AppResp::new(),
-//         Err(e) => e.into(),
-//     }
-// }
+async fn delete_group_variable(
+    Path((device_id, group_id, variable_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> AppResp<()> {
+    match GLOBAL_OPCUA_MANAGER
+        .delete_group_variable(device_id, group_id, variable_id)
+        .await
+    {
+        Ok(_) => AppResp::new(),
+        Err(e) => e.into(),
+    }
+}
 
 // async fn create_sink(
 //     Path(device_id): Path<Uuid>,

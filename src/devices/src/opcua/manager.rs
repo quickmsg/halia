@@ -144,7 +144,7 @@ impl Manager {
         }
     }
 
-    pub async fn read_group_variables(
+    pub async fn search_group_variables(
         &self,
         device_id: Uuid,
         group_id: Uuid,
