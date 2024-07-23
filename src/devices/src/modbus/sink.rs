@@ -227,16 +227,16 @@ impl Sink {
             },
         };
 
-        let endian0: Option<Endian> = match &sink_conf.endian0 {
-            Some(endian0) => match endian0.typ {
-                SinkValueType::Const => match &endian0.value {
+        let single_endian: Option<Endian> = match &sink_conf.single_endian {
+            Some(single_endian) => match single_endian.typ {
+                SinkValueType::Const => match &single_endian.value {
                     serde_json::Value::String(s) => match serde_json::from_str(s) {
                         Ok(endian) => endian,
                         Err(_) => return,
                     },
                     _ => return,
                 },
-                SinkValueType::Variable => match &endian0.value {
+                SinkValueType::Variable => match &single_endian.value {
                     serde_json::Value::String(field) => match message.get_str(field) {
                         Some(s) => match serde_json::from_str(s) {
                             Ok(endian) => endian,
@@ -250,16 +250,16 @@ impl Sink {
             None => None,
         };
 
-        let endian1 = match &sink_conf.endian1 {
-            Some(endian1) => match endian1.typ {
-                SinkValueType::Const => match &endian1.value {
+        let double_endian = match &sink_conf.double_endian {
+            Some(double_endian) => match double_endian.typ {
+                SinkValueType::Const => match &double_endian.value {
                     serde_json::Value::String(s) => match serde_json::from_str(s) {
                         Ok(endian) => endian,
                         Err(_) => return,
                     },
                     _ => return,
                 },
-                SinkValueType::Variable => match &endian1.value {
+                SinkValueType::Variable => match &double_endian.value {
                     serde_json::Value::String(field) => match message.get_str(field) {
                         Some(s) => match serde_json::from_str(s) {
                             Ok(endian) => endian,
@@ -392,8 +392,8 @@ impl Sink {
 
         let data_type = DataType {
             typ,
-            endian0,
-            endian1,
+            single_endian,
+            double_endian,
             len,
             single,
             pos,

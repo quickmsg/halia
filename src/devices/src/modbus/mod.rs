@@ -698,7 +698,7 @@ async fn write_value(ctx: &mut Context, wpe: WritePointEvent) -> HaliaResult<()>
                 }
             }
             Type::Int8 | Type::Uint8 => {
-                let (and_mask, or_mask) = match wpe.data_type.endian0.as_ref().unwrap() {
+                let (and_mask, or_mask) = match wpe.data_type.single_endian.as_ref().unwrap() {
                     Endian::Little => (0x00FF, (wpe.data[0] as u16) << 8),
                     Endian::Big => (0xFF00, wpe.data[0] as u16),
                 };

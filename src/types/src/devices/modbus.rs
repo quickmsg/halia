@@ -89,9 +89,9 @@ pub struct PointConf {
 pub struct DataType {
     pub typ: Type,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub endian0: Option<Endian>,
+    pub single_endian: Option<Endian>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub endian1: Option<Endian>,
+    pub double_endian: Option<Endian>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub len: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -134,7 +134,7 @@ impl DataType {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => MessageValue::Int64(data[0] as i64),
                     Endian::Big => MessageValue::Int64(data[1] as i64),
                 }
@@ -144,7 +144,7 @@ impl DataType {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => MessageValue::Uint64(data[0] as u64),
                     Endian::Big => MessageValue::Uint64(data[1] as u64),
                 }
@@ -154,7 +154,7 @@ impl DataType {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => data.swap(0, 1),
                 }
@@ -165,7 +165,7 @@ impl DataType {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => data.swap(0, 1),
                 }
@@ -176,14 +176,14 @@ impl DataType {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 1);
                         data.swap(2, 3);
                     }
                 }
-                match self.endian1.as_ref().unwrap() {
+                match self.double_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 2);
@@ -197,14 +197,14 @@ impl DataType {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 1);
                         data.swap(2, 3);
                     }
                 }
-                match self.endian1.as_ref().unwrap() {
+                match self.double_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 2);
@@ -218,7 +218,7 @@ impl DataType {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 1);
@@ -227,7 +227,7 @@ impl DataType {
                         data.swap(6, 7);
                     }
                 }
-                match self.endian1.as_ref().unwrap() {
+                match self.double_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 6);
@@ -243,7 +243,7 @@ impl DataType {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 1);
@@ -252,7 +252,7 @@ impl DataType {
                         data.swap(6, 7);
                     }
                 }
-                match self.endian1.as_ref().unwrap() {
+                match self.double_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 6);
@@ -268,14 +268,14 @@ impl DataType {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 1);
                         data.swap(2, 3);
                     }
                 }
-                match self.endian1.as_ref().unwrap() {
+                match self.double_endian.as_ref().unwrap() {
                     Endian::Little => {}
                     Endian::Big => {
                         data.swap(0, 2);
@@ -289,7 +289,7 @@ impl DataType {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
-                match self.endian0.as_ref().unwrap() {
+                match self.single_endian.as_ref().unwrap() {
                     Endian::Little => {
                         data.swap(0, 1);
                         data.swap(2, 3);
@@ -298,7 +298,7 @@ impl DataType {
                     }
                     Endian::Big => {}
                 }
-                match self.endian1.as_ref().unwrap() {
+                match self.double_endian.as_ref().unwrap() {
                     Endian::Little => {
                         data.swap(0, 6);
                         data.swap(1, 7);
@@ -311,7 +311,7 @@ impl DataType {
             }
             Type::String => match (
                 self.single.as_ref().unwrap(),
-                self.endian0.as_ref().unwrap(),
+                self.single_endian.as_ref().unwrap(),
             ) {
                 (true, Endian::Big) => {
                     let mut new_data = vec![];
@@ -397,7 +397,7 @@ impl DataType {
                         Ok(value) => value,
                         Err(e) => bail!("value is wrong:{}", e),
                     };
-                    let data = match self.endian0.as_ref().unwrap() {
+                    let data = match self.single_endian.as_ref().unwrap() {
                         Endian::Little => value.to_be_bytes().to_vec(),
                         Endian::Big => value.to_le_bytes().to_vec(),
                     };
@@ -411,7 +411,7 @@ impl DataType {
                         Ok(value) => value,
                         Err(e) => bail!("value is wrong:{}", e),
                     };
-                    let data = match self.endian0.as_ref().unwrap() {
+                    let data = match self.single_endian.as_ref().unwrap() {
                         Endian::Little => value.to_be_bytes().to_vec(),
                         Endian::Big => value.to_le_bytes().to_vec(),
                     };
@@ -426,14 +426,14 @@ impl DataType {
                         Err(e) => bail!("value is wrong:{}", e),
                     };
                     let mut data = value.to_be_bytes();
-                    match self.endian0.as_ref().unwrap() {
+                    match self.single_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 2);
                             data.swap(1, 3);
                         }
                     }
-                    match self.endian1.as_ref().unwrap() {
+                    match self.double_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 1);
@@ -451,14 +451,14 @@ impl DataType {
                         Err(e) => bail!("value is wrong:{}", e),
                     };
                     let mut data = value.to_be_bytes();
-                    match self.endian0.as_ref().unwrap() {
+                    match self.single_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 2);
                             data.swap(1, 3);
                         }
                     }
-                    match self.endian1.as_ref().unwrap() {
+                    match self.double_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 1);
@@ -472,7 +472,7 @@ impl DataType {
             Type::Int64 => match value.as_i64() {
                 Some(value) => {
                     let mut data = value.to_be_bytes();
-                    match self.endian0.as_ref().unwrap() {
+                    match self.single_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 6);
@@ -481,7 +481,7 @@ impl DataType {
                             data.swap(3, 5);
                         }
                     }
-                    match self.endian1.as_ref().unwrap() {
+                    match self.double_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 1);
@@ -497,7 +497,7 @@ impl DataType {
             Type::Uint64 => match value.as_i64() {
                 Some(value) => {
                     let mut data = value.to_be_bytes();
-                    match self.endian0.as_ref().unwrap() {
+                    match self.single_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 6);
@@ -506,7 +506,7 @@ impl DataType {
                             data.swap(3, 5);
                         }
                     }
-                    match self.endian1.as_ref().unwrap() {
+                    match self.double_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 1);
@@ -525,14 +525,14 @@ impl DataType {
                         bail!("value is wrong, too big")
                     };
                     let mut data = (value as f32).to_be_bytes();
-                    match self.endian0.as_ref().unwrap() {
+                    match self.single_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 2);
                             data.swap(1, 3);
                         }
                     }
-                    match self.endian1.as_ref().unwrap() {
+                    match self.double_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 1);
@@ -546,7 +546,7 @@ impl DataType {
             Type::Float64 => match value.as_f64() {
                 Some(value) => {
                     let mut data = (value as f32).to_be_bytes();
-                    match self.endian0.as_ref().unwrap() {
+                    match self.single_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 6);
@@ -555,7 +555,7 @@ impl DataType {
                             data.swap(3, 5);
                         }
                     }
-                    match self.endian1.as_ref().unwrap() {
+                    match self.double_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 1);
@@ -586,7 +586,7 @@ impl DataType {
                     }
                     match (
                         self.single.as_ref().unwrap(),
-                        self.endian0.as_ref().unwrap(),
+                        self.single_endian.as_ref().unwrap(),
                     ) {
                         (true, Endian::Big) => {
                             for byte in data {
@@ -735,9 +735,9 @@ pub struct CreateUpdateSinkReq {
 pub struct SinkConf {
     pub typ: SinkValue,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub endian0: Option<SinkValue>,
+    pub single_endian: Option<SinkValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub endian1: Option<SinkValue>,
+    pub double_endian: Option<SinkValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub len: Option<SinkValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
