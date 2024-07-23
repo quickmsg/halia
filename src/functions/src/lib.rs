@@ -2,8 +2,8 @@ use anyhow::{bail, Result};
 use message::MessageBatch;
 
 // mod aggregate;
-mod filter;
 mod field;
+mod filter;
 pub mod merge;
 
 pub trait Function: Send + Sync {

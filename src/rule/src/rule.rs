@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
 use types::rules::{
-    apps::mqtt_client, CreateUpdateRuleReq, Node, NodeType, SearchRulesItemResp, SinkNode,
-    SourceNode,
+    apps::mqtt_client, devices::modbus, CreateUpdateRuleReq, Node, NodeType, SearchRulesItemResp,
+    SinkNode, SourceNode,
 };
 use uuid::Uuid;
 
@@ -70,27 +70,22 @@ impl Rule {
                     NodeType::DeviceSource => {
                         let node = node_map.get(&info.first_id).unwrap();
                         let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
-                        match source_node.r#type.as_str() {
-                            "xxx" => {}
-                            _ => {}
-                        }
-                        // let receiver = match source.r#type {
-                        //     types::rule::CreateRuleSourceType::Device(r#type) => {
-                        //         match r#type.as_str() {
-                        //             modbus::TYPE => GLOBAL_MODBUS_MANAGER
-                        //                 .subscribe(&source.id, &source.source_id.unwrap())
-                        //                 .await
-                        //                 .unwrap(),
-                        //             _ => unreachable!(),
-                        //         }
-                        //     }
-                        //     // types::rule::CreateRuleSourceType::App => GLOBAL_APP_MANAGER
-                        //     //     .subscribe(&source.id, source.source_id)
-                        //     //     .await
-                        //     //     .unwrap(),
-                        //     _ => todo!(),
-                        // };
-                        // receivers.insert(info.first_id, vec![receiver]);
+                        let rx = match source_node.r#type.as_str() {
+                            devices::modbus::TYPE => {
+                                let source: modbus::Source =
+                                    serde_json::from_value(source_node.conf.clone())?;
+                                GLOBAL_MODBUS_MANAGER
+                                    .subscribe(
+                                        &source.device_id,
+                                        &source.source_id,
+                                        &Uuid::new_v4(),
+                                    )
+                                    .await
+                                    .unwrap()
+                            }
+                            _ => unreachable!(),
+                        };
+                        receivers.insert(info.first_id, vec![rx]);
                     }
                     NodeType::AppSource => {
                         let node = node_map.get(&info.first_id).unwrap();

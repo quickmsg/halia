@@ -220,7 +220,6 @@ impl Modbus {
                             point.start(read_tx.clone()).await;
                         }
                         loop {
-                            debug!("here");
                             select! {
                                 biased;
                                 _ = stop_signal_rx.recv() => {

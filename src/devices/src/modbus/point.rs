@@ -262,7 +262,9 @@ impl Point {
                 message.add(self.conf.base.name.clone(), message_value);
                 let mut message_batch = MessageBatch::default();
                 message_batch.push_message(message);
-                tx.send(message_batch).unwrap();
+                if let Err(e) = tx.send(message_batch) {
+                    warn!("send err :{:?}", e);
+                }
             }
             None => {}
         }
@@ -277,7 +279,14 @@ impl Point {
     pub fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
         self.ref_rules.retain(|id| id != rule_id);
         self.active_ref_rules.push(rule_id.clone());
-        self.tx.as_ref().unwrap().subscribe()
+        match &self.tx {
+            Some(tx) => tx.subscribe(),
+            None => {
+                let (tx, rx) = broadcast::channel(16);
+                self.tx = Some(tx);
+                rx
+            }
+        }
     }
 
     pub fn unsubscribe(&mut self, rule_id: &Uuid) {
