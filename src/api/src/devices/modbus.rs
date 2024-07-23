@@ -4,9 +4,12 @@ use axum::{
     Json, Router,
 };
 use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
-use types::devices::modbus::{
-    CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
-    SearchSinksResp,
+use types::{
+    devices::modbus::{
+        CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
+        SearchSinksResp,
+    },
+    Value,
 };
 use uuid::Uuid;
 
@@ -121,7 +124,7 @@ async fn update_point(
 
 async fn write_point_value(
     Path((device_id, point_id)): Path<(Uuid, Uuid)>,
-    Json(value): Json<serde_json::Value>,
+    Json(value): Json<Value>,
 ) -> AppResp<()> {
     match GLOBAL_MODBUS_MANAGER
         .write_point_value(device_id, point_id, value)

@@ -4,8 +4,8 @@ use common::{error::HaliaResult, persistence};
 use opcua::{
     client::Session,
     types::{
-        ByteString, DataValue, Guid, Identifier, NodeId, QualifiedName, ReadValueId,
-        TimestampsToReturn, UAString, Variant,
+        ByteString, Guid, Identifier, NodeId, QualifiedName, ReadValueId, TimestampsToReturn,
+        UAString, Variant,
     },
 };
 use tokio::{

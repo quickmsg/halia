@@ -10,6 +10,7 @@ use opcua::{
 };
 use serde_json::json;
 use std::{
+    str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -106,7 +107,25 @@ impl Opcua {
     }
 
     async fn recover(&mut self) -> HaliaResult<()> {
-        todo!()
+        match persistence::devices::opcua::read_variables(&self.id).await {
+            Ok(datas) => {
+                for data in datas {
+                    if data.len() == 0 {
+                        continue;
+                    }
+
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    assert_eq!(items.len(), 2);
+
+                    let variable_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateVariableReq = serde_json::from_str(items[1])?;
+                    self.create_variable(Some(variable_id), req).await?;
+                }
+            }
+            Err(_) => todo!(),
+        }
+
+        Ok(())
     }
 
     fn search(&self) -> SearchDevicesItemResp {

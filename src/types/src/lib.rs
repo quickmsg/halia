@@ -11,6 +11,11 @@ pub struct BaseConf {
     pub desc: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct Value {
+    pub value: serde_json::Value,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SinkValue {
     pub typ: SinkValueType,

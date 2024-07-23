@@ -28,12 +28,15 @@ use tokio::{
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, warn};
-use types::devices::{
-    modbus::{
-        Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType, Encode,
-        Endian, ModbusConf, SearchPointsResp, SearchSinksResp, Type,
+use types::{
+    devices::{
+        modbus::{
+            Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType,
+            Encode, Endian, ModbusConf, SearchPointsResp, SearchSinksResp, Type,
+        },
+        SearchDevicesItemResp,
     },
-    SearchDevicesItemResp,
+    Value,
 };
 use uuid::Uuid;
 
@@ -413,11 +416,7 @@ impl Modbus {
         }
     }
 
-    pub async fn write_point_value(
-        &self,
-        point_id: Uuid,
-        value: serde_json::Value,
-    ) -> HaliaResult<()> {
+    pub async fn write_point_value(&self, point_id: Uuid, value: Value) -> HaliaResult<()> {
         if self.stop_signal_tx.is_none() {
             return Err(HaliaError::DeviceStoped);
         }
@@ -438,7 +437,7 @@ impl Modbus {
                     point.conf.point.area.clone(),
                     point.conf.point.address,
                     point.conf.point.data_type.clone(),
-                    value,
+                    value.value,
                 ) {
                     Ok(wpe) => {
                         let _ = self.write_tx.as_ref().unwrap().send(wpe).await;

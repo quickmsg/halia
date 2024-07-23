@@ -4,12 +4,15 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
-use types::devices::{
-    modbus::{
-        CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
-        SearchSinksResp,
+use types::{
+    devices::{
+        modbus::{
+            CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
+            SearchSinksResp,
+        },
+        SearchDevicesItemResp,
     },
-    SearchDevicesItemResp,
+    Value,
 };
 use uuid::Uuid;
 
@@ -126,7 +129,7 @@ impl Manager {
         &self,
         device_id: Uuid,
         point_id: Uuid,
-        value: serde_json::Value,
+        value: Value,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(device) => device.write_point_value(point_id, value).await,
