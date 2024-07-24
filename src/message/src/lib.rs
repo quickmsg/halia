@@ -36,6 +36,10 @@ impl MessageBatch {
     pub fn push_message(&mut self, message: Message) {
         self.messages.push(message);
     }
+
+    pub fn extend(&mut self, other: MessageBatch) {
+        self.messages.extend(other.messages);
+    }
 }
 
 impl Default for MessageBatch {
