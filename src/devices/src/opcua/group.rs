@@ -3,14 +3,16 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
+    ref_info::RefInfo,
 };
+use message::MessageBatch;
 use opcua::{
     client::Session,
     types::{ReadValueId, TimestampsToReturn},
 };
 use tokio::{
     select,
-    sync::{mpsc, RwLock},
+    sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
     time,
 };
@@ -34,6 +36,8 @@ pub struct Group {
     variables: Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>,
 
     handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<Session>)>>,
+
+    ref_info: RefInfo,
 }
 
 impl Group {
@@ -63,6 +67,7 @@ impl Group {
             on: false,
             stop_signal_tx: None,
             handle: None,
+            ref_info: RefInfo::new(),
         })
     }
 
@@ -264,5 +269,21 @@ impl Group {
         }
 
         Ok(())
+    }
+
+    pub async fn add_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.add_ref(rule_id)
+    }
+
+    pub async fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+        self.ref_info.subscribe(rule_id)
+    }
+
+    pub async fn unsubscribe(&mut self, rule_id: &Uuid) {
+        self.ref_info.unsubscribe(rule_id)
+    }
+
+    pub async fn remove_info(&mut self, rule_id: &Uuid) {
+        self.ref_info.remove_ref(rule_id)
     }
 }

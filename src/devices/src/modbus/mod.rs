@@ -469,7 +469,7 @@ impl Modbus {
         Ok(())
     }
 
-    pub async fn pre_subscribe(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn add_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -477,7 +477,7 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.pre_subscribe(rule_id)),
+            Some(point) => Ok(point.add_ref(rule_id)),
             None => return Err(HaliaError::NotFound),
         }
     }
@@ -517,7 +517,7 @@ impl Modbus {
         }
     }
 
-    pub async fn after_unsubscribe(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn remove_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -525,7 +525,7 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.after_unsubscribe(rule_id)),
+            Some(point) => Ok(point.remove_ref(rule_id)),
             None => return Err(HaliaError::NotFound),
         }
     }

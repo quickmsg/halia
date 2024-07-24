@@ -144,14 +144,14 @@ impl Manager {
         }
     }
 
-    pub async fn pre_subscribe(
+    pub async fn add_ref(
         &self,
         device_id: &Uuid,
         point_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.pre_subscribe(point_id, rule_id).await,
+            Some(mut device) => device.add_ref(point_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -180,14 +180,14 @@ impl Manager {
         }
     }
 
-    pub async fn after_unsubscribe(
+    pub async fn remove_ref(
         &self,
         device_id: &Uuid,
         point_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.after_unsubscribe(point_id, rule_id).await,
+            Some(mut device) => device.remove_ref(point_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
