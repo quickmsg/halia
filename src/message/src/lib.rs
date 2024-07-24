@@ -21,6 +21,10 @@ impl MessageBatch {
         return &self.messages;
     }
 
+    pub fn clear(&mut self) {
+        self.messages.clear();
+    }
+
     pub fn take_one_message(&mut self) -> Option<Message> {
         self.messages.pop()
     }

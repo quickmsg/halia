@@ -1,17 +1,13 @@
 use anyhow::{bail, Result};
-use avg::Avg;
-use max::Max;
 use message::{Message, MessageBatch, MessageValue};
-use min::Min;
 use serde::Deserialize;
 use serde_json::Value;
-use sum::Sum;
-use tracing::debug;
 
-pub mod avg;
-pub mod max;
-pub mod min;
-pub mod sum;
+use crate::Function;
+mod avg;
+mod max;
+mod min;
+mod sum;
 
 pub trait Aggregater: Sync + Send {
     fn aggregate(&self, mb: &MessageBatch) -> MessageValue;
@@ -20,49 +16,48 @@ pub trait Aggregater: Sync + Send {
 #[derive(Deserialize)]
 pub struct Rule {
     r#type: String,
-    option: String,
-    field: String,
-    name: Option<String>,
+    in_field: String,
+    out_field: String,
 }
 
-pub struct Node {
-    aggregaters: Vec<Box<dyn Aggregater>>,
-    rules: Vec<Rule>,
+pub struct Aggregate {
+    aggregaters: Vec<(Box<dyn Aggregater>, String)>,
 }
 
-impl Node {
+impl Aggregate {
     pub fn new(conf: Value) -> Result<Self> {
-        let mut rules: Vec<Rule> = serde_json::from_value(conf)?;
+        let rules: Vec<Rule> = serde_json::from_value(conf)?;
 
         let mut aggregaters = Vec::new();
-        for rule in rules.iter_mut() {
+        for rule in rules.iter() {
             match &rule.r#type.as_str() {
-                &"sum" => aggregaters.push(Sum::new(rule.field.clone())),
-                &"avg" => aggregaters.push(Avg::new(rule.field.clone())),
-                &"max" => aggregaters.push(Max::new(rule.field.clone())),
-                &"min" => aggregaters.push(Min::new(rule.field.clone())),
+                &sum::TYPE => {
+                    aggregaters.push((sum::new(rule.in_field.clone()), rule.out_field.clone()))
+                }
+                &avg::TYPE => {
+                    aggregaters.push((avg::new(rule.in_field.clone()), rule.out_field.clone()))
+                }
+                &max::TYPE => {
+                    aggregaters.push((max::new(rule.in_field.clone()), rule.out_field.clone()))
+                }
+                &min::TYPE => {
+                    aggregaters.push((min::new(rule.in_field.clone()), rule.out_field.clone()))
+                }
                 _ => bail!("not support"),
             }
         }
-        Ok(Node { aggregaters, rules })
+        Ok(Aggregate { aggregaters })
     }
 }
 
-impl Operate for Node {
-    fn operate(&self, message_batch: &mut MessageBatch) -> bool {
+impl Function for Aggregate {
+    fn call(&self, message_batch: &mut MessageBatch) -> bool {
         let mut message = Message::default();
-        for (index, rule) in self.rules.iter().enumerate() {
-            let value = self.aggregaters[index].aggregate(&message_batch);
-            debug!("value:{:?}", value);
-            match &rule.name {
-                Some(name) => message.add(name.clone(), value),
-                None => message.add(rule.field.clone(), value),
-            }
+        for (aggregater, new_filed) in self.aggregaters.iter() {
+            message.add(new_filed.clone(), aggregater.aggregate(&message_batch));
         }
-        debug!("message is:{:?}", message);
-        // message_batch.clear();
-        // message_batch.push(message);
-        todo!();
+        message_batch.clear();
+        message_batch.push_message(message);
         true
     }
 }

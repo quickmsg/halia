@@ -82,7 +82,7 @@ impl Node {
 }
 
 impl Function for Node {
-    fn call(&self, message_batch: &mut message::MessageBatch) {
+    fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
         let messages = message_batch.get_messages_mut();
         debug!("{:?}", messages);
         messages.retain(|message| {
@@ -94,5 +94,7 @@ impl Function for Node {
             false
         });
         debug!("{:?}", messages);
+
+        true
     }
 }

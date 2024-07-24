@@ -400,16 +400,60 @@ impl Opcua {
         }
     }
 
-    async fn subscribe(
-        &mut self,
-        variable_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        todo!()
+    pub async fn add_subscribe_ref(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == *group_id)
+        {
+            Some(group) => Ok(group.add_ref(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
-    async fn unsubscribe(&mut self, group_id: Uuid) -> HaliaResult<()> {
-        todo!()
+    async fn subscribe(
+        &self,
+        group_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == *group_id)
+        {
+            Some(group) => Ok(group.subscribe(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    async fn unsubscribe(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == *group_id)
+        {
+            Some(group) => Ok(group.unsubscribe(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn remove_subscribe_ref(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .groups
+            .write()
+            .await
+            .iter_mut()
+            .find(|group| group.id == *group_id)
+        {
+            Some(group) => Ok(group.remove_ref(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn create_sink(&mut self, sink_id: Uuid, req: &String) -> HaliaResult<()> {

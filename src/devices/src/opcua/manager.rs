@@ -2,6 +2,8 @@ use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use message::MessageBatch;
+use tokio::sync::broadcast;
 use types::devices::{
     opcua::{
         CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
@@ -198,53 +200,53 @@ impl Manager {
         }
     }
 
-    // pub async fn pre_subscribe(
-    //     &self,
-    //     device_id: &Uuid,
-    //     point_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(device_id) {
-    //         Some(mut device) => device.pre_subscribe(point_id, rule_id).await,
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
+    pub async fn add_subscribe_ref(
+        &self,
+        device_id: &Uuid,
+        group_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get(device_id) {
+            Some(device) => device.add_subscribe_ref(group_id, rule_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
 
-    // pub async fn subscribe(
-    //     &self,
-    //     device_id: &Uuid,
-    //     point_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-    //     match self.devices.get_mut(device_id) {
-    //         Some(mut device) => device.subscribe(point_id, rule_id).await,
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
+    pub async fn subscribe(
+        &self,
+        device_id: &Uuid,
+        group_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self.devices.get(device_id) {
+            Some(device) => device.subscribe(group_id, rule_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
 
-    // pub async fn unsubscribe(
-    //     &self,
-    //     device_id: &Uuid,
-    //     point_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(device_id) {
-    //         Some(mut device) => device.unsubscribe(point_id, rule_id).await,
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
+    pub async fn unsubscribe(
+        &self,
+        device_id: &Uuid,
+        group_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get(device_id) {
+            Some(device) => device.unsubscribe(group_id, rule_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
 
-    // pub async fn after_unsubscribe(
-    //     &self,
-    //     device_id: &Uuid,
-    //     point_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(device_id) {
-    //         Some(mut device) => device.after_unsubscribe(point_id, rule_id).await,
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
+    pub async fn remove_subscribe_ref(
+        &self,
+        device_id: &Uuid,
+        group_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get(device_id) {
+            Some(device) => device.remove_subscribe_ref(group_id, rule_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
 
     // pub async fn create_sink(
     //     &self,

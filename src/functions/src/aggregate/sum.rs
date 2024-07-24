@@ -1,15 +1,15 @@
-use message::{MessageValue, MessageBatch};
+use message::{MessageBatch, MessageValue};
 
 use super::Aggregater;
 
-pub(crate) struct Sum {
+struct Sum {
     field: String,
 }
 
-impl Sum {
-    pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(Sum { field })
-    }
+pub const TYPE: &str = "sum";
+
+pub fn new(field: String) -> Box<dyn Aggregater> {
+    Box::new(Sum { field })
 }
 
 impl Aggregater for Sum {

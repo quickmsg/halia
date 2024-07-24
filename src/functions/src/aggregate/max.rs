@@ -1,14 +1,14 @@
 use super::Aggregater;
 use message::{MessageBatch, MessageValue};
 
-pub struct Max {
+struct Max {
     field: String,
 }
 
-impl Max {
-    pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(Max { field })
-    }
+pub const TYPE: &str = "max";
+
+pub fn new(field: String) -> Box<dyn Aggregater> {
+    Box::new(Max { field })
 }
 
 impl Aggregater for Max {

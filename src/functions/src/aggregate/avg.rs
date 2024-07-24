@@ -2,14 +2,14 @@ use message::{MessageBatch, MessageValue};
 
 use super::Aggregater;
 
-pub(crate) struct Avg {
+struct Avg {
     field: String,
 }
 
-impl Avg {
-    pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(Avg { field })
-    }
+pub const TYPE: &str = "avg";
+
+pub fn new(field: String) -> Box<dyn Aggregater> {
+    Box::new(Avg { field })
 }
 
 impl Aggregater for Avg {

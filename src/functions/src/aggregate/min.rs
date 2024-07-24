@@ -1,15 +1,15 @@
 use super::Aggregater;
-use message::{MessageValue, MessageBatch};
+use message::{MessageBatch, MessageValue};
 
-pub struct Min {
+struct Min {
     field: String,
 }
 
-impl Min {
+pub const TYPE: &str = "min";
+
     pub fn new(field: String) -> Box<dyn Aggregater> {
         Box::new(Min { field })
     }
-}
 
 impl Aggregater for Min {
     fn aggregate(&self, mb: &MessageBatch) -> MessageValue {
