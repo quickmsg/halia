@@ -10,7 +10,9 @@ use opcua::{
 };
 use tokio::sync::RwLock;
 use tracing::debug;
-use types::devices::opcua::{CreateUpdateGroupVariableReq, SearchGroupVariablesItemResp};
+use types::devices::opcua::{
+    CreateUpdateGroupVariableReq, SearchGroupVariablesItemResp, VariableConf,
+};
 use uuid::Uuid;
 
 pub struct Variable {
@@ -25,7 +27,7 @@ impl Variable {
         group_id: &Uuid,
         variable_id: Option<Uuid>,
         req: CreateUpdateGroupVariableReq,
-    ) -> HaliaResult<Self> {
+    ) -> HaliaResult<(Self, ReadValueId)> {
         let (variable_id, new) = match variable_id {
             Some(variable_id) => (variable_id, false),
             None => (Uuid::new_v4(), true),
@@ -41,35 +43,37 @@ impl Variable {
             .await?;
         }
 
-        Ok(Self {
-            id: variable_id,
-            conf: req,
-            value: None,
-        })
+        let read_value_id = Variable::get_read_value_id(&req.variable_conf);
+
+        Ok((
+            Self {
+                id: variable_id,
+                conf: req,
+                value: None,
+            },
+            read_value_id,
+        ))
     }
 
-    pub fn get_read_value_id(&self) -> ReadValueId {
-        let namespace = self.conf.variable_conf.namespace;
-        let identifier = match &self.conf.variable_conf.identifier_type {
+    pub fn get_read_value_id(variable_conf: &VariableConf) -> ReadValueId {
+        let namespace = variable_conf.namespace;
+        let identifier = match variable_conf.identifier_type {
             types::devices::opcua::IdentifierType::Numeric => {
                 let num: u32 =
-                    serde_json::from_value::<u32>(self.conf.variable_conf.identifier.clone())
-                        .unwrap();
+                    serde_json::from_value::<u32>(variable_conf.identifier.clone()).unwrap();
                 Identifier::Numeric(num)
             }
             types::devices::opcua::IdentifierType::String => {
-                let s: UAString =
-                    serde_json::from_value(self.conf.variable_conf.identifier.clone()).unwrap();
+                let s: UAString = serde_json::from_value(variable_conf.identifier.clone()).unwrap();
                 Identifier::String(s)
             }
             types::devices::opcua::IdentifierType::Guid => {
-                let guid: Guid =
-                    serde_json::from_value(self.conf.variable_conf.identifier.clone()).unwrap();
+                let guid: Guid = serde_json::from_value(variable_conf.identifier.clone()).unwrap();
                 Identifier::Guid(guid)
             }
             types::devices::opcua::IdentifierType::ByteString => {
                 let bs: ByteString =
-                    serde_json::from_value(self.conf.variable_conf.identifier.clone()).unwrap();
+                    serde_json::from_value(variable_conf.identifier.clone()).unwrap();
                 Identifier::ByteString(bs)
             }
         };
@@ -98,7 +102,7 @@ impl Variable {
         device_id: &Uuid,
         group_id: &Uuid,
         req: CreateUpdateGroupVariableReq,
-    ) -> HaliaResult<bool> {
+    ) -> HaliaResult<Option<ReadValueId>> {
         persistence::devices::opcua::update_group_variable(
             device_id,
             group_id,
@@ -113,7 +117,11 @@ impl Variable {
         }
         self.conf = req;
 
-        Ok(restart)
+        if restart {
+            Ok(Some(Variable::get_read_value_id(&self.conf.variable_conf)))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn delete(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {

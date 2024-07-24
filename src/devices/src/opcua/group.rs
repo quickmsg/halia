@@ -1,6 +1,9 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
-use common::{error::HaliaResult, persistence};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use opcua::{
     client::Session,
     types::{ReadValueId, TimestampsToReturn},
@@ -28,8 +31,7 @@ pub struct Group {
 
     pub on: bool,
 
-    variables: Arc<RwLock<Vec<Variable>>>,
-    read_value_ids: Arc<RwLock<Vec<ReadValueId>>>,
+    variables: Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>,
 
     handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<Session>)>>,
 }
@@ -57,8 +59,7 @@ impl Group {
         Ok(Self {
             id: group_id,
             conf: req,
-            variables: Arc::new(RwLock::new(vec![])),
-            read_value_ids: Arc::new(RwLock::new(vec![])),
+            variables: Arc::new(RwLock::new((vec![], vec![]))),
             on: false,
             stop_signal_tx: None,
             handle: None,
@@ -141,7 +142,7 @@ impl Group {
 
     async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>, client: Arc<Session>) {
         let interval = self.conf.group_conf.interval;
-        let read_value_ids = self.read_value_ids.clone();
+        let variables = self.variables.clone();
         let handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
 
@@ -152,7 +153,7 @@ impl Group {
                     }
 
                     _ = interval.tick() => {
-                        Group::read_variables_from_remote(&client, read_value_ids.read().await.as_ref()).await;
+                        Group::read_variables_from_remote(&client, &variables).await;
                     }
                 }
             }
@@ -162,16 +163,17 @@ impl Group {
 
     async fn read_variables_from_remote(
         client: &Arc<Session>,
-        read_value_ids: &[ReadValueId],
-        // value: &Arc<RwLock<Option<Variant>>>,
+        variables: &Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>,
     ) {
+        let mut lock_variables = variables.write().await;
         match client
-            .read(read_value_ids, TimestampsToReturn::Both, 2000.0)
+            .read(&lock_variables.1, TimestampsToReturn::Both, 2000.0)
             .await
         {
-            Ok(mut resp) => {
-                //  *(value.write().await) = data_value.value,
-                debug!("{:?}", resp);
+            Ok(mut data_values) => {
+                for variable in lock_variables.0.iter_mut().rev() {
+                    variable.value = data_values.pop().unwrap().value;
+                }
             }
             Err(e) => {
                 debug!("err code :{:?}", e);
@@ -186,12 +188,10 @@ impl Group {
         req: CreateUpdateGroupVariableReq,
     ) -> HaliaResult<()> {
         match Variable::new(device_id, &self.id, variable_id, req).await {
-            Ok(variable) => {
-                self.read_value_ids
-                    .write()
-                    .await
-                    .push(variable.get_read_value_id());
-                self.variables.write().await.push(variable);
+            Ok((variable, read_value_id)) => {
+                let mut lock_variables = self.variables.write().await;
+                lock_variables.0.push(variable);
+                lock_variables.1.push(read_value_id);
                 Ok(())
             }
             Err(e) => Err(e),
@@ -204,6 +204,7 @@ impl Group {
             .variables
             .read()
             .await
+            .0
             .iter()
             .rev()
             .skip((page - 1) * size)
@@ -215,7 +216,7 @@ impl Group {
         }
 
         SearchGroupVariablesResp {
-            total: self.variables.read().await.len(),
+            total: self.variables.read().await.0.len(),
             data,
         }
     }
@@ -226,40 +227,41 @@ impl Group {
         variable_id: Uuid,
         req: CreateUpdateGroupVariableReq,
     ) -> HaliaResult<()> {
-        for (i, variable) in self.variables.write().await.iter_mut().enumerate() {
+        let mut lock_variables = self.variables.write().await;
+        for (i, variable) in lock_variables.0.iter_mut().enumerate() {
             if variable.id == variable_id {
                 match variable.update(device_id, &self.id, req).await {
-                    Ok(restart) => {
-                        if restart {
-                            let new_read_value_id = variable.get_read_value_id();
-                            self.read_value_ids.write().await[i] = new_read_value_id;
-                        }
-                        return Ok(());
-                    }
+                    Ok(read_value_id) => match read_value_id {
+                        Some(read_value_id) => lock_variables.1[i] = read_value_id,
+                        None => {}
+                    },
                     Err(e) => return Err(e),
                 }
+
+                return Ok(());
             }
         }
 
-        Ok(())
+        Err(HaliaError::NotFound)
     }
 
     pub async fn delete_variable(&self, device_id: &Uuid, variable_id: Uuid) -> HaliaResult<()> {
-        for (i, variable) in self.variables.write().await.iter_mut().enumerate() {
+        let mut lock_variables = self.variables.write().await;
+        let mut pos = -1;
+        for (i, variable) in lock_variables.0.iter_mut().enumerate() {
             if variable.id == variable_id {
+                pos = i as i64;
                 match variable.delete(device_id, &self.id).await {
-                    Ok(_) => {
-                        self.read_value_ids.write().await.remove(i);
-                    }
+                    Ok(_) => {}
                     Err(e) => return Err(e),
                 }
             }
         }
 
-        self.variables
-            .write()
-            .await
-            .retain(|variable| variable.id != variable_id);
+        if pos != -1 {
+            lock_variables.0.remove(pos as usize);
+            lock_variables.1.remove(pos as usize);
+        }
 
         Ok(())
     }
