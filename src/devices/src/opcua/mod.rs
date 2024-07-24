@@ -122,16 +122,13 @@ impl Opcua {
                 .collect::<Vec<&str>>();
             assert_eq!(items.len(), 2);
 
-            debug!("{:?}", items);
-
             let group_id = Uuid::from_str(items[0]).unwrap();
-            debug!(
-                "{:?}",
-                serde_json::from_str::<CreateUpdateGroupReq>(items[1])
-            );
             let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
-            debug!("here");
             self.create_group(Some(group_id), req).await?;
+        }
+
+        for group in self.groups.write().await.iter_mut() {
+            group.recover(&self.id).await?;
         }
 
         Ok(())

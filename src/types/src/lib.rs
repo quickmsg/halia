@@ -18,6 +18,7 @@ pub struct Value {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SinkValue {
+    #[serde(rename = "type")]
     pub typ: SinkValueType,
     pub value: serde_json::Value,
 }
