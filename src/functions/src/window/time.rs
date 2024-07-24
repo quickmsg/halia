@@ -1,13 +1,16 @@
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use message::MessageBatch;
 use tokio::{
     select,
     sync::broadcast::{Receiver, Sender},
+    time::{self, Instant},
 };
 
 use super::Conf;
 
-pub const TYPE: &str = "count";
+pub const TYPE: &str = "time";
 
 pub fn run(
     conf: Conf,
@@ -15,27 +18,30 @@ pub fn run(
     tx: Sender<MessageBatch>,
     mut stop_signal_rx: Receiver<()>,
 ) -> Result<()> {
-    let conf_cnt = match conf.count {
-        Some(count) => count,
-        None => bail!("未填写count"),
+    let interval = match conf.interval {
+        Some(interval) => interval,
+        None => bail!("未填写interval值"),
     };
     tokio::spawn(async move {
         let mut mb = MessageBatch::default();
-        let mut cnt: u64 = 0;
+        let start = Instant::now()
+            .checked_add(Duration::from_secs(interval))
+            .unwrap();
+        let mut interval = time::interval_at(start, Duration::from_secs(interval));
         loop {
             select! {
                 in_mb = rx.recv() => {
                     match in_mb {
                         Ok(in_mb) => {
                             mb.extend(in_mb);
-                            cnt += 1;
-                            if cnt == conf_cnt {
-                                tx.send(mb).unwrap();
-                            }
-                            mb = MessageBatch::default();
                         }
                         Err(_) => return,
                     }
+                }
+
+                _ = interval.tick() => {
+                    tx.send(mb).unwrap();
+                    mb = MessageBatch::default();
                 }
 
                 _ = stop_signal_rx.recv() => {
