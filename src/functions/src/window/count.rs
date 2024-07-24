@@ -4,13 +4,12 @@ use tokio::{
     select,
     sync::broadcast::{Receiver, Sender},
 };
-
-use super::Conf;
+use types::rules::WindowConf;
 
 pub const TYPE: &str = "count";
 
 pub fn run(
-    conf: Conf,
+    conf: WindowConf,
     mut rx: Receiver<MessageBatch>,
     tx: Sender<MessageBatch>,
     mut stop_signal_rx: Receiver<()>,

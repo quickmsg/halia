@@ -7,13 +7,12 @@ use tokio::{
     sync::broadcast::{Receiver, Sender},
     time::{self, Instant},
 };
-
-use super::Conf;
+use types::rules::WindowConf;
 
 pub const TYPE: &str = "time";
 
 pub fn run(
-    conf: Conf,
+    conf: WindowConf,
     mut rx: Receiver<MessageBatch>,
     tx: Sender<MessageBatch>,
     mut stop_signal_rx: Receiver<()>,

@@ -2,14 +2,14 @@ use anyhow::Result;
 use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use common::{error::HaliaResult, persistence};
 use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
-use functions::merge::merge::Merge;
+use functions::{merge::merge::Merge, window};
 use message::MessageBatch;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
 use types::rules::{
     apps::mqtt_client, devices::modbus, CreateUpdateRuleReq, Node, NodeType, SearchRulesItemResp,
-    SinkNode, SourceNode,
+    SinkNode, SourceNode, WindowConf,
 };
 use uuid::Uuid;
 
@@ -105,29 +105,7 @@ impl Rule {
                         };
                         receivers.insert(info.first_id, vec![rx]);
                     }
-                    NodeType::Window => {
-                        // if let Some(source_ids) = incoming_edges.get(&info.id) {
-                        //     debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &info.id);
-                        //     let mut rxs = Vec::new();
-                        //     for source_id in source_ids {
-                        //         if let Some(mut node_receivers) = receivers.remove(source_id) {
-                        //             let rx = node_receivers.remove(0);
-                        //             rxs.push(rx);
-                        //         }
-                        //     }
-                        //     debug!("source receivers len:{}", rxs.len());
-                        //     let (tx, nrx) = broadcast::channel::<MessageBatch>(16);
-                        //     receivers.insert(info.id, vec![nrx]);
-                        //     if let Some(_) = node_map.get(&info.id) {
-                        //         match Merge::new(rxs, tx) {
-                        //             Ok(mut merge) => {
-                        //                 merge.run().await;
-                        //             }
-                        //             Err(e) => error!("create merge err:{}", e),
-                        //         }
-                        //     }
-                        // }
-                    }
+                    NodeType::Window => {}
                     NodeType::Merge => {
                         if let Some(source_ids) = incoming_edges.get(&info.id) {
                             debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &info.id);

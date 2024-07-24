@@ -42,6 +42,7 @@ pub enum NodeType {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SourceNode {
     pub r#type: String,
+    #[serde(flatten)]
     pub conf: Value,
 }
 
@@ -49,6 +50,15 @@ pub struct SourceNode {
 pub struct SinkNode {
     pub r#type: String,
     pub conf: Value,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct WindowConf {
+    #[serde(rename = "type")]
+    pub typ: String,
+    pub count: Option<u64>,
+    // s
+    pub interval: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize)]
