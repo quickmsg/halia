@@ -4,48 +4,48 @@ use serde::{Deserialize, Serialize};
 
 use super::Filter;
 
-pub struct Ct {
+struct Ct {
     field: String,
     value: TargetValue,
 }
 
-impl Ct {
-    pub fn new(conf: serde_json::Value) -> Result<Self> {
-        let conf: Conf = serde_json::from_value(conf)?;
-        let value = match conf.value {
-            serde_json::Value::Number(number) => {
-                if let Some(uint) = number.as_u64() {
-                    TargetValue::Uint(uint)
-                } else if let Some(int) = number.as_i64() {
-                    TargetValue::Int(int)
-                } else if let Some(float) = number.as_f64() {
-                    TargetValue::Float(float)
-                } else {
-                    unreachable!()
-                }
+pub const TYPE: &str = "ct";
+
+pub fn new(conf: serde_json::Value) -> Result<Box<dyn Filter>> {
+    let conf: Conf = serde_json::from_value(conf)?;
+    let value = match conf.value {
+        serde_json::Value::Number(number) => {
+            if let Some(uint) = number.as_u64() {
+                TargetValue::Uint(uint)
+            } else if let Some(int) = number.as_i64() {
+                TargetValue::Int(int)
+            } else if let Some(float) = number.as_f64() {
+                TargetValue::Float(float)
+            } else {
+                unreachable!()
             }
-            serde_json::Value::String(string) => {
-                if string.starts_with("'") && string.ends_with("'") && string.len() >= 3 {
-                    TargetValue::String(
-                        string
-                            .trim_start_matches("'")
-                            .trim_end_matches("'")
-                            .to_string(),
-                    )
-                } else {
-                    TargetValue::Field(string)
-                }
+        }
+        serde_json::Value::String(string) => {
+            if string.starts_with("'") && string.ends_with("'") && string.len() >= 3 {
+                TargetValue::String(
+                    string
+                        .trim_start_matches("'")
+                        .trim_end_matches("'")
+                        .to_string(),
+                )
+            } else {
+                TargetValue::Field(string)
             }
-            serde_json::Value::Null => TargetValue::Null,
-            serde_json::Value::Bool(bool) => TargetValue::Boolean(bool),
-            serde_json::Value::Array(array) => TargetValue::Array(array),
-            serde_json::Value::Object(obj) => TargetValue::Object(obj),
-        };
-        Ok(Self {
-            field: conf.field,
-            value,
-        })
-    }
+        }
+        serde_json::Value::Null => TargetValue::Null,
+        serde_json::Value::Bool(bool) => TargetValue::Boolean(bool),
+        serde_json::Value::Array(array) => TargetValue::Array(array),
+        serde_json::Value::Object(obj) => TargetValue::Object(obj),
+    };
+    Ok(Box::new(Ct {
+        field: conf.field,
+        value,
+    }))
 }
 
 #[derive(Deserialize, Serialize)]

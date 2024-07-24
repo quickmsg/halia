@@ -1,26 +1,16 @@
 use anyhow::{bail, Result};
-use ct::Ct;
-use eq::Eq;
-use gt::Gt;
-use gte::Gte;
-// use lt::Lt;
-// use lte::Lte;
 use message::Message;
-use neq::Neq;
-use reg::Reg;
 use serde::Deserialize;
 use tracing::debug;
 
 use crate::Function;
 
-pub mod ct;
-pub mod eq;
-pub mod gt;
-pub mod gte;
-// pub mod lt;
-// pub mod lte;
-pub mod neq;
-pub mod reg;
+mod ct;
+mod eq;
+mod gt;
+mod gte;
+mod neq;
+mod reg;
 
 pub trait Filter: Sync + Send {
     fn filter(&self, message: &Message) -> bool;
@@ -42,14 +32,8 @@ impl Node {
         let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(confs.len());
         for conf in confs {
             match conf.r#type.as_str() {
-                "gt" => {
-                    let gt = Gt::new(conf.conf)?;
-                    filters.push(Box::new(gt));
-                }
-                "gte" => {
-                    let gte = Gte::new(conf.conf)?;
-                    filters.push(Box::new(gte));
-                }
+                gt::TYPE => filters.push(gt::new(conf.conf)?),
+                gte::TYPE => filters.push(gte::new(conf.conf)?),
                 // "lt" => {
                 //     let lt = Lt::new(conf.conf)?;
                 //     filters.push(Box::new(lt));
@@ -58,22 +42,10 @@ impl Node {
                 //     let lte = Lte::new(conf.conf)?;
                 //     filters.push(Box::new(lte));
                 // }
-                "eq" => {
-                    let eq = Eq::new(conf.conf)?;
-                    filters.push(Box::new(eq));
-                }
-                "neq" => {
-                    let neq = Neq::new(conf.conf)?;
-                    filters.push(Box::new(neq));
-                }
-                "ct" => {
-                    let ct = Ct::new(conf.conf)?;
-                    filters.push(Box::new(ct));
-                }
-                "reg" => {
-                    let reg = Reg::new(conf.conf)?;
-                    filters.push(Box::new(reg));
-                }
+                eq::TYPE => filters.push(eq::new(conf.conf)?),
+                neq::TYPE => filters.push(neq::new(conf.conf)?),
+                ct::TYPE => filters.push(ct::new(conf.conf)?),
+                reg::TYPE => filters.push(reg::new(conf.conf)?),
                 _ => bail!("not support"),
             }
         }
@@ -93,8 +65,7 @@ impl Function for Node {
             }
             false
         });
-        debug!("{:?}", messages);
 
-        true
+        message_batch.len() != 0
     }
 }

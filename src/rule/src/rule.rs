@@ -16,7 +16,7 @@ use uuid::Uuid;
 pub(crate) struct Rule {
     pub id: Uuid,
     pub conf: CreateUpdateRuleReq,
-    pub stop_signal: Option<broadcast::Sender<()>>,
+    pub stop_signal_rx: Option<broadcast::Sender<()>>,
 }
 
 impl Rule {
@@ -33,7 +33,7 @@ impl Rule {
         Ok(Self {
             id,
             conf: req,
-            stop_signal: None,
+            stop_signal_rx: None,
         })
     }
 
@@ -56,13 +56,15 @@ impl Rule {
 
         let mut ids: Vec<usize> = self.conf.nodes.iter().map(|node| node.index).collect();
 
-        let mut receivers = HashMap::new();
         let stream_infos = get_stream_infos(
             &mut ids,
             &node_map,
             &mut tmp_incoming_edges,
             &mut tmp_outgoing_edges,
         )?;
+
+        // 临时变量，用于存放下一个节点的rx
+        let mut receivers = HashMap::new();
 
         for stream_info in stream_infos {
             for info in stream_info {
@@ -105,7 +107,29 @@ impl Rule {
                         };
                         receivers.insert(info.first_id, vec![rx]);
                     }
-                    NodeType::Window => {}
+                    NodeType::Window => match incoming_edges.get(&info.id) {
+                        Some(source_ids) => {
+                            let rx = receivers
+                                .remove(source_ids.first().unwrap())
+                                .unwrap()
+                                .pop()
+                                .unwrap();
+                            let node = node_map.get(&info.id).unwrap();
+                            let window_conf: WindowConf =
+                                serde_json::from_value(node.conf.clone())?;
+
+                            let (tx, next_rx) = broadcast::channel::<MessageBatch>(16);
+                            window::run(
+                                window_conf,
+                                rx,
+                                tx,
+                                self.stop_signal_rx.as_ref().unwrap().subscribe(),
+                            )
+                            .unwrap();
+                            receivers.insert(info.id, vec![next_rx]);
+                        }
+                        None => unreachable!(),
+                    },
                     NodeType::Merge => {
                         if let Some(source_ids) = incoming_edges.get(&info.id) {
                             debug!("merge source_ids:{:?}, ois.id:{}", source_ids, &info.id);
@@ -263,7 +287,7 @@ impl Rule {
     }
 
     pub fn stop(&mut self) {
-        if let Err(e) = self.stop_signal.as_ref().unwrap().send(()) {
+        if let Err(e) = self.stop_signal_rx.as_ref().unwrap().send(()) {
             error!("rule stop send signal err:{}", e);
         }
     }

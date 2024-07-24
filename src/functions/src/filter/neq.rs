@@ -4,46 +4,46 @@ use serde::{Deserialize, Serialize};
 
 use super::Filter;
 
-pub struct Neq {
+struct Neq {
     field: String,
     value: TargetValue,
 }
 
-impl Neq {
-    pub fn new(conf: serde_json::Value) -> Result<Self> {
-        let conf: Conf = serde_json::from_value(conf)?;
-        let value = match conf.value {
-            serde_json::Value::Number(number) => {
-                if let Some(int) = number.as_i64() {
-                    TargetValue::Int(int)
-                } else if let Some(float) = number.as_f64() {
-                    TargetValue::Float(float)
-                } else {
-                    bail!("parse value failed")
-                }
+pub const TYPE: &str = "neq";
+
+pub fn new(conf: serde_json::Value) -> Result<Box<dyn Filter>> {
+    let conf: Conf = serde_json::from_value(conf)?;
+    let value = match conf.value {
+        serde_json::Value::Number(number) => {
+            if let Some(int) = number.as_i64() {
+                TargetValue::Int(int)
+            } else if let Some(float) = number.as_f64() {
+                TargetValue::Float(float)
+            } else {
+                bail!("parse value failed")
             }
-            serde_json::Value::String(string) => {
-                if string.starts_with("'") && string.ends_with("'") && string.len() >= 3 {
-                    TargetValue::String(
-                        string
-                            .trim_start_matches("'")
-                            .trim_end_matches("'")
-                            .to_string(),
-                    )
-                } else {
-                    TargetValue::Field(string)
-                }
+        }
+        serde_json::Value::String(string) => {
+            if string.starts_with("'") && string.ends_with("'") && string.len() >= 3 {
+                TargetValue::String(
+                    string
+                        .trim_start_matches("'")
+                        .trim_end_matches("'")
+                        .to_string(),
+                )
+            } else {
+                TargetValue::Field(string)
             }
-            serde_json::Value::Null => TargetValue::Null,
-            serde_json::Value::Bool(bool) => TargetValue::Boolean(bool),
-            serde_json::Value::Array(array) => TargetValue::Array(array),
-            serde_json::Value::Object(obj) => TargetValue::Object(obj),
-        };
-        Ok(Self {
-            field: conf.field,
-            value,
-        })
-    }
+        }
+        serde_json::Value::Null => TargetValue::Null,
+        serde_json::Value::Bool(bool) => TargetValue::Boolean(bool),
+        serde_json::Value::Array(array) => TargetValue::Array(array),
+        serde_json::Value::Object(obj) => TargetValue::Object(obj),
+    };
+    Ok(Box::new(Neq {
+        field: conf.field,
+        value,
+    }))
 }
 
 #[derive(Deserialize, Serialize)]

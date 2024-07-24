@@ -5,10 +5,12 @@ use serde::Deserialize;
 
 use super::Filter;
 
-pub struct Reg {
+struct Reg {
     field: String,
     value: Regex,
 }
+
+pub const TYPE: &str = "reg";
 
 #[derive(Deserialize)]
 struct Conf {
@@ -16,16 +18,14 @@ struct Conf {
     value: String,
 }
 
-impl Reg {
-    pub fn new(conf: serde_json::Value) -> Result<Self> {
-        let conf: Conf = serde_json::from_value(conf)?;
-        match Regex::new(&conf.value) {
-            Ok(reg) => Ok(Reg {
-                field: conf.field,
-                value: reg,
-            }),
-            Err(e) => bail!("regex err:{}", e),
-        }
+pub fn new(conf: serde_json::Value) -> Result<Box<dyn Filter>> {
+    let conf: Conf = serde_json::from_value(conf)?;
+    match Regex::new(&conf.value) {
+        Ok(reg) => Ok(Box::new(Reg {
+            field: conf.field,
+            value: reg,
+        })),
+        Err(e) => bail!("regex err:{}", e),
     }
 }
 
