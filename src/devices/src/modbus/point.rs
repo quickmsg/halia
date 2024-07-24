@@ -202,7 +202,13 @@ impl Point {
                             return Ok(());
                         }
                     },
-                    Err(_) => return Err(HaliaError::Disconnect),
+                    Err(e) => match e {
+                        protocol::modbus::Error::Protocol(_) => todo!(),
+                        protocol::modbus::Error::Transport(e) => {
+                            warn!("{} {}", e.kind(), e);
+                            return Ok(());
+                        }
+                    },
                 }
             }
             Area::Coils => match ctx.read_coils(point_conf.address, self.quantity).await {

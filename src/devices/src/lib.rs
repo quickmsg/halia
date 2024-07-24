@@ -1,3 +1,4 @@
+#![feature(io_error_more)]
 // use coap::manager::GLOBAL_COAP_MANAGER;
 use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;

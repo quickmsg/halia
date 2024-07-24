@@ -145,6 +145,26 @@ impl Group {
         self.event_loop(stop_signal_rx, client).await;
     }
 
+    pub async fn stop(&mut self) -> HaliaResult<()> {
+        if !self.on {
+            return Ok(());
+        } else {
+            self.on = false;
+        }
+        if !self.ref_info.can_stop() {
+            return Err(HaliaError::ConfErr);
+        }
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+        self.stop_signal_tx = None;
+
+        Ok(())
+    }
+
     async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>, client: Arc<Session>) {
         let interval = self.conf.group_conf.interval;
         let variables = self.variables.clone();
