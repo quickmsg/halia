@@ -36,6 +36,7 @@ pub enum NodeType {
     AppSource,
     Merge,
     Window,
+    filter,
     Operator,
     DeviceSink,
     AppSink,

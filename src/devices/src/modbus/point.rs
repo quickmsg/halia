@@ -83,6 +83,7 @@ impl Point {
     }
 
     pub async fn start(&mut self, read_tx: mpsc::Sender<Uuid>) {
+        debug!("here");
         if self.on {
             return;
         } else {
@@ -124,10 +125,11 @@ impl Point {
     }
 
     pub async fn stop(&mut self) {
+        debug!("here");
         if !self.on {
             return;
         } else {
-            self.on = true;
+            self.on = false;
         }
 
         self.stop_signal_tx

@@ -1,20 +1,37 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::Incoming};
 
 use anyhow::Result;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
+use tracing::debug;
 use types::rules::Node;
 
 #[derive(Debug)]
 pub struct Segement {
-    first_id: usize,
-    ids: Vec<usize>,
-    last_id: usize,
-    single_rx: Option<broadcast::Receiver<MessageBatch>>,
-    broadcast_rx: Option<broadcast::Receiver<MessageBatch>>,
+    pub ids: Vec<usize>,
+    pub rx: Option<broadcast::Receiver<MessageBatch>>,
 
-    single_tx: Option<mpsc::Sender<MessageBatch>>,
-    broadcast_tx: Option<broadcast::Sender<MessageBatch>>,
+    pub single_tx: Option<mpsc::Sender<MessageBatch>>,
+    pub broadcast_tx: Option<broadcast::Sender<MessageBatch>>,
+}
+
+pub fn take_source_ids(
+    ids: &mut Vec<usize>,
+    incoming_edges: &mut HashMap<usize, Vec<usize>>,
+    outgoing_edges: &mut HashMap<usize, Vec<usize>>,
+) -> Vec<usize> {
+    let source_ids = ids
+        .iter()
+        .filter(|node_id| !incoming_edges.contains_key(*node_id))
+        .copied()
+        .collect::<Vec<usize>>();
+
+    ids.retain(|id| !source_ids.contains(id));
+    for source_id in &source_ids {
+        remove_incoming_edge(source_id, incoming_edges, outgoing_edges);
+    }
+
+    source_ids
 }
 
 pub fn get_segments(
@@ -35,8 +52,9 @@ pub fn get_segments(
 
         for source_id in source_ids.iter() {
             let segment = get_segment(*source_id, node_map, &incoming_edges, &outgoing_edges)?;
+            debug!("{:?}", segment);
             ids.retain(|id| !segment.ids.contains(id));
-            remove_incoming_edge(&segment.last_id, incoming_edges, outgoing_edges);
+            remove_incoming_edge(&segment.ids.last().unwrap(), incoming_edges, outgoing_edges);
             segments.push(segment);
         }
         rule_segments.push(segments);
@@ -61,14 +79,17 @@ pub fn get_segment(
     outgoing_edges: &HashMap<usize, Vec<usize>>,
 ) -> Result<Segement> {
     let mut seg = Segement {
-        first_id: id,
-        ids: vec![],
-        last_id: id,
-        single_rx: None,
-        broadcast_rx: None,
+        ids: vec![id],
+        rx: None,
         single_tx: None,
         broadcast_tx: None,
     };
+
+    let node = node_map.get(&id).unwrap();
+    match node.node_type {
+        types::rules::NodeType::Merge | types::rules::NodeType::Window => return Ok(seg),
+        _ => {}
+    }
 
     let mut current_id = id;
     loop {
@@ -82,28 +103,12 @@ pub fn get_segment(
                     ) {
                         (Some(outgoing_nodes), Some(incoming_nodes)) => {
                             if outgoing_nodes.len() == 1 && incoming_nodes.len() == 1 {
-                                if let Some(node) = node_map.get(&current_id) {
-                                    match node.node_type {
-                                        types::rules::NodeType::Merge
-                                        | types::rules::NodeType::Window => break,
-                                        _ => {}
-                                    }
+                                let node = node_map.get(&current_id).unwrap();
+                                match node.node_type {
+                                    types::rules::NodeType::Merge
+                                    | types::rules::NodeType::Window => break,
+                                    _ => {}
                                 }
-                                seg.last_id = current_id;
-                                seg.ids.push(current_id);
-                            } else {
-                                break;
-                            }
-                        }
-                        (Some(outgoing_nodes), None) => {
-                            if outgoing_nodes.len() == 1 {
-                                if let Some(node) = node_map.get(&current_id) {
-                                    match node.node_type {
-                                        types::rules::NodeType::Merge => break,
-                                        _ => {}
-                                    }
-                                }
-                                seg.last_id = current_id;
                                 seg.ids.push(current_id);
                             } else {
                                 break;
@@ -111,13 +116,31 @@ pub fn get_segment(
                         }
                         (None, Some(incoming_nodes)) => {
                             if incoming_nodes.len() == 1 {
-                                seg.last_id = current_id;
+                                let node = node_map.get(&current_id).unwrap();
+                                match node.node_type {
+                                    types::rules::NodeType::Merge
+                                    | types::rules::NodeType::Window => break,
+                                    _ => {}
+                                }
                                 seg.ids.push(current_id);
                             } else {
                                 break;
                             }
                         }
-                        (None, None) => unreachable!(),
+                        (Some(outgoing_nodes), None) => {
+                            if outgoing_nodes.len() == 1 {
+                                let node = node_map.get(&current_id).unwrap();
+                                match node.node_type {
+                                    types::rules::NodeType::Merge
+                                    | types::rules::NodeType::Window => break,
+                                    _ => {}
+                                }
+                                seg.ids.push(current_id);
+                            } else {
+                                break;
+                            }
+                        }
+                        (None, None) => break,
                     }
                 } else {
                     break;
@@ -129,52 +152,3 @@ pub fn get_segment(
 
     Ok(seg)
 }
-
-// pub(crate) async fn start_stream(
-//     nodes: Vec<&CreateRuleNode>,
-//     mut rx: broadcast::Receiver<MessageBatch>,
-//     tx: broadcast::Sender<MessageBatch>,
-//     mut stop_signal: broadcast::Receiver<()>,
-// ) {
-//     let mut functions = Vec::new();
-//     for create_graph_node in nodes {
-//         let node = functions::new(&create_graph_node).unwrap();
-//         functions.push(node);
-//     }
-
-//     tokio::spawn(async move {
-//         loop {
-//             select! {
-//                 biased;
-
-//                 _ = stop_signal.recv() => {
-//                     debug!("stream stop");
-//                     return
-//                 }
-
-//                 message_batch = rx.recv() => {
-//                     match message_batch {
-//                         Ok(mut message_batch) => {
-//                             for function in &functions {
-//                                 function.call(&mut message_batch);
-//                                 if message_batch.len() == 0 {
-//                                     break;
-//                                 }
-//                             }
-
-//                             if message_batch.len() != 0 {
-//                                 if let Err(e) = tx.send(message_batch) {
-//                                     error!("stream send err:{}, ids", e);
-//                                 }
-//                             }
-//                         },
-//                         Err(e) => {
-//                             error!("stream recv err:{}", e);
-//                             break;
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     });
-// }
