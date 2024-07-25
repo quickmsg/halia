@@ -7,7 +7,7 @@ use tokio::{
     sync::broadcast::{Receiver, Sender},
     time::{self, Instant},
 };
-use types::rules::WindowConf;
+use types::rules::functions::WindowConf;
 
 pub const TYPE: &str = "time";
 

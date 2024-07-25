@@ -4,7 +4,7 @@ use tokio::{
     select,
     sync::broadcast::{Receiver, Sender},
 };
-use types::rules::WindowConf;
+use types::rules::functions::WindowConf;
 
 pub const TYPE: &str = "count";
 

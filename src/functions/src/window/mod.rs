@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use message::MessageBatch;
 use tokio::sync::broadcast::{Receiver, Sender};
-use types::rules::WindowConf;
+use types::rules::functions::WindowConf;
 
 mod count;
 mod time;

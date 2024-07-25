@@ -3,7 +3,7 @@ use message::MessageValue;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{BaseConf, SinkValue};
+use crate::{BaseConf, TargetValue};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateModbusReq {
@@ -734,22 +734,22 @@ pub struct CreateUpdateSinkReq {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SinkConf {
     #[serde(rename = "type")]
-    pub typ: SinkValue,
+    pub typ: TargetValue,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub single_endian: Option<SinkValue>,
+    pub single_endian: Option<TargetValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub double_endian: Option<SinkValue>,
+    pub double_endian: Option<TargetValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub len: Option<SinkValue>,
+    pub len: Option<TargetValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub single: Option<SinkValue>,
+    pub single: Option<TargetValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pos: Option<SinkValue>,
+    pub pos: Option<TargetValue>,
 
-    pub slave: SinkValue,
-    pub area: SinkValue,
-    pub address: SinkValue,
-    pub value: SinkValue,
+    pub slave: TargetValue,
+    pub area: TargetValue,
+    pub address: TargetValue,
+    pub value: TargetValue,
 }
 
 #[derive(Serialize)]

@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 pub mod apps;
 pub mod devices;
+pub mod functions;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateUpdateRuleReq {
@@ -17,7 +18,8 @@ pub struct CreateUpdateRuleReq {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Node {
     pub index: usize,
-    pub r#type: NodeType,
+    pub node_type: NodeType,
+    #[serde(flatten)]
     pub conf: Value,
 }
 
@@ -50,15 +52,6 @@ pub struct SourceNode {
 pub struct SinkNode {
     pub r#type: String,
     pub conf: Value,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct WindowConf {
-    #[serde(rename = "type")]
-    pub typ: String,
-    pub count: Option<u64>,
-    // s
-    pub interval: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize)]

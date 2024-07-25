@@ -8,12 +8,12 @@ use std::collections::HashMap;
 use tokio::sync::broadcast;
 use tracing::{debug, error};
 use types::rules::{
-    apps::mqtt_client, devices::modbus, CreateUpdateRuleReq, Node, NodeType, SearchRulesItemResp,
-    SinkNode, SourceNode, WindowConf,
+    apps::mqtt_client, devices::modbus, functions::WindowConf, CreateUpdateRuleReq, Node, NodeType,
+    SearchRulesItemResp, SinkNode, SourceNode,
 };
 use uuid::Uuid;
 
-pub(crate) struct Rule {
+pub struct Rule {
     pub id: Uuid,
     pub conf: CreateUpdateRuleReq,
     pub stop_signal_rx: Option<broadcast::Sender<()>>,
@@ -350,7 +350,7 @@ fn get_stream_info(
     osi.ids.push(id);
 
     if let Some(node) = node_map.get(&id) {
-        match node.r#type {
+        match node.node_type {
             NodeType::DeviceSource => {
                 osi.r#type = NodeType::DeviceSource;
                 return Ok(osi);

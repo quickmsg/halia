@@ -6,7 +6,7 @@ use types::{
     devices::modbus::{
         Area, CreateUpdateSinkReq, DataType, Endian, SearchSinksItemResp, SinkConf, Type,
     },
-    SinkValueType,
+    TargetValueType,
 };
 use uuid::Uuid;
 
@@ -208,14 +208,14 @@ impl Sink {
         };
 
         let typ: Type = match sink_conf.typ.typ {
-            SinkValueType::Const => match &sink_conf.typ.value {
+            TargetValueType::Const => match &sink_conf.typ.value {
                 serde_json::Value::String(s) => match serde_json::from_str(s) {
                     Ok(typ) => typ,
                     Err(_) => return,
                 },
                 _ => return,
             },
-            SinkValueType::Variable => match &sink_conf.typ.value {
+            TargetValueType::Variable => match &sink_conf.typ.value {
                 serde_json::Value::String(field) => match message.get_str(field) {
                     Some(s) => match Type::try_from(s.as_str()) {
                         Ok(typ) => typ,
@@ -229,14 +229,14 @@ impl Sink {
 
         let single_endian: Option<Endian> = match &sink_conf.single_endian {
             Some(single_endian) => match single_endian.typ {
-                SinkValueType::Const => match &single_endian.value {
+                TargetValueType::Const => match &single_endian.value {
                     serde_json::Value::String(s) => match serde_json::from_str(s) {
                         Ok(endian) => endian,
                         Err(_) => return,
                     },
                     _ => return,
                 },
-                SinkValueType::Variable => match &single_endian.value {
+                TargetValueType::Variable => match &single_endian.value {
                     serde_json::Value::String(field) => match message.get_str(field) {
                         Some(s) => match serde_json::from_str(s) {
                             Ok(endian) => endian,
@@ -252,14 +252,14 @@ impl Sink {
 
         let double_endian = match &sink_conf.double_endian {
             Some(double_endian) => match double_endian.typ {
-                SinkValueType::Const => match &double_endian.value {
+                TargetValueType::Const => match &double_endian.value {
                     serde_json::Value::String(s) => match serde_json::from_str(s) {
                         Ok(endian) => endian,
                         Err(_) => return,
                     },
                     _ => return,
                 },
-                SinkValueType::Variable => match &double_endian.value {
+                TargetValueType::Variable => match &double_endian.value {
                     serde_json::Value::String(field) => match message.get_str(field) {
                         Some(s) => match serde_json::from_str(s) {
                             Ok(endian) => endian,
@@ -275,11 +275,11 @@ impl Sink {
 
         let len = match &sink_conf.len {
             Some(len) => match len.typ {
-                SinkValueType::Const => match common::json::get_u16(&len.value) {
+                TargetValueType::Const => match common::json::get_u16(&len.value) {
                     Some(len) => Some(len),
                     None => return,
                 },
-                SinkValueType::Variable => match &len.value {
+                TargetValueType::Variable => match &len.value {
                     serde_json::Value::String(field) => match message.get_u16(field) {
                         Some(len) => Some(len),
                         None => return,
@@ -292,11 +292,11 @@ impl Sink {
 
         let single = match &sink_conf.single {
             Some(single) => match single.typ {
-                SinkValueType::Const => match single.value.as_bool() {
+                TargetValueType::Const => match single.value.as_bool() {
                     Some(bool) => Some(bool),
                     None => return,
                 },
-                SinkValueType::Variable => match &single.value {
+                TargetValueType::Variable => match &single.value {
                     serde_json::Value::String(s) => match message.get_bool(s) {
                         Some(bool) => Some(bool),
                         None => return,
@@ -309,11 +309,11 @@ impl Sink {
 
         let pos = match &sink_conf.pos {
             Some(pos) => match pos.typ {
-                SinkValueType::Const => match common::json::get_u8(&pos.value) {
+                TargetValueType::Const => match common::json::get_u8(&pos.value) {
                     Some(u8) => Some(u8),
                     None => return,
                 },
-                SinkValueType::Variable => match &pos.value {
+                TargetValueType::Variable => match &pos.value {
                     serde_json::Value::String(field) => match message.get_u8(field) {
                         Some(u8) => Some(u8),
                         None => return,
@@ -325,13 +325,13 @@ impl Sink {
         };
 
         let slave = match sink_conf.slave.typ {
-            SinkValueType::Const => match common::json::get_u8(&sink_conf.slave.value) {
+            TargetValueType::Const => match common::json::get_u8(&sink_conf.slave.value) {
                 Some(n) => n,
                 None => {
                     return;
                 }
             },
-            SinkValueType::Variable => match &sink_conf.slave.value {
+            TargetValueType::Variable => match &sink_conf.slave.value {
                 serde_json::Value::String(field) => match message.get_u8(field) {
                     Some(n) => n,
                     None => return,
@@ -343,14 +343,14 @@ impl Sink {
         };
 
         let area: Area = match sink_conf.area.typ {
-            SinkValueType::Const => match &sink_conf.area.value {
+            TargetValueType::Const => match &sink_conf.area.value {
                 serde_json::Value::String(s) => match Area::try_from(s.as_str()) {
                     Ok(area) => area,
                     Err(_) => return,
                 },
                 _ => return,
             },
-            SinkValueType::Variable => match &sink_conf.area.value {
+            TargetValueType::Variable => match &sink_conf.area.value {
                 serde_json::Value::String(field) => match message.get_str(field) {
                     Some(s) => match Area::try_from(s.as_str()) {
                         Ok(area) => area,
@@ -364,11 +364,11 @@ impl Sink {
         debug!("{:?}", area);
 
         let address = match sink_conf.address.typ {
-            SinkValueType::Const => match common::json::get_u16(&sink_conf.address.value) {
+            TargetValueType::Const => match common::json::get_u16(&sink_conf.address.value) {
                 Some(n) => n,
                 None => return,
             },
-            SinkValueType::Variable => match &sink_conf.address.value {
+            TargetValueType::Variable => match &sink_conf.address.value {
                 serde_json::Value::String(field) => match message.get_u16(&field) {
                     Some(address) => address,
                     None => return,
@@ -379,8 +379,8 @@ impl Sink {
         debug!("{:?}", address);
 
         let value = match sink_conf.value.typ {
-            SinkValueType::Const => sink_conf.value.value.clone(),
-            SinkValueType::Variable => match &sink_conf.value.value {
+            TargetValueType::Const => sink_conf.value.value.clone(),
+            TargetValueType::Variable => match &sink_conf.value.value {
                 serde_json::Value::String(field) => match message.get(field) {
                     Some(v) => v.clone().into(),
                     None => return,
