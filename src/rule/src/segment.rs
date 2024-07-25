@@ -1,6 +1,15 @@
+use functions::Function;
 use message::MessageBatch;
-use tokio::{select, sync::broadcast};
-use tracing::{debug, error};
+use tokio::sync::{broadcast, mpsc};
+
+pub struct Segement {
+    rx: broadcast::Receiver<MessageBatch>,
+
+    functions: Vec<Box<dyn Function>>,
+
+    single_tx: Option<mpsc::Sender<MessageBatch>>,
+    broadcast_tx: Option<broadcast::Sender<MessageBatch>>,
+}
 
 // pub(crate) async fn start_stream(
 //     nodes: Vec<&CreateRuleNode>,

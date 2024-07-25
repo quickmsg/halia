@@ -10,7 +10,7 @@ use types::rules::{CreateUpdateRuleReq, SearchRulesResp};
 use uuid::Uuid;
 
 mod rule;
-mod stream;
+mod segment;
 
 pub static GLOBAL_RULE_MANAGER: LazyLock<RuleManager> = LazyLock::new(|| RuleManager {
     rules: RwLock::new(vec![]),
