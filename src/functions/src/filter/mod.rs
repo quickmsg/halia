@@ -20,30 +20,28 @@ pub struct Node {
     filters: Vec<Box<dyn Filter>>,
 }
 
-impl Node {
-    pub fn new(confs: Vec<FilterConf>) -> Result<Self> {
-        let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(confs.len());
-        for conf in confs {
-            match conf.typ.as_str() {
-                gt::TYPE => filters.push(gt::new(conf)?),
-                gte::TYPE => filters.push(gte::new(conf)?),
-                // "lt" => {
-                //     let lt = Lt::new(conf.conf)?;
-                //     filters.push(Box::new(lt));
-                // }
-                // "lte" => {
-                //     let lte = Lte::new(conf.conf)?;
-                //     filters.push(Box::new(lte));
-                // }
-                eq::TYPE => filters.push(eq::new(conf)?),
-                neq::TYPE => filters.push(neq::new(conf)?),
-                // ct::TYPE => filters.push(ct::new(conf)?),
-                // reg::TYPE => filters.push(reg::new(conf)?),
-                _ => bail!("not support"),
-            }
+pub fn new(confs: Vec<FilterConf>) -> Result<Box<dyn Function>> {
+    let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(confs.len());
+    for conf in confs {
+        match conf.typ.as_str() {
+            gt::TYPE => filters.push(gt::new(conf)?),
+            gte::TYPE => filters.push(gte::new(conf)?),
+            // "lt" => {
+            //     let lt = Lt::new(conf.conf)?;
+            //     filters.push(Box::new(lt));
+            // }
+            // "lte" => {
+            //     let lte = Lte::new(conf.conf)?;
+            //     filters.push(Box::new(lte));
+            // }
+            eq::TYPE => filters.push(eq::new(conf)?),
+            neq::TYPE => filters.push(neq::new(conf)?),
+            // ct::TYPE => filters.push(ct::new(conf)?),
+            // reg::TYPE => filters.push(reg::new(conf)?),
+            _ => bail!("not support"),
         }
-        Ok(Node { filters })
     }
+    Ok(Box::new(Node { filters }))
 }
 
 impl Function for Node {

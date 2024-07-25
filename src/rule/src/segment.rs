@@ -1,18 +1,74 @@
-use std::{collections::HashMap, net::Incoming};
+use std::collections::HashMap;
 
 use anyhow::Result;
+use functions::Function;
 use message::MessageBatch;
-use tokio::sync::{broadcast, mpsc};
-use tracing::debug;
+use tokio::{
+    select,
+    sync::{broadcast, mpsc},
+};
+use tracing::warn;
 use types::rules::Node;
 
-#[derive(Debug)]
-pub struct Segement {
-    pub ids: Vec<usize>,
-    pub rx: Option<broadcast::Receiver<MessageBatch>>,
+pub fn start_segment(
+    mut rx: broadcast::Receiver<MessageBatch>,
+    functions: Vec<Box<dyn Function>>,
+    mpsc_tx: Option<mpsc::Sender<MessageBatch>>,
+    broadcast_tx: Option<broadcast::Sender<MessageBatch>>,
+    mut stop_signal_rx: broadcast::Receiver<()>,
+) {
+    if mpsc_tx.is_some() {
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    mb = rx.recv() => {
+                        match mb {
+                            Ok(mut mb) => {
+                                for function in &functions {
+                                    if !function.call(&mut mb) {
+                                        break;
+                                    }
+                                }
+                                let _ = mpsc_tx.as_ref().unwrap().send(mb);
+                            }
+                            Err(e) => warn!("{}", e),
+                        }
 
-    pub single_tx: Option<mpsc::Sender<MessageBatch>>,
-    pub broadcast_tx: Option<broadcast::Sender<MessageBatch>>,
+                    }
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
+                }
+            }
+        });
+        return;
+    }
+
+    if broadcast_tx.is_some() {
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    mb = rx.recv() => {
+                        match mb {
+                            Ok(mut mb) => {
+                                for function in &functions {
+                                    if !function.call(&mut mb) {
+                                        break;
+                                    }
+                                }
+                                let _ = broadcast_tx.as_ref().unwrap().send(mb);
+                            }
+                            Err(e) => warn!("{}", e),
+                        }
+
+                    }
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
+                }
+            }
+        });
+    }
 }
 
 pub fn take_source_ids(
@@ -34,13 +90,13 @@ pub fn take_source_ids(
     source_ids
 }
 
-pub fn get_segments(
+pub fn get_3d_ids(
     ids: &mut Vec<usize>,
     node_map: &HashMap<usize, Node>,
     incoming_edges: &mut HashMap<usize, Vec<usize>>,
     outgoing_edges: &mut HashMap<usize, Vec<usize>>,
-) -> Result<Vec<Vec<Segement>>> {
-    let mut rule_segments = Vec::new();
+) -> Result<Vec<Vec<Vec<usize>>>> {
+    let mut threed_ids = Vec::new();
     while ids.len() > 0 {
         let source_ids = ids
             .iter()
@@ -48,18 +104,16 @@ pub fn get_segments(
             .copied()
             .collect::<Vec<usize>>();
 
-        let mut segments = Vec::new();
-
+        let mut twod_ids = vec![];
         for source_id in source_ids.iter() {
-            let segment = get_segment(*source_id, node_map, &incoming_edges, &outgoing_edges)?;
-            debug!("{:?}", segment);
-            ids.retain(|id| !segment.ids.contains(id));
-            remove_incoming_edge(&segment.ids.last().unwrap(), incoming_edges, outgoing_edges);
-            segments.push(segment);
+            let oned_ids = get_ids(*source_id, node_map, &incoming_edges, &outgoing_edges)?;
+            ids.retain(|id| !oned_ids.contains(id));
+            remove_incoming_edge(&oned_ids.last().unwrap(), incoming_edges, outgoing_edges);
+            twod_ids.push(oned_ids);
         }
-        rule_segments.push(segments);
+        threed_ids.push(twod_ids);
     }
-    Ok(rule_segments)
+    Ok(threed_ids)
 }
 
 fn remove_incoming_edge(
@@ -72,22 +126,17 @@ fn remove_incoming_edge(
     }
 }
 
-pub fn get_segment(
+pub fn get_ids(
     id: usize,
     node_map: &HashMap<usize, Node>,
     incoming_edges: &HashMap<usize, Vec<usize>>,
     outgoing_edges: &HashMap<usize, Vec<usize>>,
-) -> Result<Segement> {
-    let mut seg = Segement {
-        ids: vec![id],
-        rx: None,
-        single_tx: None,
-        broadcast_tx: None,
-    };
+) -> Result<Vec<usize>> {
+    let mut ids = vec![id];
 
     let node = node_map.get(&id).unwrap();
     match node.node_type {
-        types::rules::NodeType::Merge | types::rules::NodeType::Window => return Ok(seg),
+        types::rules::NodeType::Merge | types::rules::NodeType::Window => return Ok(ids),
         _ => {}
     }
 
@@ -109,7 +158,7 @@ pub fn get_segment(
                                     | types::rules::NodeType::Window => break,
                                     _ => {}
                                 }
-                                seg.ids.push(current_id);
+                                ids.push(current_id);
                             } else {
                                 break;
                             }
@@ -122,7 +171,7 @@ pub fn get_segment(
                                     | types::rules::NodeType::Window => break,
                                     _ => {}
                                 }
-                                seg.ids.push(current_id);
+                                ids.push(current_id);
                             } else {
                                 break;
                             }
@@ -135,7 +184,7 @@ pub fn get_segment(
                                     | types::rules::NodeType::Window => break,
                                     _ => {}
                                 }
-                                seg.ids.push(current_id);
+                                ids.push(current_id);
                             } else {
                                 break;
                             }
@@ -150,5 +199,5 @@ pub fn get_segment(
         }
     }
 
-    Ok(seg)
+    Ok(ids)
 }
