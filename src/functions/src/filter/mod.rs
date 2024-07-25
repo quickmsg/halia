@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
-use message::Message;
-use serde::Deserialize;
+use message::{Message, MessageValue};
 use tracing::debug;
+use types::rules::functions::FilterConf;
 
 use crate::Function;
 
@@ -20,20 +20,13 @@ pub struct Node {
     filters: Vec<Box<dyn Filter>>,
 }
 
-#[derive(Deserialize)]
-struct Conf {
-    r#type: String,
-    conf: serde_json::Value,
-}
-
 impl Node {
-    pub fn new(conf: serde_json::Value) -> Result<Self> {
-        let confs: Vec<Conf> = serde_json::from_value(conf)?;
+    pub fn new(confs: Vec<FilterConf>) -> Result<Self> {
         let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(confs.len());
         for conf in confs {
-            match conf.r#type.as_str() {
-                gt::TYPE => filters.push(gt::new(conf.conf)?),
-                gte::TYPE => filters.push(gte::new(conf.conf)?),
+            match conf.typ.as_str() {
+                gt::TYPE => filters.push(gt::new(conf)?),
+                gte::TYPE => filters.push(gte::new(conf)?),
                 // "lt" => {
                 //     let lt = Lt::new(conf.conf)?;
                 //     filters.push(Box::new(lt));
@@ -42,10 +35,10 @@ impl Node {
                 //     let lte = Lte::new(conf.conf)?;
                 //     filters.push(Box::new(lte));
                 // }
-                eq::TYPE => filters.push(eq::new(conf.conf)?),
-                neq::TYPE => filters.push(neq::new(conf.conf)?),
-                ct::TYPE => filters.push(ct::new(conf.conf)?),
-                reg::TYPE => filters.push(reg::new(conf.conf)?),
+                eq::TYPE => filters.push(eq::new(conf)?),
+                neq::TYPE => filters.push(neq::new(conf)?),
+                // ct::TYPE => filters.push(ct::new(conf)?),
+                // reg::TYPE => filters.push(reg::new(conf)?),
                 _ => bail!("not support"),
             }
         }
@@ -67,5 +60,17 @@ impl Function for Node {
         });
 
         message_batch.len() != 0
+    }
+}
+
+pub(crate) fn get_target(conf: &FilterConf) -> Result<(Option<MessageValue>, Option<String>)> {
+    match &conf.value.typ {
+        types::TargetValueType::Const => {
+            Ok((Some(MessageValue::from(conf.value.value.clone())), None))
+        }
+        types::TargetValueType::Variable => match conf.value.value.as_str() {
+            Some(str) => Ok((None, Some(str.to_string()))),
+            None => bail!("动态值错误"),
+        },
     }
 }

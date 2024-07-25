@@ -1,186 +1,55 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use serde::{Deserialize, Serialize};
+use types::rules::functions::FilterConf;
 
-use super::Filter;
+use super::{get_target, Filter};
 
 struct Eq {
     field: String,
-    value: TargetValue,
+    target_value: Option<MessageValue>,
+    target_field: Option<String>,
 }
 
 pub const TYPE: &str = "eq";
 
-pub fn new(conf: serde_json::Value) -> Result<Box<dyn Filter>> {
-    let conf: Conf = serde_json::from_value(conf)?;
-    let value = match conf.value {
-        serde_json::Value::Number(number) => {
-            if let Some(uint) = number.as_u64() {
-                TargetValue::Uint(uint)
-            } else if let Some(int) = number.as_i64() {
-                TargetValue::Int(int)
-            } else if let Some(float) = number.as_f64() {
-                TargetValue::Float(float)
-            } else {
-                unreachable!()
-            }
-        }
-        serde_json::Value::String(string) => {
-            if string.starts_with("'") && string.ends_with("'") && string.len() >= 3 {
-                TargetValue::String(
-                    string
-                        .trim_start_matches("'")
-                        .trim_end_matches("'")
-                        .to_string(),
-                )
-            } else {
-                TargetValue::Field(string)
-            }
-        }
-        serde_json::Value::Null => TargetValue::Null,
-        serde_json::Value::Bool(bool) => TargetValue::Boolean(bool),
-        serde_json::Value::Array(array) => TargetValue::Array(array),
-        serde_json::Value::Object(obj) => TargetValue::Object(obj),
-    };
+pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
+    let (target_value, target_field) = get_target(&conf)?;
     Ok(Box::new(Eq {
         field: conf.field,
-        value,
+        target_value,
+        target_field,
     }))
-}
-
-#[derive(Deserialize, Serialize)]
-struct Conf {
-    field: String,
-    value: serde_json::Value,
-}
-
-enum TargetValue {
-    Int(i64),
-    Uint(u64),
-    Float(f64),
-    Boolean(bool),
-    String(String),
-    Array(Vec<serde_json::Value>),
-    Null,
-    Object(serde_json::Map<String, serde_json::Value>),
-    Field(String),
 }
 
 impl Filter for Eq {
     fn filter(&self, msg: &Message) -> bool {
+        let target_value = {
+            if let Some(target_value) = &self.target_value {
+                target_value
+            } else if let Some(target_field) = &self.target_field {
+                match msg.get(&target_field) {
+                    Some(target_value) => target_value,
+                    None => return false,
+                }
+            } else {
+                unreachable!()
+            }
+        };
+
         match msg.get(&self.field) {
-            Some(value) => match value {
-                MessageValue::Int64(lhs) => match &self.value {
-                    TargetValue::Int(rhs) => *lhs == *rhs as i64,
-                    TargetValue::Float(rhs) => *lhs == *rhs as i64,
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::Int64(rhs) => lhs == rhs,
-                            MessageValue::Uint64(rhs) => *lhs == *rhs as i64,
-                            MessageValue::Float64(rhs) => *lhs == *rhs as i64,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    _ => false,
-                },
-                MessageValue::Uint64(lhs) => match &self.value {
-                    TargetValue::Int(rhs) => {
-                        if *rhs < 0 {
-                            return false;
-                        }
-                        *lhs > *rhs as u64
-                    }
-                    TargetValue::Float(rhs) => {
-                        if *rhs < 0.0 {
-                            return false;
-                        }
-                        *lhs as f64 > *rhs
-                    }
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::Int64(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs > *rhs as u64
-                            }
-                            MessageValue::Uint64(rhs) => lhs > rhs,
-                            MessageValue::Float64(rhs) => {
-                                // TODO 溢出问题
-                                if *rhs < 0.0 {
-                                    return false;
-                                }
-                                *lhs as f64 > *rhs
-                            }
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    _ => false,
-                },
-                MessageValue::Float64(lhs) => match &self.value {
-                    TargetValue::Int(rhs) => *lhs > *rhs as f64,
-                    TargetValue::Float(rhs) => *lhs > *rhs,
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::Int64(rhs) => *lhs > *rhs as f64,
-                            MessageValue::Uint64(rhs) => *lhs > *rhs as f64,
-                            MessageValue::Float64(rhs) => lhs > rhs,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    _ => false,
-                },
-                MessageValue::String(lhs) => match &self.value {
-                    TargetValue::String(rhs) => lhs == rhs,
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::String(rhs) => lhs == rhs,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    _ => false,
-                },
-                MessageValue::Null => match &self.value {
-                    TargetValue::Null => true,
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::Null => true,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    _ => false,
-                },
-                MessageValue::Boolean(lhs) => match &self.value {
-                    TargetValue::Boolean(rhs) => lhs == rhs,
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::Boolean(rhs) => lhs == rhs,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    _ => false,
-                },
-                MessageValue::Array(lhs) => match &self.value {
-                    TargetValue::Array(rhs) => {
-                        if lhs.len() != rhs.len() {
-                            return false;
-                        }
-
-                        // TODO 挨个比较
-
-                        true
-                    }
-                    TargetValue::Field(_) => todo!(),
-                    _ => false,
-                },
-                MessageValue::Object(_) => todo!(),
-                MessageValue::Bytes(_) => todo!(),
+            Some(message_value) => match (message_value, target_value) {
+                (MessageValue::Null, MessageValue::Null) => true,
+                (MessageValue::Boolean(mv), MessageValue::Boolean(tv)) => mv == tv,
+                (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv == tv,
+                (MessageValue::Int64(_), MessageValue::Uint64(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Int64(_)) => todo!(),
+                (MessageValue::Uint64(mv), MessageValue::Uint64(tv)) => mv == tv,
+                (MessageValue::Float64(mv), MessageValue::Float64(tv)) => mv == tv,
+                (MessageValue::String(mv), MessageValue::String(tv)) => mv == tv,
+                (MessageValue::Bytes(_), MessageValue::Bytes(_)) => todo!(),
+                (MessageValue::Array(mv), MessageValue::Array(tv)) => todo!(),
+                (MessageValue::Object(_), MessageValue::Object(_)) => todo!(),
+                _ => false,
             },
             None => false,
         }

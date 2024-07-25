@@ -1,140 +1,78 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use message::{Message, MessageValue};
-use serde::{Deserialize, Serialize};
+use types::rules::functions::FilterConf;
 
-use super::Filter;
+use super::{get_target, Filter};
 
 struct Gte {
     field: String,
-    value: TargetValue,
+    target_value: Option<MessageValue>,
+    target_field: Option<String>,
 }
 
 pub const TYPE: &str = "gte";
 
-pub fn new(conf: serde_json::Value) -> Result<Box<dyn Filter>> {
-    let conf: Conf = serde_json::from_value(conf)?;
-    let value = match conf.value {
-        serde_json::Value::Number(number) => {
-            if let Some(int) = number.as_i64() {
-                TargetValue::Int(int)
-            } else if let Some(float) = number.as_f64() {
-                TargetValue::Float(float)
-            } else {
-                bail!("parse value failed")
-            }
-        }
-        serde_json::Value::String(string) => {
-            if string.starts_with("'") && string.ends_with("'") && string.len() >= 3 {
-                TargetValue::String(
-                    string
-                        .trim_start_matches("'")
-                        .trim_end_matches("'")
-                        .to_string(),
-                )
-            } else {
-                TargetValue::Field(string)
-            }
-        }
-        _ => bail!("not support"),
-    };
+pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
+    let (target_value, target_field) = get_target(&conf)?;
     Ok(Box::new(Gte {
         field: conf.field,
-        value,
+        target_value,
+        target_field,
     }))
-}
-
-#[derive(Deserialize, Serialize)]
-struct Conf {
-    field: String,
-    value: serde_json::Value,
-}
-
-enum TargetValue {
-    Int(i64),
-    Float(f64),
-    String(String),
-    Field(String),
 }
 
 impl Filter for Gte {
     fn filter(&self, msg: &Message) -> bool {
-        match msg.get(&self.field) {
-            Some(value) => match value {
-                MessageValue::Int64(lhs) => match &self.value {
-                    TargetValue::Int(rhs) => *lhs >= *rhs as i64,
-                    TargetValue::Float(rhs) => *lhs >= *rhs as i64,
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::Int64(rhs) => lhs >= rhs,
-                            MessageValue::Uint64(rhs) => *lhs >= *rhs as i64,
-                            MessageValue::Float64(rhs) => *lhs >= *rhs as i64,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    TargetValue::String(_) => false,
-                },
-                MessageValue::Uint64(lhs) => match &self.value {
-                    TargetValue::Int(rhs) => {
-                        if *rhs < 0 {
-                            return false;
-                        }
-                        *lhs >= *rhs as u64
-                    }
-                    TargetValue::Float(rhs) => {
-                        if *rhs < 0.0 {
-                            return false;
-                        }
-                        *lhs as f64 >= *rhs
-                    }
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::Int64(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u64
-                            }
-                            MessageValue::Uint64(rhs) => lhs >= rhs,
-                            MessageValue::Float64(rhs) => {
-                                // TODO 溢出问题
-                                if *rhs < 0.0 {
-                                    return false;
-                                }
-                                *lhs as f64 >= *rhs
-                            }
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    TargetValue::String(_) => false,
-                },
+        let target_value = {
+            if let Some(target_value) = &self.target_value {
+                target_value
+            } else if let Some(target_field) = &self.target_field {
+                match msg.get(&target_field) {
+                    Some(target_value) => target_value,
+                    None => return false,
+                }
+            } else {
+                unreachable!()
+            }
+        };
 
-                MessageValue::Float64(lhs) => match &self.value {
-                    TargetValue::Int(rhs) => *lhs >= *rhs as f64,
-                    TargetValue::Float(rhs) => *lhs >= *rhs,
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::Int64(rhs) => *lhs >= *rhs as f64,
-                            MessageValue::Uint64(rhs) => *lhs >= *rhs as f64,
-                            MessageValue::Float64(rhs) => lhs >= rhs,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    TargetValue::String(_) => false,
-                },
-                MessageValue::String(lhs) => match &self.value {
-                    TargetValue::String(rhs) => lhs >= rhs,
-                    TargetValue::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            MessageValue::String(rhs) => lhs >= rhs,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    _ => false,
-                },
+        match msg.get(&self.field) {
+            Some(message_value) => match (message_value, target_value) {
+                (MessageValue::Int64(_), MessageValue::Int64(_)) => todo!(),
+                (MessageValue::Int64(_), MessageValue::Uint64(_)) => todo!(),
+                (MessageValue::Int64(_), MessageValue::Float64(_)) => todo!(),
+                (MessageValue::Int64(_), MessageValue::String(_)) => todo!(),
+                (MessageValue::Int64(_), MessageValue::Bytes(_)) => todo!(),
+                (MessageValue::Int64(_), MessageValue::Array(_)) => todo!(),
+                (MessageValue::Int64(_), MessageValue::Object(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Null) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Boolean(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Int64(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Uint64(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Float64(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::String(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Bytes(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Array(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Object(_)) => todo!(),
+                (MessageValue::Float64(_), MessageValue::Null) => todo!(),
+                (MessageValue::Float64(_), MessageValue::Boolean(_)) => todo!(),
+                (MessageValue::Float64(_), MessageValue::Int64(_)) => todo!(),
+                (MessageValue::Float64(_), MessageValue::Uint64(_)) => todo!(),
+                (MessageValue::Float64(_), MessageValue::Float64(_)) => todo!(),
+                (MessageValue::Float64(_), MessageValue::String(_)) => todo!(),
+                (MessageValue::Float64(_), MessageValue::Bytes(_)) => todo!(),
+                (MessageValue::Float64(_), MessageValue::Array(_)) => todo!(),
+                (MessageValue::Float64(_), MessageValue::Object(_)) => todo!(),
+                (MessageValue::String(_), MessageValue::Null) => todo!(),
+                (MessageValue::String(_), MessageValue::Boolean(_)) => todo!(),
+                (MessageValue::String(_), MessageValue::Int64(_)) => todo!(),
+                (MessageValue::String(_), MessageValue::Uint64(_)) => todo!(),
+                (MessageValue::String(_), MessageValue::Float64(_)) => todo!(),
+                (MessageValue::String(_), MessageValue::String(_)) => todo!(),
+                (MessageValue::String(_), MessageValue::Bytes(_)) => todo!(),
+                (MessageValue::String(_), MessageValue::Array(_)) => todo!(),
+                (MessageValue::String(_), MessageValue::Object(_)) => todo!(),
+                (MessageValue::Bytes(_), MessageValue::Bytes(_)) => todo!(),
                 _ => false,
             },
             None => false,
