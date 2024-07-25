@@ -13,6 +13,8 @@ use types::rules::{
 };
 use uuid::Uuid;
 
+use crate::segment::get_segments;
+
 pub struct Rule {
     pub id: Uuid,
     pub conf: CreateUpdateRuleReq,
@@ -29,6 +31,26 @@ impl Rule {
         if new {
             persistence::rule::create(&id, serde_json::to_string(&req).unwrap()).await?;
         }
+
+        let (incoming_edges, outgoing_edges) = req.get_edges();
+        let mut tmp_incoming_edges = incoming_edges.clone();
+        let mut tmp_outgoing_edges = outgoing_edges.clone();
+
+        let mut node_map = HashMap::<usize, Node>::new();
+        for node in req.nodes.iter() {
+            node_map.insert(node.index, node.clone());
+        }
+
+        let mut ids: Vec<usize> = req.nodes.iter().map(|node| node.index).collect();
+
+        let segments = get_segments(
+            &mut ids,
+            &node_map,
+            &mut tmp_incoming_edges,
+            &mut tmp_outgoing_edges,
+        );
+
+        debug!("{:?}", segments);
 
         Ok(Self {
             id,
@@ -55,6 +77,17 @@ impl Rule {
         }
 
         let mut ids: Vec<usize> = self.conf.nodes.iter().map(|node| node.index).collect();
+
+        let segments = get_segments(
+            &mut ids,
+            &node_map,
+            &mut tmp_incoming_edges,
+            &mut tmp_outgoing_edges,
+        )?;
+
+        debug!("{:?}", segments);
+
+        return Ok(());
 
         let stream_infos = get_stream_infos(
             &mut ids,
