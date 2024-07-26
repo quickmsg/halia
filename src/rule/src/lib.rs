@@ -6,7 +6,10 @@ use rule::Rule;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
 use tracing::error;
-use types::rules::{CreateUpdateRuleReq, SearchRulesResp};
+use types::{
+    rules::{CreateUpdateRuleReq, SearchRulesResp},
+    Pagination,
+};
 use uuid::Uuid;
 
 mod rule;
@@ -31,11 +34,18 @@ impl RuleManager {
         }
     }
 
-    pub async fn search(&self, page: usize, size: usize) -> HaliaResult<SearchRulesResp> {
+    pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchRulesResp> {
         let mut data = vec![];
-        for rule in self.rules.read().await.iter().rev().skip((page - 1) * size) {
+        for rule in self
+            .rules
+            .read()
+            .await
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
             data.push(rule.search());
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }

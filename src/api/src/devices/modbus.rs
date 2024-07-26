@@ -9,11 +9,11 @@ use types::{
         CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
         SearchSinksResp,
     },
-    Value,
+    Pagination, Value,
 };
 use uuid::Uuid;
 
-use crate::{AppResp, Pagination};
+use crate::AppResp;
 
 pub(crate) fn modbus_routes() -> Router {
     Router::new()
@@ -98,10 +98,10 @@ async fn create_point(
 
 async fn search_points(
     Path(device_id): Path<Uuid>,
-    pagination: Query<Pagination>,
+    Query(pagination): Query<Pagination>,
 ) -> AppResp<SearchPointsResp> {
     match GLOBAL_MODBUS_MANAGER
-        .search_points(device_id, pagination.p, pagination.s)
+        .search_points(device_id, pagination)
         .await
     {
         Ok(values) => AppResp::with_data(values),
@@ -160,10 +160,10 @@ async fn create_sink(
 
 async fn search_sinks(
     Path(device_id): Path<Uuid>,
-    pagination: Query<Pagination>,
+    Query(pagination): Query<Pagination>,
 ) -> AppResp<SearchSinksResp> {
     match GLOBAL_MODBUS_MANAGER
-        .search_sinks(device_id, pagination.p, pagination.s)
+        .search_sinks(device_id, pagination)
         .await
     {
         Ok(data) => AppResp::with_data(data),

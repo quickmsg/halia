@@ -25,12 +25,15 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::devices::{
-    opcua::{
-        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq, OpcuaConf,
-        SearchGroupVariablesResp, SearchGroupsResp,
+use types::{
+    devices::{
+        opcua::{
+            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq, OpcuaConf,
+            SearchGroupVariablesResp, SearchGroupsResp,
+        },
+        SearchDevicesItemResp,
     },
-    SearchDevicesItemResp,
+    Pagination,
 };
 
 use uuid::Uuid;
@@ -39,6 +42,7 @@ pub const TYPE: &str = "opcua";
 mod group;
 mod group_variable;
 pub mod manager;
+mod sink;
 
 struct Opcua {
     id: Uuid,
@@ -273,7 +277,7 @@ impl Opcua {
         }
     }
 
-    async fn search_groups(&self, page: usize, size: usize) -> HaliaResult<SearchGroupsResp> {
+    async fn search_groups(&self, pagination: Pagination) -> HaliaResult<SearchGroupsResp> {
         let mut data = vec![];
         for group in self
             .groups
@@ -281,10 +285,10 @@ impl Opcua {
             .await
             .iter()
             .rev()
-            .skip((page - 1) * size)
+            .skip((pagination.page - 1) * pagination.size)
         {
             data.push(group.search().await);
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }
@@ -350,8 +354,7 @@ impl Opcua {
     pub async fn read_group_variables(
         &self,
         group_id: Uuid,
-        page: usize,
-        size: usize,
+        pagination: Pagination,
     ) -> HaliaResult<SearchGroupVariablesResp> {
         match self
             .groups
@@ -360,7 +363,7 @@ impl Opcua {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => Ok(group.read_variables(page, size).await),
+            Some(group) => Ok(group.read_variables(pagination).await),
             None => Err(HaliaError::NotFound),
         }
     }

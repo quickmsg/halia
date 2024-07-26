@@ -14,12 +14,15 @@ use tokio::{
     time,
 };
 use tracing::error;
-use types::apps::{
-    mqtt_client::{
-        CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
-        SearchSourcesResp,
+use types::{
+    apps::{
+        mqtt_client::{
+            CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+            SearchSourcesResp,
+        },
+        SearchAppsItemResp,
     },
-    SearchAppsItemResp,
+    Pagination,
 };
 use uuid::Uuid;
 
@@ -427,7 +430,7 @@ impl MqttClient {
         }
     }
 
-    async fn search_sources(&self, page: usize, size: usize) -> HaliaResult<SearchSourcesResp> {
+    async fn search_sources(&self, pagination: Pagination) -> HaliaResult<SearchSourcesResp> {
         let mut data = vec![];
         for source in self
             .sources
@@ -435,10 +438,10 @@ impl MqttClient {
             .await
             .iter()
             .rev()
-            .skip((page - 1) * size)
+            .skip((pagination.page - 1) * pagination.size)
         {
             data.push(source.search());
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }
@@ -547,11 +550,16 @@ impl MqttClient {
         }
     }
 
-    async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
+    async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
         let mut data = vec![];
-        for sink in self.sinks.iter().rev().skip((page - 1) * size) {
+        for sink in self
+            .sinks
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
             data.push(sink.search());
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }

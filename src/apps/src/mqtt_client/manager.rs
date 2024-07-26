@@ -4,12 +4,15 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
-use types::apps::{
-    mqtt_client::{
-        CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
-        SearchSourcesResp,
+use types::{
+    apps::{
+        mqtt_client::{
+            CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+            SearchSourcesResp,
+        },
+        SearchAppsItemResp,
     },
-    SearchAppsItemResp,
+    Pagination,
 };
 use uuid::Uuid;
 
@@ -88,11 +91,10 @@ impl Manager {
     pub async fn search_sources(
         &self,
         app_id: Uuid,
-        page: usize,
-        size: usize,
+        pagination: Pagination,
     ) -> HaliaResult<SearchSourcesResp> {
         match self.apps.get(&app_id) {
-            Some(app) => app.search_sources(page, size).await,
+            Some(app) => app.search_sources(pagination).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -149,11 +151,10 @@ impl Manager {
     pub async fn search_sinks(
         &self,
         app_id: Uuid,
-        page: usize,
-        size: usize,
+        pagination: Pagination,
     ) -> HaliaResult<SearchSinksResp> {
         match self.apps.get(&app_id) {
-            Some(app) => Ok(app.search_sinks(page, size).await),
+            Some(app) => Ok(app.search_sinks(pagination).await),
             None => Err(HaliaError::NotFound),
         }
     }

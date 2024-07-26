@@ -36,7 +36,7 @@ use types::{
         },
         SearchDevicesItemResp,
     },
-    Value,
+    Pagination, Value,
 };
 use uuid::Uuid;
 
@@ -377,7 +377,7 @@ impl Modbus {
         }
     }
 
-    pub async fn search_points(&self, page: usize, size: usize) -> SearchPointsResp {
+    pub async fn search_points(&self, pagination: Pagination) -> SearchPointsResp {
         let mut data = vec![];
         for point in self
             .points
@@ -385,10 +385,10 @@ impl Modbus {
             .await
             .iter()
             .rev()
-            .skip((page - 1) * size)
+            .skip((pagination.page - 1) * pagination.size)
         {
             data.push(point.search());
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }
@@ -546,11 +546,16 @@ impl Modbus {
         }
     }
 
-    pub async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
+    pub async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
         let mut data = vec![];
-        for sink in self.sinks.iter().rev().skip((page - 1) * size) {
+        for sink in self
+            .sinks
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
             data.push(sink.search());
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }

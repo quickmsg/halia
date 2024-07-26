@@ -4,10 +4,13 @@ use axum::{
     Json, Router,
 };
 use rule::GLOBAL_RULE_MANAGER;
-use types::rules::{CreateUpdateRuleReq, SearchRulesResp};
+use types::{
+    rules::{CreateUpdateRuleReq, SearchRulesResp},
+    Pagination,
+};
 use uuid::Uuid;
 
-use crate::{AppResp, Pagination};
+use crate::AppResp;
 
 pub fn rule_routes() -> Router {
     Router::new()
@@ -26,8 +29,8 @@ async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResp<()> {
     }
 }
 
-async fn search(pagination: Query<Pagination>) -> AppResp<SearchRulesResp> {
-    match GLOBAL_RULE_MANAGER.search(pagination.p, pagination.s).await {
+async fn search(Query(pagination): Query<Pagination>) -> AppResp<SearchRulesResp> {
+    match GLOBAL_RULE_MANAGER.search(pagination).await {
         Ok(data) => AppResp::with_data(data),
         Err(e) => e.into(),
     }

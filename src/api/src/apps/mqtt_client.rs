@@ -4,13 +4,16 @@ use axum::{
     routing::{self, get, post, put},
     Json, Router,
 };
-use types::apps::mqtt_client::{
-    CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
-    SearchSourcesResp,
+use types::{
+    apps::mqtt_client::{
+        CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+        SearchSourcesResp,
+    },
+    Pagination,
 };
 use uuid::Uuid;
 
-use crate::{AppResp, Pagination};
+use crate::AppResp;
 
 pub fn mqtt_client_routes() -> Router {
     Router::new()
@@ -78,10 +81,10 @@ async fn create_source(
 
 async fn search_sources(
     Path(app_id): Path<Uuid>,
-    pagination: Query<Pagination>,
+    Query(pagination): Query<Pagination>,
 ) -> AppResp<SearchSourcesResp> {
     match GLOBAL_MQTT_CLIENT_MANAGER
-        .search_sources(app_id, pagination.p, pagination.s)
+        .search_sources(app_id, pagination)
         .await
     {
         Ok(data) => AppResp::with_data(data),
@@ -127,10 +130,10 @@ async fn create_sink(
 
 async fn search_sinks(
     Path(app_id): Path<Uuid>,
-    pagination: Query<Pagination>,
+    Query(pagination): Query<Pagination>,
 ) -> AppResp<SearchSinksResp> {
     match GLOBAL_MQTT_CLIENT_MANAGER
-        .search_sinks(app_id, pagination.p, pagination.s)
+        .search_sinks(app_id, pagination)
         .await
     {
         Ok(data) => AppResp::with_data(data),

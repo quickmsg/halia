@@ -50,12 +50,6 @@ impl<T: Serialize> IntoResponse for AppResp<T> {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct Pagination {
-    p: usize,
-    s: usize,
-}
-
 pub async fn start() {
     let app = Router::new()
         .nest("/api/device", devices::routes())

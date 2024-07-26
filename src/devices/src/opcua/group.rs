@@ -17,9 +17,12 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::devices::opcua::{
-    CreateUpdateGroupReq, CreateUpdateGroupVariableReq, SearchGroupVariablesResp,
-    SearchGroupsItemResp,
+use types::{
+    devices::opcua::{
+        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, SearchGroupVariablesResp,
+        SearchGroupsItemResp,
+    },
+    Pagination,
 };
 use uuid::Uuid;
 
@@ -223,7 +226,7 @@ impl Group {
         }
     }
 
-    pub async fn read_variables(&self, page: usize, size: usize) -> SearchGroupVariablesResp {
+    pub async fn read_variables(&self, pagination: Pagination) -> SearchGroupVariablesResp {
         let mut data = vec![];
         for variable in self
             .variables
@@ -232,10 +235,10 @@ impl Group {
             .0
             .iter()
             .rev()
-            .skip((page - 1) * size)
+            .skip((pagination.page - 1) * pagination.size)
         {
             data.push(variable.search());
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }

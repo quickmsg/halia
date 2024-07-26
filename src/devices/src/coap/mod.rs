@@ -1,26 +1,28 @@
+use api::API;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence::{self, Status},
 };
-use group::Group;
 use message::MessageBatch;
 use protocol::coap::client::UdpCoAPClient;
 use serde_json::json;
 use sink::Sink;
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::{broadcast, mpsc};
-use types::devices::{
-    coap::{
-        CreateUpdateCoapReq, CreateUpdateGroupAPIReq, CreateUpdateGroupReq, CreateUpdateSinkReq,
-        SearchGroupAPIsResp, SearchGroupsResp, SearchSinksResp,
+use types::{
+    devices::{
+        coap::{
+            CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateSinkReq, SearchAPIsResp,
+            SearchSinksResp,
+        },
+        SearchDevicesItemResp,
     },
-    SearchDevicesItemResp,
+    Pagination,
 };
 use uuid::Uuid;
 
 pub const TYPE: &str = "coap";
-mod group;
-mod group_api;
+mod api;
 pub mod manager;
 mod sink;
 
@@ -28,8 +30,11 @@ pub struct Coap {
     id: Uuid,
     conf: CreateUpdateCoapReq,
     client: Option<Arc<UdpCoAPClient>>,
-    groups: Vec<Group>,
+    apis: Vec<API>,
     sinks: Vec<Sink>,
+
+    on: bool,
+    stop_signal_tx: Option<mpsc::Sender<()>>,
 }
 
 impl Coap {
@@ -52,33 +57,31 @@ impl Coap {
             id: device_id,
             conf: req,
             client: None,
-            groups: vec![],
+            apis: vec![],
             sinks: vec![],
+            on: false,
+            stop_signal_tx: None,
         })
     }
 
     async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::devices::coap::read_groups(&self.id).await {
-            Ok(datas) => {
-                for data in datas {
-                    if data.len() == 0 {
-                        continue;
-                    }
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 2);
-
-                    let group_id = Uuid::from_str(items[0]).unwrap();
-                    let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
-                    self.create_group(Some(group_id), req).await?;
-                }
-
-                for group in self.groups.iter_mut() {
-                    group.recover(&self.id).await?;
-                }
-                Ok(())
+        let api_datas = persistence::devices::coap::read_apis(&self.id).await?;
+        for api_data in api_datas {
+            if api_data.len() == 0 {
+                continue;
             }
-            Err(e) => Err(e.into()),
+            let items = api_data
+                .split(persistence::DELIMITER)
+                .collect::<Vec<&str>>();
+            assert_eq!(items.len(), 2);
+
+            let api_id = Uuid::from_str(items[0]).unwrap();
+            todo!()
+            // let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
+            // self.create_group(Some(group_id), req).await?;
         }
+
+        Ok(())
     }
 
     pub fn search(&self) -> SearchDevicesItemResp {
@@ -121,12 +124,13 @@ impl Coap {
 
         let client = UdpCoAPClient::new_udp((self.conf.host.clone(), self.conf.port)).await?;
         let clone_client = Arc::new(client);
-        for group in self.groups.iter_mut() {
-            group.start(clone_client.clone());
-        }
-        self.client = Some(clone_client);
+        todo!()
+        // for group in self.groups.iter_mut() {
+        //     group.start(clone_client.clone());
+        // }
+        // self.client = Some(clone_client);
 
-        Ok(())
+        // Ok(())
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
@@ -134,9 +138,9 @@ impl Coap {
             return Ok(());
         }
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
-        for group in self.groups.iter_mut() {
-            group.stop().await;
-        }
+        // for group in self.groups.iter_mut() {
+        //     group.stop().await;
+        // }
         self.client = None;
 
         Ok(())
@@ -152,104 +156,40 @@ impl Coap {
         Ok(())
     }
 
-    pub async fn create_group(
+    pub async fn create_api(
         &mut self,
-        group_id: Option<Uuid>,
-        req: CreateUpdateGroupReq,
-    ) -> HaliaResult<()> {
-        match Group::new(&self.id, group_id, req).await {
-            Ok(mut group) => {
-                match &self.client {
-                    Some(client) => group.start(client.clone()),
-                    None => {}
-                }
-                self.groups.push(group);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    pub fn search_groups(&self, page: usize, size: usize) -> SearchGroupsResp {
-        let mut data = vec![];
-        for group in self.groups.iter().rev().skip((page - 1) * size) {
-            data.push(group.search());
-            if data.len() == size {
-                break;
-            }
-        }
-
-        SearchGroupsResp {
-            total: self.groups.len(),
-            data,
-        }
-    }
-
-    pub async fn update_group(
-        &mut self,
-        group_id: Uuid,
-        req: CreateUpdateGroupReq,
-    ) -> HaliaResult<()> {
-        match self.groups.iter_mut().find(|group| group.id == group_id) {
-            Some(group) => group.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn delete_group(&mut self, group_id: Uuid) -> HaliaResult<()> {
-        match self.groups.iter_mut().find(|group| group.id == group_id) {
-            Some(group) => match group.delete(&self.id).await {
-                Ok(_) => {
-                    self.groups.retain(|group| group.id != group_id);
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            },
-            None => return Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn create_group_api(
-        &mut self,
-        group_id: Uuid,
         api_id: Option<Uuid>,
-        req: CreateUpdateGroupAPIReq,
+        req: CreateUpdateAPIReq,
     ) -> HaliaResult<()> {
-        match self.groups.iter_mut().find(|group| group.id == group_id) {
-            Some(group) => group.create_api(&self.id, api_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
+        // match self.groups.iter_mut().find(|group| group.id == group_id) {
+        //     Some(group) => group.create_api(&self.id, api_id, req).await,
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
-    pub async fn search_group_apis(
-        &self,
-        group_id: Uuid,
-        page: usize,
-        size: usize,
-    ) -> HaliaResult<SearchGroupAPIsResp> {
-        match self.groups.iter().find(|group| group.id == group_id) {
-            Some(group) => Ok(group.search_apis(page, size).await),
-            None => Err(HaliaError::NotFound),
-        }
+    pub async fn search_apis(&self, pagination: Pagination) -> HaliaResult<SearchAPIsResp> {
+        // match self.groups.iter().find(|group| group.id == group_id) {
+        //     Some(group) => Ok(group.search_apis(page, size).await),
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
-    pub async fn update_group_api(
-        &self,
-        group_id: Uuid,
-        resource_id: Uuid,
-        req: CreateUpdateGroupAPIReq,
-    ) -> HaliaResult<()> {
-        match self.groups.iter().find(|group| group.id == group_id) {
-            Some(group) => group.update_api(&self.id, resource_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
+    pub async fn update_api(&self, api_id: Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
+        todo!()
+        // match self.groups.iter().find(|group| group.id == group_id) {
+        //     Some(group) => group.update_api(&self.id, resource_id, req).await,
+        //     None => Err(HaliaError::NotFound),
+        // }
     }
 
-    pub async fn delete_group_apis(&self, group_id: Uuid, api_ids: Vec<Uuid>) -> HaliaResult<()> {
-        match self.groups.iter().find(|group| group.id == group_id) {
-            Some(group) => group.delete_apis(&self.id, api_ids).await,
-            None => Err(HaliaError::NotFound),
-        }
+    pub async fn delete_api(&self, api_id: Uuid) -> HaliaResult<()> {
+        todo!()
+        // match self.groups.iter().find(|group| group.id == group_id) {
+        //     Some(group) => group.delete_apis(&self.id, api_ids).await,
+        //     None => Err(HaliaError::NotFound),
+        // }
     }
 
     pub async fn subscribe(
@@ -274,11 +214,16 @@ impl Coap {
         }
     }
 
-    pub async fn search_sinks(&self, page: usize, size: usize) -> SearchSinksResp {
+    pub async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
         let mut data = vec![];
-        for sink in self.sinks.iter().rev().skip((page - 1) * size) {
+        for sink in self
+            .sinks
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
             data.push(sink.search());
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }

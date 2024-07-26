@@ -4,7 +4,7 @@ use mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
 use tracing::debug;
-use types::apps::SearchAppsResp;
+use types::{apps::SearchAppsResp, Pagination};
 use uuid::Uuid;
 
 pub mod mqtt_client;
@@ -22,9 +22,16 @@ impl AppManager {
         self.apps.write().await.push((r#type, app_id));
     }
 
-    pub async fn search(&self, page: usize, size: usize) -> HaliaResult<SearchAppsResp> {
+    pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchAppsResp> {
         let mut data = vec![];
-        for (r#type, app_id) in self.apps.read().await.iter().rev().skip((page - 1) * size) {
+        for (r#type, app_id) in self
+            .apps
+            .read()
+            .await
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
             match r#type {
                 &mqtt_client::TYPE => match GLOBAL_MQTT_CLIENT_MANAGER.search(app_id) {
                     Ok(info) => {
@@ -34,7 +41,7 @@ impl AppManager {
                 },
                 _ => {}
             }
-            if data.len() == size {
+            if data.len() == pagination.size {
                 break;
             }
         }

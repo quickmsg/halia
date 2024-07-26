@@ -11,6 +11,12 @@ pub struct BaseConf {
     pub desc: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct Pagination {
+    pub page: usize,
+    pub size: usize,
+}
+
 #[derive(Deserialize)]
 pub struct Value {
     pub value: serde_json::Value,

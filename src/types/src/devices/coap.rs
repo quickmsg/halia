@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::BaseConf;
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateCoapReq {
     pub name: String,
@@ -11,28 +13,18 @@ pub struct CreateUpdateCoapReq {
     pub port: u16,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdateGroupReq {
-    pub name: String,
-    pub interval: u64,
-    pub desc: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct SearchGroupsResp {
-    pub total: usize,
-    pub data: Vec<SearchGroupsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchGroupsItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdateGroupReq,
-}
-
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateGroupAPIReq {
-    pub name: String,
+pub struct CreateUpdateAPIReq {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: APIConf,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct APIConf {
+    // ms
+    pub interval: u64,
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Vec<u8>>,
@@ -40,20 +32,18 @@ pub struct CreateUpdateGroupAPIReq {
     pub domain: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<Vec<u8>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupAPIsResp {
+pub struct SearchAPIsResp {
     pub total: usize,
-    pub data: Vec<SearchGroupAPIsItemResp>,
+    pub data: Vec<SearchAPIsItemResp>,
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupAPIsItemResp {
+pub struct SearchAPIsItemResp {
     pub id: Uuid,
-    pub conf: CreateUpdateGroupAPIReq,
+    pub conf: CreateUpdateAPIReq,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

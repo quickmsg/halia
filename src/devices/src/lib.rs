@@ -1,19 +1,22 @@
 #![feature(io_error_more)]
-// use coap::manager::GLOBAL_COAP_MANAGER;
+use coap::manager::GLOBAL_COAP_MANAGER;
 use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use opcua::manager::GLOBAL_OPCUA_MANAGER;
 use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
-use types::devices::{
-    coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
-    SearchDevicesResp,
+use types::{
+    devices::{
+        coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
+        SearchDevicesResp,
+    },
+    Pagination,
 };
 
 use uuid::Uuid;
 
-// pub mod coap;
+pub mod coap;
 pub mod modbus;
 pub mod opcua;
 
@@ -30,7 +33,7 @@ impl DeviceManager {
         self.devices.write().await.push((r#type, device_id));
     }
 
-    pub async fn search(&self, page: usize, size: usize) -> SearchDevicesResp {
+    pub async fn search(&self, pagination: Pagination) -> SearchDevicesResp {
         let mut data = vec![];
         let mut i = 0;
         let mut total = 0;
@@ -40,7 +43,7 @@ impl DeviceManager {
             let resp = match r#type {
                 &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id),
                 &opcua::TYPE => GLOBAL_OPCUA_MANAGER.search(device_id),
-                // &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
+                &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
                 _ => unreachable!(),
             };
 
@@ -52,7 +55,9 @@ impl DeviceManager {
                     if !*&resp.on {
                         close_cnt += 1;
                     }
-                    if i >= (page - 1) * size && i < page * size {
+                    if i >= (pagination.page - 1) * pagination.size
+                        && i < pagination.page * pagination.size
+                    {
                         data.push(resp);
                     }
                     total += 1;

@@ -4,13 +4,16 @@ use axum::{
     Json, Router,
 };
 use devices::opcua::manager::GLOBAL_OPCUA_MANAGER;
-use types::devices::opcua::{
-    CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-    SearchGroupVariablesResp, SearchGroupsResp,
+use types::{
+    devices::opcua::{
+        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+        SearchGroupVariablesResp, SearchGroupsResp,
+    },
+    Pagination,
 };
 use uuid::Uuid;
 
-use crate::{AppResp, Pagination};
+use crate::AppResp;
 
 pub(crate) fn opcua_routes() -> Router {
     Router::new()
@@ -95,10 +98,10 @@ async fn create_group(
 
 async fn search_groups(
     Path(device_id): Path<Uuid>,
-    pagination: Query<Pagination>,
+    Query(pagination): Query<Pagination>,
 ) -> AppResp<SearchGroupsResp> {
     match GLOBAL_OPCUA_MANAGER
-        .search_groups(device_id, pagination.p, pagination.s)
+        .search_groups(device_id, pagination)
         .await
     {
         Ok(data) => AppResp::with_data(data),
@@ -141,10 +144,10 @@ async fn create_group_variable(
 
 async fn search_group_variables(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    pagination: Query<Pagination>,
+    Query(pagination): Query<Pagination>,
 ) -> AppResp<SearchGroupVariablesResp> {
     match GLOBAL_OPCUA_MANAGER
-        .search_group_variables(device_id, group_id, pagination.p, pagination.s)
+        .search_group_variables(device_id, group_id, pagination)
         .await
     {
         Ok(values) => AppResp::with_data(values),

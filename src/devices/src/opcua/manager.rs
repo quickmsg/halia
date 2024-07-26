@@ -4,12 +4,15 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::broadcast;
-use types::devices::{
-    opcua::{
-        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-        SearchGroupVariablesResp, SearchGroupsResp,
+use types::{
+    devices::{
+        opcua::{
+            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+            SearchGroupVariablesResp, SearchGroupsResp,
+        },
+        SearchDevicesItemResp,
     },
-    SearchDevicesItemResp,
+    Pagination,
 };
 use uuid::Uuid;
 
@@ -101,11 +104,10 @@ impl Manager {
     pub async fn search_groups(
         &self,
         device_id: Uuid,
-        page: usize,
-        size: usize,
+        pagination: Pagination,
     ) -> HaliaResult<SearchGroupsResp> {
         match self.devices.get(&device_id) {
-            Some(device) => device.search_groups(page, size).await,
+            Some(device) => device.search_groups(pagination).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -150,11 +152,10 @@ impl Manager {
         &self,
         device_id: Uuid,
         group_id: Uuid,
-        page: usize,
-        size: usize,
+        pagination: Pagination,
     ) -> HaliaResult<SearchGroupVariablesResp> {
         match self.devices.get(&device_id) {
-            Some(device) => device.read_group_variables(group_id, page, size).await,
+            Some(device) => device.read_group_variables(group_id, pagination).await,
             None => Err(HaliaError::NotFound),
         }
     }

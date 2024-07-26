@@ -12,7 +12,7 @@ use types::{
         },
         SearchDevicesItemResp,
     },
-    Value,
+    Pagination, Value,
 };
 use uuid::Uuid;
 
@@ -104,11 +104,10 @@ impl Manager {
     pub async fn search_points(
         &self,
         device_id: Uuid,
-        page: usize,
-        size: usize,
+        pagination: Pagination,
     ) -> HaliaResult<SearchPointsResp> {
         match self.devices.get(&device_id) {
-            Some(device) => Ok(device.search_points(page, size).await),
+            Some(device) => Ok(device.search_points(pagination).await),
             None => Err(HaliaError::NotFound),
         }
     }
@@ -207,11 +206,10 @@ impl Manager {
     pub async fn search_sinks(
         &self,
         device_id: Uuid,
-        page: usize,
-        size: usize,
+        pagination: Pagination,
     ) -> HaliaResult<SearchSinksResp> {
         match self.devices.get(&device_id) {
-            Some(device) => Ok(device.search_sinks(page, size).await),
+            Some(device) => Ok(device.search_sinks(pagination).await),
             None => Err(HaliaError::NotFound),
         }
     }
