@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
 };
 use common::error::HaliaError;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 

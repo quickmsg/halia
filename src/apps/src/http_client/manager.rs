@@ -3,38 +3,35 @@ use std::sync::LazyLock;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::mpsc;
 use types::{
     apps::{
-        mqtt_client::{
-            CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
-            SearchSourcesResp,
-        },
+        http_client::{CreateUpdateHttpClientReq, CreateUpdateSinkReq, SearchSinksResp},
         SearchAppsItemResp,
     },
     Pagination,
 };
 use uuid::Uuid;
 
-use crate::{mqtt_client::TYPE, GLOBAL_APP_MANAGER};
+use crate::GLOBAL_APP_MANAGER;
 
-use super::MqttClient;
+use super::{HttpClient, TYPE};
 
-pub static GLOBAL_MQTT_CLIENT_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
+pub static GLOBAL_HTTP_CLIENT_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     apps: DashMap::new(),
 });
 
 pub struct Manager {
-    apps: DashMap<Uuid, MqttClient>,
+    apps: DashMap<Uuid, HttpClient>,
 }
 
 impl Manager {
     pub async fn create(
         &self,
         app_id: Option<Uuid>,
-        req: CreateUpdateMqttClientReq,
+        req: CreateUpdateHttpClientReq,
     ) -> HaliaResult<()> {
-        let app = MqttClient::new(app_id, req).await?;
+        let app = HttpClient::new(app_id, req).await?;
         GLOBAL_APP_MANAGER.create(&TYPE, app.id.clone()).await;
         self.apps.insert(app.id.clone(), app);
         Ok(())
@@ -55,7 +52,7 @@ impl Manager {
         }
     }
 
-    pub async fn update(&self, app_id: Uuid, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
+    pub async fn update(&self, app_id: Uuid, req: CreateUpdateHttpClientReq) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.update(req).await,
             None => Err(HaliaError::NotFound),
@@ -74,72 +71,6 @@ impl Manager {
         GLOBAL_APP_MANAGER.delete(&app_id).await;
 
         Ok(())
-    }
-
-    pub async fn create_source(
-        &self,
-        app_id: Uuid,
-        source_id: Option<Uuid>,
-        req: CreateUpdateSourceReq,
-    ) -> HaliaResult<()> {
-        match self.apps.get(&app_id) {
-            Some(app) => app.create_source(source_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn search_sources(
-        &self,
-        app_id: Uuid,
-        pagination: Pagination,
-    ) -> HaliaResult<SearchSourcesResp> {
-        match self.apps.get(&app_id) {
-            Some(app) => app.search_sources(pagination).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn update_source(
-        &self,
-        app_id: Uuid,
-        source_id: Uuid,
-        req: CreateUpdateSourceReq,
-    ) -> HaliaResult<()> {
-        match self.apps.get(&app_id) {
-            Some(app) => app.update_source(source_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn delete_source(&self, app_id: Uuid, source_id: Uuid) -> HaliaResult<()> {
-        match self.apps.get(&app_id) {
-            Some(app) => app.delete_source(source_id).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn subscribe(
-        &self,
-        app_id: &Uuid,
-        source_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.subscribe(source_id, rule_id).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn unsubscribe(
-        &self,
-        app_id: &Uuid,
-        source_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
-        match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.unsubscribe(source_id, rule_id).await,
-            None => Err(HaliaError::NotFound),
-        }
     }
 
     pub async fn create_sink(

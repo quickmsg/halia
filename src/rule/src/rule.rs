@@ -133,7 +133,12 @@ impl Rule {
                             for _ in 0..cnt {
                                 rxs.push(
                                     GLOBAL_MQTT_CLIENT_MANAGER
-                                        .subscribe(&source.app_id, &source.source_id)
+                                        .subscribe(
+                                            &source.app_id,
+                                            &source.source_id,
+                                            // TODO
+                                            Uuid::new_v4().as_ref(),
+                                        )
                                         .await
                                         .unwrap(),
                                 )

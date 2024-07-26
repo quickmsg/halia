@@ -2,6 +2,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 pub mod mqtt_client;
+pub mod http_client;
 
 #[derive(Serialize)]
 pub struct SearchAppsResp {

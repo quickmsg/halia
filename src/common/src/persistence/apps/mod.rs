@@ -7,6 +7,7 @@ use tokio::fs;
 use uuid::Uuid;
 
 pub mod mqtt_client;
+pub mod http_client;
 
 static APP_DIR: &str = "apps";
 

@@ -1,6 +1,7 @@
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
+    ref_info::RefInfo,
 };
 use message::MessageBatch;
 use tokio::sync::broadcast;
@@ -12,6 +13,8 @@ pub struct Source {
     pub conf: CreateUpdateSourceReq,
     pub tx: Option<broadcast::Sender<MessageBatch>>,
     pub ref_cnt: usize,
+
+    ref_info: RefInfo,
 }
 
 impl Source {
@@ -39,6 +42,7 @@ impl Source {
             conf: req,
             tx: None,
             ref_cnt: 0,
+            ref_info: RefInfo::new(),
         })
     }
 
@@ -77,22 +81,19 @@ impl Source {
         Ok(())
     }
 
-    pub fn subscribe(&mut self) -> broadcast::Receiver<MessageBatch> {
-        self.ref_cnt += 1;
-        match &self.tx {
-            Some(tx) => tx.subscribe(),
-            None => {
-                let (tx, rx) = broadcast::channel::<MessageBatch>(16);
-                self.tx = Some(tx);
-                rx
-            }
-        }
+    pub fn add_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.add_ref(rule_id);
     }
 
-    pub fn unsubscribe(&mut self) {
-        self.ref_cnt -= 1;
-        if self.ref_cnt == 0 {
-            self.tx = None;
-        }
+    pub fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+        self.ref_info.subscribe(rule_id)
+    }
+
+    pub fn unsubscribe(&mut self, rule_id: &Uuid) {
+        self.ref_info.unsubscribe(rule_id)
+    }
+
+    pub fn remove_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.remove_ref(rule_id)
     }
 }
