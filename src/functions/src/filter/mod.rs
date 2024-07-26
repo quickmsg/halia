@@ -9,6 +9,8 @@ mod ct;
 mod eq;
 mod gt;
 mod gte;
+mod lt;
+mod lte;
 mod neq;
 mod reg;
 
@@ -26,14 +28,8 @@ pub fn new(confs: Vec<FilterConf>) -> Result<Box<dyn Function>> {
         match conf.typ.as_str() {
             gt::TYPE => filters.push(gt::new(conf)?),
             gte::TYPE => filters.push(gte::new(conf)?),
-            // "lt" => {
-            //     let lt = Lt::new(conf.conf)?;
-            //     filters.push(Box::new(lt));
-            // }
-            // "lte" => {
-            //     let lte = Lte::new(conf.conf)?;
-            //     filters.push(Box::new(lte));
-            // }
+            lt::TYPE => filters.push(lt::new(conf)?),
+            lte::TYPE => filters.push(lte::new(conf)?),
             eq::TYPE => filters.push(eq::new(conf)?),
             neq::TYPE => filters.push(neq::new(conf)?),
             // ct::TYPE => filters.push(ct::new(conf)?),

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use serde::{Deserialize, Serialize};
 use types::rules::functions::FilterConf;
 
 use super::{get_target, Filter};
@@ -20,12 +19,6 @@ pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
         target_value,
         target_field,
     }))
-}
-
-#[derive(Deserialize, Serialize)]
-struct Conf {
-    field: String,
-    value: serde_json::Value,
 }
 
 impl Filter for Gt {

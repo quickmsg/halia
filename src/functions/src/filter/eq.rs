@@ -4,13 +4,13 @@ use types::rules::functions::FilterConf;
 
 use super::{get_target, Filter};
 
+pub const TYPE: &str = "eq";
+
 struct Eq {
     field: String,
     target_value: Option<MessageValue>,
     target_field: Option<String>,
 }
-
-pub const TYPE: &str = "eq";
 
 pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
     let (target_value, target_field) = get_target(&conf)?;

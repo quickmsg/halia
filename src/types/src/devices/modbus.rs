@@ -78,6 +78,7 @@ pub struct CreateUpdatePointReq {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct PointConf {
+    #[serde(flatten)]
     pub data_type: DataType,
     pub slave: u8,
     pub area: Area,

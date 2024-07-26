@@ -1,440 +1,48 @@
-use anyhow::{bail, Result};
-use message::Message;
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use message::{Message, MessageValue};
+use types::rules::functions::FilterConf;
 
-use super::Filter;
+use super::{get_target, Filter};
 
-pub struct Lte {
+pub const TYPE: &str = "lte";
+
+struct Lte {
     field: String,
-    value: Value,
+    target_value: Option<MessageValue>,
+    target_field: Option<String>,
 }
 
-impl Lte {
-    pub fn new(conf: serde_json::Value) -> Result<Self> {
-        let conf: Conf = serde_json::from_value(conf)?;
-        let value = match conf.value {
-            serde_json::Value::Number(number) => {
-                if let Some(int) = number.as_i64() {
-                    Value::Int(int)
-                } else if let Some(float) = number.as_f64() {
-                    Value::Float(float)
-                } else {
-                    bail!("parse value failed")
-                }
-            }
-            serde_json::Value::String(string) => {
-                if string.starts_with("'") && string.ends_with("'") && string.len() >= 3 {
-                    Value::String(
-                        string
-                            .trim_start_matches("'")
-                            .trim_end_matches("'")
-                            .to_string(),
-                    )
-                } else {
-                    Value::Field(string)
-                }
-            }
-            _ => bail!("not support"),
-        };
-        Ok(Self {
-            field: conf.field,
-            value,
-        })
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-struct Conf {
-    field: String,
-    value: serde_json::Value,
-}
-
-enum Value {
-    Int(i64),
-    Float(f64),
-    String(String),
-    Field(String),
+pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
+    let (target_value, target_field) = get_target(&conf)?;
+    Ok(Box::new(Lte {
+        field: conf.field,
+        target_value,
+        target_field,
+    }))
 }
 
 impl Filter for Lte {
     fn filter(&self, msg: &Message) -> bool {
+        let target_value = {
+            if let Some(target_value) = &self.target_value {
+                target_value
+            } else if let Some(target_field) = &self.target_field {
+                match msg.get(&target_field) {
+                    Some(target_value) => target_value,
+                    None => return false,
+                }
+            } else {
+                unreachable!()
+            }
+        };
+
         match msg.get(&self.field) {
-            Some(value) => match value {
-                json::Value::Int8(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs >= *rhs as i8,
-                    Value::Float(rhs) => *lhs >= *rhs as i8,
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => lhs >= rhs,
-                            json::Value::Int16(rhs) => *lhs >= *rhs as i8,
-                            json::Value::Int32(rhs) => *lhs >= *rhs as i8,
-                            json::Value::Int64(rhs) => *lhs >= *rhs as i8,
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as i8,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as i8,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as i8,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as i8,
-                            json::Value::Float32(rhs) => *lhs >= *rhs as i8,
-                            json::Value::Float64(rhs) => *lhs >= *rhs as i8,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Int16(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs > *rhs as i16,
-                    Value::Float(rhs) => *lhs > *rhs as i16,
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs >= *rhs as i16,
-                            json::Value::Int16(rhs) => lhs >= rhs,
-                            json::Value::Int32(rhs) => *lhs >= *rhs as i16,
-                            json::Value::Int64(rhs) => *lhs >= *rhs as i16,
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as i16,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as i16,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as i16,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as i16,
-                            json::Value::Float32(rhs) => *lhs >= *rhs as i16,
-                            json::Value::Float64(rhs) => *lhs >= *rhs as i16,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Int32(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs > *rhs as i32,
-                    Value::Float(rhs) => *lhs > *rhs as i32,
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs >= *rhs as i32,
-                            json::Value::Int16(rhs) => *lhs >= *rhs as i32,
-                            json::Value::Int32(rhs) => lhs >= rhs,
-                            json::Value::Int64(rhs) => *lhs >= *rhs as i32,
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as i32,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as i32,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as i32,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as i32,
-                            json::Value::Float32(rhs) => *lhs >= *rhs as i32,
-                            json::Value::Float64(rhs) => *lhs >= *rhs as i32,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Int64(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs >= *rhs as i64,
-                    Value::Float(rhs) => *lhs >= *rhs as i64,
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs >= *rhs as i64,
-                            json::Value::Int16(rhs) => *lhs >= *rhs as i64,
-                            json::Value::Int32(rhs) => *lhs >= *rhs as i64,
-                            json::Value::Int64(rhs) => lhs >= rhs,
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as i64,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as i64,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as i64,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as i64,
-                            json::Value::Float32(rhs) => *lhs >= *rhs as i64,
-                            json::Value::Float64(rhs) => *lhs >= *rhs as i64,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Uint8(lhs) => match &self.value {
-                    Value::Int(rhs) => {
-                        if *rhs < 0 {
-                            return false;
-                        }
-                        *lhs >= *rhs as u8
-                    }
-                    Value::Float(rhs) => {
-                        if *rhs < 0.0 {
-                            return false;
-                        }
-                        *lhs as f64 >= *rhs
-                    }
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u8
-                            }
-                            json::Value::Int16(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u8
-                            }
-                            json::Value::Int32(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u8
-                            }
-                            json::Value::Int64(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u8
-                            }
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as u8,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as u8,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as u8,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as u8,
-                            json::Value::Float32(rhs) => {
-                                if *rhs < 0.0 {
-                                    return false;
-                                }
-                                *lhs as f32 >= *rhs
-                            }
-                            json::Value::Float64(rhs) => {
-                                if *rhs < 0.0 {
-                                    return false;
-                                }
-                                *lhs as f64 >= *rhs
-                            }
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Uint16(lhs) => match &self.value {
-                    Value::Int(rhs) => {
-                        if *rhs < 0 {
-                            return false;
-                        }
-                        *lhs >= *rhs as u16
-                    }
-                    Value::Float(rhs) => {
-                        if *rhs < 0.0 {
-                            return false;
-                        }
-                        *lhs as f64 >= *rhs
-                    }
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u16
-                            }
-                            json::Value::Int16(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u16
-                            }
-                            json::Value::Int32(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u16
-                            }
-                            json::Value::Int64(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u16
-                            }
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as u16,
-                            json::Value::Uint16(rhs) => lhs >= rhs,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as u16,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as u16,
-                            json::Value::Float32(rhs) => *lhs >= *rhs as u16,
-                            json::Value::Float64(rhs) => *lhs >= *rhs as u16,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Uint32(lhs) => match &self.value {
-                    Value::Int(rhs) => {
-                        if *rhs < 0 {
-                            return false;
-                        }
-                        *lhs >= *rhs as u32
-                    }
-                    Value::Float(rhs) => {
-                        if *rhs < 0.0 {
-                            return false;
-                        }
-                        *lhs as f64 >= *rhs
-                    }
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u32
-                            }
-                            json::Value::Int16(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u32
-                            }
-                            json::Value::Int32(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u32
-                            }
-                            json::Value::Int64(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u32
-                            }
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as u32,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as u32,
-                            json::Value::Uint32(rhs) => lhs >= rhs,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as u32,
-                            json::Value::Float32(rhs) => {
-                                // TODO 溢出问题
-                                if *rhs < 0.0 {
-                                    return false;
-                                }
-                                *lhs as f32 >= *rhs
-                            }
-                            json::Value::Float64(rhs) => {
-                                // TODO 溢出问题
-                                if *rhs < 0.0 {
-                                    return false;
-                                }
-                                *lhs as f64 >= *rhs
-                            }
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Uint64(lhs) => match &self.value {
-                    Value::Int(rhs) => {
-                        if *rhs < 0 {
-                            return false;
-                        }
-                        *lhs >= *rhs as u64
-                    }
-                    Value::Float(rhs) => {
-                        if *rhs < 0.0 {
-                            return false;
-                        }
-                        *lhs as f64 >= *rhs
-                    }
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u64
-                            }
-                            json::Value::Int16(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u64
-                            }
-                            json::Value::Int32(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u64
-                            }
-                            json::Value::Int64(rhs) => {
-                                if *rhs < 0 {
-                                    return false;
-                                }
-                                *lhs >= *rhs as u64
-                            }
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as u64,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as u64,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as u64,
-                            json::Value::Uint64(rhs) => lhs >= rhs,
-                            json::Value::Float32(rhs) => {
-                                // TODO 溢出问题
-                                if *rhs < 0.0 {
-                                    return false;
-                                }
-                                *lhs as f32 >= *rhs
-                            }
-                            json::Value::Float64(rhs) => {
-                                // TODO 溢出问题
-                                if *rhs < 0.0 {
-                                    return false;
-                                }
-                                *lhs as f64 >= *rhs
-                            }
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Float32(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs >= *rhs as f32,
-                    Value::Float(rhs) => *lhs >= *rhs as f32,
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs >= *rhs as f32,
-                            json::Value::Int16(rhs) => *lhs >= *rhs as f32,
-                            json::Value::Int32(rhs) => *lhs >= *rhs as f32,
-                            json::Value::Int64(rhs) => *lhs >= *rhs as f32,
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as f32,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as f32,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as f32,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as f32,
-                            json::Value::Float32(rhs) => lhs >= rhs,
-                            json::Value::Float64(rhs) => *lhs >= *rhs as f32,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::Float64(lhs) => match &self.value {
-                    Value::Int(rhs) => *lhs >= *rhs as f64,
-                    Value::Float(rhs) => *lhs >= *rhs,
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::Int8(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Int16(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Int32(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Int64(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Uint8(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Uint16(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Uint32(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Uint64(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Float32(rhs) => *lhs >= *rhs as f64,
-                            json::Value::Float64(rhs) => lhs >= rhs,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    Value::String(_) => false,
-                },
-                json::Value::String(lhs) => match &self.value {
-                    Value::String(rhs) => lhs >= rhs,
-                    Value::Field(field) => match msg.get(&field) {
-                        Some(value) => match value {
-                            json::Value::String(rhs) => lhs >= rhs,
-                            _ => false,
-                        },
-                        None => false,
-                    },
-                    _ => false,
-                },
+            Some(message_value) => match (message_value, target_value) {
+                (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv <= tv,
+                (MessageValue::Int64(_), MessageValue::Uint64(_)) => todo!(),
+                (MessageValue::Uint64(_), MessageValue::Int64(_)) => todo!(),
+                (MessageValue::Uint64(mv), MessageValue::Uint64(tv)) => mv <= tv,
+                (MessageValue::Float64(mv), MessageValue::Float64(tv)) => mv <= tv,
                 _ => false,
             },
             None => false,
