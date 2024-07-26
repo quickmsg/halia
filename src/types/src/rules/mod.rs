@@ -3,16 +3,24 @@ use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::BaseConf;
+
 pub mod apps;
 pub mod devices;
 pub mod functions;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateUpdateRuleReq {
-    pub name: String,
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: RuleConf,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct RuleConf {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
-    pub desc: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -80,7 +88,7 @@ impl CreateUpdateRuleReq {
         let mut incoming_edges = HashMap::new();
         let mut outgoing_edges = HashMap::new();
 
-        for edge in self.edges.iter() {
+        for edge in self.ext.edges.iter() {
             incoming_edges
                 .entry(edge.target)
                 .or_insert_with(Vec::new)
@@ -93,27 +101,6 @@ impl CreateUpdateRuleReq {
 
         (incoming_edges, outgoing_edges)
     }
-
-    // pub fn get_ids_by_type(&self, r#type: &str) -> Vec<Uuid> {
-    //     self.nodes
-    //         .iter()
-    //         .filter(|node| node.r#type.as_str() == r#type)
-    //         .map(|node| node.id.unwrap())
-    //         .collect()
-    // }
-
-    // pub fn get_operator_ids(&self) -> Vec<Uuid> {
-    //     self.nodes
-    //         .iter()
-    //         .filter(|node| match node.r#type.as_str() {
-    //             "source" => false,
-    //             "sink" => false,
-    //             // "window" => false,
-    //             _ => true,
-    //         })
-    //         .map(|node| node.id.unwrap())
-    //         .collect()
-    // }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

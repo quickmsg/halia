@@ -50,14 +50,16 @@ pub struct Modbus {
     pub id: Uuid,
     conf: CreateUpdateModbusReq,
 
+    points: Arc<RwLock<Vec<Point>>>,
+    sinks: Vec<Sink>,
+
     on: bool,
     err: Option<String>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     rtt: Arc<AtomicU16>,
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
-    points: Arc<RwLock<Vec<Point>>>,
-    sinks: Vec<Sink>,
+
     handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
@@ -142,7 +144,7 @@ impl Modbus {
             r#type: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.stop_signal_tx.is_some(),
-            err: self.err.is_some(),
+            err: self.err.clone(),
             conf: json!(&self.conf),
         }
     }

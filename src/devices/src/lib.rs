@@ -1,11 +1,12 @@
 #![feature(io_error_more)]
+use std::{str::FromStr, sync::LazyLock};
+
 use coap::manager::GLOBAL_COAP_MANAGER;
 use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use opcua::manager::GLOBAL_OPCUA_MANAGER;
-use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
-use tracing::{debug, warn};
+use tracing::warn;
 use types::{
     devices::{
         coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
@@ -49,7 +50,7 @@ impl DeviceManager {
 
             match resp {
                 Ok(resp) => {
-                    if *&resp.err {
+                    if resp.err.is_some() {
                         err_cnt += 1;
                     }
                     if !*&resp.on {
@@ -102,9 +103,7 @@ impl DeviceManager {
                             GLOBAL_MODBUS_MANAGER.recover(&device_id).await.unwrap();
                             match items[2] {
                                 "0" => {}
-                                "1" => {
-                                    GLOBAL_MODBUS_MANAGER.start(device_id).await.unwrap();
-                                }
+                                "1" => GLOBAL_MODBUS_MANAGER.start(device_id).await.unwrap(),
                                 _ => panic!("文件已损坏"),
                             }
                         }
@@ -114,22 +113,20 @@ impl DeviceManager {
                             GLOBAL_OPCUA_MANAGER.recover(&device_id).await.unwrap();
                             match items[2] {
                                 "0" => {}
-                                "1" => {
-                                    GLOBAL_OPCUA_MANAGER.start(device_id).await.unwrap();
-                                }
+                                "1" => GLOBAL_OPCUA_MANAGER.start(device_id).await.unwrap(),
                                 _ => panic!("文件已损坏"),
                             }
                         }
-                        // coap::TYPE => {
-                        //     let req: CreateUpdateCoapReq = serde_json::from_str(items[3])?;
-                        //     GLOBAL_COAP_MANAGER.create(Some(device_id), req).await?;
-                        //     GLOBAL_COAP_MANAGER.recover(&device_id).await.unwrap();
-                        //     match items[2] {
-                        //         "0" => {}
-                        //         "1" => GLOBAL_COAP_MANAGER.start(device_id).await.unwrap(),
-                        //         _ => panic!("文件已损坏"),
-                        //     }
-                        // }
+                        coap::TYPE => {
+                            let req: CreateUpdateCoapReq = serde_json::from_str(items[3])?;
+                            GLOBAL_COAP_MANAGER.create(Some(device_id), req).await?;
+                            GLOBAL_COAP_MANAGER.recover(&device_id).await.unwrap();
+                            match items[2] {
+                                "0" => {}
+                                "1" => GLOBAL_COAP_MANAGER.start(device_id).await.unwrap(),
+                                _ => panic!("文件已损坏"),
+                            }
+                        }
                         _ => {}
                     }
                 }

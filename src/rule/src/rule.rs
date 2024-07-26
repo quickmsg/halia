@@ -79,11 +79,11 @@ impl Rule {
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
         let mut node_map = HashMap::<usize, Node>::new();
-        for node in self.conf.nodes.iter() {
+        for node in self.conf.ext.nodes.iter() {
             node_map.insert(node.index, node.clone());
         }
 
-        let mut ids: Vec<usize> = self.conf.nodes.iter().map(|node| node.index).collect();
+        let mut ids: Vec<usize> = self.conf.ext.nodes.iter().map(|node| node.index).collect();
 
         let mut receivers = HashMap::new();
 

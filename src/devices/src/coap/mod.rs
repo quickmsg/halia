@@ -34,6 +34,7 @@ pub struct Coap {
     sinks: Vec<Sink>,
 
     on: bool,
+    err: Option<String>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
 }
 
@@ -60,6 +61,7 @@ impl Coap {
             apis: vec![],
             sinks: vec![],
             on: false,
+            err: None,
             stop_signal_tx: None,
         })
     }
@@ -90,7 +92,7 @@ impl Coap {
             id: self.id.clone(),
             r#type: TYPE,
             on: self.client.is_some(),
-            err: false,
+            err: self.err.clone(),
             rtt: 999,
             conf: json!(&self.conf),
         }

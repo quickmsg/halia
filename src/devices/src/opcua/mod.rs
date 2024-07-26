@@ -1,3 +1,5 @@
+use std::{str::FromStr, sync::Arc, time::Duration};
+
 use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
@@ -10,14 +12,6 @@ use opcua::{
     types::{EndpointDescription, StatusCode},
 };
 use serde_json::json;
-use std::{
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -35,7 +29,6 @@ use types::{
     },
     Pagination,
 };
-
 use uuid::Uuid;
 
 pub const TYPE: &str = "opcua";
@@ -46,12 +39,12 @@ mod sink;
 
 struct Opcua {
     id: Uuid,
-    err: Arc<AtomicBool>,
     conf: CreateUpdateOpcuaReq,
 
     groups: Arc<RwLock<Vec<Group>>>,
 
     on: bool,
+    err: Option<String>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     session: Arc<RwLock<Option<Arc<Session>>>>,
 }
@@ -75,7 +68,7 @@ impl Opcua {
         Ok(Opcua {
             id: device_id,
             on: false,
-            err: Arc::new(AtomicBool::new(false)),
+            err: None,
             conf: req,
             session: Arc::new(RwLock::new(None)),
             stop_signal_tx: None,
@@ -143,7 +136,7 @@ impl Opcua {
             id: self.id,
             r#type: TYPE,
             on: self.on,
-            err: self.err.load(Ordering::SeqCst),
+            err: self.err.clone(),
             rtt: 9999,
             conf: json!(&self.conf),
         }

@@ -18,7 +18,7 @@ pub struct SearchDevicesItemResp {
     pub id: Uuid,
     pub r#type: &'static str,
     pub on: bool,
-    pub err: bool,
+    pub err: Option<String>,
     pub rtt: u16,
     pub conf: serde_json::Value,
 }
