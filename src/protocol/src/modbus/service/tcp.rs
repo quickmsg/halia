@@ -6,7 +6,6 @@ use std::{
 use futures_util::{SinkExt as _, StreamExt as _};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
-use tracing::debug;
 
 use crate::modbus::{
     codec,
