@@ -77,7 +77,7 @@ impl Sink {
         .await?;
 
         let mut restart = false;
-        if self.conf.topic != req.topic || self.conf.qos != req.qos {
+        if self.conf.ext != req.ext {
             restart = true;
         }
 
@@ -87,14 +87,14 @@ impl Sink {
     }
 
     pub fn start_v311(&mut self, client: Arc<AsyncClient>) {
-        let topic = self.conf.topic.clone();
-        let qos = match self.conf.qos {
+        let topic = self.conf.ext.topic.clone();
+        let qos = match self.conf.ext.qos {
             0 => QoS::AtMostOnce,
             1 => QoS::AtLeastOnce,
             2 => QoS::ExactlyOnce,
             _ => unreachable!(),
         };
-        let retain = self.conf.retain;
+        let retain = self.conf.ext.retain;
 
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -125,14 +125,14 @@ impl Sink {
     }
 
     pub fn start_v50(&mut self, client: Arc<v5::AsyncClient>) {
-        let topic = self.conf.topic.clone();
-        let qos = match self.conf.qos {
+        let topic = self.conf.ext.topic.clone();
+        let qos = match self.conf.ext.qos {
             0 => mqttbytes::QoS::AtMostOnce,
             1 => mqttbytes::QoS::AtLeastOnce,
             2 => mqttbytes::QoS::ExactlyOnce,
             _ => unreachable!(),
         };
-        let retain = self.conf.retain;
+        let retain = self.conf.ext.retain;
 
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -163,15 +163,15 @@ impl Sink {
     }
 
     pub async fn restart_v311(&mut self, client: Arc<AsyncClient>) {
-        let topic = self.conf.topic.clone();
-        let qos = self.conf.qos;
+        let topic = self.conf.ext.topic.clone();
+        let qos = self.conf.ext.qos;
         let qos = match qos {
             0 => QoS::AtMostOnce,
             1 => QoS::AtLeastOnce,
             2 => QoS::ExactlyOnce,
             _ => unreachable!(),
         };
-        let retain = self.conf.retain;
+        let retain = self.conf.ext.retain;
 
         self.stop_signal_tx
             .as_ref()
@@ -203,9 +203,9 @@ impl Sink {
     }
 
     pub async fn restart_v50(&mut self, client: Arc<v5::AsyncClient>) {
-        let topic = self.conf.topic.clone();
-        let qos = self.conf.qos;
-        let retain = self.conf.retain;
+        let topic = self.conf.ext.topic.clone();
+        let qos = self.conf.ext.qos;
+        let retain = self.conf.ext.retain;
 
         self.stop_signal_tx
             .as_ref()
@@ -287,31 +287,31 @@ fn get_publish_properties(req: &CreateUpdateSinkReq) -> Option<PublishProperties
         content_type: None,
     };
 
-    if let Some(pfi) = req.payload_format_indicator {
+    if let Some(pfi) = req.ext.payload_format_indicator {
         some = true;
         pp.payload_format_indicator = Some(pfi);
     }
-    if let Some(mpi) = req.message_expiry_interval {
+    if let Some(mpi) = req.ext.message_expiry_interval {
         some = true;
         pp.message_expiry_interval = Some(mpi);
     }
-    if let Some(ta) = req.topic_alias {
+    if let Some(ta) = req.ext.topic_alias {
         some = true;
         pp.topic_alias = Some(ta);
     }
-    if let Some(cd) = &req.correlation_data {
+    if let Some(cd) = &req.ext.correlation_data {
         some = true;
         todo!()
     }
-    if let Some(up) = &req.user_properties {
+    if let Some(up) = &req.ext.user_properties {
         some = true;
         pp.user_properties = up.clone();
     }
-    if let Some(si) = &req.subscription_identifiers {
+    if let Some(si) = &req.ext.subscription_identifiers {
         some = true;
         pp.subscription_identifiers = si.clone();
     }
-    if let Some(ct) = &req.content_type {
+    if let Some(ct) = &req.ext.content_type {
         some = true;
         pp.content_type = Some(ct.clone());
     }

@@ -59,12 +59,17 @@ pub struct SearchSourcesItemResp {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSinkReq {
-    pub name: String,
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: SinkConf,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct SinkConf {
     pub topic: String,
     pub qos: u8,
     pub retain: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
 
     // for v5
     // 1 开启 0关闭
