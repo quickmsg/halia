@@ -58,7 +58,7 @@ impl Source {
         .await?;
 
         let mut restart = false;
-        if self.conf.topic != req.topic || self.conf.qos != req.qos {
+        if self.conf.ext != req.ext {
             restart = true;
         }
 

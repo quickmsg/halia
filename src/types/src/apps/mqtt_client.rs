@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::BaseConf;
+
 #[derive(Deserialize, Serialize)]
 pub struct CreateUpdateMqttClientReq {
     pub name: String,
@@ -31,11 +33,16 @@ pub enum Version {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSourceReq {
-    pub name: String,
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: SourceConf,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
+pub struct SourceConf {
     pub topic: String,
     pub qos: u8,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
 }
 
 #[derive(Serialize)]

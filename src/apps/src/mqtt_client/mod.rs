@@ -174,7 +174,10 @@ impl MqttClient {
         let sources = self.sources.clone();
         for source in sources.read().await.iter() {
             let _ = client
-                .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
+                .subscribe(
+                    source.conf.ext.topic.clone(),
+                    get_mqtt_qos(source.conf.ext.qos),
+                )
                 .await;
         }
         self.client_v311 = Some(Arc::new(client));
@@ -195,7 +198,7 @@ impl MqttClient {
                                 match MessageBatch::from_json(p.payload) {
                                     Ok(msg) => {
                                         for source in sources.write().await.iter_mut() {
-                                            if matches(&source.conf.topic, &p.topic) {
+                                            if matches(&source.conf.ext.topic, &p.topic) {
                                                 match &source.tx {
                                                     Some(tx) => {
                                                         let _ = tx.send(msg.clone());
@@ -255,8 +258,8 @@ impl MqttClient {
         for source in sources.read().await.iter() {
             let _ = client
                 .subscribe(
-                    source.conf.topic.clone(),
-                    v5::mqttbytes::qos(source.conf.qos).unwrap(),
+                    source.conf.ext.topic.clone(),
+                    v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
                 )
                 .await;
         }
@@ -391,7 +394,10 @@ impl MqttClient {
                                 .client_v311
                                 .as_ref()
                                 .unwrap()
-                                .subscribe(source.conf.topic.clone(), get_mqtt_qos(source.conf.qos))
+                                .subscribe(
+                                    source.conf.ext.topic.clone(),
+                                    get_mqtt_qos(source.conf.ext.qos),
+                                )
                                 .await
                             {
                                 error!("client subscribe err:{e}");
@@ -403,8 +409,8 @@ impl MqttClient {
                                 .as_ref()
                                 .unwrap()
                                 .subscribe(
-                                    source.conf.topic.clone(),
-                                    v5::mqttbytes::qos(source.conf.qos).unwrap(),
+                                    source.conf.ext.topic.clone(),
+                                    v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
                                 )
                                 .await
                             {
@@ -460,7 +466,7 @@ impl MqttClient {
                                     .client_v311
                                     .as_ref()
                                     .unwrap()
-                                    .unsubscribe(source.conf.topic.clone())
+                                    .unsubscribe(source.conf.ext.topic.clone())
                                     .await
                                 {
                                     error!("unsubscribe err:{e}");
@@ -471,8 +477,8 @@ impl MqttClient {
                                     .as_ref()
                                     .unwrap()
                                     .subscribe(
-                                        source.conf.topic.clone(),
-                                        get_mqtt_qos(source.conf.qos),
+                                        source.conf.ext.topic.clone(),
+                                        get_mqtt_qos(source.conf.ext.qos),
                                     )
                                     .await
                                 {
@@ -484,7 +490,7 @@ impl MqttClient {
                                     .client_v50
                                     .as_ref()
                                     .unwrap()
-                                    .unsubscribe(source.conf.topic.clone())
+                                    .unsubscribe(source.conf.ext.topic.clone())
                                     .await
                                 {
                                     error!("unsubscribe err:{e}");
@@ -495,8 +501,8 @@ impl MqttClient {
                                     .as_ref()
                                     .unwrap()
                                     .subscribe(
-                                        source.conf.topic.clone(),
-                                        v5::mqttbytes::qos(source.conf.qos).unwrap(),
+                                        source.conf.ext.topic.clone(),
+                                        v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
                                     )
                                     .await
                                 {
