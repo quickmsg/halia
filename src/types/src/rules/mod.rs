@@ -52,14 +52,17 @@ pub enum NodeType {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SourceNode {
-    pub r#type: String,
+    #[serde(rename = "type")]
+    pub typ: String,
     #[serde(flatten)]
     pub conf: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SinkNode {
-    pub r#type: String,
+    #[serde(rename = "type")]
+    pub typ: String,
+    #[serde(flatten)]
     pub conf: Value,
 }
 

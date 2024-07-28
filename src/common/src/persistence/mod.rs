@@ -20,7 +20,6 @@ pub mod rule;
 static ROOT_DIR: &str = "storage";
 static DEVICE_DIR: &str = "devices";
 static RULE_DIR: &str = "rules";
-static DATA_FILE: &str = "data";
 pub static DELIMITER: char = '|';
 
 #[derive(Debug, PartialEq)]

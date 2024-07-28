@@ -6,17 +6,18 @@ use std::{
 use tokio::fs;
 use uuid::Uuid;
 
-pub mod mqtt_client;
 pub mod http_client;
+pub mod mqtt_client;
 
 static APP_DIR: &str = "apps";
+static APP_FILE: &str = "apps";
 
 fn get_app_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(APP_DIR)
 }
 
 fn get_app_file_path() -> PathBuf {
-    get_app_dir().join(super::DATA_FILE)
+    get_app_dir().join(APP_FILE)
 }
 
 pub async fn init() -> Result<(), io::Error> {

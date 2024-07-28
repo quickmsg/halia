@@ -30,34 +30,56 @@ impl Rule {
             None => (Uuid::new_v4(), true),
         };
 
+        for node in req.ext.nodes.iter() {
+            match node.node_type {
+                NodeType::DeviceSource => {
+                    let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
+                    match source_node.typ.as_str() {
+                        devices::modbus::TYPE => {
+                            let source: modbus::Source =
+                                serde_json::from_value(source_node.conf.clone())?;
+                            if let Err(e) = GLOBAL_MODBUS_MANAGER
+                                .add_subscribe_ref(&source.device_id, &source.source_id, &id)
+                                .await
+                            {
+                                todo!()
+                            }
+                        }
+                        devices::opcua::TYPE => {}
+                        devices::coap::TYPE => {}
+                        _ => unreachable!(),
+                    }
+                }
+                NodeType::AppSource => {
+                    let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
+                    match source_node.typ.as_str() {
+                        apps::mqtt_client::TYPE => {}
+                        _ => unreachable!(),
+                    }
+                }
+                NodeType::DeviceSink => {
+                    let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
+                    match sink_node.typ.as_str() {
+                        devices::modbus::TYPE => {}
+                        devices::opcua::TYPE => {}
+                        devices::coap::TYPE => {}
+                        _ => unreachable!(),
+                    }
+                }
+                NodeType::AppSink => {
+                    let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
+                    match sink_node.typ.as_str() {
+                        apps::mqtt_client::TYPE => {}
+                        _ => unreachable!(),
+                    }
+                }
+                _ => {}
+            }
+        }
+
         if new {
             persistence::rule::create(&id, serde_json::to_string(&req).unwrap()).await?;
         }
-
-        // let (incoming_edges, outgoing_edges) = req.get_edges();
-        // let mut tmp_incoming_edges = incoming_edges.clone();
-        // let mut tmp_outgoing_edges = outgoing_edges.clone();
-
-        // debug!("{:?}\n{:?}", tmp_incoming_edges, tmp_outgoing_edges);
-
-        // let mut node_map = HashMap::<usize, Node>::new();
-        // for node in req.nodes.iter() {
-        //     node_map.insert(node.index, node.clone());
-        // }
-
-        // let mut ids: Vec<usize> = req.nodes.iter().map(|node| node.index).collect();
-        // let source_ids =
-        //     take_source_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
-        // debug!("source ids {:?}", source_ids);
-        // debug!("{:?}", ids);
-        // let segments = get_3d_ids(
-        //     &mut ids,
-        //     &node_map,
-        //     &mut tmp_incoming_edges,
-        //     &mut tmp_outgoing_edges,
-        // );
-
-        // debug!("{:?}", segments);
 
         Ok(Self {
             id,
@@ -96,7 +118,7 @@ impl Rule {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rxs = match source_node.r#type.as_str() {
+                    let rxs = match source_node.typ.as_str() {
                         devices::modbus::TYPE => {
                             let source: modbus::Source =
                                 serde_json::from_value(source_node.conf.clone())?;
@@ -106,11 +128,7 @@ impl Rule {
                             for _ in 0..cnt {
                                 rxs.push(
                                     GLOBAL_MODBUS_MANAGER
-                                        .subscribe(
-                                            &source.device_id,
-                                            &source.source_id,
-                                            &Uuid::new_v4(),
-                                        )
+                                        .subscribe(&source.device_id, &source.source_id, &self.id)
                                         .await
                                         .unwrap(),
                                 )
@@ -123,7 +141,7 @@ impl Rule {
                 }
                 NodeType::AppSource => {
                     let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rxs = match source_node.r#type.as_str() {
+                    let rxs = match source_node.typ.as_str() {
                         apps::mqtt_client::TYPE => {
                             let source: mqtt_client::Source =
                                 serde_json::from_value(source_node.conf.clone())?;
@@ -133,12 +151,7 @@ impl Rule {
                             for _ in 0..cnt {
                                 rxs.push(
                                     GLOBAL_MQTT_CLIENT_MANAGER
-                                        .subscribe(
-                                            &source.app_id,
-                                            &source.source_id,
-                                            // TODO
-                                            Uuid::new_v4().as_ref(),
-                                        )
+                                        .subscribe(&source.app_id, &source.source_id, &self.id)
                                         .await
                                         .unwrap(),
                                 )
@@ -222,16 +235,12 @@ impl Rule {
                         }
                         NodeType::DeviceSink => {
                             let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match sink_node.r#type.as_str() {
+                            let tx = match sink_node.typ.as_str() {
                                 devices::modbus::TYPE => {
                                     let sink: types::rules::devices::modbus::Sink =
                                         serde_json::from_value(sink_node.conf.clone())?;
                                     GLOBAL_MODBUS_MANAGER
-                                        .publish(
-                                            &sink.device_id,
-                                            &sink.sink_id,
-                                            Uuid::new_v4().as_ref(),
-                                        )
+                                        .publish(&sink.device_id, &sink.sink_id, &self.id)
                                         .await
                                         .unwrap()
                                 }
@@ -241,7 +250,7 @@ impl Rule {
                         }
                         NodeType::AppSink => {
                             let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match sink_node.r#type.as_str() {
+                            let tx = match sink_node.typ.as_str() {
                                 apps::mqtt_client::TYPE => {
                                     let sink: mqtt_client::Sink =
                                         serde_json::from_value(sink_node.conf.clone())?;

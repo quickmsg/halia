@@ -33,7 +33,7 @@ pub struct Point {
 
     ref_info: RefInfo,
 
-    handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>)>>,
+    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>)>>,
 }
 
 impl Point {
@@ -69,7 +69,7 @@ impl Point {
             value: Value::Null,
             stop_signal_tx: None,
             ref_info: RefInfo::new(),
-            handle: None,
+            join_handle: None,
         })
     }
 
@@ -121,7 +121,7 @@ impl Point {
                 }
             }
         });
-        self.handle = Some(handle);
+        self.join_handle = Some(handle);
     }
 
     pub async fn stop(&mut self) {
@@ -167,7 +167,7 @@ impl Point {
                 .await
                 .unwrap();
 
-            let (stop_signal_rx, read_tx) = self.handle.take().unwrap().await.unwrap();
+            let (stop_signal_rx, read_tx) = self.join_handle.take().unwrap().await.unwrap();
             self.event_loop(self.conf.point.interval, stop_signal_rx, read_tx)
                 .await;
         }

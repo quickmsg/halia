@@ -60,7 +60,7 @@ pub struct Modbus {
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
 
-    handle: Option<
+    join_handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
             mpsc::Receiver<WritePointEvent>,
@@ -96,7 +96,7 @@ impl Modbus {
             write_tx: None,
             sinks: vec![],
             stop_signal_tx: None,
-            handle: None,
+            join_handle: None,
         })
     }
 
@@ -167,7 +167,8 @@ impl Modbus {
                 .await
                 .unwrap();
 
-            let (stop_signal_rx, write_rx, read_rx) = self.handle.take().unwrap().await.unwrap();
+            let (stop_signal_rx, write_rx, read_rx) =
+                self.join_handle.take().unwrap().await.unwrap();
 
             self.event_loop(stop_signal_rx, read_rx, write_rx).await;
         }
@@ -279,7 +280,7 @@ impl Modbus {
                 }
             }
         });
-        self.handle = Some(handle);
+        self.join_handle = Some(handle);
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
@@ -305,7 +306,7 @@ impl Modbus {
         self.stop_signal_tx = None;
         self.read_tx = None;
         self.write_tx = None;
-        self.handle = None;
+        self.join_handle = None;
 
         Ok(())
     }
@@ -471,7 +472,7 @@ impl Modbus {
         Ok(())
     }
 
-    pub async fn add_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn add_subscribe_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -519,7 +520,11 @@ impl Modbus {
         }
     }
 
-    pub async fn remove_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn remove_subscribe_ref(
+        &mut self,
+        point_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
         match self
             .points
             .write()

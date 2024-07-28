@@ -13,7 +13,9 @@ pub struct BaseConf {
 
 #[derive(Debug, Deserialize)]
 pub struct Pagination {
+    #[serde(rename = "p")]
     pub page: usize,
+    #[serde(rename = "s")]
     pub size: usize,
 }
 

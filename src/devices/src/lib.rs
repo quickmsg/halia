@@ -90,9 +90,7 @@ impl DeviceManager {
                         continue;
                     }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    if items.len() != 4 {
-                        panic!("数据损坏")
-                    }
+                    assert_eq!(items.len(), 4);
 
                     let device_id = Uuid::from_str(items[0]).unwrap();
 

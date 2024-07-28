@@ -3,7 +3,7 @@ use common::{
     persistence,
 };
 use rule::Rule;
-use std::sync::LazyLock;
+use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
 use tracing::error;
 use types::{
@@ -112,17 +112,25 @@ impl RuleManager {
 impl RuleManager {
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::rule::read().await {
-            Ok(rules) => {
-                // for (id, status, data) in rules {
-                //     let req: CreateRuleReq = serde_json::from_str(&data)?;
-                //     self.do_create_rule(id, &req).await?;
-                //     match status {
-                //         persistence::Status::Stopped => {}
-                //         persistence::Status::Runing => {
-                //             // TODO start this rule
-                //         }
-                //     }
-                // }
+            Ok(rule_datas) => {
+                for rule_data in rule_datas {
+                    if rule_data.len() == 0 {
+                        continue;
+                    }
+                    let items = rule_data
+                        .split(persistence::DELIMITER)
+                        .collect::<Vec<&str>>();
+                    assert_eq!(items.len(), 3);
+
+                    let rule_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateRuleReq = serde_json::from_str(&items[2])?;
+                    self.create(Some(rule_id), req).await?;
+                    match items[1] {
+                        "0" => {}
+                        "1" => GLOBAL_RULE_MANAGER.start(rule_id).await.unwrap(),
+                        _ => unreachable!(),
+                    }
+                }
             }
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => {
