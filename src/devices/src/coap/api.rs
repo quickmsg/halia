@@ -1,22 +1,31 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use common::{error::HaliaResult, persistence};
+use common::{error::HaliaResult, persistence, ref_info::RefInfo};
+use message::MessageBatch;
 use protocol::coap::{
     client::UdpCoAPClient,
     request::{CoapRequest, Method, RequestBuilder},
 };
-use tokio::{select, sync::mpsc, task::JoinHandle, time};
+use tokio::{
+    select,
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+    time,
+};
+use tracing::debug;
 use types::devices::coap::{CreateUpdateAPIReq, SearchAPIsItemResp};
 use uuid::Uuid;
 
 pub struct API {
     pub id: Uuid,
     conf: CreateUpdateAPIReq,
-    pub request: CoapRequest<SocketAddr>,
+    request: CoapRequest<SocketAddr>,
 
     on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<UdpCoAPClient>)>>,
+
+    ref_info: RefInfo,
 }
 
 impl API {
@@ -51,6 +60,7 @@ impl API {
             on: false,
             stop_signal_tx: None,
             join_handle: None,
+            ref_info: RefInfo::new(),
         })
     }
 
@@ -69,13 +79,35 @@ impl API {
         )
         .await?;
 
+        let mut restart = false;
+        if self.conf.ext != req.ext {
+            restart = true;
+        }
         self.conf = req;
+        if self.on && restart {
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
+            let (stop_signal_rx, client) = self.join_handle.take().unwrap().await.unwrap();
+            self.event_loop(client, stop_signal_rx);
+        }
 
         Ok(())
     }
 
     pub async fn delete(&self, device_id: &Uuid) -> HaliaResult<()> {
         persistence::devices::coap::delete_api(device_id, &self.id).await?;
+        if self.on {
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
+        }
         Ok(())
     }
 
@@ -90,10 +122,25 @@ impl API {
         self.event_loop(client, stop_signal_rx);
     }
 
-    pub async fn stop(&mut self) {}
+    pub async fn stop(&mut self) {
+        if !self.on {
+            return;
+        } else {
+            self.on = false;
+        }
+
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+        self.stop_signal_tx = None;
+    }
 
     fn event_loop(&mut self, client: Arc<UdpCoAPClient>, mut stop_signal_rx: mpsc::Receiver<()>) {
         let mut interval = time::interval(Duration::from_millis(self.conf.ext.interval));
+        let request = self.request.clone();
         let join_handle = tokio::spawn(async move {
             loop {
                 select! {
@@ -102,11 +149,30 @@ impl API {
                     }
 
                     _ = interval.tick() => {
-
+                        match client.send(request.clone()).await {
+                            Ok(resp) => debug!("{:?}", resp),
+                            Err(e) => debug!("{:?}", e),
+                        }
                     }
                 }
             }
         });
         self.join_handle = Some(join_handle);
+    }
+
+    pub fn add_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.add_ref(rule_id);
+    }
+
+    pub fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+        self.ref_info.subscribe(rule_id)
+    }
+
+    pub fn unsubscribe(&mut self, rule_id: &Uuid) {
+        self.ref_info.unsubscribe(rule_id);
+    }
+
+    pub fn remove_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.remove_ref(rule_id)
     }
 }

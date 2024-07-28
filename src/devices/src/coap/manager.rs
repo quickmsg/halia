@@ -107,7 +107,7 @@ impl Manager {
         pagination: Pagination,
     ) -> HaliaResult<SearchAPIsResp> {
         match self.devices.get(&device_id) {
-            Some(device) => device.search_apis(pagination).await,
+            Some(device) => Ok(device.search_apis(pagination).await),
             None => Err(HaliaError::NotFound),
         }
     }
@@ -118,15 +118,27 @@ impl Manager {
         api_id: Uuid,
         req: CreateUpdateAPIReq,
     ) -> HaliaResult<()> {
-        match self.devices.get(&device_id) {
-            Some(device) => device.update_api(api_id, req).await,
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.update_api(api_id, req).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
     pub async fn delete_api(&self, device_id: Uuid, api_id: Uuid) -> HaliaResult<()> {
-        match self.devices.get(&device_id) {
-            Some(device) => device.delete_api(api_id).await,
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.delete_api(api_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn add_api_ref(
+        &self,
+        device_id: &Uuid,
+        api_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.add_api_ref(api_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -134,17 +146,35 @@ impl Manager {
     pub async fn subscribe(
         &self,
         device_id: &Uuid,
-        group_id: &Uuid,
+        api_id: &Uuid,
+        rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.subscribe(group_id).await,
+            Some(mut device) => device.subscribe(api_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unsubscribe(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {
+    pub async fn unsubscribe(
+        &self,
+        device_id: &Uuid,
+        api_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.unsubscribe(group_id).await,
+            Some(mut device) => device.unsubscribe(api_id, rule_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn remove_api_ref(
+        &self,
+        device_id: &Uuid,
+        api_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.remove_api_ref(api_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
