@@ -225,7 +225,17 @@ impl Point {
                         return Ok(());
                     }
                 },
-                Err(_) => return Err(HaliaError::Disconnect),
+                Err(e) => {
+                    match e {
+                        protocol::modbus::Error::Protocol(e) => {
+                            debug!("protocol err: {:?}", e);
+                        }
+                        protocol::modbus::Error::Transport(e) => {
+                            debug!("transport err: {:?}", e);
+                        }
+                    }
+                    return Err(HaliaError::Disconnect);
+                }
             },
             Area::InputRegisters => {
                 match ctx

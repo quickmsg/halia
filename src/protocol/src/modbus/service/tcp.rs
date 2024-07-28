@@ -6,6 +6,7 @@ use std::{
 use futures_util::{SinkExt as _, StreamExt as _};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
+use tracing::debug;
 
 use crate::modbus::{
     codec,
@@ -80,6 +81,8 @@ where
             .next()
             .await
             .ok_or_else(io::Error::last_os_error)??;
+
+        debug!("{:?}", res_adu);
 
         let ResponsePdu(result) = res_adu.pdu;
 

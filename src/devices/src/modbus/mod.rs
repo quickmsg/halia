@@ -108,6 +108,7 @@ impl Modbus {
                         continue;
                     }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    debug!("{:?}", items);
                     assert_eq!(items.len(), 2);
 
                     let point_id = Uuid::from_str(items[0]).unwrap();
