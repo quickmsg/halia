@@ -2715,6 +2715,7 @@ dependencies = [
  "api",
  "apps",
  "devices",
+ "protocol",
  "rule",
  "tokio",
  "tracing",

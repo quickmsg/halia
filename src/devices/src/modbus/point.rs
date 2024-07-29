@@ -6,12 +6,11 @@ use common::{
     ref_info::RefInfo,
 };
 use message::{Message, MessageBatch};
-use protocol::modbus::{
-    client::{Context, Reader},
-    SlaveContext,
-};
+use protocol::modbus::{Context, FunctionCode};
 use serde_json::Value;
 use tokio::{
+    io::{AsyncReadExt as _, AsyncWriteExt},
+    net::TcpStream,
     select,
     sync::{broadcast, mpsc},
     task::JoinHandle,
@@ -184,103 +183,150 @@ impl Point {
         Ok(())
     }
 
-    pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<()> {
+    // pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<()> {
+    //     let point_conf = &self.conf.point;
+    //     ctx.set_slave(point_conf.slave);
+    //     let message_value = match point_conf.area {
+    //         Area::InputDiscrete => {
+    //             match ctx
+    //                 .read_discrete_inputs(point_conf.address, self.quantity)
+    //                 .await
+    //             {
+    //                 Ok(res) => match res {
+    //                     Ok(mut data) => {
+    //                         let value = point_conf.data_type.decode(&mut data);
+    //                         self.value = value.clone().into();
+    //                         value
+    //                     }
+    //                     Err(e) => {
+    //                         warn!("modbus protocl exception:{}", e);
+    //                         return Ok(());
+    //                     }
+    //                 },
+    //                 Err(e) => match e {
+    //                     protocol::modbus_bak::Error::Protocol(_) => todo!(),
+    //                     protocol::modbus_bak::Error::Transport(e) => {
+    //                         warn!("{} {}", e.kind(), e);
+    //                         return Ok(());
+    //                     }
+    //                 },
+    //             }
+    //         }
+    //         Area::Coils => match ctx.read_coils(point_conf.address, self.quantity).await {
+    //             Ok(res) => match res {
+    //                 Ok(mut data) => {
+    //                     let value = point_conf.data_type.decode(&mut data);
+    //                     self.value = value.clone().into();
+    //                     value
+    //                 }
+    //                 Err(e) => {
+    //                     warn!("modbus protocl exception:{}", e);
+    //                     return Ok(());
+    //                 }
+    //             },
+    //             Err(e) => {
+    //                 match e {
+    //                     protocol::modbus_bak::Error::Protocol(e) => {
+    //                         debug!("protocol err: {:?}", e);
+    //                     }
+    //                     protocol::modbus_bak::Error::Transport(e) => {
+    //                         debug!("transport err: {:?}", e);
+    //                     }
+    //                 }
+    //                 return Err(HaliaError::Disconnect);
+    //             }
+    //         },
+    //         Area::InputRegisters => {
+    //             match ctx
+    //                 .read_input_registers(point_conf.address, self.quantity)
+    //                 .await
+    //             {
+    //                 Ok(res) => match res {
+    //                     Ok(mut data) => {
+    //                         let value = point_conf.data_type.decode(&mut data);
+    //                         self.value = value.clone().into();
+    //                         value
+    //                     }
+    //                     Err(_) => return Ok(()),
+    //                 },
+    //                 Err(_) => return Err(HaliaError::Disconnect),
+    //             }
+    //         }
+    //         Area::HoldingRegisters => match ctx
+    //             .read_holding_registers(point_conf.address, self.quantity)
+    //             .await
+    //         {
+    //             Ok(res) => match res {
+    //                 Ok(mut data) => {
+    //                     let value = point_conf.data_type.decode(&mut data);
+    //                     self.value = value.clone().into();
+    //                     value
+    //                 }
+    //                 Err(_) => return Ok(()),
+    //             },
+    //             Err(_) => return Err(HaliaError::Disconnect),
+    //         },
+    //     };
+
+    //     match self.ref_info.get_tx() {
+    //         Some(tx) => {
+    //             let mut message = Message::default();
+    //             message.add(self.conf.base.name.clone(), message_value);
+    //             let mut message_batch = MessageBatch::default();
+    //             message_batch.push_message(message);
+    //             if let Err(e) = tx.send(message_batch) {
+    //                 warn!("send err :{:?}", e);
+    //             }
+    //         }
+    //         None => {}
+    //     }
+
+    //     Ok(())
+    // }
+
+    pub async fn read(
+        &mut self,
+        stream: &mut TcpStream,
+        ctx: &mut impl Context,
+    ) -> HaliaResult<()> {
         let point_conf = &self.conf.point;
-        ctx.set_slave(point_conf.slave);
-        let message_value = match point_conf.area {
-            Area::InputDiscrete => {
-                match ctx
-                    .read_discrete_inputs(point_conf.address, self.quantity)
-                    .await
-                {
-                    Ok(res) => match res {
-                        Ok(mut data) => {
-                            let value = point_conf.data_type.decode(&mut data);
-                            self.value = value.clone().into();
-                            value
-                        }
-                        Err(e) => {
-                            warn!("modbus protocl exception:{}", e);
-                            return Ok(());
-                        }
-                    },
-                    Err(e) => match e {
-                        protocol::modbus::Error::Protocol(_) => todo!(),
-                        protocol::modbus::Error::Transport(e) => {
-                            warn!("{} {}", e.kind(), e);
-                            return Ok(());
-                        }
-                    },
-                }
-            }
-            Area::Coils => match ctx.read_coils(point_conf.address, self.quantity).await {
-                Ok(res) => match res {
-                    Ok(mut data) => {
-                        let value = point_conf.data_type.decode(&mut data);
-                        self.value = value.clone().into();
-                        value
-                    }
-                    Err(e) => {
-                        warn!("modbus protocl exception:{}", e);
-                        return Ok(());
-                    }
-                },
-                Err(e) => {
-                    match e {
-                        protocol::modbus::Error::Protocol(e) => {
-                            debug!("protocol err: {:?}", e);
-                        }
-                        protocol::modbus::Error::Transport(e) => {
-                            debug!("transport err: {:?}", e);
-                        }
-                    }
-                    return Err(HaliaError::Disconnect);
-                }
-            },
-            Area::InputRegisters => {
-                match ctx
-                    .read_input_registers(point_conf.address, self.quantity)
-                    .await
-                {
-                    Ok(res) => match res {
-                        Ok(mut data) => {
-                            let value = point_conf.data_type.decode(&mut data);
-                            self.value = value.clone().into();
-                            value
-                        }
-                        Err(_) => return Ok(()),
-                    },
-                    Err(_) => return Err(HaliaError::Disconnect),
-                }
-            }
-            Area::HoldingRegisters => match ctx
-                .read_holding_registers(point_conf.address, self.quantity)
-                .await
-            {
-                Ok(res) => match res {
-                    Ok(mut data) => {
-                        let value = point_conf.data_type.decode(&mut data);
-                        self.value = value.clone().into();
-                        value
-                    }
-                    Err(_) => return Ok(()),
-                },
-                Err(_) => return Err(HaliaError::Disconnect),
-            },
+
+        let function_code = match point_conf.area {
+            Area::InputDiscrete => FunctionCode::ReadDiscreteInputs,
+            Area::Coils => FunctionCode::ReadCoils,
+            Area::InputRegisters => FunctionCode::ReadInputRegisters,
+            Area::HoldingRegisters => FunctionCode::ReadHoldingRegisters,
         };
 
-        match self.ref_info.get_tx() {
-            Some(tx) => {
-                let mut message = Message::default();
-                message.add(self.conf.base.name.clone(), message_value);
-                let mut message_batch = MessageBatch::default();
-                message_batch.push_message(message);
-                if let Err(e) = tx.send(message_batch) {
-                    warn!("send err :{:?}", e);
-                }
+        let req = ctx.encode_read(
+            point_conf.slave,
+            point_conf.address,
+            function_code,
+            self.quantity,
+        );
+        stream.write_all(req).await?;
+        match stream.read(ctx.get_buf()).await {
+            Ok(n) => {
+                debug!("{}", n);
+                debug!("{:?}", ctx.decode_read(n));
             }
-            None => {}
+            Err(e) => {
+                debug!("{:?}", e);
+            }
         }
+
+        // match self.ref_info.get_tx() {
+        //     Some(tx) => {
+        //         let mut message = Message::default();
+        //         message.add(self.conf.base.name.clone(), message_value);
+        //         let mut message_batch = MessageBatch::default();
+        //         message_batch.push_message(message);
+        //         if let Err(e) = tx.send(message_batch) {
+        //             warn!("send err :{:?}", e);
+        //         }
+        //     }
+        //     None => {}
+        // }
 
         Ok(())
     }

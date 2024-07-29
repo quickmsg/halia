@@ -3,7 +3,7 @@ use std::{fmt, io};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
 
-use crate::modbus::{
+use crate::modbus_bak::{
     codec,
     frame::{
         rtu::{Header, RequestAdu},
@@ -96,7 +96,7 @@ impl<T> SlaveContext for Client<T> {
 }
 
 #[async_trait::async_trait]
-impl<T> crate::modbus::client::Client for Client<T>
+impl<T> crate::modbus_bak::client::Client for Client<T>
 where
     T: fmt::Debug + AsyncRead + AsyncWrite + Send + Unpin,
 {

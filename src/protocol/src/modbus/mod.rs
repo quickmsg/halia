@@ -1,43 +1,70 @@
-#![warn(let_underscore)]
-#![warn(missing_debug_implementations)]
-#![warn(unreachable_pub)]
-#![warn(unsafe_code)]
-#![warn(unused)]
-// Clippy lints
-#![warn(clippy::pedantic)]
-// Additional restrictions
-#![warn(clippy::clone_on_ref_ptr)]
-#![warn(clippy::self_named_module_files)]
-// Exceptions
-#![allow(clippy::enum_glob_use)]
-#![allow(clippy::similar_names)]
-#![allow(clippy::module_name_repetitions)]
-#![allow(clippy::wildcard_imports)] // TODO
-#![allow(clippy::missing_errors_doc)] // TODO
+pub mod tcp;
 
-pub mod client;
+#[derive(PartialEq, Clone)]
+pub enum FunctionCode {
+    /// Modbus Function Code: `01` (`0x01`).
+    ReadCoils,
+    /// Modbus Function Code: `02` (`0x02`).
+    ReadDiscreteInputs,
 
-mod codec;
+    /// Modbus Function Code: `03` (`0x03`).
+    ReadHoldingRegisters,
+    /// Modbus Function Code: `04` (`0x04`).
+    ReadInputRegisters,
 
-mod error;
-pub use self::error::{Error, ProtocolError};
+    /// Modbus Function Code: `05` (`0x05`).
+    WriteSingleCoil,
+    /// Modbus Function Code: `06` (`0x06`).
+    WriteSingleRegister,
 
-mod frame;
-pub use self::frame::{Exception, ExceptionResponse, FunctionCode, Request, Response};
+    /// Modbus Function Code: `15` (`0x0F`).
+    WriteMultipleCoils,
+    /// Modbus Function Code: `16` (`0x10`).
+    WriteMultipleRegisters,
 
-/// Specialized [`std::result::Result`] type for type-checked responses of the _Modbus_ client API.
-///
-/// The payload is generic over the response type.
-///
-/// This [`Result`] type contains 2 layers of errors.
-///
-/// 1. [`Error`]: An unexpected protocol or network error that occurred during client/server communication.
-/// 2. [`Exception`]: An error occurred on the _Modbus_ server.
-pub type Result<T> = std::result::Result<std::result::Result<T, Exception>, Error>;
+    /// Modbus Function Code: `22` (`0x16`).
+    MaskWriteRegister,
+}
 
-mod service;
+impl From<FunctionCode> for u8 {
+    fn from(value: FunctionCode) -> Self {
+        match value {
+            FunctionCode::ReadCoils => 0x01,
+            FunctionCode::ReadDiscreteInputs => 0x02,
+            FunctionCode::ReadHoldingRegisters => 0x03,
+            FunctionCode::ReadInputRegisters => 0x04,
+            FunctionCode::WriteSingleCoil => 0x05,
+            FunctionCode::WriteSingleRegister => 0x06,
+            FunctionCode::WriteMultipleCoils => 0x0F,
+            FunctionCode::WriteMultipleRegisters => 0x10,
+            FunctionCode::MaskWriteRegister => 0x16,
+        }
+    }
+}
 
-pub trait SlaveContext {
-    /// Select a slave device for all subsequent outgoing requests.
-    fn set_slave(&mut self, slave: u8);
+pub enum ProtocolError {
+    EmptyBody,
+    DataTooSmall,
+    TranscationIdMismatch,
+    ProtocolIdErr,
+    UnitIdMismatch,
+}
+
+pub trait Context {
+    fn get_buf(&mut self) -> &mut [u8];
+    fn encode_read(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        function_code: FunctionCode,
+        quantity: u16,
+    ) -> &[u8];
+    fn decode_read(&mut self, n: usize) -> &mut [u8];
+    fn encode_write(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        function_code: FunctionCode,
+        value: &[u8],
+    ) -> &[u8];
 }
