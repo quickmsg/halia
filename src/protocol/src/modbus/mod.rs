@@ -17,8 +17,6 @@ pub enum FunctionCode {
     /// Modbus Function Code: `06` (`0x06`).
     WriteSingleRegister,
 
-    /// Modbus Function Code: `15` (`0x0F`).
-    WriteMultipleCoils,
     /// Modbus Function Code: `16` (`0x10`).
     WriteMultipleRegisters,
 
@@ -35,7 +33,6 @@ impl From<FunctionCode> for u8 {
             FunctionCode::ReadInputRegisters => 0x04,
             FunctionCode::WriteSingleCoil => 0x05,
             FunctionCode::WriteSingleRegister => 0x06,
-            FunctionCode::WriteMultipleCoils => 0x0F,
             FunctionCode::WriteMultipleRegisters => 0x10,
             FunctionCode::MaskWriteRegister => 0x16,
         }
@@ -67,4 +64,5 @@ pub trait Context {
         function_code: FunctionCode,
         value: &[u8],
     ) -> &[u8];
+    fn decode_write(&mut self);
 }

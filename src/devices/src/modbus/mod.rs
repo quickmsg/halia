@@ -4,7 +4,7 @@ use common::{
 };
 use message::MessageBatch;
 use point::Point;
-use protocol::modbus::{tcp, Context};
+use protocol::modbus::{tcp, Context, FunctionCode};
 use serde_json::json;
 use sink::Sink;
 use std::{
@@ -17,6 +17,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
+    io::{AsyncReadExt as _, AsyncWriteExt},
     net::TcpStream,
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -233,9 +234,9 @@ impl Modbus {
                                 wpe = write_rx.recv() => {
                                     debug!("here");
                                     if let Some(wpe) = wpe {
-                                        // if write_value(&mut ctx, wpe).await.is_err() {
-                                        //     break
-                                        // }
+                                        if write_value(&mut stream, &mut ctx, wpe).await.is_err() {
+                                            break
+                                        }
                                     }
                                     if interval > 0 {
                                         time::sleep(Duration::from_millis(interval)).await;
@@ -668,93 +669,128 @@ impl WritePointEvent {
     }
 }
 
-// async fn write_value(ctx: &mut impl Context, wpe: WritePointEvent) -> HaliaResult<()> {
-//     debug!("{:?}", wpe);
-//     match wpe.area {
-//         Area::Coils => match wpe.data_type.typ {
-//             Type::Bool => match ctx.write_single_coil(wpe.address, wpe.data[0]).await {
-//                 Ok(res) => match res {
-//                     Ok(_) => return Ok(()),
-//                     Err(e) => {
-//                         warn!("modbus protocl exception:{}", e);
-//                         return Ok(());
-//                     }
-//                 },
-//                 Err(e) => {
-//                     debug!("{}", e);
-//                     return Err(HaliaError::ConfErr);
-//                 }
-//             },
-//             _ => return Err(HaliaError::ConfErr),
-//         },
-//         Area::HoldingRegisters => match wpe.data_type.typ {
-//             Type::Bool => {
-//                 let pos = wpe.data_type.pos.as_ref().unwrap();
-//                 let and_mask = !(1 << pos);
-//                 let or_mask = (wpe.data[0] as u16) << pos;
-//                 match ctx
-//                     .masked_write_register(wpe.address, and_mask, or_mask)
-//                     .await
-//                 {
-//                     Ok(res) => match res {
-//                         Ok(_) => return Ok(()),
-//                         Err(_) => {
-//                             // todo log error
-//                             return Ok(());
-//                         }
-//                     },
-//                     Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
-//                 }
-//             }
-//             Type::Int8 | Type::Uint8 => {
-//                 let (and_mask, or_mask) = match wpe.data_type.single_endian.as_ref().unwrap() {
-//                     Endian::Little => (0x00FF, (wpe.data[0] as u16) << 8),
-//                     Endian::Big => (0xFF00, wpe.data[0] as u16),
-//                 };
-//                 match ctx
-//                     .masked_write_register(wpe.address, and_mask, or_mask)
-//                     .await
-//                 {
-//                     Ok(res) => match res {
-//                         Ok(_) => return Ok(()),
-//                         Err(e) => {
-//                             warn!("modbus protocol exception:{}", e);
-//                             return Ok(());
-//                         }
-//                     },
-//                     Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
-//                 }
-//             }
-//             Type::Int16 | Type::Uint16 => {
-//                 match ctx.write_single_register(wpe.address, &wpe.data).await {
-//                     Ok(res) => match res {
-//                         Ok(_) => return Ok(()),
-//                         Err(e) => {
-//                             warn!("modbus protocol exception:{}", e);
-//                             return Ok(());
-//                         }
-//                     },
-//                     Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
-//                 }
-//             }
-//             Type::Int32
-//             | Type::Uint32
-//             | Type::Int64
-//             | Type::Uint64
-//             | Type::Float32
-//             | Type::Float64
-//             | Type::String
-//             | Type::Bytes => match ctx.write_multiple_registers(wpe.address, &wpe.data).await {
-//                 Ok(res) => match res {
-//                     Ok(_) => return Ok(()),
-//                     Err(e) => {
-//                         warn!("modbus protocol exception:{}", e);
-//                         return Ok(());
-//                     }
-//                 },
-//                 Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
-//             },
-//         },
-//         _ => return Err(HaliaError::ConfErr),
-//     }
-// }
+async fn write_value(
+    stream: &mut TcpStream,
+    ctx: &mut impl Context,
+    wpe: WritePointEvent,
+) -> HaliaResult<()> {
+    let function_code = match (wpe.area, wpe.data_type.typ) {
+        (Area::Coils, Type::Bool) => FunctionCode::WriteSingleCoil,
+        (Area::HoldingRegisters, Type::Bool)
+        | (Area::HoldingRegisters, Type::Int8)
+        | (Area::HoldingRegisters, Type::Uint8) => FunctionCode::MaskWriteRegister,
+        (Area::HoldingRegisters, Type::Int16) | (Area::HoldingRegisters, Type::Uint16) => {
+            FunctionCode::WriteSingleRegister
+        }
+        // 处理特例bytes
+        (Area::HoldingRegisters, Type::Int32)
+        | (Area::HoldingRegisters, Type::Uint32)
+        | (Area::HoldingRegisters, Type::Int64)
+        | (Area::HoldingRegisters, Type::Uint64)
+        | (Area::HoldingRegisters, Type::Float32)
+        | (Area::HoldingRegisters, Type::Float64)
+        | (Area::HoldingRegisters, Type::String)
+        | (Area::HoldingRegisters, Type::Bytes) => FunctionCode::WriteMultipleRegisters,
+        _ => unreachable!(),
+    };
+
+    let req = ctx.encode_write(wpe.slave, wpe.address, function_code, &wpe.data);
+    stream.write_all(req).await?;
+    match stream.read(ctx.get_buf()).await {
+        Ok(n) => {
+            debug!("{:?}", ctx.get_buf());
+        }
+        Err(_) => todo!(),
+    }
+
+    Ok(())
+
+    // debug!("{:?}", wpe);
+    // match wpe.area {
+    //     Area::Coils => match wpe.data_type.typ {
+    //         Type::Bool => match ctx.write_single_coil(wpe.address, wpe.data[0]).await {
+    //             Ok(res) => match res {
+    //                 Ok(_) => return Ok(()),
+    //                 Err(e) => {
+    //                     warn!("modbus protocl exception:{}", e);
+    //                     return Ok(());
+    //                 }
+    //             },
+    //             Err(e) => {
+    //                 debug!("{}", e);
+    //                 return Err(HaliaError::ConfErr);
+    //             }
+    //         },
+    //         _ => return Err(HaliaError::ConfErr),
+    //     },
+    //     Area::HoldingRegisters => match wpe.data_type.typ {
+    //         Type::Bool => {
+    //             let pos = wpe.data_type.pos.as_ref().unwrap();
+    //             let and_mask = !(1 << pos);
+    //             let or_mask = (wpe.data[0] as u16) << pos;
+    //             match ctx
+    //                 .masked_write_register(wpe.address, and_mask, or_mask)
+    //                 .await
+    //             {
+    //                 Ok(res) => match res {
+    //                     Ok(_) => return Ok(()),
+    //                     Err(_) => {
+    //                         // todo log error
+    //                         return Ok(());
+    //                     }
+    //                 },
+    //                 Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
+    //             }
+    //         }
+    //         Type::Int8 | Type::Uint8 => {
+    //             let (and_mask, or_mask) = match wpe.data_type.single_endian.as_ref().unwrap() {
+    //                 Endian::Little => (0x00FF, (wpe.data[0] as u16) << 8),
+    //                 Endian::Big => (0xFF00, wpe.data[0] as u16),
+    //             };
+    //             match ctx
+    //                 .masked_write_register(wpe.address, and_mask, or_mask)
+    //                 .await
+    //             {
+    //                 Ok(res) => match res {
+    //                     Ok(_) => return Ok(()),
+    //                     Err(e) => {
+    //                         warn!("modbus protocol exception:{}", e);
+    //                         return Ok(());
+    //                     }
+    //                 },
+    //                 Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
+    //             }
+    //         }
+    //         Type::Int16 | Type::Uint16 => {
+    //             match ctx.write_single_register(wpe.address, &wpe.data).await {
+    //                 Ok(res) => match res {
+    //                     Ok(_) => return Ok(()),
+    //                     Err(e) => {
+    //                         warn!("modbus protocol exception:{}", e);
+    //                         return Ok(());
+    //                     }
+    //                 },
+    //                 Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
+    //             }
+    //         }
+    //         Type::Int32
+    //         | Type::Uint32
+    //         | Type::Int64
+    //         | Type::Uint64
+    //         | Type::Float32
+    //         | Type::Float64
+    //         | Type::String
+    //         | Type::Bytes => match ctx.write_multiple_registers(wpe.address, &wpe.data).await {
+    //             Ok(res) => match res {
+    //                 Ok(_) => return Ok(()),
+    //                 Err(e) => {
+    //                     warn!("modbus protocol exception:{}", e);
+    //                     return Ok(());
+    //                 }
+    //             },
+    //             Err(e) => return Err(HaliaError::DeviceConnectErr(e.to_string())),
+    //         },
+    //     },
+    //     _ => return Err(HaliaError::ConfErr),
+    // }
+}
