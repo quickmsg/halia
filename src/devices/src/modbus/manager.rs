@@ -151,7 +151,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
             Some(mut device) => device.add_subscribe_ref(point_id, rule_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(HaliaError::DeviceNotFound),
         }
     }
 

@@ -11,18 +11,13 @@ pub enum HaliaError {
     IoErr,
     Existed,
     ConfErr,
-    Disconnect,
+
+    DeviceNotFound,
     DeviceRunning,
-    // 设备已关闭
-    DeviceStoped,
-    // 设备连接错误
-    DeviceDisconnect,
+    DeviceStopped,
+    DeviceConnectionError(String),
 
-    DeviceConnectErr(String),
-
-    // DEVICE
-    DevicePointNotSupportWriteMethod,
-    DevicePointWriteValueErr,
+    Common(String),
 }
 
 impl From<std::fmt::Error> for HaliaError {
@@ -52,15 +47,12 @@ impl Display for HaliaError {
             HaliaError::IoErr => write!(f, "IO错误"),
             HaliaError::Existed => write!(f, "已存在"),
             HaliaError::ConfErr => write!(f, "配置错误"),
-            HaliaError::Disconnect => write!(f, "连接断开"),
-            HaliaError::DeviceStoped => write!(f, "设备已关闭"),
-            HaliaError::DeviceDisconnect => write!(f, "设备已断开连接"),
-
-            HaliaError::DevicePointNotSupportWriteMethod => write!(f, "点位不支持写"),
-            HaliaError::DevicePointWriteValueErr => write!(f, "点位写入值错误"),
             HaliaError::NotFoundGroup => todo!(),
             HaliaError::DeviceRunning => write!(f, "设备运行中"),
-            HaliaError::DeviceConnectErr(_) => todo!(),
+            HaliaError::DeviceNotFound => todo!(),
+            HaliaError::DeviceStopped => todo!(),
+            HaliaError::DeviceConnectionError(_) => todo!(),
+            HaliaError::Common(_) => todo!(),
         }
     }
 }
@@ -74,14 +66,12 @@ impl HaliaError {
             HaliaError::IoErr => 4,
             HaliaError::Existed => 5,
             HaliaError::ConfErr => 6,
-            HaliaError::Disconnect => 7,
-            HaliaError::DeviceStoped => 1001,
             HaliaError::DeviceRunning => 1006,
-            HaliaError::DeviceDisconnect => 1002,
-            HaliaError::DevicePointNotSupportWriteMethod => 1003,
-            HaliaError::DevicePointWriteValueErr => 1004,
             HaliaError::NotFoundGroup => 1005,
-            HaliaError::DeviceConnectErr(_) => 1006,
+            HaliaError::DeviceNotFound => todo!(),
+            HaliaError::DeviceStopped => todo!(),
+            HaliaError::DeviceConnectionError(_) => todo!(),
+            HaliaError::Common(_) => todo!(),
         }
     }
 }

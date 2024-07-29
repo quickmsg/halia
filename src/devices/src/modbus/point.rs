@@ -6,7 +6,7 @@ use common::{
     ref_info::RefInfo,
 };
 use message::{Message, MessageBatch};
-use protocol::modbus::{Context, FunctionCode, ProtocolError};
+use protocol::modbus::{Context, FunctionCode};
 use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt as _, AsyncWriteExt},
@@ -23,16 +23,16 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct Point {
     pub id: Uuid,
-    pub on: bool,
     pub conf: CreateUpdatePointReq,
+    quantity: u16,
 
-    pub quantity: u16,
-    pub value: Value,
-    pub stop_signal_tx: Option<mpsc::Sender<()>>,
+    on: bool,
+    stop_signal_tx: Option<mpsc::Sender<()>>,
+    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>)>>,
+    value: Value,
+    err: Option<String>,
 
     ref_info: RefInfo,
-
-    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>)>>,
 }
 
 impl Point {
@@ -69,6 +69,7 @@ impl Point {
             stop_signal_tx: None,
             ref_info: RefInfo::new(),
             join_handle: None,
+            err: None,
         })
     }
 
@@ -182,107 +183,6 @@ impl Point {
         persistence::devices::modbus::delete_point(device_id, &self.id).await?;
         Ok(())
     }
-
-    // pub async fn read(&mut self, ctx: &mut Context) -> HaliaResult<()> {
-    //     let point_conf = &self.conf.point;
-    //     ctx.set_slave(point_conf.slave);
-    //     let message_value = match point_conf.area {
-    //         Area::InputDiscrete => {
-    //             match ctx
-    //                 .read_discrete_inputs(point_conf.address, self.quantity)
-    //                 .await
-    //             {
-    //                 Ok(res) => match res {
-    //                     Ok(mut data) => {
-    //                         let value = point_conf.data_type.decode(&mut data);
-    //                         self.value = value.clone().into();
-    //                         value
-    //                     }
-    //                     Err(e) => {
-    //                         warn!("modbus protocl exception:{}", e);
-    //                         return Ok(());
-    //                     }
-    //                 },
-    //                 Err(e) => match e {
-    //                     protocol::modbus_bak::Error::Protocol(_) => todo!(),
-    //                     protocol::modbus_bak::Error::Transport(e) => {
-    //                         warn!("{} {}", e.kind(), e);
-    //                         return Ok(());
-    //                     }
-    //                 },
-    //             }
-    //         }
-    //         Area::Coils => match ctx.read_coils(point_conf.address, self.quantity).await {
-    //             Ok(res) => match res {
-    //                 Ok(mut data) => {
-    //                     let value = point_conf.data_type.decode(&mut data);
-    //                     self.value = value.clone().into();
-    //                     value
-    //                 }
-    //                 Err(e) => {
-    //                     warn!("modbus protocl exception:{}", e);
-    //                     return Ok(());
-    //                 }
-    //             },
-    //             Err(e) => {
-    //                 match e {
-    //                     protocol::modbus_bak::Error::Protocol(e) => {
-    //                         debug!("protocol err: {:?}", e);
-    //                     }
-    //                     protocol::modbus_bak::Error::Transport(e) => {
-    //                         debug!("transport err: {:?}", e);
-    //                     }
-    //                 }
-    //                 return Err(HaliaError::Disconnect);
-    //             }
-    //         },
-    //         Area::InputRegisters => {
-    //             match ctx
-    //                 .read_input_registers(point_conf.address, self.quantity)
-    //                 .await
-    //             {
-    //                 Ok(res) => match res {
-    //                     Ok(mut data) => {
-    //                         let value = point_conf.data_type.decode(&mut data);
-    //                         self.value = value.clone().into();
-    //                         value
-    //                     }
-    //                     Err(_) => return Ok(()),
-    //                 },
-    //                 Err(_) => return Err(HaliaError::Disconnect),
-    //             }
-    //         }
-    //         Area::HoldingRegisters => match ctx
-    //             .read_holding_registers(point_conf.address, self.quantity)
-    //             .await
-    //         {
-    //             Ok(res) => match res {
-    //                 Ok(mut data) => {
-    //                     let value = point_conf.data_type.decode(&mut data);
-    //                     self.value = value.clone().into();
-    //                     value
-    //                 }
-    //                 Err(_) => return Ok(()),
-    //             },
-    //             Err(_) => return Err(HaliaError::Disconnect),
-    //         },
-    //     };
-
-    //     match self.ref_info.get_tx() {
-    //         Some(tx) => {
-    //             let mut message = Message::default();
-    //             message.add(self.conf.base.name.clone(), message_value);
-    //             let mut message_batch = MessageBatch::default();
-    //             message_batch.push_message(message);
-    //             if let Err(e) = tx.send(message_batch) {
-    //                 warn!("send err :{:?}", e);
-    //             }
-    //         }
-    //         None => {}
-    //     }
-
-    //     Ok(())
-    // }
 
     pub async fn read(
         &mut self,
