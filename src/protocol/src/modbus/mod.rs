@@ -54,20 +54,20 @@ pub enum ProtocolError {
     UnitIdMismatch,
 }
 
-pub trait Context: Send + Sync {
-    async fn read(
+pub trait Context {
+    fn read(
         &mut self,
         function_code: FunctionCode,
         slave: u8,
         addr: u16,
         quantity: u16,
-    ) -> Result<&mut [u8], Error>;
+    ) -> impl std::future::Future<Output = Result<&mut [u8], Error>> + Send;
 
-    async fn write(
+    fn write(
         &mut self,
         function_code: FunctionCode,
         slave: u8,
         addr: u16,
         value: &[u8],
-    ) -> Result<(), Error>;
+    ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
 }

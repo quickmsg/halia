@@ -688,7 +688,7 @@ pub enum Endian {
     Big,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Area {
     DiscretesInput,

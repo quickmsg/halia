@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{io, time::Duration};
 
 use common::{
     error::{HaliaError, HaliaResult},
@@ -181,7 +181,7 @@ impl Point {
         Ok(())
     }
 
-    pub async fn read(&mut self, ctx: &mut impl Context) -> HaliaResult<()> {
+    pub async fn read(&mut self, ctx: &mut impl Context) -> io::Result<()> {
         let function_code = match self.conf.ext.area {
             Area::DiscretesInput => FunctionCode::ReadDiscreteInputs,
             Area::Coils => FunctionCode::ReadCoils,
@@ -215,8 +215,8 @@ impl Point {
                 }
             }
             Err(e) => match e {
-                protocol::modbus::Error::Transport(_) => todo!(),
-                protocol::modbus::Error::Protocol(_) => todo!(),
+                protocol::modbus::Error::Transport(e) => return Err(e),
+                protocol::modbus::Error::Protocol(e) => todo!(),
             },
         }
 
