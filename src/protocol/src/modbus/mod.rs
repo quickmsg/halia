@@ -43,7 +43,7 @@ impl From<FunctionCode> for u8 {
 }
 
 pub enum ProtocolError {
-    EmptyBody,
+    EmptyResp,
     DataTooSmall,
     TranscationIdMismatch,
     ProtocolIdErr,
@@ -59,7 +59,7 @@ pub trait Context {
         function_code: FunctionCode,
         quantity: u16,
     ) -> &[u8];
-    fn decode_read(&mut self, n: usize) -> &mut [u8];
+    fn decode_read(&mut self, n: usize) -> Result<&mut [u8], ProtocolError>;
     fn encode_write(
         &mut self,
         slave: u8,

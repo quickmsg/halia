@@ -112,11 +112,11 @@ impl DataType {
         }
     }
 
-    pub fn decode(&self, data: &mut Vec<u8>) -> MessageValue {
+    pub fn decode(&self, data: &mut [u8]) -> MessageValue {
         match self.typ {
             Type::Bool => match self.pos {
                 Some(pos) => {
-                    let data = match data.as_slice() {
+                    let data = match data {
                         [a, b] => [*a, *b],
                         _ => return MessageValue::Null,
                     };
@@ -132,7 +132,7 @@ impl DataType {
                 }
             },
             Type::Int8 => {
-                let data = match data.as_slice() {
+                let data = match data {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
@@ -142,7 +142,7 @@ impl DataType {
                 }
             }
             Type::Uint8 => {
-                let data = match data.as_slice() {
+                let data = match data {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
@@ -152,7 +152,7 @@ impl DataType {
                 }
             }
             Type::Int16 => {
-                let mut data = match data.as_slice() {
+                let mut data = match data {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
@@ -163,7 +163,7 @@ impl DataType {
                 MessageValue::Int64(i16::from_be_bytes(data) as i64)
             }
             Type::Uint16 => {
-                let mut data = match data.as_slice() {
+                let mut data = match data {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
@@ -174,7 +174,7 @@ impl DataType {
                 MessageValue::Uint64(u16::from_be_bytes(data) as u64)
             }
             Type::Int32 => {
-                let mut data = match data.as_slice() {
+                let mut data = match data {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
@@ -195,7 +195,7 @@ impl DataType {
                 MessageValue::Int64(i32::from_be_bytes(data) as i64)
             }
             Type::Uint32 => {
-                let mut data = match data.as_slice() {
+                let mut data = match data {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
@@ -216,7 +216,7 @@ impl DataType {
                 MessageValue::Uint64(u32::from_be_bytes(data) as u64)
             }
             Type::Int64 => {
-                let mut data = match data.as_slice() {
+                let mut data = match data {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
@@ -241,7 +241,7 @@ impl DataType {
                 MessageValue::Int64(i64::from_be_bytes(data))
             }
             Type::Uint64 => {
-                let mut data = match data.as_slice() {
+                let mut data = match data {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
@@ -266,7 +266,7 @@ impl DataType {
                 MessageValue::Uint64(u64::from_be_bytes(data))
             }
             Type::Float32 => {
-                let mut data = match data.as_slice() {
+                let mut data = match data {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
@@ -287,7 +287,7 @@ impl DataType {
                 MessageValue::Float64(f32::from_be_bytes(data) as f64)
             }
             Type::Float64 => {
-                let mut data = match data.as_slice() {
+                let mut data = match data {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
@@ -311,51 +311,52 @@ impl DataType {
                 }
                 MessageValue::Float64(f64::from_be_bytes(data))
             }
-            Type::String => match (
-                self.single.as_ref().unwrap(),
-                self.single_endian.as_ref().unwrap(),
-            ) {
-                (true, Endian::Big) => {
-                    let mut new_data = vec![];
-                    for i in 0..*self.len.as_ref().unwrap() * 2 {
-                        if i % 2 != 0 {
-                            new_data.push(data[i as usize]);
-                        }
-                    }
-                    match String::from_utf8(new_data) {
-                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
-                        Err(_) => return MessageValue::Null,
-                    }
-                }
-                (true, Endian::Little) => {
-                    let mut new_data = vec![];
-                    for i in 0..*self.len.as_ref().unwrap() * 2 {
-                        if i % 2 == 0 {
-                            new_data.push(data[i as usize]);
-                        }
-                    }
-                    match String::from_utf8(new_data) {
-                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
-                        Err(_) => return MessageValue::Null,
-                    }
-                }
-                (false, Endian::Big) => {
-                    for i in 0..*self.len.as_ref().unwrap() * 2 {
-                        if i % 2 == 0 {
-                            data.swap((i * 2) as usize, (i * 2 + 1) as usize);
-                        }
-                    }
-                    match String::from_utf8(data.clone()) {
-                        Ok(string) => return MessageValue::String(string),
-                        Err(_) => return MessageValue::Null,
-                    }
-                }
-                (false, Endian::Little) => match String::from_utf8(data.clone()) {
-                    Ok(string) => return MessageValue::String(string),
-                    Err(_) => return MessageValue::Null,
-                },
-            },
-            Type::Bytes => MessageValue::Bytes(data.clone()),
+            // Type::String => match (
+            //     self.single.as_ref().unwrap(),
+            //     self.single_endian.as_ref().unwrap(),
+            // ) {
+            //     (true, Endian::Big) => {
+            //         let mut new_data = vec![];
+            //         for i in 0..*self.len.as_ref().unwrap() * 2 {
+            //             if i % 2 != 0 {
+            //                 new_data.push(data[i as usize]);
+            //             }
+            //         }
+            //         match String::from_utf8(new_data) {
+            //             Ok(string) => return MessageValue::String(string.replace("\0", "")),
+            //             Err(_) => return MessageValue::Null,
+            //         }
+            //     }
+            //     (true, Endian::Little) => {
+            //         let mut new_data = vec![];
+            //         for i in 0..*self.len.as_ref().unwrap() * 2 {
+            //             if i % 2 == 0 {
+            //                 new_data.push(data[i as usize]);
+            //             }
+            //         }
+            //         match String::from_utf8(new_data) {
+            //             Ok(string) => return MessageValue::String(string.replace("\0", "")),
+            //             Err(_) => return MessageValue::Null,
+            //         }
+            //     }
+            //     (false, Endian::Big) => {
+            //         for i in 0..*self.len.as_ref().unwrap() * 2 {
+            //             if i % 2 == 0 {
+            //                 data.swap((i * 2) as usize, (i * 2 + 1) as usize);
+            //             }
+            //         }
+            //         match String::from_utf8(data) {
+            //             Ok(string) => return MessageValue::String(string),
+            //             Err(_) => return MessageValue::Null,
+            //         }
+            //     }
+            //     (false, Endian::Little) => match String::from_utf8(data.clone()) {
+            //         Ok(string) => return MessageValue::String(string),
+            //         Err(_) => return MessageValue::Null,
+            //     },
+            // },
+            // Type::Bytes => MessageValue::Bytes(data.clone()),
+            _ => todo!(),
         }
     }
 

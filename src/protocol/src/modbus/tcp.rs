@@ -1,6 +1,6 @@
 use tracing::debug;
 
-use super::{Context, FunctionCode};
+use super::{Context, FunctionCode, ProtocolError};
 
 struct TcpContext {
     transcation_id: u16,
@@ -66,24 +66,27 @@ impl Context for TcpContext {
         &self.buffer[..12]
     }
 
-    fn decode_read(&mut self, n: usize) -> &mut [u8] {
+    fn decode_read(&mut self, n: usize) -> Result<&mut [u8], ProtocolError> {
+        if n == 0 {
+            return Err(ProtocolError::EmptyResp);
+        }
         if n < 9 {
-            todo!()
+            return Err(ProtocolError::DataTooSmall);
         }
         let transcation_id = ((self.buffer[0] as u16) << 8) | (self.buffer[1] as u16);
         if transcation_id != self.transcation_id {
-            todo!()
+            return Err(ProtocolError::TranscationIdMismatch);
         }
 
         if self.buffer[2] != 0 || self.buffer[3] != 0 {
-            todo!()
+            return Err(ProtocolError::ProtocolIdErr);
         }
 
         let len = ((self.buffer[4] as u16) << 8) | (self.buffer[5] as u16);
 
         let unit_id = self.buffer[6];
         if self.unit_id != unit_id {
-            todo!()
+            return Err(ProtocolError::UnitIdMismatch);
         }
 
         let function_code = self.buffer[7];
@@ -93,7 +96,7 @@ impl Context for TcpContext {
 
         let byte_cnt = self.buffer[8];
 
-        &mut self.buffer[9..(9 + byte_cnt as usize)]
+        Ok(&mut self.buffer[9..(9 + byte_cnt as usize)])
     }
     fn encode_write(
         &mut self,

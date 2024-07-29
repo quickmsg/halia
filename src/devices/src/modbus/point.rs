@@ -6,7 +6,7 @@ use common::{
     ref_info::RefInfo,
 };
 use message::{Message, MessageBatch};
-use protocol::modbus::{Context, FunctionCode};
+use protocol::modbus::{Context, FunctionCode, ProtocolError};
 use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt as _, AsyncWriteExt},
@@ -306,10 +306,25 @@ impl Point {
         );
         stream.write_all(req).await?;
         match stream.read(ctx.get_buf()).await {
-            Ok(n) => {
-                debug!("{}", n);
-                debug!("{:?}", ctx.decode_read(n));
-            }
+            Ok(n) => match ctx.decode_read(n) {
+                Ok(mut data) => {
+                    let value = point_conf.data_type.decode(&mut data);
+                    self.value = value.clone().into();
+                    match self.ref_info.get_tx() {
+                        Some(tx) => {
+                            let mut message = Message::default();
+                            message.add(self.conf.base.name.clone(), value);
+                            let mut message_batch = MessageBatch::default();
+                            message_batch.push_message(message);
+                            if let Err(e) = tx.send(message_batch) {
+                                warn!("send err :{:?}", e);
+                            }
+                        }
+                        None => {}
+                    }
+                }
+                Err(_) => todo!(),
+            },
             Err(e) => {
                 debug!("{:?}", e);
             }
