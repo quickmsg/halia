@@ -8,6 +8,7 @@ use protocol::modbus::{tcp, Context, FunctionCode};
 use serde_json::json;
 use sink::Sink;
 use std::{
+    io,
     net::SocketAddr,
     str::FromStr,
     sync::{
@@ -17,8 +18,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncReadExt as _, AsyncWriteExt},
-    net::TcpStream,
     select,
     sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
@@ -220,7 +219,7 @@ impl Modbus {
         let handle = tokio::spawn(async move {
             loop {
                 match Modbus::connect(&modbus_conf).await {
-                    Ok((mut ctx, mut stream)) => {
+                    Ok(mut ctx) => {
                         for point in points.write().await.iter_mut() {
                             point.start(read_tx.clone()).await;
                         }
@@ -234,7 +233,7 @@ impl Modbus {
                                 wpe = write_rx.recv() => {
                                     debug!("here");
                                     if let Some(wpe) = wpe {
-                                        if write_value(&mut stream, &mut ctx, wpe).await.is_err() {
+                                        if write_value(&mut ctx, wpe).await.is_err() {
                                             break
                                         }
                                     }
@@ -248,7 +247,7 @@ impl Modbus {
                                         match points.write().await.iter_mut().find(|point| point.id == point_id) {
                                             Some(point) => {
                                                 let now = Instant::now();
-                                                if let Err(_) = point.read(&mut stream, &mut ctx).await {
+                                                if let Err(_) = point.read(&mut ctx).await {
                                                     break
                                                 }
                                                 rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
@@ -319,16 +318,15 @@ impl Modbus {
         Ok(())
     }
 
-    async fn connect(conf: &ModbusConf) -> HaliaResult<(impl Context, TcpStream)> {
+    async fn connect(conf: &ModbusConf) -> io::Result<impl Context> {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
                 let ethernet = conf.ethernet.as_ref().unwrap();
                 let socket_addr: SocketAddr = format!("{}:{}", ethernet.host, ethernet.port)
                     .parse()
                     .unwrap();
-                let transport = TcpStream::connect(socket_addr).await?;
                 match ethernet.encode {
-                    Encode::Tcp => Ok((tcp::new(), transport)),
+                    Encode::Tcp => tcp::new(socket_addr).await,
                     _ => todo!(), // Encode::RtuOverTcp => Ok(rtu::attach(transport)),
                 }
             }
@@ -644,7 +642,7 @@ impl WritePointEvent {
         value: serde_json::Value,
     ) -> HaliaResult<Self> {
         match area {
-            Area::InputDiscrete | Area::InputRegisters => {
+            Area::DiscretesInput | Area::InputRegisters => {
                 return Err(HaliaError::Common("区域不支持写入操作".to_owned()));
             }
             _ => {}
@@ -667,11 +665,7 @@ impl WritePointEvent {
     }
 }
 
-async fn write_value(
-    stream: &mut TcpStream,
-    ctx: &mut impl Context,
-    wpe: WritePointEvent,
-) -> HaliaResult<()> {
+async fn write_value(ctx: &mut impl Context, wpe: WritePointEvent) -> HaliaResult<()> {
     let function_code = match (wpe.area, wpe.data_type.typ) {
         (Area::Coils, Type::Bool) => FunctionCode::WriteSingleCoil,
         (Area::HoldingRegisters, Type::Bool)
@@ -692,14 +686,8 @@ async fn write_value(
         _ => unreachable!(),
     };
 
-    let req = ctx.encode_write(wpe.slave, wpe.address, function_code, &wpe.data);
-    stream.write_all(req).await?;
-    match stream.read(ctx.get_buf()).await {
-        Ok(n) => {
-            debug!("{:?}", ctx.get_buf());
-        }
-        Err(_) => todo!(),
-    }
+    // ctx.write(function_code, wpe.slave, wpe.address, &wpe.data)
+    //     .await?;
 
     Ok(())
 }

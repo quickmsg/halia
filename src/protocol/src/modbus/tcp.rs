@@ -1,12 +1,18 @@
-use tracing::debug;
+use std::{io, net::SocketAddr};
 
-use super::{Context, FunctionCode, ProtocolError};
+use tokio::{
+    io::{AsyncReadExt as _, AsyncWriteExt},
+    net::TcpStream,
+};
+
+use super::{Context, Error, FunctionCode, ProtocolError};
 
 struct TcpContext {
     transcation_id: u16,
     function_code: FunctionCode,
     unit_id: u8,
     buffer: [u8; 255],
+    stream: TcpStream,
 }
 
 impl TcpContext {
@@ -17,29 +23,9 @@ impl TcpContext {
             self.transcation_id = 0;
         }
     }
-}
 
-pub fn new() -> impl Context {
-    TcpContext {
-        function_code: FunctionCode::MaskWriteRegister,
-        transcation_id: 0,
-        unit_id: 0,
-        buffer: [0; 255],
-    }
-}
-
-impl Context for TcpContext {
-    fn get_buf(&mut self) -> &mut [u8] {
-        &mut self.buffer
-    }
-
-    fn encode_read(
-        &mut self,
-        slave: u8,
-        addr: u16,
-        function_code: FunctionCode,
-        quantity: u16,
-    ) -> &[u8] {
+    // 12
+    fn encode_read(&mut self, function_code: FunctionCode, slave: u8, addr: u16, quantity: u16) {
         self.update_transcation_id();
 
         self.buffer[0] = (self.transcation_id >> 8) as u8;
@@ -62,11 +48,9 @@ impl Context for TcpContext {
 
         self.buffer[10] = (quantity >> 8) as u8;
         self.buffer[11] = (quantity & 0x00ff) as u8;
-        debug!("{:?}", &self.buffer[..12]);
-        &self.buffer[..12]
     }
 
-    fn decode_read(&mut self, n: usize) -> Result<&mut [u8], ProtocolError> {
+    fn decode_read(&mut self, n: usize) -> Result<usize, ProtocolError> {
         if n == 0 {
             return Err(ProtocolError::EmptyResp);
         }
@@ -95,8 +79,9 @@ impl Context for TcpContext {
         // }
 
         let byte_cnt = self.buffer[8];
-
-        Ok(&mut self.buffer[9..(9 + byte_cnt as usize)])
+        Ok(byte_cnt as usize)
+        // Ok(&mut self.buffer[9..(9 + byte_cnt as usize)])
+        //
     }
 
     fn encode_write(
@@ -216,5 +201,50 @@ impl Context for TcpContext {
         // 6.	Reference Address (2 bytes): 寄存器地址，与请求一致。
         // 7.	And Mask (2 bytes): 与掩码，与请求一致。
         // 8.	Or Mask (2 bytes): 或掩码，与请求一致。
+    }
+}
+
+pub async fn new(addr: SocketAddr) -> io::Result<impl Context> {
+    let stream = TcpStream::connect(addr).await?;
+
+    Ok(TcpContext {
+        stream,
+        function_code: FunctionCode::MaskWriteRegister,
+        transcation_id: 0,
+        unit_id: 0,
+        buffer: [0; 255],
+    })
+}
+
+impl Context for TcpContext {
+    async fn read(
+        &mut self,
+        function_code: FunctionCode,
+        slave: u8,
+        addr: u16,
+        quantity: u16,
+    ) -> Result<&mut [u8], Error> {
+        self.encode_read(function_code, slave, addr, quantity);
+        if let Err(e) = self.stream.write_all(&self.buffer[..12]).await {
+            return Err(Error::Transport(e));
+        }
+
+        match self.stream.read(&mut self.buffer).await {
+            Ok(n) => match self.decode_read(n) {
+                Ok(n) => Ok(&mut self.buffer[9..9 + n]),
+                Err(e) => Err(Error::Protocol(e)),
+            },
+            Err(e) => Err(Error::Transport(e)),
+        }
+    }
+
+    async fn write(
+        &mut self,
+        function_code: FunctionCode,
+        slave: u8,
+        addr: u16,
+        value: &[u8],
+    ) -> Result<(), Error> {
+        todo!()
     }
 }

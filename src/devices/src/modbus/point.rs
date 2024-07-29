@@ -9,8 +9,6 @@ use message::{Message, MessageBatch};
 use protocol::modbus::{Context, FunctionCode};
 use serde_json::Value;
 use tokio::{
-    io::{AsyncReadExt as _, AsyncWriteExt},
-    net::TcpStream,
     select,
     sync::{broadcast, mpsc},
     task::JoinHandle,
@@ -46,7 +44,7 @@ impl Point {
             None => (Uuid::new_v4(), true),
         };
 
-        let quantity = match req.point.data_type.get_quantity() {
+        let quantity = match req.ext.data_type.get_quantity() {
             Some(quantity) => quantity,
             None => return Err(HaliaError::ConfErr),
         };
@@ -83,7 +81,6 @@ impl Point {
     }
 
     pub async fn start(&mut self, read_tx: mpsc::Sender<Uuid>) {
-        debug!("here");
         if self.on {
             return;
         } else {
@@ -93,7 +90,7 @@ impl Point {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        self.event_loop(self.conf.point.interval, stop_signal_rx, read_tx)
+        self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx)
             .await;
     }
 
@@ -150,10 +147,10 @@ impl Point {
         .await?;
 
         let mut restart = false;
-        if self.conf.point != req.point {
+        if self.conf.ext != req.ext {
             restart = true;
         }
-        self.quantity = match req.point.data_type.get_quantity() {
+        self.quantity = match req.ext.data_type.get_quantity() {
             Some(quantity) => quantity,
             None => return Err(HaliaError::ConfErr),
         };
@@ -168,7 +165,7 @@ impl Point {
                 .unwrap();
 
             let (stop_signal_rx, read_tx) = self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(self.conf.point.interval, stop_signal_rx, read_tx)
+            self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx)
                 .await;
         }
 
@@ -184,64 +181,44 @@ impl Point {
         Ok(())
     }
 
-    pub async fn read(
-        &mut self,
-        stream: &mut TcpStream,
-        ctx: &mut impl Context,
-    ) -> HaliaResult<()> {
-        let point_conf = &self.conf.point;
-
-        let function_code = match point_conf.area {
-            Area::InputDiscrete => FunctionCode::ReadDiscreteInputs,
+    pub async fn read(&mut self, ctx: &mut impl Context) -> HaliaResult<()> {
+        let function_code = match self.conf.ext.area {
+            Area::DiscretesInput => FunctionCode::ReadDiscreteInputs,
             Area::Coils => FunctionCode::ReadCoils,
             Area::InputRegisters => FunctionCode::ReadInputRegisters,
             Area::HoldingRegisters => FunctionCode::ReadHoldingRegisters,
         };
 
-        let req = ctx.encode_read(
-            point_conf.slave,
-            point_conf.address,
-            function_code,
-            self.quantity,
-        );
-        stream.write_all(req).await?;
-        match stream.read(ctx.get_buf()).await {
-            Ok(n) => match ctx.decode_read(n) {
-                Ok(mut data) => {
-                    let value = point_conf.data_type.decode(&mut data);
-                    self.value = value.clone().into();
-                    match self.ref_info.get_tx() {
-                        Some(tx) => {
-                            let mut message = Message::default();
-                            message.add(self.conf.base.name.clone(), value);
-                            let mut message_batch = MessageBatch::default();
-                            message_batch.push_message(message);
-                            if let Err(e) = tx.send(message_batch) {
-                                warn!("send err :{:?}", e);
-                            }
+        match ctx
+            .read(
+                function_code,
+                self.conf.ext.slave,
+                self.conf.ext.address,
+                self.quantity,
+            )
+            .await
+        {
+            Ok(mut data) => {
+                let value = self.conf.ext.data_type.decode(&mut data);
+                self.value = value.clone().into();
+                match self.ref_info.get_tx() {
+                    Some(tx) => {
+                        let mut message = Message::default();
+                        message.add(self.conf.base.name.clone(), value);
+                        let mut message_batch = MessageBatch::default();
+                        message_batch.push_message(message);
+                        if let Err(e) = tx.send(message_batch) {
+                            warn!("send err :{:?}", e);
                         }
-                        None => {}
                     }
+                    None => {}
                 }
-                Err(_) => todo!(),
-            },
-            Err(e) => {
-                debug!("{:?}", e);
             }
+            Err(e) => match e {
+                protocol::modbus::Error::Transport(_) => todo!(),
+                protocol::modbus::Error::Protocol(_) => todo!(),
+            },
         }
-
-        // match self.ref_info.get_tx() {
-        //     Some(tx) => {
-        //         let mut message = Message::default();
-        //         message.add(self.conf.base.name.clone(), message_value);
-        //         let mut message_batch = MessageBatch::default();
-        //         message_batch.push_message(message);
-        //         if let Err(e) = tx.send(message_batch) {
-        //             warn!("send err :{:?}", e);
-        //         }
-        //     }
-        //     None => {}
-        // }
 
         Ok(())
     }

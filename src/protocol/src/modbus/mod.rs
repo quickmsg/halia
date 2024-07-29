@@ -1,3 +1,5 @@
+use std::io;
+
 pub mod tcp;
 
 #[derive(PartialEq, Clone)]
@@ -39,6 +41,11 @@ impl From<FunctionCode> for u8 {
     }
 }
 
+pub enum Error {
+    Transport(io::Error),
+    Protocol(ProtocolError),
+}
+
 pub enum ProtocolError {
     EmptyResp,
     DataTooSmall,
@@ -47,22 +54,20 @@ pub enum ProtocolError {
     UnitIdMismatch,
 }
 
-pub trait Context {
-    fn get_buf(&mut self) -> &mut [u8];
-    fn encode_read(
+pub trait Context: Send + Sync {
+    async fn read(
         &mut self,
+        function_code: FunctionCode,
         slave: u8,
         addr: u16,
-        function_code: FunctionCode,
         quantity: u16,
-    ) -> &[u8];
-    fn decode_read(&mut self, n: usize) -> Result<&mut [u8], ProtocolError>;
-    fn encode_write(
+    ) -> Result<&mut [u8], Error>;
+
+    async fn write(
         &mut self,
+        function_code: FunctionCode,
         slave: u8,
         addr: u16,
-        function_code: FunctionCode,
         value: &[u8],
-    ) -> &[u8];
-    fn decode_write(&mut self);
+    ) -> Result<(), Error>;
 }

@@ -73,7 +73,7 @@ pub struct CreateUpdatePointReq {
     #[serde(flatten)]
     pub base: BaseConf,
     #[serde(flatten)]
-    pub point: PointConf,
+    pub ext: PointConf,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -691,7 +691,7 @@ pub enum Endian {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Area {
-    InputDiscrete,
+    DiscretesInput,
     Coils, // 可读写
     InputRegisters,
     HoldingRegisters, // 可读写
@@ -702,7 +702,7 @@ impl TryFrom<&str> for Area {
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
         match value {
-            "input_discrete" => Ok(Area::InputDiscrete),
+            "input_discrete" => Ok(Area::DiscretesInput),
             "coils" => Ok(Area::Coils),
             "input_registers" => Ok(Area::InputRegisters),
             "holding_registers" => Ok(Area::HoldingRegisters),
