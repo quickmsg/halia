@@ -23,6 +23,8 @@ mod sink;
 
 pub struct HttpClient {
     pub id: Uuid,
+
+    on: bool,
     conf: CreateUpdateHttpClientReq,
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
@@ -48,6 +50,7 @@ impl HttpClient {
         Ok(Self {
             id: app_id,
             conf: req,
+            on: false,
             sinks: vec![],
             stop_signal_tx: None,
         })
@@ -74,7 +77,7 @@ impl HttpClient {
     }
 
     pub async fn update(&mut self, req: CreateUpdateHttpClientReq) -> HaliaResult<()> {
-        persistence::apps::update_app(&self.id, serde_json::to_string(&req).unwrap()).await?;
+        persistence::apps::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -84,6 +87,20 @@ impl HttpClient {
         Ok(())
     }
 
+    pub async fn start(&mut self) {
+        match self.on {
+            true => return,
+            false => self.on = true,
+        }
+    }
+
+    pub async fn stop(&mut self) {
+        match self.on {
+            true => self.on = false,
+            false => return,
+        }
+    }
+
     pub async fn delete(&mut self) -> HaliaResult<()> {
         todo!()
     }
@@ -91,7 +108,8 @@ impl HttpClient {
     fn search(&self) -> SearchAppsItemResp {
         SearchAppsItemResp {
             id: self.id,
-            r#type: TYPE,
+            on: self.on,
+            typ: TYPE,
             conf: serde_json::to_value(&self.conf).unwrap(),
         }
     }

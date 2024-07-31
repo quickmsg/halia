@@ -34,6 +34,8 @@ mod source;
 
 pub struct MqttClient {
     pub id: Uuid,
+
+    on: bool,
     conf: CreateUpdateMqttClientReq,
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
@@ -63,6 +65,7 @@ impl MqttClient {
         Ok(Self {
             id: app_id,
             conf: req,
+            on: false,
             sources: Arc::new(RwLock::new(vec![])),
             sinks: vec![],
             client_v311: None,
@@ -109,7 +112,7 @@ impl MqttClient {
     }
 
     pub async fn update(&mut self, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
-        persistence::apps::update_app(&self.id, serde_json::to_string(&req).unwrap()).await?;
+        persistence::apps::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -143,11 +146,18 @@ impl MqttClient {
         Ok(())
     }
 
-    async fn start(&mut self) {
+    pub async fn start(&mut self) -> HaliaResult<()> {
+        match self.on {
+            true => return Ok(()),
+            false => self.on = true,
+        }
+
         match self.conf.ext.version {
             types::apps::mqtt_client::Version::V311 => self.start_v311().await,
             types::apps::mqtt_client::Version::V50 => self.start_v50().await,
         }
+
+        Ok(())
     }
 
     async fn start_v311(&mut self) {
@@ -309,7 +319,7 @@ impl MqttClient {
         });
     }
 
-    async fn stop(&mut self) {
+    pub async fn stop(&mut self) -> HaliaResult<()> {
         // TODO 验证引用
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
@@ -325,6 +335,8 @@ impl MqttClient {
             types::apps::mqtt_client::Version::V311 => self.client_v311 = None,
             types::apps::mqtt_client::Version::V50 => self.client_v50 = None,
         }
+
+        Ok(())
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
@@ -334,7 +346,8 @@ impl MqttClient {
     fn search(&self) -> SearchAppsItemResp {
         SearchAppsItemResp {
             id: self.id,
-            r#type: TYPE,
+            on: self.on,
+            typ: TYPE,
             conf: serde_json::to_value(&self.conf).unwrap(),
         }
     }

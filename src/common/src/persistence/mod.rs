@@ -4,12 +4,14 @@ use std::{
     io,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
+    str::pattern::Pattern,
 };
 
 use tokio::{
     fs::OpenOptions,
     io::{AsyncReadExt, AsyncWriteExt},
 };
+use tracing::debug;
 use uuid::Uuid;
 
 pub mod apps;
@@ -18,7 +20,6 @@ pub mod message;
 pub mod rule;
 
 static ROOT_DIR: &str = "storage";
-static DEVICE_DIR: &str = "devices";
 static RULE_DIR: &str = "rules";
 pub static DELIMITER: char = '|';
 
@@ -94,6 +95,64 @@ async fn update(path: impl AsRef<Path>, id: &Uuid, data: &str) -> Result<(), io:
             if line[..split_pos].parse::<Uuid>().expect("文件") == *id {
                 *line = new_line.as_str();
             }
+        }
+    }
+
+    let buf = lines.join("\n");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&path)
+        .await?;
+    file.write_all(buf.as_bytes()).await?;
+    Ok(())
+}
+
+async fn update_segment(
+    path: impl AsRef<Path>,
+    id: &Uuid,
+    pos: usize,
+    data: &str,
+) -> Result<(), io::Error> {
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .await?;
+
+    let mut buf = String::new();
+    file.read_to_string(&mut buf).await?;
+
+    let mut new_line = String::new();
+    let mut lines: Vec<&str> = buf.split("\n").collect();
+    let id_str = id.to_string();
+    debug!("{}", id_str);
+    for line in lines.iter_mut() {
+        debug!("{}", line);
+        if line.len() == 0 {
+            continue;
+        }
+        if line.starts_with(&id_str) {
+            let fields: Vec<&str> = line.split(DELIMITER).collect();
+            debug!("{:?}", fields);
+            for n in 0..pos {
+                debug!("{}", n);
+                new_line.push_str(fields[n]);
+                new_line.push(DELIMITER);
+            }
+
+            debug!("{}", data);
+            new_line.push_str(data);
+
+            if pos < fields.len() {
+                for n in pos + 1..fields.len() {
+                    new_line.push(DELIMITER);
+                    new_line.push_str(fields[n]);
+                }
+            }
+
+            *line = new_line.as_str();
+            break;
         }
     }
 

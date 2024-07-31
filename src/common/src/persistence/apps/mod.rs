@@ -6,6 +6,8 @@ use std::{
 use tokio::fs;
 use uuid::Uuid;
 
+use super::Status;
+
 pub mod http_client;
 pub mod mqtt_client;
 
@@ -29,6 +31,10 @@ pub async fn read_apps() -> Result<Vec<String>, io::Error> {
     super::read(get_app_file_path()).await
 }
 
-pub async fn update_app(app_id: &Uuid, data: String) -> Result<(), io::Error> {
-    super::update(get_app_file_path(), app_id, &data).await
+pub async fn update_app_conf(app_id: &Uuid, data: String) -> Result<(), io::Error> {
+    super::update_segment(get_app_file_path(), app_id, 3, &data).await
+}
+
+pub async fn update_app_status(app_id: &Uuid, status: Status) -> Result<(), io::Error> {
+    super::update_segment(get_app_file_path(), app_id, 2, &status.to_string()).await
 }

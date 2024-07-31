@@ -285,12 +285,14 @@ impl Modbus {
 
         for point in self.points.read().await.iter() {
             if !point.can_stop() {
+                debug!("here");
                 return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
             }
         }
 
         for sink in &self.sinks {
             if !sink.can_stop() {
+                debug!("here");
                 return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
             }
         }

@@ -64,16 +64,20 @@ impl AppManager {
                     if data.len() == 0 {
                         continue;
                     }
-                    debug!("{}", data);
                     let items: Vec<&str> = data.split(persistence::DELIMITER).collect();
-                    debug!("{:?} {}", items, items.len());
-                    assert!(items.len() == 3, "数据错误");
+                    assert_eq!(items.len(), 4);
                     let app_id = Uuid::from_str(items[0]).unwrap();
                     match items[1] {
                         mqtt_client::TYPE => {
                             GLOBAL_MQTT_CLIENT_MANAGER
-                                .create(Some(app_id), serde_json::from_str(items[2]).unwrap())
+                                .create(Some(app_id), serde_json::from_str(items[3]).unwrap())
                                 .await?;
+                            match items[2] {
+                                "1" => {
+                                    GLOBAL_MQTT_CLIENT_MANAGER.start(app_id).await.unwrap();
+                                }
+                                _ => {}
+                            }
                         }
                         _ => {}
                     }

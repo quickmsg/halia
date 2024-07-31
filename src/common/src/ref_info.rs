@@ -31,7 +31,10 @@ impl RefInfo {
     }
 
     pub fn can_stop(&self) -> bool {
-        todo!()
+        self.ref_rules
+            .iter()
+            .find(|(_, status)| *status == true)
+            .is_none()
     }
 
     pub fn can_delete(&self) -> bool {
