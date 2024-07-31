@@ -165,14 +165,16 @@ impl API {
     }
 
     pub fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        self.ref_info.subscribe(rule_id)
+        // self.ref_info.subscribe(rule_id)
+        todo!()
     }
 
     pub fn unsubscribe(&mut self, rule_id: &Uuid) {
-        self.ref_info.unsubscribe(rule_id);
+        // self.ref_info.unsubscribe(rule_id);
+        // todo!()
     }
 
-    pub fn remove_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.remove_ref(rule_id)
+    pub fn del_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.del_ref(rule_id);
     }
 }

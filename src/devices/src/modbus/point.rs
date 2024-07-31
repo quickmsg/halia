@@ -31,6 +31,7 @@ pub struct Point {
     err: Option<String>,
 
     ref_info: RefInfo,
+    mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
 impl Point {
@@ -66,6 +67,7 @@ impl Point {
             value: Value::Null,
             stop_signal_tx: None,
             ref_info: RefInfo::new(),
+            mb_tx: None,
             join_handle: None,
             err: None,
         })
@@ -75,7 +77,7 @@ impl Point {
         SearchPointsItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
-            ref_rules: self.ref_info.get_ref_rules(),
+            // ref_rules: self.ref_info.get_ref_rules(),
             value: self.value.clone(),
         }
     }
@@ -201,7 +203,7 @@ impl Point {
             Ok(mut data) => {
                 let value = self.conf.ext.data_type.decode(&mut data);
                 self.value = value.clone().into();
-                match self.ref_info.get_tx() {
+                match &self.mb_tx {
                     Some(tx) => {
                         let mut message = Message::default();
                         message.add(self.conf.base.name.clone(), value);
@@ -213,29 +215,42 @@ impl Point {
                     }
                     None => {}
                 }
+                Ok(())
             }
             Err(e) => match e {
-                protocol::modbus::ModbusError::Transport(e) => return Err(e),
-                protocol::modbus::ModbusError::Protocol(e) => todo!(),
+                protocol::modbus::ModbusError::Transport(e) => Err(e),
+                protocol::modbus::ModbusError::Protocol(e) => {
+                    warn!("{}", e);
+                    Ok(())
+                }
             },
         }
-
-        Ok(())
     }
 
     pub fn add_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.add_ref(rule_id);
     }
 
-    pub fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        self.ref_info.subscribe(rule_id)
+    pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+        self.ref_info.active_ref(rule_id);
+        match &self.mb_tx {
+            Some(tx) => tx.subscribe(),
+            None => {
+                let (tx, rx) = broadcast::channel(16);
+                self.mb_tx = Some(tx);
+                rx
+            }
+        }
     }
 
-    pub fn unsubscribe(&mut self, rule_id: &Uuid) {
-        self.ref_info.unsubscribe(rule_id)
+    pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
+        self.ref_info.deactive_ref(rule_id);
+        if self.ref_info.can_stop() {
+            self.mb_tx = None;
+        }
     }
 
-    pub fn remove_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.remove_ref(rule_id)
+    pub fn del_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.del_ref(rule_id)
     }
 }

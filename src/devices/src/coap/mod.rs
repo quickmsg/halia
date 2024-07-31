@@ -230,9 +230,9 @@ impl Coap {
         }
     }
 
-    pub async fn remove_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn del_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.remove_ref(rule_id)),
+            Some(api) => Ok(api.del_ref(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }

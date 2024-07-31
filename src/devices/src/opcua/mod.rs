@@ -409,7 +409,7 @@ impl Opcua {
         }
     }
 
-    async fn subscribe(
+    async fn get_group_mb_rx(
         &self,
         group_id: &Uuid,
         rule_id: &Uuid,
@@ -421,12 +421,12 @@ impl Opcua {
             .iter_mut()
             .find(|group| group.id == *group_id)
         {
-            Some(group) => Ok(group.subscribe(rule_id)),
+            Some(group) => Ok(group.get_mb_rx(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    async fn unsubscribe(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    async fn del_group_mb_rx(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -434,12 +434,12 @@ impl Opcua {
             .iter_mut()
             .find(|group| group.id == *group_id)
         {
-            Some(group) => Ok(group.unsubscribe(rule_id)),
+            Some(group) => Ok(group.del_mb_rx(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn remove_subscribe_ref(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn del_group_ref(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .groups
             .write()
@@ -447,7 +447,7 @@ impl Opcua {
             .iter_mut()
             .find(|group| group.id == *group_id)
         {
-            Some(group) => Ok(group.remove_ref(rule_id)),
+            Some(group) => Ok(group.del_ref(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }

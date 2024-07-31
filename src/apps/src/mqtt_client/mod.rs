@@ -346,7 +346,7 @@ impl MqttClient {
         }
     }
 
-    async fn subscribe(
+    async fn get_source_mb_rx(
         &mut self,
         source_id: &Uuid,
         rule_id: &Uuid,
@@ -358,7 +358,7 @@ impl MqttClient {
             .iter_mut()
             .find(|source| source.id == *source_id)
         {
-            Some(source) => source.subscribe(rule_id),
+            Some(source) => source.get_mb_rx(rule_id),
             None => return Err(HaliaError::NotFound),
         };
 
@@ -367,7 +367,7 @@ impl MqttClient {
         Ok(rx)
     }
 
-    async fn unsubscribe(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    async fn del_source_mb_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .sources
             .write()
@@ -376,8 +376,7 @@ impl MqttClient {
             .find(|source| source.id == *source_id)
         {
             Some(source) => {
-                source.unsubscribe(rule_id);
-                self.ref_cnt -= 1;
+                source.del_mb_rx(rule_id);
                 Ok(())
             }
             None => Err(HaliaError::NotFound),

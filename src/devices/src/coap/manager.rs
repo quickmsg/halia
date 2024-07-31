@@ -167,14 +167,14 @@ impl Manager {
         }
     }
 
-    pub async fn remove_api_ref(
+    pub async fn del_api_ref(
         &self,
         device_id: &Uuid,
         api_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.remove_api_ref(api_id, rule_id).await,
+            Some(mut device) => device.del_api_ref(api_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }

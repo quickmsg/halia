@@ -298,15 +298,16 @@ impl Group {
         self.ref_info.add_ref(rule_id)
     }
 
-    pub fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        self.ref_info.subscribe(rule_id)
+    pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+        // self.ref_info.subscribe(rule_id)
+        todo!()
     }
 
-    pub fn unsubscribe(&mut self, rule_id: &Uuid) {
-        self.ref_info.unsubscribe(rule_id)
+    pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
+        // self.ref_info.unsubscribe(rule_id)
     }
 
-    pub fn remove_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.remove_ref(rule_id)
+    pub fn del_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.del_ref(rule_id)
     }
 }

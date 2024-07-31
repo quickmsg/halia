@@ -45,6 +45,7 @@ mod sink;
 #[derive(Debug)]
 pub struct Modbus {
     pub id: Uuid,
+
     conf: CreateUpdateModbusReq,
 
     points: Arc<RwLock<Vec<Point>>>,
@@ -104,8 +105,8 @@ impl Modbus {
                     if data.len() == 0 {
                         continue;
                     }
+                    // TODO not collect
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    debug!("{:?}", items);
                     assert_eq!(items.len(), 2);
 
                     let point_id = Uuid::from_str(items[0]).unwrap();
@@ -141,7 +142,7 @@ impl Modbus {
             id: self.id.clone(),
             r#type: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
-            on: self.stop_signal_tx.is_some(),
+            on: self.on,
             err: self.err.clone(),
             conf: json!(&self.conf),
         }
@@ -152,18 +153,16 @@ impl Modbus {
             .await?;
 
         let mut restart = false;
-        if self.conf.modbus != req.modbus {
+        if self.conf.ext != req.ext {
             restart = true;
         }
 
         self.conf = req;
-        if restart && self.stop_signal_tx.is_some() {
-            self.stop_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(())
-                .await
-                .unwrap();
+        if restart && self.on {
+            match &self.stop_signal_tx {
+                Some(tx) => tx.send(()).await.unwrap(),
+                None => unreachable!(),
+            }
 
             let (stop_signal_rx, write_rx, read_rx) =
                 self.join_handle.take().unwrap().await.unwrap();
@@ -209,10 +208,10 @@ impl Modbus {
         mut read_rx: mpsc::Receiver<Uuid>,
         mut write_rx: mpsc::Receiver<WritePointEvent>,
     ) {
-        let modbus_conf = self.conf.modbus.clone();
-        let interval = self.conf.modbus.interval;
+        let modbus_conf = self.conf.ext.clone();
+        let interval = self.conf.ext.interval;
         let points = self.points.clone();
-        let reconnect = self.conf.modbus.reconnect;
+        let reconnect = self.conf.ext.reconnect;
 
         let rtt = self.rtt.clone();
         let read_tx = self.read_tx.as_ref().unwrap().clone();
@@ -231,7 +230,6 @@ impl Modbus {
                                 }
 
                                 wpe = write_rx.recv() => {
-                                    debug!("here");
                                     if let Some(wpe) = wpe {
                                         if write_value(&mut ctx, wpe).await.is_err() {
                                             break
@@ -282,10 +280,9 @@ impl Modbus {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        if !self.on {
-            return Ok(());
-        } else {
-            self.on = false;
+        match self.on {
+            true => self.on = false,
+            false => return Ok(()),
         }
         debug!("设备停止");
 
@@ -294,6 +291,7 @@ impl Modbus {
         for point in self.points.write().await.iter_mut() {
             point.stop().await;
         }
+
         self.stop_signal_tx
             .as_ref()
             .unwrap()
@@ -310,7 +308,7 @@ impl Modbus {
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        if self.stop_signal_tx.is_some() {
+        if self.on {
             return Err(HaliaError::DeviceRunning);
         }
         debug!("设备删除");
@@ -420,10 +418,9 @@ impl Modbus {
         if !self.on {
             return Err(HaliaError::DeviceStopped);
         }
-        // TODO
-        // if self.err.is_some() {
-        //     return Err(HaliaError::De);
-        // }
+        if self.err.is_some() {
+            return Err(HaliaError::DeviceConnectionError("xx".to_owned()));
+        }
 
         match self
             .points
@@ -470,7 +467,7 @@ impl Modbus {
         Ok(())
     }
 
-    pub async fn add_subscribe_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn add_point_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -483,7 +480,7 @@ impl Modbus {
         }
     }
 
-    pub async fn subscribe(
+    pub async fn get_point_mb_rx(
         &mut self,
         point_id: &Uuid,
         rule_id: &Uuid,
@@ -498,12 +495,12 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.subscribe(rule_id)),
+            Some(point) => Ok(point.get_mb_rx(rule_id)),
             None => return Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unsubscribe(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn del_point_mb_rx(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -511,16 +508,12 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.unsubscribe(rule_id)),
+            Some(point) => Ok(point.del_mb_rx(rule_id)),
             None => return Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn remove_subscribe_ref(
-        &mut self,
-        point_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
+    pub async fn del_point_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .points
             .write()
@@ -528,7 +521,7 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.remove_ref(rule_id)),
+            Some(point) => Ok(point.del_ref(rule_id)),
             None => return Err(HaliaError::NotFound),
         }
     }
@@ -591,34 +584,34 @@ impl Modbus {
         }
     }
 
-    pub fn pre_publish(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.pre_publish(rule_id)),
+            Some(sink) => Ok(sink.add_ref(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub fn pre_unpublish(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.pre_unpublish(rule_id)),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub fn publish(
+    pub fn get_sink_mb_tx(
         &mut self,
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.publish(rule_id)),
+            Some(sink) => Ok(sink.get_mb_tx(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub fn unpublish(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.unpublish(rule_id)),
+            Some(sink) => Ok(sink.del_mb_tx(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.del_ref(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }
@@ -686,8 +679,11 @@ async fn write_value(ctx: &mut impl Context, wpe: WritePointEvent) -> HaliaResul
         _ => unreachable!(),
     };
 
-    // ctx.write(function_code, wpe.slave, wpe.address, &wpe.data)
-    //     .await?;
-
-    Ok(())
+    match ctx
+        .write(function_code, wpe.slave, wpe.address, &wpe.data)
+        .await
+    {
+        Ok(_) => todo!(),
+        Err(_) => todo!(),
+    }
 }

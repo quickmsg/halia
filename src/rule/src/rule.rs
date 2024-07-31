@@ -39,7 +39,7 @@ impl Rule {
                             let source: modbus::Source =
                                 serde_json::from_value(source_node.conf.clone())?;
                             if let Err(e) = GLOBAL_MODBUS_MANAGER
-                                .add_subscribe_ref(&source.device_id, &source.source_id, &id)
+                                .add_point_ref(&source.device_id, &source.source_id, &id)
                                 .await
                             {
                                 todo!()
@@ -128,7 +128,11 @@ impl Rule {
                             for _ in 0..cnt {
                                 rxs.push(
                                     GLOBAL_MODBUS_MANAGER
-                                        .subscribe(&source.device_id, &source.source_id, &self.id)
+                                        .get_point_mb_rx(
+                                            &source.device_id,
+                                            &source.source_id,
+                                            &self.id,
+                                        )
                                         .await
                                         .unwrap(),
                                 )
@@ -151,7 +155,11 @@ impl Rule {
                             for _ in 0..cnt {
                                 rxs.push(
                                     GLOBAL_MQTT_CLIENT_MANAGER
-                                        .subscribe(&source.app_id, &source.source_id, &self.id)
+                                        .get_source_mb_rx(
+                                            &source.app_id,
+                                            &source.source_id,
+                                            &self.id,
+                                        )
                                         .await
                                         .unwrap(),
                                 )
@@ -240,7 +248,7 @@ impl Rule {
                                     let sink: types::rules::devices::modbus::Sink =
                                         serde_json::from_value(sink_node.conf.clone())?;
                                     GLOBAL_MODBUS_MANAGER
-                                        .publish(&sink.device_id, &sink.sink_id, &self.id)
+                                        .get_sink_mb_tx(&sink.device_id, &sink.sink_id, &self.id)
                                         .await
                                         .unwrap()
                                 }

@@ -1,4 +1,8 @@
-use common::{error::HaliaResult, persistence};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+    ref_info::RefInfo,
+};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{debug, warn};
@@ -20,7 +24,7 @@ pub struct Sink {
     pub on: bool,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    handle: Option<
+    join_handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
             mpsc::Receiver<MessageBatch>,
@@ -28,9 +32,8 @@ pub struct Sink {
         )>,
     >,
 
-    ref_rules: Vec<Uuid>,
-    active_ref_rules: Vec<Uuid>,
-    publish_tx: Option<mpsc::Sender<MessageBatch>>,
+    ref_info: RefInfo,
+    mb_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 impl Sink {
@@ -58,10 +61,9 @@ impl Sink {
             on: false,
             conf: req,
             stop_signal_tx: None,
-            handle: None,
-            ref_rules: vec![],
-            active_ref_rules: vec![],
-            publish_tx: None,
+            join_handle: None,
+            ref_info: RefInfo::new(),
+            mb_tx: None,
         })
     }
 
@@ -69,8 +71,6 @@ impl Sink {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
-            ref_rules: self.ref_rules.clone(),
-            active_ref_rules: self.active_ref_rules.clone(),
         }
     }
 
@@ -96,7 +96,7 @@ impl Sink {
                 .await
                 .unwrap();
 
-            let (stop_signal_rx, publish_rx, tx) = self.handle.take().unwrap().await.unwrap();
+            let (stop_signal_rx, publish_rx, tx) = self.join_handle.take().unwrap().await.unwrap();
             self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.sink.clone())
                 .await;
         }
@@ -104,9 +104,8 @@ impl Sink {
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        if self.ref_rules.len() > 0 || self.active_ref_rules.len() > 0 {
-            // TODO
-            return Err(common::error::HaliaError::ConfErr);
+        if !self.ref_info.can_delete() {
+            return Err(HaliaError::Common("该动作含有引用规则".to_owned()));
         }
 
         persistence::devices::modbus::delete_sink(device_id, &self.id).await?;
@@ -118,26 +117,24 @@ impl Sink {
         Ok(())
     }
 
-    pub fn pre_publish(&mut self, rule_id: &Uuid) {
-        self.ref_rules.push(rule_id.clone());
+    pub fn add_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.add_ref(rule_id);
     }
 
-    pub fn publish(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
-        self.active_ref_rules.push(rule_id.clone());
-        self.ref_rules.retain(|id| id != rule_id);
-        self.publish_tx.as_ref().unwrap().clone()
+    pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
+        self.ref_info.active_ref(rule_id);
+        self.mb_tx.as_ref().unwrap().clone()
     }
 
-    pub fn pre_unpublish(&mut self, rule_id: &Uuid) {
-        self.ref_rules.retain(|id| id != rule_id);
+    pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
+        self.ref_info.deactive_ref(rule_id);
     }
 
-    pub fn unpublish(&mut self, rule_id: &Uuid) {
-        self.active_ref_rules.retain(|id| id != rule_id);
-        self.ref_rules.push(rule_id.clone());
+    pub fn del_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.del_ref(rule_id);
     }
 
-    pub async fn start(&mut self, tx: mpsc::Sender<WritePointEvent>) {
+    pub async fn start(&mut self, device_tx: mpsc::Sender<WritePointEvent>) {
         if self.on {
             return;
         } else {
@@ -147,36 +144,36 @@ impl Sink {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        let (publish_tx, publish_rx) = mpsc::channel(16);
-        self.publish_tx = Some(publish_tx);
+        let (mb_tx, mb_rx) = mpsc::channel(16);
+        self.mb_tx = Some(mb_tx);
 
-        self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.sink.clone())
+        self.event_loop(stop_signal_rx, mb_rx, device_tx, self.conf.sink.clone())
             .await;
     }
 
     async fn event_loop(
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
-        mut publish_rx: mpsc::Receiver<MessageBatch>,
-        tx: mpsc::Sender<WritePointEvent>,
+        mut mb_rx: mpsc::Receiver<MessageBatch>,
+        device_tx: mpsc::Sender<WritePointEvent>,
         sink_conf: SinkConf,
     ) {
         let handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, publish_rx, tx);
+                        return (stop_signal_rx, mb_rx, device_tx);
                     }
 
-                    mb = publish_rx.recv() => {
+                    mb = mb_rx.recv() => {
                         if let Some(mb) = mb {
-                            Sink::send_write_point_event(mb, &sink_conf, &tx).await;
+                            Sink::send_write_point_event(mb, &sink_conf, &device_tx).await;
                         }
                     }
                 }
             }
         });
-        self.handle = Some(handle);
+        self.join_handle = Some(handle);
     }
 
     pub async fn stop(&mut self) {

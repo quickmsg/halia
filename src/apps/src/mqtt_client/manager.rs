@@ -118,26 +118,26 @@ impl Manager {
         }
     }
 
-    pub async fn subscribe(
+    pub async fn get_source_mb_rx(
         &self,
         app_id: &Uuid,
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.subscribe(source_id, rule_id).await,
+            Some(mut app) => app.get_source_mb_rx(source_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unsubscribe(
+    pub async fn del_source_mb_rx(
         &self,
         app_id: &Uuid,
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.unsubscribe(source_id, rule_id).await,
+            Some(mut app) => app.del_source_mb_rx(source_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }

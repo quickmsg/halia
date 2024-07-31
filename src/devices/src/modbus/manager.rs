@@ -143,50 +143,50 @@ impl Manager {
         }
     }
 
-    pub async fn add_subscribe_ref(
+    pub async fn add_point_ref(
         &self,
         device_id: &Uuid,
         point_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.add_subscribe_ref(point_id, rule_id).await,
+            Some(mut device) => device.add_point_ref(point_id, rule_id).await,
             None => Err(HaliaError::DeviceNotFound),
         }
     }
 
-    pub async fn subscribe(
+    pub async fn get_point_mb_rx(
         &self,
         device_id: &Uuid,
         point_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.subscribe(point_id, rule_id).await,
+            Some(mut device) => device.get_point_mb_rx(point_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unsubscribe(
+    pub async fn del_point_mb_rx(
         &self,
         device_id: &Uuid,
         point_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.unsubscribe(point_id, rule_id).await,
+            Some(mut device) => device.del_point_mb_rx(point_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn remove_subscribe_ref(
+    pub async fn del_point_ref(
         &self,
         device_id: &Uuid,
         point_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.remove_subscribe_ref(point_id, rule_id).await,
+            Some(mut device) => device.del_point_ref(point_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -233,50 +233,50 @@ impl Manager {
         }
     }
 
-    pub async fn pre_publish(
+    pub async fn add_sink_ref(
         &self,
         device_id: &Uuid,
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.pre_publish(sink_id, rule_id),
+            Some(mut device) => device.add_sink_ref(sink_id, rule_id),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn publish(
+    pub async fn get_sink_mb_tx(
         &self,
         device_id: &Uuid,
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.publish(sink_id, rule_id),
+            Some(mut device) => device.get_sink_mb_tx(sink_id, rule_id),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn pre_unpublish(
+    pub async fn del_sink_mb_tx(
         &self,
         device_id: &Uuid,
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.pre_unpublish(sink_id, rule_id),
+            Some(mut device) => device.del_sink_mb_tx(sink_id, rule_id),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unpublish(
+    pub async fn del_sink_ref(
         &self,
         device_id: &Uuid,
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.unpublish(sink_id, rule_id),
+            Some(mut device) => device.del_sink_ref(sink_id, rule_id),
             None => Err(HaliaError::NotFound),
         }
     }

@@ -10,7 +10,7 @@ pub struct CreateUpdateModbusReq {
     #[serde(flatten)]
     pub base: BaseConf,
     #[serde(flatten)]
-    pub modbus: ModbusConf,
+    pub ext: ModbusConf,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -722,7 +722,7 @@ pub struct SearchPointsItemResp {
     pub id: Uuid,
     pub conf: CreateUpdatePointReq,
     pub value: serde_json::Value,
-    pub ref_rules: Vec<(Uuid, bool)>,
+    // pub ref_rules: Vec<(Uuid, bool)>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -764,6 +764,4 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
-    pub ref_rules: Vec<Uuid>,
-    pub active_ref_rules: Vec<Uuid>,
 }
