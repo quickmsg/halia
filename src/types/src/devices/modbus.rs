@@ -722,6 +722,7 @@ pub struct SearchPointsItemResp {
     pub id: Uuid,
     pub conf: CreateUpdatePointReq,
     pub value: serde_json::Value,
+    pub err_info: Option<String>,
     // pub ref_rules: Vec<(Uuid, bool)>,
 }
 

@@ -1,4 +1,11 @@
-use std::{io, time::Duration};
+use std::{
+    io,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use common::{
     error::{HaliaError, HaliaResult},
@@ -26,9 +33,9 @@ pub struct Point {
 
     on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>)>>,
+    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>, Arc<AtomicBool>)>>,
     value: Value,
-    err: Option<String>,
+    err_info: Option<String>,
 
     ref_info: RefInfo,
     mb_tx: Option<broadcast::Sender<MessageBatch>>,
@@ -69,7 +76,7 @@ impl Point {
             ref_info: RefInfo::new(),
             mb_tx: None,
             join_handle: None,
-            err: None,
+            err_info: None,
         })
     }
 
@@ -77,22 +84,18 @@ impl Point {
         SearchPointsItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
-            // ref_rules: self.ref_info.get_ref_rules(),
             value: self.value.clone(),
+            err_info: self.err_info.clone(),
         }
     }
 
-    pub async fn start(&mut self, read_tx: mpsc::Sender<Uuid>) {
-        if self.on {
-            return;
-        } else {
-            self.on = true;
-        }
+    pub async fn start(&mut self, read_tx: mpsc::Sender<Uuid>, device_err: Arc<AtomicBool>) {
+        self.on = true;
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx)
+        self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx, device_err)
             .await;
     }
 
@@ -101,35 +104,33 @@ impl Point {
         interval: u64,
         mut stop_signal_rx: mpsc::Receiver<()>,
         read_tx: mpsc::Sender<Uuid>,
+        device_err: Arc<AtomicBool>,
     ) {
         let point_id = self.id.clone();
-        let handle = tokio::spawn(async move {
+        let join_handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
             loop {
                 select! {
                     biased;
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, read_tx);
+                        return (stop_signal_rx, read_tx, device_err);
                     }
 
                     _ = interval.tick() => {
-                        if let Err(e) = read_tx.send(point_id).await {
-                            debug!("send point info err :{}", e);
+                        if !device_err.load(Ordering::SeqCst) {
+                            if let Err(e) = read_tx.send(point_id).await {
+                                debug!("send point info err :{}", e);
+                            }
                         }
                     }
                 }
             }
         });
-        self.join_handle = Some(handle);
+        self.join_handle = Some(join_handle);
     }
 
     pub async fn stop(&mut self) {
-        debug!("here");
-        if !self.on {
-            return;
-        } else {
-            self.on = false;
-        }
+        self.on = false;
 
         self.stop_signal_tx
             .as_ref()
@@ -166,8 +167,9 @@ impl Point {
                 .await
                 .unwrap();
 
-            let (stop_signal_rx, read_tx) = self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx)
+            let (stop_signal_rx, read_tx, device_err) =
+                self.join_handle.take().unwrap().await.unwrap();
+            self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx, device_err)
                 .await;
         }
 
@@ -252,5 +254,13 @@ impl Point {
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.del_ref(rule_id)
+    }
+
+    pub fn can_delete(&self) -> bool {
+        self.ref_info.can_delete()
+    }
+
+    pub fn can_stop(&self) -> bool {
+        self.ref_info.can_stop()
     }
 }

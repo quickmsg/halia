@@ -1,3 +1,8 @@
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
@@ -21,7 +26,7 @@ pub struct Sink {
     pub id: Uuid,
     conf: CreateUpdateSinkReq,
 
-    pub on: bool,
+    on: bool,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<
@@ -29,6 +34,7 @@ pub struct Sink {
             mpsc::Receiver<()>,
             mpsc::Receiver<MessageBatch>,
             mpsc::Sender<WritePointEvent>,
+            Arc<AtomicBool>,
         )>,
     >,
 
@@ -96,9 +102,16 @@ impl Sink {
                 .await
                 .unwrap();
 
-            let (stop_signal_rx, publish_rx, tx) = self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx, publish_rx, tx, self.conf.sink.clone())
-                .await;
+            let (stop_signal_rx, publish_rx, tx, device_err) =
+                self.join_handle.take().unwrap().await.unwrap();
+            self.event_loop(
+                stop_signal_rx,
+                publish_rx,
+                tx,
+                self.conf.sink.clone(),
+                device_err,
+            )
+            .await;
         }
         Ok(())
     }
@@ -134,12 +147,12 @@ impl Sink {
         self.ref_info.del_ref(rule_id);
     }
 
-    pub async fn start(&mut self, device_tx: mpsc::Sender<WritePointEvent>) {
-        if self.on {
-            return;
-        } else {
-            self.on = true;
-        }
+    pub async fn start(
+        &mut self,
+        device_tx: mpsc::Sender<WritePointEvent>,
+        device_err: Arc<AtomicBool>,
+    ) {
+        self.on = true;
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -147,8 +160,14 @@ impl Sink {
         let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
 
-        self.event_loop(stop_signal_rx, mb_rx, device_tx, self.conf.sink.clone())
-            .await;
+        self.event_loop(
+            stop_signal_rx,
+            mb_rx,
+            device_tx,
+            self.conf.sink.clone(),
+            device_err,
+        )
+        .await;
     }
 
     async fn event_loop(
@@ -157,31 +176,30 @@ impl Sink {
         mut mb_rx: mpsc::Receiver<MessageBatch>,
         device_tx: mpsc::Sender<WritePointEvent>,
         sink_conf: SinkConf,
+        device_err: Arc<AtomicBool>,
     ) {
-        let handle = tokio::spawn(async move {
+        let join_handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, mb_rx, device_tx);
+                        return (stop_signal_rx, mb_rx, device_tx, device_err);
                     }
 
                     mb = mb_rx.recv() => {
                         if let Some(mb) = mb {
-                            Sink::send_write_point_event(mb, &sink_conf, &device_tx).await;
+                            if !device_err.load(Ordering::SeqCst) {
+                                Sink::send_write_point_event(mb, &sink_conf, &device_tx).await;
+                            }
                         }
                     }
                 }
             }
         });
-        self.join_handle = Some(handle);
+        self.join_handle = Some(join_handle);
     }
 
     pub async fn stop(&mut self) {
-        if !self.on {
-            return;
-        } else {
-            self.on = false;
-        }
+        self.on = false;
 
         match &self.stop_signal_tx {
             Some(tx) => {
@@ -404,5 +422,13 @@ impl Sink {
                 debug!("value is err :{e}");
             }
         }
+    }
+
+    pub fn can_stop(&self) -> bool {
+        self.ref_info.can_stop()
+    }
+
+    pub fn can_delete(&self) -> bool {
+        self.ref_info.can_delete()
     }
 }

@@ -12,7 +12,7 @@ use std::{
     net::SocketAddr,
     str::FromStr,
     sync::{
-        atomic::{AtomicU16, Ordering},
+        atomic::{AtomicBool, AtomicU16, Ordering},
         Arc,
     },
     time::{Duration, Instant},
@@ -52,7 +52,8 @@ pub struct Modbus {
     sinks: Vec<Sink>,
 
     on: bool,
-    err: Option<String>,
+    err: Arc<AtomicBool>,
+    err_info: Option<String>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     rtt: Arc<AtomicU16>,
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
@@ -86,7 +87,8 @@ impl Modbus {
         Ok(Modbus {
             id: device_id,
             on: false,
-            err: None,
+            err: Arc::new(AtomicBool::new(true)),
+            err_info: None,
             rtt: Arc::new(AtomicU16::new(9999)),
             conf: req,
             points: Arc::new(RwLock::new(vec![])),
@@ -143,7 +145,7 @@ impl Modbus {
             r#type: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on,
-            err: self.err.clone(),
+            err: self.err_info.clone(),
             conf: json!(&self.conf),
         }
     }
@@ -159,14 +161,14 @@ impl Modbus {
 
         self.conf = req;
         if restart && self.on {
-            match &self.stop_signal_tx {
-                Some(tx) => tx.send(()).await.unwrap(),
-                None => unreachable!(),
-            }
-
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
             let (stop_signal_rx, write_rx, read_rx) =
                 self.join_handle.take().unwrap().await.unwrap();
-
             self.event_loop(stop_signal_rx, read_rx, write_rx).await;
         }
 
@@ -189,10 +191,10 @@ impl Modbus {
         let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
         let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
         for point in self.points.write().await.iter_mut() {
-            point.start(read_tx.clone()).await;
+            point.start(read_tx.clone(), self.err.clone()).await;
         }
         for sink in self.sinks.iter_mut() {
-            sink.start(write_tx.clone()).await;
+            sink.start(write_tx.clone(), self.err.clone()).await;
         }
 
         self.read_tx = Some(read_tx);
@@ -213,15 +215,14 @@ impl Modbus {
         let points = self.points.clone();
         let reconnect = self.conf.ext.reconnect;
 
+        let err = self.err.clone();
+
         let rtt = self.rtt.clone();
-        let read_tx = self.read_tx.as_ref().unwrap().clone();
         let handle = tokio::spawn(async move {
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
-                        for point in points.write().await.iter_mut() {
-                            point.start(read_tx.clone()).await;
-                        }
+                        err.store(false, Ordering::SeqCst);
                         loop {
                             select! {
                                 biased;
@@ -258,11 +259,7 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
-                        debug!("{}", e);
-                        for point in points.write().await.iter_mut() {
-                            point.stop().await;
-                        }
-
+                        err.store(true, Ordering::SeqCst);
                         let sleep = time::sleep(Duration::from_secs(reconnect));
                         tokio::pin!(sleep);
                         select! {
@@ -283,6 +280,18 @@ impl Modbus {
         match self.on {
             true => self.on = false,
             false => return Ok(()),
+        }
+
+        for point in self.points.read().await.iter() {
+            if !point.can_stop() {
+                return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
+            }
+        }
+
+        for sink in &self.sinks {
+            if !sink.can_stop() {
+                return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
+            }
         }
         debug!("设备停止");
 
@@ -310,6 +319,17 @@ impl Modbus {
     pub async fn delete(&mut self) -> HaliaResult<()> {
         if self.on {
             return Err(HaliaError::DeviceRunning);
+        }
+        for point in self.points.read().await.iter() {
+            if !point.can_delete() {
+                return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
+            }
+        }
+
+        for sink in &self.sinks {
+            if !sink.can_delete() {
+                return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
+            }
         }
         debug!("设备删除");
         persistence::devices::delete_device(&self.id).await?;
@@ -364,9 +384,10 @@ impl Modbus {
     ) -> HaliaResult<()> {
         match Point::new(&self.id, point_id, req).await {
             Ok(mut point) => {
-                // TODO 错误判断
                 if self.on {
-                    point.start(self.read_tx.as_ref().unwrap().clone()).await;
+                    point
+                        .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
+                        .await;
                 }
                 self.points.write().await.push(point);
                 Ok(())
@@ -418,7 +439,7 @@ impl Modbus {
         if !self.on {
             return Err(HaliaError::DeviceStopped);
         }
-        if self.err.is_some() {
+        if self.err.load(Ordering::SeqCst) {
             return Err(HaliaError::DeviceConnectionError("xx".to_owned()));
         }
 
@@ -534,7 +555,8 @@ impl Modbus {
         match Sink::new(&self.id, sink_id, req).await {
             Ok(mut sink) => {
                 if self.on {
-                    sink.start(self.write_tx.as_ref().unwrap().clone()).await;
+                    sink.start(self.write_tx.as_ref().unwrap().clone(), self.err.clone())
+                        .await;
                 }
                 Ok(self.sinks.push(sink))
             }
