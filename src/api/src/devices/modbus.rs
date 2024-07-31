@@ -153,6 +153,8 @@ async fn update_sink(
 }
 
 async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_MODBUS_MANAGER.delete_sink(device_id, sink_id).await?;
+    GLOBAL_MODBUS_MANAGER
+        .delete_sink(device_id, sink_id)
+        .await?;
     Ok(AppSuccess::empty())
 }

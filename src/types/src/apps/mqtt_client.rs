@@ -5,8 +5,14 @@ use crate::BaseConf;
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateUpdateMqttClientReq {
-    pub name: String,
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: MqttClientConf,
+}
 
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct MqttClientConf {
     pub client_id: String,
     pub host: String,
     pub port: u16,
@@ -20,8 +26,6 @@ pub struct CreateUpdateMqttClientReq {
     pub timeout: usize,
     pub keep_alive: u64,
     pub clean_session: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]

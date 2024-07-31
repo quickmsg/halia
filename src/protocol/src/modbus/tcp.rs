@@ -218,7 +218,7 @@ impl Context for TcpContext {
 
         match self.stream.read(&mut self.buffer).await {
             Ok(n) => match self.decode_read(n) {
-                Ok(_) => Ok(&mut self.buffer[9..9 + self.buffer_len]),
+                Ok(_) => Ok(&mut self.buffer[9..self.buffer_len]),
                 Err(e) => Err(ModbusError::Protocol(e)),
             },
             Err(e) => Err(ModbusError::Transport(e)),

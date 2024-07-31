@@ -112,14 +112,7 @@ impl MqttClient {
         persistence::apps::update_app(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
-        if self.conf.version != req.version
-            || self.conf.client_id != req.client_id
-            || self.conf.timeout != req.timeout
-            || self.conf.keep_alive != req.keep_alive
-            || self.conf.clean_session != req.clean_session
-            || self.conf.host != req.host
-            || self.conf.port != req.port
-        {
+        if self.conf.ext != req.ext {
             restart = true;
         }
         self.conf = req;
@@ -134,7 +127,7 @@ impl MqttClient {
 
             self.start().await;
             for sink in self.sinks.iter_mut() {
-                match self.conf.version {
+                match self.conf.ext.version {
                     types::apps::mqtt_client::Version::V311 => {
                         sink.restart_v311(self.client_v311.as_ref().unwrap().clone())
                             .await
@@ -151,7 +144,7 @@ impl MqttClient {
     }
 
     async fn start(&mut self) {
-        match self.conf.version {
+        match self.conf.ext.version {
             types::apps::mqtt_client::Version::V311 => self.start_v311().await,
             types::apps::mqtt_client::Version::V50 => self.start_v50().await,
         }
@@ -159,17 +152,17 @@ impl MqttClient {
 
     async fn start_v311(&mut self) {
         let mut mqtt_options = MqttOptions::new(
-            self.conf.client_id.clone(),
-            self.conf.host.clone(),
-            self.conf.port,
+            self.conf.ext.client_id.clone(),
+            self.conf.ext.host.clone(),
+            self.conf.ext.port,
         );
 
-        mqtt_options.set_keep_alive(Duration::from_secs(self.conf.keep_alive));
+        mqtt_options.set_keep_alive(Duration::from_secs(self.conf.ext.keep_alive));
 
-        if self.conf.username.is_some() && self.conf.password.is_some() {
+        if self.conf.ext.username.is_some() && self.conf.ext.password.is_some() {
             mqtt_options.set_credentials(
-                self.conf.username.as_ref().unwrap().clone(),
-                self.conf.password.as_ref().unwrap().clone(),
+                self.conf.ext.username.as_ref().unwrap().clone(),
+                self.conf.ext.password.as_ref().unwrap().clone(),
             );
         }
 
@@ -243,16 +236,16 @@ impl MqttClient {
 
     async fn start_v50(&mut self) {
         let mut mqtt_options = v5::MqttOptions::new(
-            self.conf.client_id.clone(),
-            self.conf.host.clone(),
-            self.conf.port,
+            self.conf.ext.client_id.clone(),
+            self.conf.ext.host.clone(),
+            self.conf.ext.port,
         );
-        mqtt_options.set_keep_alive(Duration::from_secs(self.conf.keep_alive));
+        mqtt_options.set_keep_alive(Duration::from_secs(self.conf.ext.keep_alive));
 
-        if self.conf.username.is_some() && self.conf.password.is_some() {
+        if self.conf.ext.username.is_some() && self.conf.ext.password.is_some() {
             mqtt_options.set_credentials(
-                self.conf.username.as_ref().unwrap().clone(),
-                self.conf.password.as_ref().unwrap().clone(),
+                self.conf.ext.username.as_ref().unwrap().clone(),
+                self.conf.ext.password.as_ref().unwrap().clone(),
             );
         }
 
@@ -328,7 +321,7 @@ impl MqttClient {
             .await
             .unwrap();
         self.stop_signal_tx = None;
-        match self.conf.version {
+        match self.conf.ext.version {
             types::apps::mqtt_client::Version::V311 => self.client_v311 = None,
             types::apps::mqtt_client::Version::V50 => self.client_v50 = None,
         }
@@ -391,7 +384,7 @@ impl MqttClient {
         match Source::new(&self.id, source_id, req).await {
             Ok(source) => {
                 if self.stop_signal_tx.is_some() {
-                    match self.conf.version {
+                    match self.conf.ext.version {
                         types::apps::mqtt_client::Version::V311 => {
                             if let Err(e) = self
                                 .client_v311
@@ -463,7 +456,7 @@ impl MqttClient {
             Some(source) => match source.update(&self.id, req).await {
                 Ok(restart) => {
                     if self.stop_signal_tx.is_some() && restart {
-                        match self.conf.version {
+                        match self.conf.ext.version {
                             types::apps::mqtt_client::Version::V311 => {
                                 if let Err(e) = self
                                     .client_v311
@@ -578,7 +571,7 @@ impl MqttClient {
             Some(sink) => match sink.update(&self.id, req).await {
                 Ok(restart) => {
                     if sink.stop_signal_tx.is_some() && restart {
-                        match self.conf.version {
+                        match self.conf.ext.version {
                             types::apps::mqtt_client::Version::V311 => {
                                 sink.restart_v311(self.client_v311.as_ref().unwrap().clone())
                                     .await
@@ -608,7 +601,18 @@ impl MqttClient {
         }
     }
 
-    pub async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.add_ref(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn get_sink_mb_tx(
+        &mut self,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         if self.stop_signal_tx.is_none() {
             self.start().await;
         }
@@ -616,7 +620,7 @@ impl MqttClient {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => {
                 if sink.stop_signal_tx.is_none() {
-                    match self.conf.version {
+                    match self.conf.ext.version {
                         types::apps::mqtt_client::Version::V311 => {
                             sink.start_v311(self.client_v311.as_ref().unwrap().clone())
                         }
@@ -626,15 +630,22 @@ impl MqttClient {
                     }
                 }
 
-                Ok(sink.tx.as_ref().unwrap().clone())
+                Ok(sink.get_mb_tx(rule_id))
             }
             None => Err(HaliaError::NotFound),
         }
     }
 
-    async fn unpublish(&mut self, sink_id: &Uuid) -> HaliaResult<()> {
+    pub async fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.unpublish().await),
+            Some(sink) => Ok(sink.del_mb_tx(rule_id)),
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.del_ref(rule_id)),
             None => Err(HaliaError::NotFound),
         }
     }

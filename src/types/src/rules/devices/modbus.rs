@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
-pub struct Source {
+pub struct SourcePoint {
     pub device_id: Uuid,
-    pub source_id: Uuid,
+    pub point_id: Uuid,
 }
 
 #[derive(Deserialize, Serialize)]

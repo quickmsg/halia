@@ -184,20 +184,33 @@ impl Manager {
         }
     }
 
-    pub async fn publish(
-        &self,
-        app_id: &Uuid,
-        sink_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    pub fn add_sink_ref(&self, app_id: &Uuid, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.publish(sink_id).await,
+            Some(mut app) => app.add_sink_ref(sink_id, rule_id),
             None => Err(HaliaError::NotFound),
         }
     }
 
-    pub async fn unpublish(&self, app_id: &Uuid, sink_id: &Uuid) -> HaliaResult<()> {
+    pub async fn get_sink_mb_tx(
+        &self,
+        app_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.unpublish(sink_id).await,
+            Some(mut app) => app.get_sink_mb_tx(sink_id, rule_id).await,
+            None => Err(HaliaError::NotFound),
+        }
+    }
+
+    pub async fn del_sink_ref(
+        &self,
+        app_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.del_sink_ref(sink_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }

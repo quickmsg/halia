@@ -3,6 +3,7 @@ use std::sync::Arc;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
+    ref_info::RefInfo,
 };
 use message::MessageBatch;
 use rumqttc::{
@@ -19,11 +20,12 @@ use uuid::Uuid;
 pub struct Sink {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
-    pub tx: Option<mpsc::Sender<MessageBatch>>,
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
-    pub ref_cnt: usize,
 
     pub publish_properties: Option<PublishProperties>,
+
+    ref_info: RefInfo,
+    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
 
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
 }
@@ -53,8 +55,8 @@ impl Sink {
         Ok(Sink {
             id: sink_id,
             conf: req,
-            tx: None,
-            ref_cnt: 0,
+            mb_tx: None,
+            ref_info: RefInfo::new(),
             stop_signal_tx: None,
             join_handle: None,
             publish_properties,
@@ -99,17 +101,17 @@ impl Sink {
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        let (tx, mut rx) = mpsc::channel(16);
-        self.tx = Some(tx);
+        let (mb_tx, mut mb_rx) = mpsc::channel(16);
+        self.mb_tx = Some(mb_tx);
 
         let handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, rx);
+                        return (stop_signal_rx, mb_rx);
                     }
 
-                    mb = rx.recv() => {
+                    mb = mb_rx.recv() => {
                         match mb {
                             Some(mb) => {
                                 let _ = client.publish(&topic, qos, retain, mb.to_json()).await;
@@ -138,7 +140,7 @@ impl Sink {
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (tx, mut rx) = mpsc::channel(16);
-        self.tx = Some(tx);
+        self.mb_tx = Some(tx);
 
         let handle = tokio::spawn(async move {
             loop {
@@ -252,25 +254,35 @@ impl Sink {
             .send(())
             .await
             .unwrap();
-        self.tx = None;
+        self.mb_tx = None;
         self.stop_signal_tx = None;
     }
 
     pub async fn delete(&mut self, app_id: &Uuid) -> HaliaResult<()> {
-        if self.ref_cnt > 0 {
-            // TODO
-            return Err(HaliaError::NotFound);
+        if self.ref_info.can_delete() {
+            return Err(HaliaError::Common("该动作正在被引用中".to_owned()));
         }
 
         persistence::apps::mqtt_client::delete_sink(app_id, &self.id).await?;
         Ok(())
     }
 
-    pub async fn unpublish(&mut self) {
-        self.ref_cnt -= 1;
-        if self.ref_cnt == 0 {
-            self.stop().await;
-        }
+    pub fn add_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.add_ref(rule_id);
+    }
+
+    pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
+        self.ref_info.active_ref(rule_id);
+        self.mb_tx.as_ref().unwrap().clone()
+    }
+
+    pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
+        self.ref_info.deactive_ref(rule_id);
+        // TODO
+    }
+
+    pub fn del_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.del_ref(rule_id);
     }
 }
 

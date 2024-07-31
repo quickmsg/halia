@@ -36,10 +36,10 @@ impl Rule {
                     let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
                     match source_node.typ.as_str() {
                         devices::modbus::TYPE => {
-                            let source: modbus::Source =
+                            let source: modbus::SourcePoint =
                                 serde_json::from_value(source_node.conf.clone())?;
                             if let Err(e) = GLOBAL_MODBUS_MANAGER
-                                .add_point_ref(&source.device_id, &source.source_id, &id)
+                                .add_point_ref(&source.device_id, &source.point_id, &id)
                                 .await
                             {
                                 todo!()
@@ -53,7 +53,10 @@ impl Rule {
                 NodeType::AppSource => {
                     let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
                     match source_node.typ.as_str() {
-                        apps::mqtt_client::TYPE => {}
+                        apps::mqtt_client::TYPE => {
+                            let source: mqtt_client::Source =
+                                serde_json::from_value(source_node.conf.clone())?;
+                        }
                         _ => unreachable!(),
                     }
                 }
@@ -69,7 +72,18 @@ impl Rule {
                 NodeType::AppSink => {
                     let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
                     match sink_node.typ.as_str() {
-                        apps::mqtt_client::TYPE => {}
+                        apps::mqtt_client::TYPE => {
+                            let sink: mqtt_client::Sink =
+                                serde_json::from_value(sink_node.conf.clone())?;
+                            match GLOBAL_MQTT_CLIENT_MANAGER.add_sink_ref(
+                                &sink.app_id,
+                                &sink.sink_id,
+                                &id,
+                            ) {
+                                Ok(_) => {}
+                                Err(_) => todo!(),
+                            }
+                        }
                         _ => unreachable!(),
                     }
                 }
@@ -120,7 +134,7 @@ impl Rule {
                     let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
                     let rxs = match source_node.typ.as_str() {
                         devices::modbus::TYPE => {
-                            let source: modbus::Source =
+                            let source_point: modbus::SourcePoint =
                                 serde_json::from_value(source_node.conf.clone())?;
 
                             let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
@@ -129,8 +143,8 @@ impl Rule {
                                 rxs.push(
                                     GLOBAL_MODBUS_MANAGER
                                         .get_point_mb_rx(
-                                            &source.device_id,
-                                            &source.source_id,
+                                            &source_point.device_id,
+                                            &source_point.point_id,
                                             &self.id,
                                         )
                                         .await
@@ -263,7 +277,7 @@ impl Rule {
                                     let sink: mqtt_client::Sink =
                                         serde_json::from_value(sink_node.conf.clone())?;
                                     GLOBAL_MQTT_CLIENT_MANAGER
-                                        .publish(&sink.app_id, &sink.sink_id)
+                                        .get_sink_mb_tx(&sink.app_id, &sink.sink_id, &self.id)
                                         .await
                                         .unwrap()
                                 }

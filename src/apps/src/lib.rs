@@ -7,8 +7,8 @@ use tracing::debug;
 use types::{apps::SearchAppsResp, Pagination};
 use uuid::Uuid;
 
-pub mod mqtt_client;
 pub mod http_client;
+pub mod mqtt_client;
 
 pub struct AppManager {
     apps: RwLock<Vec<(&'static str, Uuid)>>,
