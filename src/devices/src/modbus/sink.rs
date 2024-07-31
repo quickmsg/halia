@@ -10,7 +10,7 @@ use common::{
 };
 use message::MessageBatch;
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use tracing::{debug, warn};
+use tracing::debug;
 use types::{
     devices::modbus::{
         Area, CreateUpdateSinkReq, DataType, Endian, SearchSinksItemResp, SinkConf, Type,
@@ -25,8 +25,6 @@ use super::WritePointEvent;
 pub struct Sink {
     pub id: Uuid,
     conf: CreateUpdateSinkReq,
-
-    on: bool,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<
@@ -64,7 +62,6 @@ impl Sink {
 
         Ok(Sink {
             id: sink_id,
-            on: false,
             conf: req,
             stop_signal_tx: None,
             join_handle: None,
@@ -94,7 +91,7 @@ impl Sink {
         }
 
         self.conf = req;
-        if restart && self.on {
+        if restart {
             self.stop_signal_tx
                 .as_ref()
                 .unwrap()
@@ -152,8 +149,6 @@ impl Sink {
         device_tx: mpsc::Sender<WritePointEvent>,
         device_err: Arc<AtomicBool>,
     ) {
-        self.on = true;
-
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
@@ -199,17 +194,13 @@ impl Sink {
     }
 
     pub async fn stop(&mut self) {
-        self.on = false;
-
-        match &self.stop_signal_tx {
-            Some(tx) => {
-                if let Err(e) = tx.send(()).await {
-                    warn!("stop signal send err :{e}");
-                }
-                self.stop_signal_tx = None;
-            }
-            None => {}
-        }
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+        self.stop_signal_tx = None;
     }
 
     async fn send_write_point_event(

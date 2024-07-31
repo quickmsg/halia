@@ -13,7 +13,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::AppResp;
+use crate::{AppResult, AppSuccess};
 
 pub fn mqtt_client_routes() -> Router {
     Router::new()
@@ -42,124 +42,94 @@ pub fn mqtt_client_routes() -> Router {
         )
 }
 
-async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn update(
     Path(app_id): Path<Uuid>,
     Json(req): Json<CreateUpdateMqttClientReq>,
-) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER.update(app_id, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER.update(app_id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete(Path(app_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER.delete(app_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn delete(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER.delete(app_id).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_source(
     Path(app_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceReq>,
-) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER
         .create_source(app_id, None, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_sources(
     Path(app_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-) -> AppResp<SearchSourcesResp> {
-    match GLOBAL_MQTT_CLIENT_MANAGER
+) -> AppResult<AppSuccess<SearchSourcesResp>> {
+    let data = GLOBAL_MQTT_CLIENT_MANAGER
         .search_sources(app_id, pagination)
-        .await
-    {
-        Ok(data) => AppResp::with_data(data),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_source(
     Path((app_id, source_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateUpdateSourceReq>,
-) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER
         .update_source(app_id, source_id, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete_source(Path((app_id, source_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER
+async fn delete_source(Path((app_id, source_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER
         .delete_source(app_id, source_id)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_sink(
     Path(app_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSinkReq>,
-) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER
         .create_sink(app_id, None, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_sinks(
     Path(app_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-) -> AppResp<SearchSinksResp> {
-    match GLOBAL_MQTT_CLIENT_MANAGER
+) -> AppResult<AppSuccess<SearchSinksResp>> {
+    let data = GLOBAL_MQTT_CLIENT_MANAGER
         .search_sinks(app_id, pagination)
-        .await
-    {
-        Ok(data) => AppResp::with_data(data),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_sink(
     Path((app_id, sink_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateUpdateSinkReq>,
-) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER
         .update_sink(app_id, sink_id, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete_sink(Path((app_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_MQTT_CLIENT_MANAGER
+async fn delete_sink(Path((app_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER
         .delete_sink(app_id, sink_id)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }

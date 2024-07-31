@@ -5,7 +5,7 @@ use modbus::modbus_routes;
 use opcua::opcua_routes;
 use types::{devices::SearchDevicesResp, Pagination};
 
-use crate::AppResp;
+use crate::AppSuccess;
 
 mod coap;
 mod modbus;
@@ -19,6 +19,6 @@ pub fn routes() -> Router {
         .nest("/coap", coap_routes())
 }
 
-async fn search_devices(Query(pagination): Query<Pagination>) -> AppResp<SearchDevicesResp> {
-    AppResp::with_data(GLOBAL_DEVICE_MANAGER.search(pagination).await)
+async fn search_devices(Query(pagination): Query<Pagination>) -> AppSuccess<SearchDevicesResp> {
+    AppSuccess::data(GLOBAL_DEVICE_MANAGER.search(pagination).await)
 }

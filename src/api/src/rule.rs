@@ -10,7 +10,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::AppResp;
+use crate::{AppResult, AppSuccess};
 
 pub fn rule_routes() -> Router {
     Router::new()
@@ -22,44 +22,35 @@ pub fn rule_routes() -> Router {
         .route("/:id", routing::delete(delete))
 }
 
-async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResp<()> {
-    match GLOBAL_RULE_MANAGER.create(None, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_RULE_MANAGER.create(None, req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn search(Query(pagination): Query<Pagination>) -> AppResp<SearchRulesResp> {
-    match GLOBAL_RULE_MANAGER.search(pagination).await {
-        Ok(data) => AppResp::with_data(data),
-        Err(e) => e.into(),
-    }
+async fn search(Query(pagination): Query<Pagination>) -> AppResult<AppSuccess<SearchRulesResp>> {
+    let data = GLOBAL_RULE_MANAGER.search(pagination).await?;
+    Ok(AppSuccess::data(data))
 }
 
-async fn start(Path(id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_RULE_MANAGER.start(id).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn start(Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_RULE_MANAGER.start(id).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn stop(Path(id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_RULE_MANAGER.stop(id).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn stop(Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_RULE_MANAGER.stop(id).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn update(Path(id): Path<Uuid>, Json(req): Json<CreateUpdateRuleReq>) -> AppResp<()> {
-    match GLOBAL_RULE_MANAGER.update(id, req).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn update(
+    Path(id): Path<Uuid>,
+    Json(req): Json<CreateUpdateRuleReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_RULE_MANAGER.update(id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete(Path(id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_RULE_MANAGER.delete(id).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn delete(Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_RULE_MANAGER.delete(id).await?;
+    Ok(AppSuccess::empty())
 }

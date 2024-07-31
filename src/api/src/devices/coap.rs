@@ -13,7 +13,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::AppResp;
+use crate::{AppResult, AppSuccess};
 
 pub(crate) fn coap_routes() -> Router {
     Router::new()
@@ -44,117 +44,102 @@ pub(crate) fn coap_routes() -> Router {
         )
 }
 
-async fn create(Json(req): Json<CreateUpdateCoapReq>) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.create(None, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn create(Json(req): Json<CreateUpdateCoapReq>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER.create(None, req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn update(Path(device_id): Path<Uuid>, Json(req): Json<CreateUpdateCoapReq>) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.update(device_id, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn update(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateCoapReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER.update(device_id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn start(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.start(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn start(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER.start(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn stop(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.stop(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn stop(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER.stop(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.delete(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn delete(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER.delete(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_api(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateAPIReq>,
-) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.create_api(device_id, None, req).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER.create_api(device_id, None, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_apis(
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-) -> AppResp<SearchAPIsResp> {
-    match GLOBAL_COAP_MANAGER.search_apis(device_id, pagination).await {
-        Ok(values) => AppResp::with_data(values),
-        Err(e) => e.into(),
-    }
+) -> AppResult<AppSuccess<SearchAPIsResp>> {
+    let data = GLOBAL_COAP_MANAGER
+        .search_apis(device_id, pagination)
+        .await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_api(
     Path((device_id, api_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateUpdateAPIReq>,
-) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.update_api(device_id, api_id, req).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER
+        .update_api(device_id, api_id, req)
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-pub async fn delete_api(Path((device_id, api_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.delete_api(device_id, api_id).await {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+pub async fn delete_api(
+    Path((device_id, api_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER.delete_api(device_id, api_id).await?;
+    Ok(AppSuccess::empty())
 }
 
 pub async fn create_sink(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSinkReq>,
-) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.create_sink(device_id, None, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER
+        .create_sink(device_id, None, req)
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 pub async fn search_sinks(
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-) -> AppResp<SearchSinksResp> {
-    match GLOBAL_COAP_MANAGER
+) -> AppResult<AppSuccess<SearchSinksResp>> {
+    let data = GLOBAL_COAP_MANAGER
         .search_sinks(device_id, pagination)
-        .await
-    {
-        Ok(data) => AppResp::with_data(data),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::data(data))
 }
 
 pub async fn update_sink(
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateUpdateSinkReq>,
-) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER
         .update_sink(device_id, sink_id, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-pub async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_COAP_MANAGER.delete_sink(device_id, sink_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+pub async fn delete_sink(
+    Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER.delete_sink(device_id, sink_id).await?;
+    Ok(AppSuccess::empty())
 }

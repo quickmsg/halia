@@ -13,7 +13,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::AppResp;
+use crate::{AppResult, AppSuccess};
 
 pub(crate) fn opcua_routes() -> Router {
     Router::new()
@@ -48,124 +48,101 @@ pub(crate) fn opcua_routes() -> Router {
         )
 }
 
-async fn create(Json(req): Json<CreateUpdateOpcuaReq>) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER.create(None, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn create(Json(req): Json<CreateUpdateOpcuaReq>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER.create(None, req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn update(Path(device_id): Path<Uuid>, Json(req): Json<CreateUpdateOpcuaReq>) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER.update(device_id, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn update(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateOpcuaReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER.update(device_id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn start(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER.start(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn start(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER.start(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn stop(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER.stop(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn stop(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER.stop(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER.delete(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn delete(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER.delete(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_group(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateGroupReq>,
-) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
         .create_group(device_id, None, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_groups(
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-) -> AppResp<SearchGroupsResp> {
-    match GLOBAL_OPCUA_MANAGER
+) -> AppResult<AppSuccess<SearchGroupsResp>> {
+    let data = GLOBAL_OPCUA_MANAGER
         .search_groups(device_id, pagination)
-        .await
-    {
-        Ok(data) => AppResp::with_data(data),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_group(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateUpdateGroupReq>,
-) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
         .update_group(device_id, group_id, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete_group(Path((device_id, group_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER.delete_group(device_id, group_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn delete_group(
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
+        .delete_group(device_id, group_id)
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_group_variable(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateUpdateGroupVariableReq>,
-) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
         .create_group_variable(device_id, group_id, None, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_group_variables(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Query(pagination): Query<Pagination>,
-) -> AppResp<SearchGroupVariablesResp> {
-    match GLOBAL_OPCUA_MANAGER
+) -> AppResult<AppSuccess<SearchGroupVariablesResp>> {
+    let data = GLOBAL_OPCUA_MANAGER
         .search_group_variables(device_id, group_id, pagination)
-        .await
-    {
-        Ok(values) => AppResp::with_data(values),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_group_variable(
     Path((device_id, group_id, variable_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(req): Json<CreateUpdateGroupVariableReq>,
-) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
         .update_group_variable(device_id, group_id, variable_id, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 // async fn write_group_point_value(
@@ -183,14 +160,11 @@ async fn update_group_variable(
 
 async fn delete_group_variable(
     Path((device_id, group_id, variable_id)): Path<(Uuid, Uuid, Uuid)>,
-) -> AppResp<()> {
-    match GLOBAL_OPCUA_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
         .delete_group_variable(device_id, group_id, variable_id)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 // async fn create_sink(

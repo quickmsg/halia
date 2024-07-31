@@ -71,7 +71,7 @@ impl HaliaError {
             HaliaError::DeviceNotFound => todo!(),
             HaliaError::DeviceStopped => todo!(),
             HaliaError::DeviceConnectionError(_) => todo!(),
-            HaliaError::Common(_) => todo!(),
+            HaliaError::Common(_) => 100,
         }
     }
 }

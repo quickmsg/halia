@@ -13,7 +13,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::AppResp;
+use crate::{AppResult, AppSuccess};
 
 pub(crate) fn modbus_routes() -> Router {
     Router::new()
@@ -45,148 +45,114 @@ pub(crate) fn modbus_routes() -> Router {
         )
 }
 
-async fn create(Json(req): Json<CreateUpdateModbusReq>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.create(None, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn create(Json(req): Json<CreateUpdateModbusReq>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER.create(None, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn update(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateModbusReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.update(device_id, req).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER.update(device_id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn start(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.start(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn start(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER.start(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn stop(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.stop(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn stop(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER.stop(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete(Path(device_id): Path<Uuid>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.delete(device_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn delete(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER.delete(device_id).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_point(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdatePointReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER
         .create_point(device_id, None, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_points(
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-) -> AppResp<SearchPointsResp> {
-    match GLOBAL_MODBUS_MANAGER
+) -> AppResult<AppSuccess<SearchPointsResp>> {
+    let data = GLOBAL_MODBUS_MANAGER
         .search_points(device_id, pagination)
-        .await
-    {
-        Ok(values) => AppResp::with_data(values),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_point(
     Path((device_id, point_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateUpdatePointReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER
         .update_point(device_id, point_id, req)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn write_point_value(
     Path((device_id, point_id)): Path<(Uuid, Uuid)>,
     Json(value): Json<Value>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER
         .write_point_value(device_id, point_id, value)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete_point(Path((device_id, point_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
+async fn delete_point(
+    Path((device_id, point_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER
         .delete_point(device_id, point_id)
-        .await
-    {
-        Ok(()) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_sink(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSinkReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER
         .create_sink(device_id, None, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_sinks(
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-) -> AppResp<SearchSinksResp> {
-    match GLOBAL_MODBUS_MANAGER
+) -> AppResult<AppSuccess<SearchSinksResp>> {
+    let data = GLOBAL_MODBUS_MANAGER
         .search_sinks(device_id, pagination)
-        .await
-    {
-        Ok(data) => AppResp::with_data(data),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_sink(
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateUpdateSinkReq>,
-) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER
         .update_sink(device_id, sink_id, req)
-        .await
-    {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-    match GLOBAL_MODBUS_MANAGER.delete_sink(device_id, sink_id).await {
-        Ok(_) => AppResp::new(),
-        Err(e) => e.into(),
-    }
+async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MODBUS_MANAGER.delete_sink(device_id, sink_id).await?;
+    Ok(AppSuccess::empty())
 }

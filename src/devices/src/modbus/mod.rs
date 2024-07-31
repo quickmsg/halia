@@ -259,6 +259,7 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
+                        debug!("{:?}", e);
                         err.store(true, Ordering::SeqCst);
                         let sleep = time::sleep(Duration::from_secs(reconnect));
                         tokio::pin!(sleep);

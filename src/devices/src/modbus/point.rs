@@ -31,7 +31,6 @@ pub struct Point {
     pub conf: CreateUpdatePointReq,
     quantity: u16,
 
-    on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>, Arc<AtomicBool>)>>,
     value: Value,
@@ -68,7 +67,6 @@ impl Point {
 
         Ok(Point {
             id: point_id,
-            on: false,
             conf: req,
             quantity,
             value: Value::Null,
@@ -90,8 +88,6 @@ impl Point {
     }
 
     pub async fn start(&mut self, read_tx: mpsc::Sender<Uuid>, device_err: Arc<AtomicBool>) {
-        self.on = true;
-
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
@@ -130,8 +126,6 @@ impl Point {
     }
 
     pub async fn stop(&mut self) {
-        self.on = false;
-
         self.stop_signal_tx
             .as_ref()
             .unwrap()
