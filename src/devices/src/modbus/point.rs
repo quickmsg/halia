@@ -215,8 +215,8 @@ impl Point {
                 }
             }
             Err(e) => match e {
-                protocol::modbus::Error::Transport(e) => return Err(e),
-                protocol::modbus::Error::Protocol(e) => todo!(),
+                protocol::modbus::ModbusError::Transport(e) => return Err(e),
+                protocol::modbus::ModbusError::Protocol(e) => todo!(),
             },
         }
 
