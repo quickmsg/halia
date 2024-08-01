@@ -54,12 +54,9 @@ impl TcpContext {
         self.buffer_len = 12;
     }
 
-    fn decode_read(&mut self, n: usize) -> Result<(), ProtocolError> {
+    fn decode_common(&mut self, n: usize) -> Result<(), ProtocolError> {
         if n == 0 {
             return Err(ProtocolError::EmptyResp);
-        }
-        if n < 9 {
-            return Err(ProtocolError::DataTooSmall);
         }
 
         let transcation_id = decode_u16(self.buffer[0], self.buffer[1]);
@@ -71,8 +68,6 @@ impl TcpContext {
             return Err(ProtocolError::ProtocolIdErr);
         }
 
-        // let len = decode_u16(self.buffer[4], self.buffer[5]);
-
         let slave = self.buffer[6];
         if self.slave != slave {
             return Err(ProtocolError::UnitIdMismatch);
@@ -82,6 +77,18 @@ impl TcpContext {
         if function_code != self.function_code {
             return Err(ProtocolError::UnitIdMismatch);
         }
+
+        Ok(())
+    }
+
+    fn decode_read(&mut self, n: usize) -> Result<(), ProtocolError> {
+        self.decode_common(n)?;
+
+        if n < 9 {
+            return Err(ProtocolError::DataTooSmall);
+        }
+
+        // let len = decode_u16(self.buffer[4], self.buffer[5]);
 
         self.buffer_len = (9 + self.buffer[8]) as usize;
         Ok(())
@@ -154,6 +161,7 @@ impl TcpContext {
     }
 
     fn decode_write(&mut self, n: usize) -> Result<(), ProtocolError> {
+        self.decode_common(n)?;
         // 1.	Transaction Identifier (2 bytes): 事务标识符，与请求一致。
         // 2.	Protocol Identifier (2 bytes): 协议标识符，与请求一致。
         // 3.	Length (2 bytes): 报文长度，表示从单元标识符到数据的总字节数。

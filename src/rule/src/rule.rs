@@ -20,6 +20,7 @@ use crate::segment::{get_3d_ids, start_segment, take_source_ids};
 pub struct Rule {
     pub id: Uuid,
     pub conf: CreateUpdateRuleReq,
+    pub on: bool,
     pub stop_signal_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -96,6 +97,7 @@ impl Rule {
         }
 
         Ok(Self {
+            on: false,
             id,
             conf: req,
             stop_signal_tx: None,
@@ -106,10 +108,16 @@ impl Rule {
         SearchRulesItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            on: self.on,
         }
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        match self.on {
+            true => return Ok(()),
+            false => self.on = true,
+        }
+
         let (stop_signal_tx, _) = broadcast::channel(16);
 
         let (incoming_edges, outgoing_edges) = self.conf.get_edges();
@@ -321,6 +329,11 @@ impl Rule {
     }
 
     pub fn stop(&mut self) {
+        match self.on {
+            true => self.on = false,
+            false => return,
+        }
+
         if let Err(e) = self.stop_signal_tx.as_ref().unwrap().send(()) {
             error!("rule stop send signal err:{}", e);
         }

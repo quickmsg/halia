@@ -60,6 +60,8 @@ pub enum ProtocolError {
     ProtocolIdErr,
     #[error("unitid不匹配")]
     UnitIdMismatch,
+    #[error("功能码不匹配")]
+    FunctionCodeMismatch,
 }
 
 pub trait Context {

@@ -130,4 +130,5 @@ pub struct SearchRulesResp {
 pub struct SearchRulesItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateRuleReq,
+    pub on: bool,
 }
