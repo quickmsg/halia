@@ -3,18 +3,16 @@ use message::{Message, MessageBatch};
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::debug;
-use types::rule::Operate;
 
-use crate::computes::float::get_float_computer;
+use crate::Function;
 
-use self::int::get_int_computer;
-
-pub mod float;
-pub mod int;
-pub mod string;
+// mod float;
+// mod int;
+// mod string;
+mod number;
 
 pub(crate) trait Computer: Sync + Send {
-    fn compute(&self, message: &Message) -> Option<Value>;
+    fn compute(&self, message: &mut Message);
 }
 
 #[derive(Deserialize)]
@@ -37,25 +35,25 @@ pub struct ComputeNode {
 }
 
 impl ComputeNode {
-    pub fn new(conf: Value) -> Result<Box<dyn Operate>> {
+    pub fn new(conf: Value) -> Result<Box<dyn Function>> {
         let mut compute_infos: Vec<ComputeInfo> = Vec::new();
         let rules: Vec<Rule> = serde_json::from_value(conf)?;
         for rule in &rules {
             match rule.r#type.as_str() {
-                "float" => match get_float_computer(rule) {
-                    Ok(computer) => compute_infos.push(ComputeInfo {
-                        output_field: rule.output_field.clone(),
-                        computer,
-                    }),
-                    Err(e) => bail!("{}", e),
-                },
-                "int" => match get_int_computer(rule) {
-                    Ok(computer) => compute_infos.push(ComputeInfo {
-                        output_field: rule.output_field.clone(),
-                        computer,
-                    }),
-                    Err(e) => bail!("{}", e),
-                },
+                // "float" => match get_float_computer(rule) {
+                //     Ok(computer) => compute_infos.push(ComputeInfo {
+                //         output_field: rule.output_field.clone(),
+                //         computer,
+                //     }),
+                //     Err(e) => bail!("{}", e),
+                // },
+                // "int" => match get_int_computer(rule) {
+                //     Ok(computer) => compute_infos.push(ComputeInfo {
+                //         output_field: rule.output_field.clone(),
+                //         computer,
+                //     }),
+                //     Err(e) => bail!("{}", e),
+                // },
                 _ => {}
             }
         }
@@ -64,18 +62,17 @@ impl ComputeNode {
     }
 }
 
-impl Operate for ComputeNode {
-    fn operate(&self, message_batch: &mut MessageBatch) -> bool {
+impl Function for ComputeNode {
+    fn call(&self, message_batch: &mut MessageBatch) -> bool {
         let messages = message_batch.get_messages_mut();
         for message in messages {
             for ci in &self.compute_infos {
-                match ci.computer.compute(message) {
-                    Some(value) => {
-                        debug!("{}, {}", ci.output_field, value);
-                        message.set(&ci.output_field, value);
-                    }
-                    None => {}
-                }
+                ci.computer.compute(message);
+                // Some(value) => {
+                //     debug!("{}, {}", ci.output_field, value);
+                //     // message.set(&ci.output_field, value);
+                // }
+                // None => {}
             }
         }
         true
