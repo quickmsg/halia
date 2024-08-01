@@ -19,14 +19,11 @@ impl Computer for Abs {
     fn compute(&self, message: &mut Message) {
         match message.get(&self.field) {
             Some(mv) => match mv {
-                message::MessageValue::Int64(value) => {
-                    message.add(self.target_field.clone(), MessageValue::Int64(value.abs()));
+                message::MessageValue::Int64(mv) => {
+                    message.add(self.target_field.clone(), MessageValue::Int64(mv.abs()));
                 }
-                message::MessageValue::Float64(value) => {
-                    message.add(
-                        self.target_field.clone(),
-                        MessageValue::Float64(value.abs()),
-                    );
+                message::MessageValue::Float64(mv) => {
+                    message.add(self.target_field.clone(), MessageValue::Float64(mv.abs()));
                 }
                 _ => {}
             },

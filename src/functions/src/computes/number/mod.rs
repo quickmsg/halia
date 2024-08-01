@@ -1,3 +1,16 @@
 mod abs;
 mod acos;
 mod acosh;
+mod asin;
+mod asinh;
+mod atan;
+mod atan2;
+mod atanh;
+mod cbrt;
+mod ceil;
+mod cos;
+mod cosh;
+mod degrees;
+mod exp;
+mod exp2;
+mod floor;
