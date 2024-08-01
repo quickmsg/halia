@@ -704,11 +704,12 @@ async fn write_value(ctx: &mut impl Context, wpe: WritePointEvent) -> HaliaResul
         _ => unreachable!(),
     };
 
-    match ctx
+    if let Err(e) = ctx
         .write(function_code, wpe.slave, wpe.address, &wpe.data)
         .await
     {
-        Ok(_) => todo!(),
-        Err(_) => todo!(),
+        debug!("{:?}", e);
     }
+
+    Ok(())
 }

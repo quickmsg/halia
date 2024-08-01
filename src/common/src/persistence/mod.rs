@@ -4,7 +4,6 @@ use std::{
     io,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    str::pattern::Pattern,
 };
 
 use tokio::{
@@ -126,22 +125,17 @@ async fn update_segment(
     let mut new_line = String::new();
     let mut lines: Vec<&str> = buf.split("\n").collect();
     let id_str = id.to_string();
-    debug!("{}", id_str);
     for line in lines.iter_mut() {
-        debug!("{}", line);
         if line.len() == 0 {
             continue;
         }
         if line.starts_with(&id_str) {
             let fields: Vec<&str> = line.split(DELIMITER).collect();
-            debug!("{:?}", fields);
             for n in 0..pos {
-                debug!("{}", n);
                 new_line.push_str(fields[n]);
                 new_line.push(DELIMITER);
             }
 
-            debug!("{}", data);
             new_line.push_str(data);
 
             if pos < fields.len() {

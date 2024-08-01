@@ -47,4 +47,15 @@ impl RefInfo {
     pub fn can_delete(&self) -> bool {
         self.ref_rules.len() == 0
     }
+
+    pub fn ref_cnt(&self) -> usize {
+        self.ref_rules.len()
+    }
+
+    pub fn active_ref_cnt(&self) -> usize {
+        self.ref_rules.iter().fold(0, |acc, (_, s)| match s {
+            true => acc + 1,
+            false => acc,
+        })
+    }
 }

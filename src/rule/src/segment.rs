@@ -7,7 +7,7 @@ use tokio::{
     select,
     sync::{broadcast, mpsc},
 };
-use tracing::warn;
+use tracing::{debug, warn};
 use types::rules::Node;
 
 pub fn start_segment(
@@ -29,7 +29,9 @@ pub fn start_segment(
                                         break;
                                     }
                                 }
-                                let _ = mpsc_tx.as_ref().unwrap().send(mb);
+                                if let Err(e) = mpsc_tx.as_ref().unwrap().send(mb).await {
+                                    debug!("{:?}", e);
+                                }
                             }
                             Err(e) => warn!("{}", e),
                         }

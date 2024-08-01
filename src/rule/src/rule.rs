@@ -20,7 +20,7 @@ use crate::segment::{get_3d_ids, start_segment, take_source_ids};
 pub struct Rule {
     pub id: Uuid,
     pub conf: CreateUpdateRuleReq,
-    pub stop_signal_rx: Option<broadcast::Sender<()>>,
+    pub stop_signal_tx: Option<broadcast::Sender<()>>,
 }
 
 impl Rule {
@@ -98,7 +98,7 @@ impl Rule {
         Ok(Self {
             id,
             conf: req,
-            stop_signal_rx: None,
+            stop_signal_tx: None,
         })
     }
 
@@ -110,6 +110,8 @@ impl Rule {
     }
 
     pub async fn start(&mut self) -> Result<()> {
+        let (stop_signal_tx, _) = broadcast::channel(16);
+
         let (incoming_edges, outgoing_edges) = self.conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
@@ -201,6 +203,7 @@ impl Rule {
 
         for twod_ids in threed_ids {
             for oned_ids in twod_ids {
+                debug!("{:?}", oned_ids);
                 let mut functions = vec![];
                 let mut ids = vec![];
                 let mut mpsc_tx: Option<mpsc::Sender<MessageBatch>> = None;
@@ -228,6 +231,7 @@ impl Rule {
                                 }
                                 Err(e) => error!("create merge err:{}", e),
                             }
+                            break;
                         }
                         NodeType::Window => {
                             let source_ids = incoming_edges.get(&id).unwrap();
@@ -242,13 +246,7 @@ impl Rule {
                             receivers.insert(id, rxs);
                             let window_conf: WindowConf =
                                 serde_json::from_value(node.conf.clone())?;
-                            window::run(
-                                window_conf,
-                                rx,
-                                tx,
-                                self.stop_signal_rx.as_ref().unwrap().subscribe(),
-                            )
-                            .unwrap();
+                            window::run(window_conf, rx, tx, stop_signal_tx.subscribe()).unwrap();
                         }
                         NodeType::Filter => {
                             let conf: Vec<FilterConf> = serde_json::from_value(node.conf.clone())?;
@@ -271,6 +269,7 @@ impl Rule {
                             mpsc_tx = Some(tx);
                         }
                         NodeType::AppSink => {
+                            ids.push(id);
                             let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
                             let tx = match sink_node.typ.as_str() {
                                 apps::mqtt_client::TYPE => {
@@ -291,7 +290,7 @@ impl Rule {
                     }
                 }
 
-                if functions.len() > 0 {
+                if ids.len() > 0 {
                     let source_ids = incoming_edges.get(&ids[0]).unwrap();
                     let source_id = source_ids[0];
                     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
@@ -311,17 +310,18 @@ impl Rule {
                         functions,
                         mpsc_tx,
                         broadcast_tx,
-                        self.stop_signal_rx.as_ref().unwrap().subscribe(),
+                        stop_signal_tx.subscribe(),
                     );
                 }
             }
         }
 
+        self.stop_signal_tx = Some(stop_signal_tx);
         Ok(())
     }
 
     pub fn stop(&mut self) {
-        if let Err(e) = self.stop_signal_rx.as_ref().unwrap().send(()) {
+        if let Err(e) = self.stop_signal_tx.as_ref().unwrap().send(()) {
             error!("rule stop send signal err:{}", e);
         }
     }

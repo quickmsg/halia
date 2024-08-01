@@ -84,6 +84,8 @@ impl Point {
             conf: self.conf.clone(),
             value: self.value.clone(),
             err_info: self.err_info.clone(),
+            active_ref_rule_cnt: self.ref_info.ref_cnt(),
+            ref_rule_cnt: self.ref_info.active_ref_cnt(),
         }
     }
 
