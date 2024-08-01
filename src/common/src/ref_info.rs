@@ -1,3 +1,4 @@
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -19,11 +20,17 @@ impl RefInfo {
     }
 
     pub fn active_ref(&mut self, rule_id: &Uuid) {
-        todo!()
+        match self.ref_rules.iter_mut().find(|(id, _)| id == rule_id) {
+            Some((_, s)) => *s = true,
+            None => debug!("未找到待激活的引用"),
+        }
     }
 
     pub fn deactive_ref(&mut self, rule_id: &Uuid) {
-        todo!()
+        match self.ref_rules.iter_mut().find(|(id, _)| id == rule_id) {
+            Some((_, s)) => *s = true,
+            None => debug!("未找到待关闭激活的引用"),
+        }
     }
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {

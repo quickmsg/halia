@@ -128,7 +128,7 @@ impl MqttClient {
                 .await
                 .unwrap();
 
-            self.start().await;
+            self.start().await.unwrap();
             for sink in self.sinks.iter_mut() {
                 match self.conf.ext.version {
                     types::apps::mqtt_client::Version::V311 => {
@@ -152,6 +152,8 @@ impl MqttClient {
             false => self.on = true,
         }
 
+        persistence::apps::update_app_status(&self.id, persistence::Status::Runing).await?;
+
         match self.conf.ext.version {
             types::apps::mqtt_client::Version::V311 => self.start_v311().await,
             types::apps::mqtt_client::Version::V50 => self.start_v50().await,
@@ -169,11 +171,11 @@ impl MqttClient {
 
         mqtt_options.set_keep_alive(Duration::from_secs(self.conf.ext.keep_alive));
 
-        if self.conf.ext.username.is_some() && self.conf.ext.password.is_some() {
-            mqtt_options.set_credentials(
-                self.conf.ext.username.as_ref().unwrap().clone(),
-                self.conf.ext.password.as_ref().unwrap().clone(),
-            );
+        match (&self.conf.ext.username, &self.conf.ext.password) {
+            (Some(username), Some(password)) => {
+                mqtt_options.set_credentials(username.clone(), password.clone());
+            }
+            (_, _) => {}
         }
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
@@ -205,7 +207,7 @@ impl MqttClient {
                                     Ok(msg) => {
                                         for source in sources.write().await.iter_mut() {
                                             if matches(&source.conf.ext.topic, &p.topic) {
-                                                match &source.tx {
+                                                match &source.mb_tx {
                                                     Some(tx) => {
                                                         let _ = tx.send(msg.clone());
                                                     }
@@ -320,6 +322,13 @@ impl MqttClient {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
+        match self.on {
+            true => self.on = false,
+            false => return Ok(()),
+        }
+
+        persistence::apps::update_app_status(&self.id, persistence::Status::Stopped).await?;
+
         // TODO 验证引用
         for sink in self.sinks.iter_mut() {
             sink.stop().await;

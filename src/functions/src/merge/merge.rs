@@ -54,7 +54,9 @@ impl Merge {
                                         merge_message.merge(message.take().unwrap());
                                     }
                                     mb.push_message(merge_message);
-                                    tx.send(mb).unwrap();
+                                    if let Err(e) = tx.send(mb) {
+                                        debug!("{:?}", e);
+                                    }
                                 }
                             }
                             None => {}
