@@ -396,7 +396,7 @@ impl Opcua {
         }
     }
 
-    pub async fn add_subscribe_ref(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn add_group_ref(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self
             .groups
             .write()

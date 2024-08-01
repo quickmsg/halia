@@ -201,14 +201,14 @@ impl Manager {
         }
     }
 
-    pub async fn add_subscribe_ref(
+    pub async fn add_group_ref(
         &self,
         device_id: &Uuid,
         group_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get(device_id) {
-            Some(device) => device.add_subscribe_ref(group_id, rule_id).await,
+            Some(device) => device.add_group_ref(group_id, rule_id).await,
             None => Err(HaliaError::NotFound),
         }
     }

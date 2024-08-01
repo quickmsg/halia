@@ -1,7 +1,10 @@
 use anyhow::Result;
 use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
-use common::{error::HaliaResult, persistence};
-use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
+use devices::{modbus::manager::GLOBAL_MODBUS_MANAGER, opcua::manager::GLOBAL_OPCUA_MANAGER};
 use functions::{filter, merge::merge::Merge, window};
 use message::MessageBatch;
 use std::collections::HashMap;
@@ -10,6 +13,7 @@ use tracing::{debug, error};
 use types::rules::{
     apps::mqtt_client,
     devices::modbus,
+    devices::opcua,
     functions::{FilterConf, WindowConf},
     CreateUpdateRuleReq, Node, NodeType, SearchRulesItemResp, SinkNode, SourceNode,
 };
@@ -25,12 +29,14 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub async fn new(id: Option<Uuid>, req: CreateUpdateRuleReq) -> HaliaResult<Self> {
-        let (id, new) = match id {
-            Some(id) => (id, false),
+    pub async fn new(rule_id: Option<Uuid>, req: CreateUpdateRuleReq) -> HaliaResult<Self> {
+        let (rule_id, new) = match rule_id {
+            Some(rule_id) => (rule_id, false),
             None => (Uuid::new_v4(), true),
         };
 
+        let mut error = None;
+        let mut add_ref_nodes = vec![];
         for node in req.ext.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
@@ -40,13 +46,26 @@ impl Rule {
                             let source: modbus::SourcePoint =
                                 serde_json::from_value(source_node.conf.clone())?;
                             if let Err(e) = GLOBAL_MODBUS_MANAGER
-                                .add_point_ref(&source.device_id, &source.point_id, &id)
+                                .add_point_ref(&source.device_id, &source.point_id, &rule_id)
                                 .await
                             {
-                                todo!()
+                                add_ref_nodes.push(&node);
+                                error = Some(format!("引用Modbus设备xxx错误").to_owned());
+                                break;
                             }
                         }
-                        devices::opcua::TYPE => {}
+                        devices::opcua::TYPE => {
+                            let source: opcua::SourceGroup =
+                                serde_json::from_value(source_node.conf.clone())?;
+                            if let Err(e) = GLOBAL_OPCUA_MANAGER
+                                .add_group_ref(&source.device_id, &source.group_id, &rule_id)
+                                .await
+                            {
+                                add_ref_nodes.push(&node);
+                                error = Some(format!("引用Opcua设备xxx错误").to_owned());
+                                break;
+                            }
+                        }
                         devices::coap::TYPE => {}
                         _ => unreachable!(),
                     }
@@ -79,7 +98,7 @@ impl Rule {
                             match GLOBAL_MQTT_CLIENT_MANAGER.add_sink_ref(
                                 &sink.app_id,
                                 &sink.sink_id,
-                                &id,
+                                &rule_id,
                             ) {
                                 Ok(_) => {}
                                 Err(_) => todo!(),
@@ -92,13 +111,18 @@ impl Rule {
             }
         }
 
+        if let Some(e) = error {
+            // TODO 回滚
+            return Err(HaliaError::Common(e));
+        }
+
         if new {
-            persistence::rule::create(&id, serde_json::to_string(&req).unwrap()).await?;
+            persistence::rule::create(&rule_id, serde_json::to_string(&req).unwrap()).await?;
         }
 
         Ok(Self {
             on: false,
-            id,
+            id: rule_id,
             conf: req,
             stop_signal_tx: None,
         })
