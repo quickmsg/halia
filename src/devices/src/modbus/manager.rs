@@ -47,9 +47,9 @@ impl Manager {
         }
     }
 
-    pub fn search(&self, device_id: &Uuid) -> HaliaResult<SearchDevicesItemResp> {
+    pub async fn search(&self, device_id: &Uuid) -> HaliaResult<SearchDevicesItemResp> {
         match self.devices.get(device_id) {
-            Some(device) => Ok(device.search()),
+            Some(device) => Ok(device.search().await),
             None => Err(HaliaError::NotFound),
         }
     }

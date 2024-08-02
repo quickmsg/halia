@@ -40,7 +40,7 @@ impl DeviceManager {
         let mut err_cnt = 0;
         for (typ, device_id) in self.devices.read().await.iter().rev() {
             let resp = match typ {
-                &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id),
+                &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id).await,
                 &opcua::TYPE => GLOBAL_OPCUA_MANAGER.search(device_id),
                 &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
                 _ => unreachable!(),
@@ -85,7 +85,7 @@ impl DeviceManager {
             }
 
             let resp = match typ {
-                &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id),
+                &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id).await,
                 &opcua::TYPE => GLOBAL_OPCUA_MANAGER.search(device_id),
                 &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
                 _ => unreachable!(),

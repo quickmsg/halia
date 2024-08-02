@@ -51,8 +51,7 @@ pub struct Modbus {
     sinks: Vec<Sink>,
 
     on: bool,
-    err: Arc<AtomicBool>,
-    err_info: Option<String>,
+    err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     rtt: Arc<AtomicU16>,
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
@@ -86,8 +85,7 @@ impl Modbus {
         Ok(Modbus {
             id: device_id,
             on: false,
-            err: Arc::new(AtomicBool::new(true)),
-            err_info: None,
+            err: Arc::new(RwLock::new(None)),
             rtt: Arc::new(AtomicU16::new(9999)),
             conf: req,
             points: Arc::new(RwLock::new(vec![])),
@@ -138,13 +136,13 @@ impl Modbus {
         Ok(())
     }
 
-    pub fn search(&self) -> SearchDevicesItemResp {
+    pub async fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id.clone(),
             typ: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on,
-            err: self.err_info.clone(),
+            err: self.err.read().await.clone(),
             conf: SearchDevicesItemConf {
                 base: self.conf.base.clone(),
                 ext: serde_json::json!(self.conf.ext),
@@ -224,7 +222,7 @@ impl Modbus {
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
-                        err.store(false, Ordering::SeqCst);
+                        *err.write().await = None;
                         loop {
                             select! {
                                 biased;
@@ -261,8 +259,7 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
-                        debug!("{:?}", e);
-                        err.store(true, Ordering::SeqCst);
+                        *err.write().await = Some(e.to_string());
                         let sleep = time::sleep(Duration::from_secs(reconnect));
                         tokio::pin!(sleep);
                         select! {
@@ -444,8 +441,8 @@ impl Modbus {
         if !self.on {
             return Err(HaliaError::DeviceStopped);
         }
-        if self.err.load(Ordering::SeqCst) {
-            return Err(HaliaError::DeviceConnectionError("xx".to_owned()));
+        if self.err.read().await.is_some() {
+            return Err(HaliaError::Common("设备断开连接中".to_owned()));
         }
 
         match self

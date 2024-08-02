@@ -1,11 +1,4 @@
-use std::{
-    io,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{io, sync::Arc, time::Duration};
 
 use common::{
     error::{HaliaError, HaliaResult},
@@ -17,7 +10,7 @@ use protocol::modbus::{Context, FunctionCode};
 use serde_json::Value;
 use tokio::{
     select,
-    sync::{broadcast, mpsc},
+    sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
     time,
 };
@@ -32,7 +25,13 @@ pub struct Point {
     quantity: u16,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Sender<Uuid>, Arc<AtomicBool>)>>,
+    join_handle: Option<
+        JoinHandle<(
+            mpsc::Receiver<()>,
+            mpsc::Sender<Uuid>,
+            Arc<RwLock<Option<String>>>,
+        )>,
+    >,
     value: Value,
     err_info: Option<String>,
 
@@ -89,7 +88,11 @@ impl Point {
         }
     }
 
-    pub async fn start(&mut self, read_tx: mpsc::Sender<Uuid>, device_err: Arc<AtomicBool>) {
+    pub async fn start(
+        &mut self,
+        read_tx: mpsc::Sender<Uuid>,
+        device_err: Arc<RwLock<Option<String>>>,
+    ) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
@@ -102,7 +105,7 @@ impl Point {
         interval: u64,
         mut stop_signal_rx: mpsc::Receiver<()>,
         read_tx: mpsc::Sender<Uuid>,
-        device_err: Arc<AtomicBool>,
+        device_err: Arc<RwLock<Option<String>>>,
     ) {
         let point_id = self.id.clone();
         let join_handle = tokio::spawn(async move {
@@ -115,7 +118,7 @@ impl Point {
                     }
 
                     _ = interval.tick() => {
-                        if !device_err.load(Ordering::SeqCst) {
+                        if device_err.read().await.is_none() {
                             if let Err(e) = read_tx.send(point_id).await {
                                 debug!("send point info err :{}", e);
                             }

@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 
 use common::{
     error::{HaliaError, HaliaResult},
@@ -9,7 +6,11 @@ use common::{
     ref_info::RefInfo,
 };
 use message::MessageBatch;
-use tokio::{select, sync::mpsc, task::JoinHandle};
+use tokio::{
+    select,
+    sync::{mpsc, RwLock},
+    task::JoinHandle,
+};
 use tracing::debug;
 use types::{
     devices::modbus::{
@@ -32,7 +33,7 @@ pub struct Sink {
             mpsc::Receiver<()>,
             mpsc::Receiver<MessageBatch>,
             mpsc::Sender<WritePointEvent>,
-            Arc<AtomicBool>,
+            Arc<RwLock<Option<String>>>,
         )>,
     >,
 
@@ -147,7 +148,7 @@ impl Sink {
     pub async fn start(
         &mut self,
         device_tx: mpsc::Sender<WritePointEvent>,
-        device_err: Arc<AtomicBool>,
+        device_err: Arc<RwLock<Option<String>>>,
     ) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -171,7 +172,7 @@ impl Sink {
         mut mb_rx: mpsc::Receiver<MessageBatch>,
         device_tx: mpsc::Sender<WritePointEvent>,
         sink_conf: SinkConf,
-        device_err: Arc<AtomicBool>,
+        device_err: Arc<RwLock<Option<String>>>,
     ) {
         let join_handle = tokio::spawn(async move {
             loop {
@@ -182,7 +183,7 @@ impl Sink {
 
                     mb = mb_rx.recv() => {
                         if let Some(mb) = mb {
-                            if !device_err.load(Ordering::SeqCst) {
+                            if device_err.read().await.is_none() {
                                 Sink::send_write_point_event(mb, &sink_conf, &device_tx).await;
                             }
                         }
