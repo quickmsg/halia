@@ -3,8 +3,7 @@ use common::{error::HaliaResult, persistence};
 use mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
-use tracing::debug;
-use types::{apps::SearchAppsResp, Pagination};
+use types::{apps::SearchAppsResp, DashboardApp, Pagination};
 use uuid::Uuid;
 
 pub mod http_client;
@@ -21,6 +20,10 @@ pub static GLOBAL_APP_MANAGER: LazyLock<AppManager> = LazyLock::new(|| AppManage
 impl AppManager {
     pub async fn create(&self, r#type: &'static str, app_id: Uuid) {
         self.apps.write().await.push((r#type, app_id));
+    }
+
+    pub async fn search_dashboard(&self) -> DashboardApp {
+        todo!()
     }
 
     pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchAppsResp> {

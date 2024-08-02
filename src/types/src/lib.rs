@@ -47,3 +47,30 @@ pub enum TargetValueType {
     Const,
     Variable,
 }
+
+#[derive(Serialize)]
+pub struct Dashboard {
+    pub device: DashboardDevice,
+    pub app: DashboardApp,
+    pub rule: DashboardRule,
+}
+
+#[derive(Serialize)]
+pub struct DashboardDevice {
+    pub total: usize,
+    pub on_cnt: usize,
+    pub err_cnt: usize,
+}
+
+#[derive(Serialize)]
+pub struct DashboardApp {
+    pub total: usize,
+    pub on_cnt: usize,
+    pub err_cnt: usize,
+}
+
+#[derive(Serialize)]
+pub struct DashboardRule {
+    pub total: usize,
+    pub on_cnt: usize,
+}

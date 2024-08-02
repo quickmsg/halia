@@ -141,7 +141,7 @@ impl Modbus {
     pub fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id.clone(),
-            r#type: TYPE,
+            typ: TYPE,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on,
             err: self.err_info.clone(),

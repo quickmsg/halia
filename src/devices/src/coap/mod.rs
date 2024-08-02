@@ -86,7 +86,7 @@ impl Coap {
         // TODO
         SearchDevicesItemResp {
             id: self.id.clone(),
-            r#type: TYPE,
+            typ: TYPE,
             on: self.client.is_some(),
             err: self.err.clone(),
             rtt: 999,

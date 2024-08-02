@@ -130,6 +130,6 @@ pub struct SearchRulesResp {
 #[derive(Serialize)]
 pub struct SearchRulesItemResp {
     pub id: Uuid,
-    pub conf: CreateUpdateRuleReq,
     pub on: bool,
+    pub conf: CreateUpdateRuleReq,
 }

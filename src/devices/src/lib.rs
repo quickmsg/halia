@@ -12,7 +12,7 @@ use types::{
         coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
         SearchDevicesResp,
     },
-    Pagination, QueryParams,
+    DashboardDevice, Pagination, QueryParams,
 };
 
 use uuid::Uuid;
@@ -34,6 +34,10 @@ impl DeviceManager {
         self.devices.write().await.push((r#type, device_id));
     }
 
+    pub async fn search_dashboard(&self) -> DashboardDevice {
+        todo!()
+    }
+
     pub async fn search(
         &self,
         pagination: Pagination,
@@ -42,8 +46,6 @@ impl DeviceManager {
         let mut data = vec![];
         let mut i = 0;
         let mut total = 0;
-        let mut err_cnt = 0;
-        let mut close_cnt = 0;
 
         for (typ, device_id) in self.devices.read().await.iter().rev() {
             if let Some(query_typ) = &query_params.typ {
@@ -93,12 +95,7 @@ impl DeviceManager {
             }
         }
 
-        SearchDevicesResp {
-            total,
-            err_cnt,
-            close_cnt,
-            data,
-        }
+        SearchDevicesResp { total, data }
     }
 
     pub async fn delete(&self, device_id: &Uuid) {

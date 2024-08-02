@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 use tracing::error;
 use types::{
     rules::{CreateUpdateRuleReq, SearchRulesResp},
-    Pagination,
+    DashboardRule, Pagination,
 };
 use uuid::Uuid;
 
@@ -32,6 +32,10 @@ impl RuleManager {
             }
             Err(e) => Err(e),
         }
+    }
+
+    pub async fn search_dashboard(&self) -> DashboardRule {
+        todo!()
     }
 
     pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchRulesResp> {
