@@ -11,13 +11,11 @@ pub struct Atan {
     target_field: Option<String>,
 }
 
-impl Atan {
-    pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-        Ok(Box::new(Atan {
-            field: conf.field,
-            target_field: conf.target_field,
-        }))
-    }
+pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Atan {
+        field: conf.field,
+        target_field: conf.target_field,
+    }))
 }
 
 impl Computer for Atan {

@@ -1,52 +1,51 @@
 use anyhow::Result;
-use message::Message;
+use message::{Message, MessageValue};
+use types::rules::functions::ComputerConf;
+
+use super::Computer;
 
 struct Atanh {
     field: String,
-    target_field: String,
+    target_field: Option<String>,
 }
 
-pub fn new(field: String, target_field: String) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Atanh {
-        field,
-        target_field,
+        field: conf.field,
+        target_field: conf.target_field,
     }))
 }
 
 impl Computer for Atanh {
     fn compute(&self, message: &mut Message) {
-        match message.get(&self.field) {
+        let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                message::MessageValue::Int64(mv) => {
+                MessageValue::Int64(mv) => {
                     if *mv <= -1 || *mv >= 1 {
-                        return;
+                        MessageValue::Null
                     }
-                    message.add(
-                        self.target_field.clone(),
-                        message::MessageValue::Float64((*mv as f64).atanh()),
-                    )
+                    MessageValue::Float64((*mv as f64).atanh())
                 }
-                message::MessageValue::Uint64(mv) => {
+                MessageValue::Uint64(mv) => {
                     if *mv >= 1 {
-                        return;
+                        MessageValue::Null
                     }
-                    message.add(
-                        self.target_field.clone(),
-                        message::MessageValue::Float64((*mv as f64).atanh()),
-                    )
+                    MessageValue::Float64((*mv as f64).atanh())
                 }
-                message::MessageValue::Float64(mv) => {
+                MessageValue::Float64(mv) => {
                     if *mv <= -1.0 || *mv >= 1.0 {
-                        return;
+                        MessageValue::Null
                     }
-                    message.add(
-                        self.target_field.clone(),
-                        message::MessageValue::Float64(mv.atanh()),
-                    )
+                    MessageValue::Float64(mv.atanh())
                 }
-                _ => {}
+                _ => MessageValue::Null,
             },
-            None => {}
+            None => MessageValue::Null,
+        };
+
+        match &self.target_field {
+            Some(target_field) => message.add(target_field.clone(), value),
+            None => message.set(&self.field, value),
         }
     }
 }
