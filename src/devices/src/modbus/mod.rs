@@ -5,7 +5,6 @@ use common::{
 use message::MessageBatch;
 use point::Point;
 use protocol::modbus::{tcp, Context, FunctionCode};
-use serde_json::json;
 use sink::Sink;
 use std::{
     io,
@@ -31,7 +30,7 @@ use types::{
             Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType,
             Encode, Endian, ModbusConf, SearchPointsResp, SearchSinksResp, Type,
         },
-        SearchDevicesItemResp,
+        SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination, Value,
 };
@@ -146,7 +145,10 @@ impl Modbus {
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on,
             err: self.err_info.clone(),
-            conf: json!(&self.conf),
+            conf: SearchDevicesItemConf {
+                base: self.conf.base.clone(),
+                ext: serde_json::json!(self.conf.ext),
+            },
         }
     }
 

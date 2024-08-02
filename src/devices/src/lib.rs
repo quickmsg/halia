@@ -12,7 +12,7 @@ use types::{
         coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
         SearchDevicesResp,
     },
-    Pagination,
+    Pagination, QueryParams,
 };
 
 use uuid::Uuid;
@@ -34,14 +34,25 @@ impl DeviceManager {
         self.devices.write().await.push((r#type, device_id));
     }
 
-    pub async fn search(&self, pagination: Pagination) -> SearchDevicesResp {
+    pub async fn search(
+        &self,
+        pagination: Pagination,
+        query_params: QueryParams,
+    ) -> SearchDevicesResp {
         let mut data = vec![];
         let mut i = 0;
         let mut total = 0;
         let mut err_cnt = 0;
         let mut close_cnt = 0;
-        for (r#type, device_id) in self.devices.read().await.iter().rev() {
-            let resp = match r#type {
+
+        for (typ, device_id) in self.devices.read().await.iter().rev() {
+            if let Some(query_typ) = &query_params.typ {
+                if typ != query_typ {
+                    continue;
+                }
+            }
+
+            let resp = match typ {
                 &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id),
                 &opcua::TYPE => GLOBAL_OPCUA_MANAGER.search(device_id),
                 &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
@@ -50,12 +61,24 @@ impl DeviceManager {
 
             match resp {
                 Ok(resp) => {
-                    if resp.err.is_some() {
-                        err_cnt += 1;
+                    if let Some(query_name) = &query_params.name {
+                        if !resp.conf.base.name.contains(query_name) {
+                            continue;
+                        }
                     }
-                    if !*&resp.on {
-                        close_cnt += 1;
+
+                    if let Some(on) = &query_params.on {
+                        if resp.on != *on {
+                            continue;
+                        }
                     }
+
+                    if let Some(err) = &query_params.err {
+                        if resp.err.is_some() != *err {
+                            continue;
+                        }
+                    }
+
                     if i >= (pagination.page - 1) * pagination.size
                         && i < pagination.page * pagination.size
                     {

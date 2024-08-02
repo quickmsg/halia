@@ -5,7 +5,6 @@ use common::{
 };
 use message::MessageBatch;
 use protocol::coap::client::UdpCoAPClient;
-use serde_json::json;
 use sink::Sink;
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::{broadcast, mpsc};
@@ -15,7 +14,7 @@ use types::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateSinkReq, SearchAPIsResp,
             SearchSinksResp,
         },
-        SearchDevicesItemResp,
+        SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination,
 };
@@ -91,7 +90,10 @@ impl Coap {
             on: self.client.is_some(),
             err: self.err.clone(),
             rtt: 999,
-            conf: json!(&self.conf),
+            conf: SearchDevicesItemConf {
+                base: todo!(),
+                ext: todo!(),
+            },
         }
     }
 

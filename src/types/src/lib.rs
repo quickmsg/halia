@@ -19,6 +19,15 @@ pub struct Pagination {
     pub size: usize,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct QueryParams {
+    pub name: Option<String>,
+    #[serde(rename = "type")]
+    pub typ: Option<String>,
+    pub on: Option<bool>,
+    pub err: Option<bool>,
+}
+
 #[derive(Deserialize)]
 pub struct Value {
     pub value: serde_json::Value,

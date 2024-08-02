@@ -25,7 +25,7 @@ use types::{
             CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq, OpcuaConf,
             SearchGroupVariablesResp, SearchGroupsResp,
         },
-        SearchDevicesItemResp,
+        SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination,
 };
@@ -138,7 +138,10 @@ impl Opcua {
             on: self.on,
             err: self.err.clone(),
             rtt: 9999,
-            conf: json!(&self.conf),
+            conf: SearchDevicesItemConf {
+                base: self.conf.base_conf.clone(),
+                ext: serde_json::json!(self.conf.opcua_conf),
+            },
         }
     }
 
