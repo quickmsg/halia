@@ -46,6 +46,7 @@ pub enum NodeType {
     Window,
     Filter,
     Operator,
+    Computer,
     DeviceSink,
     AppSink,
 }

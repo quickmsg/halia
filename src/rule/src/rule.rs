@@ -5,16 +5,15 @@ use common::{
     persistence,
 };
 use devices::{modbus::manager::GLOBAL_MODBUS_MANAGER, opcua::manager::GLOBAL_OPCUA_MANAGER};
-use functions::{filter, merge::merge::Merge, window};
+use functions::{compute, filter, merge::merge::Merge, window};
 use message::MessageBatch;
 use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error};
 use types::rules::{
     apps::mqtt_client,
-    devices::modbus,
-    devices::opcua,
-    functions::{FilterConf, WindowConf},
+    devices::{modbus, opcua},
+    functions::{ComputerConf, FilterConf, WindowConf},
     CreateUpdateRuleReq, Node, NodeType, SearchRulesItemResp, SinkNode, SourceNode,
 };
 use uuid::Uuid;
@@ -283,6 +282,12 @@ impl Rule {
                         NodeType::Filter => {
                             let conf: Vec<FilterConf> = serde_json::from_value(node.conf.clone())?;
                             functions.push(filter::new(conf)?);
+                            ids.push(id);
+                        }
+                        NodeType::Computer => {
+                            let conf: Vec<ComputerConf> =
+                                serde_json::from_value(node.conf.clone())?;
+                            functions.push(compute::new(conf)?);
                             ids.push(id);
                         }
                         NodeType::DeviceSink => {
