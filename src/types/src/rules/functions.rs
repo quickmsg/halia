@@ -14,9 +14,21 @@ pub struct WindowConf {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct FilterConf {
     #[serde(rename = "type")]
-    pub typ: String,
+    pub typ: FilterType,
     pub field: String,
     pub value: TargetValue,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum FilterType {
+    Ct,
+    Eq,
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+    Neq,
 }
 
 #[derive(Deserialize, Serialize)]
