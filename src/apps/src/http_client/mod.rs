@@ -111,6 +111,7 @@ impl HttpClient {
             on: self.on,
             typ: TYPE,
             conf: serde_json::to_value(&self.conf).unwrap(),
+            err: false,
         }
     }
 

@@ -35,7 +35,16 @@ impl RuleManager {
     }
 
     pub async fn search_dashboard(&self) -> DashboardRule {
-        todo!()
+        let mut total = 0;
+        let mut on_cnt = 0;
+        for rule in self.rules.read().await.iter() {
+            total += 1;
+            if rule.on {
+                on_cnt += 1;
+            }
+        }
+
+        DashboardRule { total, on_cnt }
     }
 
     pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchRulesResp> {

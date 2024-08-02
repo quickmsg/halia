@@ -3,6 +3,7 @@ use common::{error::HaliaResult, persistence};
 use mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
+use tracing::warn;
 use types::{apps::SearchAppsResp, DashboardApp, Pagination};
 use uuid::Uuid;
 
@@ -23,7 +24,35 @@ impl AppManager {
     }
 
     pub async fn search_dashboard(&self) -> DashboardApp {
-        todo!()
+        let mut total = 0;
+        let mut on_cnt = 0;
+        let mut err_cnt = 0;
+        for (r#type, app_id) in self.apps.read().await.iter() {
+            let resp = match r#type {
+                &mqtt_client::TYPE => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id),
+                _ => unreachable!(),
+            };
+            match resp {
+                Ok(resp) => {
+                    total += 1;
+                    if resp.on {
+                        on_cnt += 1;
+                    }
+                    if resp.err {
+                        err_cnt += 1;
+                    }
+                }
+                Err(e) => {
+                    warn!("{}", e);
+                }
+            }
+        }
+
+        DashboardApp {
+            total,
+            on_cnt,
+            err_cnt,
+        }
     }
 
     pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchAppsResp> {

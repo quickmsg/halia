@@ -358,6 +358,8 @@ impl MqttClient {
             on: self.on,
             typ: TYPE,
             conf: serde_json::to_value(&self.conf).unwrap(),
+            // TODO
+            err: false,
         }
     }
 

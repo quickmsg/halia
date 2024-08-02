@@ -16,5 +16,6 @@ pub struct SearchAppsItemResp {
     #[serde(rename = "type")]
     pub typ: &'static str,
     pub on: bool,
+    pub err: bool,
     pub conf: serde_json::Value,
 }

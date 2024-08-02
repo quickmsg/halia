@@ -35,7 +35,37 @@ impl DeviceManager {
     }
 
     pub async fn search_dashboard(&self) -> DashboardDevice {
-        todo!()
+        let mut total = 0;
+        let mut on_cnt = 0;
+        let mut err_cnt = 0;
+        for (typ, device_id) in self.devices.read().await.iter().rev() {
+            let resp = match typ {
+                &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id),
+                &opcua::TYPE => GLOBAL_OPCUA_MANAGER.search(device_id),
+                &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
+                _ => unreachable!(),
+            };
+
+            match resp {
+                Ok(resp) => {
+                    total += 1;
+                    if resp.on {
+                        on_cnt += 1;
+                    }
+                    if resp.err.is_some() {
+                        err_cnt += 1;
+                    }
+                }
+                Err(e) => {
+                    warn!("{}", e);
+                }
+            }
+        }
+        DashboardDevice {
+            total,
+            on_cnt,
+            err_cnt,
+        }
     }
 
     pub async fn search(
