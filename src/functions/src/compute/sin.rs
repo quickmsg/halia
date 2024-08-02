@@ -1,35 +1,36 @@
 use anyhow::Result;
-use message::Message;
+use message::{Message, MessageValue};
+use types::rules::functions::ComputerConf;
 
-use crate::computes::Computer;
+use super::Computer;
 
 struct Sin {
     field: String,
-    target_field: String,
+    target_field: Option<String>,
 }
 
-fn new(field: String, target_field: String) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Sin {
-        field,
-        target_field,
+        field: conf.field,
+        target_field: conf.target_field,
     }))
 }
 
 impl Computer for Sin {
     fn compute(&self, message: &mut Message) {
-        match message.get(&self.field) {
+        let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                message::MessageValue::Null => todo!(),
-                message::MessageValue::Boolean(_) => todo!(),
-                message::MessageValue::Int64(_) => todo!(),
-                message::MessageValue::Uint64(_) => todo!(),
-                message::MessageValue::Float64(_) => todo!(),
-                message::MessageValue::String(_) => todo!(),
-                message::MessageValue::Bytes(_) => todo!(),
-                message::MessageValue::Array(_) => todo!(),
-                message::MessageValue::Object(_) => todo!(),
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).sin()),
+                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).sin()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.sin()),
+                _ => MessageValue::Null,
             },
-            None => todo!(),
+            None => MessageValue::Null,
+        };
+
+        match &self.target_field {
+            Some(target_field) => message.add(target_field.clone(), value),
+            None => message.set(&self.field, value),
         }
     }
 }

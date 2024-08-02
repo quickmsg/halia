@@ -1,48 +1,48 @@
 use anyhow::Result;
+use message::MessageValue;
+use types::rules::functions::ComputerConf;
 
-use crate::computes::Computer;
+use super::Computer;
 
 struct Ln {
     field: String,
-    target_field: String,
+    target_field: Option<String>,
 }
 
-pub fn new(field: String, target_field: String) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Ln {
-        field,
-        target_field,
+        field: conf.field,
+        target_field: conf.target_field,
     }))
 }
 
 impl Computer for Ln {
     fn compute(&self, message: &mut message::Message) {
-        match message.get(&self.field) {
+        let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                message::MessageValue::Int64(mv) => {
+                MessageValue::Int64(mv) => {
                     if *mv <= 0 {
-                        return;
+                        MessageValue::Null
+                    } else {
+                        MessageValue::Float64((*mv as f64).ln())
                     }
-                    message.add(
-                        self.target_field.clone(),
-                        message::MessageValue::Float64((*mv as f64).ln()),
-                    )
                 }
-                message::MessageValue::Uint64(mv) => message.add(
-                    self.target_field.clone(),
-                    message::MessageValue::Float64((*mv as f64).ln()),
-                ),
-                message::MessageValue::Float64(mv) => {
+                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).ln()),
+                MessageValue::Float64(mv) => {
                     if *mv <= 0.0 {
-                        return;
+                        MessageValue::Null
+                    } else {
+                        MessageValue::Float64(mv.ln())
                     }
-                    message.add(
-                        self.target_field.clone(),
-                        message::MessageValue::Float64(mv.ln()),
-                    )
                 }
-                _ => {}
+                _ => MessageValue::Null,
             },
-            None => {}
+            None => MessageValue::Null,
+        };
+
+        match &self.target_field {
+            Some(target_field) => message.add(target_field.clone(), value),
+            None => message.set(&self.field, value),
         }
     }
 }

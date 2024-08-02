@@ -21,23 +21,26 @@ impl Computer for Asin {
     fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(value) => match value {
-                message::MessageValue::Int64(mv) => {
+                MessageValue::Int64(mv) => {
                     if *mv < 1 || *mv > 1 {
                         MessageValue::Null
+                    } else {
+                        message::MessageValue::Float64((*mv as f64).asin())
                     }
-                    message::MessageValue::Float64((*mv as f64).asin())
                 }
-                message::MessageValue::Uint64(mv) => {
+                MessageValue::Uint64(mv) => {
                     if *mv > 1 {
                         MessageValue::Null
+                    } else {
+                        message::MessageValue::Float64((*mv as f64).asin())
                     }
-                    message::MessageValue::Float64((*mv as f64).asin())
                 }
-                message::MessageValue::Float64(mv) => {
+                MessageValue::Float64(mv) => {
                     if *mv < -1.0 || *mv > 1.0 {
                         MessageValue::Null
+                    } else {
+                        message::MessageValue::Float64(mv.asin())
                     }
-                    message::MessageValue::Float64(mv.asin())
                 }
                 _ => MessageValue::Null,
             },

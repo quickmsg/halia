@@ -1,38 +1,36 @@
 use anyhow::Result;
+use message::MessageValue;
+use types::rules::functions::ComputerConf;
 
-use crate::computes::Computer;
+use super::Computer;
 
 pub struct Exp2 {
     field: String,
-    target_field: String,
+    target_field: Option<String>,
 }
 
-pub fn new(field: String, target_field: String) -> Result<Exp2> {
-    Ok(Exp2 {
-        field,
-        target_field,
-    })
+pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Exp2 {
+        field: conf.field,
+        target_field: conf.target_field,
+    }))
 }
 
 impl Computer for Exp2 {
     fn compute(&self, message: &mut message::Message) {
-        match message.get(&self.field) {
+        let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                message::MessageValue::Int64(mv) => message.add(
-                    self.target_field.clone(),
-                    message::MessageValue::Float64((*mv as f64).exp2()),
-                ),
-                message::MessageValue::Uint64(mv) => message.add(
-                    self.target_field.clone(),
-                    message::MessageValue::Float64((*mv as f64).exp2()),
-                ),
-                message::MessageValue::Float64(mv) => message.add(
-                    self.target_field.clone(),
-                    message::MessageValue::Float64(mv.exp2()),
-                ),
-                _ => {}
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).exp2()),
+                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).exp2()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.exp2()),
+                _ => MessageValue::Null,
             },
-            None => {}
+            None => MessageValue::Null,
+        };
+
+        match &self.target_field {
+            Some(target_field) => message.add(target_field.clone(), value),
+            None => message.set(&self.field, value),
         }
     }
 }

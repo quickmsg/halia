@@ -10,10 +10,10 @@ pub struct Exp {
 }
 
 pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Exp {
+    Ok(Box::new(Exp {
         field: conf.field,
         target_field: conf.target_field,
-    })
+    }))
 }
 
 impl Computer for Exp {

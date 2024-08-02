@@ -49,13 +49,13 @@ pub fn new(confs: Vec<ComputerConf>) -> Result<Box<dyn Function>> {
             types::rules::functions::ComputerType::Ceil => ceil::new(conf)?,
             types::rules::functions::ComputerType::Cos => cos::new(conf)?,
             types::rules::functions::ComputerType::Cosh => cosh::new(conf)?,
-            types::rules::functions::ComputerType::Degrees => todo!(),
-            types::rules::functions::ComputerType::Exp => todo!(),
-            types::rules::functions::ComputerType::Exp2 => todo!(),
-            types::rules::functions::ComputerType::Floor => todo!(),
-            types::rules::functions::ComputerType::Ln => todo!(),
-            types::rules::functions::ComputerType::Log => todo!(),
-            types::rules::functions::ComputerType::Sin => todo!(),
+            types::rules::functions::ComputerType::Degrees => degrees::new(conf)?,
+            types::rules::functions::ComputerType::Exp => exp::new(conf)?,
+            types::rules::functions::ComputerType::Exp2 => exp2::new(conf)?,
+            types::rules::functions::ComputerType::Floor => floor::new(conf)?,
+            types::rules::functions::ComputerType::Ln => ln::new(conf)?,
+            types::rules::functions::ComputerType::Log => log::new(conf)?,
+            types::rules::functions::ComputerType::Sin => sin::new(conf)?,
         };
         computers.push(computer);
     }

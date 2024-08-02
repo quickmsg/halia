@@ -24,20 +24,23 @@ impl Computer for Acos {
                 MessageValue::Int64(mv) => {
                     if *mv < -1 || *mv > 1 {
                         MessageValue::Null
+                    } else {
+                        MessageValue::Float64((*mv as f64).acos())
                     }
-                    MessageValue::Float64((*mv as f64).acos())
                 }
                 MessageValue::Uint64(mv) => {
                     if *mv > 1 {
                         MessageValue::Null
+                    } else {
+                        MessageValue::Float64((*mv as f64).acos())
                     }
-                    MessageValue::Float64((*mv as f64).acos())
                 }
                 MessageValue::Float64(mv) => {
                     if *mv < -1.0 || *mv > 1.0 {
                         MessageValue::Null
+                    } else {
+                        MessageValue::Float64(mv.acos())
                     }
-                    MessageValue::Float64(mv.acos())
                 }
                 _ => MessageValue::Null,
             },

@@ -66,7 +66,7 @@ impl Function for ComputeNode {
         let messages = message_batch.get_messages_mut();
         for message in messages {
             for ci in &self.compute_infos {
-                ci.computer.compute(message);
+                // ci.computer.compute(message);
                 // Some(value) => {
                 //     debug!("{}, {}", ci.output_field, value);
                 //     // message.set(&ci.output_field, value);

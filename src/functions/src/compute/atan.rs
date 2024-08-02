@@ -25,20 +25,23 @@ impl Computer for Atan {
                 MessageValue::Int64(mv) => {
                     if (*mv as f64) > -PI / 2.0 || (*mv as f64) > PI / 2.0 {
                         MessageValue::Null
+                    } else {
+                        MessageValue::Float64((*mv as f64).atan())
                     }
-                    MessageValue::Float64((*mv as f64).atan())
                 }
                 MessageValue::Uint64(mv) => {
                     if (*mv as f64) > PI / 2.0 {
                         MessageValue::Null
+                    } else {
+                        MessageValue::Float64((*mv as f64).atan())
                     }
-                    MessageValue::Float64((*mv as f64).atan())
                 }
                 MessageValue::Float64(mv) => {
                     if *mv < -PI / 2.0 || *mv > PI / 2.0 {
                         MessageValue::Null
+                    } else {
+                        MessageValue::Float64(mv.atan())
                     }
-                    MessageValue::Float64(mv.atan())
                 }
                 _ => MessageValue::Null,
             },

@@ -1,20 +1,25 @@
-use anyhow::Result;
-use types::TargetValue;
+use anyhow::{bail, Result};
+use message::MessageValue;
+use types::{rules::functions::ComputerConf, TargetValue};
 
-use crate::computes::Computer;
+use super::Computer;
 
 struct Log {
     field: String,
     arg: TargetValue,
-    target_field: String,
+    target_field: Option<String>,
 }
 
-pub fn new(field: String, arg: TargetValue, target_field: String) -> Result<Log> {
-    Ok(Log {
-        field,
+pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
+    let arg = match conf.arg {
+        Some(arg) => arg,
+        None => bail!("log必须含有参数"),
+    };
+    Ok(Box::new(Log {
+        field: conf.field,
         arg,
-        target_field,
-    })
+        target_field: conf.target_field,
+    }))
 }
 
 impl Computer for Log {
@@ -41,35 +46,31 @@ impl Computer for Log {
             },
         };
 
-        match message.get(&self.field) {
+        let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                message::MessageValue::Int64(mv) => {
+                MessageValue::Int64(mv) => {
                     if *mv <= 0 {
-                        return;
+                        MessageValue::Null
+                    } else {
+                        MessageValue::Float64((*mv as f64).log(arg))
                     }
-                    message.add(
-                        self.target_field.clone(),
-                        message::MessageValue::Float64((*mv as f64).log(arg)),
-                    );
                 }
-                message::MessageValue::Uint64(mv) => {
-                    message.add(
-                        self.target_field.clone(),
-                        message::MessageValue::Float64((*mv as f64).log(arg)),
-                    );
-                }
-                message::MessageValue::Float64(mv) => {
+                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).log(arg)),
+                MessageValue::Float64(mv) => {
                     if *mv <= 0.0 {
-                        return;
+                        MessageValue::Null
+                    } else {
+                        MessageValue::Float64(mv.log(arg))
                     }
-                    message.add(
-                        self.target_field.clone(),
-                        message::MessageValue::Float64(mv.log(arg)),
-                    );
                 }
-                _ => {}
+                _ => MessageValue::Null,
             },
-            None => {}
+            None => MessageValue::Null,
+        };
+
+        match &self.target_field {
+            Some(target_field) => message.add(target_field.clone(), value),
+            None => message.set(&self.field, value),
         }
     }
 }
