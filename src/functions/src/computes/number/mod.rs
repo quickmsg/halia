@@ -14,3 +14,7 @@ mod degrees;
 mod exp;
 mod exp2;
 mod floor;
+mod ln;
+mod log;
+// mod power;
+mod sin;
