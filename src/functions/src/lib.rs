@@ -1,11 +1,12 @@
 use message::MessageBatch;
 
 pub mod aggregate;
+pub mod compute;
+pub mod computes;
 mod field;
 pub mod filter;
 pub mod merge;
 pub mod window;
-pub mod computes;
 
 pub trait Function: Send + Sync {
     // 修改消息，根据返回值判断是否要继续流程，为false则消息丢弃

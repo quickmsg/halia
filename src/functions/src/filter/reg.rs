@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use message::MessageValue;
 use regex::Regex;
 use serde::Deserialize;
+use types::rules::functions::FilterConf;
 
 use super::Filter;
 
@@ -18,8 +19,7 @@ struct Conf {
     value: String,
 }
 
-pub fn new(conf: serde_json::Value) -> Result<Box<dyn Filter>> {
-    let conf: Conf = serde_json::from_value(conf)?;
+pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
     match Regex::new(&conf.value) {
         Ok(reg) => Ok(Box::new(Reg {
             field: conf.field,

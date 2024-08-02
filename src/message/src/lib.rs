@@ -124,7 +124,22 @@ impl Message {
     }
 
     pub fn add(&mut self, field: String, value: MessageValue) {
-        self.value.as_object_mut().unwrap().insert(field, value);
+        match self.value.as_object_mut() {
+            Some(obj) => {
+                obj.insert(field, value);
+            }
+            None => {}
+        }
+    }
+
+    pub fn set(&mut self, field: &String, value: MessageValue) {
+        match self.value.as_object_mut() {
+            Some(obj) => match obj.get_mut(field) {
+                Some(v) => *v = value,
+                None => {}
+            },
+            None => {}
+        }
     }
 }
 

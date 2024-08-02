@@ -9,11 +9,10 @@ use crate::Function;
 // mod float;
 // mod int;
 // mod string;
-mod number;
 
-pub(crate) trait Computer: Sync + Send {
-    fn compute(&self, message: &mut Message);
-}
+// pub(crate) trait Computer: Sync + Send {
+//     fn compute(&self, message: &mut Message);
+// }
 
 #[derive(Deserialize)]
 pub(crate) struct Rule {
@@ -27,7 +26,7 @@ pub(crate) struct Rule {
 
 struct ComputeInfo {
     output_field: String,
-    computer: Box<dyn Computer>,
+    // computer: Box<dyn Computer>,
 }
 
 pub struct ComputeNode {

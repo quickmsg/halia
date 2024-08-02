@@ -12,7 +12,7 @@ mod gte;
 mod lt;
 mod lte;
 mod neq;
-mod reg;
+// mod reg;
 
 pub trait Filter: Sync + Send {
     fn filter(&self, message: &Message) -> bool;
