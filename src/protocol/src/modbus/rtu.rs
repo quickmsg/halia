@@ -1,33 +1,31 @@
-use std::{io, net::SocketAddr};
+use std::io;
 
-use tokio::{
-    io::{AsyncReadExt as _, AsyncWriteExt},
-    net::TcpStream,
-};
+use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt};
 
 use super::{encode_u16, Context, FunctionCode, ModbusError, ProtocolError};
 
-struct RtuContext {
+struct RtuContext<T> {
     function_code: u8,
     slave: u8,
     buffer: [u8; 255],
     buffer_len: u8,
-    stream: TcpStream,
+    transport: T,
 }
 
-pub async fn new(addr: SocketAddr) -> io::Result<impl Context> {
-    let stream = TcpStream::connect(addr).await?;
-
+pub async fn new<T>(transport: T) -> io::Result<impl Context>
+where
+    T: AsyncRead + AsyncWrite + Unpin + Send,
+{
     Ok(RtuContext {
         function_code: 0,
-        stream,
         slave: 0,
         buffer: [0; 255],
         buffer_len: 0,
+        transport,
     })
 }
 
-impl RtuContext {
+impl<T> RtuContext<T> {
     fn encode_common(&mut self, function_code: FunctionCode, slave: u8, addr: u16) {
         self.buffer[0] = slave;
         self.slave = slave;
@@ -42,8 +40,26 @@ impl RtuContext {
     // 12
     fn encode_read(&mut self, function_code: FunctionCode, slave: u8, addr: u16, quantity: u16) {
         self.encode_common(function_code, slave, addr);
+        (self.buffer[4], self.buffer[5]) = encode_u16(quantity);
+        (self.buffer[6], self.buffer[7]) = self.crc16();
+    }
 
-        (self.buffer[10], self.buffer[11]) = encode_u16(quantity);
+    fn decode_common(&mut self, n: usize) -> Result<(), ProtocolError> {
+        if n == 0 {
+            return Err(ProtocolError::EmptyResp);
+        }
+
+        let slave = self.buffer[6];
+        if self.slave != slave {
+            return Err(ProtocolError::UnitIdMismatch);
+        }
+
+        let function_code = self.buffer[7];
+        if function_code != self.function_code {
+            return Err(ProtocolError::UnitIdMismatch);
+        }
+
+        Ok(())
     }
 
     fn decode_read(&mut self, n: usize) -> Result<usize, ProtocolError> {
@@ -193,15 +209,18 @@ impl RtuContext {
         let mut crc_lo = 0xFF;
         for n in 0..(self.buffer_len as usize) {
             let index = (crc_hi ^ self.buffer[n]) as usize;
-            crc_hi = crc_lo ^ table_crc_hi[index];
-            crc_lo = table_crc_lo[index];
+            crc_hi = crc_lo ^ TABLE_CRC_HI[index];
+            crc_lo = TABLE_CRC_LO[index];
         }
 
         (crc_hi, crc_lo)
     }
 }
 
-impl Context for RtuContext {
+impl<T> Context for RtuContext<T>
+where
+    T: AsyncRead + AsyncWrite + Unpin + Send,
+{
     async fn read(
         &mut self,
         function_code: FunctionCode,
@@ -210,11 +229,11 @@ impl Context for RtuContext {
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError> {
         self.encode_read(function_code, slave, addr, quantity);
-        if let Err(e) = self.stream.write_all(&self.buffer[..12]).await {
+        if let Err(e) = self.transport.write_all(&self.buffer[..12]).await {
             return Err(ModbusError::Transport(e));
         }
 
-        match self.stream.read(&mut self.buffer).await {
+        match self.transport.read(&mut self.buffer).await {
             Ok(n) => match self.decode_read(n) {
                 Ok(n) => Ok(&mut self.buffer[9..9 + n]),
                 Err(e) => Err(ModbusError::Protocol(e)),
@@ -231,8 +250,11 @@ impl Context for RtuContext {
         value: &[u8],
     ) -> Result<(), ModbusError> {
         let len = self.encode_write(function_code, slave, addr, value);
+        if let Err(e) = self.transport.write_all(&mut self.buffer[..len]).await {
+            return Err(ModbusError::Transport(e));
+        }
 
-        match self.stream.write(&mut self.buffer[..len]).await {
+        match self.transport.read(&mut self.buffer).await {
             Ok(n) => match self.decode_write(n) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(ModbusError::Protocol(e)),
@@ -242,7 +264,7 @@ impl Context for RtuContext {
     }
 }
 
-const table_crc_hi: [u8; 256] = [
+const TABLE_CRC_HI: [u8; 256] = [
     0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40,
     0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
     0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
@@ -261,7 +283,7 @@ const table_crc_hi: [u8; 256] = [
     0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81, 0x40,
 ];
 
-const table_crc_lo: [u8; 256] = [
+const TABLE_CRC_LO: [u8; 256] = [
     0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06, 0x07, 0xC7, 0x05, 0xC5, 0xC4, 0x04,
     0xCC, 0x0C, 0x0D, 0xCD, 0x0F, 0xCF, 0xCE, 0x0E, 0x0A, 0xCA, 0xCB, 0x0B, 0xC9, 0x09, 0x08, 0xC8,
     0xD8, 0x18, 0x19, 0xD9, 0x1B, 0xDB, 0xDA, 0x1A, 0x1E, 0xDE, 0xDF, 0x1F, 0xDD, 0x1D, 0x1C, 0xDC,

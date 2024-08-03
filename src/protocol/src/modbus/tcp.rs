@@ -1,22 +1,33 @@
-use std::{io, net::SocketAddr};
+use std::{fmt::Debug, io};
 
-use tokio::{
-    io::{AsyncReadExt as _, AsyncWriteExt},
-    net::TcpStream,
-};
+use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt};
 
 use super::{decode_u16, encode_u16, Context, FunctionCode, ModbusError, ProtocolError};
 
-struct TcpContext {
+struct TcpContext<T> {
     transcation_id: u16,
     function_code: u8,
     slave: u8,
     buffer: [u8; 255],
     buffer_len: usize,
-    stream: TcpStream,
+    transport: T,
 }
 
-impl TcpContext {
+pub async fn new<T>(transport: T) -> io::Result<impl Context>
+where
+    T: AsyncRead + AsyncWrite + Debug + Unpin + Send + 'static,
+{
+    Ok(TcpContext {
+        function_code: 0,
+        transcation_id: 0,
+        slave: 0,
+        buffer: [0; 255],
+        buffer_len: 0,
+        transport,
+    })
+}
+
+impl<T> TcpContext<T> {
     fn update_transcation_id(&mut self) {
         if self.transcation_id < u16::MAX {
             self.transcation_id += 1;
@@ -198,20 +209,10 @@ impl TcpContext {
     }
 }
 
-pub async fn new(addr: SocketAddr) -> io::Result<impl Context> {
-    let stream = TcpStream::connect(addr).await?;
-
-    Ok(TcpContext {
-        stream,
-        function_code: 0,
-        transcation_id: 0,
-        slave: 0,
-        buffer: [0; 255],
-        buffer_len: 0,
-    })
-}
-
-impl Context for TcpContext {
+impl<T> Context for TcpContext<T>
+where
+    T: AsyncRead + AsyncWrite + Unpin + Send,
+{
     async fn read(
         &mut self,
         function_code: FunctionCode,
@@ -220,11 +221,15 @@ impl Context for TcpContext {
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError> {
         self.encode_read(function_code, slave, addr, quantity);
-        if let Err(e) = self.stream.write_all(&self.buffer[..self.buffer_len]).await {
+        if let Err(e) = self
+            .transport
+            .write_all(&self.buffer[..self.buffer_len])
+            .await
+        {
             return Err(ModbusError::Transport(e));
         }
 
-        match self.stream.read(&mut self.buffer).await {
+        match self.transport.read(&mut self.buffer).await {
             Ok(n) => match self.decode_read(n) {
                 Ok(_) => Ok(&mut self.buffer[9..self.buffer_len]),
                 Err(e) => Err(ModbusError::Protocol(e)),
@@ -241,7 +246,11 @@ impl Context for TcpContext {
         value: &[u8],
     ) -> Result<(), ModbusError> {
         self.encode_write(function_code, slave, addr, value);
-        match self.stream.write(&mut self.buffer[..self.buffer_len]).await {
+        match self
+            .transport
+            .write(&mut self.buffer[..self.buffer_len])
+            .await
+        {
             Ok(n) => match self.decode_write(n) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(ModbusError::Protocol(e)),

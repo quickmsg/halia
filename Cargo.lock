@@ -2168,6 +2168,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "tokio",
+ "tokio-serial",
  "tokio-stream",
  "tokio-util",
  "tracing",

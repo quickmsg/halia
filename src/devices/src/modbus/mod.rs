@@ -11,12 +11,13 @@ use std::{
     net::SocketAddr,
     str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicU16, Ordering},
+        atomic::{AtomicU16, Ordering},
         Arc,
     },
     time::{Duration, Instant},
 };
 use tokio::{
+    net::TcpStream,
     select,
     sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
@@ -342,11 +343,13 @@ impl Modbus {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
                 let ethernet = conf.ethernet.as_ref().unwrap();
-                let socket_addr: SocketAddr = format!("{}:{}", ethernet.host, ethernet.port)
+                let addr: SocketAddr = format!("{}:{}", ethernet.host, ethernet.port)
                     .parse()
                     .unwrap();
+
+                let stream = TcpStream::connect(addr).await?;
                 match ethernet.encode {
-                    Encode::Tcp => tcp::new(socket_addr).await,
+                    Encode::Tcp => tcp::new(stream).await,
                     _ => todo!(), // Encode::RtuOverTcp => Ok(rtu::attach(transport)),
                 }
             }
