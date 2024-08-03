@@ -3,8 +3,11 @@ use std::io;
 use async_trait::async_trait;
 use thiserror::Error;
 
+pub(crate) mod pdu;
 pub mod rtu;
 pub mod tcp;
+
+// 协议使用大端编码方式
 
 #[derive(PartialEq, Clone)]
 pub enum FunctionCode {

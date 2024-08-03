@@ -5,11 +5,12 @@ use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt};
 
 use super::{decode_u16, encode_u16, Context, FunctionCode, ModbusError, ProtocolError};
 
+// 最大为260Bytes，MBAP为7Byte
 struct TcpContext<T> {
     transcation_id: u16,
     function_code: u8,
     slave: u8,
-    buffer: [u8; 255],
+    buffer: [u8; 260],
     buffer_len: usize,
     transport: T,
 }
@@ -22,7 +23,7 @@ where
         function_code: 0,
         transcation_id: 0,
         slave: 0,
-        buffer: [0; 255],
+        buffer: [0; 260],
         buffer_len: 0,
         transport,
     }))
@@ -85,9 +86,11 @@ impl<T> TcpContext<T> {
             return Err(ProtocolError::UnitIdMismatch);
         }
 
+        // exception code 错误的情况下 最高有效为1 剩余相同
+        // 正常情况下，function code应为请求code
         let function_code = self.buffer[7];
         if function_code != self.function_code {
-            return Err(ProtocolError::UnitIdMismatch);
+            return Err(ProtocolError::FunctionCodeMismatch);
         }
 
         Ok(())
@@ -99,6 +102,8 @@ impl<T> TcpContext<T> {
         if n < 9 {
             return Err(ProtocolError::DataTooSmall);
         }
+
+        // byte count 1Byte
 
         // let len = decode_u16(self.buffer[4], self.buffer[5]);
 
@@ -231,6 +236,7 @@ where
             return Err(ModbusError::Transport(e));
         }
 
+        // timeout
         match self.transport.read(&mut self.buffer).await {
             Ok(n) => match self.decode_read(n) {
                 Ok(_) => Ok(&mut self.buffer[9..self.buffer_len]),

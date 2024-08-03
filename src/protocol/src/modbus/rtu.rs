@@ -5,10 +5,12 @@ use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt};
 
 use super::{encode_u16, Context, FunctionCode, ModbusError, ProtocolError};
 
+// PDU最大为256 Bytes，包含1位的服务器地址和2位crc教研码
+
 struct RtuContext<T> {
     function_code: u8,
     slave: u8,
-    buffer: [u8; 255],
+    buffer: [u8; 256],
     buffer_len: u8,
     transport: T,
 }
@@ -20,7 +22,7 @@ where
     Ok(Box::new(RtuContext {
         function_code: 0,
         slave: 0,
-        buffer: [0; 255],
+        buffer: [0; 256],
         buffer_len: 0,
         transport,
     }))

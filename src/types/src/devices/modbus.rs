@@ -712,13 +712,14 @@ pub enum Endian {
     Big,
 }
 
+// 每个区域可以有65536个数据
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Area {
-    DiscretesInput,
-    Coils, // 可读写
-    InputRegisters,
-    HoldingRegisters, // 可读写
+    DiscretesInput,   // bit 只读
+    Coils,            // bit 读写
+    InputRegisters,   // 16-bit word 只读
+    HoldingRegisters, // 16-bit word 读写
 }
 
 impl TryFrom<&str> for Area {
