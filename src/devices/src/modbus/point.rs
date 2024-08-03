@@ -184,7 +184,7 @@ impl Point {
         Ok(())
     }
 
-    pub async fn read(&mut self, ctx: &mut impl Context) -> io::Result<()> {
+    pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {
         let function_code = match self.conf.ext.area {
             Area::DiscretesInput => FunctionCode::ReadDiscreteInputs,
             Area::Coils => FunctionCode::ReadCoils,

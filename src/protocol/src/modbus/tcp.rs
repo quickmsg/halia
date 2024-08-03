@@ -1,5 +1,6 @@
 use std::{fmt::Debug, io};
 
+use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt};
 
 use super::{decode_u16, encode_u16, Context, FunctionCode, ModbusError, ProtocolError};
@@ -13,18 +14,18 @@ struct TcpContext<T> {
     transport: T,
 }
 
-pub async fn new<T>(transport: T) -> io::Result<impl Context>
+pub fn new<T>(transport: T) -> io::Result<Box<dyn Context>>
 where
     T: AsyncRead + AsyncWrite + Debug + Unpin + Send + 'static,
 {
-    Ok(TcpContext {
+    Ok(Box::new(TcpContext {
         function_code: 0,
         transcation_id: 0,
         slave: 0,
         buffer: [0; 255],
         buffer_len: 0,
         transport,
-    })
+    }))
 }
 
 impl<T> TcpContext<T> {
@@ -209,6 +210,7 @@ impl<T> TcpContext<T> {
     }
 }
 
+#[async_trait]
 impl<T> Context for TcpContext<T>
 where
     T: AsyncRead + AsyncWrite + Unpin + Send,

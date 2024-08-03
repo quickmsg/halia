@@ -41,10 +41,34 @@ pub struct Ethernet {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Serial {
     pub path: String,
-    pub stop_bits: u8,
+    pub stop_bits: StopBits,
     pub baud_rate: u32,
-    pub data_bits: u8,
-    pub parity: u8,
+    pub data_bits: DataBits,
+    pub parity: Parity,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum StopBits {
+    One,
+    Two,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum DataBits {
+    Five,
+    Six,
+    Seven,
+    Eight,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Parity {
+    None,
+    Odd,
+    Even,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

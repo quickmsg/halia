@@ -1,5 +1,6 @@
-use std::io;
+use std::{fmt::Debug, io};
 
+use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt};
 
 use super::{encode_u16, Context, FunctionCode, ModbusError, ProtocolError};
@@ -12,17 +13,17 @@ struct RtuContext<T> {
     transport: T,
 }
 
-pub async fn new<T>(transport: T) -> io::Result<impl Context>
+pub fn new<T>(transport: T) -> io::Result<Box<dyn Context>>
 where
-    T: AsyncRead + AsyncWrite + Unpin + Send,
+    T: AsyncRead + AsyncWrite + Debug + Unpin + Send + 'static,
 {
-    Ok(RtuContext {
+    Ok(Box::new(RtuContext {
         function_code: 0,
         slave: 0,
         buffer: [0; 255],
         buffer_len: 0,
         transport,
-    })
+    }))
 }
 
 impl<T> RtuContext<T> {
@@ -217,6 +218,7 @@ impl<T> RtuContext<T> {
     }
 }
 
+#[async_trait]
 impl<T> Context for RtuContext<T>
 where
     T: AsyncRead + AsyncWrite + Unpin + Send,

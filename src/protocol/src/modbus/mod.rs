@@ -1,5 +1,6 @@
 use std::io;
 
+use async_trait::async_trait;
 use thiserror::Error;
 
 pub mod rtu;
@@ -64,22 +65,23 @@ pub enum ProtocolError {
     FunctionCodeMismatch,
 }
 
-pub trait Context {
-    fn read(
+#[async_trait]
+pub trait Context: Send {
+    async fn read(
         &mut self,
         function_code: FunctionCode,
         slave: u8,
         addr: u16,
         quantity: u16,
-    ) -> impl std::future::Future<Output = Result<&mut [u8], ModbusError>> + Send;
+    ) -> Result<&mut [u8], ModbusError>;
 
-    fn write(
+    async fn write(
         &mut self,
         function_code: FunctionCode,
         slave: u8,
         addr: u16,
         value: &[u8],
-    ) -> impl std::future::Future<Output = Result<(), ModbusError>> + Send;
+    ) -> Result<(), ModbusError>;
 }
 
 pub(crate) fn encode_u16(data: u16) -> (u8, u8) {

@@ -4,7 +4,7 @@ use common::{
 };
 use message::MessageBatch;
 use point::Point;
-use protocol::modbus::{tcp, Context, FunctionCode};
+use protocol::modbus::{rtu, tcp, Context, FunctionCode};
 use sink::Sink;
 use std::{
     io,
@@ -339,7 +339,7 @@ impl Modbus {
         Ok(())
     }
 
-    async fn connect(conf: &ModbusConf) -> io::Result<impl Context> {
+    async fn connect(conf: &ModbusConf) -> io::Result<Box<dyn Context>> {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
                 let ethernet = conf.ethernet.as_ref().unwrap();
@@ -349,36 +349,46 @@ impl Modbus {
 
                 let stream = TcpStream::connect(addr).await?;
                 match ethernet.encode {
-                    Encode::Tcp => tcp::new(stream).await,
-                    _ => todo!(), // Encode::RtuOverTcp => Ok(rtu::attach(transport)),
+                    Encode::Tcp => tcp::new(stream),
+                    Encode::RtuOverTcp => rtu::new(stream),
                 }
             }
-            _ => todo!(), // types::devices::modbus::LinkType::Serial => {
-                          //     let serial = conf.serial.as_ref().unwrap();
-                          //     let builder = tokio_serial::new(serial.path.clone(), serial.baud_rate);
-                          //     let mut port = SerialStream::open(&builder).unwrap();
-                          //     match serial.stop_bits {
-                          //         1 => port.set_stop_bits(StopBits::One).unwrap(),
-                          //         2 => port.set_stop_bits(StopBits::Two).unwrap(),
-                          //         _ => unreachable!(),
-                          //     };
-                          //     match serial.data_bits {
-                          //         5 => port.set_data_bits(DataBits::Five).unwrap(),
-                          //         6 => port.set_data_bits(DataBits::Six).unwrap(),
-                          //         7 => port.set_data_bits(DataBits::Seven).unwrap(),
-                          //         8 => port.set_data_bits(DataBits::Eight).unwrap(),
-                          //         _ => unreachable!(),
-                          //     };
+            types::devices::modbus::LinkType::Serial => {
+                let serial = conf.serial.as_ref().unwrap();
+                let builder = tokio_serial::new(serial.path.clone(), serial.baud_rate);
+                let mut port = SerialStream::open(&builder).unwrap();
+                match serial.stop_bits {
+                    types::devices::modbus::StopBits::One => {
+                        port.set_stop_bits(StopBits::One).unwrap()
+                    }
+                    types::devices::modbus::StopBits::Two => {
+                        port.set_stop_bits(StopBits::Two).unwrap()
+                    }
+                };
 
-                          //     match serial.parity {
-                          //         0 => port.set_parity(Parity::None).unwrap(),
-                          //         1 => port.set_parity(Parity::Odd).unwrap(),
-                          //         2 => port.set_parity(Parity::Even).unwrap(),
-                          //         _ => unreachable!(),
-                          //     };
+                match serial.data_bits {
+                    types::devices::modbus::DataBits::Five => {
+                        port.set_data_bits(DataBits::Five).unwrap()
+                    }
+                    types::devices::modbus::DataBits::Six => {
+                        port.set_data_bits(DataBits::Six).unwrap()
+                    }
+                    types::devices::modbus::DataBits::Seven => {
+                        port.set_data_bits(DataBits::Seven).unwrap()
+                    }
+                    types::devices::modbus::DataBits::Eight => {
+                        port.set_data_bits(DataBits::Eight).unwrap()
+                    }
+                };
 
-                          //     Ok(rtu::attach(port))
-                          // }
+                match serial.parity {
+                    types::devices::modbus::Parity::None => port.set_parity(Parity::None).unwrap(),
+                    types::devices::modbus::Parity::Odd => port.set_parity(Parity::Odd).unwrap(),
+                    types::devices::modbus::Parity::Even => port.set_parity(Parity::Even).unwrap(),
+                };
+
+                rtu::new(port)
+            }
         }
     }
 
@@ -685,7 +695,7 @@ impl WritePointEvent {
     }
 }
 
-async fn write_value(ctx: &mut impl Context, wpe: WritePointEvent) -> HaliaResult<()> {
+async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaResult<()> {
     let function_code = match (wpe.area, wpe.data_type.typ) {
         (Area::Coils, Type::Bool) => FunctionCode::WriteSingleCoil,
         (Area::HoldingRegisters, Type::Bool)
