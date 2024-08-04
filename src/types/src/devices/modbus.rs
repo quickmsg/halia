@@ -388,11 +388,16 @@ impl DataType {
         match self.typ {
             Type::Bool => match value.as_bool() {
                 Some(value) => {
-                    let mut data = Vec::with_capacity(1);
-                    if value {
-                        data.push(1);
-                    } else {
-                        data.push(0);
+                    let mut data = Vec::with_capacity(2);
+                    match value {
+                        true => {
+                            data.push(0xFF);
+                            data.push(0x00);
+                        }
+                        false => {
+                            data.push(0x00);
+                            data.push(0x00);
+                        }
                     }
                     Ok(data)
                 }

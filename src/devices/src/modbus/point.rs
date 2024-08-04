@@ -210,7 +210,6 @@ impl Point {
 
         match res {
             Ok(mut data) => {
-                debug!("{:?}", data);
                 let value = self.conf.ext.data_type.decode(&mut data);
                 self.value = value.clone().into();
                 match &self.mb_tx {

@@ -3,7 +3,7 @@ use std::{fmt::Debug, io};
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt};
 
-use super::{encode_u16, Context, FunctionCode, ModbusError, ProtocolError};
+use super::{encode_u16, Context, ModbusError, ProtocolError};
 
 // PDU最大为256 Bytes，包含1位的服务器地址和2位crc教研码
 
@@ -29,24 +29,6 @@ where
 }
 
 impl<T> RtuContext<T> {
-    fn encode_common(&mut self, function_code: FunctionCode, slave: u8, addr: u16) {
-        self.buffer[0] = slave;
-        self.slave = slave;
-
-        let fc = function_code.into();
-        self.function_code = fc;
-        self.buffer[1] = fc;
-
-        (self.buffer[2], self.buffer[3]) = encode_u16(addr);
-    }
-
-    // 12
-    fn encode_read(&mut self, function_code: FunctionCode, slave: u8, addr: u16, quantity: u16) {
-        self.encode_common(function_code, slave, addr);
-        (self.buffer[4], self.buffer[5]) = encode_u16(quantity);
-        (self.buffer[6], self.buffer[7]) = self.crc16();
-    }
-
     fn decode_common(&mut self, n: usize) -> Result<(), ProtocolError> {
         if n == 0 {
             return Err(ProtocolError::EmptyResp);
@@ -93,118 +75,6 @@ impl<T> RtuContext<T> {
         Ok(byte_cnt as usize)
         // Ok(&mut self.buffer[9..(9 + byte_cnt as usize)])
         //
-    }
-
-    fn encode_write(
-        &mut self,
-        function_code: FunctionCode,
-        slave: u8,
-        addr: u16,
-        value: &[u8],
-    ) -> usize {
-        self.buffer[6] = slave;
-
-        self.buffer[7] = function_code.clone().into();
-
-        self.buffer[8] = (addr >> 8) as u8;
-        self.buffer[9] = (addr & 0x00FF) as u8;
-
-        match function_code {
-            FunctionCode::WriteSingleCoil => {
-                assert_eq!(value.len(), 1);
-                match value[0] {
-                    0 => {
-                        self.buffer[10] = 0;
-                        self.buffer[11] = 0;
-                    }
-                    1 => {
-                        self.buffer[10] = 0xFF;
-                        self.buffer[11] = 0;
-                    }
-                    _ => unreachable!(),
-                }
-                self.buffer[4] = 0;
-                self.buffer[5] = 6;
-                12
-            }
-            FunctionCode::WriteSingleRegister => {
-                assert_eq!(value.len(), 2);
-                self.buffer[10] = value[0];
-                self.buffer[11] = value[1];
-
-                self.buffer[4] = 0;
-                self.buffer[5] = 6;
-
-                12
-            }
-            FunctionCode::WriteMultipleRegisters => {
-                assert!(value.len() > 2 && value.len() <= u8::MAX as usize);
-
-                let quantity = (value.len() / 2) as u16;
-                self.buffer[10] = (quantity >> 8) as u8;
-                self.buffer[11] = (quantity & 0x00ff) as u8;
-                self.buffer[12] = value.len() as u8;
-
-                for (n, v) in value.iter().enumerate() {
-                    self.buffer[13 + n] = *v;
-                }
-
-                self.buffer[4] = 0;
-                self.buffer[5] = 7 + value.len() as u8;
-
-                13 + value.len()
-            }
-            FunctionCode::MaskWriteRegister => {
-                assert_eq!(value.len(), 4);
-
-                self.buffer[4] = 0;
-                self.buffer[5] = 10;
-
-                self.buffer[10] = value[0];
-                self.buffer[11] = value[1];
-                self.buffer[12] = value[2];
-                self.buffer[13] = value[3];
-
-                14
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    fn decode_write(&mut self, n: usize) -> Result<(), ProtocolError> {
-        // 1.	Transaction Identifier (2 bytes): 事务标识符，与请求一致。
-        // 2.	Protocol Identifier (2 bytes): 协议标识符，与请求一致。
-        // 3.	Length (2 bytes): 报文长度，表示从单元标识符到数据的总字节数。
-        // 4.	Unit Identifier (1 byte): 单元标识符，与请求一致。
-        // 5.	Function Code (1 byte): 功能码，0x05表示“写单个线圈”。
-        // 6.	Output Address (2 bytes): 线圈地址，与请求一致。
-        // 7.	Output Value (2 bytes): 线圈值，与请求一致。
-
-        //     Transaction Identifier (2 bytes): 事务标识符，与请求一致。
-        // 2.	Protocol Identifier (2 bytes): 协议标识符，与请求一致。
-        // 3.	Length (2 bytes): 报文长度，表示从单元标识符到数据的总字节数。
-        // 4.	Unit Identifier (1 byte): 单元标识符，与请求一致。
-        // 5.	Function Code (1 byte): 功能码，0x06表示“写单个寄存器”。
-        // 6.	Register Address (2 bytes): 寄存器地址，与请求一致。
-        // 7.	Register Value (2 bytes): 寄存器值，与请求一致。
-
-        //     1.	Transaction Identifier (2 bytes): 事务标识符，与请求一致。
-        // 2.	Protocol Identifier (2 bytes): 协议标识符，与请求一致。
-        // 3.	Length (2 bytes): 报文长度，表示从单元标识符到数据的总字节数。
-        // 4.	Unit Identifier (1 byte): 单元标识符，与请求一致。
-        // 5.	Function Code (1 byte): 功能码，0x10表示“写多个寄存器”。
-        // 6.	Starting Address (2 bytes): 寄存器起始地址，与请求一致。
-        // 7.	Quantity of Registers (2 bytes): 要写入的寄存器数量，与请求一致。
-
-        //     1.	Transaction Identifier (2 bytes): 事务标识符，与请求一致。
-        // 2.	Protocol Identifier (2 bytes): 协议标识符，与请求一致。
-        // 3.	Length (2 bytes): 报文长度，表示从单元标识符到数据的总字节数。
-        // 4.	Unit Identifier (1 byte): 单元标识符，与请求一致。
-        // 5.	Function Code (1 byte): 功能码，0x16表示“掩码写寄存器”。
-        // 6.	Reference Address (2 bytes): 寄存器地址，与请求一致。
-        // 7.	And Mask (2 bytes): 与掩码，与请求一致。
-        // 8.	Or Mask (2 bytes): 或掩码，与请求一致。
-        todo!()
     }
 
     fn crc16(&self) -> (u8, u8) {
@@ -265,20 +135,35 @@ where
         &mut self,
         slave: u8,
         addr: u16,
-        value: bool,
+        value: Vec<u8>,
     ) -> Result<(), ModbusError> {
         todo!()
     }
 
-    async fn write_single_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
+    async fn write_single_register(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError> {
         todo!()
     }
 
-    async fn write_multiple_registers(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
+    async fn write_multiple_registers(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError> {
         todo!()
     }
 
-    async fn mask_write_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
+    async fn mask_write_register(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError> {
         todo!()
     }
     // async fn read(

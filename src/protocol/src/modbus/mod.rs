@@ -9,40 +9,40 @@ pub mod tcp;
 
 // 协议使用大端编码方式
 
-#[derive(PartialEq, Clone)]
-pub enum FunctionCode {
-    /// Modbus Function Code: `01` (`0x01`).
-    ReadCoils,
-    /// Modbus Function Code: `02` (`0x02`).
-    ReadDiscreteInputs,
-    /// Modbus Function Code: `03` (`0x03`).
-    ReadHoldingRegisters,
-    /// Modbus Function Code: `04` (`0x04`).
-    ReadInputRegisters,
-    /// Modbus Function Code: `05` (`0x05`).
-    WriteSingleCoil,
-    /// Modbus Function Code: `06` (`0x06`).
-    WriteSingleRegister,
-    /// Modbus Function Code: `16` (`0x10`).
-    WriteMultipleRegisters,
-    /// Modbus Function Code: `22` (`0x16`).
-    MaskWriteRegister,
-}
+// #[derive(PartialEq, Clone)]
+// pub enum FunctionCode {
+//     /// Modbus Function Code: `01` (`0x01`).
+//     ReadCoils,
+//     /// Modbus Function Code: `02` (`0x02`).
+//     ReadDiscreteInputs,
+//     /// Modbus Function Code: `03` (`0x03`).
+//     ReadHoldingRegisters,
+//     /// Modbus Function Code: `04` (`0x04`).
+//     ReadInputRegisters,
+//     /// Modbus Function Code: `05` (`0x05`).
+//     WriteSingleCoil,
+//     /// Modbus Function Code: `06` (`0x06`).
+//     WriteSingleRegister,
+//     /// Modbus Function Code: `16` (`0x10`).
+//     WriteMultipleRegisters,
+//     /// Modbus Function Code: `22` (`0x16`).
+//     MaskWriteRegister,
+// }
 
-impl From<FunctionCode> for u8 {
-    fn from(value: FunctionCode) -> Self {
-        match value {
-            FunctionCode::ReadCoils => 0x01,
-            FunctionCode::ReadDiscreteInputs => 0x02,
-            FunctionCode::ReadHoldingRegisters => 0x03,
-            FunctionCode::ReadInputRegisters => 0x04,
-            FunctionCode::WriteSingleCoil => 0x05,
-            FunctionCode::WriteSingleRegister => 0x06,
-            FunctionCode::WriteMultipleRegisters => 0x10,
-            FunctionCode::MaskWriteRegister => 0x16,
-        }
-    }
-}
+// impl From<FunctionCode> for u8 {
+//     fn from(value: FunctionCode) -> Self {
+//         match value {
+//             FunctionCode::ReadCoils => 0x01,
+//             FunctionCode::ReadDiscreteInputs => 0x02,
+//             FunctionCode::ReadHoldingRegisters => 0x03,
+//             FunctionCode::ReadInputRegisters => 0x04,
+//             FunctionCode::WriteSingleCoil => 0x05,
+//             FunctionCode::WriteSingleRegister => 0x06,
+//             FunctionCode::WriteMultipleRegisters => 0x10,
+//             FunctionCode::MaskWriteRegister => 0x16,
+//         }
+//     }
+// }
 
 #[derive(Debug, Error)]
 pub enum Exception {
@@ -128,14 +128,29 @@ pub trait Context: Send {
         &mut self,
         slave: u8,
         addr: u16,
-        value: bool,
+        value: Vec<u8>,
     ) -> Result<(), ModbusError>;
 
-    async fn write_single_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
+    async fn write_single_register(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError>;
 
-    async fn write_multiple_registers(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
+    async fn write_multiple_registers(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError>;
 
-    async fn mask_write_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
+    async fn mask_write_register(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError>;
 }
 
 pub(crate) fn encode_u16(data: u16) -> (u8, u8) {

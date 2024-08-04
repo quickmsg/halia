@@ -175,19 +175,11 @@ pub fn decode_read_input_registers(buffer: &mut [u8]) -> Result<&mut [u8], Modbu
 // function code: 1 Byte 0x05
 // starting address: 2 Bytes 0x0000 to 0xFFFF
 // quantity of input registers: 2 Bytes 0x0000 or 0xFF00
-pub fn encode_write_single_coil(buffer: &mut [u8], addr: u16, value: bool) -> u16 {
+pub fn encode_write_single_coil(buffer: &mut [u8], addr: u16, value: Vec<u8>) -> u16 {
     buffer[0] = 0x05;
     (buffer[1], buffer[2]) = encode_u16(addr);
-    match value {
-        true => {
-            buffer[3] = 0xFF;
-            buffer[4] = 0;
-        }
-        false => {
-            buffer[3] = 0;
-            buffer[4] = 0;
-        }
-    }
+    buffer[3] = value[0];
+    buffer[4] = value[1];
     5
 }
 
@@ -228,10 +220,12 @@ pub fn decode_write_single_coil(buffer: &[u8]) -> Result<(), ModbusError> {
 // function code: 1 Byte 0x06
 // starting address: 2 Bytes 0x0000 to 0xFFFF
 // register value: 2 Bytes 0x0000 or 0xFFFF
-pub fn encode_write_single_register(buffer: &mut [u8], addr: u16) {
+pub fn encode_write_single_register(buffer: &mut [u8], addr: u16, data: Vec<u8>) -> u16 {
     buffer[0] = 0x06;
     (buffer[1], buffer[2]) = encode_u16(addr);
-    // (buffer[3], buffer[4]) = encode_u16(quantity);
+    buffer[3] = data[0];
+    buffer[4] = data[1];
+    5
 }
 
 // function code: 1 Byte 0x06
@@ -241,7 +235,7 @@ pub fn encode_write_single_register(buffer: &mut [u8], addr: u16) {
 // function code: 1 Byte Function code + 0x80 , 0x86
 // exception code: 1 Byte 01 | 02 | 03 | 04
 // TODO
-pub fn deocode_write_single_register(buffer: &mut [u8]) {
+pub fn decode_write_single_register(buffer: &[u8]) -> Result<(), ModbusError> {
     if buffer[0] == 0x86 {
         // todo
     }
@@ -249,6 +243,8 @@ pub fn deocode_write_single_register(buffer: &mut [u8]) {
     if buffer[0] != 0x06 {
         // todo
     }
+
+    Ok(())
 }
 
 // function code: 1 Byte 0x10
@@ -256,10 +252,16 @@ pub fn deocode_write_single_register(buffer: &mut [u8]) {
 // quantity of registers: 2 Bytes 0x0001-0x007B
 // Byte count: 1 Byte  2 * N
 // register value: 2 * N Bytes
-pub fn encode_write_multiple_registers(buffer: &mut [u8], addr: u16, quantity: u16) {
+pub fn encode_write_multiple_registers(buffer: &mut [u8], addr: u16, data: Vec<u8>) -> u16 {
     buffer[0] = 0x10;
     (buffer[1], buffer[2]) = encode_u16(addr);
-    // (buffer[3], buffer[4]) = encode_u16(quantity);
+    (buffer[3], buffer[4]) = encode_u16(data.len() as u16);
+    (buffer[5]) = data.len() as u8;
+
+    for (i, v) in data.iter().enumerate() {
+        buffer[5 + i] = *v;
+    }
+    5 + (data.len() as u16)
 }
 
 // function code: 1 Byte 0x10
@@ -268,7 +270,7 @@ pub fn encode_write_multiple_registers(buffer: &mut [u8], addr: u16, quantity: u
 // Error
 // error code: 1 Byte 0x90
 // exception code: 1 Byte  01 | 02 | 03 | 04
-pub fn decode_write_multiple_registers(buffer: &mut [u8]) {
+pub fn decode_write_multiple_registers(buffer: &[u8]) -> Result<(), ModbusError> {
     if buffer[0] != 0x90 {
         // todo
     }
@@ -276,15 +278,19 @@ pub fn decode_write_multiple_registers(buffer: &mut [u8]) {
     if buffer[0] != 0x10 {
         // todo
     }
+
+    Ok(())
 }
 
 // function code: 1 Byte 0x16
 // refrence address: 2 Bytes 0x0000 to 0xFFFF
 // and_mask: 2 Bytes 0x0000 to 0xFFFF
 // or_mask: 2 Bytes 0x0000 to 0xFFFF
-pub fn encode_mask_write_register(buffer: &mut [u8], addr: u16) {
+pub fn encode_mask_write_register(buffer: &mut [u8], addr: u16) -> usize {
     buffer[0] = 0x10;
     (buffer[1], buffer[2]) = encode_u16(addr);
+
+    7
 }
 
 // function code: 1 Byte 0x16

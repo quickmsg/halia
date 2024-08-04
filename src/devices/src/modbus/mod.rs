@@ -4,7 +4,7 @@ use common::{
 };
 use message::MessageBatch;
 use point::Point;
-use protocol::modbus::{rtu, tcp, Context, FunctionCode};
+use protocol::modbus::{rtu, tcp, Context};
 use sink::Sink;
 use std::{
     io,
@@ -24,12 +24,12 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{debug, warn};
+use tracing::debug;
 use types::{
     devices::{
         modbus::{
             Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType,
-            Encode, Endian, ModbusConf, SearchPointsResp, SearchSinksResp, Type,
+            Encode, ModbusConf, SearchPointsResp, SearchSinksResp, Type,
         },
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -696,13 +696,20 @@ impl WritePointEvent {
 }
 
 async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaResult<()> {
-    let function_code = match (wpe.area, wpe.data_type.typ) {
-        (Area::Coils, Type::Bool) => FunctionCode::WriteSingleCoil,
+    let resp = match (wpe.area, wpe.data_type.typ) {
+        (Area::Coils, Type::Bool) => {
+            ctx.write_single_coil(wpe.slave, wpe.address, wpe.data)
+                .await
+        }
         (Area::HoldingRegisters, Type::Bool)
         | (Area::HoldingRegisters, Type::Int8)
-        | (Area::HoldingRegisters, Type::Uint8) => FunctionCode::MaskWriteRegister,
+        | (Area::HoldingRegisters, Type::Uint8) => {
+            ctx.mask_write_register(wpe.slave, wpe.address, wpe.data)
+                .await
+        }
         (Area::HoldingRegisters, Type::Int16) | (Area::HoldingRegisters, Type::Uint16) => {
-            FunctionCode::WriteSingleRegister
+            ctx.write_single_register(wpe.slave, wpe.address, wpe.data)
+                .await
         }
         // 处理特例bytes
         (Area::HoldingRegisters, Type::Int32)
@@ -712,17 +719,19 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
         | (Area::HoldingRegisters, Type::Float32)
         | (Area::HoldingRegisters, Type::Float64)
         | (Area::HoldingRegisters, Type::String)
-        | (Area::HoldingRegisters, Type::Bytes) => FunctionCode::WriteMultipleRegisters,
+        | (Area::HoldingRegisters, Type::Bytes) => {
+            ctx.write_multiple_registers(wpe.slave, wpe.address, wpe.data)
+                .await
+        }
         _ => unreachable!(),
     };
 
-    // TODO
-    // if let Err(e) = ctx
-    //     .write(function_code, wpe.slave, wpe.address, &wpe.data)
-    //     .await
-    // {
-    //     debug!("{:?}", e);
-    // }
-
-    Ok(())
+    match resp {
+        Ok(_) => Ok(()),
+        Err(e) => match e {
+            protocol::modbus::ModbusError::Transport(_) => todo!(),
+            protocol::modbus::ModbusError::Protocol(_) => todo!(),
+            protocol::modbus::ModbusError::Exception(_) => todo!(),
+        },
+    }
 }

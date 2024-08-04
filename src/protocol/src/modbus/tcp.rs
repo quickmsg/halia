@@ -1,8 +1,7 @@
 use std::{fmt::Debug, io};
 
 use async_trait::async_trait;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tracing::debug;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::modbus::pdu::decode_read_coils;
 
@@ -10,10 +9,12 @@ use super::{
     decode_u16, encode_u16,
     pdu::{
         decode_read_discrete_inputs, decode_read_holding_registers, decode_read_input_registers,
-        decode_write_single_coil, encode_read_coils, encode_read_discrete_inputs,
-        encode_read_holding_registers, encode_read_input_registers, encode_write_single_coil,
+        decode_write_multiple_registers, decode_write_single_coil, decode_write_single_register,
+        encode_read_coils, encode_read_discrete_inputs, encode_read_holding_registers,
+        encode_read_input_registers, encode_write_multiple_registers, encode_write_single_coil,
+        encode_write_single_register,
     },
-    Context, FunctionCode, ModbusError, ProtocolError,
+    Context, ModbusError, ProtocolError,
 };
 
 // 最大为260Bytes，MBAP为7Byte
@@ -172,7 +173,7 @@ where
         &mut self,
         slave: u8,
         addr: u16,
-        value: bool,
+        value: Vec<u8>,
     ) -> Result<(), ModbusError> {
         let len = encode_write_single_coil(&mut self.buffer[7..], addr, value);
         self.encode_adu(len, slave);
@@ -181,61 +182,42 @@ where
         decode_write_single_coil(&self.buffer[7..])
     }
 
-    async fn write_single_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
-        todo!()
+    async fn write_single_register(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError> {
+        let len = encode_write_single_register(&mut self.buffer[7..], addr, value);
+        self.encode_adu(len, slave);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_write_single_register(&self.buffer[7..])
     }
 
-    async fn write_multiple_registers(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
-        todo!()
+    async fn write_multiple_registers(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError> {
+        let len = encode_write_multiple_registers(&mut self.buffer[7..], addr, value);
+        self.encode_adu(len, slave);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_write_multiple_registers(&self.buffer[7..])
     }
 
-    async fn mask_write_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
-        todo!()
+    async fn mask_write_register(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: Vec<u8>,
+    ) -> Result<(), ModbusError> {
+        let len = encode_write_single_register(&mut self.buffer[7..], addr, value);
+        self.encode_adu(len, slave);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_write_single_register(&self.buffer[7..])
     }
-    // async fn read(
-    //     &mut self,
-    //     function_code: FunctionCode,
-    //     slave: u8,
-    //     addr: u16,
-    //     quantity: u16,
-    // ) -> Result<&mut [u8], ModbusError> {
-    //     self.encode_read(function_code, slave, addr, quantity);
-    //     if let Err(e) = self
-    //         .transport
-    //         .write_all(&self.buffer[..self.buffer_len])
-    //         .await
-    //     {
-    //         return Err(ModbusError::Transport(e));
-    //     }
-
-    //     // timeout
-    //     match self.transport.read(&mut self.buffer).await {
-    //         Ok(n) => match self.decode_read(n) {
-    //             Ok(_) => Ok(&mut self.buffer[9..self.buffer_len]),
-    //             Err(e) => Err(ModbusError::Protocol(e)),
-    //         },
-    //         Err(e) => Err(ModbusError::Transport(e)),
-    //     }
-    // }
-
-    // async fn write(
-    //     &mut self,
-    //     function_code: FunctionCode,
-    //     slave: u8,
-    //     addr: u16,
-    //     value: &[u8],
-    // ) -> Result<(), ModbusError> {
-    //     self.encode_write(function_code, slave, addr, value);
-    //     match self
-    //         .transport
-    //         .write(&mut self.buffer[..self.buffer_len])
-    //         .await
-    //     {
-    //         Ok(n) => match self.decode_write(n) {
-    //             Ok(_) => Ok(()),
-    //             Err(e) => Err(ModbusError::Protocol(e)),
-    //         },
-    //         Err(e) => Err(ModbusError::Transport(e)),
-    //     }
-    // }
 }
