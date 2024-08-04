@@ -349,6 +349,16 @@ impl MqttClient {
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
+        if self.on {
+            return Err(HaliaError::DeviceRunning);
+        }
+
+        for source in self.sources.read().await.iter() {
+            if !source.can_delete() {
+                return Err(HaliaError::Common("有源正在被引用中".to_owned()));
+            }
+        }
+
         todo!()
     }
 
@@ -379,7 +389,6 @@ impl MqttClient {
             None => return Err(HaliaError::NotFound),
         };
 
-        self.start().await;
         self.ref_cnt += 1;
         Ok(rx)
     }
