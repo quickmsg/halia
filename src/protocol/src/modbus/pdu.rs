@@ -1,4 +1,4 @@
-use super::encode_u16;
+use super::{encode_u16, Exception, ModbusError, ProtocolError};
 
 // function code: 1 Byte 0x01
 // starting address: 2 Bytes 0x0000 to 0xFFFF
@@ -17,26 +17,41 @@ pub fn encode_read_coils(buffer: &mut [u8], addr: u16, quantity: u16) -> u16 {
 // Error
 // function code: 1 Byte Function code + 0x80
 // exception code: 1 Byte 01 | 02 | 03 | 04
-pub fn decode_read_coils(buffer: &mut [u8]) -> &mut [u8] {
+pub fn decode_read_coils(buffer: &mut [u8]) -> Result<&mut [u8], ModbusError> {
     if buffer[0] == 0x81 {
-        // todo
+        match buffer[1] {
+            1 => {
+                return Err(Exception::IllegalFunction.into());
+            }
+            2 => {
+                return Err(Exception::IllegalDataAddress.into());
+            }
+            3 => {
+                return Err(Exception::IllegalDataValue.into());
+            }
+            4 => return Err(Exception::ServerDeviceFailure.into()),
+            _ => {
+                return Err(Exception::UnknowException.into());
+            }
+        }
     }
     if buffer[0] != 0x01 {
-        // todo
+        return Err(ProtocolError::FunctionCodeMismatch.into());
     }
 
     let len = buffer[1] as usize;
 
-    &mut buffer[1..1 + len]
+    Ok(&mut buffer[2..2 + len])
 }
 
 // function code: 1 Byte 0x02
 // starting address: 2 Bytes 0x0000 to 0xFFFF
 // quantity of inputs: 2 Bytes 1 to 2000(0x7D0)
-pub fn encode_read_discrete_inputs(buffer: &mut [u8], addr: u16, quantity: u16) {
+pub fn encode_read_discrete_inputs(buffer: &mut [u8], addr: u16, quantity: u16) -> u16 {
     buffer[0] = 0x02;
     (buffer[1], buffer[2]) = encode_u16(addr);
     (buffer[3], buffer[4]) = encode_u16(quantity);
+    5
 }
 
 // function code: 1 Byte 0x02
@@ -45,23 +60,40 @@ pub fn encode_read_discrete_inputs(buffer: &mut [u8], addr: u16, quantity: u16) 
 // Error
 // function code: 1 Byte Function code + 0x80 , 0x82
 // exception code: 1 Byte 01 | 02 | 03 | 04
-pub fn decode_read_discrete_inputs(buffer: &mut [u8]) {
+pub fn decode_read_discrete_inputs(buffer: &mut [u8]) -> Result<&mut [u8], ModbusError> {
     if buffer[0] == 0x82 {
-        // todo
+        match buffer[1] {
+            1 => {
+                return Err(Exception::IllegalFunction.into());
+            }
+            2 => {
+                return Err(Exception::IllegalDataAddress.into());
+            }
+            3 => {
+                return Err(Exception::IllegalDataValue.into());
+            }
+            4 => return Err(Exception::ServerDeviceFailure.into()),
+            _ => {
+                return Err(Exception::UnknowException.into());
+            }
+        }
+    }
+    if buffer[0] != 0x02 {
+        return Err(ProtocolError::FunctionCodeMismatch.into());
     }
 
-    if buffer[0] != 0x02 {
-        // todo
-    }
+    let len = buffer[1] as usize;
+    Ok(&mut buffer[2..2 + len])
 }
 
 // function code: 1 Byte 0x03
 // starting address: 2 Bytes 0x0000 to 0xFFFF
 // quantity of registers: 2 Bytes 1 to 125(0x7D)
-pub fn encode_read_holding_registers(buffer: &mut [u8], addr: u16, quantity: u16) {
-    buffer[0] = 0x01;
+pub fn encode_read_holding_registers(buffer: &mut [u8], addr: u16, quantity: u16) -> u16 {
+    buffer[0] = 0x03;
     (buffer[1], buffer[2]) = encode_u16(addr);
     (buffer[3], buffer[4]) = encode_u16(quantity);
+    5
 }
 
 // function code: 1 Byte 0x03
@@ -70,23 +102,41 @@ pub fn encode_read_holding_registers(buffer: &mut [u8], addr: u16, quantity: u16
 // Error
 // function code: 1 Byte Function code + 0x80 , 0x83
 // exception code: 1 Byte 01 | 02 | 03 | 04
-pub fn decode_read_holding_registers(buffer: &mut [u8], addr: u16, quantity: u16) {
+pub fn decode_read_holding_registers(buffer: &mut [u8]) -> Result<&mut [u8], ModbusError> {
     if buffer[0] == 0x83 {
-        // todo
+        match buffer[1] {
+            1 => {
+                return Err(Exception::IllegalFunction.into());
+            }
+            2 => {
+                return Err(Exception::IllegalDataAddress.into());
+            }
+            3 => {
+                return Err(Exception::IllegalDataValue.into());
+            }
+            4 => return Err(Exception::ServerDeviceFailure.into()),
+            _ => {
+                return Err(Exception::UnknowException.into());
+            }
+        }
     }
 
     if buffer[0] != 0x03 {
-        // todo
+        return Err(ProtocolError::FunctionCodeMismatch.into());
     }
+
+    let len = buffer[2] as usize;
+    Ok(&mut buffer[2..2 + len])
 }
 
 // function code: 1 Byte 0x04
 // starting address: 2 Bytes 0x0000 to 0xFFFF
 // quantity of input registers: 2 Bytes 1 to 125(0x7D)
-pub fn encode_read_input_registers(buffer: &mut [u8], addr: u16, quantity: u16) {
+pub fn encode_read_input_registers(buffer: &mut [u8], addr: u16, quantity: u16) -> u16 {
     buffer[0] = 0x04;
     (buffer[1], buffer[2]) = encode_u16(addr);
     (buffer[3], buffer[4]) = encode_u16(quantity);
+    5
 }
 
 // function code: 1 Byte 0x04
@@ -95,23 +145,50 @@ pub fn encode_read_input_registers(buffer: &mut [u8], addr: u16, quantity: u16) 
 // Error
 // function code: 1 Byte Function code + 0x80 , 0x84
 // exception code: 1 Byte 01 | 02 | 03 | 04
-pub fn decode_read_input_registers(buffer: &mut [u8]) {
+pub fn decode_read_input_registers(buffer: &mut [u8]) -> Result<&mut [u8], ModbusError> {
     if buffer[0] == 0x84 {
-        // todo
+        match buffer[1] {
+            1 => {
+                return Err(Exception::IllegalFunction.into());
+            }
+            2 => {
+                return Err(Exception::IllegalDataAddress.into());
+            }
+            3 => {
+                return Err(Exception::IllegalDataValue.into());
+            }
+            4 => return Err(Exception::ServerDeviceFailure.into()),
+            _ => {
+                return Err(Exception::UnknowException.into());
+            }
+        }
     }
 
     if buffer[0] != 0x04 {
-        // todo
+        return Err(ProtocolError::FunctionCodeMismatch.into());
     }
+
+    let len = buffer[2] as usize;
+    Ok(&mut buffer[2..2 + len])
 }
 
 // function code: 1 Byte 0x05
 // starting address: 2 Bytes 0x0000 to 0xFFFF
 // quantity of input registers: 2 Bytes 0x0000 or 0xFF00
-pub fn encode_write_single_coil(buffer: &mut [u8], addr: u16, quantity: u16) {
+pub fn encode_write_single_coil(buffer: &mut [u8], addr: u16, value: bool) -> u16 {
     buffer[0] = 0x05;
     (buffer[1], buffer[2]) = encode_u16(addr);
-    (buffer[3], buffer[4]) = encode_u16(quantity);
+    match value {
+        true => {
+            buffer[3] = 0xFF;
+            buffer[4] = 0;
+        }
+        false => {
+            buffer[3] = 0;
+            buffer[4] = 0;
+        }
+    }
+    5
 }
 
 // function code: 1 Byte 0x05
@@ -120,14 +197,32 @@ pub fn encode_write_single_coil(buffer: &mut [u8], addr: u16, quantity: u16) {
 // Error
 // function code: 1 Byte Function code + 0x80 , 0x85
 // exception code: 1 Byte 01 | 02 | 03 | 04
-pub fn decode_write_single_coil(buffer: &mut [u8]) {
+pub fn decode_write_single_coil(buffer: &[u8]) -> Result<(), ModbusError> {
     if buffer[0] == 0x85 {
-        // todo
+        match buffer[1] {
+            1 => {
+                return Err(Exception::IllegalFunction.into());
+            }
+            2 => {
+                return Err(Exception::IllegalDataAddress.into());
+            }
+            3 => {
+                return Err(Exception::IllegalDataValue.into());
+            }
+            4 => return Err(Exception::ServerDeviceFailure.into()),
+            _ => {
+                return Err(Exception::UnknowException.into());
+            }
+        }
     }
 
     if buffer[0] != 0x05 {
-        // todo
+        return Err(ProtocolError::FunctionCodeMismatch.into());
     }
+
+    // TODO
+
+    Ok(())
 }
 
 // function code: 1 Byte 0x06

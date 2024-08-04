@@ -210,6 +210,7 @@ impl Point {
 
         match res {
             Ok(mut data) => {
+                debug!("{:?}", data);
                 let value = self.conf.ext.data_type.decode(&mut data);
                 self.value = value.clone().into();
                 match &self.mb_tx {
@@ -229,6 +230,10 @@ impl Point {
             Err(e) => match e {
                 protocol::modbus::ModbusError::Transport(e) => Err(e),
                 protocol::modbus::ModbusError::Protocol(e) => {
+                    warn!("{}", e);
+                    Ok(())
+                }
+                protocol::modbus::ModbusError::Exception(e) => {
                     warn!("{}", e);
                     Ok(())
                 }

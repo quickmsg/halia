@@ -261,7 +261,12 @@ where
         todo!()
     }
 
-    async fn write_single_coil(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
+    async fn write_single_coil(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: bool,
+    ) -> Result<(), ModbusError> {
         todo!()
     }
 

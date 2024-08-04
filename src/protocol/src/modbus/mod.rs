@@ -44,17 +44,43 @@ impl From<FunctionCode> for u8 {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum Exception {
+    #[error("Illegal funcion")]
+    IllegalFunction = 0x01,
+    #[error("Illegal data address")]
+    IllegalDataAddress = 0x02,
+    #[error("Illegal data value")]
+    IllegalDataValue = 0x03,
+    #[error("Server device failure")]
+    ServerDeviceFailure = 0x04,
+    #[error("Acknowledge")]
+    Acknowledge = 0x05,
+    #[error("Server device busy")]
+    ServerDeviceBusy = 0x06,
+    #[error("Memory parity error")]
+    MemoryParityError = 0x08,
+    #[error("Gateway path unavailable")]
+    GatewayPathUnavailable = 0x0A,
+    #[error("Gateway target device failed to respond")]
+    GatewayTargetDevice = 0x0B,
+    #[error("未知错误")]
+    UnknowException,
+}
+
 #[derive(Error, Debug)]
 pub enum ModbusError {
     #[error("网络错误")]
     Transport(#[from] io::Error),
     #[error("协议错误")]
-    Protocol(ProtocolError),
+    Protocol(#[from] ProtocolError),
+    #[error("异常")]
+    Exception(#[from] Exception),
 }
 
 #[derive(Error, Debug)]
 pub enum ProtocolError {
-    #[error("返回结构体为空")]
+    #[error("返回为空")]
     EmptyResp,
     #[error("返回数据长度过小")]
     DataTooSmall,
@@ -98,7 +124,12 @@ pub trait Context: Send {
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError>;
 
-    async fn write_single_coil(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
+    async fn write_single_coil(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        value: bool,
+    ) -> Result<(), ModbusError>;
 
     async fn write_single_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
 
