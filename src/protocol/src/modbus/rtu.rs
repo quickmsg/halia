@@ -225,47 +225,98 @@ impl<T> Context for RtuContext<T>
 where
     T: AsyncRead + AsyncWrite + Unpin + Send,
 {
-    async fn read(
+    async fn read_coils(
         &mut self,
-        function_code: FunctionCode,
         slave: u8,
         addr: u16,
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError> {
-        self.encode_read(function_code, slave, addr, quantity);
-        if let Err(e) = self.transport.write_all(&self.buffer[..12]).await {
-            return Err(ModbusError::Transport(e));
-        }
-
-        match self.transport.read(&mut self.buffer).await {
-            Ok(n) => match self.decode_read(n) {
-                Ok(n) => Ok(&mut self.buffer[9..9 + n]),
-                Err(e) => Err(ModbusError::Protocol(e)),
-            },
-            Err(e) => Err(ModbusError::Transport(e)),
-        }
+        todo!()
     }
 
-    async fn write(
+    async fn read_discrete_inputs(
         &mut self,
-        function_code: FunctionCode,
         slave: u8,
         addr: u16,
-        value: &[u8],
-    ) -> Result<(), ModbusError> {
-        let len = self.encode_write(function_code, slave, addr, value);
-        if let Err(e) = self.transport.write_all(&mut self.buffer[..len]).await {
-            return Err(ModbusError::Transport(e));
-        }
-
-        match self.transport.read(&mut self.buffer).await {
-            Ok(n) => match self.decode_write(n) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(ModbusError::Protocol(e)),
-            },
-            Err(e) => Err(ModbusError::Transport(e)),
-        }
+        quantity: u16,
+    ) -> Result<&mut [u8], ModbusError> {
+        todo!()
     }
+
+    async fn read_holding_registers(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        quantity: u16,
+    ) -> Result<&mut [u8], ModbusError> {
+        todo!()
+    }
+
+    async fn read_input_registers(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        quantity: u16,
+    ) -> Result<&mut [u8], ModbusError> {
+        todo!()
+    }
+
+    async fn write_single_coil(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
+        todo!()
+    }
+
+    async fn write_single_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
+        todo!()
+    }
+
+    async fn write_multiple_registers(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
+        todo!()
+    }
+
+    async fn mask_write_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError> {
+        todo!()
+    }
+    // async fn read(
+    //     &mut self,
+    //     function_code: FunctionCode,
+    //     slave: u8,
+    //     addr: u16,
+    //     quantity: u16,
+    // ) -> Result<&mut [u8], ModbusError> {
+    //     self.encode_read(function_code, slave, addr, quantity);
+    //     if let Err(e) = self.transport.write_all(&self.buffer[..12]).await {
+    //         return Err(ModbusError::Transport(e));
+    //     }
+
+    //     match self.transport.read(&mut self.buffer).await {
+    //         Ok(n) => match self.decode_read(n) {
+    //             Ok(n) => Ok(&mut self.buffer[9..9 + n]),
+    //             Err(e) => Err(ModbusError::Protocol(e)),
+    //         },
+    //         Err(e) => Err(ModbusError::Transport(e)),
+    //     }
+    // }
+
+    // async fn write(
+    //     &mut self,
+    //     function_code: FunctionCode,
+    //     slave: u8,
+    //     addr: u16,
+    //     value: &[u8],
+    // ) -> Result<(), ModbusError> {
+    //     let len = self.encode_write(function_code, slave, addr, value);
+    //     if let Err(e) = self.transport.write_all(&mut self.buffer[..len]).await {
+    //         return Err(ModbusError::Transport(e));
+    //     }
+
+    //     match self.transport.read(&mut self.buffer).await {
+    //         Ok(n) => match self.decode_write(n) {
+    //             Ok(_) => Ok(()),
+    //             Err(e) => Err(ModbusError::Protocol(e)),
+    //         },
+    //         Err(e) => Err(ModbusError::Transport(e)),
+    //     }
+    // }
 }
 
 const TABLE_CRC_HI: [u8; 256] = [

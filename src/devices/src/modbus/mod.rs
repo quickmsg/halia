@@ -716,12 +716,13 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
         _ => unreachable!(),
     };
 
-    if let Err(e) = ctx
-        .write(function_code, wpe.slave, wpe.address, &wpe.data)
-        .await
-    {
-        debug!("{:?}", e);
-    }
+    // TODO
+    // if let Err(e) = ctx
+    //     .write(function_code, wpe.slave, wpe.address, &wpe.data)
+    //     .await
+    // {
+    //     debug!("{:?}", e);
+    // }
 
     Ok(())
 }

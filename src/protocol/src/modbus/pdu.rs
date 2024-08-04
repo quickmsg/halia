@@ -3,10 +3,11 @@ use super::encode_u16;
 // function code: 1 Byte 0x01
 // starting address: 2 Bytes 0x0000 to 0xFFFF
 // quantity of coilds: 2 Bytes 1 to 2000(0x7D0)
-pub fn encode_read_coils(buffer: &mut [u8], addr: u16, quantity: u16) {
+pub fn encode_read_coils(buffer: &mut [u8], addr: u16, quantity: u16) -> u16 {
     buffer[0] = 0x01;
     (buffer[1], buffer[2]) = encode_u16(addr);
     (buffer[3], buffer[4]) = encode_u16(quantity);
+    5
 }
 
 // function code: 1 Byte 0x01
@@ -16,14 +17,17 @@ pub fn encode_read_coils(buffer: &mut [u8], addr: u16, quantity: u16) {
 // Error
 // function code: 1 Byte Function code + 0x80
 // exception code: 1 Byte 01 | 02 | 03 | 04
-pub fn decode_read_coils(buffer: &mut [u8]) {
+pub fn decode_read_coils(buffer: &mut [u8]) -> &mut [u8] {
     if buffer[0] == 0x81 {
         // todo
     }
-
     if buffer[0] != 0x01 {
         // todo
     }
+
+    let len = buffer[1] as usize;
+
+    &mut buffer[1..1 + len]
 }
 
 // function code: 1 Byte 0x02

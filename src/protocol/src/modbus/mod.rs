@@ -70,21 +70,41 @@ pub enum ProtocolError {
 
 #[async_trait]
 pub trait Context: Send {
-    async fn read(
+    async fn read_coils(
         &mut self,
-        function_code: FunctionCode,
         slave: u8,
         addr: u16,
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError>;
 
-    async fn write(
+    async fn read_discrete_inputs(
         &mut self,
-        function_code: FunctionCode,
         slave: u8,
         addr: u16,
-        value: &[u8],
-    ) -> Result<(), ModbusError>;
+        quantity: u16,
+    ) -> Result<&mut [u8], ModbusError>;
+
+    async fn read_holding_registers(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        quantity: u16,
+    ) -> Result<&mut [u8], ModbusError>;
+
+    async fn read_input_registers(
+        &mut self,
+        slave: u8,
+        addr: u16,
+        quantity: u16,
+    ) -> Result<&mut [u8], ModbusError>;
+
+    async fn write_single_coil(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
+
+    async fn write_single_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
+
+    async fn write_multiple_registers(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
+
+    async fn mask_write_register(&mut self, slave: u8, addr: u16) -> Result<(), ModbusError>;
 }
 
 pub(crate) fn encode_u16(data: u16) -> (u8, u8) {

@@ -6,7 +6,7 @@ use common::{
     ref_info::RefInfo,
 };
 use message::{Message, MessageBatch};
-use protocol::modbus::{Context, FunctionCode};
+use protocol::modbus::Context;
 use serde_json::Value;
 use tokio::{
     select,
@@ -185,22 +185,30 @@ impl Point {
     }
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {
-        let function_code = match self.conf.ext.area {
-            Area::DiscretesInput => FunctionCode::ReadDiscreteInputs,
-            Area::Coils => FunctionCode::ReadCoils,
-            Area::InputRegisters => FunctionCode::ReadInputRegisters,
-            Area::HoldingRegisters => FunctionCode::ReadHoldingRegisters,
+        let res = match self.conf.ext.area {
+            Area::DiscretesInput => {
+                ctx.read_discrete_inputs(self.conf.ext.slave, self.conf.ext.address, self.quantity)
+                    .await
+            }
+            Area::Coils => {
+                ctx.read_coils(self.conf.ext.slave, self.conf.ext.address, self.quantity)
+                    .await
+            }
+            Area::InputRegisters => {
+                ctx.read_input_registers(self.conf.ext.slave, self.conf.ext.address, self.quantity)
+                    .await
+            }
+            Area::HoldingRegisters => {
+                ctx.read_holding_registers(
+                    self.conf.ext.slave,
+                    self.conf.ext.address,
+                    self.quantity,
+                )
+                .await
+            }
         };
 
-        match ctx
-            .read(
-                function_code,
-                self.conf.ext.slave,
-                self.conf.ext.address,
-                self.quantity,
-            )
-            .await
-        {
+        match res {
             Ok(mut data) => {
                 let value = self.conf.ext.data_type.decode(&mut data);
                 self.value = value.clone().into();
