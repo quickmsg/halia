@@ -111,7 +111,7 @@ pub struct PointConf {
     pub interval: u64,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq)]
 pub struct DataType {
     #[serde(rename = "type")]
     pub typ: Type,
@@ -145,8 +145,13 @@ impl DataType {
                         [a, b] => [*a, *b],
                         _ => return MessageValue::Null,
                     };
-                    let data = u16::from_be_bytes(data);
-                    MessageValue::Boolean((data >> pos) & 1 != 0)
+                    if pos <= 7 {
+                        MessageValue::Boolean(((data[0] >> (7 - pos)) & 1) != 0)
+                    } else {
+                        MessageValue::Boolean(((data[1] >> (15 - pos)) & 1) != 0)
+                    }
+                    // let data = u16::from_be_bytes(data);
+                    // MessageValue::Boolean((data >> pos) & 1 != 0)
                 }
                 None => {
                     if data[0] == 1 {
@@ -336,50 +341,52 @@ impl DataType {
                 }
                 MessageValue::Float64(f64::from_be_bytes(data))
             }
-            // Type::String => match (
-            //     self.single.as_ref().unwrap(),
-            //     self.single_endian.as_ref().unwrap(),
-            // ) {
-            //     (true, Endian::Big) => {
-            //         let mut new_data = vec![];
-            //         for i in 0..*self.len.as_ref().unwrap() * 2 {
-            //             if i % 2 != 0 {
-            //                 new_data.push(data[i as usize]);
-            //             }
-            //         }
-            //         match String::from_utf8(new_data) {
-            //             Ok(string) => return MessageValue::String(string.replace("\0", "")),
-            //             Err(_) => return MessageValue::Null,
-            //         }
-            //     }
-            //     (true, Endian::Little) => {
-            //         let mut new_data = vec![];
-            //         for i in 0..*self.len.as_ref().unwrap() * 2 {
-            //             if i % 2 == 0 {
-            //                 new_data.push(data[i as usize]);
-            //             }
-            //         }
-            //         match String::from_utf8(new_data) {
-            //             Ok(string) => return MessageValue::String(string.replace("\0", "")),
-            //             Err(_) => return MessageValue::Null,
-            //         }
-            //     }
-            //     (false, Endian::Big) => {
-            //         for i in 0..*self.len.as_ref().unwrap() * 2 {
-            //             if i % 2 == 0 {
-            //                 data.swap((i * 2) as usize, (i * 2 + 1) as usize);
-            //             }
-            //         }
-            //         match String::from_utf8(data) {
-            //             Ok(string) => return MessageValue::String(string),
-            //             Err(_) => return MessageValue::Null,
-            //         }
-            //     }
-            //     (false, Endian::Little) => match String::from_utf8(data.clone()) {
-            //         Ok(string) => return MessageValue::String(string),
-            //         Err(_) => return MessageValue::Null,
-            //     },
-            // },
+            Type::String => match (
+                self.single.as_ref().unwrap(),
+                self.single_endian.as_ref().unwrap(),
+            ) {
+                (true, Endian::Big) => {
+                    let mut new_data = vec![];
+                    for i in 0..*self.len.as_ref().unwrap() * 2 {
+                        if i % 2 != 0 {
+                            new_data.push(data[i as usize]);
+                        }
+                    }
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
+                        Err(_) => return MessageValue::Null,
+                    }
+                }
+                (true, Endian::Little) => {
+                    let mut new_data = vec![];
+                    for i in 0..*self.len.as_ref().unwrap() * 2 {
+                        if i % 2 == 0 {
+                            new_data.push(data[i as usize]);
+                        }
+                    }
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
+                        Err(_) => return MessageValue::Null,
+                    }
+                }
+                (false, Endian::Big) => {
+                    for i in 0..*self.len.as_ref().unwrap() * 2 {
+                        if i % 2 == 0 {
+                            data.swap((i * 2) as usize, (i * 2 + 1) as usize);
+                        }
+                    }
+                    todo!()
+                    // match String::from_utf8(data) {
+                    //     Ok(string) => return MessageValue::String(string),
+                    //     Err(_) => return MessageValue::Null,
+                    // }
+                }
+                // (false, Endian::Little) => match String::from_utf8(data.clone()) {
+                //     Ok(string) => return MessageValue::String(string),
+                //     Err(_) => return MessageValue::Null,
+                // },
+                _ => todo!(),
+            },
             // Type::Bytes => MessageValue::Bytes(data.clone()),
             _ => todo!(),
         }
@@ -392,12 +399,12 @@ impl DataType {
                     Some(pos) => {
                         let mut data = Vec::with_capacity(4);
                         if pos <= 7 {
-                            data.push(!(1 << pos));
+                            data.push(!(1 << (7 - pos)));
                             data.push(0xFF);
 
                             match value {
                                 true => {
-                                    data.push(1 << pos);
+                                    data.push(1 << (7 - pos));
                                     data.push(0x00);
                                 }
                                 false => {
@@ -407,11 +414,11 @@ impl DataType {
                             }
                         } else {
                             data.push(0xFF);
-                            data.push(!(1 << pos));
+                            data.push(!(1 << (15 - pos)));
                             match value {
                                 true => {
                                     data.push(0x00);
-                                    data.push(1 << pos);
+                                    data.push(1 << (15 - pos));
                                 }
                                 false => {
                                     data.push(0x00);
@@ -732,7 +739,7 @@ impl DataType {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Type {
     Bool,
@@ -773,7 +780,7 @@ impl TryFrom<&str> for Type {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Endian {
     Little,
@@ -828,24 +835,33 @@ pub struct CreateUpdateSinkReq {
     pub sink: SinkConf,
 }
 
+// #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+// pub struct SinkConf {
+//     #[serde(rename = "type")]
+//     pub typ: TargetValue,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub single_endian: Option<TargetValue>,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub double_endian: Option<TargetValue>,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub len: Option<TargetValue>,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub single: Option<TargetValue>,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub pos: Option<TargetValue>,
+
+//     pub slave: TargetValue,
+//     pub area: TargetValue,
+//     pub address: TargetValue,
+//     pub value: TargetValue,
+// }
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SinkConf {
-    #[serde(rename = "type")]
-    pub typ: TargetValue,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub single_endian: Option<TargetValue>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub double_endian: Option<TargetValue>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub len: Option<TargetValue>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub single: Option<TargetValue>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pos: Option<TargetValue>,
-
-    pub slave: TargetValue,
-    pub area: TargetValue,
-    pub address: TargetValue,
+    #[serde(flatten)]
+    pub data_type: DataType,
+    pub slave: u8,
+    pub area: Area,
+    pub address: u16,
     pub value: TargetValue,
 }
 
