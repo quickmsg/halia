@@ -891,6 +891,7 @@ dependencies = [
 name = "devices"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "byteorder",
  "bytes",
  "common",
@@ -3207,6 +3208,7 @@ name = "types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "message",
  "serde",
  "serde_json",

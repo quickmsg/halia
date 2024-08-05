@@ -1,5 +1,6 @@
 use std::{io, sync::Arc, time::Duration};
 
+use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
@@ -32,7 +33,7 @@ pub struct Point {
             Arc<RwLock<Option<String>>>,
         )>,
     >,
-    value: Value,
+    value: serde_json::Value,
     err_info: Option<String>,
 
     ref_info: RefInfo,
@@ -205,7 +206,13 @@ impl Point {
         match res {
             Ok(mut data) => {
                 let value = self.conf.ext.data_type.decode(&mut data);
-                self.value = value.clone().into();
+                match &value {
+                    message::MessageValue::Bytes(bytes) => {
+                        let str = BASE64_STANDARD.encode(bytes);
+                        self.value = serde_json::Value::String(str);
+                    }
+                    _ => self.value = value.clone().into(),
+                }
                 match &self.mb_tx {
                     Some(tx) => {
                         let mut message = Message::default();

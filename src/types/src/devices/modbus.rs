@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use base64::{prelude::BASE64_STANDARD, Engine as _};
 use message::MessageValue;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -726,21 +727,35 @@ impl DataType {
                 None => bail!("value is wrong"),
             },
             Type::Bytes => match value {
-                serde_json::Value::Array(arr) => {
-                    let mut data = vec![];
-                    for v in arr {
-                        match v {
-                            serde_json::Value::Number(n) => match n.as_u64() {
-                                Some(v) => data.push(v as u8),
-                                None => bail!("not support"),
-                            },
-                            _ => bail!("not support"),
+                serde_json::Value::String(str) => match BASE64_STANDARD.decode(str) {
+                    Ok(data) => {
+                        if data.len() > (*self.len.as_ref().unwrap() as usize) {
+                            bail!("值太长");
                         }
-                    }
+                        let mut new_data = vec![0; *self.len.as_ref().unwrap() as usize];
+                        for (i, v) in data.iter().enumerate() {
+                            new_data[i] = *v;
+                        }
 
-                    Ok(data)
-                }
-                _ => bail!("not support"),
+                        Ok(new_data)
+                    }
+                    Err(e) => bail!(e),
+                },
+                // serde_json::Value::Array(arr) => {
+                //     let mut data = vec![];
+                //     for v in arr {
+                //         match v {
+                //             serde_json::Value::Number(n) => match n.as_u64() {
+                //                 Some(v) => data.push(v as u8),
+                //                 None => bail!("not support"),
+                //             },
+                //             _ => bail!("not support"),
+                //         }
+                //     }
+
+                //     Ok(data)
+                // }
+                _ => bail!("不支持的类型"),
             },
         }
     }

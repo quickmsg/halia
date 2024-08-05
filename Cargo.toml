@@ -46,6 +46,7 @@ ryu = "1.0.18"
 itoa = "1.0.11"
 regex = "1.10.5"
 thiserror = "1.0.63"
+base64 = "0.22.1"
 
 [profile.release]
 strip = true
