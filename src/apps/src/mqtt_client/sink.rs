@@ -284,6 +284,14 @@ impl Sink {
     pub fn del_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.del_ref(rule_id);
     }
+
+    pub fn can_stop(&self) -> bool {
+        self.ref_info.can_stop()
+    }
+
+    pub fn can_delete(&self) -> bool {
+        self.ref_info.can_delete()
+    }
 }
 
 fn get_publish_properties(req: &CreateUpdateSinkReq) -> Option<PublishProperties> {

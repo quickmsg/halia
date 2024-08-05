@@ -70,7 +70,6 @@ impl Source {
     }
 
     pub async fn delete(&self, app_id: &Uuid) -> HaliaResult<()> {
-        // TODO
         if !self.ref_info.can_delete() {
             return Err(HaliaError::Common("无法删除".to_owned()));
         }
@@ -104,6 +103,10 @@ impl Source {
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.del_ref(rule_id)
+    }
+
+    pub fn can_stop(&self) -> bool {
+        self.ref_info.can_stop()
     }
 
     pub fn can_delete(&self) -> bool {

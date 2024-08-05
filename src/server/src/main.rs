@@ -2,7 +2,7 @@ use anyhow::Result;
 use apps::GLOBAL_APP_MANAGER;
 use devices::GLOBAL_DEVICE_MANAGER;
 use rule::GLOBAL_RULE_MANAGER;
-use tracing::{debug, info, warn, Level};
+use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]

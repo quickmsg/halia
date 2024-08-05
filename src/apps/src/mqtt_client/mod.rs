@@ -327,6 +327,18 @@ impl MqttClient {
             false => return Ok(()),
         }
 
+        for source in self.sources.read().await.iter() {
+            if !source.can_stop() {
+                return Err(HaliaError::Common("有源正在被引用中".to_owned()));
+            }
+        }
+
+        for sink in &self.sinks {
+            if !sink.can_stop() {
+                return Err(HaliaError::Common("有规则正在被引用中".to_owned()));
+            }
+        }
+
         persistence::apps::update_app_status(&self.id, persistence::Status::Stopped).await?;
 
         // TODO 验证引用
@@ -358,6 +370,13 @@ impl MqttClient {
                 return Err(HaliaError::Common("有源正在被引用中".to_owned()));
             }
         }
+
+        for sink in &self.sinks {
+            if !sink.can_delete() {
+                return Err(HaliaError::Common("有规则正在被引用中".to_owned()));
+            }
+        }
+
         persistence::apps::delete_app(&self.id).await?;
         Ok(())
     }
