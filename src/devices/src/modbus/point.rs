@@ -186,7 +186,7 @@ impl Point {
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {
         let res = match self.conf.ext.area {
-            Area::DiscretesInput => {
+            Area::InputDiscrete => {
                 ctx.read_discrete_inputs(self.conf.ext.slave, self.conf.ext.address, self.quantity)
                     .await
             }
@@ -210,6 +210,10 @@ impl Point {
 
         match res {
             Ok(mut data) => {
+                debug!(
+                    "{} {:?} {:?}",
+                    self.quantity, self.conf.ext.data_type.typ, data
+                );
                 let value = self.conf.ext.data_type.decode(&mut data);
                 self.value = value.clone().into();
                 match &self.mb_tx {

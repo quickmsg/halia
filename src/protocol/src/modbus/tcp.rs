@@ -8,11 +8,11 @@ use crate::modbus::pdu::decode_read_coils;
 use super::{
     decode_u16, encode_u16,
     pdu::{
-        decode_read_discrete_inputs, decode_read_holding_registers, decode_read_input_registers,
-        decode_write_multiple_registers, decode_write_single_coil, decode_write_single_register,
-        encode_read_coils, encode_read_discrete_inputs, encode_read_holding_registers,
-        encode_read_input_registers, encode_write_multiple_registers, encode_write_single_coil,
-        encode_write_single_register,
+        decode_mask_write_register, decode_read_discrete_inputs, decode_read_holding_registers,
+        decode_read_input_registers, decode_write_multiple_registers, decode_write_single_coil,
+        decode_write_single_register, encode_mask_write_register, encode_read_coils,
+        encode_read_discrete_inputs, encode_read_holding_registers, encode_read_input_registers,
+        encode_write_multiple_registers, encode_write_single_coil, encode_write_single_register,
     },
     Context, ModbusError, ProtocolError,
 };
@@ -43,14 +43,6 @@ impl<T> TcpContext<T>
 where
     T: AsyncReadExt + AsyncWriteExt + Unpin + Send,
 {
-    fn update_transcation_id(&mut self) {
-        if self.transcation_id < u16::MAX {
-            self.transcation_id += 1;
-        } else {
-            self.transcation_id = 0;
-        }
-    }
-
     fn encode_adu(&mut self, len: u16, slave: u8) {
         if self.transcation_id < u16::MAX {
             self.transcation_id += 1;
@@ -85,6 +77,9 @@ where
         if self.buffer[2] != 0 || self.buffer[3] != 0 {
             return Err(ProtocolError::ProtocolIdErr);
         }
+
+        // 随后的长度
+        // debug!("{}", decode_u16(self.buffer[4], self.buffer[5]));
 
         let slave = self.buffer[6];
         if self.slave != slave {
@@ -214,10 +209,10 @@ where
         addr: u16,
         value: Vec<u8>,
     ) -> Result<(), ModbusError> {
-        let len = encode_write_single_register(&mut self.buffer[7..], addr, value);
+        let len = encode_mask_write_register(&mut self.buffer[7..], addr, value);
         self.encode_adu(len, slave);
         self.transport_read_send().await?;
         self.decode_adu()?;
-        decode_write_single_register(&self.buffer[7..])
+        decode_mask_write_register(&self.buffer[7..])
     }
 }

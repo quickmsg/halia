@@ -125,7 +125,7 @@ pub fn decode_read_holding_registers(buffer: &mut [u8]) -> Result<&mut [u8], Mod
         return Err(ProtocolError::FunctionCodeMismatch.into());
     }
 
-    let len = buffer[2] as usize;
+    let len = buffer[1] as usize;
     Ok(&mut buffer[2..2 + len])
 }
 
@@ -286,9 +286,14 @@ pub fn decode_write_multiple_registers(buffer: &[u8]) -> Result<(), ModbusError>
 // refrence address: 2 Bytes 0x0000 to 0xFFFF
 // and_mask: 2 Bytes 0x0000 to 0xFFFF
 // or_mask: 2 Bytes 0x0000 to 0xFFFF
-pub fn encode_mask_write_register(buffer: &mut [u8], addr: u16) -> usize {
-    buffer[0] = 0x10;
+pub fn encode_mask_write_register(buffer: &mut [u8], addr: u16, value: Vec<u8>) -> u16 {
+    buffer[0] = 0x16;
     (buffer[1], buffer[2]) = encode_u16(addr);
+
+    buffer[3] = value[0];
+    buffer[4] = value[1];
+    buffer[5] = value[2];
+    buffer[6] = value[3];
 
     7
 }
@@ -300,7 +305,7 @@ pub fn encode_mask_write_register(buffer: &mut [u8], addr: u16) -> usize {
 // Error
 // error code: 1 Byte 0x96
 // exception code: 1 Byte 01 | 02 | 03 | 04
-pub fn deocde_mask_write_register(buffer: &mut [u8]) {
+pub fn decode_mask_write_register(buffer: &[u8]) -> Result<(), ModbusError> {
     if buffer[0] != 0x96 {
         // todo
     }
@@ -308,4 +313,6 @@ pub fn deocde_mask_write_register(buffer: &mut [u8]) {
     if buffer[0] != 0x16 {
         // todo
     }
+
+    Ok(())
 }

@@ -672,7 +672,7 @@ impl WritePointEvent {
         value: serde_json::Value,
     ) -> HaliaResult<Self> {
         match area {
-            Area::DiscretesInput | Area::InputRegisters => {
+            Area::InputDiscrete | Area::InputRegisters => {
                 return Err(HaliaError::Common("区域不支持写入操作".to_owned()));
             }
             _ => {}

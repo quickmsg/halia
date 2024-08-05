@@ -387,39 +387,105 @@ impl DataType {
     pub fn encode(&self, value: serde_json::Value) -> Result<Vec<u8>> {
         match self.typ {
             Type::Bool => match value.as_bool() {
-                Some(value) => {
-                    let mut data = Vec::with_capacity(2);
-                    match value {
-                        true => {
+                Some(value) => match self.pos {
+                    Some(pos) => {
+                        let mut data = Vec::with_capacity(4);
+                        if pos <= 7 {
+                            data.push(!(1 << pos));
                             data.push(0xFF);
+
+                            match value {
+                                true => {
+                                    data.push(1 << pos);
+                                    data.push(0x00);
+                                }
+                                false => {
+                                    data.push(0x00);
+                                    data.push(0x00);
+                                }
+                            }
+                        } else {
+                            data.push(0xFF);
+                            data.push(!(1 << pos));
+                            match value {
+                                true => {
+                                    data.push(0x00);
+                                    data.push(1 << pos);
+                                }
+                                false => {
+                                    data.push(0x00);
+                                    data.push(0x00);
+                                }
+                            }
+                        }
+
+                        Ok(data)
+                    }
+                    None => {
+                        let mut data = Vec::with_capacity(2);
+                        match value {
+                            true => {
+                                data.push(0xFF);
+                                data.push(0x00);
+                            }
+                            false => {
+                                data.push(0x00);
+                                data.push(0x00);
+                            }
+                        }
+                        Ok(data)
+                    }
+                },
+                None => bail!("value is wrong"),
+            },
+            Type::Int8 => match value.as_i64() {
+                Some(value) => {
+                    let mut data = Vec::with_capacity(4);
+                    match &self.single_endian.as_ref().unwrap() {
+                        Endian::Little => {
+                            data.push(0x00);
+                            data.push(0xFF);
+
+                            data.push(value as u8);
                             data.push(0x00);
                         }
-                        false => {
+                        Endian::Big => {
+                            data.push(0xFF);
                             data.push(0x00);
+
                             data.push(0x00);
+                            data.push(value as u8);
                         }
                     }
                     Ok(data)
                 }
                 None => bail!("value is wrong"),
             },
-            Type::Int8 => match value.as_i64() {
-                Some(value) => {
-                    let value: i8 = match value.try_into() {
-                        Ok(value) => value,
-                        Err(e) => bail!("value is wrong :{}", e),
-                    };
-                    Ok(value.to_be_bytes().to_vec())
-                }
-                None => bail!("value is wrong"),
-            },
             Type::Uint8 => match value.as_i64() {
                 Some(value) => {
-                    let value: u8 = match value.try_into() {
-                        Ok(value) => value,
-                        Err(e) => bail!("value is wrong:{}", e),
-                    };
-                    Ok(value.to_be_bytes().to_vec())
+                    let mut data = Vec::with_capacity(4);
+                    match &self.single_endian.as_ref().unwrap() {
+                        Endian::Little => {
+                            data.push(0x00);
+                            data.push(0xFF);
+
+                            data.push(value as u8);
+                            data.push(0x00);
+                        }
+                        Endian::Big => {
+                            data.push(0xFF);
+                            data.push(0x00);
+
+                            data.push(0x00);
+                            data.push(value as u8);
+                        }
+                    }
+                    Ok(data)
+                    // let value: u8 = match value.try_into() {
+                    //     Ok(value) => value,
+                    //     Err(e) => bail!("value is wrong:{}", e),
+                    // };
+                    // Ok(value.to_be_bytes().to_vec())
                 }
                 None => bail!("value is wrong"),
             },
@@ -721,7 +787,7 @@ pub enum Endian {
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Area {
-    DiscretesInput,   // bit 只读
+    InputDiscrete,    // bit 只读
     Coils,            // bit 读写
     InputRegisters,   // 16-bit word 只读
     HoldingRegisters, // 16-bit word 读写
@@ -732,7 +798,7 @@ impl TryFrom<&str> for Area {
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
         match value {
-            "input_discrete" => Ok(Area::DiscretesInput),
+            "input_discrete" => Ok(Area::InputDiscrete),
             "coils" => Ok(Area::Coils),
             "input_registers" => Ok(Area::InputRegisters),
             "holding_registers" => Ok(Area::HoldingRegisters),
