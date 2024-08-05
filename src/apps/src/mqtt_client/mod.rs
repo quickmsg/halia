@@ -358,8 +358,8 @@ impl MqttClient {
                 return Err(HaliaError::Common("有源正在被引用中".to_owned()));
             }
         }
-
-        todo!()
+        persistence::apps::delete_app(&self.id).await?;
+        Ok(())
     }
 
     fn search(&self) -> SearchAppsItemResp {

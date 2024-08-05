@@ -5,6 +5,14 @@ pub mod http_client;
 pub mod mqtt_client;
 
 #[derive(Serialize)]
+pub struct Summary {
+    pub total: usize,
+    pub running_cnt: usize,
+    pub err_cnt: usize,
+    pub off_cnt: usize,
+}
+
+#[derive(Serialize)]
 pub struct SearchAppsResp {
     pub total: usize,
     pub data: Vec<SearchAppsItemResp>,

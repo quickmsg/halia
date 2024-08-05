@@ -15,21 +15,17 @@ pub mod coap;
 pub mod modbus;
 pub mod opcua;
 
-pub(crate) fn get_dir() -> PathBuf {
-    Path::new(super::ROOT_DIR).join(DEVICE_DIR)
-}
-
 pub(crate) fn get_device_dir() -> PathBuf {
     Path::new(super::ROOT_DIR).join(DEVICE_DIR)
 }
 
 pub(crate) fn get_device_file_path() -> PathBuf {
-    get_dir().join(DEVICE_FILE)
+    get_device_dir().join(DEVICE_FILE)
 }
 
 pub async fn init() -> Result<(), io::Error> {
-    fs::create_dir_all(get_dir()).await?;
-    super::create_file(get_dir().join(DEVICE_FILE)).await
+    fs::create_dir_all(get_device_dir()).await?;
+    super::create_file(get_device_dir().join(DEVICE_FILE)).await
 }
 
 pub async fn read_devices() -> Result<Vec<String>, io::Error> {
@@ -46,5 +42,5 @@ pub async fn update_device_status(id: &Uuid, status: Status) -> Result<(), io::E
 
 pub async fn delete_device(id: &Uuid) -> Result<(), io::Error> {
     super::delete(get_device_file_path(), id).await?;
-    fs::remove_dir_all(get_dir().join(id.to_string())).await
+    fs::remove_dir_all(get_device_dir().join(id.to_string())).await
 }

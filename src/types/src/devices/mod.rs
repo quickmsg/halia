@@ -8,6 +8,14 @@ pub mod modbus;
 pub mod opcua;
 
 #[derive(Serialize)]
+pub struct Summary {
+    pub total: usize,
+    pub running_cnt: usize,
+    pub err_cnt: usize,
+    pub off_cnt: usize,
+}
+
+#[derive(Serialize)]
 pub struct SearchDevicesResp {
     pub total: usize,
     pub data: Vec<SearchDevicesItemResp>,

@@ -22,3 +22,7 @@ async fn search_apps(
     let data = GLOBAL_APP_MANAGER.search(pagination).await?;
     Ok(AppSuccess::data(data))
 }
+
+// async fn get_apps_summary() -> AppSuccess<Summary> {
+//     AppSuccess::data(GLOBAL_DEVICE_MANAGER.get_summary().await)
+// }

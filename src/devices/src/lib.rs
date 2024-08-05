@@ -10,9 +10,9 @@ use tracing::warn;
 use types::{
     devices::{
         coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
-        SearchDevicesResp,
+        SearchDevicesResp, Summary,
     },
-    DashboardDevice, Pagination, QueryParams,
+    Pagination, QueryParams,
 };
 
 use uuid::Uuid;
@@ -34,10 +34,11 @@ impl DeviceManager {
         self.devices.write().await.push((r#type, device_id));
     }
 
-    pub async fn search_dashboard(&self) -> DashboardDevice {
+    pub async fn get_summary(&self) -> Summary {
         let mut total = 0;
-        let mut on_cnt = 0;
+        let mut running_cnt = 0;
         let mut err_cnt = 0;
+        let mut off_cnt = 0;
         for (typ, device_id) in self.devices.read().await.iter().rev() {
             let resp = match typ {
                 &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id).await,
@@ -49,11 +50,14 @@ impl DeviceManager {
             match resp {
                 Ok(resp) => {
                     total += 1;
-                    if resp.on {
-                        on_cnt += 1;
-                    }
                     if resp.err.is_some() {
                         err_cnt += 1;
+                    } else {
+                        if resp.on {
+                            running_cnt += 1;
+                        } else {
+                            off_cnt += 1;
+                        }
                     }
                 }
                 Err(e) => {
@@ -61,10 +65,11 @@ impl DeviceManager {
                 }
             }
         }
-        DashboardDevice {
+        Summary {
             total,
-            on_cnt,
+            running_cnt,
             err_cnt,
+            off_cnt,
         }
     }
 

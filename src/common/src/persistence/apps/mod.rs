@@ -38,3 +38,8 @@ pub async fn update_app_conf(app_id: &Uuid, data: String) -> Result<(), io::Erro
 pub async fn update_app_status(app_id: &Uuid, status: Status) -> Result<(), io::Error> {
     super::update_segment(get_app_file_path(), app_id, 2, &status.to_string()).await
 }
+
+pub async fn delete_app(app_id: &Uuid) -> Result<(), io::Error> {
+    super::delete(get_app_file_path(), app_id).await?;
+    fs::remove_dir_all(get_app_dir().join(app_id.to_string())).await
+}

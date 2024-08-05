@@ -1,19 +1,14 @@
 use std::result;
 
-use ::apps::GLOBAL_APP_MANAGER;
-use ::devices::GLOBAL_DEVICE_MANAGER;
-use ::rule::GLOBAL_RULE_MANAGER;
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
     Json, Router,
 };
 use common::error::HaliaError;
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
-use types::Dashboard;
 
 mod apps;
 mod devices;
@@ -86,7 +81,7 @@ impl IntoResponse for AppError {
 
 pub async fn start() {
     let app = Router::new()
-        .route("/api/dashboard", get(dashboard))
+        // .route("/api/dashboard", get(dashboard))
         .nest("/api/device", devices::routes())
         .nest("/api/app", apps::routes())
         .nest("/api/rule", rule::rule_routes())
@@ -101,10 +96,10 @@ pub async fn start() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn dashboard() -> AppSuccess<Dashboard> {
-    AppSuccess::data(Dashboard {
-        device: GLOBAL_DEVICE_MANAGER.search_dashboard().await,
-        app: GLOBAL_APP_MANAGER.search_dashboard().await,
-        rule: GLOBAL_RULE_MANAGER.search_dashboard().await,
-    })
-}
+// async fn dashboard() -> AppSuccess<Dashboard> {
+//     AppSuccess::data(Dashboard {
+//         device: GLOBAL_DEVICE_MANAGER.search_dashboard().await,
+//         app: GLOBAL_APP_MANAGER.search_dashboard().await,
+//         rule: GLOBAL_RULE_MANAGER.search_dashboard().await,
+//     })
+// }
