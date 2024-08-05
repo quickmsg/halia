@@ -255,13 +255,13 @@ pub fn decode_write_single_register(buffer: &[u8]) -> Result<(), ModbusError> {
 pub fn encode_write_multiple_registers(buffer: &mut [u8], addr: u16, data: Vec<u8>) -> u16 {
     buffer[0] = 0x10;
     (buffer[1], buffer[2]) = encode_u16(addr);
-    (buffer[3], buffer[4]) = encode_u16(data.len() as u16);
+    (buffer[3], buffer[4]) = encode_u16((data.len() / 2) as u16);
     (buffer[5]) = data.len() as u8;
 
     for (i, v) in data.iter().enumerate() {
-        buffer[5 + i] = *v;
+        buffer[6 + i] = *v;
     }
-    5 + (data.len() as u16)
+    6 + (data.len() as u16)
 }
 
 // function code: 1 Byte 0x10

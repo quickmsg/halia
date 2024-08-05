@@ -24,7 +24,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::debug;
+use tracing::{debug, trace, warn};
 use types::{
     devices::{
         modbus::{
@@ -474,7 +474,10 @@ impl Modbus {
                     value.value,
                 ) {
                     Ok(wpe) => {
-                        let _ = self.write_tx.as_ref().unwrap().send(wpe).await;
+                        match self.write_tx.as_ref().unwrap().send(wpe).await {
+                            Ok(_) => trace!("send write value success"),
+                            Err(e) => warn!("send write value err:{:?}", e),
+                        }
                         Ok(())
                     }
                     Err(e) => Err(e),

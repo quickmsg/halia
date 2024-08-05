@@ -43,7 +43,6 @@ pub struct MqttClient {
     sinks: Vec<Sink>,
     client_v311: Option<Arc<AsyncClient>>,
     client_v50: Option<Arc<v5::AsyncClient>>,
-    ref_cnt: usize,
 }
 
 impl MqttClient {
@@ -71,7 +70,6 @@ impl MqttClient {
             client_v311: None,
             client_v50: None,
             stop_signal_tx: None,
-            ref_cnt: 0,
         })
     }
 
@@ -408,7 +406,6 @@ impl MqttClient {
             None => return Err(HaliaError::NotFound),
         };
 
-        self.ref_cnt += 1;
         Ok(rx)
     }
 
@@ -665,10 +662,6 @@ impl MqttClient {
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        if self.stop_signal_tx.is_none() {
-            self.start().await;
-        }
-
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => {
                 if sink.stop_signal_tx.is_none() {
@@ -699,20 +692,6 @@ impl MqttClient {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.del_ref(rule_id)),
             None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn add_ref_cnt(&mut self) {
-        self.ref_cnt += 1;
-        if self.stop_signal_tx.is_none() {
-            self.start().await;
-        }
-    }
-
-    async fn sub_ref_cnt(&mut self) {
-        self.ref_cnt -= 1;
-        if self.ref_cnt == 0 {
-            self.stop().await;
         }
     }
 }

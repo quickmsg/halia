@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use message::MessageValue;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::{BaseConf, TargetValue};
@@ -481,11 +482,6 @@ impl DataType {
                         }
                     }
                     Ok(data)
-                    // let value: u8 = match value.try_into() {
-                    //     Ok(value) => value,
-                    //     Err(e) => bail!("value is wrong:{}", e),
-                    // };
-                    // Ok(value.to_be_bytes().to_vec())
                 }
                 None => bail!("value is wrong"),
             },
@@ -643,23 +639,24 @@ impl DataType {
             },
             Type::Float64 => match value.as_f64() {
                 Some(value) => {
-                    let mut data = (value as f32).to_be_bytes();
+                    debug!("here {}", value);
+                    let mut data = value.to_be_bytes();
                     match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
-                            data.swap(0, 6);
-                            data.swap(1, 7);
-                            data.swap(2, 4);
-                            data.swap(3, 5);
-                        }
-                    }
-                    match self.double_endian.as_ref().unwrap() {
                         Endian::Little => {}
                         Endian::Big => {
                             data.swap(0, 1);
                             data.swap(2, 3);
                             data.swap(4, 5);
                             data.swap(6, 7);
+                        }
+                    }
+                    match self.double_endian.as_ref().unwrap() {
+                        Endian::Little => {}
+                        Endian::Big => {
+                            data.swap(0, 6);
+                            data.swap(1, 7);
+                            data.swap(2, 4);
+                            data.swap(3, 5);
                         }
                     }
                     return Ok(data.to_vec());
