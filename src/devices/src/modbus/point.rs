@@ -50,10 +50,7 @@ impl Point {
             None => (Uuid::new_v4(), true),
         };
 
-        let quantity = match req.ext.data_type.get_quantity() {
-            Some(quantity) => quantity,
-            None => return Err(HaliaError::ConfErr),
-        };
+        let quantity = req.ext.data_type.get_quantity();
 
         if new {
             persistence::devices::modbus::create_point(
@@ -152,10 +149,7 @@ impl Point {
         if self.conf.ext != req.ext {
             restart = true;
         }
-        self.quantity = match req.ext.data_type.get_quantity() {
-            Some(quantity) => quantity,
-            None => return Err(HaliaError::ConfErr),
-        };
+        self.quantity = req.ext.data_type.get_quantity();
         self.conf = req;
 
         if self.stop_signal_tx.is_some() && restart {
@@ -210,9 +204,6 @@ impl Point {
 
         match res {
             Ok(mut data) => {
-                for byte in data.iter() {
-                    debug!("{:08b}", byte);
-                }
                 let value = self.conf.ext.data_type.decode(&mut data);
                 self.value = value.clone().into();
                 match &self.mb_tx {

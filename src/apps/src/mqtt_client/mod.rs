@@ -81,7 +81,7 @@ impl MqttClient {
                         continue;
                     }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 2);
+                    assert_eq!(items.len(), 3);
                     let source_id = Uuid::from_str(items[0]).unwrap();
                     self.create_source(Some(source_id), serde_json::from_str(items[1]).unwrap())
                         .await?;
@@ -339,7 +339,6 @@ impl MqttClient {
 
         persistence::apps::update_app_status(&self.id, persistence::Status::Stopped).await?;
 
-        // TODO 验证引用
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
         }

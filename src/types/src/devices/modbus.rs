@@ -119,6 +119,8 @@ pub struct DataType {
     pub single_endian: Option<Endian>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub double_endian: Option<Endian>,
+
+    // string和bytes拥有len，值为寄存器数量
     #[serde(skip_serializing_if = "Option::is_none")]
     pub len: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,12 +130,12 @@ pub struct DataType {
 }
 
 impl DataType {
-    pub fn get_quantity(&self) -> Option<u16> {
+    pub fn get_quantity(&self) -> u16 {
         match &self.typ {
-            Type::Bool | Type::Int8 | Type::Uint8 | Type::Int16 | Type::Uint16 => Some(1),
-            Type::Int32 | Type::Uint32 | Type::Float32 => Some(2),
-            Type::Int64 | Type::Uint64 | Type::Float64 => Some(4),
-            Type::String | Type::Bytes => self.len,
+            Type::Bool | Type::Int8 | Type::Uint8 | Type::Int16 | Type::Uint16 => 1,
+            Type::Int32 | Type::Uint32 | Type::Float32 => 2,
+            Type::Int64 | Type::Uint64 | Type::Float64 => 4,
+            Type::String | Type::Bytes => *self.len.as_ref().unwrap(),
         }
     }
 
@@ -150,8 +152,6 @@ impl DataType {
                     } else {
                         MessageValue::Boolean(((data[1] >> (15 - pos)) & 1) != 0)
                     }
-                    // let data = u16::from_be_bytes(data);
-                    // MessageValue::Boolean((data >> pos) & 1 != 0)
                 }
                 None => {
                     if data[0] == 1 {
@@ -347,9 +347,9 @@ impl DataType {
             ) {
                 (true, Endian::Big) => {
                     let mut new_data = vec![];
-                    for i in 0..*self.len.as_ref().unwrap() * 2 {
+                    for (i, v) in data.iter().enumerate() {
                         if i % 2 != 0 {
-                            new_data.push(data[i as usize]);
+                            new_data.push(*v);
                         }
                     }
                     match String::from_utf8(new_data) {
@@ -359,9 +359,9 @@ impl DataType {
                 }
                 (true, Endian::Little) => {
                     let mut new_data = vec![];
-                    for i in 0..*self.len.as_ref().unwrap() * 2 {
+                    for (i, v) in data.iter().enumerate() {
                         if i % 2 == 0 {
-                            new_data.push(data[i as usize]);
+                            new_data.push(*v);
                         }
                     }
                     match String::from_utf8(new_data) {
@@ -370,25 +370,24 @@ impl DataType {
                     }
                 }
                 (false, Endian::Big) => {
-                    for i in 0..*self.len.as_ref().unwrap() * 2 {
-                        if i % 2 == 0 {
-                            data.swap((i * 2) as usize, (i * 2 + 1) as usize);
-                        }
+                    for i in 0..*self.len.as_ref().unwrap() {
+                        data.swap((i * 2) as usize, (i * 2 + 1) as usize);
                     }
-                    todo!()
-                    // match String::from_utf8(data) {
-                    //     Ok(string) => return MessageValue::String(string),
-                    //     Err(_) => return MessageValue::Null,
-                    // }
+                    let new_data = data.to_vec();
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return MessageValue::String(string),
+                        Err(_) => return MessageValue::Null,
+                    }
                 }
-                // (false, Endian::Little) => match String::from_utf8(data.clone()) {
-                //     Ok(string) => return MessageValue::String(string),
-                //     Err(_) => return MessageValue::Null,
-                // },
-                _ => todo!(),
+                (false, Endian::Little) => {
+                    let new_data = data.to_vec();
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return MessageValue::String(string),
+                        Err(_) => return MessageValue::Null,
+                    }
+                }
             },
-            // Type::Bytes => MessageValue::Bytes(data.clone()),
-            _ => todo!(),
+            Type::Bytes => MessageValue::Bytes(data.to_vec()),
         }
     }
 
@@ -672,16 +671,16 @@ impl DataType {
             },
             Type::String => match value.as_str() {
                 Some(value) => {
-                    let mut new_data = vec![];
+                    let mut new_data = vec![0; *self.len.as_ref().unwrap() as usize];
                     let data = value.as_bytes();
                     match self.single.as_ref().unwrap() {
                         true => {
-                            if (*self.len.as_ref().unwrap() as usize) < data.len() {
+                            if (*self.len.as_ref().unwrap() as usize) < data.len() * 2 {
                                 bail!("too long")
                             }
                         }
                         false => {
-                            if (*self.len.as_ref().unwrap() as usize) * 2 < data.len() {
+                            if (*self.len.as_ref().unwrap() as usize) < data.len() {
                                 bail!("too long")
                             }
                         }
@@ -691,28 +690,36 @@ impl DataType {
                         self.single_endian.as_ref().unwrap(),
                     ) {
                         (true, Endian::Big) => {
-                            for byte in data {
-                                new_data.push(0);
-                                new_data.push(*byte);
+                            for (i, byte) in data.iter().enumerate() {
+                                new_data[i * 2 + 1] = *byte;
                             }
                             return Ok(new_data);
                         }
                         (true, Endian::Little) => {
-                            for byte in data {
-                                new_data.push(*byte);
-                                new_data.push(0);
+                            for (i, byte) in data.iter().enumerate() {
+                                new_data[i * 2] = *byte;
                             }
                             return Ok(new_data);
                         }
                         (false, Endian::Big) => {
-                            for i in 0..*self.len.as_ref().unwrap() {
-                                new_data.push(data[(i * 2 + 1) as usize]);
-                                new_data.push(data[(i * 2) as usize]);
+                            for (i, v) in data.iter().enumerate() {
+                                match i % 2 {
+                                    0 => {
+                                        new_data[i + 1] = *v;
+                                    }
+                                    1 => {
+                                        new_data[i - 1] = *v;
+                                    }
+                                    _ => unreachable!(),
+                                }
                             }
                             return Ok(data.to_vec());
                         }
                         (false, Endian::Little) => {
-                            return Ok(data.to_vec());
+                            for (i, v) in data.iter().enumerate() {
+                                new_data[i] = *v;
+                            }
+                            return Ok(new_data);
                         }
                     }
                 }
@@ -835,26 +842,6 @@ pub struct CreateUpdateSinkReq {
     pub sink: SinkConf,
 }
 
-// #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-// pub struct SinkConf {
-//     #[serde(rename = "type")]
-//     pub typ: TargetValue,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub single_endian: Option<TargetValue>,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub double_endian: Option<TargetValue>,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub len: Option<TargetValue>,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub single: Option<TargetValue>,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub pos: Option<TargetValue>,
-
-//     pub slave: TargetValue,
-//     pub area: TargetValue,
-//     pub address: TargetValue,
-//     pub value: TargetValue,
-// }
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SinkConf {
     #[serde(flatten)]
