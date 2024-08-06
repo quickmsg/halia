@@ -36,7 +36,6 @@ impl Computer for Log {
                 serde_json::Value::String(field) => match message.get(field) {
                     Some(mv) => match mv {
                         message::MessageValue::Int64(mv) => *mv as f64,
-                        message::MessageValue::Uint64(mv) => *mv as f64,
                         message::MessageValue::Float64(mv) => *mv,
                         _ => return,
                     },
@@ -55,7 +54,6 @@ impl Computer for Log {
                         MessageValue::Float64((*mv as f64).log(arg))
                     }
                 }
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).log(arg)),
                 MessageValue::Float64(mv) => {
                     if *mv <= 0.0 {
                         MessageValue::Null

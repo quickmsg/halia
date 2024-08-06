@@ -21,7 +21,6 @@ impl Computer for Exp2 {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).exp2()),
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).exp2()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.exp2()),
                 _ => MessageValue::Null,
             },

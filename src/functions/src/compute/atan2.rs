@@ -36,7 +36,6 @@ impl Computer for Atan2 {
                 serde_json::Value::String(field) => match message.get(field) {
                     Some(mv) => match mv {
                         MessageValue::Int64(mv) => *mv as f64,
-                        MessageValue::Uint64(mv) => *mv as f64,
                         MessageValue::Float64(mv) => *mv,
                         _ => return,
                     },
@@ -49,7 +48,6 @@ impl Computer for Atan2 {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).atan2(arg)),
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).atan2(arg)),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.atan2(arg)),
                 _ => MessageValue::Null,
             },

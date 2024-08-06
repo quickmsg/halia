@@ -74,8 +74,8 @@ impl Message {
     pub fn get_u8(&self, field: &str) -> Option<u8> {
         match self.value.get(field) {
             Some(value) => match value {
-                MessageValue::Uint64(n) => {
-                    if *n > (u8::MAX as u64) {
+                MessageValue::Int64(n) => {
+                    if *n > (u8::MAX as i64) {
                         None
                     } else {
                         Some(*n as u8)
@@ -90,8 +90,8 @@ impl Message {
     pub fn get_u16(&self, field: &str) -> Option<u16> {
         match self.value.get(field) {
             Some(value) => match value {
-                MessageValue::Uint64(n) => {
-                    if *n > (u16::MAX as u64) {
+                MessageValue::Int64(n) => {
+                    if *n > (u16::MAX as i64) {
                         None
                     } else {
                         Some(*n as u16)
@@ -156,7 +156,6 @@ pub enum MessageValue {
     Null,
     Boolean(bool),
     Int64(i64),
-    Uint64(u64),
     Float64(f64),
     String(String),
     Bytes(Vec<u8>),

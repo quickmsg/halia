@@ -21,7 +21,6 @@ impl Computer for Cosh {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).cosh()),
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).cosh()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.cosh()),
                 _ => MessageValue::Null,
             },

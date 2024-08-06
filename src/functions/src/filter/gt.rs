@@ -20,7 +20,7 @@ pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
                     if let Some(v) = v.as_f64() {
                         MessageValue::Float64(v)
                     } else if let Some(v) = v.as_u64() {
-                        MessageValue::Uint64(v)
+                        MessageValue::Int64(v as i64)
                     } else if let Some(v) = v.as_i64() {
                         MessageValue::Int64(v)
                     } else {
@@ -68,9 +68,6 @@ impl Filter for Gt {
         match msg.get(&self.field) {
             Some(message_value) => match (message_value, target_value) {
                 (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv >= tv,
-                (MessageValue::Int64(mv), MessageValue::Uint64(tv)) => *mv >= (*tv as i64),
-                (MessageValue::Uint64(mv), MessageValue::Int64(tv)) => *mv >= (*tv as u64),
-                (MessageValue::Uint64(mv), MessageValue::Uint64(tv)) => mv >= tv,
                 (MessageValue::Float64(mv), MessageValue::Float64(tv)) => mv - tv > 1e-10,
                 _ => false,
             },

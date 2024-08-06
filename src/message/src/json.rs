@@ -54,7 +54,7 @@ impl From<serde_json::Value> for MessageValue {
             serde_json::Value::Bool(b) => Self::Boolean(b),
             serde_json::Value::Number(n) => {
                 if n.is_u64() {
-                    Self::Uint64(n.as_u64().unwrap())
+                    Self::Int64(n.as_i64().unwrap())
                 } else if n.is_i64() {
                     Self::Int64(n.as_i64().unwrap())
                 } else {
@@ -77,15 +77,7 @@ impl Into<serde_json::Value> for MessageValue {
         match self {
             MessageValue::Null => serde_json::Value::Null,
             MessageValue::Boolean(b) => serde_json::Value::Bool(b),
-            // MessageValue::Int8(n) => serde_json::Value::from(n),
-            // MessageValue::Int16(n) => serde_json::Value::from(n),
-            // MessageValue::Int32(n) => serde_json::Value::from(n),
             MessageValue::Int64(n) => serde_json::Value::from(n),
-            // MessageValue::Uint8(n) => serde_json::Value::from(n),
-            // MessageValue::Uint16(n) => serde_json::Value::from(n),
-            // MessageValue::Uint32(n) => serde_json::Value::from(n),
-            MessageValue::Uint64(n) => serde_json::Value::from(n),
-            // MessageValue::Float32(n) => serde_json::Value::from(n),
             MessageValue::Float64(n) => serde_json::Value::from(n),
             MessageValue::String(s) => serde_json::Value::from(s),
             MessageValue::Bytes(bytes) => serde_json::Value::from(bytes),

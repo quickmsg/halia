@@ -22,7 +22,6 @@ impl Computer for Cbrt {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).cbrt()),
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).cbrt()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.cbrt()),
                 _ => MessageValue::Null,
             },

@@ -22,7 +22,6 @@ impl Computer for Asinh {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).asinh()),
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).asinh()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.asinh()),
                 _ => MessageValue::Null,
             },

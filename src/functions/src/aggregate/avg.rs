@@ -24,10 +24,6 @@ impl Aggregater for Avg {
                         sum += *value as f64;
                         count += 1;
                     }
-                    MessageValue::Uint64(value) => {
-                        sum += *value as f64;
-                        count += 1;
-                    }
                     MessageValue::Float64(value) => {
                         sum += value;
                         count += 1;

@@ -7,9 +7,9 @@ struct Min {
 
 pub const TYPE: &str = "min";
 
-    pub fn new(field: String) -> Box<dyn Aggregater> {
-        Box::new(Min { field })
-    }
+pub fn new(field: String) -> Box<dyn Aggregater> {
+    Box::new(Min { field })
+}
 
 impl Aggregater for Min {
     fn aggregate(&self, mb: &MessageBatch) -> MessageValue {
@@ -19,11 +19,6 @@ impl Aggregater for Min {
             match message.get(&self.field) {
                 Some(value) => match value {
                     MessageValue::Int64(value) => {
-                        if min > *value as f64 {
-                            min = *value as f64
-                        }
-                    }
-                    MessageValue::Uint64(value) => {
                         if min > *value as f64 {
                             min = *value as f64
                         }

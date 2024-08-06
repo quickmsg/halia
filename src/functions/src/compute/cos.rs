@@ -21,7 +21,6 @@ impl Computer for Cos {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).cos()),
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).cos()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.cos()),
                 _ => MessageValue::Null,
             },

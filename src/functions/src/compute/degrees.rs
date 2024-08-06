@@ -22,7 +22,6 @@ impl Computer for Degrees {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).to_degrees()),
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).to_degrees()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.to_degrees()),
                 _ => MessageValue::Null,
             },

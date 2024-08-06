@@ -22,9 +22,6 @@ impl Aggregater for Sum {
                     MessageValue::Int64(value) => {
                         sum += *value as f64;
                     }
-                    MessageValue::Uint64(value) => {
-                        sum += *value as f64;
-                    }
                     MessageValue::Float64(value) => {
                         sum += value;
                     }

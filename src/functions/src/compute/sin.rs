@@ -21,7 +21,6 @@ impl Computer for Sin {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).sin()),
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).sin()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.sin()),
                 _ => MessageValue::Null,
             },

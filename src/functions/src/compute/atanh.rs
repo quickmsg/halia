@@ -27,13 +27,6 @@ impl Computer for Atanh {
                         MessageValue::Float64((*mv as f64).atanh())
                     }
                 }
-                MessageValue::Uint64(mv) => {
-                    if *mv >= 1 {
-                        MessageValue::Null
-                    } else {
-                        MessageValue::Float64((*mv as f64).atanh())
-                    }
-                }
                 MessageValue::Float64(mv) => {
                     if *mv <= -1.0 || *mv >= 1.0 {
                         MessageValue::Null

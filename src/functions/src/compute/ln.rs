@@ -27,7 +27,6 @@ impl Computer for Ln {
                         MessageValue::Float64((*mv as f64).ln())
                     }
                 }
-                MessageValue::Uint64(mv) => MessageValue::Float64((*mv as f64).ln()),
                 MessageValue::Float64(mv) => {
                     if *mv <= 0.0 {
                         MessageValue::Null

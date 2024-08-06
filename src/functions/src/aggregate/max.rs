@@ -23,11 +23,6 @@ impl Aggregater for Max {
                             max = *value as f64
                         }
                     }
-                    MessageValue::Uint64(value) => {
-                        if *value as f64 > max {
-                            max = *value as f64
-                        }
-                    }
                     MessageValue::Float64(value) => {
                         if *value > max {
                             max = *value

@@ -178,8 +178,8 @@ impl DataType {
                     _ => return MessageValue::Null,
                 };
                 match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => MessageValue::Uint64(data[0] as u64),
-                    Endian::Big => MessageValue::Uint64(data[1] as u64),
+                    Endian::Little => MessageValue::Int64(data[0] as i64),
+                    Endian::Big => MessageValue::Int64(data[1] as i64),
                 }
             }
             Type::Int16 => {
@@ -202,7 +202,7 @@ impl DataType {
                     Endian::Little => {}
                     Endian::Big => data.swap(0, 1),
                 }
-                MessageValue::Uint64(u16::from_be_bytes(data) as u64)
+                MessageValue::Int64(u16::from_be_bytes(data) as i64)
             }
             Type::Int32 => {
                 let mut data = match data {
@@ -244,7 +244,7 @@ impl DataType {
                         data.swap(1, 3);
                     }
                 }
-                MessageValue::Uint64(u32::from_be_bytes(data) as u64)
+                MessageValue::Int64(u32::from_be_bytes(data) as i64)
             }
             Type::Int64 => {
                 let mut data = match data {
@@ -294,7 +294,7 @@ impl DataType {
                         data.swap(3, 5);
                     }
                 }
-                MessageValue::Uint64(u64::from_be_bytes(data))
+                MessageValue::Int64(u64::from_be_bytes(data) as i64)
             }
             Type::Float32 => {
                 let mut data = match data {

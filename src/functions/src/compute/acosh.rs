@@ -28,13 +28,6 @@ impl Computer for Acosh {
                         message::MessageValue::Float64((*mv as f64).acosh())
                     }
                 }
-                message::MessageValue::Uint64(mv) => {
-                    if *mv < 1 {
-                        MessageValue::Null
-                    } else {
-                        message::MessageValue::Float64((*mv as f64).acosh())
-                    }
-                }
                 message::MessageValue::Float64(mv) => {
                     if *mv < 1.0 {
                         MessageValue::Null
