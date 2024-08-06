@@ -46,6 +46,10 @@ pub struct MqttClient {
     client_v50: Option<Arc<v5::AsyncClient>>,
 }
 
+fn source_not_find_err(source_id: Uuid) -> HaliaError {
+    HaliaError::NotFound("源".to_owned(), source_id)
+}
+
 impl MqttClient {
     pub async fn new(app_id: Option<Uuid>, req: CreateUpdateMqttClientReq) -> HaliaResult<Self> {
         let (app_id, new) = match app_id {
@@ -578,7 +582,20 @@ impl MqttClient {
             .find(|source| source.id == source_id)
         {
             Some(source) => source.delete(&self.id).await,
-            None => Err(HaliaError::NotFound("源".to_owned(), source_id)),
+            None => Err(source_not_find_err(source_id)),
+        }
+    }
+
+    pub async fn add_source_ref(&self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|source| source.id == *source_id)
+        {
+            Some(source) => Ok(source.add_ref(rule_id)),
+            None => Err(source_not_find_err(source_id.clone())),
         }
     }
 

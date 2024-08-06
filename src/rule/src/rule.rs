@@ -75,6 +75,14 @@ impl Rule {
                         apps::mqtt_client::TYPE => {
                             let source: mqtt_client::Source =
                                 serde_json::from_value(source_node.conf.clone())?;
+                            if let Err(e) = GLOBAL_MQTT_CLIENT_MANAGER
+                                .add_source_ref(&source.app_id, &source.source_id, &rule_id)
+                                .await
+                            {
+                                add_ref_nodes.push(&node);
+                                error = Some(e.to_string());
+                                break;
+                            }
                         }
                         _ => unreachable!(),
                     }
@@ -197,6 +205,8 @@ impl Rule {
                             let source: mqtt_client::Source =
                                 serde_json::from_value(source_node.conf.clone())?;
 
+                            debug!("{:?}", source);
+
                             let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
                             let mut rxs = vec![];
                             for _ in 0..cnt {
@@ -280,7 +290,9 @@ impl Rule {
                             window::run(window_conf, rx, tx, stop_signal_tx.subscribe()).unwrap();
                         }
                         NodeType::Filter => {
-                            let conf: Vec<FilterConf> = serde_json::from_value(node.conf.clone())?;
+                            debug!("{:?}", node.conf);
+                            let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
+                            debug!("{:?}", conf);
                             functions.push(filter::new(conf)?);
                             ids.push(id);
                         }

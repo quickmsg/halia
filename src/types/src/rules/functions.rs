@@ -13,6 +13,11 @@ pub struct WindowConf {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct FilterConf {
+    pub filters: Vec<FilterConfItem>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct FilterConfItem {
     #[serde(rename = "type")]
     pub typ: FilterType,
     pub field: String,

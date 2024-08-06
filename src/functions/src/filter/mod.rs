@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use message::Message;
+use tracing::debug;
 use types::rules::functions::FilterConf;
 
 use crate::Function;
@@ -21,9 +22,9 @@ pub struct Node {
     filters: Vec<Box<dyn Filter>>,
 }
 
-pub fn new(confs: Vec<FilterConf>) -> Result<Box<dyn Function>> {
-    let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(confs.len());
-    for conf in confs {
+pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
+    let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(conf.filters.len());
+    for conf in conf.filters {
         let filter = match conf.typ {
             types::rules::functions::FilterType::Eq => eq::new(conf)?,
             types::rules::functions::FilterType::Gt => gt::new(conf)?,
@@ -49,6 +50,8 @@ impl Function for Node {
             }
             false
         });
+
+        debug!("{}", message_batch.len());
 
         message_batch.len() != 0
     }

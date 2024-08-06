@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::{mqtt_client::TYPE, GLOBAL_APP_MANAGER};
 
-use super::MqttClient;
+use super::{source, MqttClient};
 
 pub static GLOBAL_MQTT_CLIENT_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     apps: DashMap::new(),
@@ -134,13 +134,25 @@ impl Manager {
         }
     }
 
+    pub async fn add_source_ref(
+        &self,
+        app_id: &Uuid,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.apps.get_mut(app_id) {
+            Some(mut app) => app.add_source_ref(source_id, rule_id).await,
+            None => Err(mqtt_client_not_find_err(app_id.clone())),
+        }
+    }
+
     pub async fn get_source_mb_rx(
         &self,
         app_id: &Uuid,
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.apps.get_mut(&app_id) {
+        match self.apps.get_mut(app_id) {
             Some(mut app) => app.get_source_mb_rx(source_id, rule_id).await,
             None => Err(mqtt_client_not_find_err(app_id.clone())),
         }

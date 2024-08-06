@@ -90,10 +90,7 @@ impl RuleManager {
         {
             Some(rule) => match rule.start().await {
                 Ok(_) => Ok(()),
-                Err(e) => {
-                    error!("rule send err :{}", e);
-                    return Err(HaliaError::Common("todo".to_owned()));
-                }
+                Err(e) => Err(HaliaError::Common(e.to_string())),
             },
             None => Err(rule_not_find_err(id)),
         }

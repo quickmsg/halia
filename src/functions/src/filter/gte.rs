@@ -1,6 +1,6 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::FilterConf;
+use types::rules::functions::FilterConfItem;
 
 use super::Filter;
 
@@ -10,7 +10,7 @@ struct Gte {
     value_field: Option<String>,
 }
 
-pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
+pub fn new(conf: FilterConfItem) -> Result<Box<dyn Filter>> {
     match conf.value.typ {
         types::TargetValueType::Const => {
             let const_value = match conf.value.value {

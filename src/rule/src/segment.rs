@@ -17,6 +17,7 @@ pub fn start_segment(
     broadcast_tx: Option<broadcast::Sender<MessageBatch>>,
     mut stop_signal_rx: broadcast::Receiver<()>,
 ) {
+    let mut next = false;
     if mpsc_tx.is_some() {
         tokio::spawn(async move {
             loop {
@@ -25,12 +26,16 @@ pub fn start_segment(
                         match mb {
                             Ok(mut mb) => {
                                 for function in &functions {
-                                    if !function.call(&mut mb) {
+                                    next = function.call(&mut mb);
+                                    if !next {
                                         break;
                                     }
                                 }
-                                if let Err(e) = mpsc_tx.as_ref().unwrap().send(mb).await {
-                                    debug!("{:?}", e);
+
+                                if next {
+                                    if let Err(e) = mpsc_tx.as_ref().unwrap().send(mb).await {
+                                        debug!("{:?}", e);
+                                    }
                                 }
                             }
                             Err(e) => warn!("{}", e),

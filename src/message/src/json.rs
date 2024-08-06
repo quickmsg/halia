@@ -1,6 +1,7 @@
 use crate::{Message, MessageBatch, MessageValue};
 use anyhow::{bail, Result};
 use bytes::Bytes;
+use tracing::debug;
 
 impl MessageBatch {
     pub fn from_json(bytes: Bytes) -> Result<Self> {
@@ -53,13 +54,19 @@ impl From<serde_json::Value> for MessageValue {
             serde_json::Value::Null => Self::Null,
             serde_json::Value::Bool(b) => Self::Boolean(b),
             serde_json::Value::Number(n) => {
-                if n.is_u64() {
-                    Self::Int64(n.as_i64().unwrap())
-                } else if n.is_i64() {
-                    Self::Int64(n.as_i64().unwrap())
-                } else {
-                    Self::Float64(n.as_f64().unwrap())
+                match n.as_i64() {
+                    Some(v) => return Self::Int64(v),
+                    None => {}
                 }
+
+                debug!("here");
+
+                match n.as_f64() {
+                    Some(v) => return Self::Float64(v),
+                    None => {}
+                }
+
+                Self::Null
             }
             serde_json::Value::String(s) => Self::String(s),
             serde_json::Value::Array(arr) => Self::Array(arr.into_iter().map(Self::from).collect()),
