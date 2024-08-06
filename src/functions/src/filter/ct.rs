@@ -1,41 +1,43 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use message::{Message, MessageValue};
-use types::rules::functions::FilterConf;
+use types::rules::functions::FilterConfItem;
 
-use super::{get_target, Filter};
+use crate::get_target_value;
 
-pub const TYPE: &str = "ct";
+use super::Filter;
 
 struct Ct {
     field: String,
-    target_value: Option<MessageValue>,
-    target_field: Option<String>,
+    const_value: Option<MessageValue>,
+    value_field: Option<String>,
 }
 
-pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
-    let (target_value, target_field) = get_target(&conf)?;
-    Ok(Box::new(Ct {
-        field: conf.field,
-        target_value,
-        target_field,
-    }))
+pub fn new(conf: FilterConfItem) -> Result<Box<dyn Filter>> {
+    match conf.value.typ {
+        types::TargetValueType::Const => {
+            let const_value = MessageValue::from(conf.value.value);
+
+            Ok(Box::new(Ct {
+                field: conf.field,
+                const_value: Some(const_value),
+                value_field: None,
+            }))
+        }
+        types::TargetValueType::Variable => match conf.value.value {
+            serde_json::Value::String(s) => Ok(Box::new(Ct {
+                field: conf.field,
+                const_value: None,
+                value_field: Some(s),
+            })),
+            _ => bail!("变量字段名称必须为字符串变量"),
+        },
+    }
 }
 
 impl Filter for Ct {
+    // TODO
     fn filter(&self, msg: &Message) -> bool {
-        let target_value = {
-            if let Some(target_value) = &self.target_value {
-                target_value
-            } else if let Some(target_field) = &self.target_field {
-                match msg.get(&target_field) {
-                    Some(target_value) => target_value,
-                    None => return false,
-                }
-            } else {
-                unreachable!()
-            }
-        };
-
+        let target_value = get_target_value!(self, msg);
         match msg.get(&self.field) {
             Some(message_value) => match (message_value, target_value) {
                 (MessageValue::String(mv), MessageValue::String(tv)) => mv == tv,

@@ -1,11 +1,10 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use message::Message;
-use tracing::debug;
 use types::rules::functions::FilterConf;
 
 use crate::Function;
 
-// mod ct;
+mod ct;
 mod eq;
 mod gt;
 mod gte;
@@ -14,7 +13,23 @@ mod lte;
 mod neq;
 // mod reg;
 
-pub trait Filter: Sync + Send {
+#[macro_export]
+macro_rules! get_target_value {
+    ($self:expr, $msg:expr) => {{
+        match &$self.const_value {
+            Some(v) => v,
+            None => match &$self.value_field {
+                Some(field) => match $msg.get(&field) {
+                    Some(v) => v,
+                    None => return false,
+                },
+                None => unreachable!(),
+            },
+        }
+    }};
+}
+
+pub(crate) trait Filter: Sync + Send {
     fn filter(&self, message: &Message) -> bool;
 }
 
@@ -32,7 +47,8 @@ pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
             types::rules::functions::FilterType::Lt => lt::new(conf)?,
             types::rules::functions::FilterType::Lte => lte::new(conf)?,
             types::rules::functions::FilterType::Neq => neq::new(conf)?,
-            _ => bail!("not support"),
+            types::rules::functions::FilterType::Ct => ct::new(conf)?,
+            types::rules::functions::FilterType::Reg => todo!(),
         };
         filters.push(filter);
     }
@@ -50,8 +66,6 @@ impl Function for Node {
             }
             false
         });
-
-        debug!("{}", message_batch.len());
 
         message_batch.len() != 0
     }

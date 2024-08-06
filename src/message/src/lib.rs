@@ -1,4 +1,7 @@
+use core::num;
 use std::collections::HashMap;
+
+use anyhow::{bail, Result};
 
 mod json;
 
@@ -164,6 +167,16 @@ pub enum MessageValue {
 }
 
 impl MessageValue {
+    pub fn from_json_number(number: serde_json::Number) -> Result<MessageValue> {
+        match number.as_i64() {
+            Some(v) => Ok(MessageValue::Int64(v)),
+            None => match number.as_f64() {
+                Some(v) => Ok(MessageValue::Float64(v)),
+                None => bail!("数值过大"),
+            },
+        }
+    }
+
     pub fn get(&self, pointer: &str) -> Option<&MessageValue> {
         if pointer.is_empty() {
             return Some(self);

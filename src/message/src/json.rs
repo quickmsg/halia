@@ -59,8 +59,6 @@ impl From<serde_json::Value> for MessageValue {
                     None => {}
                 }
 
-                debug!("here");
-
                 match n.as_f64() {
                     Some(v) => return Self::Float64(v),
                     None => {}

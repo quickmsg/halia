@@ -34,6 +34,7 @@ pub enum FilterType {
     Lt,
     Lte,
     Neq,
+    Reg,
 }
 
 #[derive(Deserialize, Serialize)]

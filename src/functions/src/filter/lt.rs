@@ -1,6 +1,8 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use message::{Message, MessageValue};
 use types::rules::functions::FilterConfItem;
+
+use crate::get_target_value;
 
 use super::Filter;
 
@@ -14,18 +16,8 @@ pub fn new(conf: FilterConfItem) -> Result<Box<dyn Filter>> {
     match conf.value.typ {
         types::TargetValueType::Const => {
             let const_value = match conf.value.value {
-                serde_json::Value::Number(v) => {
-                    if let Some(v) = v.as_f64() {
-                        MessageValue::Float64(v)
-                    } else if let Some(v) = v.as_u64() {
-                        MessageValue::Int64(v as i64)
-                    } else if let Some(v) = v.as_i64() {
-                        MessageValue::Int64(v)
-                    } else {
-                        unreachable!()
-                    }
-                }
-                _ => todo!(),
+                serde_json::Value::Number(v) => MessageValue::from_json_number(v)?,
+                _ => bail!("不支持该类型"),
             };
 
             Ok(Box::new(Lt {
@@ -47,18 +39,7 @@ pub fn new(conf: FilterConfItem) -> Result<Box<dyn Filter>> {
 
 impl Filter for Lt {
     fn filter(&self, msg: &Message) -> bool {
-        let target_value = {
-            if let Some(target_value) = &self.const_value {
-                target_value
-            } else if let Some(target_field) = &self.value_field {
-                match msg.get(&target_field) {
-                    Some(target_value) => target_value,
-                    None => return false,
-                }
-            } else {
-                unreachable!()
-            }
-        };
+        let target_value = get_target_value!(self, msg);
 
         match msg.get(&self.field) {
             Some(message_value) => match (message_value, target_value) {
