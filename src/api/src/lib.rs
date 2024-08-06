@@ -19,6 +19,7 @@ pub(crate) type AppResult<T, E = AppError> = result::Result<T, E>;
 #[derive(Serialize, Debug)]
 pub(crate) struct AppSuccess<T> {
     code: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<T>,
 }
 
@@ -47,28 +48,14 @@ impl<T: Serialize> IntoResponse for AppSuccess<T> {
 #[derive(Serialize)]
 pub(crate) struct AppError {
     code: u16,
-    data: Option<String>,
+    data: String,
 }
 
 impl From<HaliaError> for AppError {
     fn from(value: HaliaError) -> Self {
-        let code = value.code();
-        match value {
-            HaliaError::NotFound
-            | HaliaError::NotFoundGroup
-            | HaliaError::ProtocolNotSupported
-            | HaliaError::ParseErr
-            | HaliaError::IoErr
-            | HaliaError::Existed
-            | HaliaError::ConfErr
-            | HaliaError::DeviceNotFound
-            | HaliaError::DeviceRunning
-            | HaliaError::DeviceStopped => Self { code, data: None },
-            HaliaError::DeviceConnectionError(_) => todo!(),
-            HaliaError::Common(s) => Self {
-                code,
-                data: Some(s),
-            },
+        Self {
+            code: 1,
+            data: value.to_string(),
         }
     }
 }
@@ -81,7 +68,6 @@ impl IntoResponse for AppError {
 
 pub async fn start() {
     let app = Router::new()
-        // .route("/api/dashboard", get(dashboard))
         .nest("/api/device", devices::routes())
         .nest("/api/app", apps::routes())
         .nest("/api/rule", rule::rule_routes())
@@ -95,11 +81,3 @@ pub async fn start() {
     let listener = TcpListener::bind("0.0.0.0:13000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
-
-// async fn dashboard() -> AppSuccess<Dashboard> {
-//     AppSuccess::data(Dashboard {
-//         device: GLOBAL_DEVICE_MANAGER.search_dashboard().await,
-//         app: GLOBAL_APP_MANAGER.search_dashboard().await,
-//         rule: GLOBAL_RULE_MANAGER.search_dashboard().await,
-//     })
-// }

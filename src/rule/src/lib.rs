@@ -15,6 +15,10 @@ use uuid::Uuid;
 mod rule;
 mod segment;
 
+fn rule_not_find_err(id: Uuid) -> HaliaError {
+    HaliaError::NotFound("规则".to_owned(), id)
+}
+
 pub static GLOBAL_RULE_MANAGER: LazyLock<RuleManager> = LazyLock::new(|| RuleManager {
     rules: RwLock::new(vec![]),
 });
@@ -91,7 +95,7 @@ impl RuleManager {
                     return Err(HaliaError::Common("todo".to_owned()));
                 }
             },
-            None => return Err(HaliaError::NotFound),
+            None => Err(rule_not_find_err(id)),
         }
     }
 
@@ -104,7 +108,7 @@ impl RuleManager {
             .find(|rule| rule.id == id)
         {
             Some(rule) => Ok(rule.stop()),
-            None => return Err(HaliaError::NotFound),
+            None => Err(rule_not_find_err(id)),
         }
     }
 
@@ -125,7 +129,7 @@ impl RuleManager {
                 // TODO delete
                 Ok(())
             }
-            None => return Err(HaliaError::NotFound),
+            None => Err(rule_not_find_err(id)),
         }
     }
 }
