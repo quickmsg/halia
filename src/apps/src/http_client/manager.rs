@@ -17,6 +17,10 @@ use crate::GLOBAL_APP_MANAGER;
 
 use super::{HttpClient, TYPE};
 
+fn http_client_not_find_err(app_id: Uuid) -> HaliaError {
+    HaliaError::NotFound("http客户端".to_owned(), app_id)
+}
+
 pub static GLOBAL_HTTP_CLIENT_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     apps: DashMap::new(),
 });
@@ -48,14 +52,14 @@ impl Manager {
     pub fn search(&self, app_id: &Uuid) -> HaliaResult<SearchAppsItemResp> {
         match self.apps.get(&app_id) {
             Some(app) => Ok(app.search()),
-            None => Err(HaliaError::NotFound),
+            None => Err(http_client_not_find_err(app_id.clone())),
         }
     }
 
     pub async fn update(&self, app_id: Uuid, req: CreateUpdateHttpClientReq) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.update(req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(http_client_not_find_err(app_id)),
         }
     }
 
@@ -64,7 +68,7 @@ impl Manager {
             Some(mut app) => {
                 app.delete().await?;
             }
-            None => return Err(HaliaError::NotFound),
+            None => return Err(http_client_not_find_err(app_id)),
         };
 
         self.apps.remove(&app_id);
@@ -81,7 +85,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.create_sink(sink_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(http_client_not_find_err(app_id)),
         }
     }
 
@@ -92,7 +96,7 @@ impl Manager {
     ) -> HaliaResult<SearchSinksResp> {
         match self.apps.get(&app_id) {
             Some(app) => Ok(app.search_sinks(pagination).await),
-            None => Err(HaliaError::NotFound),
+            None => Err(http_client_not_find_err(app_id)),
         }
     }
 
@@ -104,14 +108,14 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.update_sink(sink_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(http_client_not_find_err(app_id)),
         }
     }
 
     pub async fn delete_sink(&self, app_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.delete_sink(sink_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(http_client_not_find_err(app_id)),
         }
     }
 
@@ -122,14 +126,14 @@ impl Manager {
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.publish(sink_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(http_client_not_find_err(app_id.clone())),
         }
     }
 
     pub async fn unpublish(&self, app_id: &Uuid, sink_id: &Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.unpublish(sink_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(http_client_not_find_err(app_id.clone())),
         }
     }
 }

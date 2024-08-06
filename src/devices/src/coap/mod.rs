@@ -25,6 +25,10 @@ mod api;
 pub mod manager;
 mod sink;
 
+fn api_not_find_err(api_id: Uuid) -> HaliaError {
+    HaliaError::NotFound("api".to_owned(), api_id)
+}
+
 pub struct Coap {
     id: Uuid,
     conf: CreateUpdateCoapReq,
@@ -152,7 +156,7 @@ impl Coap {
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
         if self.client.is_some() {
-            return Err(HaliaError::DeviceRunning);
+            return Err(HaliaError::Running);
         }
 
         persistence::devices::delete_device(&self.id).await?;
@@ -194,14 +198,14 @@ impl Coap {
     pub async fn update_api(&mut self, api_id: Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
         match self.apis.iter_mut().find(|api| api.id == api_id) {
             Some(api) => api.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(api_not_find_err(api_id)),
         }
     }
 
     pub async fn delete_api(&mut self, api_id: Uuid) -> HaliaResult<()> {
         match self.apis.iter_mut().find(|api| api.id == api_id) {
             Some(api) => api.delete(&self.id).await?,
-            None => return Err(HaliaError::NotFound),
+            None => return Err(api_not_find_err(api_id)),
         }
         self.apis.retain(|api| api.id != api_id);
         Ok(())
@@ -210,7 +214,7 @@ impl Coap {
     pub async fn add_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
             Some(api) => Ok(api.add_ref(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(api_not_find_err(api_id.clone())),
         }
     }
 
@@ -221,21 +225,21 @@ impl Coap {
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
             Some(api) => Ok(api.subscribe(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(api_not_find_err(api_id.clone())),
         }
     }
 
     pub async fn unsubscribe(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
             Some(api) => Ok(api.unsubscribe(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(api_not_find_err(api_id.clone())),
         }
     }
 
     pub async fn del_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
             Some(api) => Ok(api.del_ref(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(api_not_find_err(api_id.clone())),
         }
     }
 
@@ -277,7 +281,8 @@ impl Coap {
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
+            // TODO
+            None => Err(api_not_find_err(sink_id)),
         }
     }
 

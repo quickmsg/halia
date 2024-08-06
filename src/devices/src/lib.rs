@@ -30,8 +30,8 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub async fn create(&self, r#type: &'static str, device_id: Uuid) {
-        self.devices.write().await.push((r#type, device_id));
+    pub async fn create(&self, typ: &'static str, device_id: Uuid) {
+        self.devices.write().await.push((typ, device_id));
     }
 
     pub async fn get_summary(&self) -> Summary {

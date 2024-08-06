@@ -21,6 +21,10 @@ pub const TYPE: &str = "http_client";
 pub mod manager;
 mod sink;
 
+fn sink_not_find_err(sink_id: Uuid) -> HaliaError {
+    HaliaError::NotFound("动作".to_owned(), sink_id)
+}
+
 pub struct HttpClient {
     pub id: Uuid,
 
@@ -162,7 +166,7 @@ impl HttpClient {
                 }
                 Err(e) => Err(e),
             },
-            None => Err(HaliaError::NotFound),
+            None => Err(sink_not_find_err(sink_id)),
         }
     }
 
@@ -173,7 +177,7 @@ impl HttpClient {
                 self.sinks.retain(|sink| sink.id == sink_id);
                 Ok(())
             }
-            None => Err(HaliaError::NotFound),
+            None => Err(sink_not_find_err(sink_id)),
         }
     }
 

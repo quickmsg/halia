@@ -11,7 +11,6 @@ use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, StatusCode},
 };
-use serde_json::json;
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -36,6 +35,10 @@ mod group;
 mod group_variable;
 pub mod manager;
 mod sink;
+
+fn group_not_find_err(group_id: Uuid) -> HaliaError {
+    HaliaError::NotFound("组".to_owned(), group_id)
+}
 
 struct Opcua {
     id: Uuid,
@@ -98,7 +101,7 @@ impl Opcua {
             Ok((session, event_loop)) => (session, event_loop),
             Err(e) => {
                 debug!("{:?}", e);
-                return Err(HaliaError::IoErr);
+                return Err(HaliaError::Common(e.to_string()));
             }
         };
 
@@ -304,7 +307,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id)),
         }
     }
 
@@ -319,7 +322,7 @@ impl Opcua {
             Some(group) => {
                 group.delete().await?;
             }
-            None => return Err(HaliaError::NotFound),
+            None => return Err(group_not_find_err(group_id)),
         }
 
         self.groups
@@ -343,7 +346,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.create_variable(&self.id, variable_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id)),
         }
     }
 
@@ -360,7 +363,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => Ok(group.read_variables(pagination).await),
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id)),
         }
     }
 
@@ -378,7 +381,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update_variable(&self.id, variable_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id)),
         }
     }
 
@@ -395,7 +398,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.delete_variable(&self.id, variable_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id)),
         }
     }
 
@@ -408,7 +411,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.add_ref(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id.clone())),
         }
     }
 
@@ -425,7 +428,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.get_mb_rx(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id.clone())),
         }
     }
 
@@ -438,7 +441,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.del_mb_rx(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id.clone())),
         }
     }
 
@@ -451,7 +454,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.del_ref(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(group_not_find_err(group_id.clone())),
         }
     }
 
@@ -472,7 +475,6 @@ impl Opcua {
     }
 
     async fn add_subscription(&self, req: Bytes) -> HaliaResult<()> {
-        // TODO
-        Err(HaliaError::ParseErr)
+        todo!()
     }
 }

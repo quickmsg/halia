@@ -9,6 +9,13 @@ pub mod apps;
 pub mod devices;
 pub mod functions;
 
+#[derive(Serialize)]
+pub struct Summary {
+    pub total: usize,
+    pub running_cnt: usize,
+    pub off_cnt: usize,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateUpdateRuleReq {
     #[serde(flatten)]

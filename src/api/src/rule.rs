@@ -5,7 +5,7 @@ use axum::{
 };
 use rule::GLOBAL_RULE_MANAGER;
 use types::{
-    rules::{CreateUpdateRuleReq, SearchRulesResp},
+    rules::{CreateUpdateRuleReq, SearchRulesResp, Summary},
     Pagination,
 };
 use uuid::Uuid;
@@ -14,12 +14,17 @@ use crate::{AppResult, AppSuccess};
 
 pub fn rule_routes() -> Router {
     Router::new()
+        .route("/summary", get(get_rules_summary))
         .route("/", post(create))
         .route("/", get(search))
         .route("/:id/start", put(start))
         .route("/:id/stop", put(stop))
         .route("/:id", put(update))
         .route("/:id", routing::delete(delete))
+}
+
+async fn get_rules_summary() -> AppSuccess<Summary> {
+    AppSuccess::data(GLOBAL_RULE_MANAGER.get_summary().await)
 }
 
 async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()>> {

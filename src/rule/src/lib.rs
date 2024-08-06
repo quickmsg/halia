@@ -7,8 +7,8 @@ use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
 use tracing::error;
 use types::{
-    rules::{CreateUpdateRuleReq, SearchRulesResp},
-    DashboardRule, Pagination,
+    rules::{CreateUpdateRuleReq, SearchRulesResp, Summary},
+    Pagination,
 };
 use uuid::Uuid;
 
@@ -33,18 +33,26 @@ impl RuleManager {
             Err(e) => Err(e),
         }
     }
-
-    pub async fn search_dashboard(&self) -> DashboardRule {
+    pub async fn get_summary(&self) -> Summary {
         let mut total = 0;
-        let mut on_cnt = 0;
+        let mut running_cnt = 0;
+        let mut off_cnt = 0;
+
         for rule in self.rules.read().await.iter() {
+            let resp = rule.search();
             total += 1;
-            if rule.on {
-                on_cnt += 1;
+            if resp.on {
+                running_cnt += 1;
+            } else {
+                off_cnt += 1;
             }
         }
 
-        DashboardRule { total, on_cnt }
+        Summary {
+            total,
+            running_cnt,
+            off_cnt,
+        }
     }
 
     pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchRulesResp> {
@@ -80,7 +88,7 @@ impl RuleManager {
                 Ok(_) => Ok(()),
                 Err(e) => {
                     error!("rule send err :{}", e);
-                    return Err(HaliaError::Existed);
+                    return Err(HaliaError::Common("todo".to_owned()));
                 }
             },
             None => return Err(HaliaError::NotFound),

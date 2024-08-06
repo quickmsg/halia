@@ -42,6 +42,14 @@ pub mod manager;
 mod point;
 mod sink;
 
+fn point_not_find_error(point_id: Uuid) -> HaliaError {
+    HaliaError::NotFound("点位".to_owned(), point_id)
+}
+
+fn sink_not_find_error(sink_id: Uuid) -> HaliaError {
+    HaliaError::NotFound("动作".to_owned(), sink_id)
+}
+
 #[derive(Debug)]
 pub struct Modbus {
     pub id: Uuid,
@@ -321,7 +329,7 @@ impl Modbus {
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
         if self.on {
-            return Err(HaliaError::DeviceRunning);
+            return Err(HaliaError::Running);
         }
         for point in self.points.read().await.iter() {
             if !point.can_delete() {
@@ -446,13 +454,13 @@ impl Modbus {
             .find(|point| point.id == point_id)
         {
             Some(point) => point.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(point_not_find_error(point_id)),
         }
     }
 
     pub async fn write_point_value(&self, point_id: Uuid, value: Value) -> HaliaResult<()> {
         if !self.on {
-            return Err(HaliaError::DeviceStopped);
+            return Err(HaliaError::Stopped);
         }
         if self.err.read().await.is_some() {
             return Err(HaliaError::Common("设备断开连接中".to_owned()));
@@ -483,7 +491,7 @@ impl Modbus {
                     Err(e) => Err(e),
                 }
             }
-            None => Err(HaliaError::NotFound),
+            None => Err(point_not_find_error(point_id)),
         }
     }
 
@@ -496,7 +504,7 @@ impl Modbus {
             .find(|point| point.id == point_id)
         {
             Some(point) => point.delete(&self.id).await?,
-            None => return Err(HaliaError::NotFound),
+            None => return Err(point_not_find_error(point_id)),
         }
 
         self.points
@@ -515,7 +523,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.add_ref(rule_id)),
-            None => return Err(HaliaError::NotFound),
+            None => Err(point_not_find_error(point_id.clone())),
         }
     }
 
@@ -525,7 +533,7 @@ impl Modbus {
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         if !self.on {
-            return Err(HaliaError::DeviceStopped);
+            return Err(HaliaError::Stopped);
         }
         match self
             .points
@@ -535,7 +543,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.get_mb_rx(rule_id)),
-            None => return Err(HaliaError::NotFound),
+            None => Err(point_not_find_error(point_id.clone())),
         }
     }
 
@@ -548,7 +556,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.del_mb_rx(rule_id)),
-            None => return Err(HaliaError::NotFound),
+            None => Err(point_not_find_error(point_id.clone())),
         }
     }
 
@@ -561,7 +569,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.del_ref(rule_id)),
-            None => return Err(HaliaError::NotFound),
+            None => Err(point_not_find_error(point_id.clone())),
         }
     }
 
@@ -609,7 +617,7 @@ impl Modbus {
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(sink_not_find_error(sink_id)),
         }
     }
 
@@ -620,14 +628,14 @@ impl Modbus {
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
-            None => Err(HaliaError::NotFound),
+            None => Err(sink_not_find_error(sink_id)),
         }
     }
 
     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.add_ref(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(sink_not_find_error(sink_id.clone())),
         }
     }
 
@@ -638,21 +646,21 @@ impl Modbus {
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.get_mb_tx(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(sink_not_find_error(sink_id.clone())),
         }
     }
 
     pub fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.del_mb_tx(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(sink_not_find_error(sink_id.clone())),
         }
     }
 
     pub fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.del_ref(rule_id)),
-            None => Err(HaliaError::NotFound),
+            None => Err(sink_not_find_error(sink_id.clone())),
         }
     }
 }

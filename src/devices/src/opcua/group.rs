@@ -155,7 +155,7 @@ impl Group {
             self.on = false;
         }
         if !self.ref_info.can_stop() {
-            return Err(HaliaError::ConfErr);
+            return Err(HaliaError::Common("引用中".to_owned()));
         }
         self.stop_signal_tx
             .as_ref()
@@ -270,7 +270,7 @@ impl Group {
             }
         }
 
-        Err(HaliaError::NotFound)
+        Err(HaliaError::NotFound("变量".to_owned(), variable_id))
     }
 
     pub async fn delete_variable(&self, device_id: &Uuid, variable_id: Uuid) -> HaliaResult<()> {

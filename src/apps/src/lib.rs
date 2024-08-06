@@ -1,10 +1,14 @@
 #![feature(duration_constants)]
 use common::{error::HaliaResult, persistence};
+use http_client::manager::GLOBAL_HTTP_CLIENT_MANAGER;
 use mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
 use tracing::warn;
-use types::{apps::SearchAppsResp, DashboardApp, Pagination};
+use types::{
+    apps::{SearchAppsResp, Summary},
+    Pagination,
+};
 use uuid::Uuid;
 
 pub mod http_client;
@@ -23,23 +27,29 @@ impl AppManager {
         self.apps.write().await.push((r#type, app_id));
     }
 
-    pub async fn search_dashboard(&self) -> DashboardApp {
+    pub async fn get_summary(&self) -> Summary {
         let mut total = 0;
-        let mut on_cnt = 0;
+        let mut running_cnt = 0;
         let mut err_cnt = 0;
-        for (r#type, app_id) in self.apps.read().await.iter() {
-            let resp = match r#type {
+        let mut off_cnt = 0;
+        for (typ, app_id) in self.apps.read().await.iter() {
+            let resp = match typ {
                 &mqtt_client::TYPE => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id),
+                &http_client::TYPE => GLOBAL_HTTP_CLIENT_MANAGER.search(app_id),
                 _ => unreachable!(),
             };
+
             match resp {
                 Ok(resp) => {
                     total += 1;
-                    if resp.on {
-                        on_cnt += 1;
-                    }
                     if resp.err.is_some() {
                         err_cnt += 1;
+                    } else {
+                        if resp.on {
+                            running_cnt += 1;
+                        } else {
+                            off_cnt += 1;
+                        }
                     }
                 }
                 Err(e) => {
@@ -47,11 +57,11 @@ impl AppManager {
                 }
             }
         }
-
-        DashboardApp {
+        Summary {
             total,
-            on_cnt,
+            running_cnt,
             err_cnt,
+            off_cnt,
         }
     }
 
@@ -105,10 +115,13 @@ impl AppManager {
                                 .create(Some(app_id), serde_json::from_str(items[3]).unwrap())
                                 .await?;
                             match items[2] {
+                                "0" => {}
                                 "1" => {
                                     GLOBAL_MQTT_CLIENT_MANAGER.start(app_id).await.unwrap();
                                 }
-                                _ => {}
+                                _ => {
+                                    panic!("缓存文件错误")
+                                }
                             }
                         }
                         _ => {}

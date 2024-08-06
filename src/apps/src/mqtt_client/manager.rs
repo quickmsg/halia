@@ -24,6 +24,10 @@ pub static GLOBAL_MQTT_CLIENT_MANAGER: LazyLock<Manager> = LazyLock::new(|| Mana
     apps: DashMap::new(),
 });
 
+fn mqtt_client_not_find_err(app_id: Uuid) -> HaliaError {
+    HaliaError::NotFound("mqtt客户端".to_owned(), app_id)
+}
+
 pub struct Manager {
     apps: DashMap<Uuid, MqttClient>,
 }
@@ -51,37 +55,35 @@ impl Manager {
     pub fn search(&self, app_id: &Uuid) -> HaliaResult<SearchAppsItemResp> {
         match self.apps.get(&app_id) {
             Some(app) => Ok(app.search()),
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id.clone())),
         }
     }
 
     pub async fn update(&self, app_id: Uuid, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.update(req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
     pub async fn start(&self, app_id: Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.start().await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
     pub async fn stop(&self, app_id: Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.stop().await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
     pub async fn delete(&self, app_id: Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
-            Some(mut app) => {
-                app.delete().await?;
-            }
-            None => return Err(HaliaError::NotFound),
+            Some(mut app) => app.delete().await?,
+            None => return Err(mqtt_client_not_find_err(app_id)),
         };
 
         self.apps.remove(&app_id);
@@ -98,7 +100,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.apps.get(&app_id) {
             Some(app) => app.create_source(source_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
@@ -109,7 +111,7 @@ impl Manager {
     ) -> HaliaResult<SearchSourcesResp> {
         match self.apps.get(&app_id) {
             Some(app) => app.search_sources(pagination).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
@@ -121,14 +123,14 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.apps.get(&app_id) {
             Some(app) => app.update_source(source_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
     pub async fn delete_source(&self, app_id: Uuid, source_id: Uuid) -> HaliaResult<()> {
         match self.apps.get(&app_id) {
             Some(app) => app.delete_source(source_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
@@ -140,7 +142,7 @@ impl Manager {
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.get_source_mb_rx(source_id, rule_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id.clone())),
         }
     }
 
@@ -152,7 +154,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.del_source_mb_rx(source_id, rule_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id.clone())),
         }
     }
 
@@ -164,7 +166,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.create_sink(sink_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
@@ -175,7 +177,7 @@ impl Manager {
     ) -> HaliaResult<SearchSinksResp> {
         match self.apps.get(&app_id) {
             Some(app) => Ok(app.search_sinks(pagination).await),
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
@@ -187,21 +189,21 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.update_sink(sink_id, req).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
     pub async fn delete_sink(&self, app_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.delete_sink(sink_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id)),
         }
     }
 
     pub fn add_sink_ref(&self, app_id: &Uuid, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.add_sink_ref(sink_id, rule_id),
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id.clone())),
         }
     }
 
@@ -213,7 +215,7 @@ impl Manager {
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.get_sink_mb_tx(sink_id, rule_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id.clone())),
         }
     }
 
@@ -225,7 +227,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.del_sink_ref(sink_id, rule_id).await,
-            None => Err(HaliaError::NotFound),
+            None => Err(mqtt_client_not_find_err(app_id.clone())),
         }
     }
 }

@@ -172,7 +172,7 @@ impl Point {
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
-            return Err(HaliaError::ConfErr);
+            return Err(HaliaError::Common("引用中".to_owned()));
         }
         self.stop().await;
         persistence::devices::modbus::delete_point(device_id, &self.id).await?;
