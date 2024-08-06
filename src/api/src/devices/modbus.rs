@@ -5,9 +5,12 @@ use axum::{
 };
 use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
 use types::{
-    devices::modbus::{
-        CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
-        SearchSinksResp,
+    devices::{
+        modbus::{
+            CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
+            SearchSinksResp,
+        },
+        SearchDevicesItemResp,
     },
     Pagination, Value,
 };
@@ -18,6 +21,7 @@ use crate::{AppResult, AppSuccess};
 pub(crate) fn modbus_routes() -> Router {
     Router::new()
         .route("/", post(create))
+        .route("/:device_id", get(read))
         .route("/:device_id", put(update))
         .route("/:device_id/start", put(start))
         .route("/:device_id/stop", put(stop))
@@ -48,6 +52,11 @@ pub(crate) fn modbus_routes() -> Router {
 async fn create(Json(req): Json<CreateUpdateModbusReq>) -> AppResult<AppSuccess<()>> {
     GLOBAL_MODBUS_MANAGER.create(None, req).await?;
     Ok(AppSuccess::empty())
+}
+
+async fn read(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<SearchDevicesItemResp>> {
+    let data = GLOBAL_MODBUS_MANAGER.search(&device_id).await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update(

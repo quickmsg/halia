@@ -5,9 +5,12 @@ use axum::{
 };
 use devices::coap::manager::GLOBAL_COAP_MANAGER;
 use types::{
-    devices::coap::{
-        CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateSinkReq, SearchAPIsResp,
-        SearchSinksResp,
+    devices::{
+        coap::{
+            CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateSinkReq, SearchAPIsResp,
+            SearchSinksResp,
+        },
+        SearchDevicesItemResp,
     },
     Pagination,
 };
@@ -18,6 +21,7 @@ use crate::{AppResult, AppSuccess};
 pub(crate) fn coap_routes() -> Router {
     Router::new()
         .route("/", post(create))
+        .route("/:device_id", get(read))
         .route("/:device_id", put(update))
         .route("/:device_id/start", put(start))
         .route("/:device_id/stop", put(stop))
@@ -47,6 +51,11 @@ pub(crate) fn coap_routes() -> Router {
 async fn create(Json(req): Json<CreateUpdateCoapReq>) -> AppResult<AppSuccess<()>> {
     GLOBAL_COAP_MANAGER.create(None, req).await?;
     Ok(AppSuccess::empty())
+}
+
+async fn read(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<SearchDevicesItemResp>> {
+    let data = GLOBAL_COAP_MANAGER.search(&device_id)?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update(

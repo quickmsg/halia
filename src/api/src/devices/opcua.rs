@@ -5,9 +5,12 @@ use axum::{
 };
 use devices::opcua::manager::GLOBAL_OPCUA_MANAGER;
 use types::{
-    devices::opcua::{
-        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-        SearchGroupVariablesResp, SearchGroupsResp,
+    devices::{
+        opcua::{
+            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+            SearchGroupVariablesResp, SearchGroupsResp,
+        },
+        SearchDevicesItemResp,
     },
     Pagination,
 };
@@ -18,6 +21,7 @@ use crate::{AppResult, AppSuccess};
 pub(crate) fn opcua_routes() -> Router {
     Router::new()
         .route("/", post(create))
+        .route("/:device_id", get(read))
         .route("/:device_id", put(update))
         .route("/:device_id/start", put(start))
         .route("/:device_id/stop", put(stop))
@@ -51,6 +55,11 @@ pub(crate) fn opcua_routes() -> Router {
 async fn create(Json(req): Json<CreateUpdateOpcuaReq>) -> AppResult<AppSuccess<()>> {
     GLOBAL_OPCUA_MANAGER.create(None, req).await?;
     Ok(AppSuccess::empty())
+}
+
+async fn read(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<SearchDevicesItemResp>> {
+    let data = GLOBAL_OPCUA_MANAGER.search(&device_id)?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update(
