@@ -38,7 +38,7 @@ impl AppManager {
                     if resp.on {
                         on_cnt += 1;
                     }
-                    if resp.err {
+                    if resp.err.is_some() {
                         err_cnt += 1;
                     }
                 }

@@ -13,7 +13,7 @@ use tokio::{
     sync::{broadcast, mpsc, RwLock},
     time,
 };
-use tracing::error;
+use tracing::{debug, error};
 use types::{
     apps::{
         mqtt_client::{
@@ -34,9 +34,10 @@ mod source;
 
 pub struct MqttClient {
     pub id: Uuid,
+    conf: CreateUpdateMqttClientReq,
 
     on: bool,
-    conf: CreateUpdateMqttClientReq,
+    err: Option<String>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
     sources: Arc<RwLock<Vec<Source>>>,
@@ -65,6 +66,7 @@ impl MqttClient {
             id: app_id,
             conf: req,
             on: false,
+            err: None,
             sources: Arc::new(RwLock::new(vec![])),
             sinks: vec![],
             client_v311: None,
@@ -81,7 +83,7 @@ impl MqttClient {
                         continue;
                     }
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 3);
+                    assert_eq!(items.len(), 2);
                     let source_id = Uuid::from_str(items[0]).unwrap();
                     self.create_source(Some(source_id), serde_json::from_str(items[1]).unwrap())
                         .await?;
@@ -118,7 +120,7 @@ impl MqttClient {
         }
         self.conf = req;
 
-        if self.stop_signal_tx.is_some() && restart {
+        if self.on && restart {
             self.stop_signal_tx
                 .as_ref()
                 .unwrap()
@@ -186,7 +188,11 @@ impl MqttClient {
                 )
                 .await;
         }
+
         self.client_v311 = Some(Arc::new(client));
+        for sink in self.sinks.iter_mut() {
+            sink.start_v311(self.client_v311.as_ref().unwrap().clone());
+        }
 
         let (tx, mut rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(tx);
@@ -384,8 +390,7 @@ impl MqttClient {
             on: self.on,
             typ: TYPE,
             conf: serde_json::to_value(&self.conf).unwrap(),
-            // TODO
-            err: false,
+            err: self.err.clone(),
         }
     }
 

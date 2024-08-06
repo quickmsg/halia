@@ -25,6 +25,7 @@ pub struct HttpClient {
     pub id: Uuid,
 
     on: bool,
+    err: Option<String>,
     conf: CreateUpdateHttpClientReq,
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
@@ -51,6 +52,7 @@ impl HttpClient {
             id: app_id,
             conf: req,
             on: false,
+            err: None,
             sinks: vec![],
             stop_signal_tx: None,
         })
@@ -111,7 +113,7 @@ impl HttpClient {
             on: self.on,
             typ: TYPE,
             conf: serde_json::to_value(&self.conf).unwrap(),
-            err: false,
+            err: self.err.clone(),
         }
     }
 
