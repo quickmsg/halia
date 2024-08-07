@@ -1,28 +1,27 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ComputerConf;
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-// 立方根
-struct Cbrt {
+struct Cosh {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Cbrt {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Cosh {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Cbrt {
+impl Computer for Cosh {
     fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).cbrt()),
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.cbrt()),
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).cosh()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.cosh()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

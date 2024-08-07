@@ -1,39 +1,38 @@
-use std::f64::consts::PI;
-
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ComputerConf;
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-pub struct Atan {
+// 反余弦函数
+struct Acos {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Atan {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Acos {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Atan {
+impl Computer for Acos {
     fn compute(&self, message: &mut Message) {
-        let value = match message.get(&self.field) {
+        let compute_value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => {
-                    if (*mv as f64) > -PI / 2.0 || (*mv as f64) > PI / 2.0 {
+                    if *mv < -1 || *mv > 1 {
                         MessageValue::Null
                     } else {
-                        MessageValue::Float64((*mv as f64).atan())
+                        MessageValue::Float64((*mv as f64).acos())
                     }
                 }
                 MessageValue::Float64(mv) => {
-                    if *mv < -PI / 2.0 || *mv > PI / 2.0 {
+                    if *mv < -1.0 || *mv > 1.0 {
                         MessageValue::Null
                     } else {
-                        MessageValue::Float64(mv.atan())
+                        MessageValue::Float64(mv.acos())
                     }
                 }
                 _ => MessageValue::Null,
@@ -42,8 +41,8 @@ impl Computer for Atan {
         };
 
         match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), value),
-            None => message.set(&self.field, value),
+            Some(target_field) => message.add(target_field.clone(), compute_value),
+            None => message.set(&self.field, compute_value),
         }
     }
 }

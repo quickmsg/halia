@@ -1,27 +1,26 @@
 use anyhow::Result;
 use message::MessageValue;
-use types::rules::functions::ComputerConf;
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-pub struct Exp {
+struct Floor {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Exp {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Floor {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Exp {
+impl Computer for Floor {
     fn compute(&self, message: &mut message::Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).exp()),
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.exp()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.floor()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

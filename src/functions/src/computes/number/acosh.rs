@@ -1,38 +1,38 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ComputerConf;
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-// 反余弦函数
-struct Acos {
+// 反双曲余弦函数
+struct Acosh {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Acos {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Acosh {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Acos {
+impl Computer for Acosh {
     fn compute(&self, message: &mut Message) {
         let compute_value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => {
-                    if *mv < -1 || *mv > 1 {
+                message::MessageValue::Int64(mv) => {
+                    if *mv < 1 {
                         MessageValue::Null
                     } else {
-                        MessageValue::Float64((*mv as f64).acos())
+                        message::MessageValue::Float64((*mv as f64).acosh())
                     }
                 }
-                MessageValue::Float64(mv) => {
-                    if *mv < -1.0 || *mv > 1.0 {
+                message::MessageValue::Float64(mv) => {
+                    if *mv < 1.0 {
                         MessageValue::Null
                     } else {
-                        MessageValue::Float64(mv.acos())
+                        message::MessageValue::Float64(mv.acosh())
                     }
                 }
                 _ => MessageValue::Null,

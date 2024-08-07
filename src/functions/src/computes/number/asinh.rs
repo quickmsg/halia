@@ -1,26 +1,28 @@
 use anyhow::Result;
-use message::MessageValue;
-use types::rules::functions::ComputerConf;
+use message::{Message, MessageValue};
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-struct Floor {
+// 反双曲正弦函数
+struct Asinh {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Floor {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Asinh {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Floor {
-    fn compute(&self, message: &mut message::Message) {
+impl Computer for Asinh {
+    fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.floor()),
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).asinh()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.asinh()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

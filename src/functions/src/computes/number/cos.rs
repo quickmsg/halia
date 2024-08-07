@@ -1,28 +1,27 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ComputerConf;
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-// 反双曲正弦函数
-struct Asinh {
+struct Cos {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Asinh {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Cos {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Asinh {
+impl Computer for Cos {
     fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).asinh()),
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.asinh()),
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).cos()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.cos()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

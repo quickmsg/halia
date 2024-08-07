@@ -1,28 +1,28 @@
 use anyhow::Result;
-use message::MessageValue;
-use types::rules::functions::ComputerConf;
+use message::{Message, MessageValue};
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-// 弧度转为角度
-struct Degrees {
+// 立方根
+struct Cbrt {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Degrees {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Cbrt {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Degrees {
-    fn compute(&self, message: &mut message::Message) {
+impl Computer for Cbrt {
+    fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).to_degrees()),
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.to_degrees()),
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).cbrt()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.cbrt()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

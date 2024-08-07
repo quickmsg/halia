@@ -1,27 +1,27 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ComputerConf;
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-struct Sin {
+// 最小整数
+struct Ceil {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Sin {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Ceil {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Sin {
+impl Computer for Ceil {
     fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).sin()),
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.sin()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.ceil()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

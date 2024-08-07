@@ -39,33 +39,48 @@ pub enum FilterType {
 
 #[derive(Deserialize, Serialize)]
 pub struct ComputerConf {
+    pub computers: Vec<ComputerConfItem>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ComputerConfItem {
     #[serde(rename = "type")]
     pub typ: ComputerType,
+    pub name: String,
     pub field: String,
     pub target_field: Option<String>,
-    pub arg: Option<TargetValue>,
+    pub arg: Option<Vec<TargetValue>>,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ComputerType {
-    Abs,
-    Acos,
-    Acosh,
-    Asin,
-    Asinh,
-    Atan,
-    Atan2,
-    Atanh,
-    Cbrt,
-    Ceil,
-    Cos,
-    Cosh,
-    Degrees,
-    Exp,
-    Exp2,
-    Floor,
-    Ln,
-    Log,
-    Sin,
+    Number,
+    String,
+    Hash,
+    Date,
 }
+
+// #[derive(Deserialize, Serialize)]
+// #[serde(rename_all = "snake_case")]
+// pub enum ComputerType {
+//     Abs,
+//     Acos,
+//     Acosh,
+//     Asin,
+//     Asinh,
+//     Atan,
+//     Atan2,
+//     Atanh,
+//     Cbrt,
+//     Ceil,
+//     Cos,
+//     Cosh,
+//     Degrees,
+//     Exp,
+//     Exp2,
+//     Floor,
+//     Ln,
+//     Log,
+//     Sin,
+// }

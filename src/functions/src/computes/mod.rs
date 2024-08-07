@@ -1,79 +1,62 @@
-use anyhow::{bail, Result};
-use message::{Message, MessageBatch};
-use serde::Deserialize;
-use serde_json::Value;
-use tracing::debug;
+use anyhow::Result;
+use message::Message;
+use types::rules::functions::ComputerConf;
 
 use crate::Function;
 
-// mod float;
-// mod int;
-// mod string;
+mod number;
+mod string;
 
-// pub(crate) trait Computer: Sync + Send {
-//     fn compute(&self, message: &mut Message);
-// }
-
-#[derive(Deserialize)]
-pub(crate) struct Rule {
-    r#type: String,
-    name: String,
-    field: String,
-    output_field: String,
-    value: Option<Value>,
-    values: Option<Vec<Value>>,
+pub trait Computer: Sync + Send {
+    fn compute(&self, message: &mut Message);
 }
 
-struct ComputeInfo {
-    output_field: String,
-    // computer: Box<dyn Computer>,
+pub struct Node {
+    computers: Vec<Box<dyn Computer>>,
 }
 
-pub struct ComputeNode {
-    compute_infos: Vec<ComputeInfo>,
-}
-
-impl ComputeNode {
-    pub fn new(conf: Value) -> Result<Box<dyn Function>> {
-        let mut compute_infos: Vec<ComputeInfo> = Vec::new();
-        let rules: Vec<Rule> = serde_json::from_value(conf)?;
-        for rule in &rules {
-            match rule.r#type.as_str() {
-                // "float" => match get_float_computer(rule) {
-                //     Ok(computer) => compute_infos.push(ComputeInfo {
-                //         output_field: rule.output_field.clone(),
-                //         computer,
-                //     }),
-                //     Err(e) => bail!("{}", e),
-                // },
-                // "int" => match get_int_computer(rule) {
-                //     Ok(computer) => compute_infos.push(ComputeInfo {
-                //         output_field: rule.output_field.clone(),
-                //         computer,
-                //     }),
-                //     Err(e) => bail!("{}", e),
-                // },
-                _ => {}
-            }
-        }
-
-        Ok(Box::new(ComputeNode { compute_infos }))
+pub fn new(conf: ComputerConf) -> Result<Box<dyn Function>> {
+    let mut computers: Vec<Box<dyn Computer>> = Vec::with_capacity(conf.computers.len());
+    for item_conf in conf.computers {
+        let computer = match item_conf.typ {
+            types::rules::functions::ComputerType::Number => number::new(item_conf)?,
+            types::rules::functions::ComputerType::String => todo!(),
+            types::rules::functions::ComputerType::Hash => todo!(),
+            types::rules::functions::ComputerType::Date => todo!(),
+            //     types::rules::functions::ComputerType::Abs => abs::new(conf)?,
+            //     types::rules::functions::ComputerType::Acos => acos::new(conf)?,
+            //     types::rules::functions::ComputerType::Acosh => acosh::new(conf)?,
+            //     types::rules::functions::ComputerType::Asin => asin::new(conf)?,
+            //     types::rules::functions::ComputerType::Asinh => asinh::new(conf)?,
+            //     types::rules::functions::ComputerType::Atan => atan::new(conf)?,
+            //     types::rules::functions::ComputerType::Atan2 => atan2::new(conf)?,
+            //     types::rules::functions::ComputerType::Atanh => atanh::new(conf)?,
+            //     types::rules::functions::ComputerType::Cbrt => cbrt::new(conf)?,
+            //     types::rules::functions::ComputerType::Ceil => ceil::new(conf)?,
+            //     types::rules::functions::ComputerType::Cos => cos::new(conf)?,
+            //     types::rules::functions::ComputerType::Cosh => cosh::new(conf)?,
+            //     types::rules::functions::ComputerType::Degrees => degrees::new(conf)?,
+            //     types::rules::functions::ComputerType::Exp => exp::new(conf)?,
+            //     types::rules::functions::ComputerType::Exp2 => exp2::new(conf)?,
+            //     types::rules::functions::ComputerType::Floor => floor::new(conf)?,
+            //     types::rules::functions::ComputerType::Ln => ln::new(conf)?,
+            //     types::rules::functions::ComputerType::Log => log::new(conf)?,
+            //     types::rules::functions::ComputerType::Sin => sin::new(conf)?,
+        };
+        computers.push(computer);
     }
+    Ok(Box::new(Node { computers }))
 }
 
-impl Function for ComputeNode {
-    fn call(&self, message_batch: &mut MessageBatch) -> bool {
+impl Function for Node {
+    fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
         let messages = message_batch.get_messages_mut();
-        for message in messages {
-            for ci in &self.compute_infos {
-                // ci.computer.compute(message);
-                // Some(value) => {
-                //     debug!("{}, {}", ci.output_field, value);
-                //     // message.set(&ci.output_field, value);
-                // }
-                // None => {}
+        messages.iter_mut().for_each(|msg| {
+            for computer in &self.computers {
+                computer.compute(msg);
             }
-        }
+        });
+
         true
     }
 }

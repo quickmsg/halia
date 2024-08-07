@@ -1,7 +1,6 @@
 use message::MessageBatch;
 
 pub mod aggregate;
-pub mod compute;
 pub mod computes;
 mod field;
 pub mod filter;

@@ -1,27 +1,28 @@
 use anyhow::Result;
-use message::{Message, MessageValue};
-use types::rules::functions::ComputerConf;
+use message::MessageValue;
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-struct Cosh {
+// 弧度转为角度
+struct Degrees {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Cosh {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Degrees {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Cosh {
-    fn compute(&self, message: &mut Message) {
+impl Computer for Degrees {
+    fn compute(&self, message: &mut message::Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).cosh()),
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.cosh()),
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).to_degrees()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.to_degrees()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

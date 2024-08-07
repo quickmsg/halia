@@ -45,12 +45,12 @@ pub fn mqtt_client_routes() -> Router {
         )
 }
 
-// async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResult<AppSuccess<()>> {
-//     GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await?;
-//     Ok(AppSuccess::empty())
-// }
+async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await?;
+    Ok(AppSuccess::empty())
+}
 
-async fn create(mut multipart: Multipart) -> AppResult<AppSuccess<()>> {
+async fn create_todo(mut multipart: Multipart) -> AppResult<AppSuccess<()>> {
     let req = CreateUpdateMqttClientReq {
         base: todo!(),
         ext: todo!(),

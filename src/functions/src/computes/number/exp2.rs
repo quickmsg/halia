@@ -1,27 +1,27 @@
 use anyhow::Result;
-use message::{Message, MessageValue};
-use types::rules::functions::ComputerConf;
+use message::MessageValue;
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-// 最小整数
-struct Ceil {
+pub struct Exp2 {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Ceil {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Exp2 {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Ceil {
-    fn compute(&self, message: &mut Message) {
+impl Computer for Exp2 {
+    fn compute(&self, message: &mut message::Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.ceil()),
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).exp2()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.exp2()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

@@ -1,37 +1,38 @@
 use anyhow::Result;
-use message::MessageValue;
-use types::rules::functions::ComputerConf;
+use message::{Message, MessageValue};
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-struct Ln {
+// 反正弦函数
+struct Asin {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Ln {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Asin {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Ln {
-    fn compute(&self, message: &mut message::Message) {
+impl Computer for Asin {
+    fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
-            Some(mv) => match mv {
+            Some(value) => match value {
                 MessageValue::Int64(mv) => {
-                    if *mv <= 0 {
+                    if *mv < 1 || *mv > 1 {
                         MessageValue::Null
                     } else {
-                        MessageValue::Float64((*mv as f64).ln())
+                        message::MessageValue::Float64((*mv as f64).asin())
                     }
                 }
                 MessageValue::Float64(mv) => {
-                    if *mv <= 0.0 {
+                    if *mv < -1.0 || *mv > 1.0 {
                         MessageValue::Null
                     } else {
-                        MessageValue::Float64(mv.ln())
+                        message::MessageValue::Float64(mv.asin())
                     }
                 }
                 _ => MessageValue::Null,

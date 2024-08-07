@@ -1,27 +1,27 @@
 use anyhow::Result;
-use message::MessageValue;
-use types::rules::functions::ComputerConf;
+use message::{Message, MessageValue};
+use types::rules::functions::ComputerConfItem;
 
 use super::Computer;
 
-pub struct Exp2 {
+struct Sin {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Exp2 {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Sin {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Exp2 {
-    fn compute(&self, message: &mut message::Message) {
+impl Computer for Sin {
+    fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).exp2()),
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.exp2()),
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).sin()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.sin()),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

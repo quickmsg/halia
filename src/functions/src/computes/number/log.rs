@@ -1,29 +1,32 @@
 use anyhow::{bail, Result};
-use message::{Message, MessageValue};
-use types::{rules::functions::ComputerConf, TargetValue};
+use message::MessageValue;
+use types::{rules::functions::ComputerConfItem, TargetValue};
 
 use super::Computer;
 
-struct Atan2 {
+struct Log {
     field: String,
     arg: TargetValue,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
     let arg = match conf.arg {
-        Some(arg) => arg,
-        None => bail!("atan2函数必须拥有参数"),
+        Some(mut arg) => match arg.pop() {
+            Some(arg) => arg,
+            None => bail!("log必须含有参数"),
+        },
+        None => bail!("log必须含有参数"),
     };
-    Ok(Box::new(Atan2 {
+    Ok(Box::new(Log {
         field: conf.field,
         arg,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Atan2 {
-    fn compute(&self, message: &mut Message) {
+impl Computer for Log {
+    fn compute(&self, message: &mut message::Message) {
         let arg = match self.arg.typ {
             types::TargetValueType::Const => match &self.arg.value {
                 serde_json::Value::Number(n) => match n.as_f64() {
@@ -35,8 +38,8 @@ impl Computer for Atan2 {
             types::TargetValueType::Variable => match &self.arg.value {
                 serde_json::Value::String(field) => match message.get(field) {
                     Some(mv) => match mv {
-                        MessageValue::Int64(mv) => *mv as f64,
-                        MessageValue::Float64(mv) => *mv,
+                        message::MessageValue::Int64(mv) => *mv as f64,
+                        message::MessageValue::Float64(mv) => *mv,
                         _ => return,
                     },
                     None => return,
@@ -47,8 +50,20 @@ impl Computer for Atan2 {
 
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).atan2(arg)),
-                MessageValue::Float64(mv) => MessageValue::Float64(mv.atan2(arg)),
+                MessageValue::Int64(mv) => {
+                    if *mv <= 0 {
+                        MessageValue::Null
+                    } else {
+                        MessageValue::Float64((*mv as f64).log(arg))
+                    }
+                }
+                MessageValue::Float64(mv) => {
+                    if *mv <= 0.0 {
+                        MessageValue::Null
+                    } else {
+                        MessageValue::Float64(mv.log(arg))
+                    }
+                }
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,
