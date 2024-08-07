@@ -40,9 +40,105 @@ impl Filter for Ct {
         let target_value = get_target_value!(self, msg);
         match msg.get(&self.field) {
             Some(message_value) => match (message_value, target_value) {
-                (MessageValue::String(mv), MessageValue::String(tv)) => mv == tv,
-                (MessageValue::Bytes(_), MessageValue::Bytes(_)) => todo!(),
-                (MessageValue::Array(mv), MessageValue::Array(tv)) => todo!(),
+                (MessageValue::String(_), MessageValue::String(_)) => todo!(),
+
+                (MessageValue::Array(mv), MessageValue::Null) => {
+                    for v in mv {
+                        match v {
+                            MessageValue::Null => return true,
+                            _ => {}
+                        }
+                    }
+                    false
+                }
+                (MessageValue::Array(mv), MessageValue::Boolean(tv)) => {
+                    for v in mv {
+                        match v {
+                            MessageValue::Boolean(value) => {
+                                if value == tv {
+                                    return true;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    false
+                }
+                (MessageValue::Array(mv), MessageValue::Int64(tv)) => {
+                    for v in mv {
+                        match v {
+                            MessageValue::Int64(value) => {
+                                if value == tv {
+                                    return true;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    false
+                }
+                (MessageValue::Array(mv), MessageValue::Float64(tv)) => {
+                    for v in mv {
+                        match v {
+                            MessageValue::Float64(value) => {
+                                if (value - tv).abs() < 1e-10 {
+                                    return true;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    false
+                }
+                (MessageValue::Array(mv), MessageValue::String(tv)) => {
+                    for v in mv {
+                        match v {
+                            MessageValue::String(value) => {
+                                if value == tv {
+                                    return true;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    false
+                }
+                (MessageValue::Array(mv), MessageValue::Bytes(tv)) => {
+                    for v in mv {
+                        match v {
+                            MessageValue::Bytes(value) => {
+                                if value == tv {
+                                    return true;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    false
+                }
+                (MessageValue::Array(mv), MessageValue::Array(tv)) => {
+                    // for v in mv {
+                    //     match v {
+                    //         MessageValue::Array(value) => {
+                    //             if value == tv {
+                    //                 return true;
+                    //             }
+                    //         }
+                    //         _ => {}
+                    //     }
+                    // }
+                    // false
+                    todo!()
+                }
+                (MessageValue::Array(_), MessageValue::Object(_)) => todo!(),
+
+                (MessageValue::Object(_), MessageValue::Null) => todo!(),
+                (MessageValue::Object(_), MessageValue::Boolean(_)) => todo!(),
+                (MessageValue::Object(_), MessageValue::Int64(_)) => todo!(),
+                (MessageValue::Object(_), MessageValue::Float64(_)) => todo!(),
+                (MessageValue::Object(_), MessageValue::String(_)) => todo!(),
+                (MessageValue::Object(_), MessageValue::Bytes(_)) => todo!(),
+                (MessageValue::Object(_), MessageValue::Array(_)) => todo!(),
                 (MessageValue::Object(_), MessageValue::Object(_)) => todo!(),
                 _ => false,
             },

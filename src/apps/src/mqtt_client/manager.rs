@@ -141,7 +141,7 @@ impl Manager {
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.apps.get_mut(app_id) {
-            Some(mut app) => app.add_source_ref(source_id, rule_id).await,
+            Some(app) => app.add_source_ref(source_id, rule_id).await,
             None => Err(mqtt_client_not_find_err(app_id.clone())),
         }
     }
