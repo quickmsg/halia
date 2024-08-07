@@ -17,6 +17,7 @@ mod floor;
 mod ln;
 mod log;
 // mod power;
+mod add;
 mod sin;
 
 use anyhow::{bail, Result};

@@ -1,23 +1,30 @@
-use crate::computes::Computer;
+use crate::{add_or_set_message_value, computes::Computer};
 use anyhow::Result;
-use message::Message;
-use serde_json::Value;
+use message::{Message, MessageValue};
+use types::rules::functions::ComputerConfItem;
 
-pub(crate) struct Upper {
+struct Upper {
     field: String,
+    target_field: Option<String>,
 }
 
-impl Upper {
-    pub(crate) fn new(field: String) -> Result<Box<dyn Computer>> {
-        Ok(Box::new(Upper { field }))
-    }
+pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Upper {
+        field: conf.field,
+        target_field: conf.target_field,
+    }))
 }
 
 impl Computer for Upper {
-    fn compute(&self, message: &Message) -> Option<Value> {
-        match message.get_string(&self.field) {
-            Some(value) => Some(Value::from(value.to_uppercase())),
-            None => None,
-        }
+    fn compute(&self, message: &mut Message) {
+        let value = match message.get(&self.field) {
+            Some(mv) => match mv {
+                message::MessageValue::String(s) => MessageValue::String(s.to_uppercase()),
+                _ => MessageValue::Null,
+            },
+            None => MessageValue::Null,
+        };
+
+        add_or_set_message_value!(self, message, value);
     }
 }

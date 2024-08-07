@@ -4,6 +4,7 @@ use types::rules::functions::ComputerConf;
 
 use crate::Function;
 
+mod hash;
 mod number;
 mod string;
 
@@ -20,8 +21,8 @@ pub fn new(conf: ComputerConf) -> Result<Box<dyn Function>> {
     for item_conf in conf.computers {
         let computer = match item_conf.typ {
             types::rules::functions::ComputerType::Number => number::new(item_conf)?,
-            types::rules::functions::ComputerType::String => todo!(),
-            types::rules::functions::ComputerType::Hash => todo!(),
+            types::rules::functions::ComputerType::String => string::new(item_conf)?,
+            types::rules::functions::ComputerType::Hash => hash::new(item_conf)?,
             types::rules::functions::ComputerType::Date => todo!(),
             //     types::rules::functions::ComputerType::Abs => abs::new(conf)?,
             //     types::rules::functions::ComputerType::Acos => acos::new(conf)?,

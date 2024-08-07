@@ -2,6 +2,8 @@ use anyhow::Result;
 use message::{Message, MessageValue};
 use types::rules::functions::ComputerConfItem;
 
+use crate::add_or_set_message_value;
+
 use super::Computer;
 
 // 绝对值
@@ -19,7 +21,7 @@ pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
 
 impl Computer for Abs {
     fn compute(&self, message: &mut Message) {
-        let compute_value = match message.get(&self.field) {
+        let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Int64(mv.abs()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.abs()),
@@ -28,11 +30,6 @@ impl Computer for Abs {
             None => MessageValue::Null,
         };
 
-        match &self.target_field {
-            Some(target_field) => {
-                message.add(target_field.clone(), compute_value);
-            }
-            None => message.set(&self.field, compute_value),
-        }
+        add_or_set_message_value!(self, message, value);
     }
 }

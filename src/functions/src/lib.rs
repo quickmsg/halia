@@ -7,6 +7,16 @@ pub mod filter;
 pub mod merge;
 pub mod window;
 
+#[macro_export]
+macro_rules! add_or_set_message_value {
+    ($self:expr, $message:expr, $value:expr) => {
+        match &$self.target_field {
+            Some(target_field) => $message.add(target_field.clone(), $value),
+            None => $message.set(&$self.field, $value),
+        }
+    };
+}
+
 pub trait Function: Send + Sync {
     // 修改消息，根据返回值判断是否要继续流程，为false则消息丢弃
     fn call(&self, message_batch: &mut MessageBatch) -> bool;
