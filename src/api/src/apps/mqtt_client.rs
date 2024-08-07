@@ -1,9 +1,10 @@
 use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use axum::{
-    extract::{Path, Query},
+    extract::{Multipart, Path, Query},
     routing::{self, get, post, put},
     Json, Router,
 };
+use tracing::debug;
 use types::{
     apps::mqtt_client::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
@@ -13,7 +14,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{AppResult, AppSuccess};
+use crate::{AppError, AppResult, AppSuccess};
 
 pub fn mqtt_client_routes() -> Router {
     Router::new()
@@ -44,8 +45,44 @@ pub fn mqtt_client_routes() -> Router {
         )
 }
 
-async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await?;
+// async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResult<AppSuccess<()>> {
+//     GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await?;
+//     Ok(AppSuccess::empty())
+// }
+
+async fn create(mut multipart: Multipart) -> AppResult<AppSuccess<()>> {
+    let req = CreateUpdateMqttClientReq {
+        base: todo!(),
+        ext: todo!(),
+    };
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        match field.name() {
+            Some(name) => match name {
+                "req" => {}
+                _ => {
+                    return Err(AppError {
+                        code: 1,
+                        data: format!("多余的字段:{}", name).to_owned(),
+                    })
+                }
+            },
+            None => {
+                return Err(AppError {
+                    code: 1,
+                    data: "缺少字段名".to_owned(),
+                })
+            }
+        }
+        // let name = field.name().unwrap().to_string();
+        // match name {
+
+        // }
+        // debug!("{}", name);
+        // let file_name = field.file_name().unwrap().to_string();
+        let content_type = field.content_type().unwrap().to_string();
+        let data = field.bytes().await.unwrap();
+    }
+    // GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await?;
     Ok(AppSuccess::empty())
 }
 

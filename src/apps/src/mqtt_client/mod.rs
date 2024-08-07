@@ -187,17 +187,17 @@ impl MqttClient {
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
 
-        match (
-            &self.conf.ext.ca,
-            &self.conf.ext.client_cert,
-            &self.conf.ext.client_key,
-        ) {
-            (Some(ca), Some(client_cert), Some(client_key)) => {
-                let mut root_store = RootCertStore::empty();
-                root_store.add(ca);
-            }
-            _ => {}
-        }
+        // match (
+        //     &self.conf.ext.ca,
+        //     &self.conf.ext.client_cert,
+        //     &self.conf.ext.client_key,
+        // ) {
+        //     (Some(ca), Some(client_cert), Some(client_key)) => {
+        //         let mut root_store = RootCertStore::empty();
+        //         // root_store.add(ca);
+        //     }
+        //     _ => {}
+        // }
 
         let sources = self.sources.clone();
         for source in sources.read().await.iter() {
