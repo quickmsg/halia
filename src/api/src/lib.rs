@@ -51,6 +51,12 @@ pub(crate) struct AppError {
     data: String,
 }
 
+impl AppError {
+    pub fn new(e: String) -> Self {
+        AppError { code: 1, data: e }
+    }
+}
+
 impl From<HaliaError> for AppError {
     fn from(value: HaliaError) -> Self {
         Self {

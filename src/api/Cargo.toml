@@ -17,3 +17,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors"] }
+bytes = { workspace = true }

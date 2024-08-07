@@ -4,7 +4,7 @@ use axum::{
     routing::{self, get, post, put},
     Json, Router,
 };
-use tracing::debug;
+use bytes::Bytes;
 use types::{
     apps::mqtt_client::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
@@ -51,14 +51,38 @@ async fn create(Json(req): Json<CreateUpdateMqttClientReq>) -> AppResult<AppSucc
 }
 
 async fn create_todo(mut multipart: Multipart) -> AppResult<AppSuccess<()>> {
-    let req = CreateUpdateMqttClientReq {
-        base: todo!(),
-        ext: todo!(),
-    };
+    let mut req: Option<CreateUpdateMqttClientReq> = None;
+
+    let mut ca: Option<Bytes> = None;
+    let mut client_cert: Option<Bytes> = None;
+    let mut client_key: Option<Bytes> = None;
     while let Some(field) = multipart.next_field().await.unwrap() {
         match field.name() {
             Some(name) => match name {
-                "req" => {}
+                "req" => match field.bytes().await {
+                    Ok(data) => match serde_json::from_slice::<CreateUpdateMqttClientReq>(&data) {
+                        Ok(json_req) => req = Some(json_req),
+                        Err(e) => {
+                            return Err(AppError::new(format!("序列化错误:{}", e.to_string())))
+                        }
+                    },
+                    Err(e) => return Err(AppError::new(e.to_string())),
+                },
+                "ca" => match field.bytes().await {
+                    Ok(data) => ca = Some(data),
+                    Err(e) => return Err(AppError::new(e.to_string())),
+                },
+
+                "client_cert" => match field.bytes().await {
+                    Ok(data) => client_cert = Some(data),
+                    Err(e) => return Err(AppError::new(e.to_string())),
+                },
+
+                "client_key" => match field.bytes().await {
+                    Ok(data) => client_key = Some(data),
+                    Err(e) => return Err(AppError::new(e.to_string())),
+                },
+
                 _ => {
                     return Err(AppError {
                         code: 1,
@@ -66,24 +90,17 @@ async fn create_todo(mut multipart: Multipart) -> AppResult<AppSuccess<()>> {
                     })
                 }
             },
-            None => {
-                return Err(AppError {
-                    code: 1,
-                    data: "缺少字段名".to_owned(),
-                })
-            }
+            None => return Err(AppError::new("缺少字段名".to_owned())),
         }
-        // let name = field.name().unwrap().to_string();
-        // match name {
-
-        // }
-        // debug!("{}", name);
-        // let file_name = field.file_name().unwrap().to_string();
-        let content_type = field.content_type().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
     }
-    // GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await?;
-    Ok(AppSuccess::empty())
+
+    match req {
+        Some(req) => match GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await {
+            Ok(_) => Ok(AppSuccess::empty()),
+            Err(e) => Err(e.into()),
+        },
+        None => Err(AppError::new("缺少配置".to_owned())),
+    }
 }
 
 async fn update(
