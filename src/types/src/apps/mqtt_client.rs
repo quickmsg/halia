@@ -22,6 +22,10 @@ pub struct MqttClientConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
 
+    pub ca: Option<String>,
+    pub client_cert: Option<String>,
+    pub client_key: Option<String>,
+
     pub version: Version,
     pub timeout: usize,
     pub keep_alive: u64,

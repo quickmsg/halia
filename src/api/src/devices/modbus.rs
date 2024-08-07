@@ -1,7 +1,7 @@
 use axum::{
-    extract::{Path, Query},
+    extract::{Json, Path, Query},
     routing::{self, get, post, put},
-    Json, Router,
+    Router,
 };
 use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
 use types::{

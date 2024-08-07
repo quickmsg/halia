@@ -6,6 +6,7 @@ use common::{
 };
 use message::MessageBatch;
 use rumqttc::{v5, AsyncClient, Event, Incoming, MqttOptions, QoS};
+use rustls::RootCertStore;
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -159,7 +160,9 @@ impl MqttClient {
         persistence::apps::update_app_status(&self.id, persistence::Status::Runing).await?;
 
         match self.conf.ext.version {
-            types::apps::mqtt_client::Version::V311 => self.start_v311().await,
+            types::apps::mqtt_client::Version::V311 => {
+                self.start_v311().await;
+            }
             types::apps::mqtt_client::Version::V50 => self.start_v50().await,
         }
 
@@ -183,6 +186,19 @@ impl MqttClient {
         }
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
+
+        match (
+            &self.conf.ext.ca,
+            &self.conf.ext.client_cert,
+            &self.conf.ext.client_key,
+        ) {
+            (Some(ca), Some(client_cert), Some(client_key)) => {
+                let mut root_store = RootCertStore::empty();
+                root_store.add(ca);
+            }
+            _ => {}
+        }
+
         let sources = self.sources.clone();
         for source in sources.read().await.iter() {
             let _ = client
@@ -193,10 +209,11 @@ impl MqttClient {
                 .await;
         }
 
-        self.client_v311 = Some(Arc::new(client));
+        let arc_client = Arc::new(client);
         for sink in self.sinks.iter_mut() {
-            sink.start_v311(self.client_v311.as_ref().unwrap().clone());
+            sink.start_v311(arc_client.clone());
         }
+        self.client_v311 = Some(arc_client);
 
         let (tx, mut rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(tx);

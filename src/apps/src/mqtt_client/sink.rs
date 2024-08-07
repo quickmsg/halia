@@ -14,6 +14,7 @@ use rumqttc::{
     AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
+use tracing::debug;
 use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
@@ -89,6 +90,7 @@ impl Sink {
     }
 
     pub fn start_v311(&mut self, client: Arc<AsyncClient>) {
+        debug!("sink start");
         let topic = self.conf.ext.topic.clone();
         let qos = match self.conf.ext.qos {
             0 => QoS::AtMostOnce,
@@ -108,6 +110,7 @@ impl Sink {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
+                        debug!("stop");
                         return (stop_signal_rx, mb_rx);
                     }
 
@@ -116,7 +119,7 @@ impl Sink {
                             Some(mb) => {
                                 let _ = client.publish(&topic, qos, retain, mb.to_json()).await;
                             }
-                            None => unreachable!(),
+                            None => {}
                         }
                     }
                 }

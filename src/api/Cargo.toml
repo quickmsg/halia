@@ -10,7 +10,7 @@ common = { workspace = true }
 rule = { workspace = true }
 apps = { workspace = true }
 
-axum = { version = "0.7.5", features = ["macros", "query"] }
+axum = { version = "0.7.5", features = ["macros", "query", "multipart"] }
 tracing = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

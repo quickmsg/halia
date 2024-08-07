@@ -21,3 +21,4 @@ bytes = { workspace = true }
 async-trait = { workspace = true }
 dashmap = { workspace = true }
 thiserror = { workspace = true }
+rustls = { workspace = true }
