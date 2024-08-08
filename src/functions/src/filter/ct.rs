@@ -1,148 +1,183 @@
 use anyhow::{bail, Result};
 use message::{Message, MessageValue};
-use types::rules::functions::FilterConfItem;
-
-use crate::get_target_value;
+use types::TargetValue;
 
 use super::Filter;
 
-struct Ct {
+struct CtConst {
     field: String,
-    const_value: Option<MessageValue>,
-    value_field: Option<String>,
+    const_value: MessageValue,
 }
 
-pub fn new(conf: FilterConfItem) -> Result<Box<dyn Filter>> {
-    match conf.value.typ {
-        types::TargetValueType::Const => {
-            let const_value = MessageValue::from(conf.value.value);
+struct CtDynamic {
+    field: String,
+    target_field: String,
+}
 
-            Ok(Box::new(Ct {
-                field: conf.field,
-                const_value: Some(const_value),
-                value_field: None,
-            }))
-        }
-        types::TargetValueType::Variable => match conf.value.value {
-            serde_json::Value::String(s) => Ok(Box::new(Ct {
-                field: conf.field,
-                const_value: None,
-                value_field: Some(s),
+pub fn new(field: String, value: TargetValue) -> Result<Box<dyn Filter>> {
+    match value.typ {
+        types::TargetValueType::Const => Ok(Box::new(CtConst {
+            field,
+            const_value: MessageValue::from(value.value),
+        })),
+        types::TargetValueType::Variable => match value.value {
+            serde_json::Value::String(s) => Ok(Box::new(CtDynamic {
+                field,
+                target_field: s,
             })),
             _ => bail!("变量字段名称必须为字符串变量"),
         },
     }
 }
 
-impl Filter for Ct {
-    // TODO
+impl Filter for CtConst {
     fn filter(&self, msg: &Message) -> bool {
-        let target_value = get_target_value!(self, msg);
         match msg.get(&self.field) {
-            Some(message_value) => match (message_value, target_value) {
-                (MessageValue::String(_), MessageValue::String(_)) => todo!(),
-
-                (MessageValue::Array(mv), MessageValue::Null) => {
-                    for v in mv {
-                        match v {
-                            MessageValue::Null => return true,
-                            _ => {}
-                        }
-                    }
-                    false
-                }
-                (MessageValue::Array(mv), MessageValue::Boolean(tv)) => {
-                    for v in mv {
-                        match v {
-                            MessageValue::Boolean(value) => {
-                                if value == tv {
-                                    return true;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    false
-                }
-                (MessageValue::Array(mv), MessageValue::Int64(tv)) => {
-                    for v in mv {
-                        match v {
-                            MessageValue::Int64(value) => {
-                                if value == tv {
-                                    return true;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    false
-                }
-                (MessageValue::Array(mv), MessageValue::Float64(tv)) => {
-                    for v in mv {
-                        match v {
-                            MessageValue::Float64(value) => {
-                                if (value - tv).abs() < 1e-10 {
-                                    return true;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    false
-                }
-                (MessageValue::Array(mv), MessageValue::String(tv)) => {
-                    for v in mv {
-                        match v {
-                            MessageValue::String(value) => {
-                                if value == tv {
-                                    return true;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    false
-                }
-                (MessageValue::Array(mv), MessageValue::Bytes(tv)) => {
-                    for v in mv {
-                        match v {
-                            MessageValue::Bytes(value) => {
-                                if value == tv {
-                                    return true;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    false
-                }
-                (MessageValue::Array(mv), MessageValue::Array(tv)) => {
-                    // for v in mv {
-                    //     match v {
-                    //         MessageValue::Array(value) => {
-                    //             if value == tv {
-                    //                 return true;
-                    //             }
-                    //         }
-                    //         _ => {}
-                    //     }
-                    // }
-                    // false
-                    todo!()
-                }
-                (MessageValue::Array(_), MessageValue::Object(_)) => todo!(),
-
-                (MessageValue::Object(_), MessageValue::Null) => todo!(),
-                (MessageValue::Object(_), MessageValue::Boolean(_)) => todo!(),
-                (MessageValue::Object(_), MessageValue::Int64(_)) => todo!(),
-                (MessageValue::Object(_), MessageValue::Float64(_)) => todo!(),
-                (MessageValue::Object(_), MessageValue::String(_)) => todo!(),
-                (MessageValue::Object(_), MessageValue::Bytes(_)) => todo!(),
-                (MessageValue::Object(_), MessageValue::Array(_)) => todo!(),
-                (MessageValue::Object(_), MessageValue::Object(_)) => todo!(),
-                _ => false,
-            },
+            Some(mv) => ct(mv, &self.const_value),
             None => false,
         }
     }
+}
+
+impl Filter for CtDynamic {
+    fn filter(&self, msg: &Message) -> bool {
+        let tv = match msg.get(&self.target_field) {
+            Some(tv) => tv,
+            None => return false,
+        };
+
+        match msg.get(&self.field) {
+            Some(mv) => ct(mv, tv),
+            None => false,
+        }
+    }
+}
+
+fn ct(mv: &MessageValue, tv: &MessageValue) -> bool {
+    match (mv, tv) {
+        (MessageValue::String(mv), MessageValue::String(tv)) => mv.contains(tv),
+        (MessageValue::Array(mv), MessageValue::Null) => {
+            for v in mv {
+                match v {
+                    MessageValue::Null => return true,
+                    _ => {}
+                }
+            }
+            false
+        }
+        (MessageValue::Array(mv), MessageValue::Boolean(tv)) => {
+            for v in mv {
+                match v {
+                    MessageValue::Boolean(value) => {
+                        if value == tv {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        (MessageValue::Array(mv), MessageValue::Int64(tv)) => {
+            for v in mv {
+                match v {
+                    MessageValue::Int64(value) => {
+                        if value == tv {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        (MessageValue::Array(mv), MessageValue::Float64(tv)) => {
+            for v in mv {
+                match v {
+                    MessageValue::Float64(value) => {
+                        if (value - tv).abs() < 1e-10 {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        (MessageValue::Array(mv), MessageValue::String(tv)) => {
+            for v in mv {
+                match v {
+                    MessageValue::String(value) => {
+                        if value == tv {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        (MessageValue::Array(mv), MessageValue::Bytes(tv)) => {
+            for v in mv {
+                match v {
+                    MessageValue::Bytes(value) => {
+                        if value == tv {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        (MessageValue::Array(mv), MessageValue::Array(tv)) => {
+            // for v in mv {
+            //     match v {
+            //         MessageValue::Array(value) => {
+            //             if value == tv {
+            //                 return true;
+            //             }
+            //         }
+            //         _ => {}
+            //     }
+            // }
+            // false
+            false
+        }
+        (MessageValue::Array(_), MessageValue::Object(_)) => todo!(),
+        (MessageValue::Object(_), MessageValue::Null) => todo!(),
+        (MessageValue::Object(_), MessageValue::Boolean(_)) => todo!(),
+        (MessageValue::Object(_), MessageValue::Int64(_)) => todo!(),
+        (MessageValue::Object(_), MessageValue::Float64(_)) => todo!(),
+        (MessageValue::Object(_), MessageValue::String(_)) => todo!(),
+        (MessageValue::Object(_), MessageValue::Bytes(_)) => todo!(),
+        (MessageValue::Object(_), MessageValue::Array(_)) => todo!(),
+        (MessageValue::Object(_), MessageValue::Object(_)) => todo!(),
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contain_const() {
+        let ct_const = CtConst {
+            field: "a".to_string(),
+            const_value: MessageValue::Boolean(true),
+        };
+        let msg = r#"{"a":[false, false, true]}"#;
+        let msg: serde_json::Value = serde_json::from_str(msg).unwrap();
+        let msg = Message::from(msg);
+        assert_eq!(ct_const.filter(&msg), true);
+        
+        let msg = r#"{"a":[false, false, false]}"#;
+        let msg: serde_json::Value = serde_json::from_str(msg).unwrap();
+        let msg = Message::from(msg);
+        assert_eq!(ct_const.filter(&msg), false);
+    }
+
+    #[test]
+    fn contain_dynamic() {}
 }

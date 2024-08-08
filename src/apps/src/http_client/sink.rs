@@ -112,6 +112,10 @@ impl Sink {
         }
     }
 
+    pub async fn restart(&mut self) {
+
+    }
+
     pub async fn stop(&mut self) {}
 
     pub fn add_ref(&mut self, rule_id: &Uuid) {

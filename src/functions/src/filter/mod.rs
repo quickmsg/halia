@@ -47,7 +47,7 @@ pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
             types::rules::functions::FilterType::Lt => lt::new(conf)?,
             types::rules::functions::FilterType::Lte => lte::new(conf)?,
             types::rules::functions::FilterType::Neq => neq::new(conf)?,
-            types::rules::functions::FilterType::Ct => ct::new(conf)?,
+            types::rules::functions::FilterType::Ct => ct::new(conf.field, conf.value)?,
             types::rules::functions::FilterType::Reg => todo!(),
         };
         filters.push(filter);

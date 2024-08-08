@@ -84,8 +84,15 @@ impl HttpClient {
         let mut restart = false;
         if self.conf.ext != req.ext {
             restart = true;
-            // todo 更新sink里面的信息
         }
+        self.conf = req;
+
+        if restart {
+            for sink in self.sinks.iter_mut() {
+                sink.restart();
+            }
+        }
+
         Ok(())
     }
 

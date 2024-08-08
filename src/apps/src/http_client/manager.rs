@@ -61,6 +61,20 @@ impl Manager {
         }
     }
 
+    pub async fn start(&self, app_id: Uuid) -> HaliaResult<()> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => Ok(app.start().await),
+            None => Err(http_client_not_find_err(app_id)),
+        }
+    }
+
+    pub async fn stop(&self, app_id: Uuid) -> HaliaResult<()> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.stop().await,
+            None => Err(http_client_not_find_err(app_id)),
+        }
+    }
+
     pub async fn delete(&self, app_id: Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => {

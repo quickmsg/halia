@@ -16,6 +16,8 @@ pub fn http_client_routes() -> Router {
     Router::new()
         .route("/", post(create))
         .route("/:app_id", put(update))
+        .route("/:app_id/start", put(start))
+        .route("/:app_id/stop", put(stop))
         .route("/:app_id", routing::delete(delete))
         .nest(
             "/:app_id",
@@ -40,6 +42,16 @@ async fn update(
     Json(req): Json<CreateUpdateHttpClientReq>,
 ) -> AppResult<AppSuccess<()>> {
     GLOBAL_HTTP_CLIENT_MANAGER.update(app_id, req).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn start(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_HTTP_CLIENT_MANAGER.start(app_id).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn stop(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_HTTP_CLIENT_MANAGER.stop(app_id).await?;
     Ok(AppSuccess::empty())
 }
 
