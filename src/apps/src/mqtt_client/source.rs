@@ -48,6 +48,8 @@ impl Source {
         SearchSourcesItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            active_ref_rule_cnt: self.ref_info.active_ref_cnt(),
+            ref_rule_cnt: self.ref_info.ref_cnt(),
         }
     }
 
@@ -71,7 +73,7 @@ impl Source {
 
     pub async fn delete(&self, app_id: &Uuid) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
-            return Err(HaliaError::Common("无法删除".to_owned()));
+            return Err(HaliaError::Common("引用中，无法删除。".to_owned()));
         }
         persistence::apps::mqtt_client::delete_source(app_id, &self.id).await?;
 

@@ -14,7 +14,7 @@ use rumqttc::{
     AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use tracing::debug;
+use tracing::{debug, trace};
 use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
@@ -68,6 +68,8 @@ impl Sink {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            active_ref_rule_cnt: self.ref_info.active_ref_cnt(),
+            ref_rule_cnt: self.ref_info.ref_cnt(),
         }
     }
 
@@ -83,14 +85,13 @@ impl Sink {
         if self.conf.ext != req.ext {
             restart = true;
         }
-
         self.conf = req;
 
         Ok(restart)
     }
 
     pub fn start_v311(&mut self, client: Arc<AsyncClient>) {
-        debug!("sink start");
+        trace!("sink start");
         let topic = self.conf.ext.topic.clone();
         let qos = match self.conf.ext.qos {
             0 => QoS::AtMostOnce,
@@ -117,6 +118,7 @@ impl Sink {
                     mb = mb_rx.recv() => {
                         match mb {
                             Some(mb) => {
+                                trace!("sink get message");
                                 let _ = client.publish(&topic, qos, retain, mb.to_json()).await;
                             }
                             None => {}
@@ -281,7 +283,6 @@ impl Sink {
 
     pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
         self.ref_info.deactive_ref(rule_id);
-        // TODO
     }
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {

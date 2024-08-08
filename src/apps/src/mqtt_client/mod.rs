@@ -186,6 +186,8 @@ impl MqttClient {
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
 
+        let err = self.err.clone();
+
         // match (
         //     &self.conf.ext.ca,
         //     &self.conf.ext.client_cert,
@@ -585,7 +587,7 @@ impl MqttClient {
                 }
                 Err(e) => Err(e),
             },
-            None => Err(HaliaError::NotFound("源".to_owned(), source_id)),
+            None => Err(source_not_find_err(source_id)),
         }
     }
 

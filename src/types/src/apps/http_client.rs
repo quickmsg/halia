@@ -33,12 +33,20 @@ pub struct CreateUpdateSinkReq {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
-    // GET POST DELETE PATCH
-    pub method: String,
+    pub method: SinkMethod,
     pub path: String,
     pub params: Vec<(String, String)>,
     pub headers: Vec<(String, String)>,
     pub body: TargetValue,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum SinkMethod {
+    GET,
+    POST,
+    DELETE,
+    PATCH,
 }
 
 #[derive(Serialize)]

@@ -69,6 +69,8 @@ pub struct SearchSourcesResp {
 pub struct SearchSourcesItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSourceReq,
+    pub active_ref_rule_cnt: usize,
+    pub ref_rule_cnt: usize,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -115,4 +117,6 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
+    pub active_ref_rule_cnt: usize,
+    pub ref_rule_cnt: usize,
 }

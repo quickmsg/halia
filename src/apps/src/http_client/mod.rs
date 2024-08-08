@@ -4,9 +4,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
-use message::MessageBatch;
 use sink::Sink;
-use tokio::sync::mpsc;
 use types::{
     apps::{
         http_client::{CreateUpdateHttpClientReq, CreateUpdateSinkReq, SearchSinksResp},
@@ -31,7 +29,6 @@ pub struct HttpClient {
     on: bool,
     err: Option<String>,
     conf: CreateUpdateHttpClientReq,
-    stop_signal_tx: Option<mpsc::Sender<()>>,
 
     sinks: Vec<Sink>,
 }
@@ -58,7 +55,6 @@ impl HttpClient {
             on: false,
             err: None,
             sinks: vec![],
-            stop_signal_tx: None,
         })
     }
 
@@ -98,17 +94,39 @@ impl HttpClient {
             true => return,
             false => self.on = true,
         }
-    }
 
-    pub async fn stop(&mut self) {
-        match self.on {
-            true => self.on = false,
-            false => return,
+        for sink in self.sinks.iter_mut() {
+            sink.start().await;
         }
     }
 
+    pub async fn stop(&mut self) -> HaliaResult<()> {
+        for sink in self.sinks.iter() {
+            if !sink.can_stop() {
+                return Err(HaliaError::Common("动作被引用中".to_owned()));
+            }
+        }
+
+        match self.on {
+            true => self.on = false,
+            false => return Ok(()),
+        }
+
+        for sink in self.sinks.iter_mut() {
+            sink.stop().await;
+        }
+
+        Ok(())
+    }
+
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        todo!()
+        for sink in self.sinks.iter() {
+            if !sink.can_delete() {
+                return Err(HaliaError::Common("动作被引用中".to_owned()));
+            }
+        }
+
+        Ok(())
     }
 
     fn search(&self) -> SearchAppsItemResp {
@@ -179,34 +197,5 @@ impl HttpClient {
             }
             None => Err(sink_not_find_err(sink_id)),
         }
-    }
-
-    pub async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        // match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-        //     Some(sink) => {
-        //         if sink.stop_signal_tx.is_none() {
-        //             match self.conf.version {
-        //                 types::apps::mqtt_client::Version::V311 => {
-        //                     sink.start_v311(self.client_v311.as_ref().unwrap().clone())
-        //                 }
-        //                 types::apps::mqtt_client::Version::V50 => {
-        //                     sink.start_v50(self.client_v50.as_ref().unwrap().clone())
-        //                 }
-        //             }
-        //         }
-
-        //         Ok(sink.tx.as_ref().unwrap().clone())
-        //     }
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
-    }
-
-    async fn unpublish(&mut self, sink_id: &Uuid) -> HaliaResult<()> {
-        // match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-        //     Some(sink) => Ok(sink.unpublish().await),
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
     }
 }

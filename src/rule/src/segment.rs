@@ -7,7 +7,7 @@ use tokio::{
     select,
     sync::{broadcast, mpsc},
 };
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 use types::rules::Node;
 
 pub fn start_segment(
@@ -17,7 +17,7 @@ pub fn start_segment(
     broadcast_tx: Option<broadcast::Sender<MessageBatch>>,
     mut stop_signal_rx: broadcast::Receiver<()>,
 ) {
-    let mut next = false;
+    let mut next = true;
     if mpsc_tx.is_some() {
         tokio::spawn(async move {
             loop {

@@ -2,8 +2,6 @@ use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
-use tokio::sync::mpsc;
 use types::{
     apps::{
         http_client::{CreateUpdateHttpClientReq, CreateUpdateSinkReq, SearchSinksResp},
@@ -116,24 +114,6 @@ impl Manager {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.delete_sink(sink_id).await,
             None => Err(http_client_not_find_err(app_id)),
-        }
-    }
-
-    pub async fn publish(
-        &self,
-        app_id: &Uuid,
-        sink_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.publish(sink_id).await,
-            None => Err(http_client_not_find_err(app_id.clone())),
-        }
-    }
-
-    pub async fn unpublish(&self, app_id: &Uuid, sink_id: &Uuid) -> HaliaResult<()> {
-        match self.apps.get_mut(&app_id) {
-            Some(mut app) => app.unpublish(sink_id).await,
-            None => Err(http_client_not_find_err(app_id.clone())),
         }
     }
 }

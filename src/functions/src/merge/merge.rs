@@ -6,7 +6,7 @@ use tokio::sync::{
     broadcast::{Receiver, Sender},
     RwLock,
 };
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 pub struct Merge {
     rxs: Vec<Receiver<MessageBatch>>,
