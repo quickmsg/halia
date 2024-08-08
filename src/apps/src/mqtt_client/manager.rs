@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::{mqtt_client::TYPE, GLOBAL_APP_MANAGER};
 
-use super::{source, MqttClient};
+use super::MqttClient;
 
 pub static GLOBAL_MQTT_CLIENT_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     apps: DashMap::new(),
@@ -52,9 +52,9 @@ impl Manager {
         Ok(())
     }
 
-    pub fn search(&self, app_id: &Uuid) -> HaliaResult<SearchAppsItemResp> {
+    pub async fn search(&self, app_id: &Uuid) -> HaliaResult<SearchAppsItemResp> {
         match self.apps.get(&app_id) {
-            Some(app) => Ok(app.search()),
+            Some(app) => Ok(app.search().await),
             None => Err(mqtt_client_not_find_err(app_id.clone())),
         }
     }

@@ -6,7 +6,6 @@ use common::{
 };
 use message::MessageBatch;
 use rumqttc::{v5, AsyncClient, Event, Incoming, MqttOptions, QoS};
-use rustls::RootCertStore;
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -38,7 +37,7 @@ pub struct MqttClient {
     conf: CreateUpdateMqttClientReq,
 
     on: bool,
-    err: Option<String>,
+    err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
     sources: Arc<RwLock<Vec<Source>>>,
@@ -71,7 +70,7 @@ impl MqttClient {
             id: app_id,
             conf: req,
             on: false,
-            err: None,
+            err: Arc::new(RwLock::new(None)),
             sources: Arc::new(RwLock::new(vec![])),
             sinks: vec![],
             client_v311: None,
@@ -360,7 +359,7 @@ impl MqttClient {
 
         for sink in &self.sinks {
             if !sink.can_stop() {
-                return Err(HaliaError::Common("有规则正在被引用中".to_owned()));
+                return Err(HaliaError::Common("有动作正在被引用中".to_owned()));
             }
         }
 
@@ -405,13 +404,13 @@ impl MqttClient {
         Ok(())
     }
 
-    fn search(&self) -> SearchAppsItemResp {
+    async fn search(&self) -> SearchAppsItemResp {
         SearchAppsItemResp {
             id: self.id,
             on: self.on,
             typ: TYPE,
             conf: serde_json::to_value(&self.conf).unwrap(),
-            err: self.err.clone(),
+            err: self.err.read().await.clone(),
         }
     }
 

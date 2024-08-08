@@ -190,7 +190,7 @@ impl Modbus {
         } else {
             self.on = true;
         }
-        debug!("设备开启");
+        trace!("设备开启");
 
         persistence::devices::update_device_status(&self.id, Status::Runing).await?;
 
@@ -293,23 +293,25 @@ impl Modbus {
 
         for point in self.points.read().await.iter() {
             if !point.can_stop() {
-                debug!("here");
-                return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
+                return Err(HaliaError::Common("设备有源被运行规则引用中".to_owned()));
             }
         }
 
         for sink in &self.sinks {
             if !sink.can_stop() {
-                debug!("here");
-                return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
+                return Err(HaliaError::Common("设备有动作被运行规则引用中".to_owned()));
             }
         }
-        debug!("设备停止");
+        trace!("停止");
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
 
         for point in self.points.write().await.iter_mut() {
             point.stop().await;
+        }
+
+        for sink in self.sinks.iter_mut() {
+            sink.stop().await;
         }
 
         self.stop_signal_tx
@@ -320,6 +322,7 @@ impl Modbus {
             .unwrap();
 
         self.stop_signal_tx = None;
+        *self.err.write().await = None;
         self.read_tx = None;
         self.write_tx = None;
         self.join_handle = None;
@@ -333,16 +336,16 @@ impl Modbus {
         }
         for point in self.points.read().await.iter() {
             if !point.can_delete() {
-                return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
+                return Err(HaliaError::Common("设备点位被规则引用中".to_owned()));
             }
         }
 
         for sink in &self.sinks {
             if !sink.can_delete() {
-                return Err(HaliaError::Common("设备被运行规则引用中".to_owned()));
+                return Err(HaliaError::Common("设备动作被规则引用中".to_owned()));
             }
         }
-        debug!("设备删除");
+        trace!("设备删除");
         persistence::devices::delete_device(&self.id).await?;
         Ok(())
     }
@@ -415,7 +418,7 @@ impl Modbus {
                 self.points.write().await.push(point);
                 Ok(())
             }
-            Err(_) => todo!(),
+            Err(e) => Err(e),
         }
     }
 
@@ -462,8 +465,10 @@ impl Modbus {
         if !self.on {
             return Err(HaliaError::Stopped);
         }
-        if self.err.read().await.is_some() {
-            return Err(HaliaError::Common("设备断开连接中".to_owned()));
+
+        match self.err.read().await.as_ref() {
+            Some(err) => return Err(HaliaError::Common(err.to_string())),
+            None => {}
         }
 
         match self
@@ -740,9 +745,15 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
     match resp {
         Ok(_) => Ok(()),
         Err(e) => match e {
-            protocol::modbus::ModbusError::Transport(_) => todo!(),
-            protocol::modbus::ModbusError::Protocol(_) => todo!(),
-            protocol::modbus::ModbusError::Exception(_) => todo!(),
+            protocol::modbus::ModbusError::Transport(t) => Err(HaliaError::Io(t)),
+            protocol::modbus::ModbusError::Protocol(e) => {
+                debug!("modbus protocol err :{:?}", e);
+                Ok(())
+            }
+            protocol::modbus::ModbusError::Exception(e) => {
+                debug!("modbus exception err :{:?}", e);
+                Ok(())
+            }
         },
     }
 }
