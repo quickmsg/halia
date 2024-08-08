@@ -104,7 +104,7 @@ impl RuleManager {
             .iter_mut()
             .find(|rule| rule.id == id)
         {
-            Some(rule) => Ok(rule.stop()),
+            Some(rule) => rule.stop(),
             None => Err(rule_not_find_err(id)),
         }
     }

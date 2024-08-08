@@ -1,5 +1,7 @@
 use common::{
+    check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
+    get_id,
     persistence::{self, Status},
 };
 use message::MessageBatch;
@@ -24,7 +26,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 use types::{
     devices::{
         modbus::{
@@ -77,10 +79,7 @@ pub struct Modbus {
 
 impl Modbus {
     pub async fn new(device_id: Option<Uuid>, req: CreateUpdateModbusReq) -> HaliaResult<Modbus> {
-        let (device_id, new) = match device_id {
-            Some(device_id) => (device_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (device_id, new) = get_id(device_id);
 
         if new {
             persistence::devices::modbus::create(
@@ -185,11 +184,7 @@ impl Modbus {
     }
 
     pub async fn start(&mut self) -> HaliaResult<()> {
-        if self.on {
-            return Ok(());
-        } else {
-            self.on = true;
-        }
+        check_and_set_on_true!(self);
         trace!("设备开启");
 
         persistence::devices::update_device_status(&self.id, Status::Runing).await?;
@@ -286,10 +281,7 @@ impl Modbus {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        match self.on {
-            true => self.on = false,
-            false => return Ok(()),
-        }
+        check_and_set_on_false!(self);
 
         for point in self.points.read().await.iter() {
             if !point.can_stop() {
@@ -747,11 +739,11 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
         Err(e) => match e {
             protocol::modbus::ModbusError::Transport(t) => Err(HaliaError::Io(t)),
             protocol::modbus::ModbusError::Protocol(e) => {
-                debug!("modbus protocol err :{:?}", e);
+                warn!("modbus protocol err :{:?}", e);
                 Ok(())
             }
             protocol::modbus::ModbusError::Exception(e) => {
-                debug!("modbus exception err :{:?}", e);
+                warn!("modbus exception err :{:?}", e);
                 Ok(())
             }
         },

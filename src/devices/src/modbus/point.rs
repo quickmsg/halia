@@ -3,7 +3,7 @@ use std::{io, sync::Arc, time::Duration};
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::{Message, MessageBatch};
@@ -46,10 +46,7 @@ impl Point {
         point_id: Option<Uuid>,
         req: CreateUpdatePointReq,
     ) -> HaliaResult<Point> {
-        let (point_id, new) = match point_id {
-            Some(point_id) => (point_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (point_id, new) = get_id(point_id);
 
         let quantity = req.ext.data_type.get_quantity();
 

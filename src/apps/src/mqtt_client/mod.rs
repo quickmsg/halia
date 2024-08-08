@@ -2,7 +2,7 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_id, persistence,
 };
 use message::MessageBatch;
 use rumqttc::{v5, AsyncClient, Event, Incoming, MqttOptions, QoS};
@@ -52,10 +52,7 @@ fn source_not_find_err(source_id: Uuid) -> HaliaError {
 
 impl MqttClient {
     pub async fn new(app_id: Option<Uuid>, req: CreateUpdateMqttClientReq) -> HaliaResult<Self> {
-        let (app_id, new) = match app_id {
-            Some(app_id) => (app_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (app_id, new) = get_id(app_id);
 
         if new {
             persistence::apps::mqtt_client::create(

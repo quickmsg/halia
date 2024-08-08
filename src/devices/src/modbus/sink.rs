@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -45,10 +45,7 @@ impl Sink {
         sink_id: Option<Uuid>,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<Self> {
-        let (sink_id, new) = match sink_id {
-            Some(sink_id) => (sink_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (sink_id, new) = get_id(sink_id);
 
         if new {
             persistence::devices::modbus::create_sink(

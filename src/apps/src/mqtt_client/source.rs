@@ -1,6 +1,6 @@
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -22,11 +22,7 @@ impl Source {
         source_id: Option<Uuid>,
         req: CreateUpdateSourceReq,
     ) -> HaliaResult<Self> {
-        let (source_id, new) = match source_id {
-            Some(source_id) => (source_id, false),
-            None => (Uuid::new_v4(), true),
-        };
-
+        let (source_id, new) = get_id(source_id);
         if new {
             persistence::apps::mqtt_client::create_source(
                 app_id,

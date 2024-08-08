@@ -1,8 +1,9 @@
 use anyhow::Result;
 use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
 use common::{
+    check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_id, persistence,
 };
 use devices::{modbus::manager::GLOBAL_MODBUS_MANAGER, opcua::manager::GLOBAL_OPCUA_MANAGER};
 use functions::{filter, merge::merge::Merge, window};
@@ -29,10 +30,7 @@ pub struct Rule {
 
 impl Rule {
     pub async fn new(rule_id: Option<Uuid>, req: CreateUpdateRuleReq) -> HaliaResult<Self> {
-        let (rule_id, new) = match rule_id {
-            Some(rule_id) => (rule_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (rule_id, new) = get_id(rule_id);
 
         let mut error = None;
         let mut add_ref_nodes = vec![];
@@ -144,10 +142,7 @@ impl Rule {
     }
 
     pub async fn start(&mut self) -> Result<()> {
-        match self.on {
-            true => return Ok(()),
-            false => self.on = true,
-        }
+        check_and_set_on_true!(self);
 
         let (stop_signal_tx, _) = broadcast::channel(16);
 
@@ -370,14 +365,13 @@ impl Rule {
         Ok(())
     }
 
-    pub fn stop(&mut self) {
-        match self.on {
-            true => self.on = false,
-            false => return,
-        }
+    pub fn stop(&mut self) -> HaliaResult<()> {
+        check_and_set_on_false!(self);
 
         if let Err(e) = self.stop_signal_tx.as_ref().unwrap().send(()) {
             error!("rule stop send signal err:{}", e);
         }
+
+        Ok(())
     }
 }
