@@ -41,14 +41,9 @@ impl Filter for CtConst {
 
 impl Filter for CtDynamic {
     fn filter(&self, msg: &Message) -> bool {
-        let tv = match msg.get(&self.target_field) {
-            Some(tv) => tv,
-            None => return false,
-        };
-
-        match msg.get(&self.field) {
-            Some(mv) => ct(mv, tv),
-            None => false,
+        match (msg.get(&self.field), msg.get(&self.target_field)) {
+            (Some(mv), Some(tv)) => ct(mv, tv),
+            _ => false,
         }
     }
 }
@@ -162,17 +157,54 @@ mod tests {
     use super::*;
 
     #[test]
-    fn contain_const() {
+    fn contain_const_bool() {
         let ct_const = CtConst {
             field: "a".to_string(),
             const_value: MessageValue::Boolean(true),
         };
+
         let msg = r#"{"a":[false, false, true]}"#;
         let msg: serde_json::Value = serde_json::from_str(msg).unwrap();
         let msg = Message::from(msg);
         assert_eq!(ct_const.filter(&msg), true);
-        
+
         let msg = r#"{"a":[false, false, false]}"#;
+        let msg: serde_json::Value = serde_json::from_str(msg).unwrap();
+        let msg = Message::from(msg);
+        assert_eq!(ct_const.filter(&msg), false);
+    }
+
+    #[test]
+    fn contain_const_float() {
+        let ct_const = CtConst {
+            field: "a".to_string(),
+            const_value: MessageValue::Float64(1.1),
+        };
+
+        let msg = r#"{"a":[1.1,2.2,3.3]}"#;
+        let msg: serde_json::Value = serde_json::from_str(msg).unwrap();
+        let msg = Message::from(msg);
+        assert_eq!(ct_const.filter(&msg), true);
+
+        let msg = r#"{"a":[2.2,3.3]}"#;
+        let msg: serde_json::Value = serde_json::from_str(msg).unwrap();
+        let msg = Message::from(msg);
+        assert_eq!(ct_const.filter(&msg), false);
+    }
+
+    #[test]
+    fn contain_const_string() {
+        let ct_const = CtConst {
+            field: "a".to_string(),
+            const_value: MessageValue::String("bbbbb".to_owned()),
+        };
+
+        let msg = r#"{"a":"abbbbbadd"}"#;
+        let msg: serde_json::Value = serde_json::from_str(msg).unwrap();
+        let msg = Message::from(msg);
+        assert_eq!(ct_const.filter(&msg), true);
+
+        let msg = r#"{"a":"abbbbadd"}"#;
         let msg: serde_json::Value = serde_json::from_str(msg).unwrap();
         let msg = Message::from(msg);
         assert_eq!(ct_const.filter(&msg), false);
