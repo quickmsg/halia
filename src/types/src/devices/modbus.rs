@@ -142,6 +142,7 @@ impl DataType {
     }
 
     pub fn decode(&self, data: &mut [u8]) -> MessageValue {
+        debug!("{:?}", data);
         match self.typ {
             Type::Bool => match self.pos {
                 Some(pos) => {

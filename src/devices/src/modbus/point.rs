@@ -177,6 +177,7 @@ impl Point {
     }
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {
+        debug!("read point {:?}", self);
         let res = match self.conf.ext.area {
             Area::InputDiscrete => {
                 ctx.read_discrete_inputs(self.conf.ext.slave, self.conf.ext.address, self.quantity)
@@ -203,6 +204,7 @@ impl Point {
         match res {
             Ok(mut data) => {
                 let value = self.conf.ext.data_type.decode(&mut data);
+                debug!("{:?}", value);
                 match &value {
                     message::MessageValue::Bytes(bytes) => {
                         let str = BASE64_STANDARD.encode(bytes);
