@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use message::MessageValue;
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use tracing::debug;
 use uuid::Uuid;
 
@@ -49,20 +50,20 @@ pub struct Serial {
     pub parity: Parity,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Deserialize_repr, Serialize_repr, Debug, Clone, PartialEq)]
+#[repr(u8)]
 pub enum StopBits {
-    One,
-    Two,
+    One = 1,
+    Two = 2,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Deserialize_repr, Serialize_repr, Debug, Clone, PartialEq)]
+#[repr(u8)]
 pub enum DataBits {
-    Five,
-    Six,
-    Seven,
-    Eight,
+    Five = 5,
+    Six = 6,
+    Seven = 7,
+    Eight = 8,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

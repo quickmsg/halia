@@ -1,6 +1,7 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
 use common::{
+    check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
     get_id, persistence,
 };
@@ -46,8 +47,16 @@ pub struct MqttClient {
     client_v50: Option<Arc<v5::AsyncClient>>,
 }
 
-fn source_not_find_err(source_id: Uuid) -> HaliaError {
-    HaliaError::NotFound("源".to_owned(), source_id)
+macro_rules! source_not_found_err {
+    ($source_id:expr) => {
+        Err(HaliaError::NotFound("mqtt客户端源".to_owned(), $source_id))
+    };
+}
+
+macro_rules! sink_not_found_err {
+    ($sink_id:expr) => {
+        Err(HaliaError::NotFound("mqtt客户端动作".to_owned(), $sink_id))
+    };
 }
 
 impl MqttClient {
@@ -148,17 +157,12 @@ impl MqttClient {
     }
 
     pub async fn start(&mut self) -> HaliaResult<()> {
-        match self.on {
-            true => return Ok(()),
-            false => self.on = true,
-        }
+        check_and_set_on_true!(self);
 
         persistence::apps::update_app_status(&self.id, persistence::Status::Runing).await?;
 
         match self.conf.ext.version {
-            types::apps::mqtt_client::Version::V311 => {
-                self.start_v311().await;
-            }
+            types::apps::mqtt_client::Version::V311 => self.start_v311().await,
             types::apps::mqtt_client::Version::V50 => self.start_v50().await,
         }
 
@@ -345,10 +349,7 @@ impl MqttClient {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        match self.on {
-            true => self.on = false,
-            false => return Ok(()),
-        }
+        check_and_set_on_false!(self);
 
         for source in self.sources.read().await.iter() {
             if !source.can_stop() {
@@ -585,7 +586,7 @@ impl MqttClient {
                 }
                 Err(e) => Err(e),
             },
-            None => Err(source_not_find_err(source_id)),
+            None => source_not_found_err!(source_id),
         }
     }
 
@@ -598,7 +599,7 @@ impl MqttClient {
             .find(|source| source.id == source_id)
         {
             Some(source) => source.delete(&self.id).await,
-            None => Err(source_not_find_err(source_id)),
+            None => source_not_found_err!(source_id),
         }
     }
 
@@ -611,7 +612,7 @@ impl MqttClient {
             .find(|source| source.id == *source_id)
         {
             Some(source) => Ok(source.add_ref(rule_id)),
-            None => Err(source_not_find_err(source_id.clone())),
+            None => source_not_found_err!(source_id.clone()),
         }
     }
 
@@ -672,7 +673,7 @@ impl MqttClient {
                 }
                 Err(e) => Err(e),
             },
-            None => Err(HaliaError::NotFound("动作".to_owned(), sink_id)),
+            None => sink_not_found_err!(sink_id),
         }
     }
 
@@ -683,14 +684,14 @@ impl MqttClient {
                 self.sinks.retain(|sink| sink.id == sink_id);
                 Ok(())
             }
-            None => Err(HaliaError::NotFound("动作".to_owned(), sink_id)),
+            None => sink_not_found_err!(sink_id),
         }
     }
 
     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.add_ref(rule_id)),
-            None => Err(HaliaError::NotFound("动作".to_owned(), sink_id.clone())),
+            None => sink_not_found_err!(sink_id.clone()),
         }
     }
 
@@ -714,21 +715,21 @@ impl MqttClient {
 
                 Ok(sink.get_mb_tx(rule_id))
             }
-            None => Err(HaliaError::NotFound("动作".to_owned(), sink_id.clone())),
+            None => sink_not_found_err!(sink_id.clone()),
         }
     }
 
     pub async fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.del_mb_tx(rule_id)),
-            None => Err(HaliaError::NotFound("动作".to_owned(), sink_id.clone())),
+            None => sink_not_found_err!(sink_id.clone()),
         }
     }
 
     pub async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.del_ref(rule_id)),
-            None => Err(HaliaError::NotFound("动作".to_owned(), sink_id.clone())),
+            None => sink_not_found_err!(sink_id.clone()),
         }
     }
 }

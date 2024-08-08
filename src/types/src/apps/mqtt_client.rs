@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
 use crate::BaseConf;
@@ -59,12 +60,12 @@ pub struct SourceConf {
     pub qos: Qos,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Deserialize_repr, Serialize_repr, Clone, PartialEq)]
+#[repr(u8)]
 pub enum Qos {
-    AtMostOnce,
-    AtLeastOnce,
-    ExactlyOnce,
+    AtMostOnce = 0,
+    AtLeastOnce = 1,
+    ExactlyOnce = 2,
 }
 
 #[derive(Serialize)]

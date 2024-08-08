@@ -718,17 +718,25 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
             ctx.write_single_register(wpe.slave, wpe.address, wpe.data)
                 .await
         }
-        // 处理特例bytes
         (Area::HoldingRegisters, Type::Int32)
         | (Area::HoldingRegisters, Type::Uint32)
         | (Area::HoldingRegisters, Type::Int64)
         | (Area::HoldingRegisters, Type::Uint64)
         | (Area::HoldingRegisters, Type::Float32)
-        | (Area::HoldingRegisters, Type::Float64)
-        | (Area::HoldingRegisters, Type::String)
-        | (Area::HoldingRegisters, Type::Bytes) => {
+        | (Area::HoldingRegisters, Type::Float64) => {
             ctx.write_multiple_registers(wpe.slave, wpe.address, wpe.data)
                 .await
+        }
+
+        (Area::HoldingRegisters, Type::String) | (Area::HoldingRegisters, Type::Bytes) => {
+            let len = wpe.data_type.len.as_ref().unwrap();
+            if *len == 1 {
+                ctx.write_single_register(wpe.slave, wpe.address, wpe.data)
+                    .await
+            } else {
+                ctx.write_multiple_registers(wpe.slave, wpe.address, wpe.data)
+                    .await
+            }
         }
         _ => unreachable!(),
     };
