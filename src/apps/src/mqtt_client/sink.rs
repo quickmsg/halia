@@ -90,10 +90,9 @@ impl Sink {
         trace!("sink start");
         let topic = self.conf.ext.topic.clone();
         let qos = match self.conf.ext.qos {
-            0 => QoS::AtMostOnce,
-            1 => QoS::AtLeastOnce,
-            2 => QoS::ExactlyOnce,
-            _ => unreachable!(),
+            types::apps::mqtt_client::Qos::AtMostOnce => QoS::AtMostOnce,
+            types::apps::mqtt_client::Qos::AtLeastOnce => QoS::AtLeastOnce,
+            types::apps::mqtt_client::Qos::ExactlyOnce => QoS::AtLeastOnce,
         };
         let retain = self.conf.ext.retain;
 
@@ -130,10 +129,9 @@ impl Sink {
     pub fn start_v50(&mut self, client: Arc<v5::AsyncClient>) {
         let topic = self.conf.ext.topic.clone();
         let qos = match self.conf.ext.qos {
-            0 => mqttbytes::QoS::AtMostOnce,
-            1 => mqttbytes::QoS::AtLeastOnce,
-            2 => mqttbytes::QoS::ExactlyOnce,
-            _ => unreachable!(),
+            types::apps::mqtt_client::Qos::AtMostOnce => mqttbytes::QoS::AtMostOnce,
+            types::apps::mqtt_client::Qos::AtLeastOnce => mqttbytes::QoS::AtLeastOnce,
+            types::apps::mqtt_client::Qos::ExactlyOnce => mqttbytes::QoS::ExactlyOnce,
         };
         let retain = self.conf.ext.retain;
 
@@ -167,12 +165,10 @@ impl Sink {
 
     pub async fn restart_v311(&mut self, client: Arc<AsyncClient>) {
         let topic = self.conf.ext.topic.clone();
-        let qos = self.conf.ext.qos;
-        let qos = match qos {
-            0 => QoS::AtMostOnce,
-            1 => QoS::AtLeastOnce,
-            2 => QoS::ExactlyOnce,
-            _ => unreachable!(),
+        let qos = match self.conf.ext.qos {
+            types::apps::mqtt_client::Qos::AtMostOnce => QoS::AtMostOnce,
+            types::apps::mqtt_client::Qos::AtLeastOnce => QoS::AtLeastOnce,
+            types::apps::mqtt_client::Qos::ExactlyOnce => QoS::AtLeastOnce,
         };
         let retain = self.conf.ext.retain;
 
@@ -207,7 +203,7 @@ impl Sink {
 
     pub async fn restart_v50(&mut self, client: Arc<v5::AsyncClient>) {
         let topic = self.conf.ext.topic.clone();
-        let qos = self.conf.ext.qos;
+        // let qos = self.conf.ext.qos;
         let retain = self.conf.ext.retain;
 
         self.stop_signal_tx
@@ -233,10 +229,10 @@ impl Sink {
                             Some(mb) => {
                                 match &publish_properties {
                                     Some(pp) => {
-                                        let _ = client.publish_with_properties(&topic, mqttbytes::qos(qos).unwrap(), retain, mb.to_json(), pp.clone()).await;
+                                        // let _ = client.publish_with_properties(&topic, mqttbytes::qos(qos).unwrap(), retain, mb.to_json(), pp.clone()).await;
                                     }
                                     None => {
-                                        let _ = client.publish(&topic, mqttbytes::qos(qos).unwrap(), retain, mb.to_json()).await;
+                                        // let _ = client.publish(&topic, mqttbytes::qos(qos).unwrap(), retain, mb.to_json()).await;
                                     }
                                 }
                             }

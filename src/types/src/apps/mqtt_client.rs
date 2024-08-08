@@ -56,7 +56,15 @@ pub struct CreateUpdateSourceReq {
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct SourceConf {
     pub topic: String,
-    pub qos: u8,
+    pub qos: Qos,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Qos {
+    AtMostOnce,
+    AtLeastOnce,
+    ExactlyOnce,
 }
 
 #[derive(Serialize)]
@@ -84,7 +92,7 @@ pub struct CreateUpdateSinkReq {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
     pub topic: String,
-    pub qos: u8,
+    pub qos: Qos,
     pub retain: bool,
 
     // for v5

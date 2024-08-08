@@ -55,16 +55,16 @@ fn sink_not_find_error(sink_id: Uuid) -> HaliaError {
 #[derive(Debug)]
 pub struct Modbus {
     pub id: Uuid,
-
     conf: CreateUpdateModbusReq,
 
     points: Arc<RwLock<Vec<Point>>>,
     sinks: Vec<Sink>,
 
     on: bool,
-    err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
+    err: Arc<RwLock<Option<String>>>,
     rtt: Arc<AtomicU16>,
+
     write_tx: Option<mpsc::Sender<WritePointEvent>>,
     read_tx: Option<mpsc::Sender<Uuid>>,
 
@@ -112,7 +112,6 @@ impl Modbus {
                     if data.len() == 0 {
                         continue;
                     }
-                    // TODO not collect
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     assert_eq!(items.len(), 2);
 

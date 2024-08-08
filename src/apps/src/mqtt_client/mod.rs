@@ -17,8 +17,8 @@ use tracing::error;
 use types::{
     apps::{
         mqtt_client::{
-            CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
-            SearchSourcesResp,
+            CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, Qos,
+            SearchSinksResp, SearchSourcesResp,
         },
         SearchAppsItemResp,
     },
@@ -202,7 +202,7 @@ impl MqttClient {
             let _ = client
                 .subscribe(
                     source.conf.ext.topic.clone(),
-                    get_mqtt_qos(source.conf.ext.qos),
+                    get_mqtt_qos(&source.conf.ext.qos),
                 )
                 .await;
         }
@@ -287,12 +287,12 @@ impl MqttClient {
         let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
         let sources = self.sources.clone();
         for source in sources.read().await.iter() {
-            let _ = client
-                .subscribe(
-                    source.conf.ext.topic.clone(),
-                    v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
-                )
-                .await;
+            // let _ = client
+            //     .subscribe(
+            //         source.conf.ext.topic.clone(),
+            //         v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
+            //     )
+            //     .await;
         }
         self.client_v50 = Some(Arc::new(client));
 
@@ -464,7 +464,7 @@ impl MqttClient {
                                 .unwrap()
                                 .subscribe(
                                     source.conf.ext.topic.clone(),
-                                    get_mqtt_qos(source.conf.ext.qos),
+                                    get_mqtt_qos(&source.conf.ext.qos),
                                 )
                                 .await
                             {
@@ -472,18 +472,19 @@ impl MqttClient {
                             }
                         }
                         types::apps::mqtt_client::Version::V50 => {
-                            if let Err(e) = self
-                                .client_v50
-                                .as_ref()
-                                .unwrap()
-                                .subscribe(
-                                    source.conf.ext.topic.clone(),
-                                    v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
-                                )
-                                .await
-                            {
-                                error!("client subscribe err:{e}");
-                            }
+                            // if let Err(e) = self
+                            //     .client_v50
+                            //     .as_ref()
+                            //     .unwrap()
+                            //     .subscribe(
+                            //         source.conf.ext.topic.clone(),
+                            //         v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
+                            //     )
+                            //     .await
+                            // {
+                            //     error!("client subscribe err:{e}");
+                            // }
+                            // todo
                         }
                     }
                 }
@@ -546,7 +547,7 @@ impl MqttClient {
                                     .unwrap()
                                     .subscribe(
                                         source.conf.ext.topic.clone(),
-                                        get_mqtt_qos(source.conf.ext.qos),
+                                        get_mqtt_qos(&source.conf.ext.qos),
                                     )
                                     .await
                                 {
@@ -564,18 +565,18 @@ impl MqttClient {
                                     error!("unsubscribe err:{e}");
                                 }
 
-                                if let Err(e) = self
-                                    .client_v50
-                                    .as_ref()
-                                    .unwrap()
-                                    .subscribe(
-                                        source.conf.ext.topic.clone(),
-                                        v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
-                                    )
-                                    .await
-                                {
-                                    error!("subscribe err:{e}");
-                                }
+                                // if let Err(e) = self
+                                //     .client_v50
+                                //     .as_ref()
+                                //     .unwrap()
+                                //     .subscribe(
+                                //         source.conf.ext.topic.clone(),
+                                //         v5::mqttbytes::qos(source.conf.ext.qos).unwrap(),
+                                //     )
+                                //     .await
+                                // {
+                                //     error!("subscribe err:{e}");
+                                // }
                             }
                         }
                     }
@@ -767,11 +768,10 @@ pub fn matches(topic: &str, filter: &str) -> bool {
     true
 }
 
-fn get_mqtt_qos(qos: u8) -> QoS {
+fn get_mqtt_qos(qos: &Qos) -> QoS {
     match qos {
-        0 => QoS::AtLeastOnce,
-        1 => QoS::AtMostOnce,
-        2 => QoS::ExactlyOnce,
-        _ => unreachable!(),
+        Qos::AtMostOnce => QoS::AtMostOnce,
+        Qos::AtLeastOnce => QoS::AtLeastOnce,
+        Qos::ExactlyOnce => QoS::ExactlyOnce,
     }
 }
