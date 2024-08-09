@@ -6,7 +6,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::{BaseConf, TargetValue};
+use crate::BaseConf;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateModbusReq {
@@ -866,7 +866,7 @@ pub struct SinkConf {
     pub slave: u8,
     pub area: Area,
     pub address: u16,
-    pub value: TargetValue,
+    pub value: serde_json::Value,
 }
 
 #[derive(Serialize)]

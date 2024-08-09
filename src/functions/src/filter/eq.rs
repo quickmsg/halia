@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
+use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use types::TargetValue;
 
 use super::Filter;
 
@@ -14,10 +14,10 @@ struct EqDynamic {
     target_field: String,
 }
 
-pub fn new(field: String, value: TargetValue) -> Result<Box<dyn Filter>> {
-    match value.typ {
-        types::TargetValueType::Const => {
-            let const_value = match value.value {
+pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
+    match get_dynamic_value_from_json(value) {
+        common::DynamicValue::Const(value) => {
+            let const_value = match value {
                 serde_json::Value::Null => MessageValue::Null,
                 serde_json::Value::Bool(v) => MessageValue::Boolean(v),
                 serde_json::Value::Number(v) => MessageValue::from_json_number(v)?,
@@ -27,13 +27,10 @@ pub fn new(field: String, value: TargetValue) -> Result<Box<dyn Filter>> {
 
             Ok(Box::new(EqConst { field, const_value }))
         }
-        types::TargetValueType::Variable => match value.value {
-            serde_json::Value::String(s) => Ok(Box::new(EqDynamic {
-                field,
-                target_field: s,
-            })),
-            _ => bail!("变量字段名称必须为字符串变量"),
-        },
+        common::DynamicValue::Field(s) => Ok(Box::new(EqDynamic {
+            field,
+            target_field: s,
+        })),
     }
 }
 

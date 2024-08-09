@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{BaseConf, TargetValue};
+use crate::BaseConf;
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateUpdateHttpClientReq {
@@ -37,7 +37,7 @@ pub struct SinkConf {
     pub path: String,
     pub params: Vec<(String, String)>,
     pub headers: Vec<(String, String)>,
-    pub body: TargetValue,
+    pub body: serde_json::Value,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

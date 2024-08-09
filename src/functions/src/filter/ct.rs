@@ -1,6 +1,6 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
+use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use types::TargetValue;
 
 use super::Filter;
 
@@ -14,19 +14,16 @@ struct CtDynamic {
     target_field: String,
 }
 
-pub fn new(field: String, value: TargetValue) -> Result<Box<dyn Filter>> {
-    match value.typ {
-        types::TargetValueType::Const => Ok(Box::new(CtConst {
+pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
+    match get_dynamic_value_from_json(value) {
+        common::DynamicValue::Const(value) => Ok(Box::new(CtConst {
             field,
-            const_value: MessageValue::from(value.value),
+            const_value: MessageValue::from(value),
         })),
-        types::TargetValueType::Variable => match value.value {
-            serde_json::Value::String(s) => Ok(Box::new(CtDynamic {
-                field,
-                target_field: s,
-            })),
-            _ => bail!("变量字段名称必须为字符串变量"),
-        },
+        common::DynamicValue::Field(s) => Ok(Box::new(CtDynamic {
+            field,
+            target_field: s,
+        })),
     }
 }
 

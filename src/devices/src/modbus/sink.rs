@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    get_dynamic_value_from_json, get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -12,10 +12,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{
-    devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp, SinkConf},
-    TargetValueType,
-};
+use types::devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp, SinkConf};
 use uuid::Uuid;
 
 use super::WritePointEvent;
@@ -209,185 +206,11 @@ impl Sink {
             None => return,
         };
 
-        // let typ: Type = match sink_conf.typ.typ {
-        //     TargetValueType::Const => match &sink_conf.typ.value {
-        //         serde_json::Value::String(s) => match serde_json::from_str(s) {
-        //             Ok(typ) => typ,
-        //             Err(_) => return,
-        //         },
-        //         _ => return,
-        //     },
-        //     TargetValueType::Variable => match &sink_conf.typ.value {
-        //         serde_json::Value::String(field) => match message.get_str(field) {
-        //             Some(s) => match Type::try_from(s.as_str()) {
-        //                 Ok(typ) => typ,
-        //                 Err(_) => return,
-        //             },
-        //             None => return,
-        //         },
-        //         _ => return,
-        //     },
-        // };
-
-        // let single_endian: Option<Endian> = match &sink_conf.single_endian {
-        //     Some(single_endian) => match single_endian.typ {
-        //         TargetValueType::Const => match &single_endian.value {
-        //             serde_json::Value::String(s) => match serde_json::from_str(s) {
-        //                 Ok(endian) => endian,
-        //                 Err(_) => return,
-        //             },
-        //             _ => return,
-        //         },
-        //         TargetValueType::Variable => match &single_endian.value {
-        //             serde_json::Value::String(field) => match message.get_str(field) {
-        //                 Some(s) => match serde_json::from_str(s) {
-        //                     Ok(endian) => endian,
-        //                     Err(_) => return,
-        //                 },
-        //                 None => return,
-        //             },
-        //             _ => return,
-        //         },
-        //     },
-        //     None => None,
-        // };
-
-        // let double_endian = match &sink_conf.double_endian {
-        //     Some(double_endian) => match double_endian.typ {
-        //         TargetValueType::Const => match &double_endian.value {
-        //             serde_json::Value::String(s) => match serde_json::from_str(s) {
-        //                 Ok(endian) => endian,
-        //                 Err(_) => return,
-        //             },
-        //             _ => return,
-        //         },
-        //         TargetValueType::Variable => match &double_endian.value {
-        //             serde_json::Value::String(field) => match message.get_str(field) {
-        //                 Some(s) => match serde_json::from_str(s) {
-        //                     Ok(endian) => endian,
-        //                     Err(_) => return,
-        //                 },
-        //                 None => return,
-        //             },
-        //             _ => return,
-        //         },
-        //     },
-        //     None => None,
-        // };
-
-        // let len = match &sink_conf.len {
-        //     Some(len) => match len.typ {
-        //         TargetValueType::Const => match common::json::get_u16(&len.value) {
-        //             Some(len) => Some(len),
-        //             None => return,
-        //         },
-        //         TargetValueType::Variable => match &len.value {
-        //             serde_json::Value::String(field) => match message.get_u16(field) {
-        //                 Some(len) => Some(len),
-        //                 None => return,
-        //             },
-        //             _ => return,
-        //         },
-        //     },
-        //     None => None,
-        // };
-
-        // let single = match &sink_conf.single {
-        //     Some(single) => match single.typ {
-        //         TargetValueType::Const => match single.value.as_bool() {
-        //             Some(bool) => Some(bool),
-        //             None => return,
-        //         },
-        //         TargetValueType::Variable => match &single.value {
-        //             serde_json::Value::String(s) => match message.get_bool(s) {
-        //                 Some(bool) => Some(bool),
-        //                 None => return,
-        //             },
-        //             _ => return,
-        //         },
-        //     },
-        //     None => None,
-        // };
-
-        // let pos = match &sink_conf.pos {
-        //     Some(pos) => match pos.typ {
-        //         TargetValueType::Const => match common::json::get_u8(&pos.value) {
-        //             Some(u8) => Some(u8),
-        //             None => return,
-        //         },
-        //         TargetValueType::Variable => match &pos.value {
-        //             serde_json::Value::String(field) => match message.get_u8(field) {
-        //                 Some(u8) => Some(u8),
-        //                 None => return,
-        //             },
-        //             _ => return,
-        //         },
-        //     },
-        //     None => None,
-        // };
-
-        // let slave = match sink_conf.slave.typ {
-        //     TargetValueType::Const => match common::json::get_u8(&sink_conf.slave.value) {
-        //         Some(n) => n,
-        //         None => {
-        //             return;
-        //         }
-        //     },
-        //     TargetValueType::Variable => match &sink_conf.slave.value {
-        //         serde_json::Value::String(field) => match message.get_u8(field) {
-        //             Some(n) => n,
-        //             None => return,
-        //         },
-        //         _ => {
-        //             return;
-        //         }
-        //     },
-        // };
-
-        // let area: Area = match sink_conf.area.typ {
-        //     TargetValueType::Const => match &sink_conf.area.value {
-        //         serde_json::Value::String(s) => match Area::try_from(s.as_str()) {
-        //             Ok(area) => area,
-        //             Err(_) => return,
-        //         },
-        //         _ => return,
-        //     },
-        //     TargetValueType::Variable => match &sink_conf.area.value {
-        //         serde_json::Value::String(field) => match message.get_str(field) {
-        //             Some(s) => match Area::try_from(s.as_str()) {
-        //                 Ok(area) => area,
-        //                 Err(_) => return,
-        //             },
-        //             None => return,
-        //         },
-        //         _ => return,
-        //     },
-        // };
-        // debug!("{:?}", area);
-
-        // let address = match sink_conf.address.typ {
-        //     TargetValueType::Const => match common::json::get_u16(&sink_conf.address.value) {
-        //         Some(n) => n,
-        //         None => return,
-        //     },
-        //     TargetValueType::Variable => match &sink_conf.address.value {
-        //         serde_json::Value::String(field) => match message.get_u16(&field) {
-        //             Some(address) => address,
-        //             None => return,
-        //         },
-        //         _ => return,
-        //     },
-        // };
-        // debug!("{:?}", address);
-
-        let value = match sink_conf.value.typ {
-            TargetValueType::Const => sink_conf.value.value.clone(),
-            TargetValueType::Variable => match &sink_conf.value.value {
-                serde_json::Value::String(field) => match message.get(field) {
-                    Some(v) => v.clone().into(),
-                    None => return,
-                },
-                _ => return,
+        let value = match get_dynamic_value_from_json(sink_conf.value.clone()) {
+            common::DynamicValue::Const(value) => value,
+            common::DynamicValue::Field(s) => match message.get(&s) {
+                Some(v) => v.clone().into(),
+                None => return,
             },
         };
         debug!("{:?}", value);

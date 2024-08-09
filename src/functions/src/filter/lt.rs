@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
+use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use types::TargetValue;
 
 use super::Filter;
 
@@ -14,23 +14,20 @@ struct LtDynamic {
     target_field: String,
 }
 
-pub fn new(field: String, value: TargetValue) -> Result<Box<dyn Filter>> {
-    match value.typ {
-        types::TargetValueType::Const => {
-            let const_value = match value.value {
+pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
+    match get_dynamic_value_from_json(value) {
+        common::DynamicValue::Const(value) => {
+            let const_value = match value {
                 serde_json::Value::Number(v) => MessageValue::from_json_number(v)?,
                 _ => bail!("不支持该类型"),
             };
 
             Ok(Box::new(LtConst { field, const_value }))
         }
-        types::TargetValueType::Variable => match value.value {
-            serde_json::Value::String(s) => Ok(Box::new(LtDynamic {
-                field,
-                target_field: s,
-            })),
-            _ => bail!("不支持该类型"),
-        },
+        common::DynamicValue::Field(s) => Ok(Box::new(LtDynamic {
+            field,
+            target_field: s,
+        })),
     }
 }
 
