@@ -210,9 +210,9 @@ where
         addr: u16,
         value: Vec<u8>,
     ) -> Result<(), ModbusError> {
-        for byte in &value {
-            debug!("{:08b}", byte);
-        }
+        // for byte in &value {
+        //     debug!("{:08b}", byte);
+        // }
         let len = encode_mask_write_register(&mut self.buffer[7..], addr, value);
         self.encode_adu(len, slave);
         self.transport_read_send().await?;

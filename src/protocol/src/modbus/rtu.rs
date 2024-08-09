@@ -1,17 +1,26 @@
 use std::{fmt::Debug, io};
 
 use async_trait::async_trait;
-use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use super::{encode_u16, Context, ModbusError, ProtocolError};
+use super::{
+    pdu::{
+        decode_mask_write_register, decode_read_coils, decode_read_discrete_inputs,
+        decode_read_holding_registers, decode_read_input_registers,
+        decode_write_multiple_registers, decode_write_single_coil, decode_write_single_register,
+        encode_mask_write_register, encode_read_coils, encode_read_discrete_inputs,
+        encode_read_holding_registers, encode_read_input_registers,
+        encode_write_multiple_registers, encode_write_single_coil, encode_write_single_register,
+    },
+    Context, ModbusError, ProtocolError,
+};
 
 // PDU最大为256 Bytes，包含1位的服务器地址和2位crc教研码
 
 struct RtuContext<T> {
-    function_code: u8,
     slave: u8,
     buffer: [u8; 256],
-    buffer_len: u8,
+    buffer_len: usize,
     transport: T,
 }
 
@@ -20,7 +29,6 @@ where
     T: AsyncRead + AsyncWrite + Debug + Unpin + Send + 'static,
 {
     Ok(Box::new(RtuContext {
-        function_code: 0,
         slave: 0,
         buffer: [0; 256],
         buffer_len: 0,
@@ -28,53 +36,49 @@ where
     }))
 }
 
-impl<T> RtuContext<T> {
-    fn decode_common(&mut self, n: usize) -> Result<(), ProtocolError> {
-        if n == 0 {
+impl<T> RtuContext<T>
+where
+    T: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+{
+    fn encode_adu(&mut self, slave: u8, len: u16) {
+        self.slave = slave;
+        self.buffer[0] = slave;
+
+        self.buffer_len = 1 + len as usize;
+
+        (self.buffer[1 + len as usize], self.buffer[2 + len as usize]) = self.crc16();
+
+        self.buffer_len += 2;
+    }
+
+    // TODO crc 校验
+    fn decode_adu(&mut self) -> Result<(), ProtocolError> {
+        if self.buffer_len == 0 {
             return Err(ProtocolError::EmptyResp);
         }
 
-        let slave = self.buffer[6];
-        if self.slave != slave {
-            return Err(ProtocolError::UnitIdMismatch);
-        }
-
-        let function_code = self.buffer[7];
-        if function_code != self.function_code {
+        if self.slave != self.buffer[0] {
             return Err(ProtocolError::UnitIdMismatch);
         }
 
         Ok(())
     }
 
-    fn decode_read(&mut self, n: usize) -> Result<usize, ProtocolError> {
-        if n == 0 {
-            return Err(ProtocolError::EmptyResp);
-        }
-        if n < 9 {
-            return Err(ProtocolError::DataTooSmall);
-        }
-
-        if self.buffer[2] != 0 || self.buffer[3] != 0 {
-            return Err(ProtocolError::ProtocolIdErr);
+    async fn transport_read_send(&mut self) -> Result<(), ModbusError> {
+        if let Err(e) = self
+            .transport
+            .write_all(&self.buffer[..self.buffer_len])
+            .await
+        {
+            return Err(ModbusError::Transport(e));
         }
 
-        let len = ((self.buffer[4] as u16) << 8) | (self.buffer[5] as u16);
-
-        let slave = self.buffer[6];
-        if self.slave != slave {
-            return Err(ProtocolError::UnitIdMismatch);
+        match self.transport.read(&mut self.buffer).await {
+            Ok(n) => self.buffer_len = n,
+            Err(e) => return Err(ModbusError::Transport(e)),
         }
 
-        let function_code = self.buffer[7];
-        // if FunctionCode::from(function_code) != self.function_code {
-        //     todo!()
-        // }
-
-        let byte_cnt = self.buffer[8];
-        Ok(byte_cnt as usize)
-        // Ok(&mut self.buffer[9..(9 + byte_cnt as usize)])
-        //
+        Ok(())
     }
 
     fn crc16(&self) -> (u8, u8) {
@@ -101,7 +105,11 @@ where
         addr: u16,
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError> {
-        todo!()
+        let len = encode_read_coils(&mut self.buffer[1..], addr, quantity);
+        self.encode_adu(slave, len);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_read_coils(&mut self.buffer[7..])
     }
 
     async fn read_discrete_inputs(
@@ -110,7 +118,11 @@ where
         addr: u16,
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError> {
-        todo!()
+        let len = encode_read_discrete_inputs(&mut self.buffer[1..], addr, quantity);
+        self.encode_adu(slave, len);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_read_discrete_inputs(&mut self.buffer[1..])
     }
 
     async fn read_holding_registers(
@@ -119,7 +131,11 @@ where
         addr: u16,
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError> {
-        todo!()
+        let len = encode_read_holding_registers(&mut self.buffer[1..], addr, quantity);
+        self.encode_adu(slave, len);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_read_holding_registers(&mut self.buffer[1..])
     }
 
     async fn read_input_registers(
@@ -128,7 +144,11 @@ where
         addr: u16,
         quantity: u16,
     ) -> Result<&mut [u8], ModbusError> {
-        todo!()
+        let len = encode_read_input_registers(&mut self.buffer[1..], addr, quantity);
+        self.encode_adu(slave, len);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_read_input_registers(&mut self.buffer[1..])
     }
 
     async fn write_single_coil(
@@ -137,7 +157,11 @@ where
         addr: u16,
         value: Vec<u8>,
     ) -> Result<(), ModbusError> {
-        todo!()
+        let len = encode_write_single_coil(&mut self.buffer[1..], addr, value);
+        self.encode_adu(slave, len);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_write_single_coil(&self.buffer[1..])
     }
 
     async fn write_single_register(
@@ -146,7 +170,11 @@ where
         addr: u16,
         value: Vec<u8>,
     ) -> Result<(), ModbusError> {
-        todo!()
+        let len = encode_write_single_register(&mut self.buffer[1..], addr, value);
+        self.encode_adu(slave, len);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_write_single_register(&self.buffer[1..])
     }
 
     async fn write_multiple_registers(
@@ -155,7 +183,11 @@ where
         addr: u16,
         value: Vec<u8>,
     ) -> Result<(), ModbusError> {
-        todo!()
+        let len = encode_write_multiple_registers(&mut self.buffer[1..], addr, value);
+        self.encode_adu(slave, len);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_write_multiple_registers(&self.buffer[1..])
     }
 
     async fn mask_write_register(
@@ -164,49 +196,12 @@ where
         addr: u16,
         value: Vec<u8>,
     ) -> Result<(), ModbusError> {
-        todo!()
+        let len = encode_mask_write_register(&mut self.buffer[1..], addr, value);
+        self.encode_adu(slave, len);
+        self.transport_read_send().await?;
+        self.decode_adu()?;
+        decode_mask_write_register(&self.buffer[1..])
     }
-    // async fn read(
-    //     &mut self,
-    //     function_code: FunctionCode,
-    //     slave: u8,
-    //     addr: u16,
-    //     quantity: u16,
-    // ) -> Result<&mut [u8], ModbusError> {
-    //     self.encode_read(function_code, slave, addr, quantity);
-    //     if let Err(e) = self.transport.write_all(&self.buffer[..12]).await {
-    //         return Err(ModbusError::Transport(e));
-    //     }
-
-    //     match self.transport.read(&mut self.buffer).await {
-    //         Ok(n) => match self.decode_read(n) {
-    //             Ok(n) => Ok(&mut self.buffer[9..9 + n]),
-    //             Err(e) => Err(ModbusError::Protocol(e)),
-    //         },
-    //         Err(e) => Err(ModbusError::Transport(e)),
-    //     }
-    // }
-
-    // async fn write(
-    //     &mut self,
-    //     function_code: FunctionCode,
-    //     slave: u8,
-    //     addr: u16,
-    //     value: &[u8],
-    // ) -> Result<(), ModbusError> {
-    //     let len = self.encode_write(function_code, slave, addr, value);
-    //     if let Err(e) = self.transport.write_all(&mut self.buffer[..len]).await {
-    //         return Err(ModbusError::Transport(e));
-    //     }
-
-    //     match self.transport.read(&mut self.buffer).await {
-    //         Ok(n) => match self.decode_write(n) {
-    //             Ok(_) => Ok(()),
-    //             Err(e) => Err(ModbusError::Protocol(e)),
-    //         },
-    //         Err(e) => Err(ModbusError::Transport(e)),
-    //     }
-    // }
 }
 
 const TABLE_CRC_HI: [u8; 256] = [
