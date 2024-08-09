@@ -2,7 +2,7 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -30,15 +30,14 @@ use super::group_variable::Variable;
 
 pub struct Group {
     pub id: Uuid,
-
     conf: CreateUpdateGroupReq,
-    stop_signal_tx: Option<mpsc::Sender<()>>,
 
-    pub on: bool,
+    stop_signal_tx: Option<mpsc::Sender<()>>,
 
     variables: Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>,
 
     handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<Session>)>>,
+    mb_tx: Option<broadcast::Sender<MessageBatch>>,
 
     ref_info: RefInfo,
 }
@@ -49,10 +48,7 @@ impl Group {
         group_id: Option<Uuid>,
         req: CreateUpdateGroupReq,
     ) -> HaliaResult<Self> {
-        let (group_id, new) = match group_id {
-            Some(group_id) => (group_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (group_id, new) = get_id(group_id);
 
         if new {
             persistence::devices::opcua::create_group(
@@ -67,10 +63,10 @@ impl Group {
             id: group_id,
             conf: req,
             variables: Arc::new(RwLock::new((vec![], vec![]))),
-            on: false,
             stop_signal_tx: None,
             handle: None,
             ref_info: RefInfo::new(),
+            mb_tx: None,
         })
     }
 
@@ -118,7 +114,7 @@ impl Group {
         }
         self.conf = req;
 
-        if self.on && restart {
+        if self.stop_signal_tx.is_some() && restart {
             self.stop_signal_tx
                 .as_ref()
                 .unwrap()
@@ -137,26 +133,16 @@ impl Group {
     }
 
     pub async fn start(&mut self, client: Arc<Session>) {
-        if self.on {
-            return;
-        } else {
-            self.on = true;
-        }
-
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
         self.event_loop(stop_signal_rx, client).await;
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        if !self.on {
-            return Ok(());
-        } else {
-            self.on = false;
-        }
         if !self.ref_info.can_stop() {
             return Err(HaliaError::Common("引用中".to_owned()));
         }
+
         self.stop_signal_tx
             .as_ref()
             .unwrap()
@@ -295,16 +281,26 @@ impl Group {
     }
 
     pub fn add_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.add_ref(rule_id)
+        self.ref_info.add_ref(rule_id);
     }
 
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        // self.ref_info.subscribe(rule_id)
-        todo!()
+        self.ref_info.active_ref(rule_id);
+        match &self.mb_tx {
+            Some(mb_tx) => mb_tx.subscribe(),
+            None => {
+                let (tx, rx) = broadcast::channel(16);
+                self.mb_tx = Some(tx);
+                rx
+            }
+        }
     }
 
     pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
-        // self.ref_info.unsubscribe(rule_id)
+        self.ref_info.deactive_ref(rule_id);
+        if self.ref_info.can_stop() {
+            self.mb_tx = None;
+        }
     }
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {
