@@ -2,6 +2,7 @@ use std::{fmt::Debug, io};
 
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tracing::debug;
 
 use super::{
     pdu::{
@@ -15,8 +16,7 @@ use super::{
     Context, ModbusError, ProtocolError,
 };
 
-// PDU最大为256 Bytes，包含1位的服务器地址和2位crc教研码
-
+// PDU最大为256 Bytes，包含1位的服务器地址和2位crc校验码
 struct RtuContext<T> {
     slave: u8,
     buffer: [u8; 256],
@@ -53,6 +53,7 @@ where
 
     // TODO crc 校验
     fn decode_adu(&mut self) -> Result<(), ProtocolError> {
+        debug!("{:?}, {:?}", self.buffer, self.buffer_len);
         if self.buffer_len == 0 {
             return Err(ProtocolError::EmptyResp);
         }
@@ -109,7 +110,7 @@ where
         self.encode_adu(slave, len);
         self.transport_read_send().await?;
         self.decode_adu()?;
-        decode_read_coils(&mut self.buffer[7..])
+        decode_read_coils(&mut self.buffer[1..])
     }
 
     async fn read_discrete_inputs(
