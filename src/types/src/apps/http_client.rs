@@ -35,9 +35,16 @@ pub struct CreateUpdateSinkReq {
 pub struct SinkConf {
     pub method: SinkMethod,
     pub path: String,
-    pub params: Vec<(String, String)>,
+    pub basic_auth: Option<BasicAuth>,
     pub headers: Vec<(String, String)>,
+    pub query_params: Vec<(String, String)>,
     pub body: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct BasicAuth {
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
@@ -45,8 +52,11 @@ pub struct SinkConf {
 pub enum SinkMethod {
     GET,
     POST,
-    DELETE,
+    PUT,
     PATCH,
+    DELETE,
+    HEAD,
+    OPTIONS,
 }
 
 #[derive(Serialize)]

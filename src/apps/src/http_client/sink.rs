@@ -98,11 +98,14 @@ impl Sink {
             types::apps::http_client::SinkMethod::POST => client.post(""),
             types::apps::http_client::SinkMethod::DELETE => client.delete(""),
             types::apps::http_client::SinkMethod::PATCH => client.patch(""),
+            types::apps::http_client::SinkMethod::PUT => todo!(),
+            types::apps::http_client::SinkMethod::HEAD => todo!(),
+            types::apps::http_client::SinkMethod::OPTIONS => todo!(),
         };
         for (k, v) in conf.headers.iter() {
             builder = builder.header(k, v);
         }
-        for (k, v) in conf.params.iter() {
+        for (k, v) in conf.query_params.iter() {
             // builder = builder.query(query);
         }
 
@@ -112,9 +115,7 @@ impl Sink {
         }
     }
 
-    pub async fn restart(&mut self) {
-
-    }
+    pub async fn restart(&mut self) {}
 
     pub async fn stop(&mut self) {}
 
