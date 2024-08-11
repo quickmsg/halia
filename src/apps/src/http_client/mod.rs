@@ -100,7 +100,7 @@ impl HttpClient {
     pub async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
         for sink in self.sinks.iter_mut() {
-            sink.start().await;
+            sink.start(self.conf.ext.host.clone()).await;
         }
 
         Ok(())
@@ -185,9 +185,7 @@ impl HttpClient {
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => match sink.update(&self.id, req).await {
-                Ok(restart) => {
-                    todo!()
-                }
+                Ok(()) => Ok(()),
                 Err(e) => Err(e),
             },
             None => Err(sink_not_find_err(sink_id)),

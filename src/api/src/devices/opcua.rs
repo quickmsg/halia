@@ -8,7 +8,7 @@ use types::{
     devices::{
         opcua::{
             CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-            SearchGroupVariablesResp, SearchGroupsResp,
+            CreateUpdateSinkReq, SearchGroupVariablesResp, SearchGroupsResp, SearchSinksResp,
         },
         SearchDevicesItemResp,
     },
@@ -45,10 +45,11 @@ pub(crate) fn opcua_routes() -> Router {
         )
         .nest(
             "/:device_id/sink",
-            Router::new(), // .route("/", post(create_sink))
-                           // .route("/", get(search_sinks))
-                           // .route("/:sink_id", put(update_sink))
-                           // .route("/:sink_id", routing::delete(delete_sink)),
+            Router::new()
+                .route("/", post(create_sink))
+                .route("/", get(search_sinks))
+                .route("/:sink_id", put(update_sink))
+                .route("/:sink_id", routing::delete(delete_sink)),
         )
 }
 
@@ -176,48 +177,37 @@ async fn delete_group_variable(
     Ok(AppSuccess::empty())
 }
 
-// async fn create_sink(
-//     Path(device_id): Path<Uuid>,
-//     Json(req): Json<CreateUpdateSinkReq>,
-// ) -> AppResp<()> {
-//     match GLOBAL_MODBUS_MANAGER
-//         .create_sink(device_id, None, req)
-//         .await
-//     {
-//         Ok(_) => AppResp::new(),
-//         Err(e) => e.into(),
-//     }
-// }
+async fn create_sink(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
+        .create_sink(device_id, None, req)
+        .await?;
+    Ok(AppSuccess::empty())
+}
 
-// async fn search_sinks(
-//     Path(device_id): Path<Uuid>,
-//     pagination: Query<Pagination>,
-// ) -> AppResp<SearchSinksResp> {
-//     match GLOBAL_MODBUS_MANAGER
-//         .search_sinks(device_id, pagination.p, pagination.s)
-//         .await
-//     {
-//         Ok(data) => AppResp::with_data(data),
-//         Err(e) => e.into(),
-//     }
-// }
+async fn search_sinks(
+    Path(device_id): Path<Uuid>,
+    Query(pagination): Query<Pagination>,
+) -> AppResult<AppSuccess<SearchSinksResp>> {
+    let data = GLOBAL_OPCUA_MANAGER
+        .search_sinks(device_id, pagination)
+        .await?;
+    Ok(AppSuccess::data(data))
+}
 
-// async fn update_sink(
-//     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
-//     Json(req): Json<CreateUpdateSinkReq>,
-// ) -> AppResp<()> {
-//     match GLOBAL_MODBUS_MANAGER
-//         .update_sink(device_id, sink_id, req)
-//         .await
-//     {
-//         Ok(_) => AppResp::new(),
-//         Err(e) => e.into(),
-//     }
-// }
+async fn update_sink(
+    Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
+        .update_sink(device_id, sink_id, req)
+        .await?;
+    Ok(AppSuccess::empty())
+}
 
-// async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResp<()> {
-//     match GLOBAL_MODBUS_MANAGER.delete_sink(device_id, sink_id).await {
-//         Ok(_) => AppResp::new(),
-//         Err(e) => e.into(),
-//     }
-// }
+async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER.delete_sink(device_id, sink_id).await?;
+    Ok(AppSuccess::empty())
+}

@@ -62,11 +62,17 @@ impl Sink {
     }
 
     pub async fn delete(&mut self, app_id: &Uuid) -> HaliaResult<()> {
+        if !self.ref_info.can_delete() {
+            return Err(common::error::HaliaError::Common(
+                "引用中，不能删除".to_owned(),
+            ));
+        }
         persistence::apps::http_client::delete_sink(app_id, &self.id).await?;
+
         Ok(())
     }
 
-    pub async fn start(&mut self) {
+    pub async fn start(&mut self, host: String) {
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
@@ -82,7 +88,7 @@ impl Sink {
 
                     mb = mb_rx.recv() => {
                         match mb {
-                            Some(mb) => Sink::send_request(&conf, mb).await,
+                            Some(mb) => Sink::send_request(&host, &conf, mb).await,
                             None => warn!("http客户端收到空消息"),
                         }
                     }
@@ -91,22 +97,21 @@ impl Sink {
         });
     }
 
-    async fn send_request(conf: &SinkConf, mb: MessageBatch) {
+    async fn send_request(host: &String, conf: &SinkConf, mb: MessageBatch) {
         let client = reqwest::Client::new();
         let mut builder = match conf.method {
-            types::apps::http_client::SinkMethod::GET => client.post(""),
-            types::apps::http_client::SinkMethod::POST => client.post(""),
-            types::apps::http_client::SinkMethod::DELETE => client.delete(""),
-            types::apps::http_client::SinkMethod::PATCH => client.patch(""),
-            types::apps::http_client::SinkMethod::PUT => todo!(),
-            types::apps::http_client::SinkMethod::HEAD => todo!(),
-            types::apps::http_client::SinkMethod::OPTIONS => todo!(),
+            types::apps::http_client::SinkMethod::Get => client.post(host),
+            types::apps::http_client::SinkMethod::Post => client.post(host),
+            types::apps::http_client::SinkMethod::Delete => client.delete(host),
+            types::apps::http_client::SinkMethod::Patch => client.patch(host),
+            types::apps::http_client::SinkMethod::Put => client.put(host),
+            types::apps::http_client::SinkMethod::Head => client.head(host),
         };
+
+        builder = builder.query(&conf.query_params);
+
         for (k, v) in conf.headers.iter() {
             builder = builder.header(k, v);
-        }
-        for (k, v) in conf.query_params.iter() {
-            // builder = builder.query(query);
         }
 
         match builder.send().await {

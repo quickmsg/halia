@@ -8,7 +8,7 @@ use types::{
     devices::{
         opcua::{
             CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-            SearchGroupVariablesResp, SearchGroupsResp,
+            CreateUpdateSinkReq, SearchGroupVariablesResp, SearchGroupsResp, SearchSinksResp,
         },
         SearchDevicesItemResp,
     },
@@ -28,8 +28,10 @@ pub struct Manager {
     devices: DashMap<Uuid, Opcua>,
 }
 
-fn device_not_find_err(device_id: Uuid) -> HaliaError {
-    HaliaError::NotFound("opcua设备".to_owned(), device_id)
+macro_rules! device_not_find_err {
+    ($device_id:expr) => {
+        Err(HaliaError::NotFound("Opcua设备".to_owned(), $device_id))
+    };
 }
 
 impl Manager {
@@ -47,42 +49,42 @@ impl Manager {
     pub async fn recover(&self, device_id: &Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
             Some(mut device) => device.recover().await,
-            None => Err(device_not_find_err(device_id.clone())),
+            None => device_not_find_err!(device_id.clone()),
         }
     }
 
     pub fn search(&self, device_id: &Uuid) -> HaliaResult<SearchDevicesItemResp> {
         match self.devices.get(device_id) {
             Some(device) => Ok(device.search()),
-            None => Err(device_not_find_err(device_id.clone())),
+            None => device_not_find_err!(device_id.clone()),
         }
     }
 
     pub async fn update(&self, device_id: Uuid, req: CreateUpdateOpcuaReq) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.update(req).await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
     pub async fn start(&self, device_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.start().await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
     pub async fn stop(&self, device_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.stop().await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
     pub async fn delete(&self, device_id: Uuid) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.delete().await?,
-            None => return Err(device_not_find_err(device_id)),
+            None => return device_not_find_err!(device_id),
         };
 
         self.devices.remove(&device_id);
@@ -99,7 +101,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.create_group(group_id, req).await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
@@ -110,7 +112,7 @@ impl Manager {
     ) -> HaliaResult<SearchGroupsResp> {
         match self.devices.get(&device_id) {
             Some(device) => device.search_groups(pagination).await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
@@ -122,14 +124,14 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get(&device_id) {
             Some(device) => device.update_group(group_id, req).await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
     pub async fn delete_group(&self, device_id: Uuid, group_id: Uuid) -> HaliaResult<()> {
         match self.devices.get(&device_id) {
             Some(device) => device.delete_group(group_id).await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
@@ -146,7 +148,7 @@ impl Manager {
                     .create_group_variable(group_id, variable_id, req)
                     .await
             }
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
@@ -158,7 +160,7 @@ impl Manager {
     ) -> HaliaResult<SearchGroupVariablesResp> {
         match self.devices.get(&device_id) {
             Some(device) => device.read_group_variables(group_id, pagination).await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
@@ -175,7 +177,7 @@ impl Manager {
                     .update_group_variable(group_id, variable_id, req)
                     .await
             }
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
@@ -199,7 +201,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get(&device_id) {
             Some(device) => device.delete_group_variable(group_id, variable_id).await,
-            None => Err(device_not_find_err(device_id)),
+            None => device_not_find_err!(device_id),
         }
     }
 
@@ -211,7 +213,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get(device_id) {
             Some(device) => device.add_group_ref(group_id, rule_id).await,
-            None => Err(device_not_find_err(device_id.clone())),
+            None => device_not_find_err!(device_id.clone()),
         }
     }
 
@@ -223,7 +225,7 @@ impl Manager {
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.devices.get(device_id) {
             Some(device) => device.get_group_mb_rx(group_id, rule_id).await,
-            None => Err(device_not_find_err(device_id.clone())),
+            None => device_not_find_err!(device_id.clone()),
         }
     }
 
@@ -235,7 +237,7 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get(device_id) {
             Some(device) => device.del_group_mb_rx(group_id, rule_id).await,
-            None => Err(device_not_find_err(device_id.clone())),
+            None => device_not_find_err!(device_id.clone()),
         }
     }
 
@@ -247,52 +249,51 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get(device_id) {
             Some(device) => device.del_group_ref(group_id, rule_id).await,
-            None => Err(device_not_find_err(device_id.clone())),
+            None => device_not_find_err!(device_id.clone()),
         }
     }
 
-    // pub async fn create_sink(
-    //     &self,
-    //     device_id: Uuid,
-    //     sink_id: Option<Uuid>,
-    //     req: CreateUpdateSinkReq,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(&device_id) {
-    //         Some(mut device) => device.create_sink(sink_id, req).await,
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
+    pub async fn create_sink(
+        &self,
+        device_id: Uuid,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.create_sink(sink_id, req).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
 
-    // pub async fn search_sinks(
-    //     &self,
-    //     device_id: Uuid,
-    //     page: usize,
-    //     size: usize,
-    // ) -> HaliaResult<SearchSinksResp> {
-    //     match self.devices.get(&device_id) {
-    //         Some(device) => Ok(device.search_sinks(page, size).await),
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
+    pub async fn search_sinks(
+        &self,
+        device_id: Uuid,
+        pagination: Pagination,
+    ) -> HaliaResult<SearchSinksResp> {
+        match self.devices.get(&device_id) {
+            Some(device) => Ok(device.search_sinks(pagination).await),
+            None => device_not_find_err!(device_id),
+        }
+    }
 
-    // pub async fn update_sink(
-    //     &self,
-    //     device_id: Uuid,
-    //     sink_id: Uuid,
-    //     req: CreateUpdateSinkReq,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(&device_id) {
-    //         Some(mut device) => device.update_sink(sink_id, req).await,
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
+    pub async fn update_sink(
+        &self,
+        device_id: Uuid,
+        sink_id: Uuid,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.update_sink(sink_id, req).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
 
-    // pub async fn delete_sink(&self, device_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
-    //     match self.devices.get_mut(&device_id) {
-    //         Some(mut device) => device.delete_sink(sink_id).await,
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
+    pub async fn delete_sink(&self, device_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.delete_sink(sink_id).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
 
     // pub async fn pre_publish(
     //     &self,

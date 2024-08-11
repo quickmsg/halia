@@ -13,14 +13,22 @@ pub struct CreateUpdateHttpClientReq {
     pub ext: HttpClientConf,
 }
 
+// TODO 证书
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct HttpClientConf {
-    pub ssl: bool,
+    pub schema: Schema,
     pub host: String,
     pub port: u16,
 
     pub headers: HashMap<String, String>,
-    // pub timeout: usize,
+    // 超时时间，单位为s
+    pub timeout: usize,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+pub enum Schema {
+    Http,
+    Https,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -50,13 +58,12 @@ pub struct BasicAuth {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum SinkMethod {
-    GET,
-    POST,
-    PUT,
-    PATCH,
-    DELETE,
-    HEAD,
-    OPTIONS,
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete,
+    Head,
 }
 
 #[derive(Serialize)]

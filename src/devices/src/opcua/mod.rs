@@ -11,6 +11,7 @@ use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, StatusCode},
 };
+use sink::Sink;
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -21,8 +22,9 @@ use tracing::debug;
 use types::{
     devices::{
         opcua::{
-            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq, OpcuaConf,
-            SearchGroupVariablesResp, SearchGroupsResp,
+            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+            CreateUpdateSinkReq, OpcuaConf, SearchGroupVariablesResp, SearchGroupsResp,
+            SearchSinksResp,
         },
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -50,6 +52,8 @@ struct Opcua {
     err: Option<String>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     session: Arc<RwLock<Option<Arc<Session>>>>,
+
+    sinks: Vec<Sink>,
 }
 
 impl Opcua {
@@ -76,6 +80,7 @@ impl Opcua {
             session: Arc::new(RwLock::new(None)),
             stop_signal_tx: None,
             groups: Arc::new(RwLock::new(vec![])),
+            sinks: vec![],
         })
     }
 
@@ -458,23 +463,58 @@ impl Opcua {
         }
     }
 
-    async fn create_sink(&mut self, sink_id: Uuid, req: &String) -> HaliaResult<()> {
-        todo!()
+    async fn create_sink(
+        &mut self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match Sink::new(&self.id, sink_id, req).await {
+            Ok(sink) => {
+                if self.on {
+                    //
+                }
+                self.sinks.push(sink);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
-    async fn update_sink(&mut self, sink_id: Uuid, req: &String) -> HaliaResult<()> {
-        todo!()
+    async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
+        let mut data = vec![];
+        for sink in self
+            .sinks
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
+            data.push(sink.search());
+            if data.len() == pagination.size {
+                break;
+            }
+        }
+
+        SearchSinksResp {
+            total: self.sinks.len(),
+            data,
+        }
+    }
+
+    async fn update_sink(&mut self, sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => sink.update(&self.id, req).await,
+            None => todo!(),
+        }
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
-    async fn publish(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        todo!()
-    }
-
-    async fn add_subscription(&self, req: Bytes) -> HaliaResult<()> {
-        todo!()
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => {
+                sink.delete(&self.id).await?;
+                self.sinks.retain(|sink| sink.id != sink_id);
+                Ok(())
+            }
+            None => todo!(),
+        }
     }
 }
