@@ -1,13 +1,14 @@
 use api::API;
 use common::{
+    check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
+    get_id,
     persistence::{self, Status},
 };
 use message::MessageBatch;
-use protocol::coap::client::UdpCoAPClient;
 use sink::Sink;
-use std::{str::FromStr, sync::Arc};
-use tokio::sync::{broadcast, mpsc};
+use std::str::FromStr;
+use tokio::sync::broadcast;
 use types::{
     devices::{
         coap::{
@@ -32,7 +33,7 @@ fn api_not_find_err(api_id: Uuid) -> HaliaError {
 pub struct Coap {
     id: Uuid,
     conf: CreateUpdateCoapReq,
-    client: Option<Arc<UdpCoAPClient>>,
+
     apis: Vec<API>,
     sinks: Vec<Sink>,
 
@@ -42,10 +43,7 @@ pub struct Coap {
 
 impl Coap {
     pub async fn new(device_id: Option<Uuid>, req: CreateUpdateCoapReq) -> HaliaResult<Self> {
-        let (device_id, new) = match device_id {
-            Some(device_id) => (device_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (device_id, new) = get_id(device_id);
 
         if new {
             persistence::devices::coap::create(
@@ -59,7 +57,6 @@ impl Coap {
         Ok(Coap {
             id: device_id,
             conf: req,
-            client: None,
             apis: vec![],
             sinks: vec![],
             on: false,
@@ -87,16 +84,15 @@ impl Coap {
     }
 
     pub fn search(&self) -> SearchDevicesItemResp {
-        // TODO
         SearchDevicesItemResp {
             id: self.id.clone(),
             typ: TYPE,
-            on: self.client.is_some(),
+            on: self.on,
             err: self.err.clone(),
             rtt: 999,
             conf: SearchDevicesItemConf {
-                base: todo!(),
-                ext: todo!(),
+                base: self.conf.base.clone(),
+                ext: serde_json::json!(self.conf.ext),
             },
         }
     }
@@ -106,13 +102,13 @@ impl Coap {
             .await?;
 
         let mut restart = false;
-        if self.conf.host != req.host || self.conf.port != req.port {
+        if self.conf.ext != req.ext {
             restart = true;
         }
 
         self.conf = req;
 
-        if restart && self.client.is_some() {
+        if restart && self.on {
             // restart
             todo!()
         }
@@ -121,42 +117,59 @@ impl Coap {
     }
 
     pub async fn start(&mut self) -> HaliaResult<()> {
-        if self.on {
-            return Ok(());
-        } else {
-            self.on = true;
-        }
+        check_and_set_on_true!(self);
 
         persistence::devices::update_device_status(&self.id, Status::Runing).await?;
 
-        let client = UdpCoAPClient::new_udp((self.conf.host.clone(), self.conf.port)).await?;
-        let clone_client = Arc::new(client);
         for api in self.apis.iter_mut() {
-            api.start(clone_client.clone()).await;
+            api.start(&self.conf.ext).await;
         }
-        self.client = Some(clone_client);
+
+        for sink in self.sinks.iter_mut() {
+            sink.start(&self.conf.ext).await;
+        }
 
         Ok(())
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        if !self.on {
-            return Ok(());
-        } else {
-            self.on = false;
+        if self.apis.iter().any(|api| !api.can_stop()) {
+            return Err(HaliaError::Common("有api正被引用中".to_owned()));
         }
-        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
+        if self.sinks.iter().any(|sink| sink.can_stop()) {
+            return Err(HaliaError::Common("有动作正被引用中".to_owned()));
+        }
+
+        check_and_set_on_false!(self);
+
         for api in self.apis.iter_mut() {
             api.stop().await;
         }
-        self.client = None;
+
+        for sink in self.sinks.iter_mut() {
+            sink.stop().await;
+        }
+
+        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
 
         Ok(())
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        if self.client.is_some() {
+        if self.on {
             return Err(HaliaError::Running);
+        }
+
+        for api in self.apis.iter() {
+            if !api.can_delete() {
+                return Err(HaliaError::Common("有api正被引用中".to_owned()));
+            }
+        }
+
+        for sink in self.sinks.iter() {
+            if !sink.can_delete() {
+                return Err(HaliaError::Common("有动作正被引用中".to_owned()));
+            }
         }
 
         persistence::devices::delete_device(&self.id).await?;
@@ -171,7 +184,7 @@ impl Coap {
     ) -> HaliaResult<()> {
         let mut api = API::new(&self.id, api_id, req).await?;
         if self.on {
-            api.start(self.client.as_ref().unwrap().clone()).await;
+            _ = api.start().await;
         }
         self.apis.push(api);
 
@@ -218,20 +231,13 @@ impl Coap {
         }
     }
 
-    pub async fn subscribe(
+    pub async fn get_api_mb_rx(
         &mut self,
         api_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.subscribe(rule_id)),
-            None => Err(api_not_find_err(api_id.clone())),
-        }
-    }
-
-    pub async fn unsubscribe(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.unsubscribe(rule_id)),
+            Some(api) => Ok(api.get_mb_rx(rule_id)),
             None => Err(api_not_find_err(api_id.clone())),
         }
     }
@@ -239,6 +245,13 @@ impl Coap {
     pub async fn del_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
             Some(api) => Ok(api.del_ref(rule_id)),
+            None => Err(api_not_find_err(api_id.clone())),
+        }
+    }
+
+    pub async fn del_api_mb_rx(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.apis.iter_mut().find(|api| api.id == *api_id) {
+            Some(api) => Ok(api.del_mb_rx(rule_id)),
             None => Err(api_not_find_err(api_id.clone())),
         }
     }
@@ -295,9 +308,5 @@ impl Coap {
             }
             None => todo!(),
         }
-    }
-
-    pub async fn publish(&self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        todo!()
     }
 }

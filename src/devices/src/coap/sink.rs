@@ -1,23 +1,18 @@
-use std::sync::Arc;
-
-use common::{error::HaliaResult, persistence};
+use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
 use message::MessageBatch;
-use protocol::coap::{
-    client::UdpCoAPClient,
-    request::{Method, RequestBuilder},
-};
+use protocol::coap::request::{Method, RequestBuilder};
 use tokio::{select, sync::mpsc};
-use types::devices::coap::{CreateUpdateSinkReq, SearchSinksItemResp};
+use types::devices::coap::{CoapConf, CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
 pub struct Sink {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
 
-    ref_cnt: usize,
-
     stop_signal_tx: Option<mpsc::Sender<()>>,
     publish_tx: Option<mpsc::Sender<MessageBatch>>,
+
+    ref_info: RefInfo,
 }
 
 impl Sink {
@@ -26,10 +21,7 @@ impl Sink {
         sink_id: Option<Uuid>,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<Self> {
-        let (sink_id, new) = match sink_id {
-            Some(sink_id) => (sink_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (sink_id, new) = get_id(sink_id);
 
         if new {
             persistence::devices::coap::create_sink(
@@ -43,9 +35,9 @@ impl Sink {
         Ok(Self {
             id: sink_id,
             conf: req,
-            ref_cnt: 0,
             stop_signal_tx: None,
             publish_tx: None,
+            ref_info: RefInfo::new(),
         })
     }
 
@@ -74,18 +66,22 @@ impl Sink {
         todo!()
     }
 
-    pub fn start(&mut self, coap_client: Arc<UdpCoAPClient>) {
+    pub async fn start(&mut self, coap_conf: &CoapConf) {
         let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (publish_tx, mut publish_rx) = mpsc::channel(16);
         self.publish_tx = Some(publish_tx);
 
-        let method = match &self.conf.method.as_str() {
-            &"POST" => Method::Post,
-            &"PUT" => Method::Put,
-            &"DELETE" => Method::Delete,
-            _ => unreachable!(),
+        let method = match &self.conf.ext.method {
+            types::devices::coap::SinkMethod::Get => todo!(),
+            types::devices::coap::SinkMethod::Post => todo!(),
+            types::devices::coap::SinkMethod::Put => todo!(),
+            types::devices::coap::SinkMethod::Delete => todo!(),
+            // &"POST" => Method::Post,
+            // &"PUT" => Method::Put,
+            // &"DELETE" => Method::Delete,
+            // _ => unreachable!(),
         };
 
         let request = RequestBuilder::new(&self.conf.path, method)
@@ -122,12 +118,27 @@ impl Sink {
         self.stop_signal_tx = None;
     }
 
-    pub fn publish(&mut self) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        self.ref_cnt += 1;
+    pub fn add_ref(&mut self, rule_id: &Uuid) {
+        self.ref_info.add_ref(rule_id);
+    }
+
+    pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
         todo!()
     }
 
-    pub async fn unpublish(&mut self) {
-        self.ref_cnt -= 1;
+    pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
+        todo!()
+    }
+
+    pub fn del_ref(&mut self, rule_id: &Uuid) {
+        todo!()
+    }
+
+    pub fn can_stop(&self) -> bool {
+        self.ref_info.can_stop()
+    }
+
+    pub fn can_delete(&self) -> bool {
+        self.ref_info.can_delete()
     }
 }

@@ -1,7 +1,11 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use common::{error::HaliaResult, persistence, ref_info::RefInfo};
+use common::{
+    check_and_set_on_false, check_and_set_on_true, error::HaliaResult, get_id, persistence,
+    ref_info::RefInfo,
+};
 use message::MessageBatch;
+use opcua::client;
 use protocol::coap::{
     client::UdpCoAPClient,
     request::{CoapRequest, Method, RequestBuilder},
@@ -13,17 +17,16 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::devices::coap::{CreateUpdateAPIReq, SearchAPIsItemResp};
+use types::devices::coap::{CoapConf, CreateUpdateAPIReq, SearchAPIsItemResp};
 use uuid::Uuid;
 
 pub struct API {
     pub id: Uuid,
     conf: CreateUpdateAPIReq,
-    request: CoapRequest<SocketAddr>,
 
     on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<UdpCoAPClient>)>>,
+    join_handle: Option<JoinHandle<mpsc::Receiver<()>>>,
 
     ref_info: RefInfo,
 }
@@ -34,10 +37,7 @@ impl API {
         api_id: Option<Uuid>,
         req: CreateUpdateAPIReq,
     ) -> HaliaResult<Self> {
-        let (api_id, new) = match api_id {
-            Some(api_id) => (api_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (api_id, new) = get_id(api_id);
 
         if new {
             persistence::devices::coap::create_api(
@@ -48,15 +48,9 @@ impl API {
             .await?;
         }
 
-        let request = RequestBuilder::new(&req.ext.path, Method::Get)
-            // .queries(todo!())
-            .domain(req.ext.domain.clone())
-            .build();
-
         Ok(Self {
             id: api_id,
             conf: req,
-            request,
             on: false,
             stop_signal_tx: None,
             join_handle: None,
@@ -91,8 +85,8 @@ impl API {
                 .send(())
                 .await
                 .unwrap();
-            let (stop_signal_rx, client) = self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(client, stop_signal_rx);
+            let stop_signal_rx = self.join_handle.take().unwrap().await.unwrap();
+            self.event_loop(stop_signal_rx);
         }
 
         Ok(())
@@ -111,23 +105,18 @@ impl API {
         Ok(())
     }
 
-    pub async fn start(&mut self, client: Arc<UdpCoAPClient>) {
-        if self.on {
-            return;
-        } else {
-            self.on = true;
-        }
+    pub async fn start(&mut self, conf: &CoapConf) -> HaliaResult<()> {
+        check_and_set_on_true!(self);
+
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
-        self.event_loop(client, stop_signal_rx);
+        self.event_loop(conf, stop_signal_rx).await;
+
+        Ok(())
     }
 
-    pub async fn stop(&mut self) {
-        if !self.on {
-            return;
-        } else {
-            self.on = false;
-        }
+    pub async fn stop(&mut self) -> HaliaResult<()> {
+        check_and_set_on_false!(self);
 
         self.stop_signal_tx
             .as_ref()
@@ -136,16 +125,22 @@ impl API {
             .await
             .unwrap();
         self.stop_signal_tx = None;
+
+        Ok(())
     }
 
-    fn event_loop(&mut self, client: Arc<UdpCoAPClient>, mut stop_signal_rx: mpsc::Receiver<()>) {
+    async fn event_loop(&mut self, conf: &CoapConf, mut stop_signal_rx: mpsc::Receiver<()>) {
+        let client = UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?;
+        let request = RequestBuilder::new(&self.conf.ext.path, Method::Get)
+            // .queries(todo!())
+            .domain(self.conf.ext.domain.clone())
+            .build();
         let mut interval = time::interval(Duration::from_millis(self.conf.ext.interval));
-        let request = self.request.clone();
         let join_handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, client)
+                        return stop_signal_rx
                     }
 
                     _ = interval.tick() => {
@@ -164,17 +159,23 @@ impl API {
         self.ref_info.add_ref(rule_id);
     }
 
-    pub fn subscribe(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        // self.ref_info.subscribe(rule_id)
+    pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
         todo!()
-    }
-
-    pub fn unsubscribe(&mut self, rule_id: &Uuid) {
-        // self.ref_info.unsubscribe(rule_id);
-        // todo!()
     }
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.del_ref(rule_id);
+    }
+
+    pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
+        todo!()
+    }
+
+    pub fn can_stop(&self) -> bool {
+        self.ref_info.can_delete()
+    }
+
+    pub fn can_delete(&self) -> bool {
+        self.ref_info.can_delete()
     }
 }

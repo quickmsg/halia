@@ -5,10 +5,14 @@ use crate::BaseConf;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateCoapReq {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: CoapConf,
+}
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct CoapConf {
     pub host: String,
     pub port: u16,
 }
@@ -25,10 +29,11 @@ pub struct CreateUpdateAPIReq {
 pub struct APIConf {
     // ms
     pub interval: u64,
+
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Vec<u8>>,
-    pub queries: Vec<(String, String)>,
+    pub query_params: Vec<(String, String)>,
     pub domain: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<Vec<u8>>,
@@ -48,17 +53,30 @@ pub struct SearchAPIsItemResp {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSinkReq {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: SinkConf,
+}
 
-    pub method: String,
+#[derive(Deserialize, Serialize, Clone)]
+pub struct SinkConf {
+    pub method: SinkMethod,
     pub path: String,
     pub data: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub queries: Option<Vec<(String, String)>>,
     pub domain: String,
     pub token: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum SinkMethod {
+    Get,
+    Post,
+    Put,
+    Delete,
 }
 
 #[derive(Serialize)]

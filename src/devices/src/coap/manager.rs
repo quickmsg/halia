@@ -2,8 +2,6 @@ use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
-use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
         coap::{
@@ -147,30 +145,6 @@ impl Manager {
         }
     }
 
-    pub async fn subscribe(
-        &self,
-        device_id: &Uuid,
-        api_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.devices.get_mut(device_id) {
-            Some(mut device) => device.subscribe(api_id, rule_id).await,
-            None => Err(device_not_find_err(device_id.clone())),
-        }
-    }
-
-    pub async fn unsubscribe(
-        &self,
-        device_id: &Uuid,
-        api_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
-        match self.devices.get_mut(device_id) {
-            Some(mut device) => device.unsubscribe(api_id, rule_id).await,
-            None => Err(device_not_find_err(device_id.clone())),
-        }
-    }
-
     pub async fn del_api_ref(
         &self,
         device_id: &Uuid,
@@ -179,6 +153,18 @@ impl Manager {
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
             Some(mut device) => device.del_api_ref(api_id, rule_id).await,
+            None => Err(device_not_find_err(device_id.clone())),
+        }
+    }
+
+    pub async fn del_api_mb_rx(
+        &self,
+        device_id: &Uuid,
+        api_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.del_api_mb_rx(api_id, rule_id).await,
             None => Err(device_not_find_err(device_id.clone())),
         }
     }
@@ -225,14 +211,14 @@ impl Manager {
         }
     }
 
-    pub async fn publish(
-        &self,
-        device_id: &Uuid,
-        sink_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.devices.get_mut(&device_id) {
-            Some(device) => device.publish(sink_id).await,
-            None => Err(device_not_find_err(device_id.clone())),
-        }
-    }
+    // pub async fn publish(
+    //     &self,
+    //     device_id: &Uuid,
+    //     sink_id: &Uuid,
+    // ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    //     match self.devices.get_mut(&device_id) {
+    //         Some(device) => device.publish(sink_id).await,
+    //         None => Err(device_not_find_err(device_id.clone())),
+    //     }
+    // }
 }
