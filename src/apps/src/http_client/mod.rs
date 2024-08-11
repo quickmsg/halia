@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use common::{
+    check_and_set_on_true,
     error::{HaliaError, HaliaResult},
     persistence,
 };
@@ -20,7 +21,7 @@ pub mod manager;
 mod sink;
 
 fn sink_not_find_err(sink_id: Uuid) -> HaliaError {
-    HaliaError::NotFound("动作".to_owned(), sink_id)
+    HaliaError::NotFound("http客户端动作".to_owned(), sink_id)
 }
 
 pub struct HttpClient {
@@ -89,22 +90,20 @@ impl HttpClient {
 
         if restart {
             for sink in self.sinks.iter_mut() {
-                sink.restart();
+                sink.restart().await;
             }
         }
 
         Ok(())
     }
 
-    pub async fn start(&mut self) {
-        match self.on {
-            true => return,
-            false => self.on = true,
-        }
-
+    pub async fn start(&mut self) -> HaliaResult<()> {
+        check_and_set_on_true!(self);
         for sink in self.sinks.iter_mut() {
             sink.start().await;
         }
+
+        Ok(())
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {

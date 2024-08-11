@@ -6,7 +6,7 @@ use common::{
     get_id, persistence,
 };
 use devices::{modbus::manager::GLOBAL_MODBUS_MANAGER, opcua::manager::GLOBAL_OPCUA_MANAGER};
-use functions::{filter, merge::merge::Merge, window};
+use functions::{computes, filter, merge::merge::Merge, window};
 use message::MessageBatch;
 use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc};
@@ -292,10 +292,8 @@ impl Rule {
                             ids.push(id);
                         }
                         NodeType::Computer => {
-                            let conf: Vec<ComputerConf> =
-                                serde_json::from_value(node.conf.clone())?;
-                            todo!();
-                            // functions.push(compute::new(conf)?);
+                            let conf: ComputerConf = serde_json::from_value(node.conf.clone())?;
+                            functions.push(computes::new(conf)?);
                             ids.push(id);
                         }
                         NodeType::DeviceSink => {

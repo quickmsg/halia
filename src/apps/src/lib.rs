@@ -94,7 +94,7 @@ impl AppManager {
     }
 
     pub async fn delete(&self, app_id: &Uuid) {
-        self.apps.write().await.retain(|(_, id)| id == app_id);
+        self.apps.write().await.retain(|(_, id)| id != app_id);
     }
 
     pub async fn recover(&self) -> HaliaResult<()> {

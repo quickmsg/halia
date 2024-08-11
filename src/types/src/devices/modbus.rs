@@ -3,7 +3,6 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use message::MessageValue;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use tracing::debug;
 use uuid::Uuid;
 
 use crate::BaseConf;
@@ -142,7 +141,6 @@ impl DataType {
     }
 
     pub fn decode(&self, data: &mut [u8]) -> MessageValue {
-        debug!("{:?}", data);
         match self.typ {
             Type::Bool => match self.pos {
                 Some(pos) => {
@@ -648,7 +646,6 @@ impl DataType {
             },
             Type::Float64 => match value.as_f64() {
                 Some(value) => {
-                    debug!("here {}", value);
                     let mut data = value.to_be_bytes();
                     match self.single_endian.as_ref().unwrap() {
                         Endian::Little => {}
@@ -743,20 +740,6 @@ impl DataType {
                     }
                     Err(e) => bail!(e),
                 },
-                // serde_json::Value::Array(arr) => {
-                //     let mut data = vec![];
-                //     for v in arr {
-                //         match v {
-                //             serde_json::Value::Number(n) => match n.as_u64() {
-                //                 Some(v) => data.push(v as u8),
-                //                 None => bail!("not support"),
-                //             },
-                //             _ => bail!("not support"),
-                //         }
-                //     }
-
-                //     Ok(data)
-                // }
                 _ => bail!("不支持的类型"),
             },
         }

@@ -63,7 +63,7 @@ impl Manager {
 
     pub async fn start(&self, app_id: Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
-            Some(mut app) => Ok(app.start().await),
+            Some(mut app) => app.start().await,
             None => Err(http_client_not_find_err(app_id)),
         }
     }

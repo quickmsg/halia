@@ -122,7 +122,7 @@ impl RuleManager {
             .find(|rule| rule.id == id)
         {
             Some(rule) => {
-                rule.stop();
+                _ = rule.stop();
                 // TODO delete
                 Ok(())
             }
