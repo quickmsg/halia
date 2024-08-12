@@ -2,6 +2,8 @@ use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use message::MessageBatch;
+use tokio::sync::broadcast;
 use types::{
     devices::{
         coap::{
@@ -147,6 +149,13 @@ impl Manager {
         }
     }
 
+    pub async fn get_api_mb_rx(&self, device_id: &Uuid, api_id: &Uuid, rule_id: &Uuid ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.get_api_mb_rx(api_id, rule_id).await,
+            None => device_not_find_err!(device_id.clone()),
+        }
+    }
+
     pub async fn del_api_ref(
         &self,
         device_id: &Uuid,
@@ -213,7 +222,7 @@ impl Manager {
         }
     }
 
-    pub async fn add_sink_ref(
+    pub fn add_sink_ref(
         &self,
         device_id: &Uuid,
         sink_id: &Uuid,
@@ -225,15 +234,15 @@ impl Manager {
         }
     }
 
-    // pub async fn add_sink_ref(
-    //     &self,
-    //     device_id: &Uuid,
-    //     sink_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(device_id) {
-    //         Some(mut device) => device.add_sink_ref(sink_id, rule_id),
-    //         None => device_not_find_err!(device_id.clone()),
-    //     }
-    // }
+    pub fn del_sink_ref(
+        &self,
+        device_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(device_id) {
+            Some(mut device) => device.add_sink_ref(sink_id, rule_id),
+            None => device_not_find_err!(device_id.clone()),
+        }
+    }
 }

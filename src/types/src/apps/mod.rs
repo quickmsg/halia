@@ -1,6 +1,8 @@
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::BaseConf;
+
 pub mod http_client;
 pub mod mqtt_client;
 
@@ -25,5 +27,13 @@ pub struct SearchAppsItemResp {
     pub typ: &'static str,
     pub on: bool,
     pub err: Option<String>,
-    pub conf: serde_json::Value,
+    pub conf: SearchAppsItemConf,
+}
+
+#[derive(Serialize)]
+pub struct SearchAppsItemConf {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: serde_json::Value,
 }

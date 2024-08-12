@@ -21,7 +21,7 @@ use types::{
             CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, Qos,
             SearchSinksResp, SearchSourcesResp,
         },
-        SearchAppsItemResp,
+        SearchAppsItemConf, SearchAppsItemResp,
     },
     Pagination,
 };
@@ -409,7 +409,10 @@ impl MqttClient {
             id: self.id,
             on: self.on,
             typ: TYPE,
-            conf: serde_json::to_value(&self.conf).unwrap(),
+            conf: SearchAppsItemConf {
+                base: self.conf.base.clone(),
+                ext: serde_json::json!(self.conf.ext),
+            },
             err: self.err.read().await.clone(),
         }
     }

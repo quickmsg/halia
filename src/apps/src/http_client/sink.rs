@@ -1,4 +1,4 @@
-use common::{error::HaliaResult, persistence, ref_info::RefInfo};
+use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{trace, warn};
@@ -19,11 +19,7 @@ pub async fn new(
     sink_id: Option<Uuid>,
     req: CreateUpdateSinkReq,
 ) -> HaliaResult<Sink> {
-    let (sink_id, new) = match sink_id {
-        Some(sink_id) => (sink_id, false),
-        None => (Uuid::new_v4(), true),
-    };
-
+    let (sink_id, new) = get_id(sink_id);
     if new {
         persistence::apps::http_client::create_sink(
             app_id,
@@ -58,6 +54,12 @@ impl Sink {
         )
         .await?;
 
+        let mut restart = false;
+        if self.conf.ext != req.ext {
+            restart = true;
+        }
+        self.conf = req;
+
         todo!()
     }
 
@@ -79,6 +81,14 @@ impl Sink {
         let (mb_tx, mut mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
         let conf = self.conf.ext.clone();
+    }
+
+    async fn event_loop(
+        host: String,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut mb_rx: mpsc::Receiver<MessageBatch>,
+        conf: SinkConf,
+    ) {
         tokio::spawn(async move {
             loop {
                 select! {

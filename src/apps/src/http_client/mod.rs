@@ -3,13 +3,13 @@ use std::str::FromStr;
 use common::{
     check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_id, persistence,
 };
 use sink::Sink;
 use types::{
     apps::{
         http_client::{CreateUpdateHttpClientReq, CreateUpdateSinkReq, SearchSinksResp},
-        SearchAppsItemResp,
+        SearchAppsItemConf, SearchAppsItemResp,
     },
     Pagination,
 };
@@ -20,8 +20,10 @@ pub const TYPE: &str = "http_client";
 pub mod manager;
 mod sink;
 
-fn sink_not_find_err(sink_id: Uuid) -> HaliaError {
-    HaliaError::NotFound("http客户端动作".to_owned(), sink_id)
+macro_rules! sink_not_found_err {
+    ($sink_id:expr) => {
+        Err(HaliaError::NotFound("http客户端动作".to_owned(), $sink_id))
+    };
 }
 
 pub struct HttpClient {
@@ -36,10 +38,7 @@ pub struct HttpClient {
 
 impl HttpClient {
     pub async fn new(app_id: Option<Uuid>, req: CreateUpdateHttpClientReq) -> HaliaResult<Self> {
-        let (app_id, new) = match app_id {
-            Some(app_id) => (app_id, false),
-            None => (Uuid::new_v4(), true),
-        };
+        let (app_id, new) = get_id(app_id);
 
         if new {
             persistence::apps::mqtt_client::create(
@@ -88,7 +87,7 @@ impl HttpClient {
         }
         self.conf = req;
 
-        if restart {
+        if self.on && restart {
             for sink in self.sinks.iter_mut() {
                 sink.restart().await;
             }
@@ -107,16 +106,10 @@ impl HttpClient {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        for sink in self.sinks.iter() {
-            if !sink.can_stop() {
-                return Err(HaliaError::Common("动作被引用中".to_owned()));
-            }
+        if self.sinks.iter().any(|sink| !sink.can_stop()) {
+            return Err(HaliaError::Common("动作被引用中".to_owned()));
         }
-
-        match self.on {
-            true => self.on = false,
-            false => return Ok(()),
-        }
+        check_and_set_on_true!(self);
 
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
@@ -126,12 +119,19 @@ impl HttpClient {
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        for sink in self.sinks.iter() {
-            if !sink.can_delete() {
-                return Err(HaliaError::Common("动作被引用中".to_owned()));
-            }
+        if self.on {
+            return Err(HaliaError::Common("运行中".to_owned()));
         }
 
+        if self.sinks.iter().any(|sink| !sink.can_delete()) {
+            return Err(HaliaError::Common("动作被引用中".to_owned()));
+        }
+
+        for sink in self.sinks.iter_mut() {
+            sink.stop().await;
+        }
+
+        persistence::apps::http_client::delete(&self.id).await?;
         Ok(())
     }
 
@@ -140,7 +140,10 @@ impl HttpClient {
             id: self.id,
             on: self.on,
             typ: TYPE,
-            conf: serde_json::to_value(&self.conf).unwrap(),
+            conf: SearchAppsItemConf {
+                base: self.conf.base.clone(),
+                ext: serde_json::to_value(&self.conf.ext).unwrap(),
+            },
             err: self.err.clone(),
         }
     }
@@ -188,7 +191,7 @@ impl HttpClient {
                 Ok(()) => Ok(()),
                 Err(e) => Err(e),
             },
-            None => Err(sink_not_find_err(sink_id)),
+            None => sink_not_found_err!(sink_id),
         }
     }
 
@@ -199,7 +202,7 @@ impl HttpClient {
                 self.sinks.retain(|sink| sink.id == sink_id);
                 Ok(())
             }
-            None => Err(sink_not_find_err(sink_id)),
+            None => sink_not_found_err!(sink_id),
         }
     }
 }
