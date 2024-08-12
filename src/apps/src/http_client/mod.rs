@@ -99,7 +99,7 @@ impl HttpClient {
     pub async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
         for sink in self.sinks.iter_mut() {
-            sink.start(self.conf.ext.host.clone()).await;
+            sink.start(self.conf.ext.clone()).await;
         }
 
         Ok(())

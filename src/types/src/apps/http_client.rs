@@ -14,18 +14,18 @@ pub struct CreateUpdateHttpClientReq {
 }
 
 // TODO 证书
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct HttpClientConf {
     pub schema: Schema,
     pub host: String,
     pub port: u16,
-
-    pub headers: HashMap<String, String>,
+    
+    pub headers: Option<Vec<(String, String)>>,
     // 超时时间，单位为s
     pub timeout: usize,
 }
 
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub enum Schema {
     Http,
     Https,

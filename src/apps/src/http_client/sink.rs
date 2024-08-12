@@ -1,8 +1,11 @@
 use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
 use message::MessageBatch;
+use rumqttc::tokio_rustls::rustls::internal::msgs::base;
 use tokio::{select, sync::mpsc};
 use tracing::{trace, warn};
-use types::apps::http_client::{CreateUpdateSinkReq, SearchSinksItemResp, SinkConf};
+use types::apps::http_client::{
+    CreateUpdateSinkReq, HttpClientConf, SearchSinksItemResp, SinkConf,
+};
 use uuid::Uuid;
 
 pub struct Sink {
@@ -74,17 +77,20 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn start(&mut self, host: String) {
-        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+    pub async fn start(&mut self, base_conf: HttpClientConf) {
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        let (mb_tx, mut mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
         let conf = self.conf.ext.clone();
+        self.event_loop(base_conf, stop_signal_rx, mb_rx, conf)
+            .await;
     }
 
     async fn event_loop(
-        host: String,
+        &mut self,
+        base_conf: HttpClientConf,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
         conf: SinkConf,
@@ -98,7 +104,7 @@ impl Sink {
 
                     mb = mb_rx.recv() => {
                         match mb {
-                            Some(mb) => Sink::send_request(&host, &conf, mb).await,
+                            Some(mb) => Sink::send_request(&base_conf.host, &conf, mb).await,
                             None => warn!("http客户端收到空消息"),
                         }
                     }
@@ -123,6 +129,8 @@ impl Sink {
         for (k, v) in conf.headers.iter() {
             builder = builder.header(k, v);
         }
+
+        // builder.body();
 
         match builder.send().await {
             Ok(_) => trace!("http client send ok"),

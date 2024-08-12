@@ -2,7 +2,7 @@ use message::MessageBatch;
 
 pub mod aggregate;
 pub mod computes;
-mod field;
+pub mod field;
 pub mod filter;
 pub mod merge;
 pub mod window;
