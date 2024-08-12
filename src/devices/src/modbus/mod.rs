@@ -282,16 +282,18 @@ impl Modbus {
     pub async fn stop(&mut self) -> HaliaResult<()> {
         check_and_set_on_false!(self);
 
-        for point in self.points.read().await.iter() {
-            if !point.can_stop() {
-                return Err(HaliaError::Common("设备有源被运行规则引用中".to_owned()));
-            }
+        if self
+            .points
+            .read()
+            .await
+            .iter()
+            .any(|point| !point.can_stop())
+        {
+            return Err(HaliaError::Common("设备有源被运行规则引用中".to_owned()));
         }
 
-        for sink in &self.sinks {
-            if !sink.can_stop() {
-                return Err(HaliaError::Common("设备有动作被运行规则引用中".to_owned()));
-            }
+        if self.sinks.iter().any(|sink| !sink.can_stop()) {
+            return Err(HaliaError::Common("设备有动作被运行规则引用中".to_owned()));
         }
         trace!("停止");
 

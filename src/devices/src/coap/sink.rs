@@ -134,8 +134,13 @@ impl Sink {
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        if !self.can_delete() {
+            return Err(common::error::HaliaError::Common(
+                "引用中，不能被删除".to_owned(),
+            ));
+        }
         persistence::devices::coap::delete_sink(device_id, &self.id).await?;
-        todo!()
+        Ok(())
     }
 
     pub fn add_ref(&mut self, rule_id: &Uuid) {
