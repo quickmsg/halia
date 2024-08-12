@@ -59,7 +59,7 @@ impl Point {
             .await?;
         }
 
-        Ok(Point {
+        Ok(Self {
             id: point_id,
             conf: req,
             quantity,

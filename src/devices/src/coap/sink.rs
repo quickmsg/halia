@@ -1,7 +1,10 @@
 use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
 use message::MessageBatch;
-use protocol::coap::request::{Method, RequestBuilder};
-use tokio::{select, sync::mpsc};
+use protocol::coap::{
+    client::UdpCoAPClient,
+    request::{Method, RequestBuilder},
+};
+use tokio::{select, sync::mpsc, task::JoinHandle};
 use types::devices::coap::{CoapConf, CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
@@ -11,6 +14,14 @@ pub struct Sink {
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
     publish_tx: Option<mpsc::Sender<MessageBatch>>,
+
+    join_handle: Option<
+        JoinHandle<(
+            UdpCoAPClient,
+            mpsc::Receiver<MessageBatch>,
+            mpsc::Receiver<()>,
+        )>,
+    >,
 
     ref_info: RefInfo,
 }
@@ -38,6 +49,7 @@ impl Sink {
             stop_signal_tx: None,
             publish_tx: None,
             ref_info: RefInfo::new(),
+            join_handle: None,
         })
     }
 
@@ -61,43 +73,45 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        persistence::devices::coap::delete_sink(device_id, &self.id).await?;
-        todo!()
-    }
-
-    pub async fn start(&mut self, coap_conf: &CoapConf) {
-        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
+    pub async fn start(&mut self, coap_conf: &CoapConf) -> HaliaResult<()> {
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
-
-        let (publish_tx, mut publish_rx) = mpsc::channel(16);
+        let (publish_tx, publish_rx) = mpsc::channel(16);
         self.publish_tx = Some(publish_tx);
 
+        let client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
+        self.event_loop(stop_signal_rx, publish_rx, client).await;
+
+        Ok(())
+    }
+
+    async fn event_loop(
+        &mut self,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut publish_rx: mpsc::Receiver<MessageBatch>,
+        client: UdpCoAPClient,
+    ) {
         let method = match &self.conf.ext.method {
-            types::devices::coap::SinkMethod::Get => todo!(),
-            types::devices::coap::SinkMethod::Post => todo!(),
-            types::devices::coap::SinkMethod::Put => todo!(),
-            types::devices::coap::SinkMethod::Delete => todo!(),
-            // &"POST" => Method::Post,
-            // &"PUT" => Method::Put,
-            // &"DELETE" => Method::Delete,
-            // _ => unreachable!(),
+            types::devices::coap::SinkMethod::Get => Method::Get,
+            types::devices::coap::SinkMethod::Post => Method::Post,
+            types::devices::coap::SinkMethod::Put => Method::Put,
+            types::devices::coap::SinkMethod::Delete => Method::Delete,
         };
 
-        let request = RequestBuilder::new(&self.conf.path, method)
-            .domain(self.conf.domain.clone())
+        let request = RequestBuilder::new(&self.conf.ext.path, method)
+            // .domain(coap_conf.domain.clone())
             .build();
 
-        tokio::spawn(async move {
+        let join_handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return
+                        return (client, publish_rx, stop_signal_rx)
                     }
 
                     mb = publish_rx.recv() => {
                         if let Some(mb) = mb {
-                            match coap_client.send(request.clone()).await {
+                            match client.send(request.clone()).await {
                                 Ok(_) => todo!(),
                                 Err(_) => todo!(),
                             }
@@ -106,6 +120,7 @@ impl Sink {
                 }
             }
         });
+        self.join_handle = Some(join_handle);
     }
 
     pub async fn stop(&mut self) {
@@ -118,20 +133,26 @@ impl Sink {
         self.stop_signal_tx = None;
     }
 
+    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+        persistence::devices::coap::delete_sink(device_id, &self.id).await?;
+        todo!()
+    }
+
     pub fn add_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.add_ref(rule_id);
     }
 
     pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
-        todo!()
+        self.ref_info.active_ref(rule_id);
+        self.publish_tx.as_ref().unwrap().clone()
     }
 
     pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
-        todo!()
+        self.ref_info.deactive_ref(rule_id);
     }
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {
-        todo!()
+        self.ref_info.del_ref(rule_id);
     }
 
     pub fn can_stop(&self) -> bool {

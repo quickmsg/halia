@@ -184,7 +184,7 @@ impl Coap {
     ) -> HaliaResult<()> {
         let mut api = API::new(&self.id, api_id, req).await?;
         if self.on {
-            _ = api.start().await;
+            _ = api.start(&self.conf.ext).await;
         }
         self.apis.push(api);
 

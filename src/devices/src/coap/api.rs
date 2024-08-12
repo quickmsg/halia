@@ -1,14 +1,13 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::time::Duration;
 
 use common::{
     check_and_set_on_false, check_and_set_on_true, error::HaliaResult, get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
-use opcua::client;
 use protocol::coap::{
     client::UdpCoAPClient,
-    request::{CoapRequest, Method, RequestBuilder},
+    request::{Method, RequestBuilder},
 };
 use tokio::{
     select,
@@ -26,9 +25,10 @@ pub struct API {
 
     on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    join_handle: Option<JoinHandle<mpsc::Receiver<()>>>,
+    join_handle: Option<JoinHandle<(UdpCoAPClient, mpsc::Receiver<()>)>>,
 
     ref_info: RefInfo,
+    mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
 impl API {
@@ -55,6 +55,7 @@ impl API {
             stop_signal_tx: None,
             join_handle: None,
             ref_info: RefInfo::new(),
+            mb_tx: None,
         })
     }
 
@@ -85,8 +86,8 @@ impl API {
                 .send(())
                 .await
                 .unwrap();
-            let stop_signal_rx = self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx);
+            let (client, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
+            self.event_loop(client, stop_signal_rx).await;
         }
 
         Ok(())
@@ -110,7 +111,9 @@ impl API {
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
-        self.event_loop(conf, stop_signal_rx).await;
+
+        let client = UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?;
+        self.event_loop(client, stop_signal_rx).await;
 
         Ok(())
     }
@@ -129,8 +132,7 @@ impl API {
         Ok(())
     }
 
-    async fn event_loop(&mut self, conf: &CoapConf, mut stop_signal_rx: mpsc::Receiver<()>) {
-        let client = UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?;
+    async fn event_loop(&mut self, client: UdpCoAPClient, mut stop_signal_rx: mpsc::Receiver<()>) {
         let request = RequestBuilder::new(&self.conf.ext.path, Method::Get)
             // .queries(todo!())
             .domain(self.conf.ext.domain.clone())
@@ -140,7 +142,7 @@ impl API {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return stop_signal_rx
+                        return (client, stop_signal_rx)
                     }
 
                     _ = interval.tick() => {
@@ -160,7 +162,15 @@ impl API {
     }
 
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        todo!()
+        self.ref_info.active_ref(rule_id);
+        match &self.mb_tx {
+            Some(tx) => tx.subscribe(),
+            None => {
+                let (tx, rx) = broadcast::channel(16);
+                self.mb_tx = Some(tx);
+                rx
+            }
+        }
     }
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {
@@ -168,7 +178,10 @@ impl API {
     }
 
     pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
-        todo!()
+        self.ref_info.deactive_ref(rule_id);
+        if self.ref_info.can_stop() {
+            self.mb_tx = None;
+        }
     }
 
     pub fn can_stop(&self) -> bool {
