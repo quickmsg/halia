@@ -1,4 +1,7 @@
-use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
+use common::{
+    check_and_set_on_false, check_and_set_on_true, error::HaliaResult, get_id, persistence,
+    ref_info::RefInfo,
+};
 use message::MessageBatch;
 use protocol::coap::{
     client::UdpCoAPClient,
@@ -12,6 +15,7 @@ pub struct Sink {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
 
+    on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     publish_tx: Option<mpsc::Sender<MessageBatch>>,
 
@@ -46,6 +50,7 @@ impl Sink {
         Ok(Self {
             id: sink_id,
             conf: req,
+            on: false,
             stop_signal_tx: None,
             publish_tx: None,
             ref_info: RefInfo::new(),
@@ -74,6 +79,8 @@ impl Sink {
     }
 
     pub async fn start(&mut self, coap_conf: &CoapConf) -> HaliaResult<()> {
+        check_and_set_on_true!(self);
+
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
         let (publish_tx, publish_rx) = mpsc::channel(16);
@@ -85,6 +92,10 @@ impl Sink {
         Ok(())
     }
 
+    pub async fn restart(&mut self, coap_conf: &CoapConf) -> HaliaResult<()> {
+        todo!()
+    }
+
     async fn event_loop(
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
@@ -92,7 +103,6 @@ impl Sink {
         client: UdpCoAPClient,
     ) {
         let method = match &self.conf.ext.method {
-            types::devices::coap::SinkMethod::Get => Method::Get,
             types::devices::coap::SinkMethod::Post => Method::Post,
             types::devices::coap::SinkMethod::Put => Method::Put,
             types::devices::coap::SinkMethod::Delete => Method::Delete,
@@ -123,7 +133,9 @@ impl Sink {
         self.join_handle = Some(join_handle);
     }
 
-    pub async fn stop(&mut self) {
+    pub async fn stop(&mut self) -> HaliaResult<()> {
+        check_and_set_on_false!(self);
+
         self.stop_signal_tx
             .as_ref()
             .unwrap()
@@ -131,6 +143,8 @@ impl Sink {
             .await
             .unwrap();
         self.stop_signal_tx = None;
+
+        Ok(())
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {

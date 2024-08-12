@@ -1,3 +1,4 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -25,6 +26,12 @@ pub struct CreateUpdateAPIReq {
     pub ext: APIConf,
 }
 
+impl CreateUpdateAPIReq {
+    pub fn validate(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct APIConf {
     // ms
@@ -33,10 +40,35 @@ pub struct APIConf {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Vec<u8>>,
-    pub query_params: Vec<(String, String)>,
+    pub options: Vec<(CoapOption, String)>,
     pub domain: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub enum CoapOption {
+    IfMatch,
+    UriHost,
+    ETag,
+    IfNoneMatch,
+    Observe,
+    UriPort,
+    LocationPath,
+    Oscore,
+    UriPath,
+    ContentFormat,
+    MaxAge,
+    UriQuery,
+    Accept,
+    LocationQuery,
+    Block2,
+    Block1,
+    ProxyUri,
+    ProxyScheme,
+    Size1,
+    Size2,
+    NoResponse,
 }
 
 #[derive(Serialize)]
@@ -73,7 +105,6 @@ pub struct SinkConf {
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum SinkMethod {
-    Get,
     Post,
     Put,
     Delete,

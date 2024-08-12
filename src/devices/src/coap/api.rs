@@ -1,7 +1,10 @@
+use anyhow::Result;
 use std::time::Duration;
 
 use common::{
-    check_and_set_on_false, check_and_set_on_true, error::HaliaResult, get_id, persistence,
+    check_and_set_on_false, check_and_set_on_true,
+    error::{HaliaError, HaliaResult},
+    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -18,6 +21,8 @@ use tokio::{
 use tracing::debug;
 use types::devices::coap::{CoapConf, CreateUpdateAPIReq, SearchAPIsItemResp};
 use uuid::Uuid;
+
+use super::transform_options;
 
 pub struct API {
     pub id: Uuid,
@@ -113,7 +118,25 @@ impl API {
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let client = UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?;
-        self.event_loop(client, stop_signal_rx).await;
+        if let Err(e) = self.event_loop(client, stop_signal_rx).await {
+            return Err(HaliaError::Common(e.to_string()));
+        }
+
+        Ok(())
+    }
+
+    pub async fn restart(&mut self, conf: &CoapConf) -> HaliaResult<()> {
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+        let (_, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
+        let client = UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?;
+        if let Err(e) = self.event_loop(client, stop_signal_rx).await {
+            return Err(HaliaError::Common(e.to_string()));
+        }
 
         Ok(())
     }
@@ -132,10 +155,15 @@ impl API {
         Ok(())
     }
 
-    async fn event_loop(&mut self, client: UdpCoAPClient, mut stop_signal_rx: mpsc::Receiver<()>) {
+    async fn event_loop(
+        &mut self,
+        client: UdpCoAPClient,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+    ) -> Result<()> {
+        let options = transform_options(&self.conf.ext.options)?;
         let request = RequestBuilder::new(&self.conf.ext.path, Method::Get)
-            // .queries(todo!())
             .domain(self.conf.ext.domain.clone())
+            .options(options)
             .build();
         let mut interval = time::interval(Duration::from_millis(self.conf.ext.interval));
         let join_handle = tokio::spawn(async move {
@@ -155,7 +183,10 @@ impl API {
             }
         });
         self.join_handle = Some(join_handle);
+        Ok(())
     }
+
+    async fn read() {}
 
     pub fn add_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.add_ref(rule_id);

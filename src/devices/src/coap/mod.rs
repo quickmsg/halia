@@ -1,4 +1,6 @@
+use anyhow::Result;
 use api::API;
+use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
@@ -6,6 +8,7 @@ use common::{
     persistence::{self, Status},
 };
 use message::MessageBatch;
+use protocol::coap::request::CoapOption;
 use sink::Sink;
 use std::str::FromStr;
 use tokio::sync::{broadcast, mpsc};
@@ -117,8 +120,13 @@ impl Coap {
         self.conf = req;
 
         if restart && self.on {
-            // restart
-            todo!()
+            for api in self.apis.iter_mut() {
+                _ = api.restart(&self.conf.ext).await;
+            }
+
+            for sink in self.sinks.iter_mut() {
+                _ = sink.restart(&self.conf.ext).await;
+            }
         }
 
         Ok(())
@@ -155,7 +163,7 @@ impl Coap {
         }
 
         for sink in self.sinks.iter_mut() {
-            sink.stop().await;
+            _ = sink.stop().await;
         }
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
@@ -348,4 +356,49 @@ impl Coap {
             None => sink_not_found_err!(sink_id.clone()),
         }
     }
+}
+
+pub(crate) fn transform_options(
+    input_options: &Vec<(types::devices::coap::CoapOption, String)>,
+) -> Result<Vec<(CoapOption, Vec<u8>)>> {
+    let mut options = vec![];
+    for (k, v) in input_options {
+        let v = BASE64_STANDARD.decode(&v)?;
+        match k {
+            types::devices::coap::CoapOption::IfMatch => options.push((CoapOption::IfMatch, v)),
+            types::devices::coap::CoapOption::UriHost => options.push((CoapOption::UriHost, v)),
+            types::devices::coap::CoapOption::ETag => options.push((CoapOption::ETag, v)),
+            types::devices::coap::CoapOption::IfNoneMatch => {
+                options.push((CoapOption::IfNoneMatch, v))
+            }
+            types::devices::coap::CoapOption::Observe => options.push((CoapOption::Observe, v)),
+            types::devices::coap::CoapOption::UriPort => options.push((CoapOption::UriPort, v)),
+            types::devices::coap::CoapOption::LocationPath => {
+                options.push((CoapOption::LocationPath, v))
+            }
+            types::devices::coap::CoapOption::Oscore => options.push((CoapOption::Oscore, v)),
+            types::devices::coap::CoapOption::UriPath => options.push((CoapOption::UriPath, v)),
+            types::devices::coap::CoapOption::ContentFormat => {
+                options.push((CoapOption::ContentFormat, v))
+            }
+            types::devices::coap::CoapOption::MaxAge => options.push((CoapOption::MaxAge, v)),
+            types::devices::coap::CoapOption::UriQuery => options.push((CoapOption::UriQuery, v)),
+            types::devices::coap::CoapOption::Accept => options.push((CoapOption::Accept, v)),
+            types::devices::coap::CoapOption::LocationQuery => {
+                options.push((CoapOption::LocationQuery, v))
+            }
+            types::devices::coap::CoapOption::Block2 => options.push((CoapOption::Block2, v)),
+            types::devices::coap::CoapOption::Block1 => options.push((CoapOption::Block1, v)),
+            types::devices::coap::CoapOption::ProxyUri => options.push((CoapOption::ProxyUri, v)),
+            types::devices::coap::CoapOption::ProxyScheme => {
+                options.push((CoapOption::ProxyScheme, v))
+            }
+            types::devices::coap::CoapOption::Size1 => options.push((CoapOption::Size1, v)),
+            types::devices::coap::CoapOption::Size2 => options.push((CoapOption::Size2, v)),
+            types::devices::coap::CoapOption::NoResponse => {
+                options.push((CoapOption::NoResponse, v))
+            }
+        }
+    }
+    Ok(options)
 }
