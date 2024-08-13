@@ -95,9 +95,8 @@ pub struct CreateUpdateSinkReq {
 pub struct SinkConf {
     pub method: SinkMethod,
     pub path: String,
+    pub options: Vec<(CoapOption, String)>,
     pub data: Option<Vec<u8>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub queries: Option<Vec<(String, String)>>,
     pub domain: String,
     pub token: Option<Vec<u8>>,
 }

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use common::{
     check_and_set_on_false, check_and_set_on_true, error::HaliaResult, get_id, persistence,
     ref_info::RefInfo,
@@ -10,6 +11,8 @@ use protocol::coap::{
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use types::devices::coap::{CoapConf, CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
+
+use super::transform_options;
 
 pub struct Sink {
     pub id: Uuid,
@@ -101,12 +104,14 @@ impl Sink {
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut publish_rx: mpsc::Receiver<MessageBatch>,
         client: UdpCoAPClient,
-    ) {
+    ) -> Result<()> {
         let method = match &self.conf.ext.method {
             types::devices::coap::SinkMethod::Post => Method::Post,
             types::devices::coap::SinkMethod::Put => Method::Put,
             types::devices::coap::SinkMethod::Delete => Method::Delete,
         };
+
+        let options = transform_options(&self.conf.ext.options)?;
 
         let request = RequestBuilder::new(&self.conf.ext.path, method)
             // .domain(coap_conf.domain.clone())
@@ -131,6 +136,7 @@ impl Sink {
             }
         });
         self.join_handle = Some(join_handle);
+        Ok(())
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {

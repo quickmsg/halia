@@ -49,6 +49,7 @@ rustls = "0.23.12"
 md5 = "0.7.0"
 sha1 = "0.10.6"
 reqwest = "0.12.5"
+handlebars = "6.0.0"
 
 [profile.release]
 strip = true

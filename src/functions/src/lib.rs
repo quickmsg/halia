@@ -6,6 +6,7 @@ pub mod field;
 pub mod filter;
 pub mod merge;
 pub mod window;
+pub mod template;
 
 #[macro_export]
 macro_rules! add_or_set_message_value {
