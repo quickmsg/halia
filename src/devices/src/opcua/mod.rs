@@ -1,8 +1,8 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
-use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
+    get_id,
     persistence::{self, Status},
 };
 use group::Group;
@@ -33,10 +33,12 @@ use types::{
 use uuid::Uuid;
 
 pub const TYPE: &str = "opcua";
+mod event;
 mod group;
 mod group_variable;
 pub mod manager;
 mod sink;
+mod subscription;
 
 fn group_not_find_err(group_id: Uuid) -> HaliaError {
     HaliaError::NotFound("组".to_owned(), group_id)
@@ -58,11 +60,7 @@ struct Opcua {
 
 impl Opcua {
     pub async fn new(device_id: Option<Uuid>, req: CreateUpdateOpcuaReq) -> HaliaResult<Self> {
-        let (device_id, new) = match device_id {
-            Some(device_id) => (device_id, false),
-            None => (Uuid::new_v4(), true),
-        };
-
+        let (device_id, new) = get_id(device_id);
         if new {
             persistence::devices::opcua::create(
                 &device_id,

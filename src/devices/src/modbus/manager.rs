@@ -40,6 +40,10 @@ impl Manager {
         device_id: Option<Uuid>,
         req: CreateUpdateModbusReq,
     ) -> HaliaResult<()> {
+        for device in self.devices.iter() {
+            device.value().check_duplicate(&req)?;
+        }
+
         let device = Modbus::new(device_id, req).await?;
         GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
         self.devices.insert(device.id.clone(), device);
@@ -61,6 +65,12 @@ impl Manager {
     }
 
     pub async fn update(&self, device_id: Uuid, req: CreateUpdateModbusReq) -> HaliaResult<()> {
+        for device in self.devices.iter() {
+            if device_id != *device.key() {
+                device.value().check_duplicate(&req)?;
+            }
+        }
+
         match self.devices.get_mut(&device_id) {
             Some(mut device) => device.update(req).await,
             None => device_not_find_err!(device_id),

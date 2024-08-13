@@ -1,4 +1,4 @@
-use common::{error::HaliaResult, persistence};
+use common::{error::HaliaResult, get_id, persistence};
 use opcua::types::{
     ByteString, Guid, Identifier, NodeId, QualifiedName, ReadValueId, UAString, Variant,
 };
@@ -20,11 +20,7 @@ impl Variable {
         variable_id: Option<Uuid>,
         req: CreateUpdateGroupVariableReq,
     ) -> HaliaResult<(Self, ReadValueId)> {
-        let (variable_id, new) = match variable_id {
-            Some(variable_id) => (variable_id, false),
-            None => (Uuid::new_v4(), true),
-        };
-
+        let (variable_id, new) = get_id(variable_id);
         if new {
             persistence::devices::opcua::create_group_variable(
                 device_id,

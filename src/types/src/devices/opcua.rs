@@ -73,6 +73,27 @@ pub struct VariableConf {
     pub identifier: serde_json::Value,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct CreateUpdateSubscription {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: Subscriptionconf,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct Subscriptionconf {
+    // 秒
+    pub publishing_interval: u64,
+    pub lifetime_count: u32,
+    pub max_keep_alive_count: u32,
+    pub max_notifications_per_publish: u32,
+    pub priority: u8,
+    pub publishing_enalbed: bool,
+
+    pub monitored_items: Vec<VariableConf>,
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum IdentifierType {

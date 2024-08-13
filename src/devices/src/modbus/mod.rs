@@ -79,6 +79,8 @@ pub struct Modbus {
 
 impl Modbus {
     pub async fn new(device_id: Option<Uuid>, req: CreateUpdateModbusReq) -> HaliaResult<Modbus> {
+        Modbus::check_conf(&req)?;
+
         let (device_id, new) = get_id(device_id);
 
         if new {
@@ -103,6 +105,44 @@ impl Modbus {
             stop_signal_tx: None,
             join_handle: None,
         })
+    }
+
+    fn check_conf(req: &CreateUpdateModbusReq) -> HaliaResult<()> {
+        if req.ext.ethernet.is_none() && req.ext.serial.is_none() {
+            return Err(HaliaError::Common(
+                "必须提供以太网或串口的配置！".to_owned(),
+            ));
+        }
+
+        // TODO 判断host是否合法
+
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateModbusReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::Common(format!("名称{}已存在！", req.base.name)));
+        }
+
+        match (&self.conf.ext.ethernet, &req.ext.ethernet) {
+            (Some(eth_conf), Some(eth_req)) => {
+                if eth_conf.host == eth_req.host && eth_conf.port == eth_req.port {
+                    return Err(HaliaError::Common(format!("地址已存在").to_owned()));
+                }
+            }
+            _ => {}
+        }
+
+        match (&self.conf.ext.serial, &req.ext.serial) {
+            (Some(serial_conf), Some(serial_req)) => {
+                if serial_conf == serial_req {
+                    return Err(HaliaError::Common(format!("地址已存在")));
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
