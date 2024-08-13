@@ -1187,7 +1187,6 @@ dependencies = [
  "base64 0.22.1",
  "common",
  "futures",
- "handlebars",
  "md5",
  "message",
  "pin-utils",
@@ -1371,20 +1370,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
-]
-
-[[package]]
-name = "handlebars"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5226a0e122dc74917f3a701484482bed3ee86d016c7356836abbaa033133a157"
-dependencies = [
- "log",
- "pest",
- "pest_derive",
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]

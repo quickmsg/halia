@@ -1,5 +1,4 @@
-use core::num;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use anyhow::{bail, Result};
 
@@ -216,5 +215,44 @@ impl MessageValue {
 impl Default for MessageValue {
     fn default() -> Self {
         MessageValue::Object(HashMap::new())
+    }
+}
+
+impl fmt::Display for MessageValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MessageValue::Null => write!(f, "null"),
+            MessageValue::Boolean(b) => write!(f, "{}", b),
+            MessageValue::Int64(i) => write!(f, "{}", i),
+            MessageValue::Float64(fl) => write!(f, "{}", fl),
+            MessageValue::String(s) => write!(f, "\"{}\"", s),
+            MessageValue::Bytes(bytes) => write!(f, "{:?}", bytes), // 用 `{:?}` 打印字节数组为 `Vec<u8>` 格式
+            MessageValue::Array(arr) => {
+                let mut result = String::from("[");
+                let mut first = true;
+                for value in arr {
+                    if !first {
+                        result.push_str(", ");
+                    }
+                    first = false;
+                    result.push_str(&value.to_string());
+                }
+                result.push(']');
+                write!(f, "{}", result)
+            }
+            MessageValue::Object(map) => {
+                let mut result = String::from("{");
+                let mut first = true;
+                for (key, value) in map {
+                    if !first {
+                        result.push_str(", ");
+                    }
+                    first = false;
+                    result.push_str(&format!("\"{}\": {}", key, value));
+                }
+                result.push('}');
+                write!(f, "{}", result)
+            }
+        }
     }
 }

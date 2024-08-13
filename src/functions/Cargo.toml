@@ -19,4 +19,3 @@ pin-utils = "0.1.0"
 base64 = { workspace = true }
 md5 = { workspace = true }
 sha1 = { workspace = true }
-handlebars = { workspace = true }

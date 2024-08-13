@@ -1,33 +1,24 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
-use message::MessageBatch;
+use serde::Deserialize;
 use serde_json::Value;
 
 use super::Operator;
 
-pub struct Move {
-    fields: HashMap<String, String>,
+#[derive(Deserialize)]
+struct Move {
+    origin_field: String,
+    target_field: String,
 }
 
 pub fn new(conf: Value) -> Result<Box<dyn Operator>> {
-    let fields: HashMap<String, String> = serde_json::from_value(conf)?;
-    // Ok(Move { fields })
-    todo!()
+    let mov: Move = serde_json::from_value(conf)?;
+    Ok(Box::new(mov))
 }
 
 impl Operator for Move {
-    fn operate(&self, msg: &mut message::Message) {
-        todo!()
+    fn operate(&self, mb: &mut message::MessageBatch) {
+        for message in mb.get_messages_mut().iter_mut() {
+            // message
+        }
     }
 }
-
-// impl Operate for Rename {
-//     fn operate(&self, message_batch: &mut MessageBatch) -> bool {
-//         let messages = message_batch.get_messages_mut();
-//         for message in messages {
-//             message.rename(&self.fields);
-//         }
-//         true
-//     }
-// }

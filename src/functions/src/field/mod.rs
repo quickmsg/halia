@@ -1,5 +1,5 @@
 use anyhow::Result;
-use message::Message;
+use message::{Message, MessageBatch};
 use types::rules::functions::FilterConf;
 
 use crate::Function;
@@ -14,7 +14,7 @@ pub mod r#move;
 // pub mod watermark;
 
 pub(crate) trait Operator: Sync + Send {
-    fn operate(&self, msg: &mut Message);
+    fn operate(&self, mb: &mut MessageBatch);
 }
 
 pub struct FieldNode {
