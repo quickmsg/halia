@@ -47,9 +47,6 @@ impl Point {
         req: CreateUpdatePointReq,
     ) -> HaliaResult<Point> {
         let (point_id, new) = get_id(point_id);
-
-        let quantity = req.ext.data_type.get_quantity();
-
         if new {
             persistence::devices::modbus::create_point(
                 device_id,
@@ -58,6 +55,8 @@ impl Point {
             )
             .await?;
         }
+
+        let quantity = req.ext.data_type.get_quantity();
 
         Ok(Self {
             id: point_id,
@@ -169,8 +168,9 @@ impl Point {
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
-            return Err(HaliaError::Common("引用中".to_owned()));
+            return Err(HaliaError::DeleteRefing);
         }
+
         self.stop().await;
         persistence::devices::modbus::delete_point(device_id, &self.id).await?;
         Ok(())

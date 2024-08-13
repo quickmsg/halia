@@ -18,4 +18,8 @@ pub enum HaliaError {
     Running,
     #[error("已停止")]
     Stopped,
+    #[error("引用中，无法删除！")]
+    DeleteRefing,
+    #[error("有规则引用，运行中！")]
+    StopActiveRefing,
 }

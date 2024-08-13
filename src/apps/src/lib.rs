@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 pub mod http_client;
 pub mod mqtt_client;
+pub mod mqtt_server;
 
 pub struct AppManager {
     apps: RwLock<Vec<(&'static str, Uuid)>>,
