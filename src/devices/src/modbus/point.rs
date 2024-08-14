@@ -265,10 +265,6 @@ impl Point {
         }
     }
 
-    pub fn add_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.add_ref(rule_id);
-    }
-
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
         self.ref_info.active_ref(rule_id);
         match &self.mb_tx {
@@ -286,9 +282,5 @@ impl Point {
         if self.ref_info.can_stop() {
             self.mb_tx = None;
         }
-    }
-
-    pub fn del_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.del_ref(rule_id)
     }
 }

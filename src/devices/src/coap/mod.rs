@@ -150,10 +150,10 @@ impl Coap {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        if self.apis.iter().any(|api| !api.can_stop()) {
+        if self.apis.iter().any(|api| !api.ref_info.can_stop()) {
             return Err(HaliaError::Common("有api正被引用中".to_owned()));
         }
-        if self.sinks.iter().any(|sink| sink.can_stop()) {
+        if self.sinks.iter().any(|sink| sink.ref_info.can_stop()) {
             return Err(HaliaError::Common("有动作正被引用中".to_owned()));
         }
 
@@ -177,16 +177,12 @@ impl Coap {
             return Err(HaliaError::Running);
         }
 
-        for api in self.apis.iter() {
-            if !api.can_delete() {
-                return Err(HaliaError::Common("有api正被引用中".to_owned()));
-            }
+        if self.apis.iter().any(|api| !api.ref_info.can_delete()) {
+            return Err(HaliaError::Common("有api正被引用中".to_owned()));
         }
 
-        for sink in self.sinks.iter() {
-            if !sink.can_delete() {
-                return Err(HaliaError::Common("有动作正被引用中".to_owned()));
-            }
+        if self.sinks.iter().any(|sink| !sink.ref_info.can_delete()) {
+            return Err(HaliaError::Common("有动作正被引用中".to_owned()));
         }
 
         persistence::devices::delete_device(&self.id).await?;
@@ -328,7 +324,7 @@ impl Coap {
 
     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.add_ref(rule_id)),
+            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }
@@ -346,7 +342,7 @@ impl Coap {
 
     pub async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.del_ref(rule_id)),
+            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }

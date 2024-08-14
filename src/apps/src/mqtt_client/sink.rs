@@ -28,7 +28,7 @@ pub struct Sink {
 
     pub publish_properties: Option<PublishProperties>,
 
-    ref_info: RefInfo,
+    pub ref_info: RefInfo,
     pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
 
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
@@ -269,10 +269,6 @@ impl Sink {
         Ok(())
     }
 
-    pub fn add_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.add_ref(rule_id);
-    }
-
     pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
         self.ref_info.active_ref(rule_id);
         self.mb_tx.as_ref().unwrap().clone()
@@ -280,18 +276,6 @@ impl Sink {
 
     pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
         self.ref_info.deactive_ref(rule_id);
-    }
-
-    pub fn del_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.del_ref(rule_id);
-    }
-
-    pub fn can_stop(&self) -> bool {
-        self.ref_info.can_stop()
-    }
-
-    pub fn can_delete(&self) -> bool {
-        self.ref_info.can_delete()
     }
 }
 

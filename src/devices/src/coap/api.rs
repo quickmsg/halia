@@ -35,7 +35,7 @@ pub struct API {
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<JoinHandle<(UdpCoAPClient, mpsc::Receiver<()>)>>,
 
-    ref_info: RefInfo,
+    pub ref_info: RefInfo,
     mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
@@ -227,13 +227,5 @@ impl API {
         if self.ref_info.can_stop() {
             self.mb_tx = None;
         }
-    }
-
-    pub fn can_stop(&self) -> bool {
-        self.ref_info.can_delete()
-    }
-
-    pub fn can_delete(&self) -> bool {
-        self.ref_info.can_delete()
     }
 }

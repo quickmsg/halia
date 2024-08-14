@@ -62,7 +62,6 @@ macro_rules! sink_not_found_err {
 impl MqttClient {
     pub async fn new(app_id: Option<Uuid>, req: CreateUpdateMqttClientReq) -> HaliaResult<Self> {
         let (app_id, new) = get_id(app_id);
-
         if new {
             persistence::apps::mqtt_client::create(
                 &app_id,
@@ -351,16 +350,18 @@ impl MqttClient {
     pub async fn stop(&mut self) -> HaliaResult<()> {
         check_and_set_on_false!(self);
 
-        for source in self.sources.read().await.iter() {
-            if !source.can_stop() {
-                return Err(HaliaError::Common("有源正在被引用中".to_owned()));
-            }
+        if self
+            .sources
+            .read()
+            .await
+            .iter()
+            .any(|source| source.ref_info.can_stop())
+        {
+            return Err(HaliaError::Common("有源正在被引用中".to_owned()));
         }
 
-        for sink in &self.sinks {
-            if !sink.can_stop() {
-                return Err(HaliaError::Common("有动作正在被引用中".to_owned()));
-            }
+        if self.sinks.iter().any(|sink| sink.ref_info.can_stop()) {
+            return Err(HaliaError::Common("有动作正在被引用中".to_owned()));
         }
 
         persistence::apps::update_app_status(&self.id, persistence::Status::Stopped).await?;
@@ -388,16 +389,18 @@ impl MqttClient {
             return Err(HaliaError::Running);
         }
 
-        for source in self.sources.read().await.iter() {
-            if !source.can_delete() {
-                return Err(HaliaError::Common("有源正在被引用中".to_owned()));
-            }
+        if self
+            .sources
+            .read()
+            .await
+            .iter()
+            .any(|source| !source.ref_info.can_delete())
+        {
+            return Err(HaliaError::Common("有源正在被引用中".to_owned()));
         }
 
-        for sink in &self.sinks {
-            if !sink.can_delete() {
-                return Err(HaliaError::Common("有规则正在被引用中".to_owned()));
-            }
+        if self.sinks.iter().any(|sink| sink.ref_info.can_delete()) {
+            return Err(HaliaError::Common("有规则正在被引用中".to_owned()));
         }
 
         persistence::apps::delete_app(&self.id).await?;
@@ -693,7 +696,7 @@ impl MqttClient {
 
     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.add_ref(rule_id)),
+            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }
@@ -731,7 +734,7 @@ impl MqttClient {
 
     pub async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.del_ref(rule_id)),
+            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }

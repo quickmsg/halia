@@ -140,10 +140,6 @@ impl Sink {
         Ok(())
     }
 
-    pub fn add_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.add_ref(rule_id);
-    }
-
     pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
         self.ref_info.active_ref(rule_id);
         self.mb_tx.as_ref().unwrap().clone()
@@ -151,10 +147,7 @@ impl Sink {
 
     pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
         self.ref_info.deactive_ref(rule_id);
-    }
-
-    pub fn del_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.del_ref(rule_id);
+        todo!()
     }
 
     pub async fn start(

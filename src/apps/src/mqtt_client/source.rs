@@ -15,7 +15,7 @@ pub struct Source {
     pub id: Uuid,
     pub conf: CreateUpdateSourceReq,
 
-    ref_info: RefInfo,
+    pub ref_info: RefInfo,
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
@@ -106,13 +106,5 @@ impl Source {
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.del_ref(rule_id)
-    }
-
-    pub fn can_stop(&self) -> bool {
-        self.ref_info.can_stop()
-    }
-
-    pub fn can_delete(&self) -> bool {
-        self.ref_info.can_delete()
     }
 }

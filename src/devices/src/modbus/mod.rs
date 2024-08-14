@@ -326,8 +326,6 @@ impl Modbus {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        check_and_set_on_false!(self);
-
         if self
             .points
             .read()
@@ -341,6 +339,8 @@ impl Modbus {
         if self.sinks.iter().any(|sink| !sink.ref_info.can_stop()) {
             return Err(HaliaError::Common("设备有动作被运行规则引用中".to_owned()));
         }
+
+        check_and_set_on_false!(self);
         trace!("停止");
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
@@ -574,7 +574,7 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.add_ref(rule_id)),
+            Some(point) => Ok(point.ref_info.add_ref(rule_id)),
             None => point_not_found_err!(point_id.clone()),
         }
     }
@@ -620,7 +620,7 @@ impl Modbus {
             .iter_mut()
             .find(|point| point.id == *point_id)
         {
-            Some(point) => Ok(point.del_ref(rule_id)),
+            Some(point) => Ok(point.ref_info.del_ref(rule_id)),
             None => point_not_found_err!(point_id.clone()),
         }
     }
@@ -691,7 +691,7 @@ impl Modbus {
 
     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.add_ref(rule_id)),
+            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }
@@ -716,7 +716,7 @@ impl Modbus {
 
     pub fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.del_ref(rule_id)),
+            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }

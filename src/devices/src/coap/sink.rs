@@ -30,7 +30,7 @@ pub struct Sink {
         )>,
     >,
 
-    ref_info: RefInfo,
+    pub ref_info: RefInfo,
 }
 
 impl Sink {
@@ -112,8 +112,8 @@ impl Sink {
         };
 
         let options = transform_options(&self.conf.ext.options)?;
-
         let request = RequestBuilder::new(&self.conf.ext.path, method)
+            .options(options)
             // .domain(coap_conf.domain.clone())
             .build();
 
@@ -127,8 +127,8 @@ impl Sink {
                     mb = publish_rx.recv() => {
                         if let Some(mb) = mb {
                             match client.send(request.clone()).await {
-                                Ok(_) => todo!(),
-                                Err(_) => todo!(),
+                                Ok(_) => {}
+                                Err(_) => {}
                             }
                         }
                     }
@@ -154,17 +154,13 @@ impl Sink {
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        if !self.can_delete() {
+        if !self.ref_info.can_delete() {
             return Err(common::error::HaliaError::Common(
                 "引用中，不能被删除".to_owned(),
             ));
         }
         persistence::devices::coap::delete_sink(device_id, &self.id).await?;
         Ok(())
-    }
-
-    pub fn add_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.add_ref(rule_id);
     }
 
     pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
@@ -174,17 +170,5 @@ impl Sink {
 
     pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
         self.ref_info.deactive_ref(rule_id);
-    }
-
-    pub fn del_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.del_ref(rule_id);
-    }
-
-    pub fn can_stop(&self) -> bool {
-        self.ref_info.can_stop()
-    }
-
-    pub fn can_delete(&self) -> bool {
-        self.ref_info.can_delete()
     }
 }
