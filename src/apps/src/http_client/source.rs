@@ -7,7 +7,7 @@ use types::apps::http_client::{
 };
 use uuid::Uuid;
 
-pub struct Sink {
+pub struct Source {
     pub id: Uuid,
     conf: CreateUpdateSinkReq,
     on: bool,
@@ -21,7 +21,7 @@ pub async fn new(
     app_id: &Uuid,
     sink_id: Option<Uuid>,
     req: CreateUpdateSinkReq,
-) -> HaliaResult<Sink> {
+) -> HaliaResult<Source> {
     let (sink_id, new) = get_id(sink_id);
     if new {
         persistence::apps::http_client::create_sink(
@@ -32,7 +32,7 @@ pub async fn new(
         .await?;
     }
 
-    Ok(Sink {
+    Ok(Source {
         id: sink_id,
         conf: req,
         ref_info: RefInfo::new(),
@@ -42,7 +42,7 @@ pub async fn new(
     })
 }
 
-impl Sink {
+impl Source {
     pub fn search(&self) -> SearchSinksItemResp {
         SearchSinksItemResp {
             id: self.id.clone(),
@@ -104,12 +104,12 @@ impl Sink {
                         return
                     }
 
-                    mb = mb_rx.recv() => {
-                        match mb {
-                            Some(mb) => Sink::send_request(&base_conf.host, &conf, mb).await,
-                            None => warn!("http客户端收到空消息"),
-                        }
-                    }
+                    // mb = mb_rx.recv() => {
+                    //     match mb {
+                    //         Some(mb) => Sink::send_request(&base_conf.host, &conf, mb).await,
+                    //         None => warn!("http客户端收到空消息"),
+                    //     }
+                    // }
                 }
             }
         });

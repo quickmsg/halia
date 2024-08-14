@@ -6,6 +6,7 @@ use common::{
     get_id, persistence,
 };
 use sink::Sink;
+use source::Source;
 use types::{
     apps::{
         http_client::{CreateUpdateHttpClientReq, CreateUpdateSinkReq, SearchSinksResp},
@@ -19,6 +20,13 @@ pub const TYPE: &str = "http_client";
 
 pub mod manager;
 mod sink;
+mod source;
+
+macro_rules! source_not_found_err {
+    ($source_id:expr) => {
+        Err(HaliaError::NotFound("http客户端源".to_owned(), $source_id))
+    };
+}
 
 macro_rules! sink_not_found_err {
     ($sink_id:expr) => {
@@ -33,13 +41,15 @@ pub struct HttpClient {
     err: Option<String>,
     conf: CreateUpdateHttpClientReq,
 
+    sources: Vec<Source>,
     sinks: Vec<Sink>,
 }
 
 impl HttpClient {
     pub async fn new(app_id: Option<Uuid>, req: CreateUpdateHttpClientReq) -> HaliaResult<Self> {
-        let (app_id, new) = get_id(app_id);
+        HttpClient::check_conf(&req)?;
 
+        let (app_id, new) = get_id(app_id);
         if new {
             persistence::apps::mqtt_client::create(
                 &app_id,
@@ -54,8 +64,17 @@ impl HttpClient {
             conf: req,
             on: false,
             err: None,
+            sources: vec![],
             sinks: vec![],
         })
+    }
+
+    fn check_conf(req: &CreateUpdateHttpClientReq) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateHttpClientReq) -> HaliaResult<()> {
+        Ok(())
     }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
@@ -79,6 +98,8 @@ impl HttpClient {
     }
 
     pub async fn update(&mut self, req: CreateUpdateHttpClientReq) -> HaliaResult<()> {
+        HttpClient::check_conf(&req)?;
+
         persistence::apps::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
@@ -98,6 +119,10 @@ impl HttpClient {
 
     pub async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
+        for source in self.sources.iter_mut() {
+            source.start(self.conf.ext.clone()).await;
+        }
+
         for sink in self.sinks.iter_mut() {
             sink.start(self.conf.ext.clone()).await;
         }
@@ -106,9 +131,18 @@ impl HttpClient {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        if self.sinks.iter().any(|sink| !sink.can_stop()) {
+        if self
+            .sources
+            .iter()
+            .any(|source| !source.ref_info.can_stop())
+        {
+            return Err(HaliaError::Common("源被引用中".to_owned()));
+        }
+
+        if self.sinks.iter().any(|sink| !sink.ref_info.can_stop()) {
             return Err(HaliaError::Common("动作被引用中".to_owned()));
         }
+
         check_and_set_on_true!(self);
 
         for sink in self.sinks.iter_mut() {
@@ -123,7 +157,15 @@ impl HttpClient {
             return Err(HaliaError::Common("运行中".to_owned()));
         }
 
-        if self.sinks.iter().any(|sink| !sink.can_delete()) {
+        if self
+            .sources
+            .iter()
+            .any(|source| !source.ref_info.can_delete())
+        {
+            return Err(HaliaError::Common("源被引用中".to_owned()));
+        }
+
+        if self.sinks.iter().any(|sink| !sink.ref_info.can_delete()) {
             return Err(HaliaError::Common("动作被引用中".to_owned()));
         }
 
@@ -199,7 +241,7 @@ impl HttpClient {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => {
                 sink.delete(&self.id).await?;
-                self.sinks.retain(|sink| sink.id == sink_id);
+                self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
             None => sink_not_found_err!(sink_id),
