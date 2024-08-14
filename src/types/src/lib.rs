@@ -32,3 +32,9 @@ pub struct QueryParams {
 pub struct Value {
     pub value: serde_json::Value,
 }
+
+#[derive(Serialize)]
+pub struct RuleRef {
+    pub rule_ref_cnt: usize,
+    pub rule_active_ref_cnt: usize,
+}

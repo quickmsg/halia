@@ -28,6 +28,7 @@ pub const TYPE: &str = "coap";
 mod api;
 pub mod manager;
 mod sink;
+mod observe;
 
 macro_rules! api_not_found_err {
     ($api_id:expr) => {

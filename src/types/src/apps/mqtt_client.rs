@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
-use crate::BaseConf;
+use crate::{BaseConf, RuleRef};
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateUpdateMqttClientReq {
@@ -78,8 +78,8 @@ pub struct SearchSourcesResp {
 pub struct SearchSourcesItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSourceReq,
-    pub active_ref_rule_cnt: usize,
-    pub ref_rule_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref: RuleRef,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -126,6 +126,6 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
-    pub active_ref_rule_cnt: usize,
-    pub ref_rule_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref: RuleRef,
 }

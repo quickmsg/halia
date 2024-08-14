@@ -16,7 +16,10 @@ use tokio::{
     time,
 };
 use tracing::{debug, warn};
-use types::devices::modbus::{Area, CreateUpdatePointReq, SearchPointsItemResp};
+use types::{
+    devices::modbus::{Area, CreateUpdatePointReq, SearchPointsItemResp},
+    RuleRef,
+};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -99,8 +102,10 @@ impl Point {
             conf: self.conf.clone(),
             value: self.value.clone(),
             err_info: self.err_info.clone(),
-            active_ref_rule_cnt: self.ref_info.active_ref_cnt(),
-            ref_rule_cnt: self.ref_info.ref_cnt(),
+            rule_ref: RuleRef {
+                rule_ref_cnt: self.ref_info.ref_cnt(),
+                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
+            },
         }
     }
 

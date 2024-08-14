@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
-use crate::BaseConf;
+use crate::{BaseConf, RuleRef};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateModbusReq {
@@ -830,8 +830,8 @@ pub struct SearchPointsItemResp {
     pub conf: CreateUpdatePointReq,
     pub value: serde_json::Value,
     pub err_info: Option<String>,
-    pub active_ref_rule_cnt: usize,
-    pub ref_rule_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref: RuleRef,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -862,4 +862,6 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
+    #[serde(flatten)]
+    pub rule_ref: RuleRef,
 }

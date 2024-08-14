@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -24,12 +23,6 @@ pub struct CreateUpdateAPIReq {
     pub base: BaseConf,
     #[serde(flatten)]
     pub ext: APIConf,
-}
-
-impl CreateUpdateAPIReq {
-    pub fn validate(&self) -> Result<()> {
-        Ok(())
-    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -79,6 +72,37 @@ pub struct SearchAPIsResp {
 
 #[derive(Serialize)]
 pub struct SearchAPIsItemResp {
+    pub id: Uuid,
+    pub conf: CreateUpdateAPIReq,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct CreateUpdateObserveReq {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: APIConf,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct ObserveConf {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Vec<u8>>,
+    pub options: Vec<(CoapOption, String)>,
+    pub domain: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<Vec<u8>>,
+}
+
+#[derive(Serialize)]
+pub struct SearchObservesResp {
+    pub total: usize,
+    pub data: Vec<SearchObservesResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchObservesItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateAPIReq,
 }

@@ -12,7 +12,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp, SinkConf};
+use types::{
+    devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp, SinkConf},
+    RuleRef,
+};
 use uuid::Uuid;
 
 use super::WritePointEvent;
@@ -80,6 +83,10 @@ impl Sink {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            rule_ref: RuleRef {
+                rule_ref_cnt: self.ref_info.ref_cnt(),
+                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
+            },
         }
     }
 

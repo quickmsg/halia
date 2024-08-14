@@ -15,7 +15,10 @@ use rumqttc::{
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{debug, trace};
-use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
+use types::{
+    apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp},
+    RuleRef,
+};
 use uuid::Uuid;
 
 pub struct Sink {
@@ -64,8 +67,10 @@ impl Sink {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
-            active_ref_rule_cnt: self.ref_info.active_ref_cnt(),
-            ref_rule_cnt: self.ref_info.ref_cnt(),
+            rule_ref: RuleRef {
+                rule_ref_cnt: self.ref_info.ref_cnt(),
+                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
+            },
         }
     }
 
