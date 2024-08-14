@@ -5,7 +5,10 @@ use axum::{
     Json, Router,
 };
 use types::{
-    apps::http_client::{CreateUpdateHttpClientReq, CreateUpdateSinkReq, SearchSinksResp},
+    apps::http_client::{
+        CreateUpdateHttpClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+        SearchSourcesResp,
+    },
     Pagination,
 };
 use uuid::Uuid;
@@ -28,6 +31,17 @@ pub fn http_client_routes() -> Router {
                     .route("/", get(search_sinks))
                     .route("/:sink_id", put(update_sink))
                     .route("/:sink_id", routing::delete(delete_sink)),
+            ),
+        )
+        .nest(
+            "/:app_id",
+            Router::new().nest(
+                "/source",
+                Router::new()
+                    .route("/", post(create_source))
+                    .route("/", get(search_sources))
+                    .route("/:source_id", put(update_source))
+                    .route("/:source_id", routing::delete(delete_source)),
             ),
         )
 }
@@ -57,6 +71,43 @@ async fn stop(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
 
 async fn delete(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
     GLOBAL_HTTP_CLIENT_MANAGER.delete(app_id).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn create_source(
+    Path(app_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateSourceReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_HTTP_CLIENT_MANAGER
+        .create_source(app_id, None, req)
+        .await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn search_sources(
+    Path(app_id): Path<Uuid>,
+    Query(pagination): Query<Pagination>,
+) -> AppResult<AppSuccess<SearchSourcesResp>> {
+    let data = GLOBAL_HTTP_CLIENT_MANAGER
+        .search_sources(app_id, pagination)
+        .await?;
+    Ok(AppSuccess::data(data))
+}
+
+async fn update_source(
+    Path((app_id, source_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateSourceReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_HTTP_CLIENT_MANAGER
+        .update_source(app_id, source_id, req)
+        .await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn delete_source(Path((app_id, source_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_HTTP_CLIENT_MANAGER
+        .delete_source(app_id, source_id)
+        .await?;
     Ok(AppSuccess::empty())
 }
 

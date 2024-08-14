@@ -1,15 +1,16 @@
-use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
+use common::{error::{HaliaError, HaliaResult}, get_id, persistence, ref_info::RefInfo};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{trace, warn};
 use types::apps::http_client::{
-    CreateUpdateSinkReq, HttpClientConf, SearchSinksItemResp, SinkConf,
+    CreateUpdateSinkReq, CreateUpdateSourceReq, HttpClientConf, SearchSinksItemResp,
+    SearchSourcesItemResp, SinkConf,
 };
 use uuid::Uuid;
 
 pub struct Source {
     pub id: Uuid,
-    conf: CreateUpdateSinkReq,
+    conf: CreateUpdateSourceReq,
     on: bool,
 
     mb_tx: Option<mpsc::Sender<MessageBatch>>,
@@ -17,40 +18,54 @@ pub struct Source {
     pub ref_info: RefInfo,
 }
 
-pub async fn new(
-    app_id: &Uuid,
-    sink_id: Option<Uuid>,
-    req: CreateUpdateSinkReq,
-) -> HaliaResult<Source> {
-    let (sink_id, new) = get_id(sink_id);
-    if new {
-        persistence::apps::http_client::create_sink(
-            app_id,
-            &sink_id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+impl Source {
+    pub async fn new(
+        app_id: &Uuid,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceReq,
+    ) -> HaliaResult<Source> {
+        Source::check_conf(&req)?;
+
+        let (source_id, new) = get_id(source_id);
+        if new {
+            persistence::apps::http_client::create_source(
+                app_id,
+                &source_id,
+                serde_json::to_string(&req).unwrap(),
+            )
+            .await?;
+        }
+
+        Ok(Source {
+            id: source_id,
+            conf: req,
+            ref_info: RefInfo::new(),
+            on: false,
+            stop_signal_tx: None,
+            mb_tx: None,
+        })
     }
 
-    Ok(Source {
-        id: sink_id,
-        conf: req,
-        ref_info: RefInfo::new(),
-        on: false,
-        stop_signal_tx: None,
-        mb_tx: None,
-    })
-}
+    fn check_conf(req: &CreateUpdateSourceReq) -> HaliaResult<()> {
+        Ok(())
+    }
 
-impl Source {
-    pub fn search(&self) -> SearchSinksItemResp {
-        SearchSinksItemResp {
+    pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        Ok(())
+    }
+
+    pub fn search(&self) -> SearchSourcesItemResp {
+        SearchSourcesItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
         }
     }
 
-    pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
+    pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSourceReq) -> HaliaResult<()> {
         persistence::apps::http_client::update_sink(
             app_id,
             &self.id,

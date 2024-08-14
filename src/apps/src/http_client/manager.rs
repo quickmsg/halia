@@ -4,7 +4,10 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use types::{
     apps::{
-        http_client::{CreateUpdateHttpClientReq, CreateUpdateSinkReq, SearchSinksResp},
+        http_client::{
+            CreateUpdateHttpClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+            SearchSourcesResp,
+        },
         SearchAppsItemResp,
     },
     Pagination,
@@ -129,6 +132,48 @@ impl Manager {
     pub async fn delete_sink(&self, app_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.delete_sink(sink_id).await,
+            None => http_client_not_find_err!(app_id),
+        }
+    }
+
+    pub async fn create_source(
+        &self,
+        app_id: Uuid,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceReq,
+    ) -> HaliaResult<()> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.create_source(source_id, req).await,
+            None => http_client_not_find_err!(app_id),
+        }
+    }
+
+    pub async fn search_sources(
+        &self,
+        app_id: Uuid,
+        pagination: Pagination,
+    ) -> HaliaResult<SearchSourcesResp> {
+        match self.apps.get(&app_id) {
+            Some(app) => Ok(app.search_sources(pagination).await),
+            None => http_client_not_find_err!(app_id),
+        }
+    }
+
+    pub async fn update_source(
+        &self,
+        app_id: Uuid,
+        source_id: Uuid,
+        req: CreateUpdateSourceReq,
+    ) -> HaliaResult<()> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.update_source(source_id, req).await,
+            None => http_client_not_find_err!(app_id),
+        }
+    }
+
+    pub async fn delete_source(&self, app_id: Uuid, source_id: Uuid) -> HaliaResult<()> {
+        match self.apps.get_mut(&app_id) {
+            Some(mut app) => app.delete_source(source_id).await,
             None => http_client_not_find_err!(app_id),
         }
     }

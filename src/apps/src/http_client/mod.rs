@@ -9,7 +9,10 @@ use sink::Sink;
 use source::Source;
 use types::{
     apps::{
-        http_client::{CreateUpdateHttpClientReq, CreateUpdateSinkReq, SearchSinksResp},
+        http_client::{
+            CreateUpdateHttpClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
+            SearchSourcesResp,
+        },
         SearchAppsItemConf, SearchAppsItemResp,
     },
     Pagination,
@@ -74,6 +77,10 @@ impl HttpClient {
     }
 
     pub fn check_duplicate(&self, req: &CreateUpdateHttpClientReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
         Ok(())
     }
 
@@ -109,6 +116,10 @@ impl HttpClient {
         self.conf = req;
 
         if self.on && restart {
+            for source in self.sources.iter_mut() {
+                source.restart().await;
+            }
+
             for sink in self.sinks.iter_mut() {
                 sink.restart().await;
             }
@@ -136,15 +147,17 @@ impl HttpClient {
             .iter()
             .any(|source| !source.ref_info.can_stop())
         {
-            return Err(HaliaError::Common("源被引用中".to_owned()));
+            return Err(HaliaError::StopActiveRefing);
         }
-
         if self.sinks.iter().any(|sink| !sink.ref_info.can_stop()) {
-            return Err(HaliaError::Common("动作被引用中".to_owned()));
+            return Err(HaliaError::StopActiveRefing);
         }
 
         check_and_set_on_true!(self);
 
+        for source in self.sources.iter_mut() {
+            source.stop().await;
+        }
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
@@ -154,7 +167,7 @@ impl HttpClient {
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
         if self.on {
-            return Err(HaliaError::Common("运行中".to_owned()));
+            return Err(HaliaError::Running);
         }
 
         if self
@@ -162,13 +175,15 @@ impl HttpClient {
             .iter()
             .any(|source| !source.ref_info.can_delete())
         {
-            return Err(HaliaError::Common("源被引用中".to_owned()));
+            return Err(HaliaError::DeleteRefing);
         }
-
         if self.sinks.iter().any(|sink| !sink.ref_info.can_delete()) {
-            return Err(HaliaError::Common("动作被引用中".to_owned()));
+            return Err(HaliaError::DeleteRefing);
         }
 
+        for source in self.sources.iter_mut() {
+            source.stop().await;
+        }
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
@@ -245,6 +260,76 @@ impl HttpClient {
                 Ok(())
             }
             None => sink_not_found_err!(sink_id),
+        }
+    }
+
+    async fn create_source(
+        &mut self,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceReq,
+    ) -> HaliaResult<()> {
+        for source in self.sources.iter() {
+            source.check_duplicate(&req)?;
+        }
+
+        match Source::new(&self.id, source_id, req).await {
+            Ok(source) => {
+                self.sources.push(source);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn search_sources(&self, pagination: Pagination) -> SearchSourcesResp {
+        let mut data = vec![];
+        for source in self
+            .sources
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
+            data.push(source.search());
+            if data.len() == pagination.size {
+                break;
+            }
+        }
+        SearchSourcesResp {
+            total: self.sinks.len(),
+            data,
+        }
+    }
+
+    pub async fn update_source(
+        &mut self,
+        source_id: Uuid,
+        req: CreateUpdateSourceReq,
+    ) -> HaliaResult<()> {
+        match self
+            .sources
+            .iter_mut()
+            .find(|source| source.id == source_id)
+        {
+            Some(source) => match source.update(&self.id, req).await {
+                Ok(()) => Ok(()),
+                Err(e) => Err(e),
+            },
+            None => source_not_found_err!(source_id),
+        }
+    }
+
+    pub async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
+        match self
+            .sources
+            .iter_mut()
+            .find(|source| source.id == source_id)
+        {
+            Some(source) => {
+                source.delete(&self.id).await?;
+                self.sources.retain(|source| source.id != source_id);
+                Ok(())
+            }
+            None => source_not_found_err!(source_id),
         }
     }
 }

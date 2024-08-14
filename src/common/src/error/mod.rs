@@ -22,4 +22,8 @@ pub enum HaliaError {
     DeleteRefing,
     #[error("有规则引用，运行中！")]
     StopActiveRefing,
+    #[error("名称已存在！")]
+    NameExists,
+    #[error("地址已存在！")]
+    AddressExists,
 }
