@@ -35,7 +35,7 @@ pub struct Sink {
         )>,
     >,
 
-    ref_info: RefInfo,
+    pub ref_info: RefInfo,
     mb_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
@@ -249,13 +249,5 @@ impl Sink {
                 debug!("value is err :{e}");
             }
         }
-    }
-
-    pub fn can_stop(&self) -> bool {
-        self.ref_info.can_stop()
-    }
-
-    pub fn can_delete(&self) -> bool {
-        self.ref_info.can_delete()
     }
 }

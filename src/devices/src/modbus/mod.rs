@@ -333,12 +333,12 @@ impl Modbus {
             .read()
             .await
             .iter()
-            .any(|point| !point.can_stop())
+            .any(|point| !point.ref_info.can_stop())
         {
             return Err(HaliaError::Common("设备有源被运行规则引用中".to_owned()));
         }
 
-        if self.sinks.iter().any(|sink| !sink.can_stop()) {
+        if self.sinks.iter().any(|sink| !sink.ref_info.can_stop()) {
             return Err(HaliaError::Common("设备有动作被运行规则引用中".to_owned()));
         }
         trace!("停止");
@@ -373,19 +373,24 @@ impl Modbus {
         if self.on {
             return Err(HaliaError::Running);
         }
-        for point in self.points.read().await.iter() {
-            if !point.can_delete() {
-                return Err(HaliaError::Common("设备点位被规则引用中".to_owned()));
-            }
+
+        if self
+            .points
+            .read()
+            .await
+            .iter()
+            .any(|point| point.ref_info.can_delete())
+        {
+            return Err(HaliaError::Common("设备点位被规则引用中".to_owned()));
         }
 
-        for sink in &self.sinks {
-            if !sink.can_delete() {
-                return Err(HaliaError::Common("设备动作被规则引用中".to_owned()));
-            }
+        if self.sinks.iter().any(|sink| sink.ref_info.can_delete()) {
+            return Err(HaliaError::Common("设备动作被规则引用中".to_owned()));
         }
+
         trace!("设备删除");
         persistence::devices::delete_device(&self.id).await?;
+
         Ok(())
     }
 

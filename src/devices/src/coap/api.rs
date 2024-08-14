@@ -1,6 +1,6 @@
-use anyhow::Result;
 use std::time::Duration;
 
+use anyhow::Result;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
@@ -19,7 +19,10 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::devices::coap::{CoapConf, CreateUpdateAPIReq, SearchAPIsItemResp};
+use types::{
+    devices::coap::{CoapConf, CreateUpdateAPIReq, SearchAPIsItemResp},
+    RuleRef,
+};
 use uuid::Uuid;
 
 use super::transform_options;
@@ -43,7 +46,6 @@ impl API {
         req: CreateUpdateAPIReq,
     ) -> HaliaResult<Self> {
         let (api_id, new) = get_id(api_id);
-
         if new {
             persistence::devices::coap::create_api(
                 device_id,
@@ -64,10 +66,22 @@ impl API {
         })
     }
 
+    fn check_conf(req: &CreateUpdateAPIReq) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateAPIReq) -> HaliaResult<()> {
+        todo!()
+    }
+
     pub fn search(&self) -> SearchAPIsItemResp {
         SearchAPIsItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            rule_ref: RuleRef {
+                rule_ref_cnt: self.ref_info.ref_cnt(),
+                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
+            },
         }
     }
 

@@ -28,9 +28,25 @@ impl Observe {
         todo!()
     }
 
+    fn check_conf(req: &CreateUpdateObserveReq) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateObserveReq) -> HaliaResult<()> {
+        todo!()
+    }
+
     pub fn search(&self) {}
 
     pub async fn update(&mut self, device_id: &Uuid) -> HaliaResult<()> {
         todo!()
+    }
+
+    pub fn can_stop(&self) -> bool {
+        self.ref_info.can_stop()
+    }
+
+    pub fn can_delete(&self) -> bool {
+        self.ref_info.can_delete()
     }
 }

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::BaseConf;
+use crate::{BaseConf, RuleRef};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateCoapReq {
@@ -74,6 +74,8 @@ pub struct SearchAPIsResp {
 pub struct SearchAPIsItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateAPIReq,
+    #[serde(flatten)]
+    pub rule_ref: RuleRef,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

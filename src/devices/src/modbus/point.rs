@@ -39,7 +39,7 @@ pub struct Point {
     value: serde_json::Value,
     err_info: Option<String>,
 
-    ref_info: RefInfo,
+    pub ref_info: RefInfo,
     mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
@@ -290,13 +290,5 @@ impl Point {
 
     pub fn del_ref(&mut self, rule_id: &Uuid) {
         self.ref_info.del_ref(rule_id)
-    }
-
-    pub fn can_delete(&self) -> bool {
-        self.ref_info.can_delete()
-    }
-
-    pub fn can_stop(&self) -> bool {
-        self.ref_info.can_stop()
     }
 }
