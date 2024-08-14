@@ -49,7 +49,6 @@ impl Group {
         req: CreateUpdateGroupReq,
     ) -> HaliaResult<Self> {
         let (group_id, new) = get_id(group_id);
-
         if new {
             persistence::devices::opcua::create_group(
                 device_id,

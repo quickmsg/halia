@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::{sync::Arc, time::Duration};
 
-use common::error::HaliaResult;
+use common::{error::HaliaResult, get_id};
 use opcua::{
     client::{DataChangeCallback, MonitoredItem, Session},
     types::{DataValue, MonitoredItemCreateRequest, NodeId, TimestampsToReturn},
@@ -17,7 +17,13 @@ pub struct Subscription {
 }
 
 impl Subscription {
-    pub async fn new(req: Subscriptionconf) -> HaliaResult<Self> {
+    pub async fn new(
+        device_id: &Uuid,
+        subscription_id: Option<Uuid>,
+        req: Subscriptionconf,
+    ) -> HaliaResult<Self> {
+        let (subscription_id, new) = get_id(subscription_id);
+        if new {}
         todo!()
     }
 

@@ -40,17 +40,22 @@ use types::{
 };
 use uuid::Uuid;
 
-pub const TYPE: &str = "modbus";
 pub mod manager;
 mod point;
 mod sink;
 
-fn point_not_find_error(point_id: Uuid) -> HaliaError {
-    HaliaError::NotFound("点位".to_owned(), point_id)
+pub const TYPE: &str = "modbus";
+
+macro_rules! point_not_found_err {
+    ($point_id:expr) => {
+        Err(HaliaError::NotFound("modbus设备点位".to_owned(), $point_id))
+    };
 }
 
-fn sink_not_find_error(sink_id: Uuid) -> HaliaError {
-    HaliaError::NotFound("动作".to_owned(), sink_id)
+macro_rules! sink_not_found_err {
+    ($sink_id:expr) => {
+        Err(HaliaError::NotFound("modbus设备动作".to_owned(), $sink_id))
+    };
 }
 
 #[derive(Debug)]
@@ -494,7 +499,7 @@ impl Modbus {
             .find(|point| point.id == point_id)
         {
             Some(point) => point.update(&self.id, req).await,
-            None => Err(point_not_find_error(point_id)),
+            None => point_not_found_err!(point_id),
         }
     }
 
@@ -533,7 +538,7 @@ impl Modbus {
                     Err(e) => Err(e),
                 }
             }
-            None => Err(point_not_find_error(point_id)),
+            None => point_not_found_err!(point_id),
         }
     }
 
@@ -546,7 +551,7 @@ impl Modbus {
             .find(|point| point.id == point_id)
         {
             Some(point) => point.delete(&self.id).await?,
-            None => return Err(point_not_find_error(point_id)),
+            None => return point_not_found_err!(point_id),
         }
 
         self.points
@@ -565,7 +570,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.add_ref(rule_id)),
-            None => Err(point_not_find_error(point_id.clone())),
+            None => point_not_found_err!(point_id.clone()),
         }
     }
 
@@ -585,7 +590,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.get_mb_rx(rule_id)),
-            None => Err(point_not_find_error(point_id.clone())),
+            None => point_not_found_err!(point_id.clone()),
         }
     }
 
@@ -598,7 +603,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.del_mb_rx(rule_id)),
-            None => Err(point_not_find_error(point_id.clone())),
+            None => point_not_found_err!(point_id.clone()),
         }
     }
 
@@ -611,7 +616,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.del_ref(rule_id)),
-            None => Err(point_not_find_error(point_id.clone())),
+            None => point_not_found_err!(point_id.clone()),
         }
     }
 
@@ -664,7 +669,7 @@ impl Modbus {
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
-            None => Err(sink_not_find_error(sink_id)),
+            None => sink_not_found_err!(sink_id),
         }
     }
 
@@ -675,14 +680,14 @@ impl Modbus {
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
-            None => Err(sink_not_find_error(sink_id)),
+            None => sink_not_found_err!(sink_id),
         }
     }
 
     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.add_ref(rule_id)),
-            None => Err(sink_not_find_error(sink_id.clone())),
+            None => sink_not_found_err!(sink_id.clone()),
         }
     }
 
@@ -693,21 +698,21 @@ impl Modbus {
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.get_mb_tx(rule_id)),
-            None => Err(sink_not_find_error(sink_id.clone())),
+            None => sink_not_found_err!(sink_id.clone()),
         }
     }
 
     pub fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.del_mb_tx(rule_id)),
-            None => Err(sink_not_find_error(sink_id.clone())),
+            None => sink_not_found_err!(sink_id.clone()),
         }
     }
 
     pub fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.del_ref(rule_id)),
-            None => Err(sink_not_find_error(sink_id.clone())),
+            None => sink_not_found_err!(sink_id.clone()),
         }
     }
 }
