@@ -42,8 +42,9 @@ impl Sink {
         sink_id: Option<Uuid>,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<Self> {
-        let (sink_id, new) = get_id(sink_id);
+        Sink::check_conf(&req)?;
 
+        let (sink_id, new) = get_id(sink_id);
         if new {
             persistence::devices::modbus::create_sink(
                 device_id,
@@ -61,6 +62,18 @@ impl Sink {
             ref_info: RefInfo::new(),
             mb_tx: None,
         })
+    }
+
+    fn check_conf(req: &CreateUpdateSinkReq) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::Common(format!("名称{}已存在！", req.base.name)));
+        }
+
+        Ok(())
     }
 
     pub fn search(&self) -> SearchSinksItemResp {

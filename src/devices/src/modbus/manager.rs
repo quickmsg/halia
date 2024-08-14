@@ -43,7 +43,6 @@ impl Manager {
         for device in self.devices.iter() {
             device.value().check_duplicate(&req)?;
         }
-
         let device = Modbus::new(device_id, req).await?;
         GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
         self.devices.insert(device.id.clone(), device);

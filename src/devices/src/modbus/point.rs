@@ -46,6 +46,8 @@ impl Point {
         point_id: Option<Uuid>,
         req: CreateUpdatePointReq,
     ) -> HaliaResult<Point> {
+        Point::check_conf(&req)?;
+
         let (point_id, new) = get_id(point_id);
         if new {
             persistence::devices::modbus::create_point(
@@ -69,6 +71,26 @@ impl Point {
             join_handle: None,
             err_info: None,
         })
+    }
+
+    fn check_conf(req: &CreateUpdatePointReq) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdatePointReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::Common(format!("名称{}已存在！", req.base.name)));
+        }
+
+        if self.conf.ext.data_type == req.ext.data_type
+            && self.conf.ext.slave == req.ext.slave
+            && self.conf.ext.area == req.ext.area
+            && self.conf.ext.address == req.ext.address
+        {
+            return Err(HaliaError::Common("该点位地址已存在！".to_owned()));
+        }
+
+        Ok(())
     }
 
     pub fn search(&self) -> SearchPointsItemResp {

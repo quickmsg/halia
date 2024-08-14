@@ -1,13 +1,3 @@
-use common::{
-    check_and_set_on_false, check_and_set_on_true,
-    error::{HaliaError, HaliaResult},
-    get_id,
-    persistence::{self, Status},
-};
-use message::MessageBatch;
-use point::Point;
-use protocol::modbus::{rtu, tcp, Context};
-use sink::Sink;
 use std::{
     io,
     net::SocketAddr,
@@ -18,6 +8,17 @@ use std::{
     },
     time::{Duration, Instant},
 };
+
+use common::{
+    check_and_set_on_false, check_and_set_on_true,
+    error::{HaliaError, HaliaResult},
+    get_id,
+    persistence::{self, Status},
+};
+use message::MessageBatch;
+use point::Point;
+use protocol::modbus::{rtu, tcp, Context};
+use sink::Sink;
 use tokio::{
     net::TcpStream,
     select,
@@ -441,6 +442,9 @@ impl Modbus {
         point_id: Option<Uuid>,
         req: CreateUpdatePointReq,
     ) -> HaliaResult<()> {
+        for point in self.points.read().await.iter() {
+            point.check_duplicate(&req)?;
+        }
         match Point::new(&self.id, point_id, req).await {
             Ok(mut point) => {
                 if self.on {
@@ -616,13 +620,18 @@ impl Modbus {
         sink_id: Option<Uuid>,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
+        for sink in &self.sinks {
+            sink.check_duplicate(&req)?;
+        }
+
         match Sink::new(&self.id, sink_id, req).await {
             Ok(mut sink) => {
                 if self.on {
                     sink.start(self.write_tx.as_ref().unwrap().clone(), self.err.clone())
                         .await;
                 }
-                Ok(self.sinks.push(sink))
+                self.sinks.push(sink);
+                Ok(())
             }
             Err(e) => Err(e),
         }
