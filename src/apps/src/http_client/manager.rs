@@ -1,5 +1,6 @@
 use std::sync::LazyLock;
 
+use bytes::Bytes;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use types::{
@@ -37,8 +38,11 @@ impl Manager {
         &self,
         app_id: Option<Uuid>,
         req: CreateUpdateHttpClientReq,
+        ca: Option<Bytes>,
+        client_cert: Option<Bytes>,
+        client_key: Option<Bytes>,
     ) -> HaliaResult<()> {
-        let app = HttpClient::new(app_id, req).await?;
+        let app = HttpClient::new(app_id, req, ca, client_cert, client_key).await?;
         GLOBAL_APP_MANAGER.create(&TYPE, app.id.clone()).await;
         self.apps.insert(app.id.clone(), app);
         Ok(())

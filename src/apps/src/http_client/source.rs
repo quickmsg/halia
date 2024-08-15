@@ -1,10 +1,13 @@
-use common::{error::{HaliaError, HaliaResult}, get_id, persistence, ref_info::RefInfo};
+use common::{
+    error::{HaliaError, HaliaResult},
+    get_id, persistence,
+    ref_info::RefInfo,
+};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{trace, warn};
 use types::apps::http_client::{
-    CreateUpdateSinkReq, CreateUpdateSourceReq, HttpClientConf, SearchSinksItemResp,
-    SearchSourcesItemResp, SinkConf,
+    CreateUpdateSourceReq, HttpClientConf, SearchSourcesItemResp, SinkConf, SourceConf,
 };
 use uuid::Uuid;
 
@@ -62,6 +65,7 @@ impl Source {
         SearchSourcesItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
@@ -80,14 +84,12 @@ impl Source {
         self.conf = req;
         if self.on && restart {}
 
-        todo!()
+        Ok(())
     }
 
     pub async fn delete(&mut self, app_id: &Uuid) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
-            return Err(common::error::HaliaError::Common(
-                "引用中，不能删除".to_owned(),
-            ));
+            return Err(HaliaError::DeleteRefing);
         }
         persistence::apps::http_client::delete_sink(app_id, &self.id).await?;
 
@@ -110,7 +112,7 @@ impl Source {
         base_conf: HttpClientConf,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
-        conf: SinkConf,
+        conf: SourceConf,
     ) {
         tokio::spawn(async move {
             loop {

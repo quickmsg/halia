@@ -1,9 +1,10 @@
 use apps::http_client::manager::GLOBAL_HTTP_CLIENT_MANAGER;
 use axum::{
-    extract::{Path, Query},
+    extract::{multipart, Multipart, Path, Query},
     routing::{self, get, post, put},
     Json, Router,
 };
+use bytes::Bytes;
 use types::{
     apps::http_client::{
         CreateUpdateHttpClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
@@ -13,7 +14,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{AppResult, AppSuccess};
+use crate::{AppError, AppResult, AppSuccess};
 
 pub fn http_client_routes() -> Router {
     Router::new()
@@ -25,17 +26,6 @@ pub fn http_client_routes() -> Router {
         .nest(
             "/:app_id",
             Router::new().nest(
-                "/sink",
-                Router::new()
-                    .route("/", post(create_sink))
-                    .route("/", get(search_sinks))
-                    .route("/:sink_id", put(update_sink))
-                    .route("/:sink_id", routing::delete(delete_sink)),
-            ),
-        )
-        .nest(
-            "/:app_id",
-            Router::new().nest(
                 "/source",
                 Router::new()
                     .route("/", post(create_source))
@@ -44,11 +34,72 @@ pub fn http_client_routes() -> Router {
                     .route("/:source_id", routing::delete(delete_source)),
             ),
         )
+        .nest(
+            "/:app_id",
+            Router::new().nest(
+                "/sink",
+                Router::new()
+                    .route("/", post(create_sink))
+                    .route("/", get(search_sinks))
+                    .route("/:sink_id", put(update_sink))
+                    .route("/:sink_id", routing::delete(delete_sink)),
+            ),
+        )
 }
 
-async fn create(Json(req): Json<CreateUpdateHttpClientReq>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_HTTP_CLIENT_MANAGER.create(None, req).await?;
-    Ok(AppSuccess::empty())
+async fn create(mut multipart: Multipart) -> AppResult<AppSuccess<()>> {
+    let mut req: Option<CreateUpdateHttpClientReq> = None;
+    let mut ca: Option<Bytes> = None;
+    let mut client_cert: Option<Bytes> = None;
+    let mut client_key: Option<Bytes> = None;
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        match field.name() {
+            Some(name) => match name {
+                "req" => match field.bytes().await {
+                    Ok(data) => match serde_json::from_slice::<CreateUpdateHttpClientReq>(&data) {
+                        Ok(json_req) => req = Some(json_req),
+                        Err(e) => {
+                            return Err(AppError::new(format!("序列化错误:{}", e.to_string())))
+                        }
+                    },
+                    Err(e) => return Err(AppError::new(e.to_string())),
+                },
+                "ca" => match field.bytes().await {
+                    Ok(data) => ca = Some(data),
+                    Err(e) => return Err(AppError::new(e.to_string())),
+                },
+
+                "client_cert" => match field.bytes().await {
+                    Ok(data) => client_cert = Some(data),
+                    Err(e) => return Err(AppError::new(e.to_string())),
+                },
+
+                "client_key" => match field.bytes().await {
+                    Ok(data) => client_key = Some(data),
+                    Err(e) => return Err(AppError::new(e.to_string())),
+                },
+
+                _ => {
+                    return Err(AppError {
+                        code: 1,
+                        data: format!("多余的字段: {}。", name).to_owned(),
+                    })
+                }
+            },
+            None => return Err(AppError::new("缺少字段名".to_owned())),
+        }
+    }
+
+    match req {
+        Some(req) => match GLOBAL_HTTP_CLIENT_MANAGER
+            .create(None, req, ca, client_cert, client_key)
+            .await
+        {
+            Ok(_) => Ok(AppSuccess::empty()),
+            Err(e) => Err(e.into()),
+        },
+        None => Err(AppError::new("缺少配置".to_owned())),
+    }
 }
 
 async fn update(

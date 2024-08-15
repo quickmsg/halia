@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use bytes::Bytes;
 use common::{
     check_and_set_on_true,
     error::{HaliaError, HaliaResult},
@@ -49,7 +50,13 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub async fn new(app_id: Option<Uuid>, req: CreateUpdateHttpClientReq) -> HaliaResult<Self> {
+    pub async fn new(
+        app_id: Option<Uuid>,
+        req: CreateUpdateHttpClientReq,
+        ca: Option<Bytes>,
+        client_cert: Option<Bytes>,
+        client_key: Option<Bytes>,
+    ) -> HaliaResult<Self> {
         HttpClient::check_conf(&req)?;
 
         let (app_id, new) = get_id(app_id);

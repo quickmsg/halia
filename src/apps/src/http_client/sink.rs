@@ -47,6 +47,7 @@ impl Sink {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
