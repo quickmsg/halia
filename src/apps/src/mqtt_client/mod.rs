@@ -61,6 +61,8 @@ macro_rules! sink_not_found_err {
 
 impl MqttClient {
     pub async fn new(app_id: Option<Uuid>, req: CreateUpdateMqttClientReq) -> HaliaResult<Self> {
+        MqttClient::check_conf(&req)?;
+
         let (app_id, new) = get_id(app_id);
         if new {
             persistence::apps::mqtt_client::create(
@@ -84,43 +86,57 @@ impl MqttClient {
         })
     }
 
-    pub async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::apps::mqtt_client::read_sources(&self.id).await {
-            Ok(datas) => {
-                for data in datas {
-                    if data.len() == 0 {
-                        continue;
-                    }
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 2);
-                    let source_id = Uuid::from_str(items[0]).unwrap();
-                    self.create_source(Some(source_id), serde_json::from_str(items[1]).unwrap())
-                        .await?;
-                }
-            }
-            Err(e) => return Err(e.into()),
+    fn check_conf(req: &CreateUpdateMqttClientReq) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateMqttClientReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::NameExists);
         }
 
-        match persistence::apps::mqtt_client::read_sinks(&self.id).await {
-            Ok(datas) => {
-                for data in datas {
-                    if data.len() == 0 {
-                        continue;
-                    }
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 2);
-                    let sink_id = Uuid::from_str(items[0]).unwrap();
-                    self.create_sink(Some(sink_id), serde_json::from_str(items[1]).unwrap())
-                        .await?;
-                }
+        if self.conf.ext.host == req.ext.host && self.conf.ext.port == req.ext.port {
+            return Err(HaliaError::AddressExists);
+        }
+
+        Ok(())
+    }
+
+    pub async fn recover(&mut self) -> HaliaResult<()> {
+        let source_datas = persistence::apps::mqtt_client::read_sources(&self.id).await?;
+        for source_data in source_datas {
+            if source_data.len() == 0 {
+                continue;
             }
-            Err(e) => return Err(e.into()),
+            let items = source_data
+                .split(persistence::DELIMITER)
+                .collect::<Vec<&str>>();
+            assert_eq!(items.len(), 2);
+            let source_id = Uuid::from_str(items[0]).unwrap();
+            self.create_source(Some(source_id), serde_json::from_str(items[1]).unwrap())
+                .await?;
+        }
+
+        let sink_datas = persistence::apps::mqtt_client::read_sinks(&self.id).await?;
+        for sink_data in sink_datas {
+            if sink_data.len() == 0 {
+                continue;
+            }
+            let items = sink_data
+                .split(persistence::DELIMITER)
+                .collect::<Vec<&str>>();
+            assert_eq!(items.len(), 2);
+            let sink_id = Uuid::from_str(items[0]).unwrap();
+            self.create_sink(Some(sink_id), serde_json::from_str(items[1]).unwrap())
+                .await?;
         }
 
         Ok(())
     }
 
     pub async fn update(&mut self, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
+        MqttClient::check_conf(&req)?;
+
         persistence::apps::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
@@ -227,49 +243,54 @@ impl MqttClient {
                     }
 
                     event = event_loop.poll() => {
-                        match event {
-                            Ok(Event::Incoming(Incoming::Publish(p))) => {
-                                match MessageBatch::from_json(p.payload) {
-                                    Ok(msg) => {
-                                        for source in sources.write().await.iter_mut() {
-                                            if matches(&source.conf.ext.topic, &p.topic) {
-                                                match &source.mb_tx {
-                                                    Some(tx) => {
-                                                        let _ = tx.send(msg.clone());
-                                                    }
-                                                    None => {}
-                                                }
-                                            }
-                                        }
-                                    }
-                                    Err(e) => error!("Failed to decode msg:{}", e),
-                                }
-                            }
-                            Ok(_) => (),
-                            Err(e) => {
-                                match e {
-                                    rumqttc::ConnectionError::MqttState(e) => {
-                                        error!("mqtt connection refused:{:?}", e);
-                                    }
-                                    rumqttc::ConnectionError::NetworkTimeout => todo!(),
-                                    rumqttc::ConnectionError::FlushTimeout => todo!(),
-                                    rumqttc::ConnectionError::Tls(_) => todo!(),
-                                    rumqttc::ConnectionError::Io(e) => {
-                                        error!("mqtt connection refused:{:?}", e);
-                                    }
-                                    rumqttc::ConnectionError::ConnectionRefused(e) => {
-                                        error!("mqtt connection refused:{:?}", e);
-                                    }
-                                    rumqttc::ConnectionError::NotConnAck(_) => todo!(),
-                                    rumqttc::ConnectionError::RequestsDone => todo!(),
-                                }
-                                time::sleep(10 * Duration::SECOND).await;
-                            }
-                        }
+                        MqttClient::handle_v311_event(event, &sources).await;
                     }
                 }
             }
         });
+    }
+
+    async fn handle_v311_event(
+        event: Result<Event, rumqttc::ConnectionError>,
+        sources: &Arc<RwLock<Vec<Source>>>,
+    ) {
+        match event {
+            Ok(Event::Incoming(Incoming::Publish(p))) => match MessageBatch::from_json(p.payload) {
+                Ok(msg) => {
+                    for source in sources.write().await.iter_mut() {
+                        if matches(&source.conf.ext.topic, &p.topic) {
+                            match &source.mb_tx {
+                                Some(tx) => {
+                                    let _ = tx.send(msg.clone());
+                                }
+                                None => {}
+                            }
+                        }
+                    }
+                }
+                Err(e) => error!("Failed to decode msg:{}", e),
+            },
+            Ok(_) => (),
+            Err(e) => {
+                match e {
+                    rumqttc::ConnectionError::MqttState(e) => {
+                        error!("mqtt connection refused:{:?}", e);
+                    }
+                    rumqttc::ConnectionError::NetworkTimeout => todo!(),
+                    rumqttc::ConnectionError::FlushTimeout => todo!(),
+                    rumqttc::ConnectionError::Tls(_) => todo!(),
+                    rumqttc::ConnectionError::Io(e) => {
+                        error!("mqtt connection refused:{:?}", e);
+                    }
+                    rumqttc::ConnectionError::ConnectionRefused(e) => {
+                        error!("mqtt connection refused:{:?}", e);
+                    }
+                    rumqttc::ConnectionError::NotConnAck(_) => todo!(),
+                    rumqttc::ConnectionError::RequestsDone => todo!(),
+                }
+                time::sleep(10 * Duration::SECOND).await;
+            }
+        }
     }
 
     async fn start_v50(&mut self) {
@@ -425,18 +446,16 @@ impl MqttClient {
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        let rx = match self
+        match self
             .sources
             .write()
             .await
             .iter_mut()
             .find(|source| source.id == *source_id)
         {
-            Some(source) => source.get_mb_rx(rule_id),
-            None => return Err(HaliaError::NotFound("源".to_owned(), source_id.clone())),
-        };
-
-        Ok(rx)
+            Some(source) => Ok(source.get_mb_rx(rule_id)),
+            None => return source_not_found_err!(source_id.clone()),
+        }
     }
 
     async fn del_source_mb_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
@@ -451,7 +470,7 @@ impl MqttClient {
                 source.del_mb_rx(rule_id);
                 Ok(())
             }
-            None => Err(HaliaError::NotFound("源".to_owned(), source_id.clone())),
+            None => source_not_found_err!(source_id.clone()),
         }
     }
 
@@ -460,9 +479,13 @@ impl MqttClient {
         source_id: Option<Uuid>,
         req: CreateUpdateSourceReq,
     ) -> HaliaResult<()> {
+        for source in self.sources.read().await.iter() {
+            source.check_duplicate(&req)?;
+        }
+
         match Source::new(&self.id, source_id, req).await {
             Ok(source) => {
-                if self.stop_signal_tx.is_some() {
+                if self.on {
                     match self.conf.ext.version {
                         types::apps::mqtt_client::Version::V311 => {
                             if let Err(e) = self
@@ -535,7 +558,7 @@ impl MqttClient {
         {
             Some(source) => match source.update(&self.id, req).await {
                 Ok(restart) => {
-                    if self.stop_signal_tx.is_some() && restart {
+                    if self.on && restart {
                         match self.conf.ext.version {
                             types::apps::mqtt_client::Version::V311 => {
                                 if let Err(e) = self

@@ -4,17 +4,14 @@ use common::{
     ref_info::RefInfo,
 };
 use message::MessageBatch;
+use rumqttc::valid_topic;
 use tokio::sync::broadcast;
-use types::{
-    apps::mqtt_client::{CreateUpdateSourceReq, SearchSourcesItemResp},
-    RuleRef,
-};
+use types::apps::mqtt_client::{CreateUpdateSourceReq, SearchSourcesItemResp};
 use uuid::Uuid;
 
 pub struct Source {
     pub id: Uuid,
     pub conf: CreateUpdateSourceReq,
-
     pub ref_info: RefInfo,
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
@@ -25,6 +22,8 @@ impl Source {
         source_id: Option<Uuid>,
         req: CreateUpdateSourceReq,
     ) -> HaliaResult<Self> {
+        Source::check_conf(&req)?;
+
         let (source_id, new) = get_id(source_id);
         if new {
             persistence::apps::mqtt_client::create_source(
@@ -43,18 +42,37 @@ impl Source {
         })
     }
 
+    fn check_conf(req: &CreateUpdateSourceReq) -> HaliaResult<()> {
+        if !valid_topic(&req.ext.topic) {
+            return Err(HaliaError::Common("topic不合法".to_owned()));
+        }
+
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        if self.conf.ext.topic == req.ext.topic {
+            return Err(HaliaError::Common("主题重复！".to_owned()));
+        }
+
+        Ok(())
+    }
+
     pub fn search(&self) -> SearchSourcesItemResp {
         SearchSourcesItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
-            rule_ref: RuleRef {
-                rule_ref_cnt: self.ref_info.ref_cnt(),
-                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
-            },
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
     pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSourceReq) -> HaliaResult<bool> {
+        Source::check_conf(&req)?;
+
         persistence::apps::mqtt_client::update_source(
             app_id,
             &self.id,
@@ -66,7 +84,6 @@ impl Source {
         if self.conf.ext != req.ext {
             restart = true;
         }
-
         self.conf = req;
 
         Ok(restart)

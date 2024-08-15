@@ -11,14 +11,11 @@ use rumqttc::{
         self,
         mqttbytes::{self, v5::PublishProperties},
     },
-    AsyncClient, QoS,
+    valid_topic, AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{debug, trace};
-use types::{
-    apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp},
-    RuleRef,
-};
+use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
 pub struct Sink {
@@ -40,6 +37,8 @@ impl Sink {
         sink_id: Option<Uuid>,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<Self> {
+        Sink::check_conf(&req)?;
+
         let (sink_id, new) = get_id(sink_id);
         if new {
             persistence::apps::mqtt_client::create_sink(
@@ -63,18 +62,37 @@ impl Sink {
         })
     }
 
+    fn check_conf(req: &CreateUpdateSinkReq) -> HaliaResult<()> {
+        if !valid_topic(&req.ext.topic) {
+            return Err(HaliaError::Common("topic不合法！".to_owned()));
+        }
+
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        if self.conf.ext.topic == req.ext.topic {
+            return Err(HaliaError::Common("主题重复！".to_owned()));
+        }
+
+        Ok(())
+    }
+
     pub fn search(&self) -> SearchSinksItemResp {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
-            rule_ref: RuleRef {
-                rule_ref_cnt: self.ref_info.ref_cnt(),
-                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
-            },
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
     pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<bool> {
+        Sink::check_conf(&req)?;
+
         persistence::apps::mqtt_client::update_sink(
             app_id,
             &self.id,

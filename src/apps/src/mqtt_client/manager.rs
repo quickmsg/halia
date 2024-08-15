@@ -40,6 +40,9 @@ impl Manager {
         app_id: Option<Uuid>,
         req: CreateUpdateMqttClientReq,
     ) -> HaliaResult<()> {
+        for app in self.apps.iter() {
+            app.value().check_duplicate(&req)?;
+        }
         let app = MqttClient::new(app_id, req).await?;
         GLOBAL_APP_MANAGER.create(&TYPE, app.id.clone()).await;
         self.apps.insert(app.id.clone(), app);
@@ -62,6 +65,12 @@ impl Manager {
     }
 
     pub async fn update(&self, app_id: Uuid, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
+        for app in self.apps.iter() {
+            if app_id != *app.key() {
+                app.value().check_duplicate(&req)?;
+            }
+        }
+
         match self.apps.get_mut(&app_id) {
             Some(mut app) => app.update(req).await,
             None => mqtt_client_not_find_err!(app_id),

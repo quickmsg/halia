@@ -34,6 +34,11 @@ impl DeviceManager {
         self.devices.write().await.push((typ, device_id));
     }
 
+    // todo
+    pub fn check_duplicate_name(&self, name: &str) -> bool {
+        true
+    }
+
     pub async fn get_summary(&self) -> Summary {
         let mut total = 0;
         let mut running_cnt = 0;

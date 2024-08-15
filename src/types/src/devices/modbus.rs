@@ -740,6 +740,26 @@ impl DataType {
                     }
                     Err(e) => bail!(e),
                 },
+                serde_json::Value::Array(array) => {
+                    let mut data = vec![];
+                    for item in array.iter() {
+                        match item {
+                            serde_json::Value::Number(n) => match n.as_u64() {
+                                Some(n) => {
+                                    if n > 255 {
+                                        bail!("数字大于255")
+                                    }
+                                    data.push(n as u8);
+                                }
+                                None => bail!("数据含有非数字"),
+                            },
+                            _ => bail!("数据含有非number数字"),
+                        }
+                    }
+
+                    Ok(data)
+                }
+                // serde_json::Value::Object(_) => todo!(),
                 _ => bail!("不支持的类型"),
             },
         }
@@ -764,29 +784,6 @@ pub enum Type {
     Bytes,
 }
 
-impl TryFrom<&str> for Type {
-    type Error = ();
-
-    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        match value {
-            "bool" => Ok(Type::Bool),
-            "int8" => Ok(Type::Int8),
-            "uint8" => Ok(Type::Uint8),
-            "int16" => Ok(Type::Int16),
-            "uint16" => Ok(Type::Uint16),
-            "int32" => Ok(Type::Int32),
-            "uint32" => Ok(Type::Uint32),
-            "int64" => Ok(Type::Int64),
-            "uint64" => Ok(Type::Uint64),
-            "float32" => Ok(Type::Float32),
-            "float64" => Ok(Type::Float64),
-            "string" => Ok(Type::String),
-            "bytes" => Ok(Type::Bytes),
-            _ => Err(()),
-        }
-    }
-}
-
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Endian {
@@ -802,20 +799,6 @@ pub enum Area {
     Coils,            // bit 读写
     InputRegisters,   // 16-bit word 只读
     HoldingRegisters, // 16-bit word 读写
-}
-
-impl TryFrom<&str> for Area {
-    type Error = ();
-
-    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        match value {
-            "input_discrete" => Ok(Area::InputDiscrete),
-            "coils" => Ok(Area::Coils),
-            "input_registers" => Ok(Area::InputRegisters),
-            "holding_registers" => Ok(Area::HoldingRegisters),
-            _ => Err(()),
-        }
-    }
 }
 
 #[derive(Serialize)]
