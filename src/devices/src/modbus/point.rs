@@ -16,10 +16,7 @@ use tokio::{
     time,
 };
 use tracing::{debug, warn};
-use types::{
-    devices::modbus::{Area, CreateUpdatePointReq, SearchPointsItemResp},
-    RuleRef,
-};
+use types::devices::modbus::{Area, CreateUpdatePointReq, SearchPointsItemResp};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -82,7 +79,7 @@ impl Point {
 
     pub fn check_duplicate(&self, req: &CreateUpdatePointReq) -> HaliaResult<()> {
         if self.conf.base.name == req.base.name {
-            return Err(HaliaError::Common(format!("名称{}已存在！", req.base.name)));
+            return Err(HaliaError::NameExists);
         }
 
         if self.conf.ext.data_type == req.ext.data_type
@@ -90,7 +87,7 @@ impl Point {
             && self.conf.ext.area == req.ext.area
             && self.conf.ext.address == req.ext.address
         {
-            return Err(HaliaError::Common("该点位地址已存在！".to_owned()));
+            return Err(HaliaError::AddressExists);
         }
 
         Ok(())
@@ -102,10 +99,7 @@ impl Point {
             conf: self.conf.clone(),
             value: self.value.clone(),
             err_info: self.err_info.clone(),
-            rule_ref: RuleRef {
-                rule_ref_cnt: self.ref_info.ref_cnt(),
-                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
-            },
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 

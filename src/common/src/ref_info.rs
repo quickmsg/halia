@@ -1,4 +1,5 @@
 use tracing::debug;
+use types::RuleRef;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -57,5 +58,12 @@ impl RefInfo {
             true => acc + 1,
             false => acc,
         })
+    }
+
+    pub fn get_rule_ref(&self) -> RuleRef {
+        RuleRef {
+            rule_ref_cnt: self.ref_cnt(),
+            rule_active_ref_cnt: self.active_ref_cnt(),
+        }
     }
 }

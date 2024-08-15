@@ -67,11 +67,15 @@ impl API {
     }
 
     fn check_conf(req: &CreateUpdateAPIReq) -> HaliaResult<()> {
-        todo!()
+        Ok(())
     }
 
     pub fn check_duplicate(&self, req: &CreateUpdateAPIReq) -> HaliaResult<()> {
-        todo!()
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        Ok(())
     }
 
     pub fn search(&self) -> SearchAPIsItemResp {
@@ -216,10 +220,6 @@ impl API {
                 rx
             }
         }
-    }
-
-    pub fn del_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.del_ref(rule_id);
     }
 
     pub fn del_mb_rx(&mut self, rule_id: &Uuid) {

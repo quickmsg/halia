@@ -12,10 +12,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{
-    devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp, SinkConf},
-    RuleRef,
-};
+use types::devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp, SinkConf};
 use uuid::Uuid;
 
 use super::WritePointEvent;
@@ -73,7 +70,7 @@ impl Sink {
 
     pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
         if self.conf.base.name == req.base.name {
-            return Err(HaliaError::Common(format!("名称{}已存在！", req.base.name)));
+            return Err(HaliaError::NameExists);
         }
 
         Ok(())
@@ -83,10 +80,7 @@ impl Sink {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
-            rule_ref: RuleRef {
-                rule_ref_cnt: self.ref_info.ref_cnt(),
-                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
-            },
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
@@ -105,23 +99,23 @@ impl Sink {
 
         self.conf = req;
         if restart {
-            self.stop_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(())
-                .await
-                .unwrap();
+            match &self.stop_signal_tx {
+                Some(stop_signal_tx) => {
+                    stop_signal_tx.send(()).await.unwrap();
 
-            let (stop_signal_rx, publish_rx, tx, device_err) =
-                self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(
-                stop_signal_rx,
-                publish_rx,
-                tx,
-                self.conf.sink.clone(),
-                device_err,
-            )
-            .await;
+                    let (stop_signal_rx, publish_rx, tx, device_err) =
+                        self.join_handle.take().unwrap().await.unwrap();
+                    self.event_loop(
+                        stop_signal_rx,
+                        publish_rx,
+                        tx,
+                        self.conf.sink.clone(),
+                        device_err,
+                    )
+                    .await;
+                }
+                None => {}
+            }
         }
         Ok(())
     }

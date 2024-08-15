@@ -617,7 +617,7 @@ impl MqttClient {
             .iter_mut()
             .find(|source| source.id == *source_id)
         {
-            Some(source) => Ok(source.add_ref(rule_id)),
+            Some(source) => Ok(source.ref_info.add_ref(rule_id)),
             None => source_not_found_err!(source_id.clone()),
         }
     }

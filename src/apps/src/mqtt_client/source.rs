@@ -74,15 +74,11 @@ impl Source {
 
     pub async fn delete(&self, app_id: &Uuid) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
-            return Err(HaliaError::Common("引用中，无法删除。".to_owned()));
+            return Err(HaliaError::DeleteRefing);
         }
         persistence::apps::mqtt_client::delete_source(app_id, &self.id).await?;
 
         Ok(())
-    }
-
-    pub fn add_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.add_ref(rule_id);
     }
 
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
@@ -102,9 +98,5 @@ impl Source {
         if self.ref_info.can_stop() {
             self.mb_tx = None;
         }
-    }
-
-    pub fn del_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.del_ref(rule_id)
     }
 }
