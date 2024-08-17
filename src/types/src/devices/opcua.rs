@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::BaseConf;
+use crate::{BaseConf, RuleRef};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateOpcuaReq {
@@ -85,6 +85,7 @@ pub struct CreateUpdateSubscriptionReq {
 pub struct Subscriptionconf {
     // 秒
     pub publishing_interval: u64,
+
     pub lifetime_count: u32,
     pub max_keep_alive_count: u32,
     pub max_notifications_per_publish: u32,
@@ -105,6 +106,7 @@ pub struct SearchSubscriptionsItemResp {
     pub id: Uuid,
     #[serde(flatten)]
     pub conf: CreateUpdateSubscriptionReq,
+    pub rule_ref: RuleRef,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

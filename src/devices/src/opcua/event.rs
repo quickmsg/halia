@@ -14,7 +14,7 @@ pub struct Event {
     on: bool,
     err: Option<String>,
 
-    ref_info: RefInfo,
+    pub ref_info: RefInfo,
 }
 
 impl Event {
@@ -94,13 +94,5 @@ impl Event {
     pub fn stop(&mut self) -> HaliaResult<()> {
         check_and_set_on_false!(self);
         todo!()
-    }
-
-    pub fn can_stop(&self) -> bool {
-        self.ref_info.can_stop()
-    }
-
-    pub fn can_delete(&self) -> bool {
-        self.ref_info.can_delete()
     }
 }

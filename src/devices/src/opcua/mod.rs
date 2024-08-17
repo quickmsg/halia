@@ -1,6 +1,7 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
 use common::{
+    check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
     get_id,
     persistence::{self, Status},
@@ -43,8 +44,31 @@ pub mod manager;
 mod sink;
 mod subscription;
 
-fn group_not_find_err(group_id: Uuid) -> HaliaError {
-    HaliaError::NotFound("组".to_owned(), group_id)
+macro_rules! group_not_found_err {
+    ($group_id:expr) => {
+        Err(HaliaError::NotFound("opcua设备组".to_owned(), $group_id))
+    };
+}
+
+macro_rules! subscription_not_found_err {
+    ($subscription_id:expr) => {
+        Err(HaliaError::NotFound(
+            "opcua设备订阅".to_owned(),
+            $subscription_id,
+        ))
+    };
+}
+
+macro_rules! event_not_found_err {
+    ($event_id:expr) => {
+        Err(HaliaError::NotFound("opcua设备事件".to_owned(), $event_id))
+    };
+}
+
+macro_rules! sink_not_found_err {
+    ($sink_id:expr) => {
+        Err(HaliaError::NotFound("opcua设备动作".to_owned(), $sink_id))
+    };
 }
 
 struct Opcua {
@@ -169,11 +193,7 @@ impl Opcua {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        if self.on {
-            return Ok(());
-        } else {
-            self.on = true;
-        }
+        check_and_set_on_true!(self);
 
         persistence::devices::update_device_status(&self.id, Status::Runing).await?;
 
@@ -223,11 +243,29 @@ impl Opcua {
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        if !self.on {
-            return Ok(());
-        } else {
-            self.on = false;
+        if self
+            .groups
+            .read()
+            .await
+            .iter()
+            .any(|group| !group.ref_info.can_stop())
+        {
+            return Err(HaliaError::Common("有组被启动规则引用中！".to_owned()));
         }
+
+        if self
+            .subscriptions
+            .iter()
+            .any(|subscription| !subscription.ref_info.can_stop())
+        {
+            return Err(HaliaError::Common("有订阅被启动规则引用中！".to_owned()));
+        }
+
+        if self.events.iter().any(|event| !event.ref_info.can_stop()) {
+            return Err(HaliaError::Common("有事件被启动规则引用中！".to_owned()));
+        }
+
+        check_and_set_on_false!(self);
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
 
@@ -327,7 +365,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update(&self.id, req).await,
-            None => Err(group_not_find_err(group_id)),
+            None => group_not_found_err!(group_id),
         }
     }
 
@@ -342,7 +380,7 @@ impl Opcua {
             Some(group) => {
                 group.delete().await?;
             }
-            None => return Err(group_not_find_err(group_id)),
+            None => return group_not_found_err!(group_id),
         }
 
         self.groups
@@ -366,7 +404,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.create_variable(&self.id, variable_id, req).await,
-            None => Err(group_not_find_err(group_id)),
+            None => group_not_found_err!(group_id),
         }
     }
 
@@ -383,7 +421,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => Ok(group.read_variables(pagination).await),
-            None => Err(group_not_find_err(group_id)),
+            None => group_not_found_err!(group_id),
         }
     }
 
@@ -401,7 +439,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update_variable(&self.id, variable_id, req).await,
-            None => Err(group_not_find_err(group_id)),
+            None => group_not_found_err!(group_id),
         }
     }
 
@@ -418,7 +456,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.delete_variable(&self.id, variable_id).await,
-            None => Err(group_not_find_err(group_id)),
+            None => group_not_found_err!(group_id),
         }
     }
 
@@ -430,8 +468,8 @@ impl Opcua {
             .iter_mut()
             .find(|group| group.id == *group_id)
         {
-            Some(group) => Ok(group.add_ref(rule_id)),
-            None => Err(group_not_find_err(group_id.clone())),
+            Some(group) => Ok(group.ref_info.add_ref(rule_id)),
+            None => group_not_found_err!(group_id.clone()),
         }
     }
 
@@ -448,7 +486,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.get_mb_rx(rule_id)),
-            None => Err(group_not_find_err(group_id.clone())),
+            None => group_not_found_err!(group_id.clone()),
         }
     }
 
@@ -461,7 +499,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.del_mb_rx(rule_id)),
-            None => Err(group_not_find_err(group_id.clone())),
+            None => group_not_found_err!(group_id.clone()),
         }
     }
 
@@ -473,8 +511,8 @@ impl Opcua {
             .iter_mut()
             .find(|group| group.id == *group_id)
         {
-            Some(group) => Ok(group.del_ref(rule_id)),
-            None => Err(group_not_find_err(group_id.clone())),
+            Some(group) => Ok(group.ref_info.del_ref(rule_id)),
+            None => group_not_found_err!(group_id.clone()),
         }
     }
 
@@ -483,18 +521,19 @@ impl Opcua {
         subscription_id: Option<Uuid>,
         req: CreateUpdateSubscriptionReq,
     ) -> HaliaResult<()> {
-        match Subscription::new(&self.id, subscription_id, req).await {
-            Ok(mut subscription) => {
-                if self.on && self.session.read().await.is_some() {
-                    subscription
-                        .start(self.session.read().await.as_ref().unwrap().clone())
-                        .await;
-                }
-                self.subscriptions.push(subscription);
-                Ok(())
-            }
-            Err(e) => Err(e),
+        for subscription in self.subscriptions.iter() {
+            subscription.check_duplicate(&req)?;
         }
+
+        let mut subscription = Subscription::new(&self.id, subscription_id, req).await?;
+        if self.on && self.session.read().await.is_some() {
+            _ = subscription
+                .start(self.session.read().await.as_ref().unwrap().clone())
+                .await;
+        }
+        self.subscriptions.push(subscription);
+
+        Ok(())
     }
 
     async fn search_subscriptions(
@@ -602,7 +641,7 @@ impl Opcua {
     async fn update_event(&mut self, event_id: Uuid, req: CreateUpdateEventReq) -> HaliaResult<()> {
         match self.events.iter_mut().find(|event| event.id == event_id) {
             Some(event) => event.update(&self.id, req).await,
-            None => Err(group_not_find_err(event_id)),
+            None => event_not_found_err!(event_id),
         }
     }
 

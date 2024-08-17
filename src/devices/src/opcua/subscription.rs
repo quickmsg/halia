@@ -1,11 +1,18 @@
-use anyhow::Result;
 use std::{sync::Arc, time::Duration};
 
-use common::{error::HaliaResult, get_id, persistence};
+use anyhow::Result;
+use common::{
+    del_mb_rx,
+    error::{HaliaError, HaliaResult},
+    get_id, get_mb_rx, persistence,
+    ref_info::RefInfo,
+};
+use message::MessageBatch;
 use opcua::{
     client::{DataChangeCallback, MonitoredItem, Session},
     types::{DataValue, MonitoredItemCreateRequest, NodeId, TimestampsToReturn},
 };
+use tokio::sync::broadcast;
 use types::devices::opcua::{CreateUpdateSubscriptionReq, SearchSubscriptionsItemResp};
 use uuid::Uuid;
 
@@ -14,6 +21,9 @@ pub struct Subscription {
     conf: CreateUpdateSubscriptionReq,
 
     on: bool,
+
+    pub ref_info: RefInfo,
+    mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
 impl Subscription {
@@ -38,14 +48,28 @@ impl Subscription {
             id: subscription_id,
             conf: req,
             on: false,
+            ref_info: RefInfo::new(),
+            mb_tx: None,
         })
     }
 
     fn check_conf(req: &CreateUpdateSubscriptionReq) -> HaliaResult<()> {
+        if req.ext.publishing_interval == 0 {
+            return Err(HaliaError::Common("发布间隔必须大于0!".to_owned()));
+        }
+
         Ok(())
     }
 
     pub fn check_duplicate(&self, req: &CreateUpdateSubscriptionReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        if self.conf.ext.monitored_items == req.ext.monitored_items {
+            return Err(HaliaError::Common("点位重复！".to_owned()));
+        }
+
         Ok(())
     }
 
@@ -53,6 +77,7 @@ impl Subscription {
         SearchSubscriptionsItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
@@ -86,6 +111,14 @@ impl Subscription {
             .await?;
 
         Ok(())
+    }
+
+    pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+        get_mb_rx!(self, rule_id)
+    }
+
+    pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
+        del_mb_rx!(self, rule_id);
     }
 }
 
