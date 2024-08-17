@@ -6,9 +6,9 @@ use crate::BaseConf;
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateOpcuaReq {
     #[serde(flatten)]
-    pub base_conf: BaseConf,
+    pub base: BaseConf,
     #[serde(flatten)]
-    pub opcua_conf: OpcuaConf,
+    pub ext: OpcuaConf,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -134,7 +134,6 @@ pub struct EventConf {
     pub max_notifications_per_publish: u32,
     pub priority: u8,
     pub publishing_enabled: bool,
-
     // todo
 }
 

@@ -74,6 +74,11 @@ impl Point {
     }
 
     fn check_conf(req: &CreateUpdatePointReq) -> HaliaResult<()> {
+        if req.ext.interval == 0 {
+            return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
+        }
+
+        // TODO 其他检查
         Ok(())
     }
 

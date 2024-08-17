@@ -2,7 +2,10 @@
 use std::{str::FromStr, sync::LazyLock};
 
 use coap::manager::GLOBAL_COAP_MANAGER;
-use common::{error::HaliaResult, persistence};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use opcua::manager::GLOBAL_OPCUA_MANAGER;
 use tokio::sync::RwLock;
@@ -34,9 +37,11 @@ impl DeviceManager {
         self.devices.write().await.push((typ, device_id));
     }
 
-    // todo
-    pub fn check_duplicate_name(&self, name: &str) -> bool {
-        true
+    pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> HaliaResult<()> {
+        GLOBAL_MODBUS_MANAGER.check_duplicate_name(device_id, name)?;
+        GLOBAL_COAP_MANAGER.check_duplicate_name(device_id, name)?;
+        GLOBAL_OPCUA_MANAGER.check_duplicate_name(device_id, name)?;
+        Ok(())
     }
 
     pub async fn get_summary(&self) -> Summary {

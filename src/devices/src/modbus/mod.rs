@@ -151,6 +151,17 @@ impl Modbus {
         Ok(())
     }
 
+    // 重复时返回true
+    pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> bool {
+        if let Some(device_id) = device_id {
+            if *device_id == self.id {
+                return false;
+            }
+        }
+
+        self.conf.base.name == name
+    }
+
     pub async fn recover(&mut self) -> HaliaResult<()> {
         match persistence::devices::modbus::read_points(&self.id).await {
             Ok(datas) => {

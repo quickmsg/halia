@@ -40,9 +40,23 @@ impl Manager {
         device_id: Option<Uuid>,
         req: CreateUpdateCoapReq,
     ) -> HaliaResult<()> {
+        GLOBAL_DEVICE_MANAGER.check_duplicate_name(&device_id, &req.base.name)?;
+
         let device = Coap::new(device_id, req).await?;
         GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
         self.devices.insert(device.id.clone(), device);
+        Ok(())
+    }
+
+    pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> HaliaResult<()> {
+        if self
+            .devices
+            .iter()
+            .any(|device| !device.check_duplicate_name(device_id, name))
+        {
+            return Err(HaliaError::NameExists);
+        }
+
         Ok(())
     }
 
@@ -149,7 +163,12 @@ impl Manager {
         }
     }
 
-    pub async fn get_api_mb_rx(&self, device_id: &Uuid, api_id: &Uuid, rule_id: &Uuid ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+    pub async fn get_api_mb_rx(
+        &self,
+        device_id: &Uuid,
+        api_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.devices.get_mut(device_id) {
             Some(mut device) => device.get_api_mb_rx(api_id, rule_id).await,
             None => device_not_find_err!(device_id.clone()),

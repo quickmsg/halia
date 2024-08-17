@@ -40,12 +40,26 @@ impl Manager {
         device_id: Option<Uuid>,
         req: CreateUpdateModbusReq,
     ) -> HaliaResult<()> {
+        GLOBAL_DEVICE_MANAGER.check_duplicate_name(&device_id, &req.base.name)?;
+
         for device in self.devices.iter() {
             device.value().check_duplicate(&req)?;
         }
         let device = Modbus::new(device_id, req).await?;
         GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
         self.devices.insert(device.id.clone(), device);
+        Ok(())
+    }
+
+    pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> HaliaResult<()> {
+        if self
+            .devices
+            .iter()
+            .any(|device| !device.check_duplicate_name(device_id, name))
+        {
+            return Err(HaliaError::NameExists);
+        }
+
         Ok(())
     }
 

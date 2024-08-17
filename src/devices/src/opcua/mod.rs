@@ -82,6 +82,16 @@ impl Opcua {
         })
     }
 
+    pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> bool {
+        if let Some(device_id) = device_id {
+            if *device_id == self.id {
+                return false;
+            }
+        }
+
+        self.conf.base.name == name
+    }
+
     async fn connect(
         opcua_conf: &OpcuaConf,
     ) -> HaliaResult<(Arc<Session>, JoinHandle<StatusCode>)> {
@@ -145,8 +155,8 @@ impl Opcua {
             err: self.err.clone(),
             rtt: 9999,
             conf: SearchDevicesItemConf {
-                base: self.conf.base_conf.clone(),
-                ext: serde_json::json!(self.conf.opcua_conf),
+                base: self.conf.base.clone(),
+                ext: serde_json::json!(self.conf.ext),
             },
         }
     }
@@ -168,9 +178,9 @@ impl Opcua {
     }
 
     async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>) {
-        let opcua_conf = self.conf.opcua_conf.clone();
+        let opcua_conf = self.conf.ext.clone();
         let global_session = self.session.clone();
-        let reconnect = self.conf.opcua_conf.reconnect;
+        let reconnect = self.conf.ext.reconnect;
         let groups = self.groups.clone();
         tokio::spawn(async move {
             loop {
@@ -239,7 +249,7 @@ impl Opcua {
             .await?;
 
         let mut restart = false;
-        if self.conf.opcua_conf != req.opcua_conf {
+        if self.conf.ext != req.ext {
             restart = true;
         }
         self.conf = req;
