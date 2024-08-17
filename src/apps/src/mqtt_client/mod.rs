@@ -420,8 +420,8 @@ impl MqttClient {
             return Err(HaliaError::Common("有源正在被引用中".to_owned()));
         }
 
-        if self.sinks.iter().any(|sink| sink.ref_info.can_delete()) {
-            return Err(HaliaError::Common("有规则正在被引用中".to_owned()));
+        if self.sinks.iter().any(|sink| !sink.ref_info.can_delete()) {
+            return Err(HaliaError::Common("有动作正被规则正在被引用中".to_owned()));
         }
 
         persistence::apps::delete_app(&self.id).await?;
