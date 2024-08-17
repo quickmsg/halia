@@ -7,8 +7,10 @@ use tokio::sync::broadcast;
 use types::{
     devices::{
         opcua::{
-            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-            CreateUpdateSinkReq, SearchGroupVariablesResp, SearchGroupsResp, SearchSinksResp,
+            CreateUpdateEventReq, CreateUpdateGroupReq, CreateUpdateGroupVariableReq,
+            CreateUpdateOpcuaReq, CreateUpdateSinkReq, CreateUpdateSubscriptionReq,
+            SearchEventsResp, SearchGroupVariablesResp, SearchGroupsResp, SearchSinksResp,
+            SearchSubscriptionsResp,
         },
         SearchDevicesItemResp,
     },
@@ -267,6 +269,94 @@ impl Manager {
         }
     }
 
+    pub async fn create_subscription(
+        &self,
+        device_id: Uuid,
+        subscription_id: Option<Uuid>,
+        req: CreateUpdateSubscriptionReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.create_subscription(subscription_id, req).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn search_subscriptions(
+        &self,
+        device_id: Uuid,
+        pagination: Pagination,
+    ) -> HaliaResult<SearchSubscriptionsResp> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.search_subscriptions(pagination).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn update_subscription(
+        &self,
+        device_id: Uuid,
+        subscription_id: Uuid,
+        req: CreateUpdateSubscriptionReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.update_subscription(subscription_id, req).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn delete_subscription(
+        &self,
+        device_id: Uuid,
+        subscription_id: Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.delete_subscription(subscription_id).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn create_event(
+        &self,
+        device_id: Uuid,
+        event_id: Option<Uuid>,
+        req: CreateUpdateEventReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.create_event(event_id, req).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn search_events(
+        &self,
+        device_id: Uuid,
+        pagination: Pagination,
+    ) -> HaliaResult<SearchEventsResp> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.search_events(pagination).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn update_event(
+        &self,
+        device_id: Uuid,
+        event_id: Uuid,
+        req: CreateUpdateEventReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.update_event(event_id, req).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn delete_event(&self, device_id: Uuid, event_id: Uuid) -> HaliaResult<()> {
+        match self.devices.get(&device_id) {
+            Some(device) => device.delete_event(event_id).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
     pub async fn create_sink(
         &self,
         device_id: Uuid,
@@ -308,52 +398,4 @@ impl Manager {
             None => device_not_find_err!(device_id),
         }
     }
-
-    // pub async fn pre_publish(
-    //     &self,
-    //     device_id: &Uuid,
-    //     sink_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(&device_id) {
-    //         Some(mut device) => device.pre_publish(sink_id, rule_id),
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
-
-    // pub async fn publish(
-    //     &self,
-    //     device_id: &Uuid,
-    //     sink_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    //     match self.devices.get_mut(&device_id) {
-    //         Some(mut device) => device.publish(sink_id, rule_id),
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
-
-    // pub async fn pre_unpublish(
-    //     &self,
-    //     device_id: &Uuid,
-    //     sink_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(&device_id) {
-    //         Some(mut device) => device.pre_unpublish(sink_id, rule_id),
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
-
-    // pub async fn unpublish(
-    //     &self,
-    //     device_id: &Uuid,
-    //     sink_id: &Uuid,
-    //     rule_id: &Uuid,
-    // ) -> HaliaResult<()> {
-    //     match self.devices.get_mut(&device_id) {
-    //         Some(mut device) => device.unpublish(sink_id, rule_id),
-    //         None => Err(HaliaError::NotFound),
-    //     }
-    // }
 }

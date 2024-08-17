@@ -74,7 +74,7 @@ pub struct VariableConf {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateSubscription {
+pub struct CreateUpdateSubscriptionReq {
     #[serde(flatten)]
     pub base: BaseConf,
     #[serde(flatten)]
@@ -92,6 +92,19 @@ pub struct Subscriptionconf {
     pub publishing_enalbed: bool,
 
     pub monitored_items: Vec<VariableConf>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSubscriptionsResp {
+    pub total: usize,
+    pub data: Vec<SearchSubscriptionsItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSubscriptionsItemResp {
+    pub id: Uuid,
+    #[serde(flatten)]
+    pub conf: CreateUpdateSubscriptionReq,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -129,12 +142,26 @@ pub struct CreateUpdateEventReq {
 pub struct EventConf {
     // ms
     pub publishing_interval: u64,
+
     pub lifetime_count: u32,
     pub max_keep_alive_count: u32,
     pub max_notifications_per_publish: u32,
     pub priority: u8,
     pub publishing_enabled: bool,
     // todo
+}
+
+#[derive(Serialize)]
+pub struct SearchEventsResp {
+    pub total: usize,
+    pub data: Vec<SearchEventsItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchEventsItemResp {
+    pub id: Uuid,
+    #[serde(flatten)]
+    pub conf: CreateUpdateEventReq,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

@@ -10,6 +10,8 @@ use super::{get_device_dir, get_device_file_path, Status, DELIMITER};
 static SINK_FILE: &str = "sinks";
 static VARIABLE_FILE: &str = "variables";
 static GROUP_FILE: &str = "groups";
+static SUBSCRIPTION_FILE: &str = "subscriptions";
+static EVENT_FILE: &str = "events";
 
 fn get_group_file_path(device_id: &Uuid) -> PathBuf {
     get_device_dir()
@@ -22,6 +24,18 @@ fn get_group_variable_file_path(device_id: &Uuid, group_id: &Uuid) -> PathBuf {
         .join(device_id.to_string())
         .join(group_id.to_string())
         .join(VARIABLE_FILE)
+}
+
+fn get_subscription_file_path(device_id: &Uuid) -> PathBuf {
+    get_device_dir()
+        .join(device_id.to_string())
+        .join(SUBSCRIPTION_FILE)
+}
+
+fn get_event_file_path(device_id: &Uuid) -> PathBuf {
+    get_device_dir()
+        .join(device_id.to_string())
+        .join(EVENT_FILE)
 }
 
 fn get_sink_file_path(device_id: &Uuid) -> PathBuf {
@@ -130,6 +144,67 @@ pub async fn delete_group_variable(
         variable_id,
     )
     .await
+}
+
+pub async fn create_subscription(
+    device_id: &Uuid,
+    subscription_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::create(
+        get_subscription_file_path(device_id),
+        subscription_id,
+        &data,
+    )
+    .await
+}
+
+pub async fn read_subscriptions(device_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_subscription_file_path(device_id)).await
+}
+
+pub async fn update_subscription(
+    device_id: &Uuid,
+    subscription_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::update(
+        get_subscription_file_path(device_id),
+        subscription_id,
+        &data,
+    )
+    .await
+}
+
+pub async fn delete_subscription(
+    device_id: &Uuid,
+    subscription_id: &Uuid,
+) -> Result<(), io::Error> {
+    persistence::delete(get_subscription_file_path(device_id), subscription_id).await
+}
+
+pub async fn create_event(
+    device_id: &Uuid,
+    event_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::create(get_event_file_path(device_id), event_id, &data).await
+}
+
+pub async fn read_events(device_id: &Uuid) -> Result<Vec<String>, io::Error> {
+    persistence::read(get_event_file_path(device_id)).await
+}
+
+pub async fn update_event(
+    device_id: &Uuid,
+    event_id: &Uuid,
+    data: String,
+) -> Result<(), io::Error> {
+    persistence::update(get_event_file_path(device_id), event_id, &data).await
+}
+
+pub async fn delete_event(device_id: &Uuid, event_id: &Uuid) -> Result<(), io::Error> {
+    persistence::delete(get_event_file_path(device_id), event_id).await
 }
 
 pub async fn create_sink(device_id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {

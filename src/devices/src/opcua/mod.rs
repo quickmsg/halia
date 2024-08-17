@@ -5,6 +5,7 @@ use common::{
     get_id,
     persistence::{self, Status},
 };
+use event::Event;
 use group::Group;
 use message::MessageBatch;
 use opcua::{
@@ -12,6 +13,7 @@ use opcua::{
     types::{EndpointDescription, StatusCode},
 };
 use sink::Sink;
+use subscription::Subscription;
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
@@ -22,9 +24,10 @@ use tracing::debug;
 use types::{
     devices::{
         opcua::{
-            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-            CreateUpdateSinkReq, OpcuaConf, SearchGroupVariablesResp, SearchGroupsResp,
-            SearchSinksResp,
+            CreateUpdateEventReq, CreateUpdateGroupReq, CreateUpdateGroupVariableReq,
+            CreateUpdateOpcuaReq, CreateUpdateSinkReq, CreateUpdateSubscriptionReq, OpcuaConf,
+            SearchEventsResp, SearchGroupVariablesResp, SearchGroupsResp, SearchSinksResp,
+            SearchSubscriptionsResp,
         },
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -48,12 +51,14 @@ struct Opcua {
     id: Uuid,
     conf: CreateUpdateOpcuaReq,
 
-    groups: Arc<RwLock<Vec<Group>>>,
-
     on: bool,
     err: Option<String>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     session: Arc<RwLock<Option<Arc<Session>>>>,
+
+    groups: Arc<RwLock<Vec<Group>>>,
+    subscriptions: Vec<Subscription>,
+    events: Vec<Event>,
 
     sinks: Vec<Sink>,
 }
@@ -78,6 +83,8 @@ impl Opcua {
             session: Arc::new(RwLock::new(None)),
             stop_signal_tx: None,
             groups: Arc::new(RwLock::new(vec![])),
+            subscriptions: vec![],
+            events: vec![],
             sinks: vec![],
         })
     }
@@ -469,6 +476,156 @@ impl Opcua {
             Some(group) => Ok(group.del_ref(rule_id)),
             None => Err(group_not_find_err(group_id.clone())),
         }
+    }
+
+    async fn create_subscription(
+        &mut self,
+        subscription_id: Option<Uuid>,
+        req: CreateUpdateSubscriptionReq,
+    ) -> HaliaResult<()> {
+        match Subscription::new(&self.id, subscription_id, req).await {
+            Ok(mut subscription) => {
+                if self.on && self.session.read().await.is_some() {
+                    subscription
+                        .start(self.session.read().await.as_ref().unwrap().clone())
+                        .await;
+                }
+                self.subscriptions.push(subscription);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn search_subscriptions(
+        &self,
+        pagination: Pagination,
+    ) -> HaliaResult<SearchSubscriptionsResp> {
+        let mut data = vec![];
+        for subscription in self
+            .subscriptions
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
+            data.push(subscription.search());
+            if data.len() == pagination.size {
+                break;
+            }
+        }
+
+        Ok(SearchSubscriptionsResp {
+            total: self.subscriptions.len(),
+            data,
+        })
+    }
+
+    async fn update_subscription(
+        &self,
+        subscription_id: Uuid,
+        req: CreateUpdateSubscriptionReq,
+    ) -> HaliaResult<()> {
+        // match self
+        //     .groups
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|group| group.id == group_id)
+        // {
+        //     Some(group) => group.update(&self.id, req).await,
+        //     None => Err(group_not_find_err(group_id)),
+        // }
+        todo!()
+    }
+
+    async fn delete_subscription(&self, subscription_id: Uuid) -> HaliaResult<()> {
+        // match self
+        //     .groups
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|group| group.id == group_id)
+        // {
+        //     Some(group) => {
+        //         group.delete().await?;
+        //     }
+        //     None => return Err(group_not_find_err(group_id)),
+        // }
+
+        // self.groups
+        //     .write()
+        //     .await
+        //     .retain(|group| group.id != group_id);
+        // Ok(())
+        todo!()
+    }
+
+    async fn create_event(
+        &mut self,
+        event_id: Option<Uuid>,
+        req: CreateUpdateEventReq,
+    ) -> HaliaResult<()> {
+        match Event::new(&self.id, event_id, req).await {
+            Ok(mut event) => {
+                if self.on && self.session.read().await.is_some() {
+                    // event
+                    //     .start(self.session.read().await.as_ref().unwrap().clone())
+                    //     .await;
+                }
+                self.events.push(event);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn search_events(&self, pagination: Pagination) -> HaliaResult<SearchEventsResp> {
+        let mut data = vec![];
+        for event in self
+            .events
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
+            data.push(event.search());
+            if data.len() == pagination.size {
+                break;
+            }
+        }
+
+        Ok(SearchEventsResp {
+            total: self.events.len(),
+            data,
+        })
+    }
+
+    async fn update_event(&mut self, event_id: Uuid, req: CreateUpdateEventReq) -> HaliaResult<()> {
+        match self.events.iter_mut().find(|event| event.id == event_id) {
+            Some(event) => event.update(&self.id, req).await,
+            None => Err(group_not_find_err(event_id)),
+        }
+    }
+
+    async fn delete_event(&self, event_id: Uuid) -> HaliaResult<()> {
+        // match self
+        //     .groups
+        //     .write()
+        //     .await
+        //     .iter_mut()
+        //     .find(|group| group.id == group_id)
+        // {
+        //     Some(group) => {
+        //         group.delete().await?;
+        //     }
+        //     None => return Err(group_not_find_err(group_id)),
+        // }
+
+        // self.groups
+        //     .write()
+        //     .await
+        //     .retain(|group| group.id != group_id);
+        // Ok(())
+        todo!()
     }
 
     async fn create_sink(
