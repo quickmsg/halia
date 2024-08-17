@@ -20,6 +20,8 @@ impl Variable {
         variable_id: Option<Uuid>,
         req: CreateUpdateGroupVariableReq,
     ) -> HaliaResult<(Self, ReadValueId)> {
+        Self::check_conf(&req)?;
+
         let (variable_id, new) = get_id(variable_id);
         if new {
             persistence::devices::opcua::create_group_variable(
@@ -41,6 +43,10 @@ impl Variable {
             },
             read_value_id,
         ))
+    }
+
+    fn check_conf(req: &CreateUpdateGroupVariableReq) -> HaliaResult<()> {
+        Ok(())
     }
 
     pub fn get_read_value_id(variable_conf: &VariableConf) -> ReadValueId {

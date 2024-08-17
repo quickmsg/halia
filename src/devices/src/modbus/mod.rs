@@ -85,7 +85,7 @@ pub struct Modbus {
 
 impl Modbus {
     pub async fn new(device_id: Option<Uuid>, req: CreateUpdateModbusReq) -> HaliaResult<Modbus> {
-        Modbus::check_conf(&req)?;
+        Self::check_conf(&req)?;
 
         let (device_id, new) = get_id(device_id);
 
@@ -720,7 +720,7 @@ impl Modbus {
 
     pub fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.del_mb_tx(rule_id)),
+            Some(sink) => Ok(sink.ref_info.deactive_ref(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }

@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use common::{
-    check_and_set_on_false, check_and_set_on_true,
+    check_and_set_on_false, check_and_set_on_true, del_mb_rx,
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    get_id, get_mb_rx, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -206,26 +206,11 @@ impl API {
 
     async fn read() {}
 
-    pub fn add_ref(&mut self, rule_id: &Uuid) {
-        self.ref_info.add_ref(rule_id);
-    }
-
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        self.ref_info.active_ref(rule_id);
-        match &self.mb_tx {
-            Some(tx) => tx.subscribe(),
-            None => {
-                let (tx, rx) = broadcast::channel(16);
-                self.mb_tx = Some(tx);
-                rx
-            }
-        }
+        get_mb_rx!(self, rule_id)
     }
 
     pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
-        self.ref_info.deactive_ref(rule_id);
-        if self.ref_info.can_stop() {
-            self.mb_tx = None;
-        }
+        del_mb_rx!(self, rule_id)
     }
 }

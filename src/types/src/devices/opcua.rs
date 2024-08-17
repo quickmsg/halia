@@ -133,40 +133,6 @@ pub struct SearchGroupVariablesItemResp {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateEventReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: EventConf,
-}
-
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
-pub struct EventConf {
-    // ms
-    pub publishing_interval: u64,
-
-    pub lifetime_count: u32,
-    pub max_keep_alive_count: u32,
-    pub max_notifications_per_publish: u32,
-    pub priority: u8,
-    pub publishing_enabled: bool,
-    // todo
-}
-
-#[derive(Serialize)]
-pub struct SearchEventsResp {
-    pub total: usize,
-    pub data: Vec<SearchEventsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchEventsItemResp {
-    pub id: Uuid,
-    #[serde(flatten)]
-    pub conf: CreateUpdateEventReq,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSinkReq {
     #[serde(flatten)]
     pub base: BaseConf,

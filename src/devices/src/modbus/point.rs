@@ -2,8 +2,9 @@ use std::{io, sync::Arc, time::Duration};
 
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
+    del_mb_rx,
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    get_id, get_mb_rx, persistence,
     ref_info::RefInfo,
 };
 use message::{Message, MessageBatch};
@@ -46,7 +47,7 @@ impl Point {
         point_id: Option<Uuid>,
         req: CreateUpdatePointReq,
     ) -> HaliaResult<Point> {
-        Point::check_conf(&req)?;
+        Self::check_conf(&req)?;
 
         let (point_id, new) = get_id(point_id);
         if new {
@@ -265,21 +266,10 @@ impl Point {
     }
 
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        self.ref_info.active_ref(rule_id);
-        match &self.mb_tx {
-            Some(tx) => tx.subscribe(),
-            None => {
-                let (tx, rx) = broadcast::channel(16);
-                self.mb_tx = Some(tx);
-                rx
-            }
-        }
+        get_mb_rx!(self, rule_id)
     }
 
     pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
-        self.ref_info.deactive_ref(rule_id);
-        if self.ref_info.can_stop() {
-            self.mb_tx = None;
-        }
+        del_mb_rx!(self, rule_id)
     }
 }

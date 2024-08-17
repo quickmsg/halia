@@ -6,7 +6,6 @@ use common::{
     get_id,
     persistence::{self, Status},
 };
-use event::Event;
 use group::Group;
 use message::MessageBatch;
 use opcua::{
@@ -25,10 +24,9 @@ use tracing::debug;
 use types::{
     devices::{
         opcua::{
-            CreateUpdateEventReq, CreateUpdateGroupReq, CreateUpdateGroupVariableReq,
-            CreateUpdateOpcuaReq, CreateUpdateSinkReq, CreateUpdateSubscriptionReq, OpcuaConf,
-            SearchEventsResp, SearchGroupVariablesResp, SearchGroupsResp, SearchSinksResp,
-            SearchSubscriptionsResp,
+            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+            CreateUpdateSinkReq, CreateUpdateSubscriptionReq, OpcuaConf, SearchGroupVariablesResp,
+            SearchGroupsResp, SearchSinksResp, SearchSubscriptionsResp,
         },
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -37,7 +35,6 @@ use types::{
 use uuid::Uuid;
 
 pub const TYPE: &str = "opcua";
-mod event;
 mod group;
 mod group_variable;
 pub mod manager;
@@ -59,12 +56,6 @@ macro_rules! subscription_not_found_err {
     };
 }
 
-macro_rules! event_not_found_err {
-    ($event_id:expr) => {
-        Err(HaliaError::NotFound("opcua设备事件".to_owned(), $event_id))
-    };
-}
-
 macro_rules! sink_not_found_err {
     ($sink_id:expr) => {
         Err(HaliaError::NotFound("opcua设备动作".to_owned(), $sink_id))
@@ -82,7 +73,6 @@ struct Opcua {
 
     groups: Arc<RwLock<Vec<Group>>>,
     subscriptions: Vec<Subscription>,
-    events: Vec<Event>,
 
     sinks: Vec<Sink>,
 }
@@ -108,7 +98,6 @@ impl Opcua {
             stop_signal_tx: None,
             groups: Arc::new(RwLock::new(vec![])),
             subscriptions: vec![],
-            events: vec![],
             sinks: vec![],
         })
     }
@@ -261,10 +250,6 @@ impl Opcua {
             return Err(HaliaError::Common("有订阅被启动规则引用中！".to_owned()));
         }
 
-        if self.events.iter().any(|event| !event.ref_info.can_stop()) {
-            return Err(HaliaError::Common("有事件被启动规则引用中！".to_owned()));
-        }
-
         check_and_set_on_false!(self);
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
@@ -312,7 +297,25 @@ impl Opcua {
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        Ok(())
+        if self
+            .groups
+            .read()
+            .await
+            .iter()
+            .any(|group| !group.ref_info.can_delete())
+        {
+            return Err(HaliaError::Common("有组被规则引用中！".to_owned()));
+        }
+
+        if self
+            .subscriptions
+            .iter()
+            .any(|subscription| !subscription.ref_info.can_delete())
+        {
+            return Err(HaliaError::Common("有订阅被规则引用中！".to_owned()));
+        }
+
+        todo!()
     }
 
     async fn create_group(
@@ -560,111 +563,35 @@ impl Opcua {
     }
 
     async fn update_subscription(
-        &self,
+        &mut self,
         subscription_id: Uuid,
         req: CreateUpdateSubscriptionReq,
     ) -> HaliaResult<()> {
-        // match self
-        //     .groups
-        //     .write()
-        //     .await
-        //     .iter_mut()
-        //     .find(|group| group.id == group_id)
-        // {
-        //     Some(group) => group.update(&self.id, req).await,
-        //     None => Err(group_not_find_err(group_id)),
-        // }
-        todo!()
-    }
-
-    async fn delete_subscription(&self, subscription_id: Uuid) -> HaliaResult<()> {
-        // match self
-        //     .groups
-        //     .write()
-        //     .await
-        //     .iter_mut()
-        //     .find(|group| group.id == group_id)
-        // {
-        //     Some(group) => {
-        //         group.delete().await?;
-        //     }
-        //     None => return Err(group_not_find_err(group_id)),
-        // }
-
-        // self.groups
-        //     .write()
-        //     .await
-        //     .retain(|group| group.id != group_id);
-        // Ok(())
-        todo!()
-    }
-
-    async fn create_event(
-        &mut self,
-        event_id: Option<Uuid>,
-        req: CreateUpdateEventReq,
-    ) -> HaliaResult<()> {
-        match Event::new(&self.id, event_id, req).await {
-            Ok(mut event) => {
-                if self.on && self.session.read().await.is_some() {
-                    // event
-                    //     .start(self.session.read().await.as_ref().unwrap().clone())
-                    //     .await;
-                }
-                self.events.push(event);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    async fn search_events(&self, pagination: Pagination) -> HaliaResult<SearchEventsResp> {
-        let mut data = vec![];
-        for event in self
-            .events
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
+        match self
+            .subscriptions
+            .iter_mut()
+            .find(|subscription| subscription.id == subscription_id)
         {
-            data.push(event.search());
-            if data.len() == pagination.size {
-                break;
+            Some(subscription) => subscription.update(&self.id, req).await,
+            None => subscription_not_found_err!(subscription_id),
+        }
+    }
+
+    async fn delete_subscription(&mut self, subscription_id: Uuid) -> HaliaResult<()> {
+        match self
+            .subscriptions
+            .iter_mut()
+            .find(|subscription| subscription.id == subscription_id)
+        {
+            Some(subscription) => {
+                subscription.delete().await?;
             }
+            None => return subscription_not_found_err!(subscription_id),
         }
 
-        Ok(SearchEventsResp {
-            total: self.events.len(),
-            data,
-        })
-    }
-
-    async fn update_event(&mut self, event_id: Uuid, req: CreateUpdateEventReq) -> HaliaResult<()> {
-        match self.events.iter_mut().find(|event| event.id == event_id) {
-            Some(event) => event.update(&self.id, req).await,
-            None => event_not_found_err!(event_id),
-        }
-    }
-
-    async fn delete_event(&self, event_id: Uuid) -> HaliaResult<()> {
-        // match self
-        //     .groups
-        //     .write()
-        //     .await
-        //     .iter_mut()
-        //     .find(|group| group.id == group_id)
-        // {
-        //     Some(group) => {
-        //         group.delete().await?;
-        //     }
-        //     None => return Err(group_not_find_err(group_id)),
-        // }
-
-        // self.groups
-        //     .write()
-        //     .await
-        //     .retain(|group| group.id != group_id);
-        // Ok(())
-        todo!()
+        self.subscriptions
+            .retain(|subscription| subscription.id != subscription_id);
+        Ok(())
     }
 
     async fn create_sink(
@@ -707,7 +634,7 @@ impl Opcua {
     async fn update_sink(&mut self, sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
-            None => todo!(),
+            None => sink_not_found_err!(sink_id),
         }
     }
 
@@ -718,7 +645,7 @@ impl Opcua {
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
-            None => todo!(),
+            None => sink_not_found_err!(sink_id),
         }
     }
 }

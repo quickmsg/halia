@@ -7,10 +7,9 @@ use devices::opcua::manager::GLOBAL_OPCUA_MANAGER;
 use types::{
     devices::{
         opcua::{
-            CreateUpdateEventReq, CreateUpdateGroupReq, CreateUpdateGroupVariableReq,
-            CreateUpdateOpcuaReq, CreateUpdateSinkReq, CreateUpdateSubscriptionReq,
-            SearchEventsResp, SearchGroupVariablesResp, SearchGroupsResp, SearchSinksResp,
-            SearchSubscriptionsResp,
+            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
+            CreateUpdateSinkReq, CreateUpdateSubscriptionReq, SearchGroupVariablesResp,
+            SearchGroupsResp, SearchSinksResp, SearchSubscriptionsResp,
         },
         SearchDevicesItemResp,
     },
@@ -52,14 +51,6 @@ pub(crate) fn opcua_routes() -> Router {
                 .route("/", get(search_subscriptions))
                 .route("/:subscription_id", put(update_subscription))
                 .route("/:subscription_id", routing::delete(delete_subscription)),
-        )
-        .nest(
-            "/:device_id/event",
-            Router::new()
-                .route("/", post(create_event))
-                .route("/", get(search_events))
-                .route("/:event_id", put(update_event))
-                .route("/:event_id", routing::delete(delete_event)),
         )
         .nest(
             "/:device_id/sink",
@@ -230,45 +221,6 @@ async fn delete_subscription(
 ) -> AppResult<AppSuccess<()>> {
     GLOBAL_OPCUA_MANAGER
         .delete_subscription(device_id, group_id)
-        .await?;
-    Ok(AppSuccess::empty())
-}
-
-async fn create_event(
-    Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateEventReq>,
-) -> AppResult<AppSuccess<()>> {
-    GLOBAL_OPCUA_MANAGER
-        .create_event(device_id, None, req)
-        .await?;
-    Ok(AppSuccess::empty())
-}
-
-async fn search_events(
-    Path(device_id): Path<Uuid>,
-    Query(pagination): Query<Pagination>,
-) -> AppResult<AppSuccess<SearchEventsResp>> {
-    let data = GLOBAL_OPCUA_MANAGER
-        .search_events(device_id, pagination)
-        .await?;
-    Ok(AppSuccess::data(data))
-}
-
-async fn update_event(
-    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateEventReq>,
-) -> AppResult<AppSuccess<()>> {
-    GLOBAL_OPCUA_MANAGER
-        .update_event(device_id, group_id, req)
-        .await?;
-    Ok(AppSuccess::empty())
-}
-
-async fn delete_event(
-    Path((device_id, event_id)): Path<(Uuid, Uuid)>,
-) -> AppResult<AppSuccess<()>> {
-    GLOBAL_OPCUA_MANAGER
-        .delete_event(device_id, event_id)
         .await?;
     Ok(AppSuccess::empty())
 }

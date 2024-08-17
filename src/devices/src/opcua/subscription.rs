@@ -82,9 +82,7 @@ impl Subscription {
     }
 
     pub async fn start(&mut self, session: Arc<Session>) -> Result<()> {
-        self.on = true;
-
-        let subscription_id = session
+        let opcua_subscription_id = session
             .create_subscription(
                 Duration::from_secs(self.conf.ext.publishing_interval),
                 self.conf.ext.lifetime_count,
@@ -107,10 +105,29 @@ impl Subscription {
             .collect();
 
         let _ = session
-            .create_monitored_items(subscription_id, TimestampsToReturn::Both, items_to_create)
+            .create_monitored_items(
+                opcua_subscription_id,
+                TimestampsToReturn::Both,
+                items_to_create,
+            )
             .await?;
 
         Ok(())
+    }
+
+    pub async fn update(
+        &mut self,
+        device_id: &Uuid,
+        req: CreateUpdateSubscriptionReq,
+    ) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn delete(&mut self) -> HaliaResult<()> {
+        if !self.ref_info.can_delete() {
+            return Err(HaliaError::DeleteRefing);
+        }
+        todo!()
     }
 
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {

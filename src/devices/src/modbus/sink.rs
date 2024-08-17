@@ -139,11 +139,6 @@ impl Sink {
         self.mb_tx.as_ref().unwrap().clone()
     }
 
-    pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
-        self.ref_info.deactive_ref(rule_id);
-        todo!()
-    }
-
     pub async fn start(
         &mut self,
         device_tx: mpsc::Sender<WritePointEvent>,
