@@ -79,6 +79,8 @@ struct Opcua {
 
 impl Opcua {
     pub async fn new(device_id: Option<Uuid>, req: CreateUpdateOpcuaReq) -> HaliaResult<Self> {
+        Self::check_conf(&req)?;
+
         let (device_id, new) = get_id(device_id);
         if new {
             persistence::devices::opcua::create(
@@ -100,6 +102,10 @@ impl Opcua {
             subscriptions: vec![],
             sinks: vec![],
         })
+    }
+
+    fn check_conf(req: &CreateUpdateOpcuaReq) -> HaliaResult<()> {
+        Ok(())
     }
 
     pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> bool {
@@ -254,6 +260,10 @@ impl Opcua {
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
 
+        for group in self.groups.write().await.iter_mut() {
+            group.stop().await?;
+        }
+
         match self
             .session
             .read()
@@ -275,6 +285,8 @@ impl Opcua {
     }
 
     async fn update(&mut self, req: CreateUpdateOpcuaReq) -> HaliaResult<()> {
+        Self::check_conf(&req)?;
+
         persistence::devices::update_device_conf(&self.id, serde_json::to_string(&req).unwrap())
             .await?;
 

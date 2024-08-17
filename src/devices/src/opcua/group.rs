@@ -29,6 +29,15 @@ use uuid::Uuid;
 
 use super::group_variable::Variable;
 
+macro_rules! variable_not_found_err {
+    ($variable_id:expr) => {
+        Err(HaliaError::NotFound(
+            "opcua设备组变量".to_owned(),
+            $variable_id,
+        ))
+    };
+}
+
 pub struct Group {
     pub id: Uuid,
     conf: CreateUpdateGroupReq,
@@ -140,7 +149,7 @@ impl Group {
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
         if !self.ref_info.can_stop() {
-            return Err(HaliaError::Common("引用中".to_owned()));
+            return Err(HaliaError::StopActiveRefing);
         }
 
         self.stop_signal_tx
@@ -256,7 +265,7 @@ impl Group {
             }
         }
 
-        Err(HaliaError::NotFound("变量".to_owned(), variable_id))
+        variable_not_found_err!(variable_id)
     }
 
     pub async fn delete_variable(&self, device_id: &Uuid, variable_id: Uuid) -> HaliaResult<()> {
