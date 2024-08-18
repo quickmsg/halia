@@ -1,5 +1,6 @@
 use std::{fs, io, path::PathBuf};
 
+use types::apps::AppType;
 use uuid::Uuid;
 
 use crate::persistence::{self, create_file, Status, DELIMITER};
@@ -17,13 +18,13 @@ fn get_sink_file_path(app_id: &Uuid) -> PathBuf {
     get_app_dir().join(app_id.to_string()).join(SINK_DIR)
 }
 
-pub async fn create(app_id: &Uuid, typ: &str, data: String) -> Result<(), io::Error> {
+pub async fn create(app_id: &Uuid, data: String) -> Result<(), io::Error> {
     persistence::create(
         get_app_file_path(),
         app_id,
         &format!(
             "{}{}{}{}{}",
-            typ,
+            AppType::MqttClient,
             DELIMITER,
             Status::Stopped.to_string(),
             DELIMITER,

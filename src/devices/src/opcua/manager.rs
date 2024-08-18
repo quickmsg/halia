@@ -11,7 +11,7 @@ use types::{
             CreateUpdateSinkReq, CreateUpdateSubscriptionReq, SearchGroupVariablesResp,
             SearchGroupsResp, SearchSinksResp, SearchSubscriptionsResp,
         },
-        SearchDevicesItemResp,
+        DeviceType, SearchDevicesItemResp,
     },
     Pagination,
 };
@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use crate::GLOBAL_DEVICE_MANAGER;
 
-use super::{Opcua, TYPE};
+use super::Opcua;
 
 pub static GLOBAL_OPCUA_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     devices: DashMap::new(),
@@ -44,7 +44,9 @@ impl Manager {
         GLOBAL_DEVICE_MANAGER.check_duplicate_name(&device_id, &req.base.name)?;
 
         let device = Opcua::new(device_id, req).await?;
-        GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
+        GLOBAL_DEVICE_MANAGER
+            .create(DeviceType::Opcua, device.id)
+            .await;
         self.devices.insert(device.id.clone(), device);
         Ok(())
     }

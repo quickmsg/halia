@@ -10,7 +10,7 @@ use types::{
             CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, PointsQueryParams,
             SearchPointsResp, SearchSinksResp, SinksQueryParams,
         },
-        SearchDevicesItemResp,
+        DeviceType, SearchDevicesItemResp,
     },
     Pagination, Value,
 };
@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::GLOBAL_DEVICE_MANAGER;
 
-use super::{Modbus, TYPE};
+use super::Modbus;
 
 pub static GLOBAL_MODBUS_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     devices: DashMap::new(),
@@ -46,7 +46,9 @@ impl Manager {
             device.value().check_duplicate(&req)?;
         }
         let device = Modbus::new(device_id, req).await?;
-        GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
+        GLOBAL_DEVICE_MANAGER
+            .create(DeviceType::Modbus, device.id)
+            .await;
         self.devices.insert(device.id.clone(), device);
         Ok(())
     }

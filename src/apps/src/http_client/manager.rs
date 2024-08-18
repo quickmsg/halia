@@ -9,7 +9,7 @@ use types::{
             CreateUpdateHttpClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
             SearchSourcesResp,
         },
-        SearchAppsItemResp,
+        AppType, SearchAppsItemResp,
     },
     Pagination,
 };
@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::GLOBAL_APP_MANAGER;
 
-use super::{HttpClient, TYPE};
+use super::HttpClient;
 
 macro_rules! http_client_not_find_err {
     ($app_id:expr) => {
@@ -43,7 +43,9 @@ impl Manager {
         client_key: Option<Bytes>,
     ) -> HaliaResult<()> {
         let app = HttpClient::new(app_id, req, ca, client_cert, client_key).await?;
-        GLOBAL_APP_MANAGER.create(&TYPE, app.id.clone()).await;
+        GLOBAL_APP_MANAGER
+            .create(AppType::HttpClient, app.id.clone())
+            .await;
         self.apps.insert(app.id.clone(), app);
         Ok(())
     }

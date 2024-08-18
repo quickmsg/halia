@@ -14,13 +14,11 @@ use types::{
             CreateUpdateHttpClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
             SearchSourcesResp,
         },
-        SearchAppsItemConf, SearchAppsItemResp,
+        AppType, SearchAppsItemConf, SearchAppsItemResp,
     },
     Pagination,
 };
 use uuid::Uuid;
-
-pub const TYPE: &str = "http_client";
 
 pub mod manager;
 mod sink;
@@ -61,12 +59,8 @@ impl HttpClient {
 
         let (app_id, new) = get_id(app_id);
         if new {
-            persistence::apps::mqtt_client::create(
-                &app_id,
-                TYPE,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            persistence::apps::mqtt_client::create(&app_id, serde_json::to_string(&req).unwrap())
+                .await?;
         }
 
         Ok(Self {
@@ -203,7 +197,7 @@ impl HttpClient {
         SearchAppsItemResp {
             id: self.id,
             on: self.on,
-            typ: TYPE,
+            typ: AppType::HttpClient,
             conf: SearchAppsItemConf {
                 base: self.conf.base.clone(),
                 ext: serde_json::to_value(&self.conf.ext).unwrap(),

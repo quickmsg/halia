@@ -15,7 +15,8 @@ use types::rules::{
     apps::mqtt_client,
     devices::{modbus, opcua},
     functions::{ComputerConf, FilterConf, WindowConf},
-    CreateUpdateRuleReq, Node, NodeType, SearchRulesItemResp, SinkNode, SourceNode,
+    AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DeviceSinkNode, DeviceSourceNode, Node,
+    NodeType, SearchRulesItemResp,
 };
 use uuid::Uuid;
 
@@ -37,9 +38,9 @@ impl Rule {
         for node in req.ext.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
-                    let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
-                    match source_node.typ.as_str() {
-                        devices::modbus::TYPE => {
+                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                    match source_node.typ {
+                        types::devices::DeviceType::Modbus => {
                             let source: modbus::SourcePoint =
                                 serde_json::from_value(source_node.conf.clone())?;
                             if let Err(e) = GLOBAL_MODBUS_MANAGER
@@ -51,7 +52,7 @@ impl Rule {
                                 break;
                             }
                         }
-                        devices::opcua::TYPE => {
+                        types::devices::DeviceType::Opcua => {
                             let source: opcua::SourceGroup =
                                 serde_json::from_value(source_node.conf.clone())?;
                             if let Err(e) = GLOBAL_OPCUA_MANAGER
@@ -63,14 +64,13 @@ impl Rule {
                                 break;
                             }
                         }
-                        devices::coap::TYPE => {}
-                        _ => unreachable!(),
+                        types::devices::DeviceType::Coap => todo!(),
                     }
                 }
                 NodeType::AppSource => {
-                    let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
-                    match source_node.typ.as_str() {
-                        apps::mqtt_client::TYPE => {
+                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                    match source_node.typ {
+                        types::apps::AppType::MqttClient => {
                             let source: mqtt_client::Source =
                                 serde_json::from_value(source_node.conf.clone())?;
                             if let Err(e) = GLOBAL_MQTT_CLIENT_MANAGER
@@ -82,22 +82,21 @@ impl Rule {
                                 break;
                             }
                         }
-                        _ => unreachable!(),
+                        types::apps::AppType::HttpClient => todo!(),
                     }
                 }
                 NodeType::DeviceSink => {
-                    let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
-                    match sink_node.typ.as_str() {
-                        devices::modbus::TYPE => {}
-                        devices::opcua::TYPE => {}
-                        devices::coap::TYPE => {}
-                        _ => unreachable!(),
+                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                    match sink_node.typ {
+                        types::devices::DeviceType::Modbus => todo!(),
+                        types::devices::DeviceType::Opcua => todo!(),
+                        types::devices::DeviceType::Coap => todo!(),
                     }
                 }
                 NodeType::AppSink => {
-                    let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
-                    match sink_node.typ.as_str() {
-                        apps::mqtt_client::TYPE => {
+                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+                    match sink_node.typ {
+                        types::apps::AppType::MqttClient => {
                             let sink: mqtt_client::Sink =
                                 serde_json::from_value(sink_node.conf.clone())?;
                             match GLOBAL_MQTT_CLIENT_MANAGER.add_sink_ref(
@@ -109,7 +108,7 @@ impl Rule {
                                 Err(_) => todo!(),
                             }
                         }
-                        _ => unreachable!(),
+                        types::apps::AppType::HttpClient => todo!(),
                     }
                 }
                 _ => {}
@@ -167,9 +166,9 @@ impl Rule {
             let node = node_map.get(&source_id).unwrap();
             match node.node_type {
                 NodeType::DeviceSource => {
-                    let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rxs = match source_node.typ.as_str() {
-                        devices::modbus::TYPE => {
+                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                    let rxs = match source_node.typ {
+                        types::devices::DeviceType::Modbus => {
                             let source_point: modbus::SourcePoint =
                                 serde_json::from_value(source_node.conf.clone())?;
 
@@ -189,14 +188,15 @@ impl Rule {
                             }
                             rxs
                         }
-                        _ => unreachable!(),
+                        types::devices::DeviceType::Opcua => todo!(),
+                        types::devices::DeviceType::Coap => todo!(),
                     };
                     receivers.insert(source_id, rxs);
                 }
                 NodeType::AppSource => {
-                    let source_node: SourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rxs = match source_node.typ.as_str() {
-                        apps::mqtt_client::TYPE => {
+                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                    let rxs = match source_node.typ {
+                        types::apps::AppType::MqttClient => {
                             let source: mqtt_client::Source =
                                 serde_json::from_value(source_node.conf.clone())?;
 
@@ -218,9 +218,7 @@ impl Rule {
                             }
                             rxs
                         }
-                        _ => {
-                            todo!()
-                        }
+                        types::apps::AppType::HttpClient => todo!(),
                     };
                     receivers.insert(source_id, rxs);
                 }
@@ -297,9 +295,10 @@ impl Rule {
                             ids.push(id);
                         }
                         NodeType::DeviceSink => {
-                            let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match sink_node.typ.as_str() {
-                                devices::modbus::TYPE => {
+                            let sink_node: DeviceSinkNode =
+                                serde_json::from_value(node.conf.clone())?;
+                            let tx = match sink_node.typ {
+                                types::devices::DeviceType::Modbus => {
                                     let sink: types::rules::devices::modbus::Sink =
                                         serde_json::from_value(sink_node.conf.clone())?;
                                     GLOBAL_MODBUS_MANAGER
@@ -307,15 +306,16 @@ impl Rule {
                                         .await
                                         .unwrap()
                                 }
-                                _ => todo!(),
+                                types::devices::DeviceType::Opcua => todo!(),
+                                types::devices::DeviceType::Coap => todo!(),
                             };
                             mpsc_tx = Some(tx);
                         }
                         NodeType::AppSink => {
                             ids.push(id);
-                            let sink_node: SinkNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match sink_node.typ.as_str() {
-                                apps::mqtt_client::TYPE => {
+                            let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+                            let tx = match sink_node.typ {
+                                types::apps::AppType::MqttClient => {
                                     let sink: mqtt_client::Sink =
                                         serde_json::from_value(sink_node.conf.clone())?;
                                     GLOBAL_MQTT_CLIENT_MANAGER
@@ -323,9 +323,7 @@ impl Rule {
                                         .await
                                         .unwrap()
                                 }
-                                _ => {
-                                    todo!()
-                                }
+                                types::apps::AppType::HttpClient => todo!(),
                             };
                             mpsc_tx = Some(tx);
                         }

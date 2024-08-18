@@ -6,8 +6,8 @@ use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::RwLock;
 use tracing::warn;
 use types::{
-    apps::{SearchAppsResp, Summary},
-    Pagination, QueryParams,
+    apps::{AppType, QueryParams, SearchAppsResp, Summary},
+    Pagination,
 };
 use uuid::Uuid;
 
@@ -16,7 +16,7 @@ pub mod mqtt_client;
 pub mod mqtt_server;
 
 pub struct AppManager {
-    apps: RwLock<Vec<(&'static str, Uuid)>>,
+    apps: RwLock<Vec<(AppType, Uuid)>>,
 }
 
 pub static GLOBAL_APP_MANAGER: LazyLock<AppManager> = LazyLock::new(|| AppManager {
@@ -24,8 +24,8 @@ pub static GLOBAL_APP_MANAGER: LazyLock<AppManager> = LazyLock::new(|| AppManage
 });
 
 impl AppManager {
-    pub async fn create(&self, r#type: &'static str, app_id: Uuid) {
-        self.apps.write().await.push((r#type, app_id));
+    pub async fn create(&self, typ: AppType, app_id: Uuid) {
+        self.apps.write().await.push((typ, app_id));
     }
 
     pub async fn get_summary(&self) -> Summary {
@@ -35,9 +35,8 @@ impl AppManager {
         let mut off_cnt = 0;
         for (typ, app_id) in self.apps.read().await.iter() {
             let resp = match typ {
-                &mqtt_client::TYPE => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id).await,
-                &http_client::TYPE => GLOBAL_HTTP_CLIENT_MANAGER.search(app_id),
-                _ => unreachable!(),
+                AppType::MqttClient => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id).await,
+                AppType::HttpClient => GLOBAL_HTTP_CLIENT_MANAGER.search(app_id),
             };
 
             match resp {
@@ -83,9 +82,8 @@ impl AppManager {
             }
 
             let resp = match typ {
-                &mqtt_client::TYPE => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id).await,
-                &http_client::TYPE => GLOBAL_HTTP_CLIENT_MANAGER.search(app_id),
-                _ => unreachable!(),
+                AppType::MqttClient => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id).await,
+                AppType::HttpClient => GLOBAL_HTTP_CLIENT_MANAGER.search(app_id),
             };
 
             match resp {
@@ -140,22 +138,27 @@ impl AppManager {
                     let items: Vec<&str> = data.split(persistence::DELIMITER).collect();
                     assert_eq!(items.len(), 4);
                     let app_id = Uuid::from_str(items[0]).unwrap();
-                    match items[1] {
-                        mqtt_client::TYPE => {
-                            GLOBAL_MQTT_CLIENT_MANAGER
-                                .create(Some(app_id), serde_json::from_str(items[3]).unwrap())
-                                .await?;
-                            match items[2] {
-                                "0" => {}
-                                "1" => {
-                                    GLOBAL_MQTT_CLIENT_MANAGER.start(app_id).await.unwrap();
-                                }
-                                _ => {
-                                    panic!("缓存文件错误")
+
+                    let typ = AppType::try_from(items[1]);
+                    match typ {
+                        Ok(typ) => match typ {
+                            AppType::MqttClient => {
+                                GLOBAL_MQTT_CLIENT_MANAGER
+                                    .create(Some(app_id), serde_json::from_str(items[3]).unwrap())
+                                    .await?;
+                                match items[2] {
+                                    "0" => {}
+                                    "1" => {
+                                        GLOBAL_MQTT_CLIENT_MANAGER.start(app_id).await.unwrap();
+                                    }
+                                    _ => {
+                                        panic!("缓存文件错误")
+                                    }
                                 }
                             }
-                        }
-                        _ => {}
+                            AppType::HttpClient => todo!(),
+                        },
+                        Err(e) => panic!("{}", e),
                     }
                 }
 

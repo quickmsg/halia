@@ -28,18 +28,18 @@ use types::{
             CreateUpdateSinkReq, CreateUpdateSubscriptionReq, OpcuaConf, SearchGroupVariablesResp,
             SearchGroupsResp, SearchSinksResp, SearchSubscriptionsResp,
         },
-        SearchDevicesItemConf, SearchDevicesItemResp,
+        DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination,
 };
 use uuid::Uuid;
 
-pub const TYPE: &str = "opcua";
 mod group;
 mod group_variable;
 pub mod manager;
 mod sink;
 mod subscription;
+mod subscription_item;
 
 macro_rules! group_not_found_err {
     ($group_id:expr) => {
@@ -83,12 +83,8 @@ impl Opcua {
 
         let (device_id, new) = get_id(device_id);
         if new {
-            persistence::devices::opcua::create(
-                &device_id,
-                TYPE,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            persistence::devices::opcua::create(&device_id, serde_json::to_string(&req).unwrap())
+                .await?;
         }
 
         Ok(Opcua {
@@ -176,7 +172,7 @@ impl Opcua {
     fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id,
-            typ: TYPE,
+            typ: DeviceType::Opcua,
             on: self.on,
             err: self.err.clone(),
             rtt: 9999,

@@ -10,7 +10,7 @@ use types::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateSinkReq, SearchAPIsResp,
             SearchSinksResp,
         },
-        SearchDevicesItemResp,
+        DeviceType, SearchDevicesItemResp,
     },
     Pagination,
 };
@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::GLOBAL_DEVICE_MANAGER;
 
-use super::{Coap, TYPE};
+use super::Coap;
 
 pub static GLOBAL_COAP_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     devices: DashMap::new(),
@@ -43,7 +43,9 @@ impl Manager {
         GLOBAL_DEVICE_MANAGER.check_duplicate_name(&device_id, &req.base.name)?;
 
         let device = Coap::new(device_id, req).await?;
-        GLOBAL_DEVICE_MANAGER.create(&TYPE, device.id).await;
+        GLOBAL_DEVICE_MANAGER
+            .create(DeviceType::Coap, device.id)
+            .await;
         self.devices.insert(device.id.clone(), device);
         Ok(())
     }

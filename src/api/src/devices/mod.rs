@@ -4,8 +4,8 @@ use devices::GLOBAL_DEVICE_MANAGER;
 use modbus::modbus_routes;
 use opcua::opcua_routes;
 use types::{
-    devices::{SearchDevicesResp, Summary},
-    Pagination, QueryParams,
+    devices::{QueryParams, SearchDevicesResp, Summary},
+    Pagination,
 };
 
 use crate::AppSuccess;

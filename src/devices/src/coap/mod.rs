@@ -18,13 +18,12 @@ use types::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateSinkReq, SearchAPIsResp,
             SearchSinksResp,
         },
-        SearchDevicesItemConf, SearchDevicesItemResp,
+        DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination,
 };
 use uuid::Uuid;
 
-pub const TYPE: &str = "coap";
 mod api;
 pub mod manager;
 mod observe;
@@ -58,12 +57,8 @@ impl Coap {
         let (device_id, new) = get_id(device_id);
 
         if new {
-            persistence::devices::coap::create(
-                &device_id,
-                TYPE,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            persistence::devices::coap::create(&device_id, serde_json::to_string(&req).unwrap())
+                .await?;
         }
 
         Ok(Coap {
@@ -108,7 +103,7 @@ impl Coap {
     pub fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id.clone(),
-            typ: TYPE,
+            typ: DeviceType::Coap,
             on: self.on,
             err: self.err.clone(),
             rtt: 999,

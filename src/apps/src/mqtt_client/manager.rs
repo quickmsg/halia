@@ -10,13 +10,13 @@ use types::{
             CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
             SearchSourcesResp, SinksQueryParams, SourcesQueryParams,
         },
-        SearchAppsItemResp,
+        AppType, SearchAppsItemResp,
     },
     Pagination,
 };
 use uuid::Uuid;
 
-use crate::{mqtt_client::TYPE, GLOBAL_APP_MANAGER};
+use crate::GLOBAL_APP_MANAGER;
 
 use super::MqttClient;
 
@@ -44,7 +44,9 @@ impl Manager {
             app.value().check_duplicate(&req)?;
         }
         let app = MqttClient::new(app_id, req).await?;
-        GLOBAL_APP_MANAGER.create(&TYPE, app.id.clone()).await;
+        GLOBAL_APP_MANAGER
+            .create(AppType::MqttClient, app.id.clone())
+            .await;
         self.apps.insert(app.id.clone(), app);
         Ok(())
     }

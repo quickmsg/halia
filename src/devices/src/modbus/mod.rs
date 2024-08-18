@@ -35,7 +35,7 @@ use types::{
             Encode, ModbusConf, PointsQueryParams, SearchPointsResp, SearchSinksResp,
             SinksQueryParams, Type,
         },
-        SearchDevicesItemConf, SearchDevicesItemResp,
+        DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination, Value,
 };
@@ -44,8 +44,6 @@ use uuid::Uuid;
 pub mod manager;
 mod point;
 mod sink;
-
-pub const TYPE: &str = "modbus";
 
 macro_rules! point_not_found_err {
     ($point_id:expr) => {
@@ -91,12 +89,8 @@ impl Modbus {
         let (device_id, new) = get_id(device_id);
 
         if new {
-            persistence::devices::modbus::create(
-                &device_id,
-                TYPE,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            persistence::devices::modbus::create(&device_id, serde_json::to_string(&req).unwrap())
+                .await?;
         }
 
         Ok(Modbus {
@@ -204,7 +198,7 @@ impl Modbus {
     pub async fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id.clone(),
-            typ: TYPE,
+            typ: DeviceType::Modbus,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on,
             err: self.err.read().await.clone(),

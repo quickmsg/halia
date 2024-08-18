@@ -10,9 +10,9 @@ use tracing::warn;
 use types::{
     devices::{
         coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
-        SearchDevicesResp, Summary,
+        DeviceType, QueryParams, SearchDevicesResp, Summary,
     },
-    Pagination, QueryParams,
+    Pagination,
 };
 
 use uuid::Uuid;
@@ -26,11 +26,11 @@ pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| Dev
 });
 
 pub struct DeviceManager {
-    devices: RwLock<Vec<(&'static str, Uuid)>>,
+    devices: RwLock<Vec<(DeviceType, Uuid)>>,
 }
 
 impl DeviceManager {
-    pub async fn create(&self, typ: &'static str, device_id: Uuid) {
+    pub async fn create(&self, typ: DeviceType, device_id: Uuid) {
         self.devices.write().await.push((typ, device_id));
     }
 
@@ -48,10 +48,9 @@ impl DeviceManager {
         let mut off_cnt = 0;
         for (typ, device_id) in self.devices.read().await.iter().rev() {
             let resp = match typ {
-                &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id).await,
-                &opcua::TYPE => GLOBAL_OPCUA_MANAGER.search(device_id),
-                &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
-                _ => unreachable!(),
+                DeviceType::Modbus => GLOBAL_MODBUS_MANAGER.search(device_id).await,
+                DeviceType::Opcua => GLOBAL_OPCUA_MANAGER.search(device_id),
+                DeviceType::Coap => GLOBAL_COAP_MANAGER.search(device_id),
             };
 
             match resp {
@@ -97,10 +96,9 @@ impl DeviceManager {
             }
 
             let resp = match typ {
-                &modbus::TYPE => GLOBAL_MODBUS_MANAGER.search(device_id).await,
-                &opcua::TYPE => GLOBAL_OPCUA_MANAGER.search(device_id),
-                &coap::TYPE => GLOBAL_COAP_MANAGER.search(device_id),
-                _ => unreachable!(),
+                DeviceType::Modbus => GLOBAL_MODBUS_MANAGER.search(device_id).await,
+                DeviceType::Opcua => GLOBAL_OPCUA_MANAGER.search(device_id),
+                DeviceType::Coap => GLOBAL_COAP_MANAGER.search(device_id),
             };
 
             match resp {
@@ -156,38 +154,41 @@ impl DeviceManager {
 
                     let device_id = Uuid::from_str(items[0]).unwrap();
 
-                    match items[1] {
-                        modbus::TYPE => {
-                            let req: CreateUpdateModbusReq = serde_json::from_str(items[3])?;
-                            GLOBAL_MODBUS_MANAGER.create(Some(device_id), req).await?;
-                            GLOBAL_MODBUS_MANAGER.recover(&device_id).await.unwrap();
-                            match items[2] {
-                                "0" => {}
-                                "1" => GLOBAL_MODBUS_MANAGER.start(device_id).await.unwrap(),
-                                _ => panic!("文件已损坏"),
+                    let typ = DeviceType::try_from(items[1]);
+                    match typ {
+                        Ok(typ) => match typ {
+                            DeviceType::Modbus => {
+                                let req: CreateUpdateModbusReq = serde_json::from_str(items[3])?;
+                                GLOBAL_MODBUS_MANAGER.create(Some(device_id), req).await?;
+                                GLOBAL_MODBUS_MANAGER.recover(&device_id).await.unwrap();
+                                match items[2] {
+                                    "0" => {}
+                                    "1" => GLOBAL_MODBUS_MANAGER.start(device_id).await.unwrap(),
+                                    _ => panic!("文件已损坏"),
+                                }
                             }
-                        }
-                        opcua::TYPE => {
-                            let req: CreateUpdateOpcuaReq = serde_json::from_str(items[3])?;
-                            GLOBAL_OPCUA_MANAGER.create(Some(device_id), req).await?;
-                            GLOBAL_OPCUA_MANAGER.recover(&device_id).await.unwrap();
-                            match items[2] {
-                                "0" => {}
-                                "1" => GLOBAL_OPCUA_MANAGER.start(device_id).await.unwrap(),
-                                _ => panic!("文件已损坏"),
+                            DeviceType::Opcua => {
+                                let req: CreateUpdateOpcuaReq = serde_json::from_str(items[3])?;
+                                GLOBAL_OPCUA_MANAGER.create(Some(device_id), req).await?;
+                                GLOBAL_OPCUA_MANAGER.recover(&device_id).await.unwrap();
+                                match items[2] {
+                                    "0" => {}
+                                    "1" => GLOBAL_OPCUA_MANAGER.start(device_id).await.unwrap(),
+                                    _ => panic!("文件已损坏"),
+                                }
                             }
-                        }
-                        coap::TYPE => {
-                            let req: CreateUpdateCoapReq = serde_json::from_str(items[3])?;
-                            GLOBAL_COAP_MANAGER.create(Some(device_id), req).await?;
-                            GLOBAL_COAP_MANAGER.recover(&device_id).await.unwrap();
-                            match items[2] {
-                                "0" => {}
-                                "1" => GLOBAL_COAP_MANAGER.start(device_id).await.unwrap(),
-                                _ => panic!("文件已损坏"),
+                            DeviceType::Coap => {
+                                let req: CreateUpdateCoapReq = serde_json::from_str(items[3])?;
+                                GLOBAL_COAP_MANAGER.create(Some(device_id), req).await?;
+                                GLOBAL_COAP_MANAGER.recover(&device_id).await.unwrap();
+                                match items[2] {
+                                    "0" => {}
+                                    "1" => GLOBAL_COAP_MANAGER.start(device_id).await.unwrap(),
+                                    _ => panic!("文件已损坏"),
+                                }
                             }
-                        }
-                        _ => {}
+                        },
+                        Err(e) => panic!("{}", e),
                     }
                 }
                 Ok(())

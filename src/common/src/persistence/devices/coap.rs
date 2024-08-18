@@ -1,6 +1,7 @@
 use std::{io, path::PathBuf};
 
 use tokio::fs;
+use types::devices::DeviceType;
 use uuid::Uuid;
 
 use crate::persistence;
@@ -25,13 +26,13 @@ fn get_api_file_path(device_id: &Uuid) -> PathBuf {
     get_device_dir().join(device_id.to_string()).join(API_FILE)
 }
 
-pub async fn create(device_id: &Uuid, r#type: &'static str, data: String) -> Result<(), io::Error> {
+pub async fn create(device_id: &Uuid, data: String) -> Result<(), io::Error> {
     crate::persistence::create(
         get_device_file_path(),
         device_id,
         &format!(
             "{}{}{}{}{}",
-            r#type,
+            DeviceType::Coap,
             DELIMITER,
             Status::Stopped,
             DELIMITER,

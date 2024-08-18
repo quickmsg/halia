@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::BaseConf;
+use crate::{apps::AppType, devices::DeviceType, BaseConf};
 
 pub mod apps;
 pub mod devices;
@@ -65,17 +65,33 @@ pub enum NodeType {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SourceNode {
+pub struct DeviceSourceNode {
     #[serde(rename = "type")]
-    pub typ: String,
+    pub typ: DeviceType,
     #[serde(flatten)]
     pub conf: Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SinkNode {
+pub struct AppSourceNode {
     #[serde(rename = "type")]
-    pub typ: String,
+    pub typ: AppType,
+    #[serde(flatten)]
+    pub conf: Value,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DeviceSinkNode {
+    #[serde(rename = "type")]
+    pub typ: DeviceType,
+    #[serde(flatten)]
+    pub conf: Value,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AppSinkNode {
+    #[serde(rename = "type")]
+    pub typ: AppType,
     #[serde(flatten)]
     pub conf: Value,
 }
