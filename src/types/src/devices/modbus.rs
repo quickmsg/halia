@@ -817,6 +817,12 @@ pub struct SearchPointsItemResp {
     pub rule_ref: RuleRef,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PointsQueryParams {
+    pub name: Option<String>,
+    pub err: Option<bool>,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateSinkReq {
     #[serde(flatten)]

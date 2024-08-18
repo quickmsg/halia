@@ -7,7 +7,7 @@ use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
 use tracing::error;
 use types::{
-    rules::{CreateUpdateRuleReq, SearchRulesResp, Summary},
+    rules::{CreateUpdateRuleReq, QueryParams, SearchRulesResp, Summary},
     Pagination,
 };
 use uuid::Uuid;
@@ -59,25 +59,39 @@ impl RuleManager {
         }
     }
 
-    pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchRulesResp> {
+    pub async fn search(
+        &self,
+        pagination: Pagination,
+        query_params: QueryParams,
+    ) -> SearchRulesResp {
+        let mut i = 0;
+        let mut total = 0;
         let mut data = vec![];
-        for rule in self
-            .rules
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(rule.search());
-            if data.len() == pagination.size {
-                break;
+
+        for rule in self.rules.read().await.iter().rev() {
+            let rule = rule.search();
+            if let Some(query_name) = &query_params.name {
+                if !rule.conf.base.name.contains(query_name) {
+                    continue;
+                }
             }
+
+            if let Some(on) = &query_params.on {
+                if rule.on != *on {
+                    continue;
+                }
+            }
+
+            if i >= (pagination.page - 1) * pagination.size && i < pagination.page * pagination.size
+            {
+                data.push(rule);
+            }
+
+            i += 1;
+            total += 1;
         }
-        Ok(SearchRulesResp {
-            total: self.rules.read().await.len(),
-            data,
-        })
+
+        SearchRulesResp { total, data }
     }
 
     pub async fn start(&self, id: Uuid) -> HaliaResult<()> {

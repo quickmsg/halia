@@ -5,7 +5,7 @@ use axum::{
 };
 use rule::GLOBAL_RULE_MANAGER;
 use types::{
-    rules::{CreateUpdateRuleReq, SearchRulesResp, Summary},
+    rules::{CreateUpdateRuleReq, QueryParams, SearchRulesResp, Summary},
     Pagination,
 };
 use uuid::Uuid;
@@ -32,9 +32,11 @@ async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()
     Ok(AppSuccess::empty())
 }
 
-async fn search(Query(pagination): Query<Pagination>) -> AppResult<AppSuccess<SearchRulesResp>> {
-    let data = GLOBAL_RULE_MANAGER.search(pagination).await?;
-    Ok(AppSuccess::data(data))
+async fn search(
+    Query(pagination): Query<Pagination>,
+    Query(query_params): Query<QueryParams>,
+) -> AppSuccess<SearchRulesResp> {
+    AppSuccess::data(GLOBAL_RULE_MANAGER.search(pagination, query_params).await)
 }
 
 async fn start(Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {

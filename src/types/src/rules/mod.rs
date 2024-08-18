@@ -16,6 +16,12 @@ pub struct Summary {
     pub off_cnt: usize,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct QueryParams {
+    pub name: Option<String>,
+    pub on: Option<bool>,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateUpdateRuleReq {
     #[serde(flatten)]

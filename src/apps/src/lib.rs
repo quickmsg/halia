@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 use tracing::warn;
 use types::{
     apps::{SearchAppsResp, Summary},
-    Pagination,
+    Pagination, QueryParams,
 };
 use uuid::Uuid;
 
@@ -66,32 +66,64 @@ impl AppManager {
         }
     }
 
-    pub async fn search(&self, pagination: Pagination) -> HaliaResult<SearchAppsResp> {
+    pub async fn search(
+        &self,
+        pagination: Pagination,
+        query_params: QueryParams,
+    ) -> SearchAppsResp {
         let mut data = vec![];
-        for (r#type, app_id) in self
-            .apps
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            match r#type {
-                &mqtt_client::TYPE => match GLOBAL_MQTT_CLIENT_MANAGER.search(app_id).await {
-                    Ok(info) => data.push(info),
-                    Err(e) => return Err(e),
-                },
-                _ => {}
+        let mut i = 0;
+        let mut total = 0;
+
+        for (typ, app_id) in self.apps.read().await.iter().rev() {
+            if let Some(query_type) = &query_params.typ {
+                if typ != query_type {
+                    continue;
+                }
             }
-            if data.len() == pagination.size {
-                break;
+
+            let resp = match typ {
+                &mqtt_client::TYPE => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id).await,
+                &http_client::TYPE => GLOBAL_HTTP_CLIENT_MANAGER.search(app_id),
+                _ => unreachable!(),
+            };
+
+            match resp {
+                Ok(resp) => {
+                    if let Some(query_name) = &query_params.name {
+                        if !resp.conf.base.name.contains(query_name) {
+                            continue;
+                        }
+                    }
+
+                    if let Some(on) = &query_params.on {
+                        if resp.on != *on {
+                            continue;
+                        }
+                    }
+
+                    if let Some(err) = &query_params.err {
+                        if resp.err.is_some() != *err {
+                            continue;
+                        }
+                    }
+
+                    if i >= (pagination.page - 1) * pagination.size
+                        && i < pagination.page * pagination.size
+                    {
+                        data.push(resp);
+                    }
+
+                    total += 1;
+                    i += 1;
+                }
+                Err(e) => {
+                    warn!("{}", e);
+                }
             }
         }
 
-        Ok(SearchAppsResp {
-            total: self.apps.read().await.len(),
-            data,
-        })
+        SearchAppsResp { total, data }
     }
 
     pub async fn delete(&self, app_id: &Uuid) {

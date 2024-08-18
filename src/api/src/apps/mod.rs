@@ -4,10 +4,10 @@ use http_client::http_client_routes;
 use mqtt_client::mqtt_client_routes;
 use types::{
     apps::{SearchAppsResp, Summary},
-    Pagination,
+    Pagination, QueryParams,
 };
 
-use crate::{AppResult, AppSuccess};
+use crate::AppSuccess;
 
 mod http_client;
 mod mqtt_client;
@@ -22,9 +22,9 @@ pub fn routes() -> Router {
 
 async fn search_apps(
     Query(pagination): Query<Pagination>,
-) -> AppResult<AppSuccess<SearchAppsResp>> {
-    let data = GLOBAL_APP_MANAGER.search(pagination).await?;
-    Ok(AppSuccess::data(data))
+    Query(query_params): Query<QueryParams>,
+) -> AppSuccess<SearchAppsResp> {
+    AppSuccess::data(GLOBAL_APP_MANAGER.search(pagination, query_params).await)
 }
 
 async fn get_apps_summary() -> AppSuccess<Summary> {

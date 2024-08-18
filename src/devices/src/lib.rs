@@ -2,10 +2,7 @@
 use std::{str::FromStr, sync::LazyLock};
 
 use coap::manager::GLOBAL_COAP_MANAGER;
-use common::{
-    error::{HaliaError, HaliaResult},
-    persistence,
-};
+use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
 use opcua::manager::GLOBAL_OPCUA_MANAGER;
 use tokio::sync::RwLock;
@@ -93,8 +90,8 @@ impl DeviceManager {
         let mut total = 0;
 
         for (typ, device_id) in self.devices.read().await.iter().rev() {
-            if let Some(query_typ) = &query_params.typ {
-                if typ != query_typ {
+            if let Some(query_type) = &query_params.typ {
+                if typ != query_type {
                     continue;
                 }
             }

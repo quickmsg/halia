@@ -1,6 +1,6 @@
 use apps::http_client::manager::GLOBAL_HTTP_CLIENT_MANAGER;
 use axum::{
-    extract::{multipart, Multipart, Path, Query},
+    extract::{Multipart, Path, Query},
     routing::{self, get, post, put},
     Json, Router,
 };
