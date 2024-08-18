@@ -2,14 +2,12 @@ use common::{error::HaliaResult, get_id, persistence};
 use opcua::types::{
     ByteString, Guid, Identifier, NodeId, QualifiedName, ReadValueId, UAString, Variant,
 };
-use types::devices::opcua::{
-    CreateUpdateGroupVariableReq, SearchGroupVariablesItemResp, VariableConf,
-};
+use types::devices::opcua::{CreateUpdateVariableReq, SearchVariablesItemResp, VariableConf};
 use uuid::Uuid;
 
 pub struct Variable {
     pub id: Uuid,
-    conf: CreateUpdateGroupVariableReq,
+    conf: CreateUpdateVariableReq,
     pub value: Option<Variant>,
 }
 
@@ -18,7 +16,7 @@ impl Variable {
         device_id: &Uuid,
         group_id: &Uuid,
         variable_id: Option<Uuid>,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<(Self, ReadValueId)> {
         Self::check_conf(&req)?;
 
@@ -33,7 +31,7 @@ impl Variable {
             .await?;
         }
 
-        let read_value_id = Variable::get_read_value_id(&req.variable_conf);
+        let read_value_id = Variable::get_read_value_id(&req.ext);
 
         Ok((
             Self {
@@ -45,7 +43,7 @@ impl Variable {
         ))
     }
 
-    fn check_conf(req: &CreateUpdateGroupVariableReq) -> HaliaResult<()> {
+    fn check_conf(req: &CreateUpdateVariableReq) -> HaliaResult<()> {
         Ok(())
     }
 
@@ -83,8 +81,8 @@ impl Variable {
         }
     }
 
-    pub fn search(&self) -> SearchGroupVariablesItemResp {
-        SearchGroupVariablesItemResp {
+    pub fn search(&self) -> SearchVariablesItemResp {
+        SearchVariablesItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
             value: serde_json::to_value(&self.value).unwrap(),
@@ -95,7 +93,7 @@ impl Variable {
         &mut self,
         device_id: &Uuid,
         group_id: &Uuid,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<Option<ReadValueId>> {
         persistence::devices::opcua::update_group_variable(
             device_id,
@@ -106,13 +104,13 @@ impl Variable {
         .await?;
 
         let mut restart = false;
-        if self.conf.variable_conf != req.variable_conf {
+        if self.conf.ext != req.ext {
             restart = true;
         }
         self.conf = req;
 
         if restart {
-            Ok(Some(Variable::get_read_value_id(&self.conf.variable_conf)))
+            Ok(Some(Variable::get_read_value_id(&self.conf.ext)))
         } else {
             Ok(None)
         }

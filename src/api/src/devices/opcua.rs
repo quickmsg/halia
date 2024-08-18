@@ -7,9 +7,10 @@ use devices::opcua::manager::GLOBAL_OPCUA_MANAGER;
 use types::{
     devices::{
         opcua::{
-            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-            CreateUpdateSinkReq, CreateUpdateSubscriptionReq, SearchGroupVariablesResp,
-            SearchGroupsResp, SearchSinksResp, SearchSubscriptionsResp,
+            CreateUpdateGroupReq, CreateUpdateMonitoredItemReq, CreateUpdateOpcuaReq,
+            CreateUpdateSinkReq, CreateUpdateSubscriptionReq, CreateUpdateVariableReq,
+            SearchGroupsResp, SearchMonitoredItemsItemResp, SearchSinksResp,
+            SearchSubscriptionsResp, SearchVariablesResp,
         },
         SearchDevicesItemResp,
     },
@@ -37,11 +38,11 @@ pub(crate) fn opcua_routes() -> Router {
                 .nest(
                     "/:group_id/variable",
                     Router::new()
-                        .route("/", post(create_group_variable))
-                        .route("/", get(search_group_variables))
-                        .route("/:variable_id", put(update_group_variable))
+                        .route("/", post(create_variable))
+                        .route("/", get(search_variables))
+                        .route("/:variable_id", put(update_variable))
                         // .route("/:variable_id/value", put(write_group_variable_value))
-                        .route("/:variable_id", routing::delete(delete_group_variable)),
+                        .route("/:variable_id", routing::delete(delete_variable)),
                 ),
         )
         .nest(
@@ -50,7 +51,18 @@ pub(crate) fn opcua_routes() -> Router {
                 .route("/", post(create_subscription))
                 .route("/", get(search_subscriptions))
                 .route("/:subscription_id", put(update_subscription))
-                .route("/:subscription_id", routing::delete(delete_subscription)),
+                .route("/:subscription_id", routing::delete(delete_subscription))
+                .nest(
+                    "/monitored_item",
+                    Router::new()
+                        .route("/", post(create_monitored_item))
+                        .route("/", get(search_monitored_items))
+                        .route("/:monitored_item_id", put(update_monitored_item))
+                        .route(
+                            "/:monitored_item_id",
+                            routing::delete(delete_monitored_item),
+                        ),
+                ),
         )
         .nest(
             "/:device_id/sink",
@@ -134,32 +146,32 @@ async fn delete_group(
     Ok(AppSuccess::empty())
 }
 
-async fn create_group_variable(
+async fn create_variable(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupVariableReq>,
+    Json(req): Json<CreateUpdateVariableReq>,
 ) -> AppResult<AppSuccess<()>> {
     GLOBAL_OPCUA_MANAGER
-        .create_group_variable(device_id, group_id, None, req)
+        .create_variable(device_id, group_id, None, req)
         .await?;
     Ok(AppSuccess::empty())
 }
 
-async fn search_group_variables(
+async fn search_variables(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
     Query(pagination): Query<Pagination>,
-) -> AppResult<AppSuccess<SearchGroupVariablesResp>> {
+) -> AppResult<AppSuccess<SearchVariablesResp>> {
     let data = GLOBAL_OPCUA_MANAGER
-        .search_group_variables(device_id, group_id, pagination)
+        .search_variables(device_id, group_id, pagination)
         .await?;
     Ok(AppSuccess::data(data))
 }
 
-async fn update_group_variable(
+async fn update_variable(
     Path((device_id, group_id, variable_id)): Path<(Uuid, Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateGroupVariableReq>,
+    Json(req): Json<CreateUpdateVariableReq>,
 ) -> AppResult<AppSuccess<()>> {
     GLOBAL_OPCUA_MANAGER
-        .update_group_variable(device_id, group_id, variable_id, req)
+        .update_variable(device_id, group_id, variable_id, req)
         .await?;
     Ok(AppSuccess::empty())
 }
@@ -177,11 +189,11 @@ async fn update_group_variable(
 //     }
 // }
 
-async fn delete_group_variable(
+async fn delete_variable(
     Path((device_id, group_id, variable_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
     GLOBAL_OPCUA_MANAGER
-        .delete_group_variable(device_id, group_id, variable_id)
+        .delete_variable(device_id, group_id, variable_id)
         .await?;
     Ok(AppSuccess::empty())
 }
@@ -217,6 +229,48 @@ async fn update_subscription(
 }
 
 async fn delete_subscription(
+    Path((device_id, group_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_OPCUA_MANAGER
+        .delete_subscription(device_id, group_id)
+        .await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn create_monitored_item(
+    Path((device_id, subscription_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateMonitoredItemReq>,
+) -> AppResult<AppSuccess<()>> {
+    // GLOBAL_OPCUA_MANAGER
+    //     .create_subscription(device_id, None, req)
+    //     .await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn search_monitored_items(
+    Path((device_id, subscription_id)): Path<(Uuid, Uuid)>,
+    Query(pagination): Query<Pagination>,
+) -> AppResult<AppSuccess<SearchMonitoredItemsItemResp>> {
+    // let data = GLOBAL_OPCUA_MANAGER
+    //     .search_subscriptions(device_id, pagination)
+    //     .await?;
+    // Ok(AppSuccess::data(data))
+    todo!()
+}
+
+async fn update_monitored_item(
+    Path((device_id, subscription_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateSubscriptionReq>,
+) -> AppResult<AppSuccess<()>> {
+    // GLOBAL_OPCUA_MANAGER
+    //     .update_subscription(device_id, group_id, req)
+    //     .await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn delete_monitored_item(
     Path((device_id, group_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
     GLOBAL_OPCUA_MANAGER

@@ -21,9 +21,9 @@ pub struct OpcuaConf {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateUpdateGroupReq {
     #[serde(flatten)]
-    pub base_conf: BaseConf,
+    pub base: BaseConf,
     #[serde(flatten)]
-    pub group_conf: GroupConf,
+    pub ext: GroupConf,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -59,11 +59,11 @@ pub enum TimestampsToReturn {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateGroupVariableReq {
+pub struct CreateUpdateVariableReq {
     #[serde(flatten)]
-    pub base_conf: BaseConf,
+    pub base: BaseConf,
     #[serde(flatten)]
-    pub variable_conf: VariableConf,
+    pub ext: VariableConf,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -109,6 +109,42 @@ pub struct SearchSubscriptionsItemResp {
     pub rule_ref: RuleRef,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct CreateUpdateMonitoredItemReq {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: MonitoredItemconf,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct MonitoredItemconf {
+    // 秒
+    pub publishing_interval: u64,
+
+    pub lifetime_count: u32,
+    pub max_keep_alive_count: u32,
+    pub max_notifications_per_publish: u32,
+    pub priority: u8,
+    pub publishing_enalbed: bool,
+
+    pub monitored_items: Vec<VariableConf>,
+}
+
+#[derive(Serialize)]
+pub struct SearchMonitoredItemsResp {
+    pub total: usize,
+    pub data: Vec<SearchMonitoredItemsItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchMonitoredItemsItemResp {
+    pub id: Uuid,
+    #[serde(flatten)]
+    pub conf: CreateUpdateMonitoredItemReq,
+    pub rule_ref: RuleRef,
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum IdentifierType {
@@ -119,16 +155,16 @@ pub enum IdentifierType {
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupVariablesResp {
+pub struct SearchVariablesResp {
     pub total: usize,
-    pub data: Vec<SearchGroupVariablesItemResp>,
+    pub data: Vec<SearchVariablesItemResp>,
 }
 
 #[derive(Serialize)]
-pub struct SearchGroupVariablesItemResp {
+pub struct SearchVariablesItemResp {
     pub id: Uuid,
     #[serde(flatten)]
-    pub conf: CreateUpdateGroupVariableReq,
+    pub conf: CreateUpdateVariableReq,
     pub value: serde_json::Value,
 }
 

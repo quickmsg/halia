@@ -7,9 +7,9 @@ use tokio::sync::broadcast;
 use types::{
     devices::{
         opcua::{
-            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-            CreateUpdateSinkReq, CreateUpdateSubscriptionReq, SearchGroupVariablesResp,
-            SearchGroupsResp, SearchSinksResp, SearchSubscriptionsResp,
+            CreateUpdateGroupReq, CreateUpdateOpcuaReq, CreateUpdateSinkReq,
+            CreateUpdateSubscriptionReq, CreateUpdateVariableReq, SearchGroupsResp,
+            SearchSinksResp, SearchSubscriptionsResp, SearchVariablesResp,
         },
         DeviceType, SearchDevicesItemResp,
     },
@@ -152,12 +152,12 @@ impl Manager {
         }
     }
 
-    pub async fn create_group_variable(
+    pub async fn create_variable(
         &self,
         device_id: Uuid,
         group_id: Uuid,
         variable_id: Option<Uuid>,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(&device_id) {
             Some(mut device) => {
@@ -169,24 +169,24 @@ impl Manager {
         }
     }
 
-    pub async fn search_group_variables(
+    pub async fn search_variables(
         &self,
         device_id: Uuid,
         group_id: Uuid,
         pagination: Pagination,
-    ) -> HaliaResult<SearchGroupVariablesResp> {
+    ) -> HaliaResult<SearchVariablesResp> {
         match self.devices.get(&device_id) {
             Some(device) => device.read_group_variables(group_id, pagination).await,
             None => device_not_find_err!(device_id),
         }
     }
 
-    pub async fn update_group_variable(
+    pub async fn update_variable(
         &self,
         device_id: Uuid,
         group_id: Uuid,
         variable_id: Uuid,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
         match self.devices.get(&device_id) {
             Some(device) => {
@@ -210,7 +210,7 @@ impl Manager {
     //     }
     // }
 
-    pub async fn delete_group_variable(
+    pub async fn delete_variable(
         &self,
         device_id: Uuid,
         group_id: Uuid,

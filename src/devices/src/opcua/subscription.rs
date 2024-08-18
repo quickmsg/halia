@@ -20,6 +20,8 @@ pub struct Subscription {
     pub id: Uuid,
     conf: CreateUpdateSubscriptionReq,
 
+    monitored_items: Vec<MonitoredItem>,
+
     on: bool,
 
     pub ref_info: RefInfo,
@@ -50,6 +52,7 @@ impl Subscription {
             on: false,
             ref_info: RefInfo::new(),
             mb_tx: None,
+            monitored_items: vec![],
         })
     }
 

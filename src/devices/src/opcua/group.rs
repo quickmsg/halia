@@ -20,14 +20,13 @@ use tokio::{
 use tracing::debug;
 use types::{
     devices::opcua::{
-        CreateUpdateGroupReq, CreateUpdateGroupVariableReq, SearchGroupVariablesResp,
-        SearchGroupsItemResp,
+        CreateUpdateGroupReq, CreateUpdateVariableReq, SearchGroupsItemResp, SearchVariablesResp,
     },
     Pagination,
 };
 use uuid::Uuid;
 
-use super::group_variable::Variable;
+use super::variable::Variable;
 
 macro_rules! variable_not_found_err {
     ($variable_id:expr) => {
@@ -94,7 +93,7 @@ impl Group {
             assert_eq!(items.len(), 2);
 
             let variable_id = Uuid::from_str(items[0]).unwrap();
-            let req: CreateUpdateGroupVariableReq = serde_json::from_str(items[1])?;
+            let req: CreateUpdateVariableReq = serde_json::from_str(items[1])?;
             self.create_variable(device_id, Some(variable_id), req)
                 .await?;
         }
@@ -118,7 +117,7 @@ impl Group {
         .await?;
 
         let mut restart = false;
-        if self.conf.group_conf != req.group_conf {
+        if self.conf.ext != req.ext {
             restart = true;
         }
         self.conf = req;
@@ -164,7 +163,7 @@ impl Group {
     }
 
     async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>, client: Arc<Session>) {
-        let interval = self.conf.group_conf.interval;
+        let interval = self.conf.ext.interval;
         let variables = self.variables.clone();
         let handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
@@ -208,7 +207,7 @@ impl Group {
         &self,
         device_id: &Uuid,
         variable_id: Option<Uuid>,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
         match Variable::new(device_id, &self.id, variable_id, req).await {
             Ok((variable, read_value_id)) => {
@@ -221,7 +220,7 @@ impl Group {
         }
     }
 
-    pub async fn read_variables(&self, pagination: Pagination) -> SearchGroupVariablesResp {
+    pub async fn search_variables(&self, pagination: Pagination) -> SearchVariablesResp {
         let mut data = vec![];
         for variable in self
             .variables
@@ -238,7 +237,7 @@ impl Group {
             }
         }
 
-        SearchGroupVariablesResp {
+        SearchVariablesResp {
             total: self.variables.read().await.0.len(),
             data,
         }
@@ -248,7 +247,7 @@ impl Group {
         &self,
         device_id: &Uuid,
         variable_id: Uuid,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
         let mut lock_variables = self.variables.write().await;
         for (i, variable) in lock_variables.0.iter_mut().enumerate() {

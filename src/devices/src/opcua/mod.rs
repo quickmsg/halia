@@ -24,9 +24,9 @@ use tracing::debug;
 use types::{
     devices::{
         opcua::{
-            CreateUpdateGroupReq, CreateUpdateGroupVariableReq, CreateUpdateOpcuaReq,
-            CreateUpdateSinkReq, CreateUpdateSubscriptionReq, OpcuaConf, SearchGroupVariablesResp,
-            SearchGroupsResp, SearchSinksResp, SearchSubscriptionsResp,
+            CreateUpdateGroupReq, CreateUpdateOpcuaReq, CreateUpdateSinkReq,
+            CreateUpdateSubscriptionReq, CreateUpdateVariableReq, OpcuaConf, SearchGroupsResp,
+            SearchSinksResp, SearchSubscriptionsResp, SearchVariablesResp,
         },
         DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -35,11 +35,11 @@ use types::{
 use uuid::Uuid;
 
 mod group;
-mod group_variable;
 pub mod manager;
+mod monitored_item;
 mod sink;
 mod subscription;
-mod subscription_item;
+mod variable;
 
 macro_rules! group_not_found_err {
     ($group_id:expr) => {
@@ -405,7 +405,7 @@ impl Opcua {
         &mut self,
         group_id: Uuid,
         variable_id: Option<Uuid>,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
         match self
             .groups
@@ -423,7 +423,7 @@ impl Opcua {
         &self,
         group_id: Uuid,
         pagination: Pagination,
-    ) -> HaliaResult<SearchGroupVariablesResp> {
+    ) -> HaliaResult<SearchVariablesResp> {
         match self
             .groups
             .read()
@@ -431,7 +431,7 @@ impl Opcua {
             .iter()
             .find(|group| group.id == group_id)
         {
-            Some(group) => Ok(group.read_variables(pagination).await),
+            Some(group) => Ok(group.search_variables(pagination).await),
             None => group_not_found_err!(group_id),
         }
     }
@@ -440,7 +440,7 @@ impl Opcua {
         &self,
         group_id: Uuid,
         variable_id: Uuid,
-        req: CreateUpdateGroupVariableReq,
+        req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
         match self
             .groups

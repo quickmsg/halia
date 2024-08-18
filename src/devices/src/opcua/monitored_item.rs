@@ -9,16 +9,16 @@ use common::{
 };
 use message::MessageBatch;
 use opcua::{
-    client::{DataChangeCallback, MonitoredItem, Session},
+    client::{DataChangeCallback, MonitoredItem as OpcuaMonitoredItem, Session},
     types::{DataValue, MonitoredItemCreateRequest, NodeId, TimestampsToReturn},
 };
 use tokio::sync::broadcast;
-use types::devices::opcua::{CreateUpdateSubscriptionReq, SearchSubscriptionsItemResp};
+use types::devices::opcua::{CreateUpdateMonitoredItemReq, SearchMonitoredItemsItemResp};
 use uuid::Uuid;
 
-pub struct Subscription {
+pub struct MonitoredItem {
     pub id: Uuid,
-    conf: CreateUpdateSubscriptionReq,
+    conf: CreateUpdateMonitoredItemReq,
 
     on: bool,
 
@@ -26,11 +26,11 @@ pub struct Subscription {
     mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
-impl Subscription {
+impl MonitoredItem {
     pub async fn new(
         device_id: &Uuid,
         subscription_id: Option<Uuid>,
-        req: CreateUpdateSubscriptionReq,
+        req: CreateUpdateMonitoredItemReq,
     ) -> HaliaResult<Self> {
         Self::check_conf(&req)?;
 
@@ -53,7 +53,7 @@ impl Subscription {
         })
     }
 
-    fn check_conf(req: &CreateUpdateSubscriptionReq) -> HaliaResult<()> {
+    fn check_conf(req: &CreateUpdateMonitoredItemReq) -> HaliaResult<()> {
         if req.ext.publishing_interval == 0 {
             return Err(HaliaError::Common("发布间隔必须大于0!".to_owned()));
         }
@@ -61,7 +61,7 @@ impl Subscription {
         Ok(())
     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdateSubscriptionReq) -> HaliaResult<()> {
+    pub fn check_duplicate(&self, req: &CreateUpdateMonitoredItemReq) -> HaliaResult<()> {
         if self.conf.base.name == req.base.name {
             return Err(HaliaError::NameExists);
         }
@@ -73,8 +73,8 @@ impl Subscription {
         Ok(())
     }
 
-    pub fn search(&self) -> SearchSubscriptionsItemResp {
-        SearchSubscriptionsItemResp {
+    pub fn search(&self) -> SearchMonitoredItemsItemResp {
+        SearchMonitoredItemsItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
             rule_ref: self.ref_info.get_rule_ref(),
@@ -118,7 +118,7 @@ impl Subscription {
     pub async fn update(
         &mut self,
         device_id: &Uuid,
-        req: CreateUpdateSubscriptionReq,
+        req: CreateUpdateMonitoredItemReq,
     ) -> HaliaResult<()> {
         todo!()
     }
@@ -140,7 +140,7 @@ impl Subscription {
     }
 }
 
-fn print_value(data_value: &DataValue, item: &MonitoredItem) {
+fn print_value(data_value: &DataValue, item: &OpcuaMonitoredItem) {
     let node_id = &item.item_to_monitor().node_id;
     if let Some(ref value) = data_value.value {
         println!("Item \"{}\", Value = {:?}", node_id, value);
