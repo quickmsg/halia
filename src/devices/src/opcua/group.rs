@@ -80,7 +80,7 @@ impl Group {
 
     pub async fn recover(&self, device_id: &Uuid) -> HaliaResult<()> {
         let variable_datas =
-            persistence::devices::opcua::read_group_variables(device_id, &self.id).await?;
+            persistence::devices::opcua::read_variables(device_id, &self.id).await?;
 
         for variable_data in variable_datas {
             if variable_data.len() == 0 {

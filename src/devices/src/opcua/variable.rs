@@ -22,7 +22,7 @@ impl Variable {
 
         let (variable_id, new) = get_id(variable_id);
         if new {
-            persistence::devices::opcua::create_group_variable(
+            persistence::devices::opcua::create_variable(
                 device_id,
                 group_id,
                 &variable_id,
@@ -95,7 +95,7 @@ impl Variable {
         group_id: &Uuid,
         req: CreateUpdateVariableReq,
     ) -> HaliaResult<Option<ReadValueId>> {
-        persistence::devices::opcua::update_group_variable(
+        persistence::devices::opcua::update_variable(
             device_id,
             group_id,
             &self.id,
@@ -117,7 +117,7 @@ impl Variable {
     }
 
     pub async fn delete(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {
-        persistence::devices::opcua::delete_group_variable(device_id, group_id, &self.id).await?;
+        persistence::devices::opcua::delete_variable(device_id, group_id, &self.id).await?;
         Ok(())
     }
 }

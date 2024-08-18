@@ -119,16 +119,26 @@ pub struct CreateUpdateMonitoredItemReq {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct MonitoredItemconf {
-    // 秒
-    pub publishing_interval: u64,
+    #[serde(flatten)]
+    pub variable: VariableConf,
+    pub attribute_id: u32,
+    pub index_range: String,
+    pub data_encoding: String,
+    pub monitoring_mode: MonitoringMode,
 
-    pub lifetime_count: u32,
-    pub max_keep_alive_count: u32,
-    pub max_notifications_per_publish: u32,
-    pub priority: u8,
-    pub publishing_enalbed: bool,
+    pub client_handle: u32,
+    pub sampling_interval: f64,
+    // pub filter: 
+    pub queue_size: u32,
+    pub discard_oleds: bool,
+}
 
-    pub monitored_items: Vec<VariableConf>,
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum MonitoringMode {
+    Disabled,
+    Sampling,
+    Reporting,
 }
 
 #[derive(Serialize)]
