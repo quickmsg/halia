@@ -68,6 +68,12 @@ pub enum Qos {
     ExactlyOnce = 2,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SourcesQueryParams {
+    pub name: Option<String>,
+    pub err: Option<bool>,
+}
+
 #[derive(Serialize)]
 pub struct SearchSourcesResp {
     pub total: usize,
@@ -114,6 +120,12 @@ pub struct SinkConf {
     pub correlation_data: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription_identifiers: Option<Vec<usize>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SinksQueryParams {
+    pub name: Option<String>,
+    pub err: Option<bool>,
 }
 
 #[derive(Serialize)]

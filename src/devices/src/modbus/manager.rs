@@ -7,8 +7,8 @@ use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
         modbus::{
-            CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
-            SearchSinksResp,
+            CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, PointsQueryParams,
+            SearchPointsResp, SearchSinksResp, SinksQueryParams,
         },
         SearchDevicesItemResp,
     },
@@ -134,9 +134,10 @@ impl Manager {
         &self,
         device_id: Uuid,
         pagination: Pagination,
+        query_params: PointsQueryParams,
     ) -> HaliaResult<SearchPointsResp> {
         match self.devices.get(&device_id) {
-            Some(device) => Ok(device.search_points(pagination).await),
+            Some(device) => Ok(device.search_points(pagination, query_params).await),
             None => device_not_find_err!(device_id),
         }
     }
@@ -236,9 +237,10 @@ impl Manager {
         &self,
         device_id: Uuid,
         pagination: Pagination,
+        query_params: SinksQueryParams,
     ) -> HaliaResult<SearchSinksResp> {
         match self.devices.get(&device_id) {
-            Some(device) => Ok(device.search_sinks(pagination).await),
+            Some(device) => Ok(device.search_sinks(pagination, query_params).await),
             None => device_not_find_err!(device_id),
         }
     }

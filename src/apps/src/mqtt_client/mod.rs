@@ -19,7 +19,7 @@ use types::{
     apps::{
         mqtt_client::{
             CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, Qos,
-            SearchSinksResp, SearchSourcesResp,
+            SearchSinksResp, SearchSourcesResp, SinksQueryParams, SourcesQueryParams,
         },
         SearchAppsItemConf, SearchAppsItemResp,
     },
@@ -525,26 +525,33 @@ impl MqttClient {
         }
     }
 
-    async fn search_sources(&self, pagination: Pagination) -> HaliaResult<SearchSourcesResp> {
+    async fn search_sources(
+        &self,
+        pagination: Pagination,
+        query_params: SourcesQueryParams,
+    ) -> HaliaResult<SearchSourcesResp> {
+        let mut total = 0;
         let mut data = vec![];
-        for source in self
-            .sources
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(source.search());
-            if data.len() == pagination.size {
-                break;
+
+        for source in self.sources.read().await.iter().rev() {
+            let source = source.search();
+
+            if let Some(query_name) = &query_params.name {
+                if !source.conf.base.name.contains(query_name) {
+                    continue;
+                }
             }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(source);
+            }
+
+            total += 1;
         }
 
-        Ok(SearchSourcesResp {
-            total: self.sources.read().await.len(),
-            data,
-        })
+        Ok(SearchSourcesResp { total, data })
     }
 
     async fn update_source(&self, source_id: Uuid, req: CreateUpdateSourceReq) -> HaliaResult<()> {
@@ -658,23 +665,30 @@ impl MqttClient {
         }
     }
 
-    async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
+    async fn search_sinks(
+        &self,
+        pagination: Pagination,
+        query_params: SinksQueryParams,
+    ) -> SearchSinksResp {
+        let mut total = 0;
         let mut data = vec![];
-        for sink in self
-            .sinks
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(sink.search());
-            if data.len() == pagination.size {
-                break;
+        for sink in self.sinks.iter().rev() {
+            let sink = sink.search();
+            if let Some(query_name) = &query_params.name {
+                if !sink.conf.base.name.contains(query_name) {
+                    continue;
+                }
             }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(sink);
+            }
+
+            total += 1;
         }
-        SearchSinksResp {
-            total: self.sinks.len(),
-            data,
-        }
+        SearchSinksResp { total, data }
     }
 
     pub async fn update_sink(

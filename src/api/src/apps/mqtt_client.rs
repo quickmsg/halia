@@ -8,7 +8,7 @@ use bytes::Bytes;
 use types::{
     apps::mqtt_client::{
         CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
-        SearchSourcesResp,
+        SearchSourcesResp, SinksQueryParams, SourcesQueryParams,
     },
     Pagination,
 };
@@ -139,9 +139,10 @@ async fn create_source(
 async fn search_sources(
     Path(app_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
+    Query(query_params): Query<SourcesQueryParams>,
 ) -> AppResult<AppSuccess<SearchSourcesResp>> {
     let data = GLOBAL_MQTT_CLIENT_MANAGER
-        .search_sources(app_id, pagination)
+        .search_sources(app_id, pagination, query_params)
         .await?;
     Ok(AppSuccess::data(data))
 }
@@ -176,9 +177,10 @@ async fn create_sink(
 async fn search_sinks(
     Path(app_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
+    Query(query_params): Query<SinksQueryParams>,
 ) -> AppResult<AppSuccess<SearchSinksResp>> {
     let data = GLOBAL_MQTT_CLIENT_MANAGER
-        .search_sinks(app_id, pagination)
+        .search_sinks(app_id, pagination, query_params)
         .await?;
     Ok(AppSuccess::data(data))
 }

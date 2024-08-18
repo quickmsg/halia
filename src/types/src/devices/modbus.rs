@@ -801,6 +801,12 @@ pub enum Area {
     HoldingRegisters, // 16-bit word 读写
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PointsQueryParams {
+    pub name: Option<String>,
+    pub err: Option<bool>,
+}
+
 #[derive(Serialize)]
 pub struct SearchPointsResp {
     pub total: usize,
@@ -815,12 +821,6 @@ pub struct SearchPointsItemResp {
     pub err_info: Option<String>,
     #[serde(flatten)]
     pub rule_ref: RuleRef,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PointsQueryParams {
-    pub name: Option<String>,
-    pub err: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -839,6 +839,12 @@ pub struct SinkConf {
     pub area: Area,
     pub address: u16,
     pub value: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SinksQueryParams {
+    pub name: Option<String>,
+    pub err: Option<bool>,
 }
 
 #[derive(Serialize)]

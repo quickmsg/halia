@@ -32,7 +32,8 @@ use types::{
     devices::{
         modbus::{
             Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType,
-            Encode, ModbusConf, SearchPointsResp, SearchSinksResp, Type,
+            Encode, ModbusConf, PointsQueryParams, SearchPointsResp, SearchSinksResp,
+            SinksQueryParams, Type,
         },
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -480,26 +481,31 @@ impl Modbus {
         }
     }
 
-    pub async fn search_points(&self, pagination: Pagination) -> SearchPointsResp {
+    pub async fn search_points(
+        &self,
+        pagination: Pagination,
+        query_params: PointsQueryParams,
+    ) -> SearchPointsResp {
+        let mut total = 0;
         let mut data = vec![];
-        for point in self
-            .points
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(point.search());
-            if data.len() == pagination.size {
-                break;
+        for point in self.points.read().await.iter().rev() {
+            let point = point.search();
+            if let Some(query_name) = &query_params.name {
+                if !point.conf.base.name.contains(query_name) {
+                    continue;
+                }
             }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(point);
+            }
+
+            total += 1;
         }
 
-        SearchPointsResp {
-            total: self.points.read().await.len(),
-            data,
-        }
+        SearchPointsResp { total, data }
     }
 
     pub async fn update_point(
@@ -658,24 +664,32 @@ impl Modbus {
         }
     }
 
-    pub async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
+    pub async fn search_sinks(
+        &self,
+        pagination: Pagination,
+        query_params: SinksQueryParams,
+    ) -> SearchSinksResp {
+        let mut total = 0;
         let mut data = vec![];
-        for sink in self
-            .sinks
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(sink.search());
-            if data.len() == pagination.size {
-                break;
+        for sink in self.sinks.iter().rev() {
+            let sink = sink.search();
+
+            if let Some(query_name) = &query_params.name {
+                if !sink.conf.base.name.contains(query_name) {
+                    continue;
+                }
             }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(sink);
+            }
+
+            total += 1;
         }
 
-        SearchSinksResp {
-            total: self.sinks.len(),
-            data,
-        }
+        SearchSinksResp { total, data }
     }
 
     pub async fn update_sink(

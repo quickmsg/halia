@@ -7,8 +7,8 @@ use devices::modbus::manager::GLOBAL_MODBUS_MANAGER;
 use types::{
     devices::{
         modbus::{
-            CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, SearchPointsResp,
-            SearchSinksResp,
+            CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, PointsQueryParams,
+            SearchPointsResp, SearchSinksResp, SinksQueryParams,
         },
         SearchDevicesItemResp,
     },
@@ -95,9 +95,10 @@ async fn create_point(
 async fn search_points(
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
+    Query(query_params): Query<PointsQueryParams>,
 ) -> AppResult<AppSuccess<SearchPointsResp>> {
     let data = GLOBAL_MODBUS_MANAGER
-        .search_points(device_id, pagination)
+        .search_points(device_id, pagination, query_params)
         .await?;
     Ok(AppSuccess::data(data))
 }
@@ -144,9 +145,10 @@ async fn create_sink(
 async fn search_sinks(
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
+    Query(query_params): Query<SinksQueryParams>,
 ) -> AppResult<AppSuccess<SearchSinksResp>> {
     let data = GLOBAL_MODBUS_MANAGER
-        .search_sinks(device_id, pagination)
+        .search_sinks(device_id, pagination, query_params)
         .await?;
     Ok(AppSuccess::data(data))
 }

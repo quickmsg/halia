@@ -8,7 +8,7 @@ use types::{
     apps::{
         mqtt_client::{
             CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, SearchSinksResp,
-            SearchSourcesResp,
+            SearchSourcesResp, SinksQueryParams, SourcesQueryParams,
         },
         SearchAppsItemResp,
     },
@@ -119,9 +119,10 @@ impl Manager {
         &self,
         app_id: Uuid,
         pagination: Pagination,
+        query_params: SourcesQueryParams,
     ) -> HaliaResult<SearchSourcesResp> {
         match self.apps.get(&app_id) {
-            Some(app) => app.search_sources(pagination).await,
+            Some(app) => app.search_sources(pagination, query_params).await,
             None => mqtt_client_not_find_err!(app_id),
         }
     }
@@ -197,9 +198,10 @@ impl Manager {
         &self,
         app_id: Uuid,
         pagination: Pagination,
+        query_params: SinksQueryParams,
     ) -> HaliaResult<SearchSinksResp> {
         match self.apps.get(&app_id) {
-            Some(app) => Ok(app.search_sinks(pagination).await),
+            Some(app) => Ok(app.search_sinks(pagination, query_params).await),
             None => mqtt_client_not_find_err!(app_id),
         }
     }

@@ -43,6 +43,12 @@ pub struct SourceConf {
     pub body: serde_json::Value,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SourcesQueryParams {
+    pub name: Option<String>,
+    pub err: Option<bool>,
+}
+
 #[derive(Serialize)]
 pub struct SearchSourcesResp {
     pub total: usize,
@@ -89,6 +95,12 @@ pub enum SinkMethod {
     Patch,
     Delete,
     Head,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SinksQueryParams {
+    pub name: Option<String>,
+    pub err: Option<bool>,
 }
 
 #[derive(Serialize)]
