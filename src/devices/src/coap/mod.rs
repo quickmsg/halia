@@ -8,6 +8,7 @@ use common::{
     persistence::{self, Status},
 };
 use message::MessageBatch;
+use observe::Observe;
 use protocol::coap::request::CoapOption;
 use sink::Sink;
 use std::str::FromStr;
@@ -15,8 +16,8 @@ use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
         coap::{
-            CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateSinkReq, SearchAPIsResp,
-            SearchSinksResp,
+            CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
+            SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
         DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -28,6 +29,15 @@ mod api;
 pub mod manager;
 mod observe;
 mod sink;
+
+macro_rules! observe_not_found_err {
+    ($observe_id:expr) => {
+        Err(HaliaError::NotFound(
+            "coap设备观察器".to_owned(),
+            $observe_id,
+        ))
+    };
+}
 
 macro_rules! api_not_found_err {
     ($api_id:expr) => {
@@ -45,6 +55,7 @@ pub struct Coap {
     id: Uuid,
     conf: CreateUpdateCoapReq,
 
+    observes: Vec<Observe>,
     apis: Vec<API>,
     sinks: Vec<Sink>,
 
@@ -54,8 +65,9 @@ pub struct Coap {
 
 impl Coap {
     pub async fn new(device_id: Option<Uuid>, req: CreateUpdateCoapReq) -> HaliaResult<Self> {
-        let (device_id, new) = get_id(device_id);
+        Self::check_conf(&req)?;
 
+        let (device_id, new) = get_id(device_id);
         if new {
             persistence::devices::coap::create(&device_id, serde_json::to_string(&req).unwrap())
                 .await?;
@@ -64,6 +76,7 @@ impl Coap {
         Ok(Coap {
             id: device_id,
             conf: req,
+            observes: vec![],
             apis: vec![],
             sinks: vec![],
             on: false,
@@ -71,12 +84,29 @@ impl Coap {
         })
     }
 
+    fn check_conf(req: &CreateUpdateCoapReq) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateCoapReq) -> HaliaResult<()> {
+        Ok(())
+    }
+
     async fn recover(&mut self) -> HaliaResult<()> {
+        let observe_datas = persistence::devices::coap::read_observes(&self.id).await?;
+        for observe_data in observe_datas {
+            let items = observe_data
+                .split(persistence::DELIMITER)
+                .collect::<Vec<&str>>();
+            assert_eq!(items.len(), 2);
+
+            let observe_id = Uuid::from_str(items[0]).unwrap();
+            let req: CreateUpdateObserveReq = serde_json::from_str(items[1])?;
+            // self.create_observe(Some(observe_id), req).await?;
+        }
+
         let api_datas = persistence::devices::coap::read_apis(&self.id).await?;
         for api_data in api_datas {
-            if api_data.len() == 0 {
-                continue;
-            }
             let items = api_data
                 .split(persistence::DELIMITER)
                 .collect::<Vec<&str>>();
@@ -403,4 +433,59 @@ pub(crate) fn transform_options(
         }
     }
     Ok(options)
+}
+
+// observe 代码块
+impl Coap {
+    pub async fn create_observe(
+        &mut self,
+        observe_id: Option<Uuid>,
+        req: CreateUpdateObserveReq,
+    ) -> HaliaResult<()> {
+        let mut observe = Observe::new(&self.id, observe_id, req).await?;
+        // if self.on {
+        //     _ = api.start(&self.conf.ext).await;
+        // }
+        self.observes.push(observe);
+
+        Ok(())
+    }
+
+    pub async fn search_observes(&self, pagination: Pagination) -> SearchObservesResp {
+        let mut data = vec![];
+        for observe in self.observes.iter().rev() {
+            data.push(observe.search());
+        }
+
+        SearchObservesResp {
+            total: self.apis.len(),
+            data,
+        }
+    }
+
+    pub async fn update_observe(
+        &mut self,
+        observe_id: Uuid,
+        req: CreateUpdateObserveReq,
+    ) -> HaliaResult<()> {
+        match self
+            .observes
+            .iter_mut()
+            .find(|observe| observe.id == observe_id)
+        {
+            Some(observe) => observe.update(&self.id, req).await,
+            None => observe_not_found_err!(observe_id),
+        }
+    }
+
+    pub async fn delete_observe(&mut self, observe_id: Uuid) -> HaliaResult<()> {
+        // match self.apis.iter_mut().find(|api| api.id == api_id) {
+        //     Some(api) => api.delete(&self.id).await?,
+        //     None => return api_not_found_err!(api_id),
+        // }
+        // self.apis.retain(|api| api.id != api_id);
+        // Ok(())
+
+        todo!()
+    }
 }

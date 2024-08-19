@@ -83,7 +83,7 @@ pub struct CreateUpdateObserveReq {
     #[serde(flatten)]
     pub base: BaseConf,
     #[serde(flatten)]
-    pub ext: APIConf,
+    pub ext: ObserveConf,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -100,13 +100,14 @@ pub struct ObserveConf {
 #[derive(Serialize)]
 pub struct SearchObservesResp {
     pub total: usize,
-    pub data: Vec<SearchObservesResp>,
+    pub data: Vec<SearchObservesItemResp>,
 }
 
 #[derive(Serialize)]
 pub struct SearchObservesItemResp {
     pub id: Uuid,
-    pub conf: CreateUpdateAPIReq,
+    pub conf: CreateUpdateObserveReq,
+    pub rule_ref: RuleRef,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

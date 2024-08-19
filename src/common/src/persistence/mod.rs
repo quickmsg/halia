@@ -10,7 +10,6 @@ use tokio::{
     fs::OpenOptions,
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use tracing::debug;
 use uuid::Uuid;
 
 pub mod apps;
@@ -74,7 +73,11 @@ async fn read(path: impl AsRef<Path>) -> Result<Vec<String>, io::Error> {
     let mut buf = String::new();
     file.read_to_string(&mut buf).await?;
 
-    Ok(buf.split("\n").map(|s| s.to_string()).collect())
+    Ok(buf
+        .split("\n")
+        .filter(|s| s.len() > 0)
+        .map(|s| s.to_string())
+        .collect())
 }
 
 async fn update(path: impl AsRef<Path>, id: &Uuid, data: &str) -> Result<(), io::Error> {

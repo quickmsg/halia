@@ -7,8 +7,8 @@ use devices::coap::manager::GLOBAL_COAP_MANAGER;
 use types::{
     devices::{
         coap::{
-            CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateSinkReq, SearchAPIsResp,
-            SearchSinksResp,
+            CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
+            SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
         SearchDevicesItemResp,
     },
@@ -29,6 +29,14 @@ pub(crate) fn coap_routes() -> Router {
         .nest(
             "/:device_id",
             Router::new()
+                .nest(
+                    "/observe",
+                    Router::new()
+                        .route("/", post(create_observe))
+                        .route("/", get(search_observes))
+                        .route("/:observe_id", put(update_observe))
+                        .route("/:observe_id", routing::delete(delete_observe)),
+                )
                 .nest(
                     "/api",
                     Router::new()
@@ -78,6 +86,45 @@ async fn stop(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
 
 async fn delete(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
     GLOBAL_COAP_MANAGER.delete(device_id).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn create_observe(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateObserveReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER
+        .create_observe(device_id, None, req)
+        .await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn search_observes(
+    Path(device_id): Path<Uuid>,
+    Query(pagination): Query<Pagination>,
+) -> AppResult<AppSuccess<SearchObservesResp>> {
+    let data = GLOBAL_COAP_MANAGER
+        .search_observes(device_id, pagination)
+        .await?;
+    Ok(AppSuccess::data(data))
+}
+
+async fn update_observe(
+    Path((device_id, api_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateObserveReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER
+        .update_observe(device_id, api_id, req)
+        .await?;
+    Ok(AppSuccess::empty())
+}
+
+pub async fn delete_observe(
+    Path((device_id, observe_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_COAP_MANAGER
+        .delete_observe(device_id, observe_id)
+        .await?;
     Ok(AppSuccess::empty())
 }
 
