@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
@@ -9,8 +11,8 @@ use protocol::coap::{
     client::{ObserveMessage, UdpCoAPClient},
     request::Packet,
 };
-use tokio::sync::{broadcast, oneshot};
-use tracing::debug;
+use tokio::sync::{broadcast, oneshot, RwLock};
+use tracing::{debug, warn};
 use types::devices::coap::{CoapConf, CreateUpdateObserveReq, SearchObservesItemResp};
 use uuid::Uuid;
 
@@ -18,12 +20,10 @@ pub struct Observe {
     pub id: Uuid,
     conf: CreateUpdateObserveReq,
 
-    on: bool,
-
     observe_tx: Option<oneshot::Sender<ObserveMessage>>,
 
     pub ref_info: RefInfo,
-    mb_tx: Option<broadcast::Sender<MessageBatch>>,
+    mb_tx: Arc<RwLock<Option<broadcast::Sender<MessageBatch>>>>,
 }
 
 impl Observe {
@@ -47,10 +47,9 @@ impl Observe {
         Ok(Self {
             id: observe_id,
             conf: req,
-            on: false,
             observe_tx: None,
             ref_info: RefInfo::new(),
-            mb_tx: None,
+            mb_tx: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -87,7 +86,8 @@ impl Observe {
             serde_json::to_string(&req).unwrap(),
         )
         .await?;
-        todo!()
+
+        Ok(())
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
@@ -97,27 +97,53 @@ impl Observe {
 
     pub async fn start(&mut self, conf: &CoapConf) -> Result<()> {
         let client = UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?;
+
+        let mb_tx = self.mb_tx.clone();
+
         let observe_tx = client
-            .observe(&self.conf.ext.path, Self::observe_handler)
+            .observe(&self.conf.ext.path, move |msg| {
+                Self::observe_handler(msg, &mb_tx)
+            })
             .await?;
         self.observe_tx = Some(observe_tx);
 
         Ok(())
     }
 
-    fn observe_handler(msg: Packet) {
-        debug!("receive msg :{:?}", msg);
+    fn observe_handler(msg: Packet, mb_tx: &Arc<RwLock<Option<broadcast::Sender<MessageBatch>>>>) {
+        // match mb_tx.write().await {
+        //     Some(_) => todo!(),
+        //     None => todo!(),
+        // }
+        match String::from_utf8(msg.payload) {
+            Ok(data) => debug!("{}", data),
+            Err(e) => warn!("{}", e),
+        }
+        // debug!("receive msg :{:?}", msg.payload);
     }
 
     pub async fn stop(&mut self) {
-        _ = self
+        if let Err(e) = self
             .observe_tx
             .take()
             .unwrap()
-            .send(ObserveMessage::Terminate);
+            .send(ObserveMessage::Terminate)
+        {
+            warn!("stop send msg err:{:?}", e);
+        }
     }
 
-    pub async fn restart(&mut self) {
+    pub async fn restart(&mut self) {}
 
+    pub async fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+        self.ref_info.active_ref(rule_id);
+
+        if let Some(tx) = self.mb_tx.read().await.as_ref() {
+            tx.subscribe()
+        } else {
+            let (sender, receiver) = broadcast::channel(16);
+            *self.mb_tx.write().await = Some(sender);
+            receiver
+        }
     }
 }

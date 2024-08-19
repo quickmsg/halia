@@ -13,6 +13,7 @@ use protocol::coap::request::CoapOption;
 use sink::Sink;
 use std::str::FromStr;
 use tokio::sync::{broadcast, mpsc};
+use tracing::warn;
 use types::{
     devices::{
         coap::{
@@ -189,7 +190,9 @@ impl Coap {
         persistence::devices::update_device_status(&self.id, Status::Runing).await?;
 
         for observe in self.observes.iter_mut() {
-            _ = observe.start(&self.conf.ext).await;
+            if let Err(e) = observe.start(&self.conf.ext).await {
+                warn!("observe start err:{}", e);
+            }
         }
 
         for api in self.apis.iter_mut() {
@@ -476,6 +479,10 @@ impl Coap {
         observe_id: Option<Uuid>,
         req: CreateUpdateObserveReq,
     ) -> HaliaResult<()> {
+        for observe in self.observes.iter() {
+            observe.check_duplicate(&req)?;
+        }
+
         let mut observe = Observe::new(&self.id, observe_id, req).await?;
         if self.on {
             _ = observe.start(&self.conf.ext).await;

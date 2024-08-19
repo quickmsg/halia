@@ -89,12 +89,12 @@ pub struct CreateUpdateObserveReq {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ObserveConf {
     pub path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Vec<u8>>,
-    pub options: Vec<(CoapOption, String)>,
-    pub domain: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token: Option<Vec<u8>>,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub data: Option<Vec<u8>>,
+    // pub options: Vec<(CoapOption, String)>,
+    // pub domain: String,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub token: Option<Vec<u8>>,
 }
 
 #[derive(Serialize)]
