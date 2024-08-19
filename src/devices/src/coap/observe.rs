@@ -1,9 +1,17 @@
-use std::sync::mpsc;
-
-use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
+use anyhow::Result;
+use common::{
+    error::{HaliaError, HaliaResult},
+    get_id, persistence,
+    ref_info::RefInfo,
+};
 use message::MessageBatch;
-use tokio::sync::broadcast;
-use types::devices::coap::{CreateUpdateObserveReq, SearchObservesItemResp};
+use protocol::coap::{
+    client::{ObserveMessage, UdpCoAPClient},
+    request::Packet,
+};
+use tokio::sync::{broadcast, oneshot};
+use tracing::debug;
+use types::devices::coap::{CoapConf, CreateUpdateObserveReq, SearchObservesItemResp};
 use uuid::Uuid;
 
 pub struct Observe {
@@ -11,9 +19,10 @@ pub struct Observe {
     conf: CreateUpdateObserveReq,
 
     on: bool,
-    stop_signal_tx: Option<mpsc::Sender<()>>,
 
-    ref_info: RefInfo,
+    observe_tx: Option<oneshot::Sender<ObserveMessage>>,
+
+    pub ref_info: RefInfo,
     mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
@@ -39,7 +48,7 @@ impl Observe {
             id: observe_id,
             conf: req,
             on: false,
-            stop_signal_tx: None,
+            observe_tx: None,
             ref_info: RefInfo::new(),
             mb_tx: None,
         })
@@ -50,6 +59,10 @@ impl Observe {
     }
 
     pub fn check_duplicate(&self, req: &CreateUpdateObserveReq) -> HaliaResult<()> {
+        if self.conf.base.name == req.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
         Ok(())
     }
 
@@ -66,10 +79,45 @@ impl Observe {
         device_id: &Uuid,
         req: CreateUpdateObserveReq,
     ) -> HaliaResult<()> {
+        Self::check_conf(&req)?;
+
+        persistence::devices::coap::update_observe(
+            device_id,
+            &self.id,
+            serde_json::to_string(&req).unwrap(),
+        )
+        .await?;
         todo!()
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+        persistence::devices::coap::delete_observe(device_id, &self.id).await?;
+        Ok(())
+    }
+
+    pub async fn start(&mut self, conf: &CoapConf) -> Result<()> {
+        let client = UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?;
+        let observe_tx = client
+            .observe(&self.conf.ext.path, Self::observe_handler)
+            .await?;
+        self.observe_tx = Some(observe_tx);
+
+        Ok(())
+    }
+
+    fn observe_handler(msg: Packet) {
+        debug!("receive msg :{:?}", msg);
+    }
+
+    pub async fn stop(&mut self) {
+        _ = self
+            .observe_tx
+            .take()
+            .unwrap()
+            .send(ObserveMessage::Terminate);
+    }
+
+    pub async fn restart(&mut self) {
+
     }
 }

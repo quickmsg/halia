@@ -102,7 +102,7 @@ impl Coap {
 
             let observe_id = Uuid::from_str(items[0]).unwrap();
             let req: CreateUpdateObserveReq = serde_json::from_str(items[1])?;
-            // self.create_observe(Some(observe_id), req).await?;
+            self.create_observe(Some(observe_id), req).await?;
         }
 
         let api_datas = persistence::devices::coap::read_apis(&self.id).await?;
@@ -115,6 +115,18 @@ impl Coap {
             let api_id = Uuid::from_str(items[0]).unwrap();
             let req: CreateUpdateAPIReq = serde_json::from_str(items[1])?;
             self.create_api(Some(api_id), req).await?;
+        }
+
+        let sink_datas = persistence::devices::coap::read_sinks(&self.id).await?;
+        for sink_data in sink_datas {
+            let items = sink_data
+                .split(persistence::DELIMITER)
+                .collect::<Vec<&str>>();
+            assert_eq!(items.len(), 2);
+
+            let sink_id = Uuid::from_str(items[0]).unwrap();
+            let req: CreateUpdateSinkReq = serde_json::from_str(items[1])?;
+            self.create_sink(Some(sink_id), req).await?;
         }
 
         Ok(())
@@ -156,10 +168,13 @@ impl Coap {
         self.conf = req;
 
         if restart && self.on {
+            for observe in self.observes.iter_mut() {
+                // todo
+                _ = observe.restart().await;
+            }
             for api in self.apis.iter_mut() {
                 _ = api.restart(&self.conf.ext).await;
             }
-
             for sink in self.sinks.iter_mut() {
                 _ = sink.restart(&self.conf.ext).await;
             }
@@ -173,6 +188,10 @@ impl Coap {
 
         persistence::devices::update_device_status(&self.id, Status::Runing).await?;
 
+        for observe in self.observes.iter_mut() {
+            _ = observe.start(&self.conf.ext).await;
+        }
+
         for api in self.apis.iter_mut() {
             _ = api.start(&self.conf.ext).await;
         }
@@ -185,6 +204,13 @@ impl Coap {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
+        if self
+            .observes
+            .iter()
+            .any(|observe| !observe.ref_info.can_stop())
+        {
+            return Err(HaliaError::Common("有观察器正被引用中".to_owned()));
+        }
         if self.apis.iter().any(|api| !api.ref_info.can_stop()) {
             return Err(HaliaError::Common("有api正被引用中".to_owned()));
         }
@@ -194,10 +220,12 @@ impl Coap {
 
         check_and_set_on_false!(self);
 
+        for observe in self.observes.iter_mut() {
+            _ = observe.stop().await;
+        }
         for api in self.apis.iter_mut() {
             _ = api.stop().await;
         }
-
         for sink in self.sinks.iter_mut() {
             _ = sink.stop().await;
         }
@@ -212,10 +240,16 @@ impl Coap {
             return Err(HaliaError::Running);
         }
 
+        if self
+            .observes
+            .iter()
+            .any(|observe| !observe.ref_info.can_delete())
+        {
+            return Err(HaliaError::Common("有观察器正被引用中".to_owned()));
+        }
         if self.apis.iter().any(|api| !api.ref_info.can_delete()) {
             return Err(HaliaError::Common("有api正被引用中".to_owned()));
         }
-
         if self.sinks.iter().any(|sink| !sink.ref_info.can_delete()) {
             return Err(HaliaError::Common("有动作正被引用中".to_owned()));
         }
@@ -443,9 +477,9 @@ impl Coap {
         req: CreateUpdateObserveReq,
     ) -> HaliaResult<()> {
         let mut observe = Observe::new(&self.id, observe_id, req).await?;
-        // if self.on {
-        //     _ = api.start(&self.conf.ext).await;
-        // }
+        if self.on {
+            _ = observe.start(&self.conf.ext).await;
+        }
         self.observes.push(observe);
 
         Ok(())
@@ -479,13 +513,15 @@ impl Coap {
     }
 
     pub async fn delete_observe(&mut self, observe_id: Uuid) -> HaliaResult<()> {
-        // match self.apis.iter_mut().find(|api| api.id == api_id) {
-        //     Some(api) => api.delete(&self.id).await?,
-        //     None => return api_not_found_err!(api_id),
-        // }
-        // self.apis.retain(|api| api.id != api_id);
-        // Ok(())
-
-        todo!()
+        match self
+            .observes
+            .iter_mut()
+            .find(|observe| observe.id == observe_id)
+        {
+            Some(observe) => observe.delete(&self.id).await?,
+            None => return observe_not_found_err!(observe_id),
+        }
+        self.observes.retain(|observe| observe.id != observe_id);
+        Ok(())
     }
 }
