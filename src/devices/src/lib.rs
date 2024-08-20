@@ -1,6 +1,7 @@
 #![feature(io_error_more)]
 use std::{str::FromStr, sync::LazyLock};
 
+use bytes::Bytes;
 use coap::manager::GLOBAL_COAP_MANAGER;
 use common::{error::HaliaResult, persistence};
 use modbus::manager::GLOBAL_MODBUS_MANAGER;
@@ -9,10 +10,9 @@ use tokio::sync::RwLock;
 use tracing::warn;
 use types::{
     devices::{
-        coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq,
-        DeviceType, QueryParams, SearchDevicesResp, Summary,
+        coap::CreateUpdateCoapReq, modbus::CreateUpdateModbusReq, opcua::CreateUpdateOpcuaReq, DeviceType, QueryParams, SearchDevicesItemResp, SearchDevicesResp, Summary
     },
-    Pagination,
+    Pagination, SearchSourcesOrSinksResp,
 };
 
 use uuid::Uuid;

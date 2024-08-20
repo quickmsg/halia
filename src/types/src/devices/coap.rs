@@ -108,8 +108,11 @@ pub struct CreateUpdateSourceReq {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct SourceConf {
     pub method: SourceMethod,
-    #[serde(flatten)]
-    pub conf: serde_json::Value,
+
+    pub get_conf: Option<GetConf>,
+    pub observe_conf: Option<ObeserveConf>,
+    // #[serde(flatten)]
+    // pub conf: serde_json::Value,
     // #[serde(skip_serializing_if = "Option::is_none")]
     // pub data: Option<Vec<u8>>,
     // pub options: Vec<(CoapOption, String)>,
@@ -119,15 +122,20 @@ pub struct SourceConf {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub enum SourceMethod {
+    Get,
+    Observe,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct GetConf {
     pub interval: u64,
     pub path: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub enum SourceMethod {
-    Get,
-    Observe,
+pub struct ObeserveConf {
+    pub path: String,
 }
 
 #[derive(Deserialize)]

@@ -1,14 +1,26 @@
+use std::time::Duration;
+
 use anyhow::Result;
-use common::{del_mb_rx, error::HaliaResult, get_id, get_mb_rx, persistence, ref_info::RefInfo};
+use common::{
+    del_mb_rx,
+    error::{HaliaError, HaliaResult},
+    get_id, get_mb_rx, persistence,
+    ref_info::RefInfo,
+};
 use message::MessageBatch;
 use protocol::coap::{
     client::{ObserveMessage, UdpCoAPClient},
-    request::Packet,
+    request::{Method, Packet, RequestBuilder},
 };
-use tokio::sync::{broadcast, oneshot};
-use tracing::warn;
+use tokio::{
+    select,
+    sync::{broadcast, mpsc, oneshot},
+    task::JoinHandle,
+    time,
+};
+use tracing::{debug, warn};
 use types::{
-    devices::coap::{CoapConf, SourceConf},
+    devices::coap::{CoapConf, SourceConf, SourceMethod},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
 };
 use uuid::Uuid;
@@ -18,6 +30,9 @@ pub struct Source {
 
     base_conf: BaseConf,
     ext_conf: SourceConf,
+
+    stop_signal_tx: Option<mpsc::Sender<()>>,
+    join_handle: Option<JoinHandle<(UdpCoAPClient, mpsc::Receiver<()>)>>,
 
     observe_tx: Option<oneshot::Sender<ObserveMessage>>,
 
@@ -45,12 +60,26 @@ impl Source {
             observe_tx: None,
             ref_info: RefInfo::new(),
             mb_tx: None,
+            stop_signal_tx: None,
+            join_handle: None,
         })
     }
 
     fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
         let data = serde_json::to_string(&req)?;
         let conf: SourceConf = serde_json::from_value(req.ext)?;
+        match conf.method {
+            SourceMethod::Get => {
+                if conf.get_conf.is_none() {
+                    return Err(HaliaError::Common("get请求为空！".to_owned()));
+                }
+            }
+            SourceMethod::Observe => {
+                if conf.observe_conf.is_none() {
+                    return Err(HaliaError::Common("observe配置为空！".to_owned()));
+                }
+            }
+        }
         // TODO check
 
         Ok((req.base, conf, data))
@@ -109,16 +138,74 @@ impl Source {
 
         let (mb_tx, _) = broadcast::channel(16);
 
-        let observe_mb_tx = mb_tx.clone();
+        match self.ext_conf.method {
+            SourceMethod::Get => todo!(),
+            SourceMethod::Observe => self.start_observe(client, mb_tx.clone()).await?,
+        }
+
         self.mb_tx = Some(mb_tx);
 
+        Ok(())
+    }
+
+    async fn start_observe(
+        &mut self,
+        client: UdpCoAPClient,
+        observe_mb_tx: broadcast::Sender<MessageBatch>,
+    ) -> Result<()> {
         let observe_tx = client
-            .observe(&self.ext_conf.path, move |msg| {
-                Self::observe_handler(msg, &observe_mb_tx)
-            })
+            .observe(
+                &self.ext_conf.observe_conf.as_ref().unwrap().path,
+                move |msg| Self::observe_handler(msg, &observe_mb_tx),
+            )
             .await?;
         self.observe_tx = Some(observe_tx);
 
+        Ok(())
+    }
+
+    async fn start_api(&mut self, client: UdpCoAPClient) -> HaliaResult<()> {
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+
+        if let Err(e) = self.event_loop(client, stop_signal_rx).await {
+            return Err(HaliaError::Common(e.to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn event_loop(
+        &mut self,
+        client: UdpCoAPClient,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+    ) -> Result<()> {
+        // let options = transform_options(&self.ext_conf.observe_conf.as_ref().unwrap().options)?;
+        let request =
+            RequestBuilder::new(&self.ext_conf.get_conf.as_ref().unwrap().path, Method::Get)
+                // .domain(self.conf.ext.domain.clone())
+                // .options(options)
+                .build();
+        let mut interval = time::interval(Duration::from_millis(
+            self.ext_conf.get_conf.as_ref().unwrap().interval,
+        ));
+        let join_handle = tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = stop_signal_rx.recv() => {
+                        return (client, stop_signal_rx)
+                    }
+
+                    _ = interval.tick() => {
+                        match client.send(request.clone()).await {
+                            Ok(resp) => debug!("{:?}", resp),
+                            Err(e) => debug!("{:?}", e),
+                        }
+                    }
+                }
+            }
+        });
+        self.join_handle = Some(join_handle);
         Ok(())
     }
 
@@ -156,14 +243,14 @@ impl Source {
             warn!("stop send msg err:{:?}", e);
         }
 
-        let observe_mb_tx = self.mb_tx.as_ref().unwrap().clone();
-        let client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
-        let observe_tx = client
-            .observe(&self.ext_conf.path, move |msg| {
-                Self::observe_handler(msg, &observe_mb_tx)
-            })
-            .await?;
-        self.observe_tx = Some(observe_tx);
+        // let observe_mb_tx = self.mb_tx.as_ref().unwrap().clone();
+        // let client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
+        // let observe_tx = client
+        //     .observe(&self.ext_conf.path, move |msg| {
+        //         Self::observe_handler(msg, &observe_mb_tx)
+        //     })
+        //     .await?;
+        // self.observe_tx = Some(observe_tx);
 
         Ok(())
     }

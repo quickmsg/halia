@@ -26,6 +26,8 @@ use types::{
 };
 use uuid::Uuid;
 
+// use crate::Device;
+
 mod api;
 pub mod manager;
 mod observe;
@@ -614,3 +616,127 @@ impl Coap {
         }
     }
 }
+
+// // source
+// impl Coap {
+//     pub async fn create_source(
+//         &mut self,
+//         observe_id: Option<Uuid>,
+//         req: CreateUpdateObserveReq,
+//     ) -> HaliaResult<()> {
+//         for observe in self.observes.iter() {
+//             observe.check_duplicate(&req)?;
+//         }
+
+//         let mut observe = Observe::new(&self.id, observe_id, req).await?;
+//         if self.on {
+//             _ = observe.start(&self.conf.ext).await;
+//         }
+//         self.observes.push(observe);
+
+//         Ok(())
+//     }
+
+//     pub async fn search_observes(
+//         &self,
+//         pagination: Pagination,
+//         query: QueryObserves,
+//     ) -> SearchObservesResp {
+//         let mut total = 0;
+//         let mut data = vec![];
+//         for observe in self.observes.iter().rev() {
+//             let observe = observe.search();
+
+//             if let Some(name) = &query.name {
+//                 if !observe.conf.base.name.contains(name) {
+//                     continue;
+//                 }
+//             }
+
+//             if total >= ((pagination.page - 1) * pagination.size)
+//                 && total < (pagination.page * pagination.size)
+//             {
+//                 data.push(observe);
+//             }
+//             total += 1;
+//         }
+
+//         SearchObservesResp { total, data }
+//     }
+
+//     pub async fn update_observe(
+//         &mut self,
+//         observe_id: Uuid,
+//         req: CreateUpdateObserveReq,
+//     ) -> HaliaResult<()> {
+//         match self
+//             .observes
+//             .iter_mut()
+//             .find(|observe| observe.id == observe_id)
+//         {
+//             Some(observe) => observe.update(&self.id, req, &self.conf.ext).await,
+//             None => observe_not_found_err!(observe_id),
+//         }
+//     }
+
+//     pub async fn delete_observe(&mut self, observe_id: Uuid) -> HaliaResult<()> {
+//         match self
+//             .observes
+//             .iter_mut()
+//             .find(|observe| observe.id == observe_id)
+//         {
+//             Some(observe) => observe.delete(&self.id).await?,
+//             None => return observe_not_found_err!(observe_id),
+//         }
+//         self.observes.retain(|observe| observe.id != observe_id);
+//         Ok(())
+//     }
+
+//     pub fn add_observe_ref(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+//         match self
+//             .observes
+//             .iter_mut()
+//             .find(|observe| observe.id == *observe_id)
+//         {
+//             Some(observe) => Ok(observe.ref_info.add_ref(rule_id)),
+//             None => return observe_not_found_err!(observe_id.clone()),
+//         }
+//     }
+
+//     pub fn get_observe_rx(
+//         &mut self,
+//         observe_id: &Uuid,
+//         rule_id: &Uuid,
+//     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+//         match self
+//             .observes
+//             .iter_mut()
+//             .find(|observe| observe.id == *observe_id)
+//         {
+//             Some(observe) => Ok(observe.get_mb_rx(rule_id)),
+//             None => observe_not_found_err!(observe_id.clone()),
+//         }
+//     }
+
+//     pub fn del_observe_rx(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+//         match self
+//             .observes
+//             .iter_mut()
+//             .find(|observe| observe.id == *observe_id)
+//         {
+//             Some(observe) => Ok(observe.del_mb_rx(rule_id)),
+//             None => observe_not_found_err!(observe_id.clone()),
+//         }
+//     }
+
+//     pub fn del_observe_ref(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+//         match self
+//             .observes
+//             .iter_mut()
+//             .find(|observe| observe.id == *observe_id)
+//         {
+//             Some(observe) => Ok(observe.ref_info.del_ref(rule_id)),
+//             None => return observe_not_found_err!(observe_id.clone()),
+//         }
+//     }
+// }
