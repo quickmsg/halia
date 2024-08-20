@@ -261,14 +261,14 @@ impl Manager {
         }
     }
 
-    pub async fn get_api_mb_rx(
+    pub async fn get_api_rx(
         &self,
         device_id: &Uuid,
         api_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.get_api_mb_rx(api_id, rule_id).await,
+            Some(mut device) => device.get_api_rx(api_id, rule_id).await,
             None => device_not_find_err!(device_id.clone()),
         }
     }
@@ -285,14 +285,14 @@ impl Manager {
         }
     }
 
-    pub async fn del_api_mb_rx(
+    pub async fn del_api_rx(
         &self,
         device_id: &Uuid,
         api_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<()> {
         match self.devices.get_mut(device_id) {
-            Some(mut device) => device.del_api_mb_rx(api_id, rule_id).await,
+            Some(mut device) => device.del_api_rx(api_id, rule_id).await,
             None => device_not_find_err!(device_id.clone()),
         }
     }

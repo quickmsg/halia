@@ -422,6 +422,10 @@ impl Coap {
         api_id: Option<Uuid>,
         req: CreateUpdateAPIReq,
     ) -> HaliaResult<()> {
+        for api in self.apis.iter() {
+            api.check_duplicate(&req)?;
+        }
+
         let mut api = API::new(&self.id, api_id, req).await?;
         if self.on {
             _ = api.start(&self.conf.ext).await;
@@ -449,6 +453,12 @@ impl Coap {
     }
 
     pub async fn update_api(&mut self, api_id: Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
+        for api in self.apis.iter() {
+            if api.id != api_id {
+                api.check_duplicate(&req)?;
+            }
+        }
+
         match self.apis.iter_mut().find(|api| api.id == api_id) {
             Some(api) => api.update(&self.id, req).await,
             None => api_not_found_err!(api_id),
@@ -471,13 +481,13 @@ impl Coap {
         }
     }
 
-    pub async fn get_api_mb_rx(
+    pub async fn get_api_rx(
         &mut self,
         api_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.get_mb_rx(rule_id)),
+            Some(api) => Ok(api.get_rx(rule_id)),
             None => api_not_found_err!(api_id.clone()),
         }
     }
@@ -489,9 +499,9 @@ impl Coap {
         }
     }
 
-    pub async fn del_api_mb_rx(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn del_api_rx(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.del_mb_rx(rule_id)),
+            Some(api) => Ok(api.del_rx(rule_id)),
             None => api_not_found_err!(api_id.clone()),
         }
     }
@@ -559,13 +569,13 @@ impl Coap {
         }
     }
 
-    pub async fn get_sink_mb_tx(
+    pub async fn get_sink_tx(
         &mut self,
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.get_mb_tx(rule_id)),
+            Some(sink) => Ok(sink.get_tx(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }
@@ -577,9 +587,9 @@ impl Coap {
         }
     }
 
-    pub async fn del_sink_mb_rx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn del_sink_rx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.del_mb_tx(rule_id)),
+            Some(sink) => Ok(sink.del_tx(rule_id)),
             None => sink_not_found_err!(sink_id.clone()),
         }
     }

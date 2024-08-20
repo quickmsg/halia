@@ -118,7 +118,7 @@ pub struct CreateUpdateSinkReq {
     pub ext: SinkConf,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct SinkConf {
     pub method: SinkMethod,
     pub path: String,
@@ -128,7 +128,7 @@ pub struct SinkConf {
     pub token: Option<Vec<u8>>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum SinkMethod {
     Post,
@@ -146,4 +146,5 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
+    pub rule_ref: RuleRef,
 }

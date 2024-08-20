@@ -1,6 +1,7 @@
 use anyhow::Result;
 use common::{
-    check_and_set_on_false, check_and_set_on_true, error::HaliaResult, get_id, persistence,
+    error::{HaliaError, HaliaResult},
+    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -18,9 +19,8 @@ pub struct Sink {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
 
-    on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    publish_tx: Option<mpsc::Sender<MessageBatch>>,
+    mb_tx: Option<mpsc::Sender<MessageBatch>>,
 
     join_handle: Option<
         JoinHandle<(
@@ -39,8 +39,9 @@ impl Sink {
         sink_id: Option<Uuid>,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<Self> {
-        let (sink_id, new) = get_id(sink_id);
+        Self::check_conf(&req)?;
 
+        let (sink_id, new) = get_id(sink_id);
         if new {
             persistence::devices::coap::create_sink(
                 device_id,
@@ -53,22 +54,28 @@ impl Sink {
         Ok(Self {
             id: sink_id,
             conf: req,
-            on: false,
             stop_signal_tx: None,
-            publish_tx: None,
+            mb_tx: None,
             ref_info: RefInfo::new(),
             join_handle: None,
         })
+    }
+
+    fn check_conf(req: &CreateUpdateSinkReq) -> HaliaResult<()> {
+        Ok(())
     }
 
     pub fn search(&self) -> SearchSinksItemResp {
         SearchSinksItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
     pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
+        Self::check_conf(&req)?;
+
         persistence::devices::coap::update_sink(
             device_id,
             &self.id,
@@ -76,27 +83,53 @@ impl Sink {
         )
         .await?;
 
+        let mut restart = false;
+        if self.conf.ext != req.ext {
+            restart = true;
+        }
         self.conf = req;
+
+        if restart {
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
+
+            let (client, mb_rx, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
+            _ = self.event_loop(stop_signal_rx, mb_rx, client).await;
+        }
 
         Ok(())
     }
 
     pub async fn start(&mut self, coap_conf: &CoapConf) -> HaliaResult<()> {
-        check_and_set_on_true!(self);
-
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
-        let (publish_tx, publish_rx) = mpsc::channel(16);
-        self.publish_tx = Some(publish_tx);
+
+        let (mb_tx, mb_rx) = mpsc::channel(16);
+        self.mb_tx = Some(mb_tx);
 
         let client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
-        self.event_loop(stop_signal_rx, publish_rx, client).await;
+        _ = self.event_loop(stop_signal_rx, mb_rx, client).await;
 
         Ok(())
     }
 
     pub async fn restart(&mut self, coap_conf: &CoapConf) -> HaliaResult<()> {
-        todo!()
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+
+        let (_, mb_rx, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
+        let client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
+        _ = self.event_loop(stop_signal_rx, mb_rx, client).await;
+
+        Ok(())
     }
 
     async fn event_loop(
@@ -111,7 +144,8 @@ impl Sink {
             types::devices::coap::SinkMethod::Delete => Method::Delete,
         };
 
-        let options = transform_options(&self.conf.ext.options)?;
+        // 在check conf中进行options校验
+        let options = transform_options(&self.conf.ext.options).unwrap();
         let request = RequestBuilder::new(&self.conf.ext.path, method)
             .options(options)
             // .domain(coap_conf.domain.clone())
@@ -140,8 +174,6 @@ impl Sink {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        check_and_set_on_false!(self);
-
         self.stop_signal_tx
             .as_ref()
             .unwrap()
@@ -155,20 +187,19 @@ impl Sink {
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
-            return Err(common::error::HaliaError::Common(
-                "引用中，不能被删除".to_owned(),
-            ));
+            return Err(HaliaError::DeleteRefing);
         }
+        self.stop().await?;
         persistence::devices::coap::delete_sink(device_id, &self.id).await?;
         Ok(())
     }
 
-    pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
+    pub fn get_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
         self.ref_info.active_ref(rule_id);
-        self.publish_tx.as_ref().unwrap().clone()
+        self.mb_tx.as_ref().unwrap().clone()
     }
 
-    pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
+    pub fn del_tx(&mut self, rule_id: &Uuid) {
         self.ref_info.deactive_ref(rule_id);
     }
 }

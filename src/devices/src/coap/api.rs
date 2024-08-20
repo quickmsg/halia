@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use common::{
-    check_and_set_on_false, check_and_set_on_true, del_mb_rx,
+    del_mb_rx,
     error::{HaliaError, HaliaResult},
     get_id, get_mb_rx, persistence,
     ref_info::RefInfo,
@@ -19,10 +19,7 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::{
-    devices::coap::{CoapConf, CreateUpdateAPIReq, SearchAPIsItemResp},
-    RuleRef,
-};
+use types::devices::coap::{CoapConf, CreateUpdateAPIReq, SearchAPIsItemResp};
 use uuid::Uuid;
 
 use super::transform_options;
@@ -31,7 +28,6 @@ pub struct API {
     pub id: Uuid,
     conf: CreateUpdateAPIReq,
 
-    on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<JoinHandle<(UdpCoAPClient, mpsc::Receiver<()>)>>,
 
@@ -45,6 +41,8 @@ impl API {
         api_id: Option<Uuid>,
         req: CreateUpdateAPIReq,
     ) -> HaliaResult<Self> {
+        Self::check_conf(&req)?;
+
         let (api_id, new) = get_id(api_id);
         if new {
             persistence::devices::coap::create_api(
@@ -58,7 +56,6 @@ impl API {
         Ok(Self {
             id: api_id,
             conf: req,
-            on: false,
             stop_signal_tx: None,
             join_handle: None,
             ref_info: RefInfo::new(),
@@ -66,7 +63,7 @@ impl API {
         })
     }
 
-    fn check_conf(req: &CreateUpdateAPIReq) -> HaliaResult<()> {
+    fn check_conf(_req: &CreateUpdateAPIReq) -> HaliaResult<()> {
         Ok(())
     }
 
@@ -82,14 +79,13 @@ impl API {
         SearchAPIsItemResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
-            rule_ref: RuleRef {
-                rule_ref_cnt: self.ref_info.ref_cnt(),
-                rule_active_ref_cnt: self.ref_info.active_ref_cnt(),
-            },
+            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
     pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
+        Self::check_conf(&req)?;
+
         persistence::devices::coap::update_api(
             device_id,
             &self.id,
@@ -102,36 +98,37 @@ impl API {
             restart = true;
         }
         self.conf = req;
-        if self.on && restart {
-            self.stop_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(())
-                .await
-                .unwrap();
-            let (client, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(client, stop_signal_rx).await;
+
+        if restart {
+            match &self.stop_signal_tx {
+                Some(stop_signal_tx) => {
+                    stop_signal_tx.send(()).await.unwrap();
+                    let (client, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
+                    _ = self.event_loop(client, stop_signal_rx).await;
+                }
+                None => {}
+            }
         }
 
         Ok(())
     }
 
     pub async fn delete(&self, device_id: &Uuid) -> HaliaResult<()> {
-        persistence::devices::coap::delete_api(device_id, &self.id).await?;
-        if self.on {
-            self.stop_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(())
-                .await
-                .unwrap();
+        if !self.ref_info.can_delete() {
+            return Err(HaliaError::DeleteRefing);
         }
+
+        persistence::devices::coap::delete_api(device_id, &self.id).await?;
+
+        match &self.stop_signal_tx {
+            Some(stop_signal_tx) => stop_signal_tx.send(()).await.unwrap(),
+            None => {}
+        }
+
         Ok(())
     }
 
     pub async fn start(&mut self, conf: &CoapConf) -> HaliaResult<()> {
-        check_and_set_on_true!(self);
-
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
@@ -160,8 +157,6 @@ impl API {
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        check_and_set_on_false!(self);
-
         self.stop_signal_tx
             .as_ref()
             .unwrap()
@@ -204,13 +199,13 @@ impl API {
         Ok(())
     }
 
-    async fn read() {}
+    // async fn read() {}
 
-    pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+    pub fn get_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
         get_mb_rx!(self, rule_id)
     }
 
-    pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
+    pub fn del_rx(&mut self, rule_id: &Uuid) {
         del_mb_rx!(self, rule_id)
     }
 }
