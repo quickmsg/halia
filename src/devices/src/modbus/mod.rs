@@ -34,14 +34,12 @@ use types::{
             Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType,
             Encode, ModbusConf, PointsQueryParams, SearchPointsResp, SearchSinksResp,
             SinksQueryParams, Type,
-        },
-        CreateUpdateDeviceReq, DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
-    },
-    Pagination, Value,
+        }, CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf, SearchDevicesItemResp
+    }, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value
 };
 use uuid::Uuid;
 
-use crate::Device;
+use crate::{sink_not_found_err, source_not_found_err, Device};
 
 // pub mod manager;
 mod point;
@@ -509,7 +507,7 @@ impl Modbus {
             .find(|point| point.id == point_id)
         {
             Some(point) => point.update(&self.id, req).await,
-            None => point_not_found_err!(point_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -548,7 +546,7 @@ impl Modbus {
                     Err(e) => Err(e),
                 }
             }
-            None => point_not_found_err!(point_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -561,7 +559,7 @@ impl Modbus {
             .find(|point| point.id == point_id)
         {
             Some(point) => point.delete(&self.id).await?,
-            None => return point_not_found_err!(point_id),
+            None => return source_not_found_err!(),
         }
 
         self.points
@@ -580,7 +578,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.ref_info.add_ref(rule_id)),
-            None => point_not_found_err!(point_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -600,7 +598,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.get_mb_rx(rule_id)),
-            None => point_not_found_err!(point_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -613,7 +611,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.del_mb_rx(rule_id)),
-            None => point_not_found_err!(point_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -626,7 +624,7 @@ impl Modbus {
             .find(|point| point.id == *point_id)
         {
             Some(point) => Ok(point.ref_info.del_ref(rule_id)),
-            None => point_not_found_err!(point_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -687,7 +685,7 @@ impl Modbus {
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
-            None => sink_not_found_err!(sink_id),
+            None => sink_not_found_err!(),
         }
     }
 
@@ -698,14 +696,14 @@ impl Modbus {
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
-            None => sink_not_found_err!(sink_id),
+            None => sink_not_found_err!(),
         }
     }
 
     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
+            None => sink_not_found_err!(),
         }
     }
 
@@ -716,21 +714,21 @@ impl Modbus {
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.get_mb_tx(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
+            None => sink_not_found_err!(),
         }
     }
 
     pub fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.ref_info.deactive_ref(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
+            None => sink_not_found_err!(),
         }
     }
 
     pub fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
+            None => sink_not_found_err!(),
         }
     }
 }
@@ -863,6 +861,164 @@ impl Device for Modbus {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn delete<'life0, 'async_trait>(
         &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn create_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn search_sources<'life0, 'async_trait>(
+        &'life0 mut self,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn create_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn search_sinks<'life0, 'async_trait>(
+        &'life0 mut self,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Uuid,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = HaliaResult<()>>

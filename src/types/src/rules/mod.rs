@@ -66,34 +66,26 @@ pub enum NodeType {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceSourceNode {
-    #[serde(rename = "type")]
-    pub typ: DeviceType,
-    #[serde(flatten)]
-    pub conf: Value,
+    pub device_id: Uuid,
+    pub source_id: Uuid,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppSourceNode {
-    #[serde(rename = "type")]
-    pub typ: AppType,
-    #[serde(flatten)]
-    pub conf: Value,
+    pub app_id: Uuid,
+    pub source_id: Uuid,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceSinkNode {
-    #[serde(rename = "type")]
-    pub typ: DeviceType,
-    #[serde(flatten)]
-    pub conf: Value,
+    pub device_id: Uuid,
+    pub sink_id: Uuid,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppSinkNode {
-    #[serde(rename = "type")]
-    pub typ: AppType,
-    #[serde(flatten)]
-    pub conf: Value,
+    pub app_id: Uuid,
+    pub sink_id: Uuid,
 }
 
 #[derive(Serialize, Deserialize)]

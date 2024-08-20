@@ -27,7 +27,9 @@ use types::{
 };
 use uuid::Uuid;
 
-pub mod manager;
+use crate::{sink_not_found_err, source_not_found_err};
+
+// pub mod manager;
 mod sink;
 mod source;
 
@@ -43,18 +45,6 @@ pub struct MqttClient {
     sinks: Vec<Sink>,
     client_v311: Option<Arc<AsyncClient>>,
     client_v50: Option<Arc<v5::AsyncClient>>,
-}
-
-macro_rules! source_not_found_err {
-    ($source_id:expr) => {
-        Err(HaliaError::NotFound("mqtt客户端源".to_owned(), $source_id))
-    };
-}
-
-macro_rules! sink_not_found_err {
-    ($sink_id:expr) => {
-        Err(HaliaError::NotFound("mqtt客户端动作".to_owned(), $sink_id))
-    };
 }
 
 impl MqttClient {
@@ -448,7 +438,7 @@ impl MqttClient {
             .find(|source| source.id == *source_id)
         {
             Some(source) => Ok(source.get_mb_rx(rule_id)),
-            None => return source_not_found_err!(source_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -464,7 +454,7 @@ impl MqttClient {
                 source.del_mb_rx(rule_id);
                 Ok(())
             }
-            None => source_not_found_err!(source_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -615,7 +605,7 @@ impl MqttClient {
                 }
                 Err(e) => Err(e),
             },
-            None => source_not_found_err!(source_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -628,7 +618,7 @@ impl MqttClient {
             .find(|source| source.id == source_id)
         {
             Some(source) => source.delete(&self.id).await,
-            None => source_not_found_err!(source_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -641,7 +631,7 @@ impl MqttClient {
             .find(|source| source.id == *source_id)
         {
             Some(source) => Ok(source.ref_info.add_ref(rule_id)),
-            None => source_not_found_err!(source_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -692,7 +682,7 @@ impl MqttClient {
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
-            None => sink_not_found_err!(sink_id),
+            None => sink_not_found_err!(),
         }
     }
 
@@ -703,14 +693,14 @@ impl MqttClient {
                 self.sinks.retain(|sink| sink.id == sink_id);
                 Ok(())
             }
-            None => sink_not_found_err!(sink_id),
+            None => sink_not_found_err!(),
         }
     }
 
     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
+            None => sink_not_found_err!(),
         }
     }
 
@@ -734,21 +724,21 @@ impl MqttClient {
 
                 Ok(sink.get_mb_tx(rule_id))
             }
-            None => sink_not_found_err!(sink_id.clone()),
+            None => sink_not_found_err!(),
         }
     }
 
     pub async fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.del_mb_tx(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
+            None => sink_not_found_err!(),
         }
     }
 
     pub async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
+            None => sink_not_found_err!(),
         }
     }
 }

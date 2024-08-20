@@ -3,7 +3,6 @@ use axum::{
     routing::{self, get, post, put},
     Json, Router,
 };
-use devices::coap::manager::GLOBAL_COAP_MANAGER;
 use types::{
     devices::{
         coap::{

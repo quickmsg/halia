@@ -19,11 +19,6 @@ use crate::GLOBAL_APP_MANAGER;
 
 use super::HttpClient;
 
-macro_rules! http_client_not_find_err {
-    ($app_id:expr) => {
-        Err(HaliaError::NotFound("http客户端".to_owned(), $app_id))
-    };
-}
 
 pub static GLOBAL_HTTP_CLIENT_MANAGER: LazyLock<Manager> = LazyLock::new(|| Manager {
     apps: DashMap::new(),

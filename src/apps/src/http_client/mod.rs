@@ -20,21 +20,11 @@ use types::{
 };
 use uuid::Uuid;
 
-pub mod manager;
+use crate::{sink_not_found_err, source_not_found_err};
+
+// pub mod manager;
 mod sink;
 mod source;
-
-macro_rules! source_not_found_err {
-    ($source_id:expr) => {
-        Err(HaliaError::NotFound("http客户端源".to_owned(), $source_id))
-    };
-}
-
-macro_rules! sink_not_found_err {
-    ($sink_id:expr) => {
-        Err(HaliaError::NotFound("http客户端动作".to_owned(), $sink_id))
-    };
-}
 
 pub struct HttpClient {
     pub id: Uuid,
@@ -249,7 +239,7 @@ impl HttpClient {
                 Ok(()) => Ok(()),
                 Err(e) => Err(e),
             },
-            None => sink_not_found_err!(sink_id),
+            None => sink_not_found_err!(),
         }
     }
 
@@ -260,7 +250,7 @@ impl HttpClient {
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
-            None => sink_not_found_err!(sink_id),
+            None => sink_not_found_err!(),
         }
     }
 
@@ -315,7 +305,7 @@ impl HttpClient {
                 Ok(()) => Ok(()),
                 Err(e) => Err(e),
             },
-            None => source_not_found_err!(source_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -330,7 +320,7 @@ impl HttpClient {
                 self.sources.retain(|source| source.id != source_id);
                 Ok(())
             }
-            None => source_not_found_err!(source_id),
+            None => source_not_found_err!(),
         }
     }
 }

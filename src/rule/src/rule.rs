@@ -1,11 +1,11 @@
 use anyhow::Result;
-use apps::mqtt_client::manager::GLOBAL_MQTT_CLIENT_MANAGER;
+use apps::GLOBAL_APP_MANAGER;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
     get_id, persistence,
 };
-use devices::{modbus::manager::GLOBAL_MODBUS_MANAGER, opcua::manager::GLOBAL_OPCUA_MANAGER};
+use devices::GLOBAL_DEVICE_MANAGER;
 use functions::{computes, filter, merge::merge::Merge, window};
 use message::MessageBatch;
 use std::collections::HashMap;
@@ -34,82 +34,82 @@ impl Rule {
         let (rule_id, new) = get_id(rule_id);
 
         let mut error = None;
-        let mut add_ref_nodes = vec![];
+        // let mut add_ref_nodes = vec![];
         for node in req.ext.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    match source_node.typ {
-                        types::devices::DeviceType::Modbus => {
-                            let source: modbus::SourcePoint =
-                                serde_json::from_value(source_node.conf.clone())?;
-                            if let Err(e) = GLOBAL_MODBUS_MANAGER
-                                .add_point_ref(&source.device_id, &source.point_id, &rule_id)
-                                .await
-                            {
-                                add_ref_nodes.push(&node);
-                                error = Some(format!("引用Modbus设备xxx错误").to_owned());
-                                break;
-                            }
-                        }
-                        types::devices::DeviceType::Opcua => {
-                            let source: opcua::SourceGroup =
-                                serde_json::from_value(source_node.conf.clone())?;
-                            if let Err(e) = GLOBAL_OPCUA_MANAGER
-                                .add_group_ref(&source.device_id, &source.group_id, &rule_id)
-                                .await
-                            {
-                                add_ref_nodes.push(&node);
-                                error = Some(format!("引用Opcua设备xxx错误").to_owned());
-                                break;
-                            }
-                        }
-                        types::devices::DeviceType::Coap => todo!(),
-                    }
+                    // match source_node.typ {
+                    //     types::devices::DeviceType::Modbus => {
+                    //         let source: modbus::SourcePoint =
+                    //             serde_json::from_value(source_node.conf.clone())?;
+                    //         if let Err(e) = GLOBAL_MODBUS_MANAGER
+                    //             .add_point_ref(&source.device_id, &source.point_id, &rule_id)
+                    //             .await
+                    //         {
+                    //             add_ref_nodes.push(&node);
+                    //             error = Some(format!("引用Modbus设备xxx错误").to_owned());
+                    //             break;
+                    //         }
+                    //     }
+                    //     types::devices::DeviceType::Opcua => {
+                    //         let source: opcua::SourceGroup =
+                    //             serde_json::from_value(source_node.conf.clone())?;
+                    //         if let Err(e) = GLOBAL_OPCUA_MANAGER
+                    //             .add_group_ref(&source.device_id, &source.group_id, &rule_id)
+                    //             .await
+                    //         {
+                    //             add_ref_nodes.push(&node);
+                    //             error = Some(format!("引用Opcua设备xxx错误").to_owned());
+                    //             break;
+                    //         }
+                    //     }
+                    //     types::devices::DeviceType::Coap => todo!(),
+                    // }
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    match source_node.typ {
-                        types::apps::AppType::MqttClient => {
-                            let source: mqtt_client::Source =
-                                serde_json::from_value(source_node.conf.clone())?;
-                            if let Err(e) = GLOBAL_MQTT_CLIENT_MANAGER
-                                .add_source_ref(&source.app_id, &source.source_id, &rule_id)
-                                .await
-                            {
-                                add_ref_nodes.push(&node);
-                                error = Some(e.to_string());
-                                break;
-                            }
-                        }
-                        types::apps::AppType::HttpClient => todo!(),
-                    }
+                    // match source_node.typ {
+                    //     types::apps::AppType::MqttClient => {
+                    //         let source: mqtt_client::Source =
+                    //             serde_json::from_value(source_node.conf.clone())?;
+                    //         if let Err(e) = GLOBAL_MQTT_CLIENT_MANAGER
+                    //             .add_source_ref(&source.app_id, &source.source_id, &rule_id)
+                    //             .await
+                    //         {
+                    //             add_ref_nodes.push(&node);
+                    //             error = Some(e.to_string());
+                    //             break;
+                    //         }
+                    //     }
+                    //     types::apps::AppType::HttpClient => todo!(),
+                    // }
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    match sink_node.typ {
-                        types::devices::DeviceType::Modbus => todo!(),
-                        types::devices::DeviceType::Opcua => todo!(),
-                        types::devices::DeviceType::Coap => todo!(),
-                    }
+                    // match sink_node.typ {
+                    //     types::devices::DeviceType::Modbus => todo!(),
+                    //     types::devices::DeviceType::Opcua => todo!(),
+                    //     types::devices::DeviceType::Coap => todo!(),
+                    // }
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    match sink_node.typ {
-                        types::apps::AppType::MqttClient => {
-                            let sink: mqtt_client::Sink =
-                                serde_json::from_value(sink_node.conf.clone())?;
-                            match GLOBAL_MQTT_CLIENT_MANAGER.add_sink_ref(
-                                &sink.app_id,
-                                &sink.sink_id,
-                                &rule_id,
-                            ) {
-                                Ok(_) => {}
-                                Err(_) => todo!(),
-                            }
-                        }
-                        types::apps::AppType::HttpClient => todo!(),
-                    }
+                    // match sink_node.typ {
+                    //     types::apps::AppType::MqttClient => {
+                    //         let sink: mqtt_client::Sink =
+                    //             serde_json::from_value(sink_node.conf.clone())?;
+                    //         match GLOBAL_MQTT_CLIENT_MANAGER.add_sink_ref(
+                    //             &sink.app_id,
+                    //             &sink.sink_id,
+                    //             &rule_id,
+                    //         ) {
+                    //             Ok(_) => {}
+                    //             Err(_) => todo!(),
+                    //         }
+                    //     }
+                    //     types::apps::AppType::HttpClient => todo!(),
+                    // }
                 }
                 _ => {}
             }
@@ -167,59 +167,38 @@ impl Rule {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rxs = match source_node.typ {
-                        types::devices::DeviceType::Modbus => {
-                            let source_point: modbus::SourcePoint =
-                                serde_json::from_value(source_node.conf.clone())?;
-
-                            let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
-                            let mut rxs = vec![];
-                            for _ in 0..cnt {
-                                rxs.push(
-                                    GLOBAL_MODBUS_MANAGER
-                                        .get_point_mb_rx(
-                                            &source_point.device_id,
-                                            &source_point.point_id,
-                                            &self.id,
-                                        )
-                                        .await
-                                        .unwrap(),
+                    let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
+                    let mut rxs = vec![];
+                    for _ in 0..cnt {
+                        rxs.push(
+                            GLOBAL_DEVICE_MANAGER
+                                .get_source_rx(
+                                    &source_node.device_id,
+                                    &source_node.source_id,
+                                    &self.id,
                                 )
-                            }
-                            rxs
-                        }
-                        types::devices::DeviceType::Opcua => todo!(),
-                        types::devices::DeviceType::Coap => todo!(),
-                    };
+                                .await
+                                .unwrap(),
+                        )
+                    }
                     receivers.insert(source_id, rxs);
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rxs = match source_node.typ {
-                        types::apps::AppType::MqttClient => {
-                            let source: mqtt_client::Source =
-                                serde_json::from_value(source_node.conf.clone())?;
-
-                            debug!("{:?}", source);
-
-                            let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
-                            let mut rxs = vec![];
-                            for _ in 0..cnt {
-                                rxs.push(
-                                    GLOBAL_MQTT_CLIENT_MANAGER
-                                        .get_source_mb_rx(
-                                            &source.app_id,
-                                            &source.source_id,
-                                            &self.id,
-                                        )
-                                        .await
-                                        .unwrap(),
+                    let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
+                    let mut rxs = vec![];
+                    for _ in 0..cnt {
+                        rxs.push(
+                            GLOBAL_APP_MANAGER
+                                .get_source_rx(
+                                    &source_node.app_id,
+                                    &source_node.source_id,
+                                    &self.id,
                                 )
-                            }
-                            rxs
-                        }
-                        types::apps::AppType::HttpClient => todo!(),
-                    };
+                                .await
+                                .unwrap(),
+                        )
+                    }
                     receivers.insert(source_id, rxs);
                 }
                 _ => unreachable!(),
@@ -297,34 +276,19 @@ impl Rule {
                         NodeType::DeviceSink => {
                             let sink_node: DeviceSinkNode =
                                 serde_json::from_value(node.conf.clone())?;
-                            let tx = match sink_node.typ {
-                                types::devices::DeviceType::Modbus => {
-                                    let sink: types::rules::devices::modbus::Sink =
-                                        serde_json::from_value(sink_node.conf.clone())?;
-                                    GLOBAL_MODBUS_MANAGER
-                                        .get_sink_mb_tx(&sink.device_id, &sink.sink_id, &self.id)
-                                        .await
-                                        .unwrap()
-                                }
-                                types::devices::DeviceType::Opcua => todo!(),
-                                types::devices::DeviceType::Coap => todo!(),
-                            };
+                            let tx = GLOBAL_DEVICE_MANAGER
+                                .get_sink_tx(&sink_node.device_id, &sink_node.sink_id, &self.id)
+                                .await
+                                .unwrap();
                             mpsc_tx = Some(tx);
                         }
                         NodeType::AppSink => {
                             ids.push(id);
                             let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match sink_node.typ {
-                                types::apps::AppType::MqttClient => {
-                                    let sink: mqtt_client::Sink =
-                                        serde_json::from_value(sink_node.conf.clone())?;
-                                    GLOBAL_MQTT_CLIENT_MANAGER
-                                        .get_sink_mb_tx(&sink.app_id, &sink.sink_id, &self.id)
-                                        .await
-                                        .unwrap()
-                                }
-                                types::apps::AppType::HttpClient => todo!(),
-                            };
+                            let tx = GLOBAL_APP_MANAGER
+                                .get_sink_tx(&sink_node.app_id, &sink_node.sink_id, &self.id)
+                                .await
+                                .unwrap();
                             mpsc_tx = Some(tx);
                         }
                         _ => {}

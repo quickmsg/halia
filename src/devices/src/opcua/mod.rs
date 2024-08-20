@@ -28,41 +28,21 @@ use types::{
             CreateUpdateSubscriptionReq, CreateUpdateVariableReq, OpcuaConf, SearchGroupsResp,
             SearchSinksResp, SearchSubscriptionsResp, SearchVariablesResp,
         },
-        CreateUpdateDeviceReq, DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
+        CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf,
+        SearchDevicesItemResp,
     },
-    Pagination,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
-use crate::Device;
+use crate::{sink_not_found_err, source_not_found_err, Device};
 
 mod group;
-pub mod manager;
+// pub mod manager;
 mod monitored_item;
 mod sink;
 mod subscription;
 mod variable;
-
-macro_rules! group_not_found_err {
-    ($group_id:expr) => {
-        Err(HaliaError::NotFound("opcua设备组".to_owned(), $group_id))
-    };
-}
-
-macro_rules! subscription_not_found_err {
-    ($subscription_id:expr) => {
-        Err(HaliaError::NotFound(
-            "opcua设备订阅".to_owned(),
-            $subscription_id,
-        ))
-    };
-}
-
-macro_rules! sink_not_found_err {
-    ($sink_id:expr) => {
-        Err(HaliaError::NotFound("opcua设备动作".to_owned(), $sink_id))
-    };
-}
 
 struct Opcua {
     id: Uuid,
@@ -91,17 +71,18 @@ pub async fn new(
             .await?;
     }
 
-    Ok(Opcua {
+    Ok(Box::new(Opcua {
         id: device_id,
         on: false,
         err: None,
-        conf: req,
+        // conf: req,
+        conf: todo!(),
         session: Arc::new(RwLock::new(None)),
         stop_signal_tx: None,
         groups: Arc::new(RwLock::new(vec![])),
         subscriptions: vec![],
         sinks: vec![],
-    })
+    }))
 }
 
 impl Opcua {
@@ -381,7 +362,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update(&self.id, req).await,
-            None => group_not_found_err!(group_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -396,7 +377,7 @@ impl Opcua {
             Some(group) => {
                 group.delete().await?;
             }
-            None => return group_not_found_err!(group_id),
+            None => return source_not_found_err!(),
         }
 
         self.groups
@@ -420,7 +401,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.create_variable(&self.id, variable_id, req).await,
-            None => group_not_found_err!(group_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -437,7 +418,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => Ok(group.search_variables(pagination).await),
-            None => group_not_found_err!(group_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -455,7 +436,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update_variable(&self.id, variable_id, req).await,
-            None => group_not_found_err!(group_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -472,7 +453,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.delete_variable(&self.id, variable_id).await,
-            None => group_not_found_err!(group_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -485,7 +466,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.ref_info.add_ref(rule_id)),
-            None => group_not_found_err!(group_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -502,7 +483,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.get_mb_rx(rule_id)),
-            None => group_not_found_err!(group_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -515,7 +496,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.del_mb_rx(rule_id)),
-            None => group_not_found_err!(group_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -528,7 +509,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.ref_info.del_ref(rule_id)),
-            None => group_not_found_err!(group_id.clone()),
+            None => source_not_found_err!(),
         }
     }
 
@@ -586,7 +567,7 @@ impl Opcua {
             .find(|subscription| subscription.id == subscription_id)
         {
             Some(subscription) => subscription.update(&self.id, req).await,
-            None => subscription_not_found_err!(subscription_id),
+            None => source_not_found_err!(),
         }
     }
 
@@ -599,7 +580,7 @@ impl Opcua {
             Some(subscription) => {
                 subscription.delete().await?;
             }
-            None => return subscription_not_found_err!(subscription_id),
+            None => return source_not_found_err!(),
         }
 
         self.subscriptions
@@ -647,7 +628,7 @@ impl Opcua {
     async fn update_sink(&mut self, sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
-            None => sink_not_found_err!(sink_id),
+            None => sink_not_found_err!(),
         }
     }
 
@@ -658,7 +639,212 @@ impl Opcua {
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
-            None => sink_not_found_err!(sink_id),
+            None => sink_not_found_err!(),
         }
+    }
+}
+
+impl Device for Opcua {
+    fn get_id(&self) -> Uuid {
+        todo!()
+    }
+
+    fn search(&self) -> SearchDevicesItemResp {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update<'life0, 'async_trait>(
+        &'life0 mut self,
+        req: CreateUpdateDeviceReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn create_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn search_sources<'life0, 'async_trait>(
+        &'life0 mut self,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn create_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn search_sinks<'life0, 'async_trait>(
+        &'life0 mut self,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
     }
 }

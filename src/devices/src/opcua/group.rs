@@ -26,16 +26,9 @@ use types::{
 };
 use uuid::Uuid;
 
-use super::variable::Variable;
+use crate::source_not_found_err;
 
-macro_rules! variable_not_found_err {
-    ($variable_id:expr) => {
-        Err(HaliaError::NotFound(
-            "opcua设备组变量".to_owned(),
-            $variable_id,
-        ))
-    };
-}
+use super::variable::Variable;
 
 pub struct Group {
     pub id: Uuid,
@@ -264,7 +257,7 @@ impl Group {
             }
         }
 
-        variable_not_found_err!(variable_id)
+        source_not_found_err!()
     }
 
     pub async fn delete_variable(&self, device_id: &Uuid, variable_id: Uuid) -> HaliaResult<()> {
