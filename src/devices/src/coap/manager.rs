@@ -110,7 +110,103 @@ impl Manager {
 
         Ok(())
     }
+}
 
+// observe
+impl Manager {
+    pub async fn create_observe(
+        &self,
+        device_id: Uuid,
+        observe_id: Option<Uuid>,
+        req: CreateUpdateObserveReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.create_observe(observe_id, req).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn search_observes(
+        &self,
+        device_id: Uuid,
+        pagination: Pagination,
+    ) -> HaliaResult<SearchObservesResp> {
+        match self.devices.get(&device_id) {
+            Some(device) => Ok(device.search_observes(pagination).await),
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn update_observe(
+        &self,
+        device_id: Uuid,
+        observe_id: Uuid,
+        req: CreateUpdateObserveReq,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.update_observe(observe_id, req).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub async fn delete_observe(&self, device_id: Uuid, observe_id: Uuid) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.delete_observe(observe_id).await,
+            None => device_not_find_err!(device_id),
+        }
+    }
+
+    pub fn add_observe_ref(
+        &self,
+        device_id: &Uuid,
+        observe_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.add_observe_ref(observe_id, rule_id),
+            None => device_not_find_err!(device_id.clone()),
+        }
+    }
+
+    pub fn get_observe_rx(
+        &self,
+        device_id: &Uuid,
+        observe_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.get_observe_rx(observe_id, rule_id),
+            None => device_not_find_err!(device_id.clone()),
+        }
+    }
+
+    pub fn del_observe_rx(
+        &self,
+        device_id: &Uuid,
+        observe_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.del_observe_rx(observe_id, rule_id),
+            None => device_not_find_err!(device_id.clone()),
+        }
+    }
+
+    pub fn del_observe_ref(
+        &self,
+        device_id: &Uuid,
+        observe_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self.devices.get_mut(&device_id) {
+            Some(mut device) => device.del_observe_ref(observe_id, rule_id),
+            None => device_not_find_err!(device_id.clone()),
+        }
+    }
+}
+
+// api
+impl Manager {
     pub async fn create_api(
         &self,
         device_id: Uuid,
@@ -200,7 +296,10 @@ impl Manager {
             None => device_not_find_err!(device_id.clone()),
         }
     }
+}
 
+// sink
+impl Manager {
     pub async fn create_sink(
         &self,
         device_id: Uuid,
@@ -264,51 +363,6 @@ impl Manager {
         match self.devices.get_mut(device_id) {
             Some(mut device) => device.add_sink_ref(sink_id, rule_id),
             None => device_not_find_err!(device_id.clone()),
-        }
-    }
-}
-
-// observe
-impl Manager {
-    pub async fn create_observe(
-        &self,
-        device_id: Uuid,
-        observe_id: Option<Uuid>,
-        req: CreateUpdateObserveReq,
-    ) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.create_observe(observe_id, req).await,
-            None => device_not_find_err!(device_id),
-        }
-    }
-
-    pub async fn search_observes(
-        &self,
-        device_id: Uuid,
-        pagination: Pagination,
-    ) -> HaliaResult<SearchObservesResp> {
-        match self.devices.get(&device_id) {
-            Some(device) => Ok(device.search_observes(pagination).await),
-            None => device_not_find_err!(device_id),
-        }
-    }
-
-    pub async fn update_observe(
-        &self,
-        device_id: Uuid,
-        observe_id: Uuid,
-        req: CreateUpdateObserveReq,
-    ) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.update_observe(observe_id, req).await,
-            None => device_not_find_err!(device_id),
-        }
-    }
-
-    pub async fn delete_observe(&self, device_id: Uuid, observe_id: Uuid) -> HaliaResult<()> {
-        match self.devices.get_mut(&device_id) {
-            Some(mut device) => device.delete_observe(observe_id).await,
-            None => device_not_find_err!(device_id),
         }
     }
 }

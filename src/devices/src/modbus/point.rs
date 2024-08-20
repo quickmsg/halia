@@ -117,6 +117,9 @@ impl Point {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
+        let (mb_tx, _) = broadcast::channel(16);
+        self.mb_tx = Some(mb_tx);
+
         self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx, device_err)
             .await;
     }
@@ -237,8 +240,12 @@ impl Point {
                     }
                     _ => self.value = value.clone().into(),
                 }
+
                 match &self.mb_tx {
                     Some(tx) => {
+                        if tx.receiver_count() == 0 {
+                            return Ok(());
+                        }
                         let mut message = Message::default();
                         message.add(self.conf.base.name.clone(), value);
                         let mut message_batch = MessageBatch::default();

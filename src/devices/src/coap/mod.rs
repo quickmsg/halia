@@ -170,8 +170,7 @@ impl Coap {
 
         if restart && self.on {
             for observe in self.observes.iter_mut() {
-                // todo
-                _ = observe.restart().await;
+                _ = observe.restart(&self.conf.ext).await;
             }
             for api in self.apis.iter_mut() {
                 _ = api.restart(&self.conf.ext).await;
@@ -260,170 +259,6 @@ impl Coap {
         persistence::devices::delete_device(&self.id).await?;
 
         Ok(())
-    }
-
-    pub async fn create_api(
-        &mut self,
-        api_id: Option<Uuid>,
-        req: CreateUpdateAPIReq,
-    ) -> HaliaResult<()> {
-        let mut api = API::new(&self.id, api_id, req).await?;
-        if self.on {
-            _ = api.start(&self.conf.ext).await;
-        }
-        self.apis.push(api);
-
-        Ok(())
-    }
-
-    pub async fn search_apis(&self, pagination: Pagination) -> SearchAPIsResp {
-        let mut data = vec![];
-        for api in self
-            .apis
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(api.search());
-        }
-
-        SearchAPIsResp {
-            total: self.apis.len(),
-            data,
-        }
-    }
-
-    pub async fn update_api(&mut self, api_id: Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
-        match self.apis.iter_mut().find(|api| api.id == api_id) {
-            Some(api) => api.update(&self.id, req).await,
-            None => api_not_found_err!(api_id),
-        }
-    }
-
-    pub async fn delete_api(&mut self, api_id: Uuid) -> HaliaResult<()> {
-        match self.apis.iter_mut().find(|api| api.id == api_id) {
-            Some(api) => api.delete(&self.id).await?,
-            None => return api_not_found_err!(api_id),
-        }
-        self.apis.retain(|api| api.id != api_id);
-        Ok(())
-    }
-
-    pub async fn add_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.ref_info.add_ref(rule_id)),
-            None => api_not_found_err!(api_id.clone()),
-        }
-    }
-
-    pub async fn get_api_mb_rx(
-        &mut self,
-        api_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.get_mb_rx(rule_id)),
-            None => api_not_found_err!(api_id.clone()),
-        }
-    }
-
-    pub async fn del_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.ref_info.del_ref(rule_id)),
-            None => api_not_found_err!(api_id.clone()),
-        }
-    }
-
-    pub async fn del_api_mb_rx(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.apis.iter_mut().find(|api| api.id == *api_id) {
-            Some(api) => Ok(api.del_mb_rx(rule_id)),
-            None => api_not_found_err!(api_id.clone()),
-        }
-    }
-
-    pub async fn create_sink(
-        &mut self,
-        sink_id: Option<Uuid>,
-        req: CreateUpdateSinkReq,
-    ) -> HaliaResult<()> {
-        match Sink::new(&self.id, sink_id, req).await {
-            Ok(sink) => Ok(self.sinks.push(sink)),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
-        let mut data = vec![];
-        for sink in self
-            .sinks
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(sink.search());
-            if data.len() == pagination.size {
-                break;
-            }
-        }
-
-        SearchSinksResp {
-            total: self.sinks.len(),
-            data,
-        }
-    }
-
-    pub async fn update_sink(
-        &mut self,
-        sink_id: Uuid,
-        req: CreateUpdateSinkReq,
-    ) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(&self.id, req).await,
-            None => sink_not_found_err!(sink_id),
-        }
-    }
-
-    pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => {
-                sink.delete(&self.id).await?;
-                self.sinks.retain(|sink| sink.id != sink_id);
-                Ok(())
-            }
-            None => sink_not_found_err!(sink_id),
-        }
-    }
-
-    pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
-        }
-    }
-
-    pub async fn get_sink_mb_tx(
-        &mut self,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.get_mb_tx(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
-        }
-    }
-
-    pub async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
-        }
-    }
-
-    pub async fn del_sink_mb_rx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.del_mb_tx(rule_id)),
-            None => sink_not_found_err!(sink_id.clone()),
-        }
     }
 }
 
@@ -514,7 +349,7 @@ impl Coap {
             .iter_mut()
             .find(|observe| observe.id == observe_id)
         {
-            Some(observe) => observe.update(&self.id, req).await,
+            Some(observe) => observe.update(&self.id, req, &self.conf.ext).await,
             None => observe_not_found_err!(observe_id),
         }
     }
@@ -530,5 +365,222 @@ impl Coap {
         }
         self.observes.retain(|observe| observe.id != observe_id);
         Ok(())
+    }
+
+    pub fn add_observe_ref(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .observes
+            .iter_mut()
+            .find(|observe| observe.id == *observe_id)
+        {
+            Some(observe) => Ok(observe.ref_info.add_ref(rule_id)),
+            None => return observe_not_found_err!(observe_id.clone()),
+        }
+    }
+
+    pub fn get_observe_rx(
+        &mut self,
+        observe_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self
+            .observes
+            .iter_mut()
+            .find(|observe| observe.id == *observe_id)
+        {
+            Some(observe) => Ok(observe.get_mb_rx(rule_id)),
+            None => observe_not_found_err!(observe_id.clone()),
+        }
+    }
+
+    pub fn del_observe_rx(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .observes
+            .iter_mut()
+            .find(|observe| observe.id == *observe_id)
+        {
+            Some(observe) => Ok(observe.del_mb_rx(rule_id)),
+            None => observe_not_found_err!(observe_id.clone()),
+        }
+    }
+
+    pub fn del_observe_ref(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .observes
+            .iter_mut()
+            .find(|observe| observe.id == *observe_id)
+        {
+            Some(observe) => Ok(observe.ref_info.del_ref(rule_id)),
+            None => return observe_not_found_err!(observe_id.clone()),
+        }
+    }
+}
+
+impl Coap {
+    pub async fn create_api(
+        &mut self,
+        api_id: Option<Uuid>,
+        req: CreateUpdateAPIReq,
+    ) -> HaliaResult<()> {
+        let mut api = API::new(&self.id, api_id, req).await?;
+        if self.on {
+            _ = api.start(&self.conf.ext).await;
+        }
+        self.apis.push(api);
+
+        Ok(())
+    }
+
+    pub async fn search_apis(&self, pagination: Pagination) -> SearchAPIsResp {
+        let mut data = vec![];
+        for api in self
+            .apis
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
+            data.push(api.search());
+        }
+
+        SearchAPIsResp {
+            total: self.apis.len(),
+            data,
+        }
+    }
+
+    pub async fn update_api(&mut self, api_id: Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
+        match self.apis.iter_mut().find(|api| api.id == api_id) {
+            Some(api) => api.update(&self.id, req).await,
+            None => api_not_found_err!(api_id),
+        }
+    }
+
+    pub async fn delete_api(&mut self, api_id: Uuid) -> HaliaResult<()> {
+        match self.apis.iter_mut().find(|api| api.id == api_id) {
+            Some(api) => api.delete(&self.id).await?,
+            None => return api_not_found_err!(api_id),
+        }
+        self.apis.retain(|api| api.id != api_id);
+        Ok(())
+    }
+
+    pub async fn add_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.apis.iter_mut().find(|api| api.id == *api_id) {
+            Some(api) => Ok(api.ref_info.add_ref(rule_id)),
+            None => api_not_found_err!(api_id.clone()),
+        }
+    }
+
+    pub async fn get_api_mb_rx(
+        &mut self,
+        api_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match self.apis.iter_mut().find(|api| api.id == *api_id) {
+            Some(api) => Ok(api.get_mb_rx(rule_id)),
+            None => api_not_found_err!(api_id.clone()),
+        }
+    }
+
+    pub async fn del_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.apis.iter_mut().find(|api| api.id == *api_id) {
+            Some(api) => Ok(api.ref_info.del_ref(rule_id)),
+            None => api_not_found_err!(api_id.clone()),
+        }
+    }
+
+    pub async fn del_api_mb_rx(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.apis.iter_mut().find(|api| api.id == *api_id) {
+            Some(api) => Ok(api.del_mb_rx(rule_id)),
+            None => api_not_found_err!(api_id.clone()),
+        }
+    }
+}
+
+// sink
+impl Coap {
+    pub async fn create_sink(
+        &mut self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match Sink::new(&self.id, sink_id, req).await {
+            Ok(sink) => Ok(self.sinks.push(sink)),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
+        let mut data = vec![];
+        for sink in self
+            .sinks
+            .iter()
+            .rev()
+            .skip((pagination.page - 1) * pagination.size)
+        {
+            data.push(sink.search());
+            if data.len() == pagination.size {
+                break;
+            }
+        }
+
+        SearchSinksResp {
+            total: self.sinks.len(),
+            data,
+        }
+    }
+
+    pub async fn update_sink(
+        &mut self,
+        sink_id: Uuid,
+        req: CreateUpdateSinkReq,
+    ) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => sink.update(&self.id, req).await,
+            None => sink_not_found_err!(sink_id),
+        }
+    }
+
+    pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => {
+                sink.delete(&self.id).await?;
+                self.sinks.retain(|sink| sink.id != sink_id);
+                Ok(())
+            }
+            None => sink_not_found_err!(sink_id),
+        }
+    }
+
+    pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
+            None => sink_not_found_err!(sink_id.clone()),
+        }
+    }
+
+    pub async fn get_sink_mb_tx(
+        &mut self,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.get_mb_tx(rule_id)),
+            None => sink_not_found_err!(sink_id.clone()),
+        }
+    }
+
+    pub async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
+            None => sink_not_found_err!(sink_id.clone()),
+        }
+    }
+
+    pub async fn del_sink_mb_rx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.del_mb_tx(rule_id)),
+            None => sink_not_found_err!(sink_id.clone()),
+        }
     }
 }
