@@ -28,11 +28,13 @@ use types::{
             CreateUpdateSubscriptionReq, CreateUpdateVariableReq, OpcuaConf, SearchGroupsResp,
             SearchSinksResp, SearchSubscriptionsResp, SearchVariablesResp,
         },
-        DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
+        CreateUpdateDeviceReq, DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination,
 };
 use uuid::Uuid;
+
+use crate::Device;
 
 mod group;
 pub mod manager;
@@ -77,29 +79,32 @@ struct Opcua {
     sinks: Vec<Sink>,
 }
 
-impl Opcua {
-    pub async fn new(device_id: Option<Uuid>, req: CreateUpdateOpcuaReq) -> HaliaResult<Self> {
-        Self::check_conf(&req)?;
+pub async fn new(
+    device_id: Option<Uuid>,
+    req: CreateUpdateDeviceReq,
+) -> HaliaResult<Box<dyn Device>> {
+    // Self::check_conf(&req)?;
 
-        let (device_id, new) = get_id(device_id);
-        if new {
-            persistence::devices::opcua::create(&device_id, serde_json::to_string(&req).unwrap())
-                .await?;
-        }
-
-        Ok(Opcua {
-            id: device_id,
-            on: false,
-            err: None,
-            conf: req,
-            session: Arc::new(RwLock::new(None)),
-            stop_signal_tx: None,
-            groups: Arc::new(RwLock::new(vec![])),
-            subscriptions: vec![],
-            sinks: vec![],
-        })
+    let (device_id, new) = get_id(device_id);
+    if new {
+        persistence::devices::opcua::create(&device_id, serde_json::to_string(&req).unwrap())
+            .await?;
     }
 
+    Ok(Opcua {
+        id: device_id,
+        on: false,
+        err: None,
+        conf: req,
+        session: Arc::new(RwLock::new(None)),
+        stop_signal_tx: None,
+        groups: Arc::new(RwLock::new(vec![])),
+        subscriptions: vec![],
+        sinks: vec![],
+    })
+}
+
+impl Opcua {
     fn check_conf(req: &CreateUpdateOpcuaReq) -> HaliaResult<()> {
         Ok(())
     }

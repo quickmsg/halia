@@ -35,30 +35,20 @@ use types::{
             Encode, ModbusConf, PointsQueryParams, SearchPointsResp, SearchSinksResp,
             SinksQueryParams, Type,
         },
-        DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
+        CreateUpdateDeviceReq, DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination, Value,
 };
 use uuid::Uuid;
 
-pub mod manager;
+use crate::Device;
+
+// pub mod manager;
 mod point;
 mod sink;
 
-macro_rules! point_not_found_err {
-    ($point_id:expr) => {
-        Err(HaliaError::NotFound("modbus设备点位".to_owned(), $point_id))
-    };
-}
-
-macro_rules! sink_not_found_err {
-    ($sink_id:expr) => {
-        Err(HaliaError::NotFound("modbus设备动作".to_owned(), $sink_id))
-    };
-}
-
 #[derive(Debug)]
-pub struct Modbus {
+struct Modbus {
     pub id: Uuid,
     conf: CreateUpdateModbusReq,
 
@@ -82,32 +72,36 @@ pub struct Modbus {
     >,
 }
 
-impl Modbus {
-    pub async fn new(device_id: Option<Uuid>, req: CreateUpdateModbusReq) -> HaliaResult<Modbus> {
-        Self::check_conf(&req)?;
+pub async fn new(
+    device_id: Option<Uuid>,
+    req: CreateUpdateDeviceReq,
+) -> HaliaResult<Box<dyn Device>> {
+    // Self::check_conf(&req)?;
 
-        let (device_id, new) = get_id(device_id);
+    let (device_id, new) = get_id(device_id);
 
-        if new {
-            persistence::devices::modbus::create(&device_id, serde_json::to_string(&req).unwrap())
-                .await?;
-        }
-
-        Ok(Modbus {
-            id: device_id,
-            on: false,
-            err: Arc::new(RwLock::new(None)),
-            rtt: Arc::new(AtomicU16::new(9999)),
-            conf: req,
-            points: Arc::new(RwLock::new(vec![])),
-            read_tx: None,
-            write_tx: None,
-            sinks: vec![],
-            stop_signal_tx: None,
-            join_handle: None,
-        })
+    if new {
+        persistence::devices::modbus::create(&device_id, serde_json::to_string(&req).unwrap())
+            .await?;
     }
 
+    Ok(Box::new(Modbus {
+        id: device_id,
+        on: false,
+        err: Arc::new(RwLock::new(None)),
+        rtt: Arc::new(AtomicU16::new(9999)),
+        // conf: req,
+        conf: todo!(),
+        points: Arc::new(RwLock::new(vec![])),
+        read_tx: None,
+        write_tx: None,
+        sinks: vec![],
+        stop_signal_tx: None,
+        join_handle: None,
+    }))
+}
+
+impl Modbus {
     fn check_conf(req: &CreateUpdateModbusReq) -> HaliaResult<()> {
         if req.ext.ethernet.is_none() && req.ext.serial.is_none() {
             return Err(HaliaError::Common(
@@ -834,5 +828,52 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
                 Ok(())
             }
         },
+    }
+}
+
+impl Device for Modbus {
+    fn get_id(&self) -> Uuid {
+        todo!()
+    }
+
+    fn search(&self) -> SearchDevicesItemResp {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update<'life0, 'async_trait>(
+        &'life0 mut self,
+        req: CreateUpdateDeviceReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
     }
 }

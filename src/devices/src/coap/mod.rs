@@ -20,31 +20,30 @@ use types::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
             QueryObserves, SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
-        DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
+        CreateUpdateDeviceReq, DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
     Pagination,
 };
 use uuid::Uuid;
 
+use crate::Device;
+
 // use crate::Device;
 
 mod api;
-pub mod manager;
+// pub mod manager;
 mod observe;
 mod sink;
 mod source;
 
 macro_rules! observe_not_found_err {
-    ($observe_id:expr) => {
-        Err(HaliaError::NotFound(
-            "coap设备观察器".to_owned(),
-            $observe_id,
-        ))
+    () => {
+        Err(HaliaError::NotFound("coap设备观察器".to_owned()))
     };
 }
 
 macro_rules! api_not_found_err {
-    ($api_id:expr) => {
+    () => {
         Err(HaliaError::NotFound("coap设备API".to_owned(), $api_id))
     };
 }
@@ -55,7 +54,7 @@ macro_rules! sink_not_found_err {
     };
 }
 
-pub struct Coap {
+struct Coap {
     id: Uuid,
     conf: CreateUpdateCoapReq,
 
@@ -67,27 +66,30 @@ pub struct Coap {
     err: Option<String>,
 }
 
-impl Coap {
-    pub async fn new(device_id: Option<Uuid>, req: CreateUpdateCoapReq) -> HaliaResult<Self> {
-        Self::check_conf(&req)?;
+pub async fn new(
+    device_id: Option<Uuid>,
+    req: CreateUpdateDeviceReq,
+) -> HaliaResult<Box<dyn Device>> {
+    // Self::check_conf(&req)?;
 
-        let (device_id, new) = get_id(device_id);
-        if new {
-            persistence::devices::coap::create(&device_id, serde_json::to_string(&req).unwrap())
-                .await?;
-        }
-
-        Ok(Coap {
-            id: device_id,
-            conf: req,
-            observes: vec![],
-            apis: vec![],
-            sinks: vec![],
-            on: false,
-            err: None,
-        })
+    let (device_id, new) = get_id(device_id);
+    if new {
+        persistence::devices::coap::create(&device_id, serde_json::to_string(&req).unwrap())
+            .await?;
     }
 
+    Ok(Box::new(Coap {
+        id: device_id,
+        conf: req,
+        observes: vec![],
+        apis: vec![],
+        sinks: vec![],
+        on: false,
+        err: None,
+    }))
+}
+
+impl Coap {
     fn check_conf(_req: &CreateUpdateCoapReq) -> HaliaResult<()> {
         Ok(())
     }
@@ -740,3 +742,9 @@ impl Coap {
 //         }
 //     }
 // }
+
+impl Device for Coap {
+    fn get_id(&self) -> Uuid {
+        self.id.clone()
+    }
+}

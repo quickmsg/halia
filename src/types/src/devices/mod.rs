@@ -11,11 +11,27 @@ pub mod modbus;
 pub mod opcua;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub struct CreateUpdateDeviceReq {
+    #[serde(rename = "type")]
+    pub typ: DeviceType,
+    #[serde(flatten)]
+    pub conf: DeviceConf,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceType {
     Modbus,
     Opcua,
     Coap,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub struct DeviceConf {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: serde_json::Value,
 }
 
 impl fmt::Display for DeviceType {

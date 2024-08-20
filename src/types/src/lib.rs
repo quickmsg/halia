@@ -5,7 +5,7 @@ pub mod apps;
 pub mod devices;
 pub mod rules;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct BaseConf {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]

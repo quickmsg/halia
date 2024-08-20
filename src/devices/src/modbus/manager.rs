@@ -28,19 +28,13 @@ pub struct Manager {
     devices: DashMap<Uuid, Modbus>,
 }
 
-macro_rules! device_not_find_err {
-    ($device_id:expr) => {
-        Err(HaliaError::NotFound("modbus设备".to_owned(), $device_id))
-    };
-}
-
 impl Manager {
     pub async fn create(
         &self,
         device_id: Option<Uuid>,
         req: CreateUpdateModbusReq,
     ) -> HaliaResult<()> {
-        GLOBAL_DEVICE_MANAGER.check_duplicate_name(&device_id, &req.base.name)?;
+        // GLOBAL_DEVICE_MANAGER.check_duplicate_name(&device_id, &req.base.name)?;
 
         for device in self.devices.iter() {
             device.value().check_duplicate(&req)?;
