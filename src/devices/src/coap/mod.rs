@@ -11,7 +11,7 @@ use message::MessageBatch;
 use observe::Observe;
 use protocol::coap::request::CoapOption;
 use sink::Sink;
-use std::{str::FromStr, thread::panicking};
+use std::str::FromStr;
 use tokio::sync::{broadcast, mpsc};
 use tracing::warn;
 use types::{
@@ -30,6 +30,7 @@ mod api;
 pub mod manager;
 mod observe;
 mod sink;
+mod source;
 
 macro_rules! observe_not_found_err {
     ($observe_id:expr) => {

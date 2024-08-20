@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub mod apps;
 pub mod devices;
@@ -28,4 +29,26 @@ pub struct Value {
 pub struct RuleRef {
     pub rule_ref_cnt: usize,
     pub rule_active_ref_cnt: usize,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct CreateUpdateSourceOrSinkReq {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: serde_json::Value,
+}
+
+#[derive(Serialize)]
+pub struct SearchSourcesOrSinksResp {
+    pub total: usize,
+    pub data: Vec<SearchSourcesOrSinksItemResp>,
+    pub rule_ref: RuleRef,
+}
+
+#[derive(Serialize)]
+pub struct SearchSourcesOrSinksItemResp {
+    pub id: Uuid,
+    pub conf: CreateUpdateSourceOrSinkReq,
+    pub rule_ref: RuleRef,
 }

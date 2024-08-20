@@ -20,6 +20,8 @@ pub mod rule;
 static ROOT_DIR: &str = "storage";
 static RULE_DIR: &str = "rules";
 pub static DELIMITER: char = '|';
+static SOURCE_FILE: &str = "sources";
+static SINK_FILE: &str = "sinks";
 
 #[derive(Debug, PartialEq)]
 pub enum Status {
@@ -45,12 +47,12 @@ impl Display for Status {
     }
 }
 
-async fn insert(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
-    let mut file = OpenOptions::new().append(true).open(path).await?;
-    file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
-        .await?;
-    file.flush().await
-}
+// async fn insert(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
+//     let mut file = OpenOptions::new().append(true).open(path).await?;
+//     file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
+//         .await?;
+//     file.flush().await
+// }
 
 pub async fn create(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().append(true).open(path).await?;
@@ -186,4 +188,44 @@ async fn delete(path: impl AsRef<Path>, id: &Uuid) -> Result<(), io::Error> {
 
     file.write(buf.as_bytes()).await?;
     file.flush().await
+}
+
+fn get_source_file_path(id: &Uuid) -> PathBuf {
+    Path::new(ROOT_DIR).join(id.to_string()).join(SOURCE_FILE)
+}
+
+pub async fn create_source(id: &Uuid, source_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    create(get_source_file_path(id), source_id, data).await
+}
+
+pub async fn read_sources(id: &Uuid) -> Result<Vec<String>, io::Error> {
+    read(get_source_file_path(id)).await
+}
+
+pub async fn update_source(id: &Uuid, source_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    update(get_source_file_path(id), source_id, data).await
+}
+
+pub async fn delete_source(id: &Uuid, source_id: &Uuid) -> Result<(), io::Error> {
+    delete(get_source_file_path(id), source_id).await
+}
+
+fn get_sink_file_path(id: &Uuid) -> PathBuf {
+    Path::new(ROOT_DIR).join(id.to_string()).join(SINK_FILE)
+}
+
+pub async fn create_sink(id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+    create(get_sink_file_path(id), sink_id, &data).await
+}
+
+pub async fn read_sinks(id: &Uuid) -> Result<Vec<String>, io::Error> {
+    read(get_source_file_path(id)).await
+}
+
+pub async fn update_sink(id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+    update(get_sink_file_path(id), sink_id, &data).await
+}
+
+pub async fn delete_sink(id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
+    delete(get_sink_file_path(id), sink_id).await
 }

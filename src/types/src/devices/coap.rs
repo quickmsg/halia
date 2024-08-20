@@ -97,6 +97,39 @@ pub struct ObserveConf {
     // pub token: Option<Vec<u8>>,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct CreateUpdateSourceReq {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: SourceConf,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct SourceConf {
+    pub method: SourceMethod,
+    #[serde(flatten)]
+    pub conf: serde_json::Value,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub data: Option<Vec<u8>>,
+    // pub options: Vec<(CoapOption, String)>,
+    // pub domain: String,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub token: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct GetConf {
+    pub interval: u64,
+    pub path: String,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub enum SourceMethod {
+    Get,
+    Observe,
+}
+
 #[derive(Deserialize)]
 pub struct QueryObserves {
     pub name: Option<String>,
