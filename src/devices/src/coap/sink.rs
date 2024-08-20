@@ -61,7 +61,7 @@ impl Sink {
         })
     }
 
-    fn check_conf(req: &CreateUpdateSinkReq) -> HaliaResult<()> {
+    fn check_conf(_req: &CreateUpdateSinkReq) -> HaliaResult<()> {
         Ok(())
     }
 
@@ -159,7 +159,7 @@ impl Sink {
                     }
 
                     mb = publish_rx.recv() => {
-                        if let Some(mb) = mb {
+                        if let Some(_mb) = mb {
                             match client.send(request.clone()).await {
                                 Ok(_) => {}
                                 Err(_) => {}

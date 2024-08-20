@@ -97,6 +97,11 @@ pub struct ObserveConf {
     // pub token: Option<Vec<u8>>,
 }
 
+#[derive(Deserialize)]
+pub struct QueryObserves {
+    pub name: Option<String>,
+}
+
 #[derive(Serialize)]
 pub struct SearchObservesResp {
     pub total: usize,

@@ -11,14 +11,14 @@ use message::MessageBatch;
 use observe::Observe;
 use protocol::coap::request::CoapOption;
 use sink::Sink;
-use std::str::FromStr;
+use std::{str::FromStr, thread::panicking};
 use tokio::sync::{broadcast, mpsc};
 use tracing::warn;
 use types::{
     devices::{
         coap::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
-            SearchAPIsResp, SearchObservesResp, SearchSinksResp,
+            QueryObserves, SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
         DeviceType, SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -85,11 +85,15 @@ impl Coap {
         })
     }
 
-    fn check_conf(req: &CreateUpdateCoapReq) -> HaliaResult<()> {
+    fn check_conf(_req: &CreateUpdateCoapReq) -> HaliaResult<()> {
         Ok(())
     }
 
     pub fn check_duplicate(&self, req: &CreateUpdateCoapReq) -> HaliaResult<()> {
+        if self.conf.ext == req.ext {
+            return Err(HaliaError::AddressExists);
+        }
+
         Ok(())
     }
 
@@ -327,16 +331,31 @@ impl Coap {
         Ok(())
     }
 
-    pub async fn search_observes(&self, pagination: Pagination) -> SearchObservesResp {
+    pub async fn search_observes(
+        &self,
+        pagination: Pagination,
+        query: QueryObserves,
+    ) -> SearchObservesResp {
+        let mut total = 0;
         let mut data = vec![];
         for observe in self.observes.iter().rev() {
-            data.push(observe.search());
+            let observe = observe.search();
+
+            if let Some(name) = &query.name {
+                if !observe.conf.base.name.contains(name) {
+                    continue;
+                }
+            }
+
+            if total >= ((pagination.page - 1) * pagination.size)
+                && total < (pagination.page * pagination.size)
+            {
+                data.push(observe);
+            }
+            total += 1;
         }
 
-        SearchObservesResp {
-            total: self.apis.len(),
-            data,
-        }
+        SearchObservesResp { total, data }
     }
 
     pub async fn update_observe(

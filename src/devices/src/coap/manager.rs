@@ -8,7 +8,7 @@ use types::{
     devices::{
         coap::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
-            SearchAPIsResp, SearchObservesResp, SearchSinksResp,
+            QueryObserves, SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
         DeviceType, SearchDevicesItemResp,
     },
@@ -130,9 +130,10 @@ impl Manager {
         &self,
         device_id: Uuid,
         pagination: Pagination,
+        query: QueryObserves,
     ) -> HaliaResult<SearchObservesResp> {
         match self.devices.get(&device_id) {
-            Some(device) => Ok(device.search_observes(pagination).await),
+            Some(device) => Ok(device.search_observes(pagination, query).await),
             None => device_not_find_err!(device_id),
         }
     }

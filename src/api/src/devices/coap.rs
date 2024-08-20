@@ -8,7 +8,7 @@ use types::{
     devices::{
         coap::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
-            SearchAPIsResp, SearchObservesResp, SearchSinksResp,
+            QueryObserves, SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
         SearchDevicesItemResp,
     },
@@ -102,9 +102,10 @@ async fn create_observe(
 async fn search_observes(
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
+    Query(query): Query<QueryObserves>,
 ) -> AppResult<AppSuccess<SearchObservesResp>> {
     let data = GLOBAL_COAP_MANAGER
-        .search_observes(device_id, pagination)
+        .search_observes(device_id, pagination, query)
         .await?;
     Ok(AppSuccess::data(data))
 }
