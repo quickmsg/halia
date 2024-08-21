@@ -28,7 +28,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, Type},
@@ -80,7 +80,7 @@ pub async fn new(
 
     let (device_id, new) = get_id(device_id);
     if new {
-        persistence::create_device(DeviceType::Modbus, &device_id, &data).await?;
+        persistence::create_device(&device_id, &data).await?;
     }
 
     Ok(Box::new(Modbus {
@@ -655,6 +655,49 @@ impl Device for Modbus {
             .find(|source| source.id == source_id)
         {
             Some(source) => source.update(&self.id, req).await,
+            None => source_not_found_err!(),
+        }
+    }
+
+    async fn write_source_value(
+        &mut self,
+        source_id: Uuid,
+        req: Value,
+    ) -> HaliaResult<()> {
+        if !self.on {
+            return Err(HaliaError::Stopped);
+        }
+
+        match self.err.read().await.as_ref() {
+            Some(err) => return Err(HaliaError::Common(err.to_string())),
+            None => {}
+        }
+
+        match self
+            .sources
+            .read()
+            .await
+            .iter()
+            .find(|source| source.id == source_id)
+        {
+            Some(source) => {
+                match WritePointEvent::new(
+                    source.ext_conf.slave,
+                    source.ext_conf.area.clone(),
+                    source.ext_conf.address,
+                    source.ext_conf.data_type.clone(),
+                    req.value,
+                ) {
+                    Ok(wpe) => {
+                        match self.write_tx.as_ref().unwrap().send(wpe).await {
+                            Ok(_) => trace!("send write value success"),
+                            Err(e) => warn!("send write value err:{:?}", e),
+                        }
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
+                }
+            }
             None => source_not_found_err!(),
         }
     }

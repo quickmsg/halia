@@ -150,15 +150,13 @@ impl AppManager {
     }
 
     pub async fn recover(&self) -> HaliaResult<()> {
-        // match persistence::apps::read_apps().await {
+        // match persistence::read_apps().await {
         //     Ok(datas) => {
         //         for data in datas {
-        //             if data.len() == 0 {
-        //                 continue;
-        //             }
         //             let items: Vec<&str> = data.split(persistence::DELIMITER).collect();
-        //             assert_eq!(items.len(), 4);
+        //             assert_eq!(items.len(), 3);
         //             let app_id = Uuid::from_str(items[0]).unwrap();
+        //             // let req: CreateUpdat
 
         //             let typ = AppType::try_from(items[1]);
         //             match typ {

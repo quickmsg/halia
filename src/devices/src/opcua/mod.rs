@@ -32,7 +32,7 @@ use types::{
         CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf,
         SearchDevicesItemResp,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
 
@@ -898,6 +898,13 @@ impl Device for Opcua {
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
+        todo!()
+    }
+    async fn write_source_value(
+        &mut self,
+        source_id: Uuid,
+        req: Value,
+    ) -> HaliaResult<()> {
         todo!()
     }
 }

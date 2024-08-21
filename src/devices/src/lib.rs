@@ -1,8 +1,11 @@
 #![feature(io_error_more)]
-use std::sync::LazyLock;
+use std::{str::FromStr, sync::LazyLock};
 
 use async_trait::async_trait;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use types::{
@@ -10,7 +13,7 @@ use types::{
         CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemResp, SearchDevicesResp,
         Summary,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
 
 use uuid::Uuid;
@@ -43,6 +46,7 @@ pub trait Device: Send + Sync {
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
+    async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()>;
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()>;
 
     async fn create_sink(
@@ -121,85 +125,53 @@ impl DeviceManager {
     //         self.devices.write().await.retain(|(_, id)| id != device_id);
     //     }
 
-    //     pub async fn recover(&self) -> HaliaResult<()> {
-    //         match persistence::devices::read_devices().await {
-    //             Ok(datas) => {
-    //                 for data in datas {
-    //                     if data.len() == 0 {
-    //                         continue;
-    //                     }
-    //                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-    //                     assert_eq!(items.len(), 4);
+    pub async fn recover(&self) -> HaliaResult<()> {
+        match persistence::read_devices().await {
+            Ok(datas) => {
+                for data in datas {
+                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+                    assert_eq!(items.len(), 3);
 
-    //                     let device_id = Uuid::from_str(items[0]).unwrap();
+                    let device_id = Uuid::from_str(items[0]).unwrap();
 
-    //                     let typ = DeviceType::try_from(items[1]);
-    //                     match typ {
-    //                         Ok(typ) => match typ {
-    //                             DeviceType::Modbus => {
-    //                                 let req: CreateUpdateModbusReq = serde_json::from_str(items[3])?;
-    //                                 GLOBAL_MODBUS_MANAGER.create(Some(device_id), req).await?;
-    //                                 GLOBAL_MODBUS_MANAGER.recover(&device_id).await.unwrap();
-    //                                 match items[2] {
-    //                                     "0" => {}
-    //                                     "1" => GLOBAL_MODBUS_MANAGER.start(device_id).await.unwrap(),
-    //                                     _ => panic!("文件已损坏"),
-    //                                 }
-    //                             }
-    //                             DeviceType::Opcua => {
-    //                                 let req: CreateUpdateOpcuaReq = serde_json::from_str(items[3])?;
-    //                                 GLOBAL_OPCUA_MANAGER.create(Some(device_id), req).await?;
-    //                                 GLOBAL_OPCUA_MANAGER.recover(&device_id).await.unwrap();
-    //                                 match items[2] {
-    //                                     "0" => {}
-    //                                     "1" => GLOBAL_OPCUA_MANAGER.start(device_id).await.unwrap(),
-    //                                     _ => panic!("文件已损坏"),
-    //                                 }
-    //                             }
-    //                             DeviceType::Coap => {
-    //                                 let req: CreateUpdateCoapReq = serde_json::from_str(items[3])?;
-    //                                 GLOBAL_COAP_MANAGER.create(Some(device_id), req).await?;
-    //                                 GLOBAL_COAP_MANAGER.recover(&device_id).await.unwrap();
-    //                                 match items[2] {
-    //                                     "0" => {}
-    //                                     "1" => GLOBAL_COAP_MANAGER.start(device_id).await.unwrap(),
-    //                                     _ => panic!("文件已损坏"),
-    //                                 }
-    //                             }
-    //                         },
-    //                         Err(e) => panic!("{}", e),
-    //                     }
-    //                 }
-    //                 Ok(())
-    //             }
-    //             Err(e) => match e.kind() {
-    //                 std::io::ErrorKind::NotFound => match persistence::devices::init().await {
-    //                     Ok(_) => Ok(()),
-    //                     Err(e) => Err(e.into()),
-    //                 },
-    //                 std::io::ErrorKind::PermissionDenied => todo!(),
-    //                 std::io::ErrorKind::ConnectionRefused => todo!(),
-    //                 std::io::ErrorKind::ConnectionReset => todo!(),
-    //                 std::io::ErrorKind::ConnectionAborted => todo!(),
-    //                 std::io::ErrorKind::NotConnected => todo!(),
-    //                 std::io::ErrorKind::AddrInUse => todo!(),
-    //                 std::io::ErrorKind::AddrNotAvailable => todo!(),
-    //                 std::io::ErrorKind::BrokenPipe => todo!(),
-    //                 std::io::ErrorKind::AlreadyExists => todo!(),
-    //                 std::io::ErrorKind::WouldBlock => todo!(),
-    //                 std::io::ErrorKind::InvalidInput => todo!(),
-    //                 std::io::ErrorKind::InvalidData => todo!(),
-    //                 std::io::ErrorKind::TimedOut => todo!(),
-    //                 std::io::ErrorKind::WriteZero => todo!(),
-    //                 std::io::ErrorKind::Interrupted => todo!(),
-    //                 std::io::ErrorKind::Unsupported => todo!(),
-    //                 std::io::ErrorKind::UnexpectedEof => todo!(),
-    //                 std::io::ErrorKind::OutOfMemory => todo!(),
-    //                 std::io::ErrorKind::Other => todo!(),
-    //                 _ => todo!(),
-    //             },
-    //         }
-    //     }
+                    let req: CreateUpdateDeviceReq = serde_json::from_str(items[2])?;
+                    self.create_device(Some(device_id), req).await?;
+                    match items[1] {
+                        "0" => {}
+                        "1" => self.start_device(device_id).await.unwrap(),
+                        _ => panic!("文件已损坏"),
+                    }
+                }
+                Ok(())
+            }
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => match persistence::init_devices().await {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(e.into()),
+                },
+                std::io::ErrorKind::PermissionDenied => todo!(),
+                std::io::ErrorKind::ConnectionRefused => todo!(),
+                std::io::ErrorKind::ConnectionReset => todo!(),
+                std::io::ErrorKind::ConnectionAborted => todo!(),
+                std::io::ErrorKind::NotConnected => todo!(),
+                std::io::ErrorKind::AddrInUse => todo!(),
+                std::io::ErrorKind::AddrNotAvailable => todo!(),
+                std::io::ErrorKind::BrokenPipe => todo!(),
+                std::io::ErrorKind::AlreadyExists => todo!(),
+                std::io::ErrorKind::WouldBlock => todo!(),
+                std::io::ErrorKind::InvalidInput => todo!(),
+                std::io::ErrorKind::InvalidData => todo!(),
+                std::io::ErrorKind::TimedOut => todo!(),
+                std::io::ErrorKind::WriteZero => todo!(),
+                std::io::ErrorKind::Interrupted => todo!(),
+                std::io::ErrorKind::Unsupported => todo!(),
+                std::io::ErrorKind::UnexpectedEof => todo!(),
+                std::io::ErrorKind::OutOfMemory => todo!(),
+                std::io::ErrorKind::Other => todo!(),
+                _ => todo!(),
+            },
+        }
+    }
 }
 
 impl DeviceManager {
@@ -340,9 +312,16 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.delete().await,
-            None => device_not_found_err!(),
+            Some(device) => device.delete().await?,
+            None => return device_not_found_err!(),
         }
+
+        self.devices
+            .write()
+            .await
+            .retain(|device| device.get_id() != device_id);
+
+        Ok(())
     }
 }
 
@@ -397,6 +376,24 @@ impl DeviceManager {
             .find(|device| device.get_id() == device_id)
         {
             Some(device) => device.update_source(source_id, req).await,
+            None => device_not_found_err!(),
+        }
+    }
+
+    pub async fn write_source_value(
+        &self,
+        device_id: Uuid,
+        source_id: Uuid,
+        req: Value,
+    ) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.write_source_value(source_id, req).await,
             None => device_not_found_err!(),
         }
     }
