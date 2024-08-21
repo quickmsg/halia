@@ -209,7 +209,7 @@ impl Source {
         }
 
         self.stop().await;
-        persistence::devices::modbus::delete_point(device_id, &self.id).await?;
+        persistence::delete_source(device_id, &self.id).await?;
         Ok(())
     }
 

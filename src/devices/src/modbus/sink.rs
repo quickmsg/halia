@@ -133,7 +133,7 @@ impl Sink {
             return Err(HaliaError::Common("该动作含有引用规则".to_owned()));
         }
 
-        persistence::devices::modbus::delete_sink(device_id, &self.id).await?;
+        persistence::delete_sink(device_id, &self.id).await?;
         match self.stop_signal_tx {
             Some(_) => self.stop().await,
             None => {}

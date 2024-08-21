@@ -49,8 +49,12 @@ impl HttpClient {
 
         let (app_id, new) = get_id(app_id);
         if new {
-            persistence::apps::mqtt_client::create(&app_id, serde_json::to_string(&req).unwrap())
-                .await?;
+            // persistence::create_app(
+            //     AppType::HttpClient,
+            //     &app_id,
+            //     serde_json::to_string(&req).unwrap(),
+            // )
+            // .await?;
         }
 
         Ok(Self {
@@ -76,7 +80,7 @@ impl HttpClient {
     }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::apps::http_client::read_sinks(&self.id).await {
+        match persistence::read_sinks(&self.id).await {
             Ok(datas) => {
                 for data in datas {
                     if data.len() == 0 {
@@ -98,7 +102,7 @@ impl HttpClient {
     pub async fn update(&mut self, req: CreateUpdateHttpClientReq) -> HaliaResult<()> {
         HttpClient::check_conf(&req)?;
 
-        persistence::apps::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
+        // persistence::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -179,7 +183,7 @@ impl HttpClient {
             sink.stop().await;
         }
 
-        persistence::apps::http_client::delete(&self.id).await?;
+        persistence::delete_app(&self.id).await?;
         Ok(())
     }
 

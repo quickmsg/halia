@@ -68,8 +68,12 @@ pub async fn new(
 
     let (device_id, new) = get_id(device_id);
     if new {
-        persistence::devices::opcua::create(&device_id, serde_json::to_string(&req).unwrap())
-            .await?;
+        // persistence::create_device(
+        //     DeviceType::Coap,
+        //     &device_id,
+        //     serde_json::to_string(&req).unwrap(),
+        // )
+        // .await?;
     }
 
     Ok(Box::new(Opcua {
@@ -133,7 +137,7 @@ impl Opcua {
     }
 
     async fn recover(&mut self) -> HaliaResult<()> {
-        let group_datas = persistence::devices::opcua::read_groups(&self.id).await?;
+        let group_datas = persistence::read_sources(&self.id).await?;
         for group_data in group_datas {
             if group_data.len() == 0 {
                 continue;
@@ -173,7 +177,7 @@ impl Opcua {
     async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
 
-        persistence::devices::update_device_status(&self.id, Status::Runing).await?;
+        persistence::update_device_status(&self.id, Status::Runing).await?;
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -241,7 +245,7 @@ impl Opcua {
 
         check_and_set_on_false!(self);
 
-        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
+        persistence::update_device_status(&self.id, Status::Stopped).await?;
 
         for group in self.groups.write().await.iter_mut() {
             group.stop().await?;
@@ -270,8 +274,7 @@ impl Opcua {
     async fn update(&mut self, req: CreateUpdateOpcuaReq) -> HaliaResult<()> {
         Self::check_conf(&req)?;
 
-        persistence::devices::update_device_conf(&self.id, serde_json::to_string(&req).unwrap())
-            .await?;
+        // persistence::update_device_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {

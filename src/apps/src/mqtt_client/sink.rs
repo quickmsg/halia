@@ -45,12 +45,8 @@ impl Sink {
 
         let (sink_id, new) = get_id(sink_id);
         if new {
-            persistence::apps::mqtt_client::create_sink(
-                app_id,
-                &sink_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            // persistence::create_sink(app_id, &sink_id, serde_json::to_string(&req).unwrap())
+            //     .await?;
         }
 
         let publish_properties = get_publish_properties(&req);
@@ -97,12 +93,7 @@ impl Sink {
     pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
         Sink::check_conf(&req)?;
 
-        persistence::apps::mqtt_client::update_sink(
-            app_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+        // persistence::update_sink(app_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -267,7 +258,7 @@ impl Sink {
         if self.ref_info.can_delete() {
             return Err(HaliaError::DeleteRefing);
         }
-        persistence::apps::mqtt_client::delete_sink(app_id, &self.id).await?;
+        persistence::delete_sink(app_id, &self.id).await?;
         Ok(())
     }
 

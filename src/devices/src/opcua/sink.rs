@@ -18,12 +18,12 @@ impl Sink {
         let (sink_id, new) = get_id(sink_id);
 
         if new {
-            persistence::devices::opcua::create_sink(
-                device_id,
-                &sink_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            // persistence::devices::opcua::create_sink(
+            //     device_id,
+            //     &sink_id,
+            //     serde_json::to_string(&req).unwrap(),
+            // )
+            // .await?;
         }
 
         todo!()

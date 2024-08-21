@@ -24,12 +24,7 @@ pub async fn new(
 ) -> HaliaResult<Sink> {
     let (sink_id, new) = get_id(sink_id);
     if new {
-        persistence::apps::http_client::create_sink(
-            app_id,
-            &sink_id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+        // persistence::create_sink(app_id, &sink_id, serde_json::to_string(&req).unwrap()).await?;
     }
 
     Ok(Sink {
@@ -52,12 +47,7 @@ impl Sink {
     }
 
     pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        persistence::apps::http_client::update_sink(
-            app_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+        // persistence::update_sink(app_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -75,7 +65,7 @@ impl Sink {
                 "引用中，不能删除".to_owned(),
             ));
         }
-        persistence::apps::http_client::delete_sink(app_id, &self.id).await?;
+        persistence::delete_sink(app_id, &self.id).await?;
 
         Ok(())
     }

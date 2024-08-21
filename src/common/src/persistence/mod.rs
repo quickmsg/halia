@@ -13,18 +13,18 @@ use tokio::{
 use types::{apps::AppType, devices::DeviceType};
 use uuid::Uuid;
 
-pub mod apps;
-pub mod devices;
-pub mod message;
-pub mod rule;
+// pub mod apps;
+// pub mod devices;
+// pub mod message;
+// pub mod rule;
 
 static ROOT_DIR: &str = "storage";
-static RULE_DIR: &str = "rules";
 pub static DELIMITER: char = '|';
-static SOURCE_FILE: &str = "sources";
-static SINK_FILE: &str = "sinks";
 static DEVICE_FILE: &str = "devices";
 static APP_FILE: &str = "apps";
+static SOURCE_FILE: &str = "sources";
+static SINK_FILE: &str = "sinks";
+static RULE_FILE: &str = "rules";
 
 #[derive(Debug, PartialEq)]
 pub enum Status {
@@ -48,6 +48,12 @@ impl Display for Status {
             Status::Runing => write!(f, "1"),
         }
     }
+}
+
+pub async fn init() -> Result<(), io::Error> {
+    create_file(get_device_file_path()).await?;
+    create_file(get_app_file_path()).await?;
+    create_file(get_rule_file_path()).await
 }
 
 // async fn insert(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
@@ -276,6 +282,7 @@ pub async fn delete_app(app_id: &Uuid) -> Result<(), io::Error> {
     delete(get_app_file_path(), app_id).await?;
     fs::remove_dir_all(app_id.to_string()).await
 }
+
 fn get_source_file_path(id: &Uuid) -> PathBuf {
     Path::new(ROOT_DIR).join(id.to_string()).join(SOURCE_FILE)
 }
@@ -314,4 +321,33 @@ pub async fn update_sink(id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(),
 
 pub async fn delete_sink(id: &Uuid, sink_id: &Uuid) -> Result<(), io::Error> {
     delete(get_sink_file_path(id), sink_id).await
+}
+
+fn get_rule_file_path() -> PathBuf {
+    Path::new(ROOT_DIR).join(RULE_FILE)
+}
+
+pub async fn create_rule(rule_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    create(
+        get_rule_file_path(),
+        rule_id,
+        &format!("{}{}{}", Status::Stopped, DELIMITER, data,),
+    )
+    .await
+}
+
+pub async fn read_rules() -> Result<Vec<String>, io::Error> {
+    read(get_rule_file_path()).await
+}
+
+pub async fn update_rule_conf(rule_id: &Uuid, conf: &String) -> Result<(), io::Error> {
+    update_segment(get_rule_file_path(), rule_id, 2, conf).await
+}
+
+pub async fn update_rule_status(app_id: &Uuid, status: Status) -> Result<(), io::Error> {
+    update_segment(get_rule_file_path(), app_id, 1, &status.to_string()).await
+}
+
+pub async fn delete_rule(rule_id: &Uuid) -> Result<(), io::Error> {
+    delete(get_rule_file_path(), rule_id).await
 }

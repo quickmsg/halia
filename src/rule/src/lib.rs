@@ -5,7 +5,6 @@ use common::{
 use rule::Rule;
 use std::{str::FromStr, sync::LazyLock};
 use tokio::sync::RwLock;
-use tracing::error;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, SearchRulesResp, Summary},
     Pagination,
@@ -149,7 +148,7 @@ impl RuleManager {
 
 impl RuleManager {
     pub async fn recover(&self) -> HaliaResult<()> {
-        match persistence::rule::read().await {
+        match persistence::read_rules().await {
             Ok(rule_datas) => {
                 for rule_data in rule_datas {
                     if rule_data.len() == 0 {
@@ -172,10 +171,10 @@ impl RuleManager {
             }
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => {
-                    if let Err(e) = persistence::rule::init().await {
-                        error!("{e}");
-                        return Err(e.into());
-                    }
+                    // if let Err(e) = persistence::rule::init().await {
+                    //     error!("{e}");
+                    //     return Err(e.into());
+                    // }
                 }
                 std::io::ErrorKind::PermissionDenied => todo!(),
                 std::io::ErrorKind::ConnectionRefused => todo!(),

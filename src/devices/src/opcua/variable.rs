@@ -22,13 +22,13 @@ impl Variable {
 
         let (variable_id, new) = get_id(variable_id);
         if new {
-            persistence::devices::opcua::create_variable(
-                device_id,
-                group_id,
-                &variable_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            // persistence::devices::opcua::create_variable(
+            //     device_id,
+            //     group_id,
+            //     &variable_id,
+            //     serde_json::to_string(&req).unwrap(),
+            // )
+            // .await?;
         }
 
         let read_value_id = Variable::get_read_value_id(&req.ext);
@@ -95,13 +95,13 @@ impl Variable {
         group_id: &Uuid,
         req: CreateUpdateVariableReq,
     ) -> HaliaResult<Option<ReadValueId>> {
-        persistence::devices::opcua::update_variable(
-            device_id,
-            group_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+        // persistence::devices::opcua::update_variable(
+        //     device_id,
+        //     group_id,
+        //     &self.id,
+        //     serde_json::to_string(&req).unwrap(),
+        // )
+        // .await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -117,7 +117,7 @@ impl Variable {
     }
 
     pub async fn delete(&self, device_id: &Uuid, group_id: &Uuid) -> HaliaResult<()> {
-        persistence::devices::opcua::delete_variable(device_id, group_id, &self.id).await?;
+        // persistence::devices::opcua::delete_variable(device_id, group_id, &self.id).await?;
         Ok(())
     }
 }

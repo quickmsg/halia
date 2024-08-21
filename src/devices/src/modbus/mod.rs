@@ -80,7 +80,7 @@ pub async fn new(
 
     let (device_id, new) = get_id(device_id);
     if new {
-        persistence::devices::modbus::create(&device_id, &data).await?;
+        persistence::create_device(DeviceType::Modbus, &device_id, &data).await?;
     }
 
     Ok(Box::new(Modbus {
@@ -171,7 +171,7 @@ impl Modbus {
         //     Err(e) => return Err(e.into()),
         // }
 
-        match persistence::devices::modbus::read_sinks(&self.id).await {
+        match persistence::read_sinks(&self.id).await {
             Ok(datas) => {
                 for data in datas {
                     if data.len() == 0 {
@@ -475,7 +475,7 @@ impl Device for Modbus {
     async fn update(&mut self, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
         let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
 
-        persistence::devices::update_device_conf(&self.id, data).await?;
+        persistence::update_device_conf(&self.id, &data).await?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
@@ -503,7 +503,7 @@ impl Device for Modbus {
         check_and_set_on_true!(self);
         trace!("设备开启");
 
-        persistence::devices::update_device_status(&self.id, Status::Runing).await?;
+        persistence::update_device_status(&self.id, Status::Runing).await?;
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -543,7 +543,7 @@ impl Device for Modbus {
         check_and_set_on_false!(self);
         trace!("停止");
 
-        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
+        persistence::update_device_status(&self.id, Status::Stopped).await?;
 
         for point in self.sources.write().await.iter_mut() {
             point.stop().await;
@@ -588,7 +588,7 @@ impl Device for Modbus {
         }
 
         trace!("设备删除");
-        persistence::devices::delete_device(&self.id).await?;
+        persistence::delete_device(&self.id).await?;
 
         Ok(())
     }

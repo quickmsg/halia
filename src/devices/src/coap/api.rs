@@ -45,12 +45,12 @@ impl API {
 
         let (api_id, new) = get_id(api_id);
         if new {
-            persistence::devices::coap::create_api(
-                device_id,
-                &api_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            // persistence::devices::coap::create_api(
+            //     device_id,
+            //     &api_id,
+            //     serde_json::to_string(&req).unwrap(),
+            // )
+            // .await?;
         }
 
         Ok(Self {
@@ -86,12 +86,12 @@ impl API {
     pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
         Self::check_conf(&req)?;
 
-        persistence::devices::coap::update_api(
-            device_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+        // persistence::devices::coap::update_api(
+        //     device_id,
+        //     &self.id,
+        //     serde_json::to_string(&req).unwrap(),
+        // )
+        // .await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -118,7 +118,7 @@ impl API {
             return Err(HaliaError::DeleteRefing);
         }
 
-        persistence::devices::coap::delete_api(device_id, &self.id).await?;
+        // persistence::devices::coap::delete_api(device_id, &self.id).await?;
 
         match &self.stop_signal_tx {
             Some(stop_signal_tx) => stop_signal_tx.send(()).await.unwrap(),

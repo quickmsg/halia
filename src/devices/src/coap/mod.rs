@@ -57,10 +57,10 @@ pub async fn new(
     // Self::check_conf(&req)?;
 
     let (device_id, new) = get_id(device_id);
-    if new {
-        persistence::devices::coap::create(&device_id, serde_json::to_string(&req).unwrap())
-            .await?;
-    }
+    // if new {
+    //     persistence::create_device(&device_id, serde_json::to_string(&req).unwrap())
+    //         .await?;
+    // }
 
     Ok(Box::new(Coap {
         id: device_id,
@@ -87,7 +87,7 @@ impl Coap {
     }
 
     async fn recover(&mut self) -> HaliaResult<()> {
-        let observe_datas = persistence::devices::coap::read_observes(&self.id).await?;
+        let observe_datas = persistence::read_sources(&self.id).await?;
         for observe_data in observe_datas {
             let items = observe_data
                 .split(persistence::DELIMITER)
@@ -99,19 +99,19 @@ impl Coap {
             self.create_observe(Some(observe_id), req).await?;
         }
 
-        let api_datas = persistence::devices::coap::read_apis(&self.id).await?;
-        for api_data in api_datas {
-            let items = api_data
-                .split(persistence::DELIMITER)
-                .collect::<Vec<&str>>();
-            assert_eq!(items.len(), 2);
+        // let api_datas = persistence::devices::coap::read_apis(&self.id).await?;
+        // for api_data in api_datas {
+        //     let items = api_data
+        //         .split(persistence::DELIMITER)
+        //         .collect::<Vec<&str>>();
+        //     assert_eq!(items.len(), 2);
 
-            let api_id = Uuid::from_str(items[0]).unwrap();
-            let req: CreateUpdateAPIReq = serde_json::from_str(items[1])?;
-            self.create_api(Some(api_id), req).await?;
-        }
+        //     let api_id = Uuid::from_str(items[0]).unwrap();
+        //     let req: CreateUpdateAPIReq = serde_json::from_str(items[1])?;
+        //     self.create_api(Some(api_id), req).await?;
+        // }
 
-        let sink_datas = persistence::devices::coap::read_sinks(&self.id).await?;
+        let sink_datas = persistence::read_sinks(&self.id).await?;
         for sink_data in sink_datas {
             let items = sink_data
                 .split(persistence::DELIMITER)
@@ -151,8 +151,7 @@ impl Coap {
     }
 
     pub async fn update(&mut self, req: CreateUpdateCoapReq) -> HaliaResult<()> {
-        persistence::devices::update_device_conf(&self.id, serde_json::to_string(&req).unwrap())
-            .await?;
+        // persistence::update_device_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -179,7 +178,7 @@ impl Coap {
     pub async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
 
-        persistence::devices::update_device_status(&self.id, Status::Runing).await?;
+        persistence::update_device_status(&self.id, Status::Runing).await?;
 
         for observe in self.observes.iter_mut() {
             if let Err(e) = observe.start(&self.conf.ext).await {
@@ -225,7 +224,7 @@ impl Coap {
             _ = sink.stop().await;
         }
 
-        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
+        persistence::update_device_status(&self.id, Status::Stopped).await?;
 
         Ok(())
     }
@@ -249,7 +248,7 @@ impl Coap {
             return Err(HaliaError::Common("有动作正被引用中".to_owned()));
         }
 
-        persistence::devices::delete_device(&self.id).await?;
+        persistence::delete_device(&self.id).await?;
 
         Ok(())
     }

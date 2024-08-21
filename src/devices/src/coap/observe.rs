@@ -35,12 +35,12 @@ impl Observe {
 
         let (observe_id, new) = get_id(observe_id);
         if new {
-            persistence::devices::coap::create_observe(
-                device_id,
-                &observe_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            // persistence::devices::coap::create_observe(
+            //     device_id,
+            //     &observe_id,
+            //     serde_json::to_string(&req).unwrap(),
+            // )
+            // .await?;
         }
 
         Ok(Self {
@@ -86,12 +86,12 @@ impl Observe {
         }
         self.conf = req;
 
-        persistence::devices::coap::update_observe(
-            device_id,
-            &self.id,
-            serde_json::to_string(&self.conf).unwrap(),
-        )
-        .await?;
+        // persistence::devices::coap::update_observe(
+        //     device_id,
+        //     &self.id,
+        //     serde_json::to_string(&self.conf).unwrap(),
+        // )
+        // .await?;
 
         if restart {
             _ = self.restart(coap_conf).await;
@@ -101,7 +101,7 @@ impl Observe {
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        persistence::devices::coap::delete_observe(device_id, &self.id).await?;
+        // persistence::devices::coap::delete_observe(device_id, &self.id).await?;
         Ok(())
     }
 

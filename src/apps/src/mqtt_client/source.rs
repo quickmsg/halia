@@ -26,12 +26,8 @@ impl Source {
 
         let (source_id, new) = get_id(source_id);
         if new {
-            persistence::apps::mqtt_client::create_source(
-                app_id,
-                &source_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            //     persistence::create_source(app_id, &source_id, serde_json::to_string(&req).unwrap())
+            //         .await?;
         }
 
         Ok(Source {
@@ -73,12 +69,7 @@ impl Source {
     pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSourceReq) -> HaliaResult<bool> {
         Source::check_conf(&req)?;
 
-        persistence::apps::mqtt_client::update_source(
-            app_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+        // persistence::update_source(app_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -93,7 +84,7 @@ impl Source {
         if !self.ref_info.can_delete() {
             return Err(HaliaError::DeleteRefing);
         }
-        persistence::apps::mqtt_client::delete_source(app_id, &self.id).await?;
+        persistence::delete_source(app_id, &self.id).await?;
 
         Ok(())
     }

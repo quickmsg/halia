@@ -38,12 +38,12 @@ impl Subscription {
 
         let (subscription_id, new) = get_id(subscription_id);
         if new {
-            persistence::devices::opcua::create_subscription(
-                device_id,
-                &subscription_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            // persistence::devices::opcua::create_subscription(
+            //     device_id,
+            //     &subscription_id,
+            //     serde_json::to_string(&req).unwrap(),
+            // )
+            // .await?;
         }
 
         Ok(Self {

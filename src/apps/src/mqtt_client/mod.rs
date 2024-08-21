@@ -53,8 +53,12 @@ impl MqttClient {
 
         let (app_id, new) = get_id(app_id);
         if new {
-            persistence::apps::mqtt_client::create(&app_id, serde_json::to_string(&req).unwrap())
-                .await?;
+            // persistence::create_app(
+            //     AppType::MqttClient,
+            //     &app_id,
+            //     serde_json::to_string(&req).unwrap(),
+            // )
+            // .await?;
         }
 
         Ok(Self {
@@ -87,7 +91,7 @@ impl MqttClient {
     }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
-        let source_datas = persistence::apps::mqtt_client::read_sources(&self.id).await?;
+        let source_datas = persistence::read_sources(&self.id).await?;
         for source_data in source_datas {
             if source_data.len() == 0 {
                 continue;
@@ -101,7 +105,7 @@ impl MqttClient {
                 .await?;
         }
 
-        let sink_datas = persistence::apps::mqtt_client::read_sinks(&self.id).await?;
+        let sink_datas = persistence::read_sinks(&self.id).await?;
         for sink_data in sink_datas {
             if sink_data.len() == 0 {
                 continue;
@@ -121,7 +125,7 @@ impl MqttClient {
     pub async fn update(&mut self, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
         MqttClient::check_conf(&req)?;
 
-        persistence::apps::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
+        // persistence::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -158,7 +162,7 @@ impl MqttClient {
     pub async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
 
-        persistence::apps::update_app_status(&self.id, persistence::Status::Runing).await?;
+        persistence::update_app_status(&self.id, persistence::Status::Runing).await?;
 
         match self.conf.ext.version {
             types::apps::mqtt_client::Version::V311 => self.start_v311().await,
@@ -369,7 +373,7 @@ impl MqttClient {
             return Err(HaliaError::Common("有动作正在被引用中".to_owned()));
         }
 
-        persistence::apps::update_app_status(&self.id, persistence::Status::Stopped).await?;
+        persistence::update_app_status(&self.id, persistence::Status::Stopped).await?;
 
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
@@ -408,7 +412,7 @@ impl MqttClient {
             return Err(HaliaError::Common("有动作正被规则正在被引用中".to_owned()));
         }
 
-        persistence::apps::delete_app(&self.id).await?;
+        persistence::delete_app(&self.id).await?;
         Ok(())
     }
 

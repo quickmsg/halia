@@ -42,14 +42,10 @@ impl Sink {
         Self::check_conf(&req)?;
 
         let (sink_id, new) = get_id(sink_id);
-        if new {
-            persistence::devices::coap::create_sink(
-                device_id,
-                &sink_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
-        }
+        // if new {
+        //     persistence::create_sink(device_id, &sink_id, serde_json::to_string(&req).unwrap())
+        //         .await?;
+        // }
 
         Ok(Self {
             id: sink_id,
@@ -76,12 +72,7 @@ impl Sink {
     pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
         Self::check_conf(&req)?;
 
-        persistence::devices::coap::update_sink(
-            device_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+        // persistence::update_sink(device_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {
@@ -190,7 +181,7 @@ impl Sink {
             return Err(HaliaError::DeleteRefing);
         }
         self.stop().await?;
-        persistence::devices::coap::delete_sink(device_id, &self.id).await?;
+        persistence::delete_sink(device_id, &self.id).await?;
         Ok(())
     }
 

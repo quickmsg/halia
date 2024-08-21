@@ -119,7 +119,7 @@ impl Rule {
         }
 
         if new {
-            persistence::rule::create(&rule_id, serde_json::to_string(&req).unwrap()).await?;
+            // persistence::create_rule(&rule_id, serde_json::to_string(&req).unwrap()).await?;
         }
 
         Ok(Self {

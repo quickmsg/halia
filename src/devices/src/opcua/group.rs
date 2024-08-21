@@ -52,12 +52,12 @@ impl Group {
     ) -> HaliaResult<Self> {
         let (group_id, new) = get_id(group_id);
         if new {
-            persistence::devices::opcua::create_group(
-                device_id,
-                &group_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            // persistence::devices::opcua::create_group(
+            //     device_id,
+            //     &group_id,
+            //     serde_json::to_string(&req).unwrap(),
+            // )
+            // .await?;
         }
 
         Ok(Self {
@@ -72,24 +72,24 @@ impl Group {
     }
 
     pub async fn recover(&self, device_id: &Uuid) -> HaliaResult<()> {
-        let variable_datas =
-            persistence::devices::opcua::read_variables(device_id, &self.id).await?;
+        // let variable_datas =
+        //     persistence::devices::opcua::read_variables(device_id, &self.id).await?;
 
-        for variable_data in variable_datas {
-            if variable_data.len() == 0 {
-                continue;
-            }
+        // for variable_data in variable_datas {
+        //     if variable_data.len() == 0 {
+        //         continue;
+        //     }
 
-            let items = variable_data
-                .split(persistence::DELIMITER)
-                .collect::<Vec<&str>>();
-            assert_eq!(items.len(), 2);
+        //     let items = variable_data
+        //         .split(persistence::DELIMITER)
+        //         .collect::<Vec<&str>>();
+        //     assert_eq!(items.len(), 2);
 
-            let variable_id = Uuid::from_str(items[0]).unwrap();
-            let req: CreateUpdateVariableReq = serde_json::from_str(items[1])?;
-            self.create_variable(device_id, Some(variable_id), req)
-                .await?;
-        }
+        //     let variable_id = Uuid::from_str(items[0]).unwrap();
+        //     let req: CreateUpdateVariableReq = serde_json::from_str(items[1])?;
+        //     self.create_variable(device_id, Some(variable_id), req)
+        //         .await?;
+        // }
 
         Ok(())
     }
@@ -102,12 +102,12 @@ impl Group {
     }
 
     pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateGroupReq) -> HaliaResult<()> {
-        persistence::devices::opcua::update_group(
-            device_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+        // persistence::devices::opcua::update_group(
+        //     device_id,
+        //     &self.id,
+        //     serde_json::to_string(&req).unwrap(),
+        // )
+        // .await?;
 
         let mut restart = false;
         if self.conf.ext != req.ext {

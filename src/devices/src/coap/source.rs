@@ -129,7 +129,7 @@ impl Source {
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        persistence::devices::coap::delete_observe(device_id, &self.id).await?;
+        persistence::delete_source(device_id, &self.id).await?;
         Ok(())
     }
 
