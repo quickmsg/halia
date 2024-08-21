@@ -898,7 +898,7 @@ impl Device for Modbus {
     #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn search_sources<'life0, 'async_trait>(
-        &'life0 mut self,
+        &'life0 self,
         pagination: Pagination,
         query: QueryParams,
     ) -> ::core::pin::Pin<
@@ -977,7 +977,7 @@ impl Device for Modbus {
     #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn search_sinks<'life0, 'async_trait>(
-        &'life0 mut self,
+        &'life0 self,
         pagination: Pagination,
         query: QueryParams,
     ) -> ::core::pin::Pin<

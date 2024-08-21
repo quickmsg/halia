@@ -32,7 +32,7 @@ pub trait Device: Send + Sync {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn search_sources(
-        &mut self,
+        &self,
         pagination: Pagination,
         query: QueryParams,
     ) -> HaliaResult<SearchSourcesOrSinksResp>;
@@ -49,7 +49,7 @@ pub trait Device: Send + Sync {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn search_sinks(
-        &mut self,
+        &self,
         pagination: Pagination,
         query: QueryParams,
     ) -> HaliaResult<SearchSourcesOrSinksResp>;
@@ -321,53 +321,27 @@ impl DeviceManager {
 
     pub async fn search_sources(
         &self,
+        device_id: Uuid,
         pagination: Pagination,
-        query_params: QueryParams,
-    ) -> SearchDevicesResp {
-        let mut data = vec![];
-        let mut total = 0;
-
-        for device in self.devices.read().await.iter().rev() {
-            let device = device.search();
-            if let Some(typ) = &query_params.typ {
-                if *typ != device.typ {
-                    continue;
-                }
-            }
-
-            if let Some(name) = &query_params.name {
-                if !device.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
-
-            if let Some(on) = &query_params.on {
-                if device.on != *on {
-                    continue;
-                }
-            }
-
-            if let Some(err) = &query_params.err {
-                if device.err.is_some() != *err {
-                    continue;
-                }
-            }
-
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
-                data.push(device);
-            }
-            total += 1;
+        query: QueryParams,
+    ) -> HaliaResult<SearchSourcesOrSinksResp> {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.search_sources(pagination, query).await,
+            None => device_not_found_err!(),
         }
-
-        SearchDevicesResp { total, data }
     }
 
     pub async fn update_source(
         &self,
         device_id: Uuid,
-        req: CreateUpdateDeviceReq,
+        source_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match self
             .devices
@@ -376,12 +350,12 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.update(req).await,
+            Some(device) => device.update_source(source_id, req).await,
             None => device_not_found_err!(),
         }
     }
 
-    pub async fn delete_source(&self, device_id: Uuid) -> HaliaResult<()> {
+    pub async fn delete_source(&self, device_id: Uuid, source_id: Uuid) -> HaliaResult<()> {
         match self
             .devices
             .write()
@@ -389,7 +363,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.delete().await,
+            Some(device) => device.delete_source(source_id).await,
             None => device_not_found_err!(),
         }
     }
@@ -416,47 +390,20 @@ impl DeviceManager {
 
     pub async fn search_sinks(
         &self,
+        device_id: Uuid,
         pagination: Pagination,
-        query_params: QueryParams,
-    ) -> SearchDevicesResp {
-        let mut data = vec![];
-        let mut total = 0;
-
-        for device in self.devices.read().await.iter().rev() {
-            let device = device.search();
-            if let Some(typ) = &query_params.typ {
-                if *typ != device.typ {
-                    continue;
-                }
-            }
-
-            if let Some(name) = &query_params.name {
-                if !device.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
-
-            if let Some(on) = &query_params.on {
-                if device.on != *on {
-                    continue;
-                }
-            }
-
-            if let Some(err) = &query_params.err {
-                if device.err.is_some() != *err {
-                    continue;
-                }
-            }
-
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
-                data.push(device);
-            }
-            total += 1;
+        query: QueryParams,
+    ) -> HaliaResult<SearchSourcesOrSinksResp> {
+        match self
+            .devices
+            .read()
+            .await
+            .iter()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.search_sinks(pagination, query).await,
+            None => device_not_found_err!(),
         }
-
-        SearchDevicesResp { total, data }
     }
 
     pub async fn update_sink(

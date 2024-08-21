@@ -3,11 +3,10 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
-use bytes::Bytes;
 use devices::GLOBAL_DEVICE_MANAGER;
 use types::{
     devices::{CreateUpdateDeviceReq, QueryParams, SearchDevicesResp, Summary},
-    CreateUpdateSourceOrSinkReq, Pagination,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -93,30 +92,70 @@ async fn create_source(
     Ok(AppSuccess::empty())
 }
 
-async fn search_sources(Path(device_id): Path<Uuid>, Json(req): Json<Bytes>) -> AppResult<()> {
-    todo!()
+async fn search_sources(
+    Path(device_id): Path<Uuid>,
+    Query(pagination): Query<Pagination>,
+    Query(query_params): Query<QueryParams>,
+) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
+    let sources = GLOBAL_DEVICE_MANAGER
+        .search_sources(device_id, pagination, query_params)
+        .await?;
+    Ok(AppSuccess::data(sources))
 }
 
-async fn update_source(Path(device_id): Path<Uuid>, Json(req): Json<Bytes>) -> AppResult<()> {
-    todo!()
+async fn update_source(
+    Path((device_id, source_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_DEVICE_MANAGER
+        .update_source(device_id, source_id, req)
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete_source(Path(device_id): Path<Uuid>) -> AppResult<()> {
-    todo!()
+async fn delete_source(
+    Path((device_id, source_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_DEVICE_MANAGER
+        .delete_source(device_id, source_id)
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn create_sink(Json(req): Json<CreateUpdateSourceOrSinkReq>) -> AppResult<()> {
-    todo!()
+async fn create_sink(
+    Path(device_id): Path<Uuid>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_DEVICE_MANAGER
+        .create_sink(device_id, None, req)
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn search_sinks(Path(device_id): Path<Uuid>, Json(req): Json<Bytes>) -> AppResult<()> {
-    todo!()
+async fn search_sinks(
+    Path(device_id): Path<Uuid>,
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<QueryParams>,
+) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
+    let sinks = GLOBAL_DEVICE_MANAGER
+        .search_sinks(device_id, pagination, query)
+        .await?;
+    Ok(AppSuccess::data(sinks))
 }
 
-async fn update_sink(Path(device_id): Path<Uuid>, Json(req): Json<Bytes>) -> AppResult<()> {
-    todo!()
+async fn update_sink(
+    Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    GLOBAL_DEVICE_MANAGER
+        .update_sink(device_id, sink_id, req)
+        .await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn delete_sink(Path(device_id): Path<Uuid>) -> AppResult<()> {
-    todo!()
+async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_DEVICE_MANAGER
+        .delete_sink(device_id, sink_id)
+        .await?;
+    Ok(AppSuccess::empty())
 }
