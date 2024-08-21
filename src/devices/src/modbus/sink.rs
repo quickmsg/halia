@@ -12,7 +12,9 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::devices::modbus::{CreateUpdateSinkReq, SearchSinksItemResp, SinkConf};
+use types::{
+    devices::modbus::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
+};
 use uuid::Uuid;
 
 use super::WritePointEvent;
@@ -20,7 +22,9 @@ use super::WritePointEvent;
 #[derive(Debug)]
 pub struct Sink {
     pub id: Uuid,
-    conf: CreateUpdateSinkReq,
+
+    base_conf: BaseConf,
+    ext_conf: SinkConf,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<
@@ -40,23 +44,19 @@ impl Sink {
     pub async fn new(
         device_id: &Uuid,
         sink_id: Option<Uuid>,
-        req: CreateUpdateSinkReq,
+        req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<Self> {
-        Sink::check_conf(&req)?;
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
 
         let (sink_id, new) = get_id(sink_id);
         if new {
-            persistence::devices::modbus::create_sink(
-                device_id,
-                &sink_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            persistence::create_sink(device_id, &sink_id, &data).await?;
         }
 
         Ok(Sink {
             id: sink_id,
-            conf: req,
+            base_conf,
+            ext_conf,
             stop_signal_tx: None,
             join_handle: None,
             ref_info: RefInfo::new(),
@@ -64,40 +64,48 @@ impl Sink {
         })
     }
 
-    fn check_conf(req: &CreateUpdateSinkReq) -> HaliaResult<()> {
-        Ok(())
+    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SinkConf, String)> {
+        let data = serde_json::to_string(&req)?;
+        let conf: SinkConf = serde_json::from_value(req.ext)?;
+
+        Ok((req.base, conf, data))
     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
-        if self.conf.base.name == req.base.name {
-            return Err(HaliaError::NameExists);
-        }
+    // pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
+    //     if self.conf.base.name == req.base.name {
+    //         return Err(HaliaError::NameExists);
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn search(&self) -> SearchSinksItemResp {
-        SearchSinksItemResp {
+    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
+        SearchSourcesOrSinksItemResp {
             id: self.id.clone(),
-            conf: self.conf.clone(),
+            conf: CreateUpdateSourceOrSinkReq {
+                base: self.base_conf.clone(),
+                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
+            },
             rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
-    pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        persistence::devices::modbus::update_sink(
-            device_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+    pub async fn update(
+        &mut self,
+        device_id: &Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+
+        persistence::update_sink(device_id, &self.id, &data).await?;
 
         let mut restart = false;
-        if self.conf.sink != req.sink {
+        if self.ext_conf != ext_conf {
             restart = true;
         }
+        self.base_conf = base_conf;
+        self.ext_conf = ext_conf;
 
-        self.conf = req;
         if restart {
             match &self.stop_signal_tx {
                 Some(stop_signal_tx) => {
@@ -109,7 +117,7 @@ impl Sink {
                         stop_signal_rx,
                         publish_rx,
                         tx,
-                        self.conf.sink.clone(),
+                        self.ext_conf.clone(),
                         device_err,
                     )
                     .await;
@@ -134,7 +142,7 @@ impl Sink {
         Ok(())
     }
 
-    pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
+    pub fn get_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
         self.ref_info.active_ref(rule_id);
         self.mb_tx.as_ref().unwrap().clone()
     }
@@ -154,7 +162,7 @@ impl Sink {
             stop_signal_rx,
             mb_rx,
             device_tx,
-            self.conf.sink.clone(),
+            self.ext_conf.clone(),
             device_err,
         )
         .await;

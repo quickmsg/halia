@@ -720,7 +720,7 @@ impl Device for Opcua {
         query: QueryParams,
     ) -> ::core::pin::Pin<
         Box<
-            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
+            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
                 + ::core::marker::Send
                 + 'async_trait,
         >,
@@ -799,7 +799,7 @@ impl Device for Opcua {
         query: QueryParams,
     ) -> ::core::pin::Pin<
         Box<
-            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
+            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
                 + ::core::marker::Send
                 + 'async_trait,
         >,
@@ -887,6 +887,14 @@ impl Device for Opcua {
     }
 
     async fn del_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn start(&mut self) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn stop(&mut self) -> HaliaResult<()> {
         todo!()
     }
 }

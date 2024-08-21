@@ -22,7 +22,8 @@ pub fn routes() -> Router {
         .route("/", post(create_device))
         .route("/", get(search_devices))
         .route("/:device_id", put(update_device))
-        .route("/:device_id", put(update_device))
+        .route("/:device_id/start", put(start_device))
+        .route("/:device_id/stop", put(stop_device))
         .route("/:device_id", delete(delete_device))
         .nest(
             "/:device_id",
@@ -74,6 +75,16 @@ async fn update_device(
     Json(req): Json<CreateUpdateDeviceReq>,
 ) -> AppResult<AppSuccess<()>> {
     GLOBAL_DEVICE_MANAGER.update_device(device_id, req).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn start_device(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_DEVICE_MANAGER.start_device(device_id).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn stop_device(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    GLOBAL_DEVICE_MANAGER.stop_device(device_id).await?;
     Ok(AppSuccess::empty())
 }
 

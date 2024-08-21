@@ -802,7 +802,7 @@ impl Device for Coap {
         query: QueryParams,
     ) -> ::core::pin::Pin<
         Box<
-            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
+            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
                 + ::core::marker::Send
                 + 'async_trait,
         >,
@@ -881,7 +881,7 @@ impl Device for Coap {
         query: QueryParams,
     ) -> ::core::pin::Pin<
         Box<
-            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
+            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
                 + ::core::marker::Send
                 + 'async_trait,
         >,
@@ -1105,6 +1105,14 @@ impl Device for Coap {
         'life3: 'async_trait,
         Self: 'async_trait,
     {
+        todo!()
+    }
+
+    async fn start(&mut self) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn stop(&mut self) -> HaliaResult<()> {
         todo!()
     }
 }

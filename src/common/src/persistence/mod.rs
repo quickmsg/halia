@@ -214,15 +214,15 @@ fn get_sink_file_path(id: &Uuid) -> PathBuf {
     Path::new(ROOT_DIR).join(id.to_string()).join(SINK_FILE)
 }
 
-pub async fn create_sink(id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
-    create(get_sink_file_path(id), sink_id, &data).await
+pub async fn create_sink(id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    create(get_sink_file_path(id), sink_id, data).await
 }
 
 pub async fn read_sinks(id: &Uuid) -> Result<Vec<String>, io::Error> {
     read(get_source_file_path(id)).await
 }
 
-pub async fn update_sink(id: &Uuid, sink_id: &Uuid, data: String) -> Result<(), io::Error> {
+pub async fn update_sink(id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {
     update(get_sink_file_path(id), sink_id, &data).await
 }
 

@@ -3,9 +3,6 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use message::MessageValue;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use uuid::Uuid;
-
-use crate::{BaseConf, RuleRef};
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ModbusConf {
@@ -785,14 +782,6 @@ pub enum Area {
     HoldingRegisters, // 16-bit word 读写
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdateSinkReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub sink: SinkConf,
-}
-
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SinkConf {
     #[serde(flatten)]
@@ -801,24 +790,4 @@ pub struct SinkConf {
     pub area: Area,
     pub address: u16,
     pub value: serde_json::Value,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SinksQueryParams {
-    pub name: Option<String>,
-    pub err: Option<bool>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSinksResp {
-    pub total: usize,
-    pub data: Vec<SearchSinksItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSinksItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdateSinkReq,
-    #[serde(flatten)]
-    pub rule_ref: RuleRef,
 }

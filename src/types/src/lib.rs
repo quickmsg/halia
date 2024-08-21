@@ -43,7 +43,6 @@ pub struct CreateUpdateSourceOrSinkReq {
 pub struct SearchSourcesOrSinksResp {
     pub total: usize,
     pub data: Vec<SearchSourcesOrSinksItemResp>,
-    pub rule_ref: RuleRef,
 }
 
 #[derive(Serialize)]

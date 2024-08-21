@@ -18,7 +18,7 @@ use tokio::{
 };
 use tracing::{debug, warn};
 use types::{
-    devices::modbus::{Area, SearchPointsItemResp, SourceConf},
+    devices::modbus::{Area, SourceConf},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
 };
 use uuid::Uuid;
@@ -49,26 +49,22 @@ pub struct Source {
 impl Source {
     pub async fn new(
         device_id: &Uuid,
-        point_id: Option<Uuid>,
+        source_id: Option<Uuid>,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<Self> {
-        Self::check_conf(&req)?;
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
 
-        let (point_id, new) = get_id(point_id);
+        let (source_id, new) = get_id(source_id);
         if new {
-            persistence::devices::modbus::create_point(
-                device_id,
-                &point_id,
-                serde_json::to_string(&req).unwrap(),
-            )
-            .await?;
+            persistence::create_source(device_id, &source_id, &data).await?;
         }
 
-        let quantity = req.ext.data_type.get_quantity();
+        let quantity = ext_conf.data_type.get_quantity();
 
         Ok(Self {
-            id: point_id,
-            conf: req,
+            id: source_id,
+            base_conf,
+            ext_conf,
             quantity,
             value: Value::Null,
             stop_signal_tx: None,
@@ -79,13 +75,16 @@ impl Source {
         })
     }
 
-    fn parse_conf(req: &CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-        if req.ext.interval == 0 {
+    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
+        let data = serde_json::to_string(&req)?;
+        let conf: SourceConf = serde_json::from_value(req.ext)?;
+
+        if conf.interval == 0 {
             return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
         }
 
         // TODO 其他检查
-        Ok(())
+        Ok((req.base, conf, data))
     }
 
     // pub fn check_duplicate(&self, req: &CreateUpdatePointReq) -> HaliaResult<()> {
@@ -106,17 +105,13 @@ impl Source {
 
     pub fn search(&self) -> SearchSourcesOrSinksItemResp {
         SearchSourcesOrSinksItemResp {
-            id: todo!(),
-            conf: todo!(),
-            rule_ref: todo!(),
+            id: self.id.clone(),
+            conf: CreateUpdateSourceOrSinkReq {
+                base: self.base_conf.clone(),
+                ext: serde_json::to_value(&self.ext_conf).unwrap(),
+            },
+            rule_ref: self.ref_info.get_rule_ref(),
         }
-        // SearchPointsItemResp {
-        //     id: self.id.clone(),
-        //     conf: self.conf.clone(),
-        //     value: self.value.clone(),
-        //     err_info: self.err_info.clone(),
-        //     rule_ref: self.ref_info.get_rule_ref(),
-        // }
     }
 
     pub async fn start(
@@ -130,7 +125,7 @@ impl Source {
         let (mb_tx, _) = broadcast::channel(16);
         self.mb_tx = Some(mb_tx);
 
-        self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx, device_err)
+        self.event_loop(self.ext_conf.interval, stop_signal_rx, read_tx, device_err)
             .await;
     }
 
@@ -174,20 +169,22 @@ impl Source {
         self.stop_signal_tx = None;
     }
 
-    pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdatePointReq) -> HaliaResult<()> {
-        persistence::devices::modbus::update_point(
-            device_id,
-            &self.id,
-            serde_json::to_string(&req).unwrap(),
-        )
-        .await?;
+    pub async fn update(
+        &mut self,
+        device_id: &Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+
+        persistence::update_source(device_id, &self.id, &data).await?;
 
         let mut restart = false;
-        if self.conf.ext != req.ext {
+        if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.quantity = req.ext.data_type.get_quantity();
-        self.conf = req;
+        self.quantity = ext_conf.data_type.get_quantity();
+        self.base_conf = base_conf;
+        self.ext_conf = ext_conf;
 
         if self.stop_signal_tx.is_some() && restart {
             self.stop_signal_tx
@@ -199,7 +196,7 @@ impl Source {
 
             let (stop_signal_rx, read_tx, device_err) =
                 self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(self.conf.ext.interval, stop_signal_rx, read_tx, device_err)
+            self.event_loop(self.ext_conf.interval, stop_signal_rx, read_tx, device_err)
                 .await;
         }
 
@@ -217,23 +214,23 @@ impl Source {
     }
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {
-        let res = match self.conf.ext.area {
+        let res = match self.ext_conf.area {
             Area::InputDiscrete => {
-                ctx.read_discrete_inputs(self.conf.ext.slave, self.conf.ext.address, self.quantity)
+                ctx.read_discrete_inputs(self.ext_conf.slave, self.ext_conf.address, self.quantity)
                     .await
             }
             Area::Coils => {
-                ctx.read_coils(self.conf.ext.slave, self.conf.ext.address, self.quantity)
+                ctx.read_coils(self.ext_conf.slave, self.ext_conf.address, self.quantity)
                     .await
             }
             Area::InputRegisters => {
-                ctx.read_input_registers(self.conf.ext.slave, self.conf.ext.address, self.quantity)
+                ctx.read_input_registers(self.ext_conf.slave, self.ext_conf.address, self.quantity)
                     .await
             }
             Area::HoldingRegisters => {
                 ctx.read_holding_registers(
-                    self.conf.ext.slave,
-                    self.conf.ext.address,
+                    self.ext_conf.slave,
+                    self.ext_conf.address,
                     self.quantity,
                 )
                 .await
@@ -242,7 +239,7 @@ impl Source {
 
         match res {
             Ok(mut data) => {
-                let value = self.conf.ext.data_type.decode(&mut data);
+                let value = self.ext_conf.data_type.decode(&mut data);
                 match &value {
                     message::MessageValue::Bytes(bytes) => {
                         let str = BASE64_STANDARD.encode(bytes);
@@ -257,7 +254,7 @@ impl Source {
                             return Ok(());
                         }
                         let mut message = Message::default();
-                        message.add(self.conf.base.name.clone(), value);
+                        message.add(self.base_conf.name.clone(), value);
                         let mut message_batch = MessageBatch::default();
                         message_batch.push_message(message);
                         if let Err(e) = tx.send(message_batch) {
@@ -282,11 +279,11 @@ impl Source {
         }
     }
 
-    pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
+    pub fn get_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
         get_mb_rx!(self, rule_id)
     }
 
-    pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
+    pub fn del_rx(&mut self, rule_id: &Uuid) {
         del_mb_rx!(self, rule_id)
     }
 }

@@ -44,3 +44,4 @@ pub async fn delete_device(id: &Uuid) -> Result<(), io::Error> {
     super::delete(get_device_file_path(), id).await?;
     fs::remove_dir_all(get_device_dir().join(id.to_string())).await
 }
+

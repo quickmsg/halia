@@ -31,10 +31,7 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{trace, warn};
 use types::{
     devices::{
-        modbus::{
-            Area, CreateUpdatePointReq, CreateUpdateSinkReq, DataType, Encode, ModbusConf,
-            PointsQueryParams, SearchPointsResp, SearchSinksResp, SinksQueryParams, Type,
-        },
+        modbus::{Area, DataType, Encode, ModbusConf, Type},
         CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf,
         SearchDevicesItemResp,
     },
@@ -184,38 +181,12 @@ impl Modbus {
                     assert_eq!(items.len(), 2);
 
                     let sink_id = Uuid::from_str(items[0]).unwrap();
-                    let req: CreateUpdateSinkReq = serde_json::from_str(items[1])?;
+                    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
                     self.create_sink(Some(sink_id), req).await?;
                 }
             }
             Err(e) => return Err(e.into()),
         }
-
-        Ok(())
-    }
-
-    pub async fn start(&mut self) -> HaliaResult<()> {
-        check_and_set_on_true!(self);
-        trace!("设备开启");
-
-        persistence::devices::update_device_status(&self.id, Status::Runing).await?;
-
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(stop_signal_tx);
-
-        let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
-        let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
-
-        for source in self.sources.write().await.iter_mut() {
-            source.start(read_tx.clone(), self.err.clone()).await;
-        }
-        for sink in self.sinks.iter_mut() {
-            sink.start(write_tx.clone(), self.err.clone()).await;
-        }
-
-        self.read_tx = Some(read_tx);
-        self.write_tx = Some(write_tx);
-        self.event_loop(stop_signal_rx, read_rx, write_rx).await;
 
         Ok(())
     }
@@ -292,50 +263,6 @@ impl Modbus {
         self.join_handle = Some(handle);
     }
 
-    pub async fn stop(&mut self) -> HaliaResult<()> {
-        if self
-            .sources
-            .read()
-            .await
-            .iter()
-            .any(|point| !point.ref_info.can_stop())
-        {
-            return Err(HaliaError::Common("设备有源被运行规则引用中".to_owned()));
-        }
-
-        if self.sinks.iter().any(|sink| !sink.ref_info.can_stop()) {
-            return Err(HaliaError::Common("设备有动作被运行规则引用中".to_owned()));
-        }
-
-        check_and_set_on_false!(self);
-        trace!("停止");
-
-        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
-
-        for point in self.sources.write().await.iter_mut() {
-            point.stop().await;
-        }
-
-        for sink in self.sinks.iter_mut() {
-            sink.stop().await;
-        }
-
-        self.stop_signal_tx
-            .as_ref()
-            .unwrap()
-            .send(())
-            .await
-            .unwrap();
-
-        self.stop_signal_tx = None;
-        *self.err.write().await = None;
-        self.read_tx = None;
-        self.write_tx = None;
-        self.join_handle = None;
-
-        Ok(())
-    }
-
     async fn connect(conf: &ModbusConf) -> io::Result<Box<dyn Context>> {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
@@ -389,72 +316,6 @@ impl Modbus {
         }
     }
 
-    // pub async fn create_point(
-    //     &mut self,
-    //     point_id: Option<Uuid>,
-    //     req: CreateUpdatePointReq,
-    // ) -> HaliaResult<()> {
-    //     for point in self.points.read().await.iter() {
-    //         point.check_duplicate(&req)?;
-    //     }
-    //     match Point::new(&self.id, point_id, req).await {
-    //         Ok(mut point) => {
-    //             if self.on {
-    //                 point
-    //                     .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
-    //                     .await;
-    //             }
-    //             self.points.write().await.push(point);
-    //             Ok(())
-    //         }
-    //         Err(e) => Err(e),
-    //     }
-    // }
-
-    pub async fn search_points(
-        &self,
-        pagination: Pagination,
-        query_params: PointsQueryParams,
-    ) -> SearchPointsResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for point in self.points.read().await.iter().rev() {
-            let point = point.search();
-            if let Some(query_name) = &query_params.name {
-                if !point.conf.base.name.contains(query_name) {
-                    continue;
-                }
-            }
-
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
-                data.push(point);
-            }
-
-            total += 1;
-        }
-
-        SearchPointsResp { total, data }
-    }
-
-    pub async fn update_point(
-        &mut self,
-        point_id: Uuid,
-        req: CreateUpdatePointReq,
-    ) -> HaliaResult<()> {
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|point| point.id == point_id)
-        {
-            Some(point) => point.update(&self.id, req).await,
-            None => source_not_found_err!(),
-        }
-    }
-
     pub async fn write_point_value(&self, point_id: Uuid, value: Value) -> HaliaResult<()> {
         if !self.on {
             return Err(HaliaError::Stopped);
@@ -474,10 +335,10 @@ impl Modbus {
         {
             Some(point) => {
                 match WritePointEvent::new(
-                    point.conf.ext.slave,
-                    point.conf.ext.area.clone(),
-                    point.conf.ext.address,
-                    point.conf.ext.data_type.clone(),
+                    point.ext_conf.slave,
+                    point.ext_conf.area.clone(),
+                    point.ext_conf.address,
+                    point.ext_conf.data_type.clone(),
                     value.value,
                 ) {
                     Ok(wpe) => {
@@ -491,188 +352,6 @@ impl Modbus {
                 }
             }
             None => source_not_found_err!(),
-        }
-    }
-
-    pub async fn delete_point(&mut self, point_id: Uuid) -> HaliaResult<()> {
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|point| point.id == point_id)
-        {
-            Some(point) => point.delete(&self.id).await?,
-            None => return source_not_found_err!(),
-        }
-
-        self.points
-            .write()
-            .await
-            .retain(|point| point.id != point_id);
-        Ok(())
-    }
-
-    pub async fn add_point_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|point| point.id == *point_id)
-        {
-            Some(point) => Ok(point.ref_info.add_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
-    }
-
-    pub async fn get_point_mb_rx(
-        &mut self,
-        point_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        if !self.on {
-            return Err(HaliaError::Stopped);
-        }
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|point| point.id == *point_id)
-        {
-            Some(point) => Ok(point.get_mb_rx(rule_id)),
-            None => source_not_found_err!(),
-        }
-    }
-
-    pub async fn del_point_mb_rx(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|point| point.id == *point_id)
-        {
-            Some(point) => Ok(point.del_mb_rx(rule_id)),
-            None => source_not_found_err!(),
-        }
-    }
-
-    pub async fn del_point_ref(&mut self, point_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .points
-            .write()
-            .await
-            .iter_mut()
-            .find(|point| point.id == *point_id)
-        {
-            Some(point) => Ok(point.ref_info.del_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
-    }
-
-    pub async fn create_sink(
-        &mut self,
-        sink_id: Option<Uuid>,
-        req: CreateUpdateSinkReq,
-    ) -> HaliaResult<()> {
-        for sink in &self.sinks {
-            sink.check_duplicate(&req)?;
-        }
-
-        match Sink::new(&self.id, sink_id, req).await {
-            Ok(mut sink) => {
-                if self.on {
-                    sink.start(self.write_tx.as_ref().unwrap().clone(), self.err.clone())
-                        .await;
-                }
-                self.sinks.push(sink);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn search_sinks(
-        &self,
-        pagination: Pagination,
-        query_params: SinksQueryParams,
-    ) -> SearchSinksResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for sink in self.sinks.iter().rev() {
-            let sink = sink.search();
-
-            if let Some(query_name) = &query_params.name {
-                if !sink.conf.base.name.contains(query_name) {
-                    continue;
-                }
-            }
-
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
-                data.push(sink);
-            }
-
-            total += 1;
-        }
-
-        SearchSinksResp { total, data }
-    }
-
-    pub async fn update_sink(
-        &mut self,
-        sink_id: Uuid,
-        req: CreateUpdateSinkReq,
-    ) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(&self.id, req).await,
-            None => sink_not_found_err!(),
-        }
-    }
-
-    pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => {
-                sink.delete(&self.id).await?;
-                self.sinks.retain(|sink| sink.id != sink_id);
-                Ok(())
-            }
-            None => sink_not_found_err!(),
-        }
-    }
-
-    pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
-    }
-
-    pub fn get_sink_mb_tx(
-        &mut self,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.get_mb_tx(rule_id)),
-            None => sink_not_found_err!(),
-        }
-    }
-
-    pub fn del_sink_mb_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.deactive_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
-    }
-
-    pub fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
-            None => sink_not_found_err!(),
         }
     }
 }
@@ -820,6 +499,76 @@ impl Device for Modbus {
         Ok(())
     }
 
+    async fn start(&mut self) -> HaliaResult<()> {
+        check_and_set_on_true!(self);
+        trace!("设备开启");
+
+        persistence::devices::update_device_status(&self.id, Status::Runing).await?;
+
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+
+        let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
+        let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
+
+        for source in self.sources.write().await.iter_mut() {
+            source.start(read_tx.clone(), self.err.clone()).await;
+        }
+        for sink in self.sinks.iter_mut() {
+            sink.start(write_tx.clone(), self.err.clone()).await;
+        }
+
+        self.read_tx = Some(read_tx);
+        self.write_tx = Some(write_tx);
+        self.event_loop(stop_signal_rx, read_rx, write_rx).await;
+
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> HaliaResult<()> {
+        if self
+            .sources
+            .read()
+            .await
+            .iter()
+            .any(|point| !point.ref_info.can_stop())
+        {
+            return Err(HaliaError::Common("设备有源被运行规则引用中".to_owned()));
+        }
+
+        if self.sinks.iter().any(|sink| !sink.ref_info.can_stop()) {
+            return Err(HaliaError::Common("设备有动作被运行规则引用中".to_owned()));
+        }
+
+        check_and_set_on_false!(self);
+        trace!("停止");
+
+        persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
+
+        for point in self.sources.write().await.iter_mut() {
+            point.stop().await;
+        }
+
+        for sink in self.sinks.iter_mut() {
+            sink.stop().await;
+        }
+
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+
+        self.stop_signal_tx = None;
+        *self.err.write().await = None;
+        self.read_tx = None;
+        self.write_tx = None;
+        self.join_handle = None;
+
+        Ok(())
+    }
+
     async fn delete(&mut self) -> HaliaResult<()> {
         if self.on {
             return Err(HaliaError::Running);
@@ -870,7 +619,7 @@ impl Device for Modbus {
         &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> HaliaResult<SearchSourcesOrSinksResp> {
+    ) -> SearchSourcesOrSinksResp {
         let mut total = 0;
         let mut data = vec![];
         for source in self.sources.read().await.iter().rev() {
@@ -890,7 +639,7 @@ impl Device for Modbus {
             total += 1;
         }
 
-        SearchSourcesOrSinksResp {total,data, rule_ref: todo!() } }
+        SearchSourcesOrSinksResp { total, data }
     }
 
     async fn update_source(
@@ -898,94 +647,120 @@ impl Device for Modbus {
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        todo!()
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|source| source.id == source_id)
+        {
+            Some(source) => source.update(&self.id, req).await,
+            None => source_not_found_err!(),
+        }
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        todo!()
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|source| source.id == source_id)
+        {
+            Some(source) => source.delete(&self.id).await?,
+            None => return source_not_found_err!(),
+        }
+
+        self.sources
+            .write()
+            .await
+            .retain(|source| source.id != source_id);
+        Ok(())
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn create_sink<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn create_sink(
+        &mut self,
         sink_id: Option<Uuid>,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> HaliaResult<()> {
+        // for sink in &self.sinks {
+        //     sink.check_duplicate(&req)?;
+        // }
+
+        match Sink::new(&self.id, sink_id, req).await {
+            Ok(mut sink) => {
+                if self.on {
+                    sink.start(self.write_tx.as_ref().unwrap().clone(), self.err.clone())
+                        .await;
+                }
+                self.sinks.push(sink);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn search_sinks<'life0, 'async_trait>(
-        &'life0 self,
+    async fn search_sinks(
+        &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> SearchSourcesOrSinksResp {
+        let mut total = 0;
+        let mut data = vec![];
+        for sink in self.sinks.iter().rev() {
+            let sink = sink.search();
+
+            if let Some(name) = &query.name {
+                if !sink.conf.base.name.contains(name) {
+                    continue;
+                }
+            }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(sink);
+            }
+
+            total += 1;
+        }
+
+        SearchSourcesOrSinksResp { total, data }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update_sink<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn update_sink(
+        &mut self,
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => sink.update(&self.id, req).await,
+            None => sink_not_found_err!(),
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete_sink<'life0, 'async_trait>(
-        &'life0 mut self,
-        sink_id: Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => {
+                sink.delete(&self.id).await?;
+                self.sinks.retain(|sink| sink.id != sink_id);
+                Ok(())
+            }
+            None => sink_not_found_err!(),
+        }
     }
 
     async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|source| source.id == *source_id)
+        {
+            Some(source) => Ok(source.ref_info.add_ref(rule_id)),
+            None => source_not_found_err!(),
+        }
     }
 
     async fn get_source_rx(
@@ -993,19 +768,52 @@ impl Device for Modbus {
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        todo!()
+        if !self.on {
+            return Err(HaliaError::Stopped);
+        }
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|source| source.id == *source_id)
+        {
+            Some(source) => Ok(source.get_rx(rule_id)),
+            None => source_not_found_err!(),
+        }
     }
 
     async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|source| source.id == *source_id)
+        {
+            Some(source) => Ok(source.del_rx(rule_id)),
+            None => source_not_found_err!(),
+        }
     }
 
     async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|source| source.id == *source_id)
+        {
+            Some(source) => Ok(source.ref_info.del_ref(rule_id)),
+            None => source_not_found_err!(),
+        }
     }
 
-    async fn add_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
+            None => sink_not_found_err!(),
+        }
     }
 
     async fn get_sink_tx(
@@ -1013,14 +821,23 @@ impl Device for Modbus {
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        todo!()
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.get_tx(rule_id)),
+            None => sink_not_found_err!(),
+        }
     }
 
-    async fn del_sink_tx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.ref_info.deactive_ref(rule_id)),
+            None => sink_not_found_err!(),
+        }
     }
 
-    async fn del_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
+            None => sink_not_found_err!(),
+        }
     }
 }

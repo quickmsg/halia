@@ -24,6 +24,8 @@ pub trait Device: Send + Sync {
     fn get_id(&self) -> Uuid;
     async fn search(&self) -> SearchDevicesItemResp;
     async fn update(&mut self, req: CreateUpdateDeviceReq) -> HaliaResult<()>;
+    async fn start(&mut self) -> HaliaResult<()>;
+    async fn stop(&mut self) -> HaliaResult<()>;
     async fn delete(&mut self) -> HaliaResult<()>;
 
     async fn create_source(
@@ -35,7 +37,7 @@ pub trait Device: Send + Sync {
         &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> HaliaResult<SearchSourcesOrSinksResp>;
+    ) -> SearchSourcesOrSinksResp;
     async fn update_source(
         &mut self,
         source_id: Uuid,
@@ -52,7 +54,7 @@ pub trait Device: Send + Sync {
         &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> HaliaResult<SearchSourcesOrSinksResp>;
+    ) -> SearchSourcesOrSinksResp;
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
@@ -304,6 +306,32 @@ impl DeviceManager {
         }
     }
 
+    pub async fn start_device(&self, device_id: Uuid) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.start().await,
+            None => device_not_found_err!(),
+        }
+    }
+
+    pub async fn stop_device(&self, device_id: Uuid) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == device_id)
+        {
+            Some(device) => device.stop().await,
+            None => device_not_found_err!(),
+        }
+    }
+
     pub async fn delete_device(&self, device_id: Uuid) -> HaliaResult<()> {
         match self
             .devices
@@ -350,7 +378,7 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.search_sources(pagination, query).await,
+            Some(device) => Ok(device.search_sources(pagination, query).await),
             None => device_not_found_err!(),
         }
     }
@@ -419,7 +447,7 @@ impl DeviceManager {
             .iter()
             .find(|device| device.get_id() == device_id)
         {
-            Some(device) => device.search_sinks(pagination, query).await,
+            Some(device) => Ok(device.search_sinks(pagination, query).await),
             None => device_not_found_err!(),
         }
     }
