@@ -12,8 +12,6 @@ use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error};
 use types::rules::{
-    apps::mqtt_client,
-    devices::{modbus, opcua},
     functions::{ComputerConf, FilterConf, WindowConf},
     AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DeviceSinkNode, DeviceSourceNode, Node,
     NodeType, SearchRulesItemResp,

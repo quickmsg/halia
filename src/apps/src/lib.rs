@@ -195,7 +195,7 @@ impl AppManager {
         //         _ => Err(e.into()),
         //     },
         // }
-        todo!()
+        Ok(())
     }
 }
 

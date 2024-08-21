@@ -7,9 +7,10 @@ use std::{
 };
 
 use tokio::{
-    fs::OpenOptions,
+    fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
+use types::{apps::AppType, devices::DeviceType};
 use uuid::Uuid;
 
 pub mod apps;
@@ -22,6 +23,8 @@ static RULE_DIR: &str = "rules";
 pub static DELIMITER: char = '|';
 static SOURCE_FILE: &str = "sources";
 static SINK_FILE: &str = "sinks";
+static DEVICE_FILE: &str = "devices";
+static APP_FILE: &str = "apps";
 
 #[derive(Debug, PartialEq)]
 pub enum Status {
@@ -190,6 +193,89 @@ async fn delete(path: impl AsRef<Path>, id: &Uuid) -> Result<(), io::Error> {
     file.flush().await
 }
 
+fn get_device_file_path() -> PathBuf {
+    Path::new(ROOT_DIR).join(DEVICE_FILE)
+}
+
+pub async fn create_device(
+    typ: DeviceType,
+    device_id: &Uuid,
+    data: &String,
+) -> Result<(), io::Error> {
+    create(
+        get_device_file_path(),
+        device_id,
+        &format!(
+            "{}{}{}{}{}",
+            typ,
+            DELIMITER,
+            Status::Stopped,
+            DELIMITER,
+            data,
+        ),
+    )
+    .await?;
+
+    create_file(get_source_file_path(device_id)).await?;
+    create_file(get_sink_file_path(device_id)).await
+}
+
+pub async fn read_devices() -> Result<Vec<String>, io::Error> {
+    read(get_device_file_path()).await
+}
+
+pub async fn update_device_conf(device_id: &Uuid, conf: &String) -> Result<(), io::Error> {
+    update_segment(get_device_file_path(), device_id, 3, conf).await
+}
+
+pub async fn update_device_status(device_id: &Uuid, status: Status) -> Result<(), io::Error> {
+    update_segment(get_device_file_path(), device_id, 2, &status.to_string()).await
+}
+
+pub async fn delete_device(device_id: &Uuid) -> Result<(), io::Error> {
+    delete(get_device_file_path(), device_id).await?;
+    fs::remove_dir_all(device_id.to_string()).await
+}
+
+fn get_app_file_path() -> PathBuf {
+    Path::new(ROOT_DIR).join(APP_FILE)
+}
+
+pub async fn create_app(typ: AppType, app_id: &Uuid, data: &String) -> Result<(), io::Error> {
+    create(
+        get_app_file_path(),
+        app_id,
+        &format!(
+            "{}{}{}{}{}",
+            typ,
+            DELIMITER,
+            Status::Stopped,
+            DELIMITER,
+            data,
+        ),
+    )
+    .await?;
+
+    create_file(get_source_file_path(app_id)).await?;
+    create_file(get_sink_file_path(app_id)).await
+}
+
+pub async fn read_apps() -> Result<Vec<String>, io::Error> {
+    read(get_app_file_path()).await
+}
+
+pub async fn update_app_conf(app_id: &Uuid, conf: &String) -> Result<(), io::Error> {
+    update_segment(get_app_file_path(), app_id, 3, conf).await
+}
+
+pub async fn update_app_status(app_id: &Uuid, status: Status) -> Result<(), io::Error> {
+    update_segment(get_app_file_path(), app_id, 2, &status.to_string()).await
+}
+
+pub async fn delete_app(app_id: &Uuid) -> Result<(), io::Error> {
+    delete(get_app_file_path(), app_id).await?;
+    fs::remove_dir_all(app_id.to_string()).await
+}
 fn get_source_file_path(id: &Uuid) -> PathBuf {
     Path::new(ROOT_DIR).join(id.to_string()).join(SOURCE_FILE)
 }
