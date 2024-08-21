@@ -17,13 +17,18 @@ use tokio::{
     time,
 };
 use tracing::{debug, warn};
-use types::devices::modbus::{Area, CreateUpdatePointReq, SearchPointsItemResp};
+use types::{
+    devices::modbus::{Area, SearchPointsItemResp, SourceConf},
+    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
+};
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub struct Point {
+pub struct Source {
     pub id: Uuid,
-    pub conf: CreateUpdatePointReq,
+
+    pub base_conf: BaseConf,
+    pub ext_conf: SourceConf,
     quantity: u16,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
@@ -41,12 +46,12 @@ pub struct Point {
     mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
-impl Point {
+impl Source {
     pub async fn new(
         device_id: &Uuid,
         point_id: Option<Uuid>,
-        req: CreateUpdatePointReq,
-    ) -> HaliaResult<Point> {
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<Self> {
         Self::check_conf(&req)?;
 
         let (point_id, new) = get_id(point_id);
@@ -74,7 +79,7 @@ impl Point {
         })
     }
 
-    fn check_conf(req: &CreateUpdatePointReq) -> HaliaResult<()> {
+    fn parse_conf(req: &CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
         if req.ext.interval == 0 {
             return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
         }
@@ -83,30 +88,35 @@ impl Point {
         Ok(())
     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdatePointReq) -> HaliaResult<()> {
-        if self.conf.base.name == req.base.name {
-            return Err(HaliaError::NameExists);
-        }
+    // pub fn check_duplicate(&self, req: &CreateUpdatePointReq) -> HaliaResult<()> {
+    //     if self.conf.base.name == req.base.name {
+    //         return Err(HaliaError::NameExists);
+    //     }
 
-        if self.conf.ext.data_type == req.ext.data_type
-            && self.conf.ext.slave == req.ext.slave
-            && self.conf.ext.area == req.ext.area
-            && self.conf.ext.address == req.ext.address
-        {
-            return Err(HaliaError::AddressExists);
-        }
+    //     if self.conf.ext.data_type == req.ext.data_type
+    //         && self.conf.ext.slave == req.ext.slave
+    //         && self.conf.ext.area == req.ext.area
+    //         && self.conf.ext.address == req.ext.address
+    //     {
+    //         return Err(HaliaError::AddressExists);
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn search(&self) -> SearchPointsItemResp {
-        SearchPointsItemResp {
-            id: self.id.clone(),
-            conf: self.conf.clone(),
-            value: self.value.clone(),
-            err_info: self.err_info.clone(),
-            rule_ref: self.ref_info.get_rule_ref(),
+    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
+        SearchSourcesOrSinksItemResp {
+            id: todo!(),
+            conf: todo!(),
+            rule_ref: todo!(),
         }
+        // SearchPointsItemResp {
+        //     id: self.id.clone(),
+        //     conf: self.conf.clone(),
+        //     value: self.value.clone(),
+        //     err_info: self.err_info.clone(),
+        //     rule_ref: self.ref_info.get_rule_ref(),
+        // }
     }
 
     pub async fn start(

@@ -1,5 +1,6 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
+use async_trait::async_trait;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
@@ -644,12 +645,13 @@ impl Opcua {
     }
 }
 
+#[async_trait]
 impl Device for Opcua {
     fn get_id(&self) -> Uuid {
         todo!()
     }
 
-    fn search(&self) -> SearchDevicesItemResp {
+    async fn search(&self) -> SearchDevicesItemResp {
         todo!()
     }
 
@@ -845,6 +847,46 @@ impl Device for Opcua {
         'life0: 'async_trait,
         Self: 'async_trait,
     {
+        todo!()
+    }
+
+    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn get_source_rx(
+        &mut self,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        todo!()
+    }
+
+    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn add_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn get_sink_tx(
+        &mut self,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        todo!()
+    }
+
+    async fn del_sink_tx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn del_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         todo!()
     }
 }

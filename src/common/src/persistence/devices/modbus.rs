@@ -21,7 +21,7 @@ fn get_sink_file_path(device_id: &Uuid) -> PathBuf {
     get_device_dir().join(device_id.to_string()).join(SINK_FILE)
 }
 
-pub async fn create(device_id: &Uuid, data: String) -> Result<(), io::Error> {
+pub async fn create(device_id: &Uuid, data: &String) -> Result<(), io::Error> {
     crate::persistence::create(
         get_device_file_path(),
         device_id,

@@ -22,7 +22,7 @@ pub mod opcua;
 #[async_trait]
 pub trait Device: Send + Sync {
     fn get_id(&self) -> Uuid;
-    fn search(&self) -> SearchDevicesItemResp;
+    async fn search(&self) -> SearchDevicesItemResp;
     async fn update(&mut self, req: CreateUpdateDeviceReq) -> HaliaResult<()>;
     async fn delete(&mut self) -> HaliaResult<()>;
 
@@ -59,6 +59,24 @@ pub trait Device: Send + Sync {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()>;
+
+    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn get_source_rx(
+        &mut self,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+
+    async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn get_sink_tx(
+        &mut self,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>>;
+    async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
 }
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
@@ -189,7 +207,7 @@ impl DeviceManager {
         let mut err_cnt = 0;
         let mut off_cnt = 0;
         for device in self.devices.read().await.iter().rev() {
-            let device = device.search();
+            let device = device.search().await;
             total += 1;
 
             if device.err.is_some() {
@@ -233,7 +251,7 @@ impl DeviceManager {
         let mut total = 0;
 
         for device in self.devices.read().await.iter().rev() {
-            let device = device.search();
+            let device = device.search().await;
             if let Some(typ) = &query_params.typ {
                 if *typ != device.typ {
                     continue;
@@ -439,13 +457,94 @@ impl DeviceManager {
 }
 
 impl DeviceManager {
+    pub async fn add_source_ref(
+        &self,
+        device_id: &Uuid,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.add_source_ref(source_id, rule_id).await,
+            None => device_not_found_err!(),
+        }
+    }
+
     pub async fn get_source_rx(
         &self,
         device_id: &Uuid,
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        todo!()
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.get_source_rx(source_id, rule_id).await,
+            None => device_not_found_err!(),
+        }
+    }
+
+    pub async fn del_source_rx(
+        &self,
+        device_id: &Uuid,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.del_source_rx(source_id, rule_id).await,
+            None => device_not_found_err!(),
+        }
+    }
+
+    pub async fn del_source_ref(
+        &self,
+        device_id: &Uuid,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.del_source_ref(source_id, rule_id).await,
+            None => device_not_found_err!(),
+        }
+    }
+
+    pub async fn add_sink_ref(
+        &self,
+        device_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.add_sink_ref(sink_id, rule_id).await,
+            None => device_not_found_err!(),
+        }
     }
 
     pub async fn get_sink_tx(
@@ -454,6 +553,51 @@ impl DeviceManager {
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        todo!()
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.get_sink_tx(sink_id, rule_id).await,
+            None => device_not_found_err!(),
+        }
+    }
+
+    pub async fn del_sink_tx(
+        &self,
+        device_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.del_sink_tx(sink_id, rule_id).await,
+            None => device_not_found_err!(),
+        }
+    }
+
+    pub async fn del_sink_ref(
+        &self,
+        device_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .devices
+            .write()
+            .await
+            .iter_mut()
+            .find(|device| device.get_id() == *device_id)
+        {
+            Some(device) => device.del_sink_ref(sink_id, rule_id).await,
+            None => device_not_found_err!(),
+        }
     }
 }

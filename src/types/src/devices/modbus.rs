@@ -7,14 +7,6 @@ use uuid::Uuid;
 
 use crate::{BaseConf, RuleRef};
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdateModbusReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: ModbusConf,
-}
-
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ModbusConf {
     // ms
@@ -94,16 +86,8 @@ pub enum Encode {
     RtuOverTcp,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdatePointReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: PointConf,
-}
-
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct PointConf {
+pub struct SourceConf {
     #[serde(flatten)]
     pub data_type: DataType,
     pub slave: u8,
@@ -799,28 +783,6 @@ pub enum Area {
     Coils,            // bit 读写
     InputRegisters,   // 16-bit word 只读
     HoldingRegisters, // 16-bit word 读写
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PointsQueryParams {
-    pub name: Option<String>,
-    pub err: Option<bool>,
-}
-
-#[derive(Serialize)]
-pub struct SearchPointsResp {
-    pub total: usize,
-    pub data: Vec<SearchPointsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchPointsItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdatePointReq,
-    pub value: serde_json::Value,
-    pub err_info: Option<String>,
-    #[serde(flatten)]
-    pub rule_ref: RuleRef,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

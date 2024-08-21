@@ -9,6 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use async_trait::async_trait;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
@@ -16,9 +17,9 @@ use common::{
     persistence::{self, Status},
 };
 use message::MessageBatch;
-use point::Point;
 use protocol::modbus::{rtu, tcp, Context};
 use sink::Sink;
+use source::Source;
 use tokio::{
     net::TcpStream,
     select,
@@ -31,26 +32,30 @@ use tracing::{trace, warn};
 use types::{
     devices::{
         modbus::{
-            Area, CreateUpdateModbusReq, CreateUpdatePointReq, CreateUpdateSinkReq, DataType,
-            Encode, ModbusConf, PointsQueryParams, SearchPointsResp, SearchSinksResp,
-            SinksQueryParams, Type,
-        }, CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf, SearchDevicesItemResp
-    }, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value
+            Area, CreateUpdatePointReq, CreateUpdateSinkReq, DataType, Encode, ModbusConf,
+            PointsQueryParams, SearchPointsResp, SearchSinksResp, SinksQueryParams, Type,
+        },
+        CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf,
+        SearchDevicesItemResp,
+    },
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
 
 use crate::{sink_not_found_err, source_not_found_err, Device};
 
 // pub mod manager;
-mod point;
 mod sink;
+mod source;
 
 #[derive(Debug)]
 struct Modbus {
     pub id: Uuid,
-    conf: CreateUpdateModbusReq,
 
-    points: Arc<RwLock<Vec<Point>>>,
+    base_conf: BaseConf,
+    ext_conf: ModbusConf,
+
+    sources: Arc<RwLock<Vec<Source>>>,
     sinks: Vec<Sink>,
 
     on: bool,
@@ -74,34 +79,36 @@ pub async fn new(
     device_id: Option<Uuid>,
     req: CreateUpdateDeviceReq,
 ) -> HaliaResult<Box<dyn Device>> {
-    // Self::check_conf(&req)?;
+    let (base_conf, ext_conf, data) = Modbus::parse_conf(req)?;
 
     let (device_id, new) = get_id(device_id);
-
     if new {
-        persistence::devices::modbus::create(&device_id, serde_json::to_string(&req).unwrap())
-            .await?;
+        persistence::devices::modbus::create(&device_id, &data).await?;
     }
 
     Ok(Box::new(Modbus {
         id: device_id,
+        base_conf,
+        ext_conf,
         on: false,
         err: Arc::new(RwLock::new(None)),
         rtt: Arc::new(AtomicU16::new(9999)),
-        // conf: req,
-        conf: todo!(),
-        points: Arc::new(RwLock::new(vec![])),
+        sources: Arc::new(RwLock::new(vec![])),
+        sinks: vec![],
         read_tx: None,
         write_tx: None,
-        sinks: vec![],
         stop_signal_tx: None,
         join_handle: None,
     }))
 }
 
 impl Modbus {
-    fn check_conf(req: &CreateUpdateModbusReq) -> HaliaResult<()> {
-        if req.ext.ethernet.is_none() && req.ext.serial.is_none() {
+    fn parse_conf(req: CreateUpdateDeviceReq) -> HaliaResult<(BaseConf, ModbusConf, String)> {
+        let data = serde_json::to_string(&req)?;
+
+        let conf: ModbusConf = serde_json::from_value(req.conf.ext)?;
+
+        if conf.ethernet.is_none() && conf.serial.is_none() {
             return Err(HaliaError::Common(
                 "必须提供以太网或串口的配置！".to_owned(),
             ));
@@ -109,63 +116,63 @@ impl Modbus {
 
         // TODO 判断host是否合法
 
-        Ok(())
+        Ok((req.conf.base, conf, data))
     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdateModbusReq) -> HaliaResult<()> {
-        if self.conf.base.name == req.base.name {
-            return Err(HaliaError::Common(format!("名称{}已存在！", req.base.name)));
-        }
+    // pub fn check_duplicate(&self, req: &CreateUpdateModbusReq) -> HaliaResult<()> {
+    //     if self.base_c.name == req.base.name {
+    //         return Err(HaliaError::Common(format!("名称{}已存在！", req.base.name)));
+    //     }
 
-        match (&self.conf.ext.ethernet, &req.ext.ethernet) {
-            (Some(eth_conf), Some(eth_req)) => {
-                if eth_conf.host == eth_req.host && eth_conf.port == eth_req.port {
-                    return Err(HaliaError::Common(format!("地址已存在").to_owned()));
-                }
-            }
-            _ => {}
-        }
+    //     match (&self.conf.ext.ethernet, &req.ext.ethernet) {
+    //         (Some(eth_conf), Some(eth_req)) => {
+    //             if eth_conf.host == eth_req.host && eth_conf.port == eth_req.port {
+    //                 return Err(HaliaError::Common(format!("地址已存在").to_owned()));
+    //             }
+    //         }
+    //         _ => {}
+    //     }
 
-        match (&self.conf.ext.serial, &req.ext.serial) {
-            (Some(serial_conf), Some(serial_req)) => {
-                if serial_conf == serial_req {
-                    return Err(HaliaError::Common(format!("地址已存在")));
-                }
-            }
-            _ => {}
-        }
+    //     match (&self.conf.ext.serial, &req.ext.serial) {
+    //         (Some(serial_conf), Some(serial_req)) => {
+    //             if serial_conf == serial_req {
+    //                 return Err(HaliaError::Common(format!("地址已存在")));
+    //             }
+    //         }
+    //         _ => {}
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    // 重复时返回true
-    pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> bool {
-        if let Some(device_id) = device_id {
-            if *device_id == self.id {
-                return false;
-            }
-        }
+    // // 重复时返回true
+    // pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> bool {
+    //     if let Some(device_id) = device_id {
+    //         if *device_id == self.id {
+    //             return false;
+    //         }
+    //     }
 
-        self.conf.base.name == name
-    }
+    //     self.conf.base.name == name
+    // }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::devices::modbus::read_points(&self.id).await {
-            Ok(datas) => {
-                for data in datas {
-                    if data.len() == 0 {
-                        continue;
-                    }
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 2);
+        // match persistence::devices::modbus::read_points(&self.id).await {
+        //     Ok(datas) => {
+        //         for data in datas {
+        //             if data.len() == 0 {
+        //                 continue;
+        //             }
+        //             let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+        //             assert_eq!(items.len(), 2);
 
-                    let point_id = Uuid::from_str(items[0]).unwrap();
-                    let req: CreateUpdatePointReq = serde_json::from_str(items[1])?;
-                    self.create_point(Some(point_id), req).await?;
-                }
-            }
-            Err(e) => return Err(e.into()),
-        }
+        //             let point_id = Uuid::from_str(items[0]).unwrap();
+        //             let req: CreateUpdatePointReq = serde_json::from_str(items[1])?;
+        //             self.create_point(Some(point_id), req).await?;
+        //         }
+        //     }
+        //     Err(e) => return Err(e.into()),
+        // }
 
         match persistence::devices::modbus::read_sinks(&self.id).await {
             Ok(datas) => {
@@ -187,45 +194,6 @@ impl Modbus {
         Ok(())
     }
 
-    pub async fn search(&self) -> SearchDevicesItemResp {
-        SearchDevicesItemResp {
-            id: self.id.clone(),
-            typ: DeviceType::Modbus,
-            rtt: self.rtt.load(Ordering::SeqCst),
-            on: self.on,
-            err: self.err.read().await.clone(),
-            conf: SearchDevicesItemConf {
-                base: self.conf.base.clone(),
-                ext: serde_json::json!(self.conf.ext),
-            },
-        }
-    }
-
-    pub async fn update(&mut self, req: CreateUpdateModbusReq) -> HaliaResult<()> {
-        persistence::devices::update_device_conf(&self.id, serde_json::to_string(&req).unwrap())
-            .await?;
-
-        let mut restart = false;
-        if self.conf.ext != req.ext {
-            restart = true;
-        }
-
-        self.conf = req;
-        if restart && self.on {
-            self.stop_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(())
-                .await
-                .unwrap();
-            let (stop_signal_rx, write_rx, read_rx) =
-                self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx, read_rx, write_rx).await;
-        }
-
-        Ok(())
-    }
-
     pub async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
         trace!("设备开启");
@@ -237,8 +205,9 @@ impl Modbus {
 
         let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
         let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
-        for point in self.points.write().await.iter_mut() {
-            point.start(read_tx.clone(), self.err.clone()).await;
+
+        for source in self.sources.write().await.iter_mut() {
+            source.start(read_tx.clone(), self.err.clone()).await;
         }
         for sink in self.sinks.iter_mut() {
             sink.start(write_tx.clone(), self.err.clone()).await;
@@ -257,10 +226,10 @@ impl Modbus {
         mut read_rx: mpsc::Receiver<Uuid>,
         mut write_rx: mpsc::Receiver<WritePointEvent>,
     ) {
-        let modbus_conf = self.conf.ext.clone();
-        let interval = self.conf.ext.interval;
-        let points = self.points.clone();
-        let reconnect = self.conf.ext.reconnect;
+        let modbus_conf = self.ext_conf.clone();
+        let interval = modbus_conf.interval;
+        let sources = self.sources.clone();
+        let reconnect = modbus_conf.reconnect;
 
         let err = self.err.clone();
 
@@ -290,7 +259,7 @@ impl Modbus {
 
                                 point_id = read_rx.recv() => {
                                    if let Some(point_id) = point_id {
-                                        match points.write().await.iter_mut().find(|point| point.id == point_id) {
+                                        match sources.write().await.iter_mut().find(|point| point.id == point_id) {
                                             Some(point) => {
                                                 let now = Instant::now();
                                                 if let Err(_) = point.read(&mut ctx).await {
@@ -325,7 +294,7 @@ impl Modbus {
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
         if self
-            .points
+            .sources
             .read()
             .await
             .iter()
@@ -343,7 +312,7 @@ impl Modbus {
 
         persistence::devices::update_device_status(&self.id, Status::Stopped).await?;
 
-        for point in self.points.write().await.iter_mut() {
+        for point in self.sources.write().await.iter_mut() {
             point.stop().await;
         }
 
@@ -363,31 +332,6 @@ impl Modbus {
         self.read_tx = None;
         self.write_tx = None;
         self.join_handle = None;
-
-        Ok(())
-    }
-
-    pub async fn delete(&mut self) -> HaliaResult<()> {
-        if self.on {
-            return Err(HaliaError::Running);
-        }
-
-        if self
-            .points
-            .read()
-            .await
-            .iter()
-            .any(|point| point.ref_info.can_delete())
-        {
-            return Err(HaliaError::Common("设备点位被规则引用中".to_owned()));
-        }
-
-        if self.sinks.iter().any(|sink| sink.ref_info.can_delete()) {
-            return Err(HaliaError::Common("设备动作被规则引用中".to_owned()));
-        }
-
-        trace!("设备删除");
-        persistence::devices::delete_device(&self.id).await?;
 
         Ok(())
     }
@@ -445,27 +389,27 @@ impl Modbus {
         }
     }
 
-    pub async fn create_point(
-        &mut self,
-        point_id: Option<Uuid>,
-        req: CreateUpdatePointReq,
-    ) -> HaliaResult<()> {
-        for point in self.points.read().await.iter() {
-            point.check_duplicate(&req)?;
-        }
-        match Point::new(&self.id, point_id, req).await {
-            Ok(mut point) => {
-                if self.on {
-                    point
-                        .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
-                        .await;
-                }
-                self.points.write().await.push(point);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
+    // pub async fn create_point(
+    //     &mut self,
+    //     point_id: Option<Uuid>,
+    //     req: CreateUpdatePointReq,
+    // ) -> HaliaResult<()> {
+    //     for point in self.points.read().await.iter() {
+    //         point.check_duplicate(&req)?;
+    //     }
+    //     match Point::new(&self.id, point_id, req).await {
+    //         Ok(mut point) => {
+    //             if self.on {
+    //                 point
+    //                     .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
+    //                     .await;
+    //             }
+    //             self.points.write().await.push(point);
+    //             Ok(())
+    //         }
+    //         Err(e) => Err(e),
+    //     }
+    // }
 
     pub async fn search_points(
         &self,
@@ -522,7 +466,7 @@ impl Modbus {
         }
 
         match self
-            .points
+            .sources
             .read()
             .await
             .iter()
@@ -829,128 +773,135 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
     }
 }
 
+#[async_trait]
 impl Device for Modbus {
     fn get_id(&self) -> Uuid {
-        todo!()
+        self.id.clone()
     }
 
-    fn search(&self) -> SearchDevicesItemResp {
-        todo!()
+    async fn search(&self) -> SearchDevicesItemResp {
+        SearchDevicesItemResp {
+            id: self.id.clone(),
+            typ: DeviceType::Modbus,
+            rtt: self.rtt.load(Ordering::SeqCst),
+            on: self.on,
+            err: self.err.read().await.clone(),
+            conf: SearchDevicesItemConf {
+                base: self.base_conf.clone(),
+                ext: serde_json::json!(self.ext_conf),
+            },
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update<'life0, 'async_trait>(
-        &'life0 mut self,
-        req: CreateUpdateDeviceReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn update(&mut self, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+
+        persistence::devices::update_device_conf(&self.id, data).await?;
+
+        let mut restart = false;
+        if self.ext_conf != ext_conf {
+            restart = true;
+        }
+        self.base_conf = base_conf;
+        self.ext_conf = ext_conf;
+
+        if restart && self.on {
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
+            let (stop_signal_rx, write_rx, read_rx) =
+                self.join_handle.take().unwrap().await.unwrap();
+            self.event_loop(stop_signal_rx, read_rx, write_rx).await;
+        }
+
+        Ok(())
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn delete(&mut self) -> HaliaResult<()> {
+        if self.on {
+            return Err(HaliaError::Running);
+        }
+
+        if self
+            .sources
+            .read()
+            .await
+            .iter()
+            .any(|point| point.ref_info.can_delete())
+        {
+            return Err(HaliaError::Common("设备点位被规则引用中".to_owned()));
+        }
+        if self.sinks.iter().any(|sink| sink.ref_info.can_delete()) {
+            return Err(HaliaError::Common("设备动作被规则引用中".to_owned()));
+        }
+
+        trace!("设备删除");
+        persistence::devices::delete_device(&self.id).await?;
+
+        Ok(())
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn create_source<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn create_source(
+        &mut self,
         source_id: Option<Uuid>,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> HaliaResult<()> {
+        // for point in self.points.read().await.iter() {
+        //     point.check_duplicate(&req)?;
+        // }
+        match Source::new(&self.id, source_id, req).await {
+            Ok(mut source) => {
+                if self.on {
+                    source
+                        .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
+                        .await;
+                }
+                self.sources.write().await.push(source);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn search_sources<'life0, 'async_trait>(
-        &'life0 self,
+    async fn search_sources(
+        &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<SearchSourcesOrSinksResp>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> HaliaResult<SearchSourcesOrSinksResp> {
+        let mut total = 0;
+        let mut data = vec![];
+        for source in self.sources.read().await.iter().rev() {
+            let source = source.search();
+            if let Some(name) = &query.name {
+                if !source.conf.base.name.contains(name) {
+                    continue;
+                }
+            }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(source);
+            }
+
+            total += 1;
+        }
+
+        SearchSourcesOrSinksResp {total,data, rule_ref: todo!() } }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update_source<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn update_source(
+        &mut self,
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    ) -> HaliaResult<()> {
         todo!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete_source<'life0, 'async_trait>(
-        &'life0 mut self,
-        source_id: Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 
@@ -1030,6 +981,46 @@ impl Device for Modbus {
         'life0: 'async_trait,
         Self: 'async_trait,
     {
+        todo!()
+    }
+
+    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn get_source_rx(
+        &mut self,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        todo!()
+    }
+
+    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn add_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn get_sink_tx(
+        &mut self,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        todo!()
+    }
+
+    async fn del_sink_tx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        todo!()
+    }
+
+    async fn del_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         todo!()
     }
 }
