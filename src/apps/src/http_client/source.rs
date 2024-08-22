@@ -4,19 +4,25 @@ use common::{
     ref_info::RefInfo,
 };
 use message::MessageBatch;
-use tokio::{select, sync::mpsc};
+use tokio::{
+    select,
+    sync::{broadcast, mpsc},
+};
 use tracing::{trace, warn};
-use types::apps::http_client::{
-    CreateUpdateSourceReq, HttpClientConf, SearchSourcesItemResp, SinkConf, SourceConf,
+use types::{
+    apps::http_client::{HttpClientConf, SinkConf, SourceConf},
+    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
 };
 use uuid::Uuid;
 
 pub struct Source {
     pub id: Uuid,
-    conf: CreateUpdateSourceReq,
+    base_conf: BaseConf,
+    ext_conf: SourceConf,
     on: bool,
 
-    mb_tx: Option<mpsc::Sender<MessageBatch>>,
+    mb_tx: Option<broadcast::Sender<MessageBatch>>,
+
     stop_signal_tx: Option<mpsc::Sender<()>>,
     pub ref_info: RefInfo,
 }
@@ -25,19 +31,19 @@ impl Source {
     pub async fn new(
         app_id: &Uuid,
         source_id: Option<Uuid>,
-        req: CreateUpdateSourceReq,
+        req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<Source> {
-        Source::check_conf(&req)?;
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
 
         let (source_id, new) = get_id(source_id);
         if new {
-            // persistence::create_source(app_id, &source_id, serde_json::to_string(&req).unwrap())
-            // .await?;
+            persistence::create_source(app_id, &source_id, &data).await?;
         }
 
         Ok(Source {
             id: source_id,
-            conf: req,
+            base_conf,
+            ext_conf,
             ref_info: RefInfo::new(),
             on: false,
             stop_signal_tx: None,
@@ -45,34 +51,49 @@ impl Source {
         })
     }
 
-    fn check_conf(req: &CreateUpdateSourceReq) -> HaliaResult<()> {
-        Ok(())
+    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
+        let data = serde_json::to_string(&req)?;
+        let conf: SourceConf = serde_json::from_value(req.ext)?;
+
+        // TODO 其他检查
+        Ok((req.base, conf, data))
     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
-        if self.conf.base.name == req.base.name {
-            return Err(HaliaError::NameExists);
-        }
+    // pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
+    //     if self.conf.base.name == req.base.name {
+    //         return Err(HaliaError::NameExists);
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn search(&self) -> SearchSourcesItemResp {
-        SearchSourcesItemResp {
+    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
+        SearchSourcesOrSinksItemResp {
             id: self.id.clone(),
-            conf: self.conf.clone(),
+            conf: CreateUpdateSourceOrSinkReq {
+                base: self.base_conf.clone(),
+                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
+            },
             rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
-    pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSourceReq) -> HaliaResult<()> {
-        // persistence::update_source(app_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
+    pub async fn update(
+        &mut self,
+        app_id: &Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+
+        persistence::update_source(app_id, &self.id, &data).await?;
 
         let mut restart = false;
-        if self.conf.ext != req.ext {
+        if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.conf = req;
+        self.base_conf = base_conf;
+        self.ext_conf = ext_conf;
+
         if self.on && restart {}
 
         Ok(())
@@ -91,18 +112,19 @@ impl Source {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = broadcast::channel(16);
         self.mb_tx = Some(mb_tx);
-        let conf = self.conf.ext.clone();
+        let conf = self.ext_conf.clone();
         self.event_loop(base_conf, stop_signal_rx, mb_rx, conf)
             .await;
     }
 
+    // TODO
     async fn event_loop(
         &mut self,
         base_conf: HttpClientConf,
         mut stop_signal_rx: mpsc::Receiver<()>,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
+        mut mb_rx: broadcast::Receiver<MessageBatch>,
         conf: SourceConf,
     ) {
         tokio::spawn(async move {
@@ -152,12 +174,12 @@ impl Source {
 
     pub async fn stop(&mut self) {}
 
-    pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
+    pub fn get_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
         self.ref_info.active_ref(rule_id);
-        self.mb_tx.as_ref().unwrap().clone()
+        self.mb_tx.as_ref().unwrap().subscribe()
     }
 
-    pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
-        self.ref_info.deactive_ref(rule_id);
+    pub fn del_rx(&mut self, rule_id: &Uuid) {
+        self.ref_info.deactive_ref(rule_id)
     }
 }

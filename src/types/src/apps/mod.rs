@@ -10,10 +10,26 @@ pub mod http_client;
 pub mod mqtt_client;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub struct CreateUpdateAppReq {
+    #[serde(rename = "type")]
+    pub typ: AppType,
+    #[serde(flatten)]
+    pub conf: AppConf,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AppType {
     MqttClient,
     HttpClient,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub struct AppConf {
+    #[serde(flatten)]
+    pub base: BaseConf,
+    #[serde(flatten)]
+    pub ext: serde_json::Value,
 }
 
 impl fmt::Display for AppType {
@@ -67,6 +83,7 @@ pub struct SearchAppsItemResp {
     pub typ: AppType,
     pub on: bool,
     pub err: Option<String>,
+    pub rtt: u16,
     pub conf: SearchAppsItemConf,
 }
 

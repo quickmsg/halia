@@ -30,10 +30,8 @@ use uuid::Uuid;
 
 use crate::{sink_not_found_err, source_not_found_err, Device};
 
-// use crate::Device;
 
 mod api;
-// pub mod manager;
 mod observe;
 mod sink;
 mod source;

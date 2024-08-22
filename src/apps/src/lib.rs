@@ -1,12 +1,16 @@
 #![feature(duration_constants)]
-use common::{error::HaliaResult, persistence};
+use async_trait::async_trait;
+use common::{
+    error::{HaliaError, HaliaResult},
+    persistence,
+};
 use message::MessageBatch;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::warn;
 use types::{
-    apps::{AppType, QueryParams, SearchAppsResp, Summary},
-    Pagination,
+    apps::{AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemResp, SearchAppsResp, Summary},
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -14,13 +18,75 @@ pub mod http_client;
 pub mod mqtt_client;
 pub mod mqtt_server;
 
-pub struct AppManager {
-    apps: RwLock<Vec<(AppType, Uuid)>>,
+#[async_trait]
+pub trait App: Send + Sync {
+    fn get_id(&self) -> Uuid;
+    async fn search(&self) -> SearchAppsItemResp;
+    async fn update(&mut self, req: CreateUpdateAppReq) -> HaliaResult<()>;
+    async fn start(&mut self) -> HaliaResult<()>;
+    async fn stop(&mut self) -> HaliaResult<()>;
+    async fn delete(&mut self) -> HaliaResult<()>;
+
+    async fn create_source(
+        &mut self,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()>;
+    async fn search_sources(
+        &self,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> SearchSourcesOrSinksResp;
+    async fn update_source(
+        &mut self,
+        source_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()>;
+    async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()>;
+
+    async fn create_sink(
+        &mut self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()>;
+    async fn search_sinks(
+        &self,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> SearchSourcesOrSinksResp;
+    async fn update_sink(
+        &mut self,
+        sink_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()>;
+    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()>;
+
+    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn get_source_rx(
+        &mut self,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+
+    async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn get_sink_tx(
+        &mut self,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>>;
+    async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
 }
 
 pub static GLOBAL_APP_MANAGER: LazyLock<AppManager> = LazyLock::new(|| AppManager {
     apps: RwLock::new(vec![]),
 });
+
+pub struct AppManager {
+    apps: RwLock<Vec<Box<dyn App>>>,
+}
 
 macro_rules! app_not_found_err {
     () => {
@@ -43,111 +109,13 @@ macro_rules! sink_not_found_err {
 }
 
 impl AppManager {
-    pub async fn create(&self, typ: AppType, app_id: Uuid) {
-        self.apps.write().await.push((typ, app_id));
-    }
+    // pub async fn create(&self, typ: AppType, app_id: Uuid) {
+    //     self.apps.write().await.push((typ, app_id));
+    // }
 
-    pub async fn get_summary(&self) -> Summary {
-        todo!()
-        // let mut total = 0;
-        // let mut running_cnt = 0;
-        // let mut err_cnt = 0;
-        // let mut off_cnt = 0;
-        // for (typ, app_id) in self.apps.read().await.iter() {
-        //     let resp = match typ {
-        //         AppType::MqttClient => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id).await,
-        //         AppType::HttpClient => GLOBAL_HTTP_CLIENT_MANAGER.search(app_id),
-        //     };
-
-        //     match resp {
-        //         Ok(resp) => {
-        //             total += 1;
-        //             if resp.err.is_some() {
-        //                 err_cnt += 1;
-        //             } else {
-        //                 if resp.on {
-        //                     running_cnt += 1;
-        //                 } else {
-        //                     off_cnt += 1;
-        //                 }
-        //             }
-        //         }
-        //         Err(e) => {
-        //             warn!("{}", e);
-        //         }
-        //     }
-        // }
-        // Summary {
-        //     total,
-        //     running_cnt,
-        //     err_cnt,
-        //     off_cnt,
-        // }
-    }
-
-    pub async fn search(
-        &self,
-        pagination: Pagination,
-        query_params: QueryParams,
-    ) -> SearchAppsResp {
-        todo!()
-        // let mut data = vec![];
-        // let mut i = 0;
-        // let mut total = 0;
-
-        // for (typ, app_id) in self.apps.read().await.iter().rev() {
-        //     if let Some(query_type) = &query_params.typ {
-        //         if typ != query_type {
-        //             continue;
-        //         }
-        //     }
-
-        //     let resp = match typ {
-        //         AppType::MqttClient => GLOBAL_MQTT_CLIENT_MANAGER.search(app_id).await,
-        //         AppType::HttpClient => GLOBAL_HTTP_CLIENT_MANAGER.search(app_id),
-        //     };
-
-        //     match resp {
-        //         Ok(resp) => {
-        //             if let Some(query_name) = &query_params.name {
-        //                 if !resp.conf.base.name.contains(query_name) {
-        //                     continue;
-        //                 }
-        //             }
-
-        //             if let Some(on) = &query_params.on {
-        //                 if resp.on != *on {
-        //                     continue;
-        //                 }
-        //             }
-
-        //             if let Some(err) = &query_params.err {
-        //                 if resp.err.is_some() != *err {
-        //                     continue;
-        //                 }
-        //             }
-
-        //             if i >= (pagination.page - 1) * pagination.size
-        //                 && i < pagination.page * pagination.size
-        //             {
-        //                 data.push(resp);
-        //             }
-
-        //             total += 1;
-        //             i += 1;
-        //         }
-        //         Err(e) => {
-        //             warn!("{}", e);
-        //         }
-        //     }
-        // }
-
-        // SearchAppsResp { total, data }
-    }
-
-    pub async fn delete(&self, app_id: &Uuid) {
-        self.apps.write().await.retain(|(_, id)| id != app_id);
-    }
+    // pub async fn delete(&self, app_id: &Uuid) {
+    //     self.apps.write().await.retain(|(_, id)| id != app_id);
+    // }
 
     pub async fn recover(&self) -> HaliaResult<()> {
         // match persistence::read_apps().await {
@@ -198,13 +166,325 @@ impl AppManager {
 }
 
 impl AppManager {
+    pub async fn get_summary(&self) -> Summary {
+        let mut total = 0;
+        let mut running_cnt = 0;
+        let mut err_cnt = 0;
+        let mut off_cnt = 0;
+        for app in self.apps.read().await.iter().rev() {
+            let app = app.search().await;
+            total += 1;
+
+            if app.err.is_some() {
+                err_cnt += 1;
+            } else {
+                if app.on {
+                    running_cnt += 1;
+                } else {
+                    off_cnt += 1;
+                }
+            }
+        }
+        Summary {
+            total,
+            running_cnt,
+            err_cnt,
+            off_cnt,
+        }
+    }
+
+    pub async fn create_app(
+        &self,
+        device_id: Option<Uuid>,
+        req: CreateUpdateAppReq,
+    ) -> HaliaResult<()> {
+        let device = match req.typ {
+            AppType::MqttClient => mqtt_client::new(device_id, req).await?,
+            AppType::HttpClient => http_client::new(device_id, req).await?,
+        };
+        self.apps.write().await.push(device);
+        Ok(())
+    }
+
+    pub async fn search_apps(&self, pagination: Pagination, query: QueryParams) -> SearchAppsResp {
+        todo!()
+    }
+
+    pub async fn update_app(&self, app_id: Uuid, req: CreateUpdateAppReq) -> HaliaResult<()> {
+        todo!()
+    }
+
+    pub async fn start_app(&self, app_id: Uuid) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.start().await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn stop_app(&self, app_id: Uuid) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.stop().await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn delete_app(&self, app_id: Uuid) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.delete().await?,
+            None => return app_not_found_err!(),
+        }
+
+        self.apps.write().await.retain(|app| app.get_id() != app_id);
+
+        Ok(())
+    }
+}
+
+impl AppManager {
+    pub async fn create_source(
+        &self,
+        app_id: Uuid,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.create_source(source_id, req).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn search_sources(
+        &self,
+        app_id: Uuid,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> HaliaResult<SearchSourcesOrSinksResp> {
+        match self
+            .apps
+            .read()
+            .await
+            .iter()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => Ok(app.search_sources(pagination, query).await),
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn update_source(
+        &self,
+        app_id: Uuid,
+        source_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.update_source(source_id, req).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn delete_source(&self, app_id: Uuid, source_id: Uuid) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.delete_source(source_id).await,
+            None => app_not_found_err!(),
+        }
+    }
+}
+
+impl AppManager {
+    pub async fn create_sink(
+        &self,
+        app_id: Uuid,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.create_sink(sink_id, req).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn search_sinks(
+        &self,
+        app_id: Uuid,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> HaliaResult<SearchSourcesOrSinksResp> {
+        match self
+            .apps
+            .read()
+            .await
+            .iter()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(device) => Ok(device.search_sinks(pagination, query).await),
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn update_sink(
+        &self,
+        app_id: Uuid,
+        sink_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.update_sink(sink_id, req).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn delete_sink(&self, app_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == app_id)
+        {
+            Some(app) => app.delete_sink(sink_id).await,
+            None => app_not_found_err!(),
+        }
+    }
+}
+
+impl AppManager {
+    pub async fn add_source_ref(
+        &self,
+        app_id: &Uuid,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == *app_id)
+        {
+            Some(app) => app.add_source_ref(source_id, rule_id).await,
+            None => app_not_found_err!(),
+        }
+    }
+
     pub async fn get_source_rx(
         &self,
         app_id: &Uuid,
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        todo!()
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == *app_id)
+        {
+            Some(app) => app.get_source_rx(source_id, rule_id).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn del_source_rx(
+        &self,
+        app_id: &Uuid,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == *app_id)
+        {
+            Some(app) => app.del_source_rx(source_id, rule_id).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn del_source_ref(
+        &self,
+        app_id: &Uuid,
+        source_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == *app_id)
+        {
+            Some(app) => app.del_source_ref(source_id, rule_id).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn add_sink_ref(
+        &self,
+        app_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == *app_id)
+        {
+            Some(app) => app.add_sink_ref(sink_id, rule_id).await,
+            None => app_not_found_err!(),
+        }
     }
 
     pub async fn get_sink_tx(
@@ -213,6 +493,51 @@ impl AppManager {
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        todo!()
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == *app_id)
+        {
+            Some(app) => app.get_sink_tx(sink_id, rule_id).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn del_sink_tx(
+        &self,
+        app_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == *app_id)
+        {
+            Some(app) => app.del_sink_tx(sink_id, rule_id).await,
+            None => app_not_found_err!(),
+        }
+    }
+
+    pub async fn del_sink_ref(
+        &self,
+        app_id: &Uuid,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<()> {
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| app.get_id() == *app_id)
+        {
+            Some(app) => app.del_sink_ref(sink_id, rule_id).await,
+            None => app_not_found_err!(),
+        }
     }
 }

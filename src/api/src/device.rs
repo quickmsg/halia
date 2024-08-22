@@ -12,10 +12,6 @@ use uuid::Uuid;
 
 use crate::{AppResult, AppSuccess};
 
-// mod coap;
-// mod modbus;
-// mod opcua;
-
 pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_devices_summary))
@@ -46,9 +42,6 @@ pub fn routes() -> Router {
                         .route("/:sink_id", delete(delete_sink)),
                 ),
         )
-    // .nest("/modbus", modbus_routes())
-    // .nest("/opcua", opcua_routes())
-    // .nest("/coap", coap_routes())
 }
 
 async fn get_devices_summary() -> AppSuccess<Summary> {

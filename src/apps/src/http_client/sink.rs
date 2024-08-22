@@ -2,14 +2,16 @@ use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{trace, warn};
-use types::apps::http_client::{
-    CreateUpdateSinkReq, HttpClientConf, SearchSinksItemResp, SinkConf,
+use types::{
+    apps::http_client::{HttpClientConf, SinkConf, SourceConf},
+    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
 };
 use uuid::Uuid;
 
 pub struct Sink {
     pub id: Uuid,
-    conf: CreateUpdateSinkReq,
+    base_conf: BaseConf,
+    ext_conf: SinkConf,
     on: bool,
 
     mb_tx: Option<mpsc::Sender<MessageBatch>>,
@@ -17,43 +19,62 @@ pub struct Sink {
     pub ref_info: RefInfo,
 }
 
-pub async fn new(
-    app_id: &Uuid,
-    sink_id: Option<Uuid>,
-    req: CreateUpdateSinkReq,
-) -> HaliaResult<Sink> {
-    let (sink_id, new) = get_id(sink_id);
-    if new {
-        // persistence::create_sink(app_id, &sink_id, serde_json::to_string(&req).unwrap()).await?;
+impl Sink {
+    pub async fn new(
+        app_id: &Uuid,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<Sink> {
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+        let (sink_id, new) = get_id(sink_id);
+        if new {
+            persistence::create_sink(app_id, &sink_id, &data).await?;
+        }
+
+        Ok(Sink {
+            id: sink_id,
+            base_conf,
+            ext_conf,
+            ref_info: RefInfo::new(),
+            on: false,
+            stop_signal_tx: None,
+            mb_tx: None,
+        })
     }
 
-    Ok(Sink {
-        id: sink_id,
-        conf: req,
-        ref_info: RefInfo::new(),
-        on: false,
-        stop_signal_tx: None,
-        mb_tx: None,
-    })
-}
+    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SinkConf, String)> {
+        let data = serde_json::to_string(&req)?;
+        let conf: SinkConf = serde_json::from_value(req.ext)?;
 
-impl Sink {
-    pub fn search(&self) -> SearchSinksItemResp {
-        SearchSinksItemResp {
+        Ok((req.base, conf, data))
+    }
+
+    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
+        SearchSourcesOrSinksItemResp {
             id: self.id.clone(),
-            conf: self.conf.clone(),
+            conf: CreateUpdateSourceOrSinkReq {
+                base: self.base_conf.clone(),
+                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
+            },
             rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
-    pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        // persistence::update_sink(app_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
+    pub async fn update(
+        &mut self,
+        app_id: &Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+        persistence::update_sink(app_id, &self.id, &data).await?;
 
         let mut restart = false;
-        if self.conf.ext != req.ext {
+        if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.conf = req;
+        self.base_conf = base_conf;
+        self.ext_conf = ext_conf;
+
         if self.on && restart {}
 
         todo!()
@@ -76,7 +97,7 @@ impl Sink {
 
         let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
-        let conf = self.conf.ext.clone();
+        let conf = self.ext_conf.clone();
         self.event_loop(base_conf, stop_signal_rx, mb_rx, conf)
             .await;
     }
@@ -135,12 +156,12 @@ impl Sink {
 
     pub async fn stop(&mut self) {}
 
-    pub fn get_mb_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
+    pub fn get_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
         self.ref_info.active_ref(rule_id);
         self.mb_tx.as_ref().unwrap().clone()
     }
 
-    pub fn del_mb_tx(&mut self, rule_id: &Uuid) {
+    pub fn del_tx(&mut self, rule_id: &Uuid) {
         self.ref_info.deactive_ref(rule_id);
     }
 }

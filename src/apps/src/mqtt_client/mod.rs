@@ -17,25 +17,23 @@ use tokio::{
 use tracing::error;
 use types::{
     apps::{
-        mqtt_client::{
-            CreateUpdateMqttClientReq, CreateUpdateSinkReq, CreateUpdateSourceReq, Qos,
-            SearchSinksResp, SearchSourcesResp, SinksQueryParams, SourcesQueryParams,
-        },
-        AppType, SearchAppsItemConf, SearchAppsItemResp,
+        mqtt_client::{MqttClientConf, Qos, SourcesQueryParams},
+        AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf, SearchAppsItemResp,
     },
-    Pagination,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
-use crate::{sink_not_found_err, source_not_found_err};
+use crate::{sink_not_found_err, source_not_found_err, App};
 
-// pub mod manager;
 mod sink;
 mod source;
 
 pub struct MqttClient {
     pub id: Uuid,
-    conf: CreateUpdateMqttClientReq,
+
+    base_conf: BaseConf,
+    ext_conf: MqttClientConf,
 
     on: bool,
     err: Arc<RwLock<Option<String>>>,
@@ -47,48 +45,47 @@ pub struct MqttClient {
     client_v50: Option<Arc<v5::AsyncClient>>,
 }
 
+pub async fn new(app_id: Option<Uuid>, req: CreateUpdateAppReq) -> HaliaResult<Box<dyn App>> {
+    let (base_conf, ext_conf, data) = MqttClient::parse_conf(req)?;
+    let (app_id, new) = get_id(app_id);
+    if new {
+        persistence::create_app(&app_id, &data).await?;
+    }
+
+    Ok(Box::new(MqttClient {
+        id: app_id,
+        base_conf,
+        ext_conf,
+        on: false,
+        err: Arc::new(RwLock::new(None)),
+        sources: Arc::new(RwLock::new(vec![])),
+        sinks: vec![],
+        client_v311: None,
+        client_v50: None,
+        stop_signal_tx: None,
+    }))
+}
+
 impl MqttClient {
-    pub async fn new(app_id: Option<Uuid>, req: CreateUpdateMqttClientReq) -> HaliaResult<Self> {
-        MqttClient::check_conf(&req)?;
+    fn parse_conf(req: CreateUpdateAppReq) -> HaliaResult<(BaseConf, MqttClientConf, String)> {
+        let data = serde_json::to_string(&req)?;
+        let conf: MqttClientConf = serde_json::from_value(req.conf.ext)?;
 
-        let (app_id, new) = get_id(app_id);
-        if new {
-            // persistence::create_app(
-            //     AppType::MqttClient,
-            //     &app_id,
-            //     serde_json::to_string(&req).unwrap(),
-            // )
-            // .await?;
-        }
-
-        Ok(Self {
-            id: app_id,
-            conf: req,
-            on: false,
-            err: Arc::new(RwLock::new(None)),
-            sources: Arc::new(RwLock::new(vec![])),
-            sinks: vec![],
-            client_v311: None,
-            client_v50: None,
-            stop_signal_tx: None,
-        })
+        // TODO 其他检查
+        Ok((req.conf.base, conf, data))
     }
 
-    fn check_conf(req: &CreateUpdateMqttClientReq) -> HaliaResult<()> {
-        Ok(())
-    }
+    // pub fn check_duplicate(&self, req: &CreateUpdateMqttClientReq) -> HaliaResult<()> {
+    //     if self.conf.base.name == req.base.name {
+    //         return Err(HaliaError::NameExists);
+    //     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdateMqttClientReq) -> HaliaResult<()> {
-        if self.conf.base.name == req.base.name {
-            return Err(HaliaError::NameExists);
-        }
+    //     if self.ext_conf.host == req.ext.host && self.ext_conf.port == req.ext.port {
+    //         return Err(HaliaError::AddressExists);
+    //     }
 
-        if self.conf.ext.host == req.ext.host && self.conf.ext.port == req.ext.port {
-            return Err(HaliaError::AddressExists);
-        }
-
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub async fn recover(&mut self) -> HaliaResult<()> {
         let source_datas = persistence::read_sources(&self.id).await?;
@@ -122,16 +119,16 @@ impl MqttClient {
         Ok(())
     }
 
-    pub async fn update(&mut self, req: CreateUpdateMqttClientReq) -> HaliaResult<()> {
-        MqttClient::check_conf(&req)?;
-
-        // persistence::update_app_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
+    pub async fn update(&mut self, req: CreateUpdateAppReq) -> HaliaResult<()> {
+        let (base_conf, ext_conf, data) = MqttClient::parse_conf(req)?;
+        persistence::update_app_conf(&self.id, &data).await?;
 
         let mut restart = false;
-        if self.conf.ext != req.ext {
+        if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.conf = req;
+        self.base_conf = base_conf;
+        self.ext_conf = ext_conf;
 
         if self.on && restart {
             self.stop_signal_tx
@@ -143,7 +140,7 @@ impl MqttClient {
 
             self.start().await.unwrap();
             for sink in self.sinks.iter_mut() {
-                match self.conf.ext.version {
+                match self.ext_conf.version {
                     types::apps::mqtt_client::Version::V311 => {
                         sink.restart_v311(self.client_v311.as_ref().unwrap().clone())
                             .await
@@ -164,7 +161,7 @@ impl MqttClient {
 
         persistence::update_app_status(&self.id, persistence::Status::Runing).await?;
 
-        match self.conf.ext.version {
+        match self.ext_conf.version {
             types::apps::mqtt_client::Version::V311 => self.start_v311().await,
             types::apps::mqtt_client::Version::V50 => self.start_v50().await,
         }
@@ -174,14 +171,14 @@ impl MqttClient {
 
     async fn start_v311(&mut self) {
         let mut mqtt_options = MqttOptions::new(
-            self.conf.ext.client_id.clone(),
-            self.conf.ext.host.clone(),
-            self.conf.ext.port,
+            self.ext_conf.client_id.clone(),
+            self.ext_conf.host.clone(),
+            self.ext_conf.port,
         );
 
-        mqtt_options.set_keep_alive(Duration::from_secs(self.conf.ext.keep_alive));
+        mqtt_options.set_keep_alive(Duration::from_secs(self.ext_conf.keep_alive));
 
-        match (&self.conf.ext.username, &self.conf.ext.password) {
+        match (&self.ext_conf.username, &self.ext_conf.password) {
             (Some(username), Some(password)) => {
                 mqtt_options.set_credentials(username.clone(), password.clone());
             }
@@ -193,9 +190,9 @@ impl MqttClient {
         let err = self.err.clone();
 
         // match (
-        //     &self.conf.ext.ca,
-        //     &self.conf.ext.client_cert,
-        //     &self.conf.ext.client_key,
+        //     &self.ext_conf.ca,
+        //     &self.ext_conf.client_cert,
+        //     &self.ext_conf.client_key,
         // ) {
         //     (Some(ca), Some(client_cert), Some(client_key)) => {
         //         let mut root_store = RootCertStore::empty();
@@ -208,8 +205,8 @@ impl MqttClient {
         for source in sources.read().await.iter() {
             let _ = client
                 .subscribe(
-                    source.conf.ext.topic.clone(),
-                    get_mqtt_v311_qos(&source.conf.ext.qos),
+                    source.ext_conf.topic.clone(),
+                    get_mqtt_v311_qos(&source.ext_conf.qos),
                 )
                 .await;
         }
@@ -246,7 +243,7 @@ impl MqttClient {
             Ok(Event::Incoming(Incoming::Publish(p))) => match MessageBatch::from_json(p.payload) {
                 Ok(msg) => {
                     for source in sources.write().await.iter_mut() {
-                        if matches(&source.conf.ext.topic, &p.topic) {
+                        if matches(&source.ext_conf.topic, &p.topic) {
                             match &source.mb_tx {
                                 Some(tx) => {
                                     let _ = tx.send(msg.clone());
@@ -283,16 +280,16 @@ impl MqttClient {
 
     async fn start_v50(&mut self) {
         let mut mqtt_options = v5::MqttOptions::new(
-            self.conf.ext.client_id.clone(),
-            self.conf.ext.host.clone(),
-            self.conf.ext.port,
+            self.ext_conf.client_id.clone(),
+            self.ext_conf.host.clone(),
+            self.ext_conf.port,
         );
-        mqtt_options.set_keep_alive(Duration::from_secs(self.conf.ext.keep_alive));
+        mqtt_options.set_keep_alive(Duration::from_secs(self.ext_conf.keep_alive));
 
-        if self.conf.ext.username.is_some() && self.conf.ext.password.is_some() {
+        if self.ext_conf.username.is_some() && self.ext_conf.password.is_some() {
             mqtt_options.set_credentials(
-                self.conf.ext.username.as_ref().unwrap().clone(),
-                self.conf.ext.password.as_ref().unwrap().clone(),
+                self.ext_conf.username.as_ref().unwrap().clone(),
+                self.ext_conf.password.as_ref().unwrap().clone(),
             );
         }
 
@@ -301,8 +298,8 @@ impl MqttClient {
         for source in sources.read().await.iter() {
             let _ = client
                 .subscribe(
-                    source.conf.ext.topic.clone(),
-                    get_mqtt_v50_qos(&source.conf.ext.qos),
+                    source.ext_conf.topic.clone(),
+                    get_mqtt_v50_qos(&source.ext_conf.qos),
                 )
                 .await;
         }
@@ -385,7 +382,7 @@ impl MqttClient {
             .await
             .unwrap();
         self.stop_signal_tx = None;
-        match self.conf.ext.version {
+        match self.ext_conf.version {
             types::apps::mqtt_client::Version::V311 => self.client_v311 = None,
             types::apps::mqtt_client::Version::V50 => self.client_v50 = None,
         }
@@ -422,10 +419,11 @@ impl MqttClient {
             on: self.on,
             typ: AppType::MqttClient,
             conf: SearchAppsItemConf {
-                base: self.conf.base.clone(),
-                ext: serde_json::json!(self.conf.ext),
+                base: self.base_conf.clone(),
+                ext: serde_json::json!(self.ext_conf),
             },
             err: self.err.read().await.clone(),
+            rtt: 1,
         }
     }
 
@@ -465,24 +463,24 @@ impl MqttClient {
     pub async fn create_source(
         &self,
         source_id: Option<Uuid>,
-        req: CreateUpdateSourceReq,
+        req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        for source in self.sources.read().await.iter() {
-            source.check_duplicate(&req)?;
-        }
+        // for source in self.sources.read().await.iter() {
+        //     source.check_duplicate(&req)?;
+        // }
 
         match Source::new(&self.id, source_id, req).await {
             Ok(source) => {
                 if self.on {
-                    match self.conf.ext.version {
+                    match self.ext_conf.version {
                         types::apps::mqtt_client::Version::V311 => {
                             if let Err(e) = self
                                 .client_v311
                                 .as_ref()
                                 .unwrap()
                                 .subscribe(
-                                    source.conf.ext.topic.clone(),
-                                    get_mqtt_v311_qos(&source.conf.ext.qos),
+                                    source.ext_conf.topic.clone(),
+                                    get_mqtt_v311_qos(&source.ext_conf.qos),
                                 )
                                 .await
                             {
@@ -495,8 +493,8 @@ impl MqttClient {
                                 .as_ref()
                                 .unwrap()
                                 .subscribe(
-                                    source.conf.ext.topic.clone(),
-                                    get_mqtt_v50_qos(&source.conf.ext.qos),
+                                    source.ext_conf.topic.clone(),
+                                    get_mqtt_v50_qos(&source.ext_conf.qos),
                                 )
                                 .await
                             {
@@ -517,7 +515,7 @@ impl MqttClient {
         &self,
         pagination: Pagination,
         query_params: SourcesQueryParams,
-    ) -> HaliaResult<SearchSourcesResp> {
+    ) -> HaliaResult<SearchSourcesOrSinksResp> {
         let mut total = 0;
         let mut data = vec![];
 
@@ -539,10 +537,14 @@ impl MqttClient {
             total += 1;
         }
 
-        Ok(SearchSourcesResp { total, data })
+        Ok(SearchSourcesOrSinksResp { total, data })
     }
 
-    async fn update_source(&self, source_id: Uuid, req: CreateUpdateSourceReq) -> HaliaResult<()> {
+    async fn update_source(
+        &self,
+        source_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
         match self
             .sources
             .write()
@@ -553,13 +555,13 @@ impl MqttClient {
             Some(source) => match source.update(&self.id, req).await {
                 Ok(restart) => {
                     if self.on && restart {
-                        match self.conf.ext.version {
+                        match self.ext_conf.version {
                             types::apps::mqtt_client::Version::V311 => {
                                 if let Err(e) = self
                                     .client_v311
                                     .as_ref()
                                     .unwrap()
-                                    .unsubscribe(source.conf.ext.topic.clone())
+                                    .unsubscribe(source.ext_conf.topic.clone())
                                     .await
                                 {
                                     error!("unsubscribe err:{e}");
@@ -570,8 +572,8 @@ impl MqttClient {
                                     .as_ref()
                                     .unwrap()
                                     .subscribe(
-                                        source.conf.ext.topic.clone(),
-                                        get_mqtt_v311_qos(&source.conf.ext.qos),
+                                        source.ext_conf.topic.clone(),
+                                        get_mqtt_v311_qos(&source.ext_conf.qos),
                                     )
                                     .await
                                 {
@@ -583,7 +585,7 @@ impl MqttClient {
                                     .client_v50
                                     .as_ref()
                                     .unwrap()
-                                    .unsubscribe(source.conf.ext.topic.clone())
+                                    .unsubscribe(source.ext_conf.topic.clone())
                                     .await
                                 {
                                     error!("unsubscribe err:{e}");
@@ -594,8 +596,8 @@ impl MqttClient {
                                     .as_ref()
                                     .unwrap()
                                     .subscribe(
-                                        source.conf.ext.topic.clone(),
-                                        get_mqtt_v50_qos(&source.conf.ext.qos),
+                                        source.ext_conf.topic.clone(),
+                                        get_mqtt_v50_qos(&source.ext_conf.qos),
                                     )
                                     .await
                                 {
@@ -642,7 +644,7 @@ impl MqttClient {
     async fn create_sink(
         &mut self,
         sink_id: Option<Uuid>,
-        req: CreateUpdateSinkReq,
+        req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match Sink::new(&self.id, sink_id, req).await {
             Ok(sink) => {
@@ -656,8 +658,8 @@ impl MqttClient {
     async fn search_sinks(
         &self,
         pagination: Pagination,
-        query_params: SinksQueryParams,
-    ) -> SearchSinksResp {
+        query_params: QueryParams,
+    ) -> SearchSourcesOrSinksResp {
         let mut total = 0;
         let mut data = vec![];
         for sink in self.sinks.iter().rev() {
@@ -676,13 +678,13 @@ impl MqttClient {
 
             total += 1;
         }
-        SearchSinksResp { total, data }
+        SearchSourcesOrSinksResp { total, data }
     }
 
     pub async fn update_sink(
         &mut self,
         sink_id: Uuid,
-        req: CreateUpdateSinkReq,
+        req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
@@ -716,7 +718,7 @@ impl MqttClient {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => {
                 if sink.stop_signal_tx.is_none() {
-                    match self.conf.ext.version {
+                    match self.ext_conf.version {
                         types::apps::mqtt_client::Version::V311 => {
                             sink.start_v311(self.client_v311.as_ref().unwrap().clone())
                         }
@@ -795,5 +797,436 @@ fn get_mqtt_v50_qos(qos: &Qos) -> v5::mqttbytes::QoS {
         Qos::AtMostOnce => v5::mqttbytes::QoS::AtMostOnce,
         Qos::AtLeastOnce => v5::mqttbytes::QoS::AtLeastOnce,
         Qos::ExactlyOnce => v5::mqttbytes::QoS::ExactlyOnce,
+    }
+}
+
+impl App for MqttClient {
+    fn get_id(&self) -> Uuid {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn search<'life0, 'async_trait>(
+        &'life0 self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = SearchAppsItemResp>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update<'life0, 'async_trait>(
+        &'life0 mut self,
+        req: CreateUpdateAppReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn start<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn stop<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn create_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn search_sources<'life0, 'async_trait>(
+        &'life0 self,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete_source<'life0, 'async_trait>(
+        &'life0 mut self,
+        source_id: Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn create_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Option<Uuid>,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn search_sinks<'life0, 'async_trait>(
+        &'life0 self,
+        pagination: Pagination,
+        query: QueryParams,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn update_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn delete_sink<'life0, 'async_trait>(
+        &'life0 mut self,
+        sink_id: Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn add_source_ref<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 mut self,
+        source_id: &'life1 Uuid,
+        rule_id: &'life2 Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn get_source_rx<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 mut self,
+        source_id: &'life1 Uuid,
+        rule_id: &'life2 Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<broadcast::Receiver<MessageBatch>>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn del_source_rx<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 mut self,
+        source_id: &'life1 Uuid,
+        rule_id: &'life2 Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn del_source_ref<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 mut self,
+        source_id: &'life1 Uuid,
+        rule_id: &'life2 Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn add_sink_ref<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 mut self,
+        sink_id: &'life1 Uuid,
+        rule_id: &'life2 Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn get_sink_tx<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 mut self,
+        sink_id: &'life1 Uuid,
+        rule_id: &'life2 Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<mpsc::Sender<MessageBatch>>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn del_sink_tx<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 mut self,
+        sink_id: &'life1 Uuid,
+        rule_id: &'life2 Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
+    }
+
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn del_sink_ref<'life0, 'life1, 'life2, 'async_trait>(
+        &'life0 mut self,
+        sink_id: &'life1 Uuid,
+        rule_id: &'life2 Uuid,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = HaliaResult<()>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        'life1: 'async_trait,
+        'life2: 'async_trait,
+        Self: 'async_trait,
+    {
+        todo!()
     }
 }

@@ -11,7 +11,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
 mod apps;
-mod devices;
+mod device;
 mod rule;
 
 pub(crate) type AppResult<T, E = AppError> = result::Result<T, E>;
@@ -74,7 +74,7 @@ impl IntoResponse for AppError {
 
 pub async fn start() {
     let app = Router::new()
-        .nest("/api/device", devices::routes())
+        .nest("/api/device", device::routes())
         .nest("/api/app", apps::routes())
         .nest("/api/rule", rule::rule_routes())
         .layer(

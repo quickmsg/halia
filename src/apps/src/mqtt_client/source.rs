@@ -6,13 +6,19 @@ use common::{
 use message::MessageBatch;
 use rumqttc::valid_topic;
 use tokio::sync::broadcast;
-use types::apps::mqtt_client::{CreateUpdateSourceReq, SearchSourcesItemResp};
+use types::{
+    apps::mqtt_client::SourceConf, BaseConf, CreateUpdateSourceOrSinkReq,
+    SearchSourcesOrSinksItemResp,
+};
 use uuid::Uuid;
 
 pub struct Source {
     pub id: Uuid,
-    pub conf: CreateUpdateSourceReq,
+    pub base_conf: BaseConf,
+    pub ext_conf: SourceConf,
+
     pub ref_info: RefInfo,
+
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
@@ -20,62 +26,75 @@ impl Source {
     pub async fn new(
         app_id: &Uuid,
         source_id: Option<Uuid>,
-        req: CreateUpdateSourceReq,
+        req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<Self> {
-        Source::check_conf(&req)?;
+        let (base_conf, ext_conf, data) = Source::parse_conf(req)?;
 
         let (source_id, new) = get_id(source_id);
         if new {
-            //     persistence::create_source(app_id, &source_id, serde_json::to_string(&req).unwrap())
-            //         .await?;
+            persistence::create_source(app_id, &source_id, &data).await?;
         }
 
         Ok(Source {
             id: source_id,
-            conf: req,
+            base_conf,
+            ext_conf,
             mb_tx: None,
             ref_info: RefInfo::new(),
         })
     }
 
-    fn check_conf(req: &CreateUpdateSourceReq) -> HaliaResult<()> {
-        if !valid_topic(&req.ext.topic) {
+    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
+        let data = serde_json::to_string(&req)?;
+        let conf: SourceConf = serde_json::from_value(req.ext)?;
+
+        // TODO 其他检查
+
+        if !valid_topic(&conf.topic) {
             return Err(HaliaError::Common("topic不合法".to_owned()));
         }
 
-        Ok(())
+        Ok((req.base, conf, data))
     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
-        if self.conf.base.name == req.base.name {
-            return Err(HaliaError::NameExists);
-        }
+    // pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
+    //     if self.conf.base.name == req.base.name {
+    //         return Err(HaliaError::NameExists);
+    //     }
 
-        if self.conf.ext.topic == req.ext.topic {
-            return Err(HaliaError::Common("主题重复！".to_owned()));
-        }
+    //     if self.conf.ext.topic == req.ext.topic {
+    //         return Err(HaliaError::Common("主题重复！".to_owned()));
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn search(&self) -> SearchSourcesItemResp {
-        SearchSourcesItemResp {
+    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
+        SearchSourcesOrSinksItemResp {
             id: self.id.clone(),
-            conf: self.conf.clone(),
+            conf: CreateUpdateSourceOrSinkReq {
+                base: self.base_conf.clone(),
+                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
+            },
             rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
-    pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSourceReq) -> HaliaResult<bool> {
-        Source::check_conf(&req)?;
+    pub async fn update(
+        &mut self,
+        app_id: &Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<bool> {
+        let (base_conf, ext_conf, data) = Source::parse_conf(req)?;
 
-        // persistence::update_source(app_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
+        persistence::update_source(app_id, &self.id, &data).await?;
 
         let mut restart = false;
-        if self.conf.ext != req.ext {
+        if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.conf = req;
+        self.base_conf = base_conf;
+        self.ext_conf = ext_conf;
 
         Ok(restart)
     }

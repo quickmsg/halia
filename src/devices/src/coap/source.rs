@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use common::{
-    del_mb_rx,
     error::{HaliaError, HaliaResult},
-    get_id, get_mb_rx, persistence,
+    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -256,10 +255,10 @@ impl Source {
     }
 
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        get_mb_rx!(self, rule_id)
+        todo!()
     }
 
     pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
-        del_mb_rx!(self, rule_id);
+        todo!()
     }
 }

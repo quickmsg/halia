@@ -12,12 +12,18 @@ use rumqttc::{
     AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use types::apps::mqtt_client::{CreateUpdateSinkReq, SearchSinksItemResp};
+use types::{
+    apps::mqtt_client::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq,
+    SearchSourcesOrSinksItemResp,
+};
 use uuid::Uuid;
 
 pub struct Sink {
     pub id: Uuid,
-    pub conf: CreateUpdateSinkReq,
+
+    base_conf: BaseConf,
+    ext_conf: SinkConf,
+
     pub stop_signal_tx: Option<mpsc::Sender<()>>,
 
     pub publish_properties: Option<PublishProperties>,
@@ -39,21 +45,21 @@ impl Sink {
     pub async fn new(
         app_id: &Uuid,
         sink_id: Option<Uuid>,
-        req: CreateUpdateSinkReq,
+        req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<Self> {
-        Sink::check_conf(&req)?;
+        let (base_conf, ext_conf, data) = Sink::parse_conf(req)?;
 
         let (sink_id, new) = get_id(sink_id);
         if new {
-            // persistence::create_sink(app_id, &sink_id, serde_json::to_string(&req).unwrap())
-            //     .await?;
+            persistence::create_sink(app_id, &sink_id, &data).await?;
         }
 
-        let publish_properties = get_publish_properties(&req);
+        let publish_properties = get_publish_properties(&ext_conf);
 
         Ok(Sink {
             id: sink_id,
-            conf: req,
+            base_conf,
+            ext_conf,
             mb_tx: None,
             ref_info: RefInfo::new(),
             stop_signal_tx: None,
@@ -62,44 +68,54 @@ impl Sink {
         })
     }
 
-    fn check_conf(req: &CreateUpdateSinkReq) -> HaliaResult<()> {
-        if !mqttbytes::valid_topic(&req.ext.topic) {
+    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SinkConf, String)> {
+        let data = serde_json::to_string(&req)?;
+        let conf: SinkConf = serde_json::from_value(req.ext)?;
+
+        if !mqttbytes::valid_topic(&conf.topic) {
             return Err(HaliaError::Common("topic不合法！".to_owned()));
         }
 
-        Ok(())
+        Ok((req.base, conf, data))
     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
-        if self.conf.base.name == req.base.name {
-            return Err(HaliaError::NameExists);
-        }
+    // pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
+    //     if self.conf.base.name == req.base.name {
+    //         return Err(HaliaError::NameExists);
+    //     }
 
-        if self.conf.ext.topic == req.ext.topic {
-            return Err(HaliaError::Common("主题重复！".to_owned()));
-        }
+    //     if self.conf.ext.topic == req.ext.topic {
+    //         return Err(HaliaError::Common("主题重复！".to_owned()));
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn search(&self) -> SearchSinksItemResp {
-        SearchSinksItemResp {
+    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
+        SearchSourcesOrSinksItemResp {
             id: self.id.clone(),
-            conf: self.conf.clone(),
+            conf: CreateUpdateSourceOrSinkReq {
+                base: self.base_conf.clone(),
+                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
+            },
             rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
-    pub async fn update(&mut self, app_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        Sink::check_conf(&req)?;
-
-        // persistence::update_sink(app_id, &self.id, serde_json::to_string(&req).unwrap()).await?;
+    pub async fn update(
+        &mut self,
+        app_id: &Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+        persistence::update_sink(app_id, &self.id, &data).await?;
 
         let mut restart = false;
-        if self.conf.ext != req.ext {
+        if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.conf = req;
+        self.base_conf = base_conf;
+        self.ext_conf = ext_conf;
 
         if restart && self.stop_signal_tx.is_some() {
             self.stop_signal_tx
@@ -152,13 +168,13 @@ impl Sink {
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
     ) {
-        let topic = self.conf.ext.topic.clone();
-        let qos = match self.conf.ext.qos {
+        let topic = self.ext_conf.topic.clone();
+        let qos = match self.ext_conf.qos {
             types::apps::mqtt_client::Qos::AtMostOnce => QoS::AtMostOnce,
             types::apps::mqtt_client::Qos::AtLeastOnce => QoS::AtLeastOnce,
             types::apps::mqtt_client::Qos::ExactlyOnce => QoS::AtLeastOnce,
         };
-        let retain = self.conf.ext.retain;
+        let retain = self.ext_conf.retain;
 
         let join_handle = tokio::spawn(async move {
             loop {
@@ -212,13 +228,13 @@ impl Sink {
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
     ) {
-        let topic = self.conf.ext.topic.clone();
-        let qos = match self.conf.ext.qos {
+        let topic = self.ext_conf.topic.clone();
+        let qos = match self.ext_conf.qos {
             types::apps::mqtt_client::Qos::AtMostOnce => v5::mqttbytes::QoS::AtMostOnce,
             types::apps::mqtt_client::Qos::AtLeastOnce => v5::mqttbytes::QoS::AtLeastOnce,
             types::apps::mqtt_client::Qos::ExactlyOnce => v5::mqttbytes::QoS::ExactlyOnce,
         };
-        let retain = self.conf.ext.retain;
+        let retain = self.ext_conf.retain;
 
         let join_handle = tokio::spawn(async move {
             loop {
@@ -272,7 +288,7 @@ impl Sink {
     }
 }
 
-fn get_publish_properties(req: &CreateUpdateSinkReq) -> Option<PublishProperties> {
+fn get_publish_properties(conf: &SinkConf) -> Option<PublishProperties> {
     let mut some = false;
     let mut pp = PublishProperties {
         payload_format_indicator: None,
@@ -285,31 +301,31 @@ fn get_publish_properties(req: &CreateUpdateSinkReq) -> Option<PublishProperties
         content_type: None,
     };
 
-    if let Some(pfi) = req.ext.payload_format_indicator {
+    if let Some(pfi) = conf.payload_format_indicator {
         some = true;
         pp.payload_format_indicator = Some(pfi);
     }
-    if let Some(mpi) = req.ext.message_expiry_interval {
+    if let Some(mpi) = conf.message_expiry_interval {
         some = true;
         pp.message_expiry_interval = Some(mpi);
     }
-    if let Some(ta) = req.ext.topic_alias {
+    if let Some(ta) = conf.topic_alias {
         some = true;
         pp.topic_alias = Some(ta);
     }
-    if let Some(cd) = &req.ext.correlation_data {
+    if let Some(cd) = &conf.correlation_data {
         some = true;
         todo!()
     }
-    if let Some(up) = &req.ext.user_properties {
+    if let Some(up) = &conf.user_properties {
         some = true;
         pp.user_properties = up.clone();
     }
-    if let Some(si) = &req.ext.subscription_identifiers {
+    if let Some(si) = &conf.subscription_identifiers {
         some = true;
         pp.subscription_identifiers = si.clone();
     }
-    if let Some(ct) = &req.ext.content_type {
+    if let Some(ct) = &conf.content_type {
         some = true;
         pp.content_type = Some(ct.clone());
     }

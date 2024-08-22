@@ -17,18 +17,3 @@ macro_rules! check_and_set_on_false {
         }
     };
 }
-
-#[macro_export]
-macro_rules! get_mb_rx {
-    ($self:expr, $rule_id:expr) => {{
-        $self.ref_info.active_ref($rule_id);
-        $self.mb_tx.as_ref().unwrap().subscribe()
-    }};
-}
-
-#[macro_export]
-macro_rules! del_mb_rx {
-    ($self:expr, $rule_id:expr) => {{
-        $self.ref_info.deactive_ref($rule_id);
-    }};
-}

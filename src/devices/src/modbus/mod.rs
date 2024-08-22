@@ -41,7 +41,6 @@ use uuid::Uuid;
 
 use crate::{sink_not_found_err, source_not_found_err, Device};
 
-// pub mod manager;
 mod sink;
 mod source;
 

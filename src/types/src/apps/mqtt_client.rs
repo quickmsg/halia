@@ -1,17 +1,8 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use uuid::Uuid;
 
-use crate::{BaseConf, RuleRef};
-
-#[derive(Deserialize, Serialize)]
-pub struct CreateUpdateMqttClientReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: MqttClientConf,
-}
+use crate::BaseConf;
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientConf {
@@ -46,14 +37,6 @@ pub enum Version {
     V50,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateSourceReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: SourceConf,
-}
-
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct SourceConf {
     pub topic: String,
@@ -72,28 +55,6 @@ pub enum Qos {
 pub struct SourcesQueryParams {
     pub name: Option<String>,
     pub err: Option<bool>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSourcesResp {
-    pub total: usize,
-    pub data: Vec<SearchSourcesItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSourcesItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdateSourceReq,
-    #[serde(flatten)]
-    pub rule_ref: RuleRef,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateSinkReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: SinkConf,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
@@ -120,24 +81,4 @@ pub struct SinkConf {
     pub correlation_data: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription_identifiers: Option<Vec<usize>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SinksQueryParams {
-    pub name: Option<String>,
-    pub err: Option<bool>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSinksResp {
-    pub total: usize,
-    pub data: Vec<SearchSinksItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSinksItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdateSinkReq,
-    #[serde(flatten)]
-    pub rule_ref: RuleRef,
 }

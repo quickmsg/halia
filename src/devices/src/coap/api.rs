@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use common::{
-    del_mb_rx,
     error::{HaliaError, HaliaResult},
-    get_id, get_mb_rx, persistence,
+    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -202,10 +201,11 @@ impl API {
     // async fn read() {}
 
     pub fn get_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        get_mb_rx!(self, rule_id)
+        self.ref_info.active_ref(rule_id);
+        self.mb_tx.as_ref().unwrap().subscribe()
     }
 
     pub fn del_rx(&mut self, rule_id: &Uuid) {
-        del_mb_rx!(self, rule_id)
+        self.ref_info.deactive_ref(rule_id)
     }
 }
