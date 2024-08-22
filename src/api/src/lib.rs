@@ -10,7 +10,7 @@ use serde::Serialize;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
-mod apps;
+mod app;
 mod device;
 mod rule;
 
@@ -75,7 +75,7 @@ impl IntoResponse for AppError {
 pub async fn start() {
     let app = Router::new()
         .nest("/api/device", device::routes())
-        .nest("/api/app", apps::routes())
+        .nest("/api/app", app::routes())
         .nest("/api/rule", rule::rule_routes())
         .layer(
             CorsLayer::new()
