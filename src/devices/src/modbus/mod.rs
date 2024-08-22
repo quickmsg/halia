@@ -1,7 +1,6 @@
 use std::{
     io,
     net::SocketAddr,
-    str::FromStr,
     sync::{
         atomic::{AtomicU16, Ordering},
         Arc,
@@ -13,7 +12,6 @@ use async_trait::async_trait;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    persistence::{self},
 };
 use message::MessageBatch;
 use protocol::modbus::{rtu, tcp, Context};
@@ -141,44 +139,6 @@ impl Modbus {
 
     //     self.conf.base.name == name
     // }
-
-    pub async fn recover(&mut self) -> HaliaResult<()> {
-        // match persistence::devices::modbus::read_points(&self.id).await {
-        //     Ok(datas) => {
-        //         for data in datas {
-        //             if data.len() == 0 {
-        //                 continue;
-        //             }
-        //             let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-        //             assert_eq!(items.len(), 2);
-
-        //             let point_id = Uuid::from_str(items[0]).unwrap();
-        //             let req: CreateUpdatePointReq = serde_json::from_str(items[1])?;
-        //             self.create_point(Some(point_id), req).await?;
-        //         }
-        //     }
-        //     Err(e) => return Err(e.into()),
-        // }
-
-        match persistence::read_sinks(&self.id).await {
-            Ok(datas) => {
-                for data in datas {
-                    if data.len() == 0 {
-                        continue;
-                    }
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 2);
-
-                    let sink_id = Uuid::from_str(items[0]).unwrap();
-                    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
-                    self.create_sink(sink_id, req).await?;
-                }
-            }
-            Err(e) => return Err(e.into()),
-        }
-
-        Ok(())
-    }
 
     async fn event_loop(
         &mut self,

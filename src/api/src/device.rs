@@ -94,7 +94,10 @@ async fn create_source(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER.create_source(device_id, req).await?;
+    let source_id = Uuid::new_v4();
+    GLOBAL_DEVICE_MANAGER
+        .create_source(device_id, source_id, req, true)
+        .await?;
     Ok(AppSuccess::empty())
 }
 
@@ -142,7 +145,10 @@ async fn create_sink(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER.create_sink(device_id, req).await?;
+    let sink_id = Uuid::new_v4();
+    GLOBAL_DEVICE_MANAGER
+        .create_sink(device_id, sink_id, req, true)
+        .await?;
     Ok(AppSuccess::empty())
 }
 

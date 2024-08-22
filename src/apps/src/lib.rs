@@ -7,7 +7,6 @@ use common::{
 use message::MessageBatch;
 use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::{broadcast, mpsc, RwLock};
-use tracing::warn;
 use types::{
     apps::{AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemResp, SearchAppsResp, Summary},
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
@@ -118,50 +117,55 @@ impl AppManager {
     // }
 
     pub async fn recover(&self) -> HaliaResult<()> {
-        // match persistence::read_apps().await {
-        //     Ok(datas) => {
-        //         for data in datas {
-        //             let items: Vec<&str> = data.split(persistence::DELIMITER).collect();
-        //             assert_eq!(items.len(), 3);
-        //             let app_id = Uuid::from_str(items[0]).unwrap();
-        //             // let req: CreateUpdat
+        match persistence::read_apps().await {
+            Ok(datas) => {
+                for data in datas {
+                    let items: Vec<&str> = data.split(persistence::DELIMITER).collect();
+                    assert_eq!(items.len(), 3);
 
-        //             let typ = AppType::try_from(items[1]);
-        //             match typ {
-        //                 Ok(typ) => match typ {
-        //                     AppType::MqttClient => {
-        //                         GLOBAL_MQTT_CLIENT_MANAGER
-        //                             .create(Some(app_id), serde_json::from_str(items[3]).unwrap())
-        //                             .await?;
-        //                         match items[2] {
-        //                             "0" => {}
-        //                             "1" => {
-        //                                 GLOBAL_MQTT_CLIENT_MANAGER.start(app_id).await.unwrap();
-        //                             }
-        //                             _ => {
-        //                                 panic!("缓存文件错误")
-        //                             }
-        //                         }
-        //                     }
-        //                     AppType::HttpClient => todo!(),
-        //                 },
-        //                 Err(e) => panic!("{}", e),
-        //             }
-        //         }
+                    let app_id = Uuid::from_str(items[0]).unwrap();
+                    let req: CreateUpdateAppReq = serde_json::from_str(items[2])?;
+                    self.create_app(app_id, req, false).await?;
 
-        //         GLOBAL_MQTT_CLIENT_MANAGER.recover().await?;
+                    let sources = persistence::read_sources(&app_id).await?;
+                    for source_data in sources {
+                        let items = source_data
+                            .split(persistence::DELIMITER)
+                            .collect::<Vec<&str>>();
+                        assert_eq!(items.len(), 2);
+                        let source_id = Uuid::from_str(items[0]).unwrap();
+                        let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
+                        self.create_source(app_id, source_id, req, false).await?;
+                    }
 
-        //         Ok(())
-        //     }
-        //     Err(e) => match e.kind() {
-        //         std::io::ErrorKind::NotFound => match persistence::apps::init().await {
-        //             Ok(_) => Ok(()),
-        //             Err(e) => Err(e.into()),
-        //         },
-        //         _ => Err(e.into()),
-        //     },
-        // }
-        Ok(())
+                    let sinks = persistence::read_sinks(&app_id).await?;
+                    for sink_data in sinks {
+                        let items = sink_data
+                            .split(persistence::DELIMITER)
+                            .collect::<Vec<&str>>();
+                        assert_eq!(items.len(), 2);
+                        let sink_id = Uuid::from_str(items[0]).unwrap();
+                        let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
+                        self.create_sink(app_id, sink_id, req, false).await?;
+                    }
+
+                    match items[1] {
+                        "0" => {}
+                        "1" => self.start_app(app_id).await.unwrap(),
+                        _ => panic!("文件已损坏"),
+                    }
+                }
+
+                Ok(())
+            }
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    persistence::init_apps().await?;
+                    Ok(())
+                }
+                _ => return Err(e.into()),
+            },
+        }
     }
 }
 
@@ -197,7 +201,7 @@ impl AppManager {
         &self,
         app_id: Uuid,
         req: CreateUpdateAppReq,
-        recover: bool,
+        persist: bool,
     ) -> HaliaResult<()> {
         let data = serde_json::to_string(&req)?;
         let device = match req.typ {
@@ -205,7 +209,7 @@ impl AppManager {
             AppType::HttpClient => http_client::new(app_id, req.conf).await?,
         };
 
-        if !recover {
+        if persist {
             persistence::create_app(&app_id, &data).await?;
         }
         self.apps.write().await.push(device);
@@ -271,7 +275,9 @@ impl AppManager {
     pub async fn create_source(
         &self,
         app_id: Uuid,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
+        persist: bool,
     ) -> HaliaResult<()> {
         match self
             .apps
@@ -282,9 +288,10 @@ impl AppManager {
         {
             Some(app) => {
                 let data = serde_json::to_string(&req)?;
-                let source_id = Uuid::new_v4();
                 app.create_source(source_id, req).await;
-                persistence::create_source(app.get_id(), &source_id, &data).await?;
+                if persist {
+                    persistence::create_source(app.get_id(), &source_id, &data).await?;
+                }
                 Ok(())
             }
             None => app_not_found_err!(),
@@ -345,7 +352,9 @@ impl AppManager {
     pub async fn create_sink(
         &self,
         app_id: Uuid,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
+        persist: bool,
     ) -> HaliaResult<()> {
         match self
             .apps
@@ -356,9 +365,10 @@ impl AppManager {
         {
             Some(app) => {
                 let data = serde_json::to_string(&req)?;
-                let sink_id = Uuid::new_v4();
                 app.create_sink(sink_id, req).await?;
-                persistence::create_sink(app.get_id(), &sink_id, &data).await?;
+                if persist {
+                    persistence::create_sink(app.get_id(), &sink_id, &data).await?;
+                }
                 Ok(())
             }
             None => app_not_found_err!(),

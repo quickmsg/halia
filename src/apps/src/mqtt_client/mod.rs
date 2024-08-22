@@ -1,9 +1,8 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    persistence,
 };
 use message::MessageBatch;
 use rumqttc::{mqttbytes, v5, AsyncClient, Event, Incoming, MqttOptions, QoS};
@@ -63,14 +62,6 @@ pub async fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
 }
 
 impl MqttClient {
-    fn parse_conf(req: CreateUpdateAppReq) -> HaliaResult<(BaseConf, MqttClientConf, String)> {
-        let data = serde_json::to_string(&req)?;
-        let conf: MqttClientConf = serde_json::from_value(req.conf.ext)?;
-
-        // TODO 其他检查
-        Ok((req.conf.base, conf, data))
-    }
-
     // pub fn check_duplicate(&self, req: &CreateUpdateMqttClientReq) -> HaliaResult<()> {
     //     if self.conf.base.name == req.base.name {
     //         return Err(HaliaError::NameExists);
@@ -83,47 +74,14 @@ impl MqttClient {
     //     Ok(())
     // }
 
-    pub async fn recover(&mut self) -> HaliaResult<()> {
-        let source_datas = persistence::read_sources(&self.id).await?;
-        for source_data in source_datas {
-            if source_data.len() == 0 {
-                continue;
-            }
-            let items = source_data
-                .split(persistence::DELIMITER)
-                .collect::<Vec<&str>>();
-            assert_eq!(items.len(), 2);
-            let source_id = Uuid::from_str(items[0]).unwrap();
-            self.create_source(source_id, serde_json::from_str(items[1]).unwrap())
-                .await?;
-        }
-
-        let sink_datas = persistence::read_sinks(&self.id).await?;
-        for sink_data in sink_datas {
-            if sink_data.len() == 0 {
-                continue;
-            }
-            let items = sink_data
-                .split(persistence::DELIMITER)
-                .collect::<Vec<&str>>();
-            assert_eq!(items.len(), 2);
-            let sink_id = Uuid::from_str(items[0]).unwrap();
-            self.create_sink(sink_id, serde_json::from_str(items[1]).unwrap())
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    pub async fn update(&mut self, req: CreateUpdateAppReq) -> HaliaResult<()> {
-        let (base_conf, ext_conf, data) = MqttClient::parse_conf(req)?;
-        persistence::update_app_conf(&self.id, &data).await?;
+    pub async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
+        let ext_conf = serde_json::from_value(app_conf.ext)?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.base_conf = base_conf;
+        self.base_conf = app_conf.base;
         self.ext_conf = ext_conf;
 
         if self.on && restart {
@@ -154,8 +112,6 @@ impl MqttClient {
 
     pub async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
-
-        persistence::update_app_status(&self.id, persistence::Status::Runing).await?;
 
         match self.ext_conf.version {
             types::apps::mqtt_client::Version::V311 => self.start_v311().await,
@@ -366,8 +322,6 @@ impl MqttClient {
             return Err(HaliaError::Common("有动作正在被引用中".to_owned()));
         }
 
-        persistence::update_app_status(&self.id, persistence::Status::Stopped).await?;
-
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
@@ -405,7 +359,6 @@ impl MqttClient {
             return Err(HaliaError::Common("有动作正被规则正在被引用中".to_owned()));
         }
 
-        persistence::delete_app(&self.id).await?;
         Ok(())
     }
 
@@ -683,7 +636,7 @@ impl MqttClient {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(&self.id, req).await,
+            Some(sink) => sink.update(req).await,
             None => sink_not_found_err!(),
         }
     }
@@ -691,7 +644,7 @@ impl MqttClient {
     pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => {
-                sink.delete(&self.id).await?;
+                sink.delete().await?;
                 self.sinks.retain(|sink| sink.id == sink_id);
                 Ok(())
             }

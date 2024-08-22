@@ -5,13 +5,11 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    persistence::{self, Status},
 };
 use message::MessageBatch;
 use observe::Observe;
 use protocol::coap::request::CoapOption;
 use sink::Sink;
-use std::str::FromStr;
 use tokio::sync::{broadcast, mpsc};
 use tracing::warn;
 use types::{
@@ -70,46 +68,6 @@ impl Coap {
         Ok(())
     }
 
-    async fn recover(&mut self) -> HaliaResult<()> {
-        let observe_datas = persistence::read_sources(&self.id).await?;
-        for observe_data in observe_datas {
-            let items = observe_data
-                .split(persistence::DELIMITER)
-                .collect::<Vec<&str>>();
-            assert_eq!(items.len(), 2);
-
-            let observe_id = Uuid::from_str(items[0]).unwrap();
-            let req: CreateUpdateObserveReq = serde_json::from_str(items[1])?;
-            self.create_observe(observe_id, req).await?;
-        }
-
-        // let api_datas = persistence::devices::coap::read_apis(&self.id).await?;
-        // for api_data in api_datas {
-        //     let items = api_data
-        //         .split(persistence::DELIMITER)
-        //         .collect::<Vec<&str>>();
-        //     assert_eq!(items.len(), 2);
-
-        //     let api_id = Uuid::from_str(items[0]).unwrap();
-        //     let req: CreateUpdateAPIReq = serde_json::from_str(items[1])?;
-        //     self.create_api(Some(api_id), req).await?;
-        // }
-
-        let sink_datas = persistence::read_sinks(&self.id).await?;
-        for sink_data in sink_datas {
-            let items = sink_data
-                .split(persistence::DELIMITER)
-                .collect::<Vec<&str>>();
-            assert_eq!(items.len(), 2);
-
-            let sink_id = Uuid::from_str(items[0]).unwrap();
-            let req: CreateUpdateSinkReq = serde_json::from_str(items[1])?;
-            self.create_sink(sink_id, req).await?;
-        }
-
-        Ok(())
-    }
-
     pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> bool {
         if let Some(device_id) = device_id {
             if *device_id == self.id {
@@ -162,8 +120,6 @@ impl Coap {
     pub async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
 
-        persistence::update_device_status(&self.id, Status::Runing).await?;
-
         for observe in self.observes.iter_mut() {
             if let Err(e) = observe.start(&self.conf.ext).await {
                 warn!("observe start err:{}", e);
@@ -208,8 +164,6 @@ impl Coap {
             _ = sink.stop().await;
         }
 
-        persistence::update_device_status(&self.id, Status::Stopped).await?;
-
         Ok(())
     }
 
@@ -231,8 +185,6 @@ impl Coap {
         if self.sinks.iter().any(|sink| !sink.ref_info.can_delete()) {
             return Err(HaliaError::Common("有动作正被引用中".to_owned()));
         }
-
-        persistence::delete_device(&self.id).await?;
 
         Ok(())
     }
