@@ -20,7 +20,7 @@ pub mod mqtt_server;
 
 #[async_trait]
 pub trait App: Send + Sync {
-    fn get_id(&self) -> Uuid;
+    fn get_id(&self) -> &Uuid;
     async fn search(&self) -> SearchAppsItemResp;
     async fn update(&mut self, req: CreateUpdateAppReq) -> HaliaResult<()>;
     async fn start(&mut self) -> HaliaResult<()>;
@@ -29,7 +29,7 @@ pub trait App: Send + Sync {
 
     async fn create_source(
         &mut self,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn search_sources(
@@ -46,7 +46,7 @@ pub trait App: Send + Sync {
 
     async fn create_sink(
         &mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn search_sinks(
@@ -195,13 +195,19 @@ impl AppManager {
 
     pub async fn create_app(
         &self,
-        device_id: Option<Uuid>,
+        app_id: Uuid,
         req: CreateUpdateAppReq,
+        recover: bool,
     ) -> HaliaResult<()> {
+        let data = serde_json::to_string(&req)?;
         let device = match req.typ {
-            AppType::MqttClient => mqtt_client::new(device_id, req).await?,
-            AppType::HttpClient => http_client::new(device_id, req).await?,
+            AppType::MqttClient => mqtt_client::new(app_id, req.conf).await?,
+            AppType::HttpClient => http_client::new(app_id, req.conf).await?,
         };
+
+        if !recover {
+            persistence::create_app(&app_id, &data).await?;
+        }
         self.apps.write().await.push(device);
         Ok(())
     }
@@ -220,7 +226,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(app) => app.start().await,
             None => app_not_found_err!(),
@@ -233,7 +239,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(app) => app.stop().await,
             None => app_not_found_err!(),
@@ -246,13 +252,16 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(app) => app.delete().await?,
             None => return app_not_found_err!(),
         }
 
-        self.apps.write().await.retain(|app| app.get_id() != app_id);
+        self.apps
+            .write()
+            .await
+            .retain(|app| *app.get_id() != app_id);
 
         Ok(())
     }
@@ -262,7 +271,6 @@ impl AppManager {
     pub async fn create_source(
         &self,
         app_id: Uuid,
-        source_id: Option<Uuid>,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match self
@@ -270,9 +278,15 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
-            Some(app) => app.create_source(source_id, req).await,
+            Some(app) => {
+                let data = serde_json::to_string(&req)?;
+                let source_id = Uuid::new_v4();
+                app.create_source(source_id, req).await;
+                persistence::create_source(app.get_id(), &source_id, &data).await?;
+                Ok(())
+            }
             None => app_not_found_err!(),
         }
     }
@@ -288,7 +302,7 @@ impl AppManager {
             .read()
             .await
             .iter()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(app) => Ok(app.search_sources(pagination, query).await),
             None => app_not_found_err!(),
@@ -306,7 +320,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(app) => app.update_source(source_id, req).await,
             None => app_not_found_err!(),
@@ -319,7 +333,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(app) => app.delete_source(source_id).await,
             None => app_not_found_err!(),
@@ -331,7 +345,6 @@ impl AppManager {
     pub async fn create_sink(
         &self,
         app_id: Uuid,
-        sink_id: Option<Uuid>,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match self
@@ -339,9 +352,15 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
-            Some(app) => app.create_sink(sink_id, req).await,
+            Some(app) => {
+                let data = serde_json::to_string(&req)?;
+                let sink_id = Uuid::new_v4();
+                app.create_sink(sink_id, req).await?;
+                persistence::create_sink(app.get_id(), &sink_id, &data).await?;
+                Ok(())
+            }
             None => app_not_found_err!(),
         }
     }
@@ -357,7 +376,7 @@ impl AppManager {
             .read()
             .await
             .iter()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(device) => Ok(device.search_sinks(pagination, query).await),
             None => app_not_found_err!(),
@@ -375,7 +394,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(app) => app.update_sink(sink_id, req).await,
             None => app_not_found_err!(),
@@ -388,7 +407,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == app_id)
+            .find(|app| *app.get_id() == app_id)
         {
             Some(app) => app.delete_sink(sink_id).await,
             None => app_not_found_err!(),
@@ -408,7 +427,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == *app_id)
+            .find(|app| *app.get_id() == *app_id)
         {
             Some(app) => app.add_source_ref(source_id, rule_id).await,
             None => app_not_found_err!(),
@@ -426,7 +445,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == *app_id)
+            .find(|app| *app.get_id() == *app_id)
         {
             Some(app) => app.get_source_rx(source_id, rule_id).await,
             None => app_not_found_err!(),
@@ -444,7 +463,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == *app_id)
+            .find(|app| *app.get_id() == *app_id)
         {
             Some(app) => app.del_source_rx(source_id, rule_id).await,
             None => app_not_found_err!(),
@@ -462,7 +481,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == *app_id)
+            .find(|app| *app.get_id() == *app_id)
         {
             Some(app) => app.del_source_ref(source_id, rule_id).await,
             None => app_not_found_err!(),
@@ -480,7 +499,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == *app_id)
+            .find(|app| *app.get_id() == *app_id)
         {
             Some(app) => app.add_sink_ref(sink_id, rule_id).await,
             None => app_not_found_err!(),
@@ -498,7 +517,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == *app_id)
+            .find(|app| *app.get_id() == *app_id)
         {
             Some(app) => app.get_sink_tx(sink_id, rule_id).await,
             None => app_not_found_err!(),
@@ -516,7 +535,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == *app_id)
+            .find(|app| *app.get_id() == *app_id)
         {
             Some(app) => app.del_sink_tx(sink_id, rule_id).await,
             None => app_not_found_err!(),
@@ -534,7 +553,7 @@ impl AppManager {
             .write()
             .await
             .iter_mut()
-            .find(|app| app.get_id() == *app_id)
+            .find(|app| *app.get_id() == *app_id)
         {
             Some(app) => app.del_sink_ref(sink_id, rule_id).await,
             None => app_not_found_err!(),

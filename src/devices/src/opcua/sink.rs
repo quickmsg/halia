@@ -1,4 +1,4 @@
-use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
+use common::{error::HaliaResult, ref_info::RefInfo};
 use types::devices::opcua::{CreateUpdateSinkReq, SearchSinksItemResp};
 use uuid::Uuid;
 
@@ -10,22 +10,7 @@ pub struct Sink {
 }
 
 impl Sink {
-    pub async fn new(
-        device_id: &Uuid,
-        sink_id: Option<Uuid>,
-        req: CreateUpdateSinkReq,
-    ) -> HaliaResult<Self> {
-        let (sink_id, new) = get_id(sink_id);
-
-        if new {
-            // persistence::devices::opcua::create_sink(
-            //     device_id,
-            //     &sink_id,
-            //     serde_json::to_string(&req).unwrap(),
-            // )
-            // .await?;
-        }
-
+    pub async fn new(sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<Self> {
         todo!()
     }
 

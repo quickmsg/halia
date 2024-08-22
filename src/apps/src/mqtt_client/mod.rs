@@ -3,7 +3,7 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    persistence,
 };
 use message::MessageBatch;
 use rumqttc::{mqttbytes, v5, AsyncClient, Event, Incoming, MqttOptions, QoS};
@@ -18,7 +18,7 @@ use tracing::error;
 use types::{
     apps::{
         mqtt_client::{MqttClientConf, Qos, SourcesQueryParams},
-        AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf, SearchAppsItemResp,
+        AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf, SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
@@ -45,16 +45,12 @@ pub struct MqttClient {
     client_v50: Option<Arc<v5::AsyncClient>>,
 }
 
-pub async fn new(app_id: Option<Uuid>, req: CreateUpdateAppReq) -> HaliaResult<Box<dyn App>> {
-    let (base_conf, ext_conf, data) = MqttClient::parse_conf(req)?;
-    let (app_id, new) = get_id(app_id);
-    if new {
-        persistence::create_app(&app_id, &data).await?;
-    }
+pub async fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
+    let ext_conf: MqttClientConf = serde_json::from_value(app_conf.ext)?;
 
     Ok(Box::new(MqttClient {
         id: app_id,
-        base_conf,
+        base_conf: app_conf.base,
         ext_conf,
         on: false,
         err: Arc::new(RwLock::new(None)),
@@ -98,7 +94,7 @@ impl MqttClient {
                 .collect::<Vec<&str>>();
             assert_eq!(items.len(), 2);
             let source_id = Uuid::from_str(items[0]).unwrap();
-            self.create_source(Some(source_id), serde_json::from_str(items[1]).unwrap())
+            self.create_source(source_id, serde_json::from_str(items[1]).unwrap())
                 .await?;
         }
 
@@ -112,7 +108,7 @@ impl MqttClient {
                 .collect::<Vec<&str>>();
             assert_eq!(items.len(), 2);
             let sink_id = Uuid::from_str(items[0]).unwrap();
-            self.create_sink(Some(sink_id), serde_json::from_str(items[1]).unwrap())
+            self.create_sink(sink_id, serde_json::from_str(items[1]).unwrap())
                 .await?;
         }
 
@@ -462,14 +458,14 @@ impl MqttClient {
 
     pub async fn create_source(
         &self,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         // for source in self.sources.read().await.iter() {
         //     source.check_duplicate(&req)?;
         // }
 
-        match Source::new(&self.id, source_id, req).await {
+        match Source::new(source_id, req).await {
             Ok(source) => {
                 if self.on {
                     match self.ext_conf.version {
@@ -552,7 +548,7 @@ impl MqttClient {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => match source.update(&self.id, req).await {
+            Some(source) => match source.update(req).await {
                 Ok(restart) => {
                     if self.on && restart {
                         match self.ext_conf.version {
@@ -623,7 +619,7 @@ impl MqttClient {
             .iter()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.delete(&self.id).await,
+            Some(source) => source.delete().await,
             None => source_not_found_err!(),
         }
     }
@@ -643,10 +639,10 @@ impl MqttClient {
 
     async fn create_sink(
         &mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        match Sink::new(&self.id, sink_id, req).await {
+        match Sink::new(sink_id, req).await {
             Ok(sink) => {
                 self.sinks.push(sink);
                 Ok(())
@@ -801,8 +797,8 @@ fn get_mqtt_v50_qos(qos: &Qos) -> v5::mqttbytes::QoS {
 }
 
 impl App for MqttClient {
-    fn get_id(&self) -> Uuid {
-        todo!()
+    fn get_id(&self) -> &Uuid {
+        &self.id
     }
 
     #[must_use]
@@ -900,7 +896,7 @@ impl App for MqttClient {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn create_source<'life0, 'async_trait>(
         &'life0 mut self,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> ::core::pin::Pin<
         Box<
@@ -979,7 +975,7 @@ impl App for MqttClient {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn create_sink<'life0, 'async_trait>(
         &'life0 mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> ::core::pin::Pin<
         Box<

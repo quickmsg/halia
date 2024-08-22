@@ -1,7 +1,6 @@
 use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -27,20 +26,10 @@ pub struct Observe {
 impl Observe {
     pub async fn new(
         device_id: &Uuid,
-        observe_id: Option<Uuid>,
+        observe_id: Uuid,
         req: CreateUpdateObserveReq,
     ) -> HaliaResult<Self> {
         Self::check_conf(&req)?;
-
-        let (observe_id, new) = get_id(observe_id);
-        if new {
-            // persistence::devices::coap::create_observe(
-            //     device_id,
-            //     &observe_id,
-            //     serde_json::to_string(&req).unwrap(),
-            // )
-            // .await?;
-        }
 
         Ok(Self {
             id: observe_id,

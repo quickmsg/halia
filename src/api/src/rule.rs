@@ -28,7 +28,8 @@ async fn get_rules_summary() -> AppSuccess<Summary> {
 }
 
 async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_RULE_MANAGER.create(None, req).await?;
+    let rule_id = Uuid::new_v4();
+    GLOBAL_RULE_MANAGER.create(rule_id, req).await?;
     Ok(AppSuccess::empty())
 }
 

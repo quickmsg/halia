@@ -29,8 +29,8 @@ pub struct RuleManager {
 }
 
 impl RuleManager {
-    pub async fn create(&self, id: Option<Uuid>, req: CreateUpdateRuleReq) -> HaliaResult<()> {
-        match Rule::new(id, req).await {
+    pub async fn create(&self, id: Uuid, req: CreateUpdateRuleReq) -> HaliaResult<()> {
+        match Rule::new(id, req, true).await {
             Ok(rule) => {
                 self.rules.write().await.push(rule);
                 Ok(())
@@ -161,7 +161,7 @@ impl RuleManager {
 
                     let rule_id = Uuid::from_str(items[0]).unwrap();
                     let req: CreateUpdateRuleReq = serde_json::from_str(&items[2])?;
-                    self.create(Some(rule_id), req).await?;
+                    self.create(rule_id, req).await?;
                     match items[1] {
                         "0" => {}
                         "1" => GLOBAL_RULE_MANAGER.start(rule_id).await.unwrap(),

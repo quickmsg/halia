@@ -13,7 +13,6 @@ use async_trait::async_trait;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    get_id,
     persistence::{self},
 };
 use message::MessageBatch;
@@ -28,12 +27,11 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, Type},
-        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
-        SearchDevicesItemResp,
+        DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf, SearchDevicesItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
@@ -71,9 +69,8 @@ struct Modbus {
     >,
 }
 
-pub async fn new(device_id: Option<Uuid>, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+pub async fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     let ext_conf: ModbusConf = serde_json::from_value(device_conf.ext)?;
-    let (device_id, new) = get_id(device_id);
 
     Ok(Box::new(Modbus {
         id: device_id,

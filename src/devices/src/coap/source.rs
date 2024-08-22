@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -42,15 +42,10 @@ pub struct Source {
 impl Source {
     pub async fn new(
         device_id: &Uuid,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<Self> {
         let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        let (source_id, new) = get_id(source_id);
-        if new {
-            persistence::create_source(device_id, &source_id, &data).await?;
-        }
 
         Ok(Self {
             id: source_id,

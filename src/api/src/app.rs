@@ -48,7 +48,8 @@ async fn get_apps_summary() -> AppSuccess<Summary> {
 }
 
 async fn create_app(Json(req): Json<CreateUpdateAppReq>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.create_app(None, req).await?;
+    let app_id = Uuid::new_v4();
+    GLOBAL_APP_MANAGER.create_app(app_id, req, false).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -143,7 +144,7 @@ async fn create_source(
     Path(app_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.create_source(app_id, None, req).await?;
+    GLOBAL_APP_MANAGER.create_source(app_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -177,7 +178,7 @@ async fn create_sink(
     Path(app_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.create_sink(app_id, None, req).await?;
+    GLOBAL_APP_MANAGER.create_sink(app_id, req).await?;
     Ok(AppSuccess::empty())
 }
 

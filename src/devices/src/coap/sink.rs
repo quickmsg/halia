@@ -1,7 +1,7 @@
 use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -36,16 +36,10 @@ pub struct Sink {
 impl Sink {
     pub async fn new(
         device_id: &Uuid,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<Self> {
         Self::check_conf(&req)?;
-
-        let (sink_id, new) = get_id(sink_id);
-        // if new {
-        //     persistence::create_sink(device_id, &sink_id, serde_json::to_string(&req).unwrap())
-        //         .await?;
-        // }
 
         Ok(Self {
             id: sink_id,

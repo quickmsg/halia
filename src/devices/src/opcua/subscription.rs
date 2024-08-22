@@ -3,7 +3,6 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -30,20 +29,10 @@ pub struct Subscription {
 impl Subscription {
     pub async fn new(
         device_id: &Uuid,
-        subscription_id: Option<Uuid>,
+        subscription_id: Uuid,
         req: CreateUpdateSubscriptionReq,
     ) -> HaliaResult<Self> {
         Self::check_conf(&req)?;
-
-        let (subscription_id, new) = get_id(subscription_id);
-        if new {
-            // persistence::devices::opcua::create_subscription(
-            //     device_id,
-            //     &subscription_id,
-            //     serde_json::to_string(&req).unwrap(),
-            // )
-            // .await?;
-        }
 
         Ok(Self {
             id: subscription_id,

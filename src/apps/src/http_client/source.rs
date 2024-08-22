@@ -1,6 +1,5 @@
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -28,21 +27,12 @@ pub struct Source {
 }
 
 impl Source {
-    pub async fn new(
-        app_id: &Uuid,
-        source_id: Option<Uuid>,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<Source> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        let (source_id, new) = get_id(source_id);
-        if new {
-            persistence::create_source(app_id, &source_id, &data).await?;
-        }
+    pub async fn new(source_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Source> {
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
 
         Ok(Source {
             id: source_id,
-            base_conf,
+            base_conf: req.base,
             ext_conf,
             ref_info: RefInfo::new(),
             on: false,
@@ -78,20 +68,14 @@ impl Source {
         }
     }
 
-    pub async fn update(
-        &mut self,
-        app_id: &Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        persistence::update_source(app_id, &self.id, &data).await?;
+    pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.base_conf = base_conf;
+        self.base_conf = req.base;
         self.ext_conf = ext_conf;
 
         if self.on && restart {}
@@ -99,11 +83,10 @@ impl Source {
         Ok(())
     }
 
-    pub async fn delete(&mut self, app_id: &Uuid) -> HaliaResult<()> {
+    pub async fn delete(&mut self) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
             return Err(HaliaError::DeleteRefing);
         }
-        persistence::delete_source(app_id, &self.id).await?;
 
         Ok(())
     }

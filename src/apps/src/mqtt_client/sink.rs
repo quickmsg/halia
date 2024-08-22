@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -42,23 +42,14 @@ pub struct Sink {
 }
 
 impl Sink {
-    pub async fn new(
-        app_id: &Uuid,
-        sink_id: Option<Uuid>,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<Self> {
-        let (base_conf, ext_conf, data) = Sink::parse_conf(req)?;
-
-        let (sink_id, new) = get_id(sink_id);
-        if new {
-            persistence::create_sink(app_id, &sink_id, &data).await?;
-        }
+    pub async fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
 
         let publish_properties = get_publish_properties(&ext_conf);
 
         Ok(Sink {
             id: sink_id,
-            base_conf,
+            base_conf: req.base,
             ext_conf,
             mb_tx: None,
             ref_info: RefInfo::new(),

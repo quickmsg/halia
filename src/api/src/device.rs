@@ -49,7 +49,10 @@ async fn get_devices_summary() -> AppSuccess<Summary> {
 }
 
 async fn create_device(Json(req): Json<CreateUpdateDeviceReq>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER.create_device(None, req).await?;
+    let device_id = Uuid::new_v4();
+    GLOBAL_DEVICE_MANAGER
+        .create_device(device_id, req, false)
+        .await?;
     Ok(AppSuccess::empty())
 }
 
@@ -91,9 +94,7 @@ async fn create_source(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER
-        .create_source(device_id, None, req)
-        .await?;
+    GLOBAL_DEVICE_MANAGER.create_source(device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 

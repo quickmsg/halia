@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    get_id,
     persistence::{self, Status},
 };
 use group::Group;
@@ -60,18 +59,8 @@ struct Opcua {
     sinks: Vec<Sink>,
 }
 
-pub async fn new(device_id: Option<Uuid>, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+pub async fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     // Self::check_conf(&req)?;
-
-    let (device_id, new) = get_id(device_id);
-    if new {
-        // persistence::create_device(
-        //     DeviceType::Coap,
-        //     &device_id,
-        //     serde_json::to_string(&req).unwrap(),
-        // )
-        // .await?;
-    }
 
     Ok(Box::new(Opcua {
         id: device_id,
@@ -147,7 +136,7 @@ impl Opcua {
 
             let group_id = Uuid::from_str(items[0]).unwrap();
             let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
-            self.create_group(Some(group_id), req).await?;
+            self.create_group(group_id, req).await?;
         }
 
         for group in self.groups.write().await.iter_mut() {
@@ -313,11 +302,7 @@ impl Opcua {
         todo!()
     }
 
-    async fn create_group(
-        &mut self,
-        group_id: Option<Uuid>,
-        req: CreateUpdateGroupReq,
-    ) -> HaliaResult<()> {
+    async fn create_group(&mut self, group_id: Uuid, req: CreateUpdateGroupReq) -> HaliaResult<()> {
         match Group::new(&self.id, group_id, req).await {
             Ok(mut group) => {
                 if self.on && self.session.read().await.is_some() {
@@ -391,7 +376,7 @@ impl Opcua {
     async fn create_group_variable(
         &mut self,
         group_id: Uuid,
-        variable_id: Option<Uuid>,
+        variable_id: Uuid,
         req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
         match self
@@ -516,7 +501,7 @@ impl Opcua {
 
     async fn create_subscription(
         &mut self,
-        subscription_id: Option<Uuid>,
+        subscription_id: Uuid,
         req: CreateUpdateSubscriptionReq,
     ) -> HaliaResult<()> {
         for subscription in self.subscriptions.iter() {
@@ -589,12 +574,8 @@ impl Opcua {
         Ok(())
     }
 
-    async fn create_sink(
-        &mut self,
-        sink_id: Option<Uuid>,
-        req: CreateUpdateSinkReq,
-    ) -> HaliaResult<()> {
-        match Sink::new(&self.id, sink_id, req).await {
+    async fn create_sink(&mut self, sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
+        match Sink::new(sink_id, req).await {
             Ok(sink) => {
                 if self.on {
                     //

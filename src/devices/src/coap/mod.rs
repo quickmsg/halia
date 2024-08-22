@@ -5,7 +5,6 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    get_id,
     persistence::{self, Status},
 };
 use message::MessageBatch;
@@ -21,8 +20,7 @@ use types::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
             QueryObserves, SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
-        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
-        SearchDevicesItemResp,
+        DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf, SearchDevicesItemResp,
     },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
@@ -47,15 +45,7 @@ struct Coap {
     err: Option<String>,
 }
 
-pub async fn new(device_id: Option<Uuid>, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
-    // Self::check_conf(&req)?;
-
-    let (device_id, new) = get_id(device_id);
-    // if new {
-    //     persistence::create_device(&device_id, serde_json::to_string(&req).unwrap())
-    //         .await?;
-    // }
-
+pub async fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     Ok(Box::new(Coap {
         id: device_id,
         conf: todo!(),
@@ -90,7 +80,7 @@ impl Coap {
 
             let observe_id = Uuid::from_str(items[0]).unwrap();
             let req: CreateUpdateObserveReq = serde_json::from_str(items[1])?;
-            self.create_observe(Some(observe_id), req).await?;
+            self.create_observe(observe_id, req).await?;
         }
 
         // let api_datas = persistence::devices::coap::read_apis(&self.id).await?;
@@ -114,7 +104,7 @@ impl Coap {
 
             let sink_id = Uuid::from_str(items[0]).unwrap();
             let req: CreateUpdateSinkReq = serde_json::from_str(items[1])?;
-            self.create_sink(Some(sink_id), req).await?;
+            self.create_sink(sink_id, req).await?;
         }
 
         Ok(())
@@ -297,7 +287,7 @@ pub(crate) fn transform_options(
 impl Coap {
     pub async fn create_observe(
         &mut self,
-        observe_id: Option<Uuid>,
+        observe_id: Uuid,
         req: CreateUpdateObserveReq,
     ) -> HaliaResult<()> {
         for observe in self.observes.iter() {
@@ -418,11 +408,7 @@ impl Coap {
 }
 
 impl Coap {
-    pub async fn create_api(
-        &mut self,
-        api_id: Option<Uuid>,
-        req: CreateUpdateAPIReq,
-    ) -> HaliaResult<()> {
+    pub async fn create_api(&mut self, api_id: Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
         for api in self.apis.iter() {
             api.check_duplicate(&req)?;
         }
@@ -512,7 +498,7 @@ impl Coap {
 impl Coap {
     pub async fn create_sink(
         &mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSinkReq,
     ) -> HaliaResult<()> {
         match Sink::new(&self.id, sink_id, req).await {

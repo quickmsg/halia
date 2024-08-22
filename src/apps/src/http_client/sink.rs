@@ -1,9 +1,9 @@
-use common::{error::HaliaResult, get_id, persistence, ref_info::RefInfo};
+use common::{error::HaliaResult, persistence, ref_info::RefInfo};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{trace, warn};
 use types::{
-    apps::http_client::{HttpClientConf, SinkConf, SourceConf},
+    apps::http_client::{HttpClientConf, SinkConf},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
 };
 use uuid::Uuid;
@@ -20,20 +20,12 @@ pub struct Sink {
 }
 
 impl Sink {
-    pub async fn new(
-        app_id: &Uuid,
-        sink_id: Option<Uuid>,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<Sink> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-        let (sink_id, new) = get_id(sink_id);
-        if new {
-            persistence::create_sink(app_id, &sink_id, &data).await?;
-        }
+    pub async fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Sink> {
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
 
         Ok(Sink {
             id: sink_id,
-            base_conf,
+            base_conf: req.base,
             ext_conf,
             ref_info: RefInfo::new(),
             on: false,

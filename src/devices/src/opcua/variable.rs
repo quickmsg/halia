@@ -1,4 +1,4 @@
-use common::{error::HaliaResult, get_id, persistence};
+use common::error::HaliaResult;
 use opcua::types::{
     ByteString, Guid, Identifier, NodeId, QualifiedName, ReadValueId, UAString, Variant,
 };
@@ -15,21 +15,10 @@ impl Variable {
     pub async fn new(
         device_id: &Uuid,
         group_id: &Uuid,
-        variable_id: Option<Uuid>,
+        variable_id: Uuid,
         req: CreateUpdateVariableReq,
     ) -> HaliaResult<(Self, ReadValueId)> {
         Self::check_conf(&req)?;
-
-        let (variable_id, new) = get_id(variable_id);
-        if new {
-            // persistence::devices::opcua::create_variable(
-            //     device_id,
-            //     group_id,
-            //     &variable_id,
-            //     serde_json::to_string(&req).unwrap(),
-            // )
-            // .await?;
-        }
 
         let read_value_id = Variable::get_read_value_id(&req.ext);
 

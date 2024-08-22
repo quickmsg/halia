@@ -3,7 +3,6 @@ use std::time::Duration;
 use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -37,20 +36,10 @@ pub struct API {
 impl API {
     pub async fn new(
         device_id: &Uuid,
-        api_id: Option<Uuid>,
+        api_id: Uuid,
         req: CreateUpdateAPIReq,
     ) -> HaliaResult<Self> {
         Self::check_conf(&req)?;
-
-        let (api_id, new) = get_id(api_id);
-        if new {
-            // persistence::devices::coap::create_api(
-            //     device_id,
-            //     &api_id,
-            //     serde_json::to_string(&req).unwrap(),
-            // )
-            // .await?;
-        }
 
         Ok(Self {
             id: api_id,

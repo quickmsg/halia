@@ -4,7 +4,7 @@ use std::{str::FromStr, sync::LazyLock};
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    persistence,
 };
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc, RwLock};
@@ -135,7 +135,7 @@ impl DeviceManager {
                     let device_id = Uuid::from_str(items[0]).unwrap();
 
                     let req: CreateUpdateDeviceReq = serde_json::from_str(items[2])?;
-                    self.create_device(Some(device_id), req).await?;
+                    self.create_device(device_id, req, true).await?;
                     match items[1] {
                         "0" => {}
                         "1" => self.start_device(device_id).await.unwrap(),
@@ -185,8 +185,9 @@ impl DeviceManager {
 
     pub async fn create_device(
         &self,
-        device_id: Option<Uuid>,
+        device_id: Uuid,
         req: CreateUpdateDeviceReq,
+        recover: bool,
     ) -> HaliaResult<()> {
         let data = serde_json::to_string(&req)?;
         let device = match req.typ {
@@ -194,7 +195,9 @@ impl DeviceManager {
             DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
             DeviceType::Coap => coap::new(device_id, req.conf).await?,
         };
-        persistence::create_device(device.get_id(), &data).await?;
+        if !recover {
+            persistence::create_device(device.get_id(), &data).await?;
+        }
         self.devices.write().await.push(device);
         Ok(())
     }
@@ -330,7 +333,6 @@ impl DeviceManager {
     pub async fn create_source(
         &self,
         device_id: Uuid,
-        source_id: Option<Uuid>,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match self
@@ -341,12 +343,10 @@ impl DeviceManager {
             .find(|device| *device.get_id() == device_id)
         {
             Some(device) => {
-                let (source_id, new) = get_id(source_id);
+                let source_id = Uuid::new_v4();
                 let data = serde_json::to_string(&req)?;
                 device.create_source(source_id.clone(), req).await?;
-                if new {
-                    persistence::create_source(device.get_id(), &source_id, &data).await?;
-                }
+                persistence::create_source(device.get_id(), &source_id, &data).await?;
                 Ok(())
             }
 

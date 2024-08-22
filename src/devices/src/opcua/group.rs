@@ -2,7 +2,6 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -46,19 +45,9 @@ pub struct Group {
 impl Group {
     pub async fn new(
         device_id: &Uuid,
-        group_id: Option<Uuid>,
+        group_id: Uuid,
         req: CreateUpdateGroupReq,
     ) -> HaliaResult<Self> {
-        let (group_id, new) = get_id(group_id);
-        if new {
-            // persistence::devices::opcua::create_group(
-            //     device_id,
-            //     &group_id,
-            //     serde_json::to_string(&req).unwrap(),
-            // )
-            // .await?;
-        }
-
         Ok(Self {
             id: group_id,
             conf: req,
@@ -198,7 +187,7 @@ impl Group {
     pub async fn create_variable(
         &self,
         device_id: &Uuid,
-        variable_id: Option<Uuid>,
+        variable_id: Uuid,
         req: CreateUpdateVariableReq,
     ) -> HaliaResult<()> {
         match Variable::new(device_id, &self.id, variable_id, req).await {

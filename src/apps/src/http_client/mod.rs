@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use common::{
     check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
+    persistence,
 };
 use message::MessageBatch;
 use sink::Sink;
@@ -12,8 +12,8 @@ use source::Source;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
-        http_client::HttpClientConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf,
-        SearchAppsItemResp,
+        http_client::HttpClientConf, AppConf, AppType, CreateUpdateAppReq, QueryParams,
+        SearchAppsItemConf, SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
@@ -38,22 +38,17 @@ pub struct HttpClient {
 }
 
 pub async fn new(
-    app_id: Option<Uuid>,
-    req: CreateUpdateAppReq,
+    app_id: Uuid,
+    app_conf: AppConf,
     // ca: Option<Bytes>,
     // client_cert: Option<Bytes>,
     // client_key: Option<Bytes>,
 ) -> HaliaResult<Box<dyn App>> {
-    let (base_conf, ext_conf, data) = HttpClient::parse_conf(req)?;
-
-    let (app_id, new) = get_id(app_id);
-    if new {
-        persistence::create_app(&app_id, &data).await?;
-    }
+    let ext_conf: HttpClientConf = serde_json::from_value(app_conf.ext)?;
 
     Ok(Box::new(HttpClient {
         id: app_id,
-        base_conf,
+        base_conf: app_conf.base,
         ext_conf,
         on: false,
         err: None,
@@ -89,7 +84,7 @@ impl HttpClient {
                     let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
                     assert_eq!(items.len(), 2);
                     let sink_id = Uuid::from_str(items[0]).unwrap();
-                    self.create_sink(Some(sink_id), serde_json::from_str(items[1]).unwrap())
+                    self.create_sink(sink_id, serde_json::from_str(items[1]).unwrap())
                         .await?;
                 }
             }
@@ -102,8 +97,8 @@ impl HttpClient {
 
 #[async_trait]
 impl App for HttpClient {
-    fn get_id(&self) -> Uuid {
-        self.id.clone()
+    fn get_id(&self) -> &Uuid {
+        &self.id
     }
 
     async fn search(&self) -> SearchAppsItemResp {
@@ -211,14 +206,14 @@ impl App for HttpClient {
 
     async fn create_source(
         &mut self,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         // for source in self.sources.iter() {
         //     source.check_duplicate(&req)?;
         // }
 
-        match Source::new(&self.id, source_id, req).await {
+        match Source::new(source_id, req).await {
             Ok(source) => {
                 self.sources.push(source);
                 Ok(())
@@ -261,7 +256,7 @@ impl App for HttpClient {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => match source.update(&self.id, req).await {
+            Some(source) => match source.update(req).await {
                 Ok(()) => Ok(()),
                 Err(e) => Err(e),
             },
@@ -276,7 +271,7 @@ impl App for HttpClient {
             .find(|source| source.id == source_id)
         {
             Some(source) => {
-                source.delete(&self.id).await?;
+                source.delete().await?;
                 self.sources.retain(|source| source.id != source_id);
                 Ok(())
             }
@@ -286,10 +281,10 @@ impl App for HttpClient {
 
     async fn create_sink(
         &mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        match Sink::new(&self.id, sink_id, req).await {
+        match Sink::new(sink_id, req).await {
             Ok(sink) => {
                 self.sinks.push(sink);
                 Ok(())

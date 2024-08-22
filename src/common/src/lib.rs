@@ -12,13 +12,6 @@ pub fn check_page_size(i: usize, page: usize, size: usize) -> bool {
     i >= (page - 1) * size && i < page * size
 }
 
-pub fn get_id(id: Option<Uuid>) -> (Uuid, bool) {
-    match id {
-        Some(id) => (id, false),
-        None => (Uuid::new_v4(), true),
-    }
-}
-
 pub enum DynamicValue {
     Const(serde_json::Value),
     Field(String),
