@@ -21,7 +21,7 @@ use types::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
             QueryObserves, SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
-        CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf,
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
         SearchDevicesItemResp,
     },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
@@ -29,7 +29,6 @@ use types::{
 use uuid::Uuid;
 
 use crate::{sink_not_found_err, source_not_found_err, Device};
-
 
 mod api;
 mod observe;
@@ -48,10 +47,7 @@ struct Coap {
     err: Option<String>,
 }
 
-pub async fn new(
-    device_id: Option<Uuid>,
-    req: CreateUpdateDeviceReq,
-) -> HaliaResult<Box<dyn Device>> {
+pub async fn new(device_id: Option<Uuid>, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     // Self::check_conf(&req)?;
 
     let (device_id, new) = get_id(device_id);
@@ -726,8 +722,8 @@ impl Coap {
 
 #[async_trait]
 impl Device for Coap {
-    fn get_id(&self) -> Uuid {
-        self.id.clone()
+    fn get_id(&self) -> &Uuid {
+        &self.id
     }
 
     async fn search(&self) -> SearchDevicesItemResp {
@@ -738,7 +734,7 @@ impl Device for Coap {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn update<'life0, 'async_trait>(
         &'life0 mut self,
-        req: CreateUpdateDeviceReq,
+        req: DeviceConf,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = HaliaResult<()>>
@@ -775,7 +771,7 @@ impl Device for Coap {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn create_source<'life0, 'async_trait>(
         &'life0 mut self,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> ::core::pin::Pin<
         Box<
@@ -854,7 +850,7 @@ impl Device for Coap {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn create_sink<'life0, 'async_trait>(
         &'life0 mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> ::core::pin::Pin<
         Box<
@@ -1113,11 +1109,7 @@ impl Device for Coap {
         todo!()
     }
 
-    async fn write_source_value(
-        &mut self,
-        source_id: Uuid,
-        req: Value,
-    ) -> HaliaResult<()> {
+    async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
         todo!()
     }
 }

@@ -4,14 +4,14 @@ use std::{str::FromStr, sync::LazyLock};
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_id, persistence,
 };
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use types::{
     devices::{
-        CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemResp, SearchDevicesResp,
-        Summary,
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemResp,
+        SearchDevicesResp, Summary,
     },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
@@ -24,16 +24,16 @@ pub mod opcua;
 
 #[async_trait]
 pub trait Device: Send + Sync {
-    fn get_id(&self) -> Uuid;
+    fn get_id(&self) -> &Uuid;
     async fn search(&self) -> SearchDevicesItemResp;
-    async fn update(&mut self, req: CreateUpdateDeviceReq) -> HaliaResult<()>;
+    async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()>;
     async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
     async fn delete(&mut self) -> HaliaResult<()>;
 
     async fn create_source(
         &mut self,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn search_sources(
@@ -51,7 +51,7 @@ pub trait Device: Send + Sync {
 
     async fn create_sink(
         &mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn search_sinks(
@@ -188,11 +188,13 @@ impl DeviceManager {
         device_id: Option<Uuid>,
         req: CreateUpdateDeviceReq,
     ) -> HaliaResult<()> {
+        let data = serde_json::to_string(&req)?;
         let device = match req.typ {
-            DeviceType::Modbus => modbus::new(device_id, req).await?,
-            DeviceType::Opcua => opcua::new(device_id, req).await?,
-            DeviceType::Coap => coap::new(device_id, req).await?,
+            DeviceType::Modbus => modbus::new(device_id, req.conf).await?,
+            DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
+            DeviceType::Coap => coap::new(device_id, req.conf).await?,
         };
+        persistence::create_device(device.get_id(), &data).await?;
         self.devices.write().await.push(device);
         Ok(())
     }
@@ -252,9 +254,14 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
-            Some(device) => device.update(req).await,
+            Some(device) => {
+                let data = serde_json::to_string(&req)?;
+                device.update(req.conf).await?;
+                persistence::update_device_conf(device.get_id(), &data).await?;
+                Ok(())
+            }
             None => device_not_found_err!(),
         }
     }
@@ -265,9 +272,14 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
-            Some(device) => device.start().await,
+            Some(device) => {
+                device.start().await?;
+                persistence::update_device_status(device.get_id(), persistence::Status::Runing)
+                    .await?;
+                Ok(())
+            }
             None => device_not_found_err!(),
         }
     }
@@ -278,9 +290,14 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
-            Some(device) => device.stop().await,
+            Some(device) => {
+                device.stop().await?;
+                persistence::update_device_status(device.get_id(), persistence::Status::Stopped)
+                    .await?;
+                Ok(())
+            }
             None => device_not_found_err!(),
         }
     }
@@ -291,16 +308,19 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
-            Some(device) => device.delete().await?,
+            Some(device) => {
+                device.delete().await?;
+                persistence::delete_device(device.get_id()).await?;
+            }
             None => return device_not_found_err!(),
         }
 
         self.devices
             .write()
             .await
-            .retain(|device| device.get_id() != device_id);
+            .retain(|device| *device.get_id() != device_id);
 
         Ok(())
     }
@@ -318,9 +338,18 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
-            Some(device) => device.create_source(source_id, req).await,
+            Some(device) => {
+                let (source_id, new) = get_id(source_id);
+                let data = serde_json::to_string(&req)?;
+                device.create_source(source_id.clone(), req).await?;
+                if new {
+                    persistence::create_source(device.get_id(), &source_id, &data).await?;
+                }
+                Ok(())
+            }
+
             None => device_not_found_err!(),
         }
     }
@@ -336,7 +365,7 @@ impl DeviceManager {
             .read()
             .await
             .iter()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
             Some(device) => Ok(device.search_sources(pagination, query).await),
             None => device_not_found_err!(),
@@ -354,9 +383,14 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
-            Some(device) => device.update_source(source_id, req).await,
+            Some(device) => {
+                let data = serde_json::to_string(&req)?;
+                device.update_source(source_id, req).await?;
+                persistence::update_source(device.get_id(), &source_id, &data).await?;
+                Ok(())
+            }
             None => device_not_found_err!(),
         }
     }
@@ -372,7 +406,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
             Some(device) => device.write_source_value(source_id, req).await,
             None => device_not_found_err!(),
@@ -385,9 +419,13 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
-            Some(device) => device.delete_source(source_id).await,
+            Some(device) => {
+                device.delete_source(source_id).await?;
+                persistence::delete_source(device.get_id(), &source_id).await?;
+                Ok(())
+            }
             None => device_not_found_err!(),
         }
     }
@@ -397,7 +435,6 @@ impl DeviceManager {
     pub async fn create_sink(
         &self,
         device_id: Uuid,
-        sink_id: Option<Uuid>,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match self
@@ -405,9 +442,15 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
-            Some(device) => device.create_sink(sink_id, req).await,
+            Some(device) => {
+                let data = serde_json::to_string(&req)?;
+                let sink_id = Uuid::new_v4();
+                device.create_sink(sink_id.clone(), req).await?;
+                persistence::create_sink(device.get_id(), &sink_id, &data).await?;
+                Ok(())
+            }
             None => device_not_found_err!(),
         }
     }
@@ -423,7 +466,7 @@ impl DeviceManager {
             .read()
             .await
             .iter()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
             Some(device) => Ok(device.search_sinks(pagination, query).await),
             None => device_not_found_err!(),
@@ -441,7 +484,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
             Some(device) => device.update_sink(sink_id, req).await,
             None => device_not_found_err!(),
@@ -454,7 +497,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == device_id)
+            .find(|device| *device.get_id() == device_id)
         {
             Some(device) => device.delete_sink(sink_id).await,
             None => device_not_found_err!(),
@@ -474,7 +517,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == *device_id)
+            .find(|device| *device.get_id() == *device_id)
         {
             Some(device) => device.add_source_ref(source_id, rule_id).await,
             None => device_not_found_err!(),
@@ -492,7 +535,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == *device_id)
+            .find(|device| *device.get_id() == *device_id)
         {
             Some(device) => device.get_source_rx(source_id, rule_id).await,
             None => device_not_found_err!(),
@@ -510,7 +553,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == *device_id)
+            .find(|device| *device.get_id() == *device_id)
         {
             Some(device) => device.del_source_rx(source_id, rule_id).await,
             None => device_not_found_err!(),
@@ -528,7 +571,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == *device_id)
+            .find(|device| *device.get_id() == *device_id)
         {
             Some(device) => device.del_source_ref(source_id, rule_id).await,
             None => device_not_found_err!(),
@@ -546,7 +589,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == *device_id)
+            .find(|device| *device.get_id() == *device_id)
         {
             Some(device) => device.add_sink_ref(sink_id, rule_id).await,
             None => device_not_found_err!(),
@@ -564,7 +607,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == *device_id)
+            .find(|device| *device.get_id() == *device_id)
         {
             Some(device) => device.get_sink_tx(sink_id, rule_id).await,
             None => device_not_found_err!(),
@@ -582,7 +625,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == *device_id)
+            .find(|device| *device.get_id() == *device_id)
         {
             Some(device) => device.del_sink_tx(sink_id, rule_id).await,
             None => device_not_found_err!(),
@@ -600,7 +643,7 @@ impl DeviceManager {
             .write()
             .await
             .iter_mut()
-            .find(|device| device.get_id() == *device_id)
+            .find(|device| *device.get_id() == *device_id)
         {
             Some(device) => device.del_sink_ref(sink_id, rule_id).await,
             None => device_not_found_err!(),

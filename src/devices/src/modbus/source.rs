@@ -3,7 +3,6 @@ use std::{io, sync::Arc, time::Duration};
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, persistence,
     ref_info::RefInfo,
 };
 use message::{Message, MessageBatch};
@@ -46,23 +45,12 @@ pub struct Source {
 }
 
 impl Source {
-    pub async fn new(
-        device_id: &Uuid,
-        source_id: Option<Uuid>,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<Self> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        let (source_id, new) = get_id(source_id);
-        if new {
-            persistence::create_source(device_id, &source_id, &data).await?;
-        }
-
+    pub async fn new(source_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
         let quantity = ext_conf.data_type.get_quantity();
-
         Ok(Self {
             id: source_id,
-            base_conf,
+            base_conf: req.base,
             ext_conf,
             quantity,
             value: Value::Null,
@@ -74,17 +62,17 @@ impl Source {
         })
     }
 
-    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
-        let data = serde_json::to_string(&req)?;
-        let conf: SourceConf = serde_json::from_value(req.ext)?;
+    // fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
+    //     let data = serde_json::to_string(&req)?;
+    //     let conf: SourceConf = serde_json::from_value(req.ext)?;
 
-        if conf.interval == 0 {
-            return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
-        }
+    //     if conf.interval == 0 {
+    //         return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
+    //     }
 
-        // TODO 其他检查
-        Ok((req.base, conf, data))
-    }
+    //     // TODO 其他检查
+    //     Ok((req.base, conf, data))
+    // }
 
     // pub fn check_duplicate(&self, req: &CreateUpdatePointReq) -> HaliaResult<()> {
     //     if self.conf.base.name == req.base.name {
@@ -168,21 +156,15 @@ impl Source {
         self.stop_signal_tx = None;
     }
 
-    pub async fn update(
-        &mut self,
-        device_id: &Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        persistence::update_source(device_id, &self.id, &data).await?;
+    pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
         self.quantity = ext_conf.data_type.get_quantity();
-        self.base_conf = base_conf;
+        self.base_conf = req.base;
         self.ext_conf = ext_conf;
 
         if self.stop_signal_tx.is_some() && restart {
@@ -202,13 +184,12 @@ impl Source {
         Ok(())
     }
 
-    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+    pub async fn delete(&mut self) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
             return Err(HaliaError::DeleteRefing);
         }
 
         self.stop().await;
-        persistence::delete_source(device_id, &self.id).await?;
         Ok(())
     }
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common::{
     error::{HaliaError, HaliaResult},
-    get_dynamic_value_from_json, get_id, persistence,
+    get_dynamic_value_from_json,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -41,21 +41,13 @@ pub struct Sink {
 }
 
 impl Sink {
-    pub async fn new(
-        device_id: &Uuid,
-        sink_id: Option<Uuid>,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<Self> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        let (sink_id, new) = get_id(sink_id);
-        if new {
-            persistence::create_sink(device_id, &sink_id, &data).await?;
-        }
+    pub async fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        // let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
 
         Ok(Sink {
             id: sink_id,
-            base_conf,
+            base_conf: req.base,
             ext_conf,
             stop_signal_tx: None,
             join_handle: None,
@@ -64,12 +56,12 @@ impl Sink {
         })
     }
 
-    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SinkConf, String)> {
-        let data = serde_json::to_string(&req)?;
-        let conf: SinkConf = serde_json::from_value(req.ext)?;
+    // fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SinkConf, String)> {
+    //     let data = serde_json::to_string(&req)?;
+    //     let conf: SinkConf = serde_json::from_value(req.ext)?;
 
-        Ok((req.base, conf, data))
-    }
+    //     Ok((req.base, conf, data))
+    // }
 
     // pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
     //     if self.conf.base.name == req.base.name {
@@ -90,20 +82,14 @@ impl Sink {
         }
     }
 
-    pub async fn update(
-        &mut self,
-        device_id: &Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        persistence::update_sink(device_id, &self.id, &data).await?;
+    pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.base_conf = base_conf;
+        self.base_conf = req.base;
         self.ext_conf = ext_conf;
 
         if restart {
@@ -128,12 +114,11 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+    pub async fn delete(&mut self) -> HaliaResult<()> {
         if !self.ref_info.can_delete() {
             return Err(HaliaError::Common("该动作含有引用规则".to_owned()));
         }
 
-        persistence::delete_sink(device_id, &self.id).await?;
         match self.stop_signal_tx {
             Some(_) => self.stop().await,
             None => {}

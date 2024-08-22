@@ -141,9 +141,7 @@ async fn create_sink(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER
-        .create_sink(device_id, None, req)
-        .await?;
+    GLOBAL_DEVICE_MANAGER.create_sink(device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 

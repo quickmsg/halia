@@ -14,7 +14,7 @@ use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
     get_id,
-    persistence::{self, Status},
+    persistence::{self},
 };
 use message::MessageBatch;
 use protocol::modbus::{rtu, tcp, Context};
@@ -32,7 +32,7 @@ use tracing::{debug, trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, Type},
-        CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf,
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
         SearchDevicesItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
@@ -71,20 +71,13 @@ struct Modbus {
     >,
 }
 
-pub async fn new(
-    device_id: Option<Uuid>,
-    req: CreateUpdateDeviceReq,
-) -> HaliaResult<Box<dyn Device>> {
-    let (base_conf, ext_conf, data) = Modbus::parse_conf(req)?;
-
+pub async fn new(device_id: Option<Uuid>, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+    let ext_conf: ModbusConf = serde_json::from_value(device_conf.ext)?;
     let (device_id, new) = get_id(device_id);
-    if new {
-        persistence::create_device(&device_id, &data).await?;
-    }
 
     Ok(Box::new(Modbus {
         id: device_id,
-        base_conf,
+        base_conf: device_conf.base,
         ext_conf,
         on: false,
         err: Arc::new(RwLock::new(None)),
@@ -99,21 +92,21 @@ pub async fn new(
 }
 
 impl Modbus {
-    fn parse_conf(req: CreateUpdateDeviceReq) -> HaliaResult<(BaseConf, ModbusConf, String)> {
-        let data = serde_json::to_string(&req)?;
+    // fn parse_conf(req: CreateUpdateDeviceReq) -> HaliaResult<(BaseConf, ModbusConf, String)> {
+    //     let data = serde_json::to_string(&req)?;
 
-        let conf: ModbusConf = serde_json::from_value(req.conf.ext)?;
+    //     let conf: ModbusConf = serde_json::from_value(req.conf.ext)?;
 
-        if conf.ethernet.is_none() && conf.serial.is_none() {
-            return Err(HaliaError::Common(
-                "必须提供以太网或串口的配置！".to_owned(),
-            ));
-        }
+    //     if conf.ethernet.is_none() && conf.serial.is_none() {
+    //         return Err(HaliaError::Common(
+    //             "必须提供以太网或串口的配置！".to_owned(),
+    //         ));
+    //     }
 
-        // TODO 判断host是否合法
+    //     // TODO 判断host是否合法
 
-        Ok((req.conf.base, conf, data))
-    }
+    //     Ok((req.conf.base, conf, data))
+    // }
 
     // pub fn check_duplicate(&self, req: &CreateUpdateModbusReq) -> HaliaResult<()> {
     //     if self.base_c.name == req.base.name {
@@ -181,7 +174,7 @@ impl Modbus {
 
                     let sink_id = Uuid::from_str(items[0]).unwrap();
                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
-                    self.create_sink(Some(sink_id), req).await?;
+                    self.create_sink(sink_id, req).await?;
                 }
             }
             Err(e) => return Err(e.into()),
@@ -453,8 +446,8 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
 
 #[async_trait]
 impl Device for Modbus {
-    fn get_id(&self) -> Uuid {
-        self.id.clone()
+    fn get_id(&self) -> &Uuid {
+        &self.id
     }
 
     async fn search(&self) -> SearchDevicesItemResp {
@@ -471,16 +464,14 @@ impl Device for Modbus {
         }
     }
 
-    async fn update(&mut self, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        persistence::update_device_conf(&self.id, &data).await?;
+    async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()> {
+        let ext_conf: ModbusConf = serde_json::from_value(device_conf.ext)?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.base_conf = base_conf;
+        self.base_conf = device_conf.base;
         self.ext_conf = ext_conf;
 
         if restart && self.on {
@@ -501,8 +492,6 @@ impl Device for Modbus {
     async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
         trace!("设备开启");
-
-        persistence::update_device_status(&self.id, Status::Runing).await?;
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -541,8 +530,6 @@ impl Device for Modbus {
 
         check_and_set_on_false!(self);
         trace!("停止");
-
-        persistence::update_device_status(&self.id, Status::Stopped).await?;
 
         for point in self.sources.write().await.iter_mut() {
             point.stop().await;
@@ -587,20 +574,19 @@ impl Device for Modbus {
         }
 
         trace!("设备删除");
-        persistence::delete_device(&self.id).await?;
 
         Ok(())
     }
 
     async fn create_source(
         &mut self,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         // for point in self.points.read().await.iter() {
         //     point.check_duplicate(&req)?;
         // }
-        match Source::new(&self.id, source_id, req).await {
+        match Source::new(source_id, req).await {
             Ok(mut source) => {
                 if self.on {
                     source
@@ -653,16 +639,12 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.update(&self.id, req).await,
+            Some(source) => source.update(req).await,
             None => source_not_found_err!(),
         }
     }
 
-    async fn write_source_value(
-        &mut self,
-        source_id: Uuid,
-        req: Value,
-    ) -> HaliaResult<()> {
+    async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
         if !self.on {
             return Err(HaliaError::Stopped);
         }
@@ -709,7 +691,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.delete(&self.id).await?,
+            Some(source) => source.delete().await?,
             None => return source_not_found_err!(),
         }
 
@@ -722,14 +704,14 @@ impl Device for Modbus {
 
     async fn create_sink(
         &mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         // for sink in &self.sinks {
         //     sink.check_duplicate(&req)?;
         // }
 
-        match Sink::new(&self.id, sink_id, req).await {
+        match Sink::new(sink_id, req).await {
             Ok(mut sink) => {
                 if self.on {
                     sink.start(self.write_tx.as_ref().unwrap().clone(), self.err.clone())
@@ -776,7 +758,7 @@ impl Device for Modbus {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(&self.id, req).await,
+            Some(sink) => sink.update(req).await,
             None => sink_not_found_err!(),
         }
     }
@@ -784,7 +766,7 @@ impl Device for Modbus {
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => {
-                sink.delete(&self.id).await?;
+                sink.delete().await?;
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }

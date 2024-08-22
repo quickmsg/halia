@@ -29,7 +29,7 @@ use types::{
             CreateUpdateSubscriptionReq, CreateUpdateVariableReq, OpcuaConf, SearchGroupsResp,
             SearchSinksResp, SearchSubscriptionsResp, SearchVariablesResp,
         },
-        CreateUpdateDeviceReq, DeviceType, QueryParams, SearchDevicesItemConf,
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
         SearchDevicesItemResp,
     },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
@@ -60,10 +60,7 @@ struct Opcua {
     sinks: Vec<Sink>,
 }
 
-pub async fn new(
-    device_id: Option<Uuid>,
-    req: CreateUpdateDeviceReq,
-) -> HaliaResult<Box<dyn Device>> {
+pub async fn new(device_id: Option<Uuid>, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     // Self::check_conf(&req)?;
 
     let (device_id, new) = get_id(device_id);
@@ -650,8 +647,8 @@ impl Opcua {
 
 #[async_trait]
 impl Device for Opcua {
-    fn get_id(&self) -> Uuid {
-        todo!()
+    fn get_id(&self) -> &Uuid {
+        &self.id
     }
 
     async fn search(&self) -> SearchDevicesItemResp {
@@ -662,7 +659,7 @@ impl Device for Opcua {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn update<'life0, 'async_trait>(
         &'life0 mut self,
-        req: CreateUpdateDeviceReq,
+        req: DeviceConf,
     ) -> ::core::pin::Pin<
         Box<
             dyn ::core::future::Future<Output = HaliaResult<()>>
@@ -699,7 +696,7 @@ impl Device for Opcua {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn create_source<'life0, 'async_trait>(
         &'life0 mut self,
-        source_id: Option<Uuid>,
+        source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> ::core::pin::Pin<
         Box<
@@ -778,7 +775,7 @@ impl Device for Opcua {
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn create_sink<'life0, 'async_trait>(
         &'life0 mut self,
-        sink_id: Option<Uuid>,
+        sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> ::core::pin::Pin<
         Box<
@@ -900,11 +897,7 @@ impl Device for Opcua {
     async fn stop(&mut self) -> HaliaResult<()> {
         todo!()
     }
-    async fn write_source_value(
-        &mut self,
-        source_id: Uuid,
-        req: Value,
-    ) -> HaliaResult<()> {
+    async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
         todo!()
     }
 }
