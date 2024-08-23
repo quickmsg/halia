@@ -59,3 +59,11 @@ pub struct SearchSourcesOrSinksItemResp {
     #[serde(flatten)]
     pub rule_ref: RuleRef,
 }
+
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct CertInfo {
+    pub ca_cert: String,
+    pub client_cert: String,
+    pub client_key: String,
+    pub verify_server_cert: bool,
+}

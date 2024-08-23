@@ -2,27 +2,32 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+use crate::CertInfo;
+
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientConf {
     pub client_id: String,
     pub host: String,
     pub port: u16,
 
+    #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub username: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub password: Option<String>,
+    pub auth: Option<MqttClientAuth>,
 
-    pub ssl: bool,
-    pub ca_cert: Option<String>,
-    pub client_cert: Option<String>,
-    pub client_key: Option<String>,
-    pub verify_server_cert: Option<bool>,
+    #[serde(flatten)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cert_info: Option<CertInfo>,
 
     pub version: Version,
     pub timeout: usize,
     pub keep_alive: u64,
     pub clean_session: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct MqttClientAuth {
+    pub username: String,
+    pub password: String,
 }
 
 pub struct CertConf {

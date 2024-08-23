@@ -3,7 +3,7 @@ use common::{
     ref_info::RefInfo,
 };
 use message::MessageBatch;
-use rumqttc::valid_topic;
+use rumqttc::valid_filter;
 use tokio::sync::broadcast;
 use types::{
     apps::mqtt_client::SourceConf, BaseConf, CreateUpdateSourceOrSinkReq,
@@ -36,7 +36,7 @@ impl Source {
     }
 
     pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
-        if !valid_topic(&conf.topic) {
+        if !valid_filter(&conf.topic) {
             return Err(HaliaError::Common("topic错误!".to_owned()));
         }
 

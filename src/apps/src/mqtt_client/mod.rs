@@ -78,30 +78,17 @@ impl MqttClient {
 
         mqtt_options.set_keep_alive(Duration::from_secs(self.ext_conf.keep_alive));
 
-        match (&self.ext_conf.username, &self.ext_conf.password) {
-            (Some(username), Some(password)) => {
-                mqtt_options.set_credentials(username.clone(), password.clone());
-            }
-            (_, _) => {}
+        if let Some(auth) = &self.ext_conf.auth {
+            mqtt_options.set_credentials(auth.username.clone(), auth.password.clone());
         }
 
-        if self.ext_conf.ssl {
+        if let Some(cert_info) = &self.ext_conf.cert_info {
             let transport = Transport::Tls(TlsConfiguration::Simple {
-                ca: self.ext_conf.ca_cert.as_ref().unwrap().clone().into_bytes(),
+                ca: cert_info.ca_cert.clone().into_bytes(),
                 alpn: None,
                 client_auth: Some((
-                    self.ext_conf
-                        .client_cert
-                        .as_ref()
-                        .unwrap()
-                        .clone()
-                        .into_bytes(),
-                    self.ext_conf
-                        .client_key
-                        .as_ref()
-                        .unwrap()
-                        .clone()
-                        .into_bytes(),
+                    cert_info.client_cert.clone().into_bytes(),
+                    cert_info.client_key.clone().into_bytes(),
                 )),
             });
             mqtt_options.set_transport(transport);
@@ -180,11 +167,20 @@ impl MqttClient {
         );
         mqtt_options.set_keep_alive(Duration::from_secs(self.ext_conf.keep_alive));
 
-        if self.ext_conf.username.is_some() && self.ext_conf.password.is_some() {
-            mqtt_options.set_credentials(
-                self.ext_conf.username.as_ref().unwrap().clone(),
-                self.ext_conf.password.as_ref().unwrap().clone(),
-            );
+        if let Some(auth) = &self.ext_conf.auth {
+            mqtt_options.set_credentials(auth.username.clone(), auth.password.clone());
+        }
+
+        if let Some(cert_info) = &self.ext_conf.cert_info {
+            let transport = Transport::Tls(TlsConfiguration::Simple {
+                ca: cert_info.ca_cert.clone().into_bytes(),
+                alpn: None,
+                client_auth: Some((
+                    cert_info.client_cert.clone().into_bytes(),
+                    cert_info.client_key.clone().into_bytes(),
+                )),
+            });
+            mqtt_options.set_transport(transport);
         }
 
         let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
