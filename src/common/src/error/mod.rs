@@ -1,7 +1,5 @@
 use std::{io, result};
 
-use uuid::Uuid;
-
 pub type HaliaResult<T, E = HaliaError> = result::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]

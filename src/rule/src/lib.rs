@@ -29,15 +29,21 @@ pub struct RuleManager {
 }
 
 impl RuleManager {
-    pub async fn create(&self, id: Uuid, req: CreateUpdateRuleReq) -> HaliaResult<()> {
-        match Rule::new(id, req, true).await {
-            Ok(rule) => {
-                self.rules.write().await.push(rule);
-                Ok(())
-            }
-            Err(e) => Err(e),
+    pub async fn create(
+        &self,
+        id: Uuid,
+        req: CreateUpdateRuleReq,
+        persist: bool,
+    ) -> HaliaResult<()> {
+        let data = serde_json::to_string(&req)?;
+        let rule = Rule::new(id, req).await?;
+        if persist {
+            persistence::create_rule(&id, &data).await?;
         }
+        self.rules.write().await.push(rule);
+        Ok(())
     }
+
     pub async fn get_summary(&self) -> Summary {
         let mut total = 0;
         let mut running_cnt = 0;
@@ -65,7 +71,6 @@ impl RuleManager {
         pagination: Pagination,
         query_params: QueryParams,
     ) -> SearchRulesResp {
-        let mut i = 0;
         let mut total = 0;
         let mut data = vec![];
 
@@ -83,12 +88,10 @@ impl RuleManager {
                 }
             }
 
-            if i >= (pagination.page - 1) * pagination.size && i < pagination.page * pagination.size
-            {
+            if pagination.check(total) {
                 data.push(rule);
             }
 
-            i += 1;
             total += 1;
         }
 
@@ -103,10 +106,13 @@ impl RuleManager {
             .iter_mut()
             .find(|rule| rule.id == id)
         {
-            Some(rule) => match rule.start().await {
-                Ok(_) => Ok(()),
-                Err(e) => Err(HaliaError::Common(e.to_string())),
-            },
+            Some(rule) => {
+                if let Err(e) = rule.start().await {
+                    return Err(HaliaError::Common(e.to_string()));
+                }
+                persistence::update_rule_status(&rule.id, persistence::Status::Runing).await?;
+                Ok(())
+            }
             None => rule_not_fonnd_err!(),
         }
     }
@@ -119,7 +125,11 @@ impl RuleManager {
             .iter_mut()
             .find(|rule| rule.id == id)
         {
-            Some(rule) => rule.stop(),
+            Some(rule) => {
+                rule.stop()?;
+                persistence::update_rule_status(&rule.id, persistence::Status::Stopped).await?;
+                Ok(())
+            }
             None => rule_not_fonnd_err!(),
         }
     }
@@ -137,8 +147,8 @@ impl RuleManager {
             .find(|rule| rule.id == id)
         {
             Some(rule) => {
-                _ = rule.stop();
-                // TODO delete
+                rule.stop()?;
+                persistence::delete_rule(&id).await?;
                 Ok(())
             }
             None => rule_not_fonnd_err!(),
@@ -161,43 +171,23 @@ impl RuleManager {
 
                     let rule_id = Uuid::from_str(items[0]).unwrap();
                     let req: CreateUpdateRuleReq = serde_json::from_str(&items[2])?;
-                    self.create(rule_id, req).await?;
+                    self.create(rule_id, req, false).await?;
                     match items[1] {
                         "0" => {}
                         "1" => GLOBAL_RULE_MANAGER.start(rule_id).await.unwrap(),
-                        _ => unreachable!(),
+                        _ => panic!("文件损坏"),
                     }
                 }
+
+                Ok(())
             }
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => {
-                    // if let Err(e) = persistence::rule::init().await {
-                    //     error!("{e}");
-                    //     return Err(e.into());
-                    // }
+                    persistence::init_rules().await?;
+                    Ok(())
                 }
-                std::io::ErrorKind::PermissionDenied => todo!(),
-                std::io::ErrorKind::ConnectionRefused => todo!(),
-                std::io::ErrorKind::ConnectionReset => todo!(),
-                std::io::ErrorKind::ConnectionAborted => todo!(),
-                std::io::ErrorKind::NotConnected => todo!(),
-                std::io::ErrorKind::AddrInUse => todo!(),
-                std::io::ErrorKind::AddrNotAvailable => todo!(),
-                std::io::ErrorKind::BrokenPipe => todo!(),
-                std::io::ErrorKind::AlreadyExists => todo!(),
-                std::io::ErrorKind::WouldBlock => todo!(),
-                std::io::ErrorKind::InvalidInput => todo!(),
-                std::io::ErrorKind::InvalidData => todo!(),
-                std::io::ErrorKind::TimedOut => todo!(),
-                std::io::ErrorKind::WriteZero => todo!(),
-                std::io::ErrorKind::Interrupted => todo!(),
-                std::io::ErrorKind::Unsupported => todo!(),
-                std::io::ErrorKind::UnexpectedEof => todo!(),
-                std::io::ErrorKind::OutOfMemory => todo!(),
-                std::io::ErrorKind::Other => todo!(),
-                _ => todo!(),
+                _ => Err(e.into()),
             },
         }
-        Ok(())
     }
 }

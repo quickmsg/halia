@@ -12,11 +12,6 @@ use tokio::{
 };
 use uuid::Uuid;
 
-// pub mod apps;
-// pub mod devices;
-// pub mod message;
-// pub mod rule;
-
 static ROOT_DIR: &str = "storage";
 pub static DELIMITER: char = '|';
 static DEVICE_FILE: &str = "devices";
@@ -60,13 +55,6 @@ pub async fn init_apps() -> Result<(), io::Error> {
 pub async fn init_rules() -> Result<(), io::Error> {
     create_file(get_rule_file_path()).await
 }
-
-// async fn insert(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
-//     let mut file = OpenOptions::new().append(true).open(path).await?;
-//     file.write(format!("{}{}{}\n", id, DELIMITER, data).as_bytes())
-//         .await?;
-//     file.flush().await
-// }
 
 pub async fn create(path: PathBuf, id: &Uuid, data: &str) -> Result<(), io::Error> {
     let mut file = OpenOptions::new().append(true).open(path).await?;

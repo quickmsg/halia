@@ -3,7 +3,6 @@ use apps::GLOBAL_APP_MANAGER;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    persistence,
 };
 use devices::GLOBAL_DEVICE_MANAGER;
 use functions::{computes, filter, merge::merge::Merge, window};
@@ -28,7 +27,7 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub async fn new(rule_id: Uuid, req: CreateUpdateRuleReq, persist: bool) -> HaliaResult<Self> {
+    pub async fn new(rule_id: Uuid, req: CreateUpdateRuleReq) -> HaliaResult<Self> {
         let mut error = None;
         let mut add_ref_nodes = vec![];
         for node in req.ext.nodes.iter() {
@@ -84,10 +83,6 @@ impl Rule {
         if let Some(e) = error {
             // TODO 回滚
             return Err(HaliaError::Common(e));
-        }
-
-        if persist {
-            persistence::create_rule(&rule_id, &serde_json::to_string(&req).unwrap()).await?;
         }
 
         Ok(Self {

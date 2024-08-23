@@ -7,7 +7,7 @@ use tokio::{
     select,
     sync::{broadcast, mpsc},
 };
-use tracing::{debug, trace, warn};
+use tracing::{debug, warn};
 use types::rules::Node;
 
 pub fn start_segment(
