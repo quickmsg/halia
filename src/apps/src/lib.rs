@@ -1,14 +1,18 @@
 #![feature(duration_constants)]
+use std::{str::FromStr, sync::LazyLock, vec};
+
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
 use message::MessageBatch;
-use std::{str::FromStr, sync::LazyLock, vec};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use types::{
-    apps::{AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemResp, SearchAppsResp, Summary},
+    apps::{
+        AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemResp, SearchAppsResp,
+        Summary,
+    },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
@@ -21,7 +25,7 @@ pub mod mqtt_server;
 pub trait App: Send + Sync {
     fn get_id(&self) -> &Uuid;
     async fn search(&self) -> SearchAppsItemResp;
-    async fn update(&mut self, req: CreateUpdateAppReq) -> HaliaResult<()>;
+    async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()>;
     async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
     async fn delete(&mut self) -> HaliaResult<()>;
@@ -108,14 +112,6 @@ macro_rules! sink_not_found_err {
 }
 
 impl AppManager {
-    // pub async fn create(&self, typ: AppType, app_id: Uuid) {
-    //     self.apps.write().await.push((typ, app_id));
-    // }
-
-    // pub async fn delete(&self, app_id: &Uuid) {
-    //     self.apps.write().await.retain(|(_, id)| id != app_id);
-    // }
-
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::read_apps().await {
             Ok(datas) => {
@@ -217,11 +213,61 @@ impl AppManager {
     }
 
     pub async fn search_apps(&self, pagination: Pagination, query: QueryParams) -> SearchAppsResp {
-        todo!()
+        let mut data = vec![];
+        let mut total = 0;
+
+        for app in self.apps.read().await.iter().rev() {
+            let app = app.search().await;
+            if let Some(typ) = &query.typ {
+                if *typ != app.typ {
+                    continue;
+                }
+            }
+
+            if let Some(name) = &query.name {
+                if !app.conf.base.name.contains(name) {
+                    continue;
+                }
+            }
+            if let Some(on) = &query.on {
+                if app.on != *on {
+                    continue;
+                }
+            }
+
+            if let Some(err) = &query.err {
+                if app.err.is_some() != *err {
+                    continue;
+                }
+            }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(app);
+            }
+            total += 1;
+        }
+
+        SearchAppsResp { total, data }
     }
 
     pub async fn update_app(&self, app_id: Uuid, req: CreateUpdateAppReq) -> HaliaResult<()> {
-        todo!()
+        match self
+            .apps
+            .write()
+            .await
+            .iter_mut()
+            .find(|app| *app.get_id() == app_id)
+        {
+            Some(app) => {
+                let data = serde_json::to_string(&req)?;
+                app.update(req.conf).await?;
+                persistence::update_app_conf(app.get_id(), &data).await?;
+                Ok(())
+            }
+            None => app_not_found_err!(),
+        }
     }
 
     pub async fn start_app(&self, app_id: Uuid) -> HaliaResult<()> {
@@ -288,7 +334,7 @@ impl AppManager {
         {
             Some(app) => {
                 let data = serde_json::to_string(&req)?;
-                app.create_source(source_id, req).await;
+                app.create_source(source_id, req).await?;
                 if persist {
                     persistence::create_source(app.get_id(), &source_id, &data).await?;
                 }
@@ -329,7 +375,12 @@ impl AppManager {
             .iter_mut()
             .find(|app| *app.get_id() == app_id)
         {
-            Some(app) => app.update_source(source_id, req).await,
+            Some(app) => {
+                let data = serde_json::to_string(&req)?;
+                app.update_source(source_id, req).await?;
+                persistence::update_source(app.get_id(), &source_id, &data).await?;
+                Ok(())
+            }
             None => app_not_found_err!(),
         }
     }
@@ -342,7 +393,11 @@ impl AppManager {
             .iter_mut()
             .find(|app| *app.get_id() == app_id)
         {
-            Some(app) => app.delete_source(source_id).await,
+            Some(app) => {
+                app.delete_source(source_id).await?;
+                persistence::delete_source(app.get_id(), &source_id).await?;
+                Ok(())
+            }
             None => app_not_found_err!(),
         }
     }
@@ -406,7 +461,12 @@ impl AppManager {
             .iter_mut()
             .find(|app| *app.get_id() == app_id)
         {
-            Some(app) => app.update_sink(sink_id, req).await,
+            Some(app) => {
+                let data = serde_json::to_string(&req)?;
+                app.update_sink(sink_id, req).await?;
+                persistence::update_sink(app.get_id(), &sink_id, &data).await?;
+                Ok(())
+            }
             None => app_not_found_err!(),
         }
     }
@@ -419,7 +479,11 @@ impl AppManager {
             .iter_mut()
             .find(|app| *app.get_id() == app_id)
         {
-            Some(app) => app.delete_sink(sink_id).await,
+            Some(app) => {
+                app.delete_sink(sink_id).await?;
+                persistence::delete_sink(app.get_id(), &sink_id).await?;
+                Ok(())
+            }
             None => app_not_found_err!(),
         }
     }

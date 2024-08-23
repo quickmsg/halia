@@ -3,6 +3,7 @@ use apps::GLOBAL_APP_MANAGER;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
+    persistence,
 };
 use devices::GLOBAL_DEVICE_MANAGER;
 use functions::{computes, filter, merge::merge::Merge, window};
@@ -27,84 +28,54 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub async fn new(rule_id: Uuid, req: CreateUpdateRuleReq, recover: bool) -> HaliaResult<Self> {
+    pub async fn new(rule_id: Uuid, req: CreateUpdateRuleReq, persist: bool) -> HaliaResult<Self> {
         let mut error = None;
-        // let mut add_ref_nodes = vec![];
+        let mut add_ref_nodes = vec![];
         for node in req.ext.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    // match source_node.typ {
-                    //     types::devices::DeviceType::Modbus => {
-                    //         let source: modbus::SourcePoint =
-                    //             serde_json::from_value(source_node.conf.clone())?;
-                    //         if let Err(e) = GLOBAL_MODBUS_MANAGER
-                    //             .add_point_ref(&source.device_id, &source.point_id, &rule_id)
-                    //             .await
-                    //         {
-                    //             add_ref_nodes.push(&node);
-                    //             error = Some(format!("引用Modbus设备xxx错误").to_owned());
-                    //             break;
-                    //         }
-                    //     }
-                    //     types::devices::DeviceType::Opcua => {
-                    //         let source: opcua::SourceGroup =
-                    //             serde_json::from_value(source_node.conf.clone())?;
-                    //         if let Err(e) = GLOBAL_OPCUA_MANAGER
-                    //             .add_group_ref(&source.device_id, &source.group_id, &rule_id)
-                    //             .await
-                    //         {
-                    //             add_ref_nodes.push(&node);
-                    //             error = Some(format!("引用Opcua设备xxx错误").to_owned());
-                    //             break;
-                    //         }
-                    //     }
-                    //     types::devices::DeviceType::Coap => todo!(),
-                    // }
+                    if let Err(e) = GLOBAL_DEVICE_MANAGER
+                        .add_source_ref(&source_node.device_id, &source_node.source_id, &rule_id)
+                        .await
+                    {
+                        add_ref_nodes.push(&node);
+                        error = Some(format!("引用设备错误: {}", e).to_owned());
+                        break;
+                    }
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    // match source_node.typ {
-                    //     types::apps::AppType::MqttClient => {
-                    //         let source: mqtt_client::Source =
-                    //             serde_json::from_value(source_node.conf.clone())?;
-                    //         if let Err(e) = GLOBAL_MQTT_CLIENT_MANAGER
-                    //             .add_source_ref(&source.app_id, &source.source_id, &rule_id)
-                    //             .await
-                    //         {
-                    //             add_ref_nodes.push(&node);
-                    //             error = Some(e.to_string());
-                    //             break;
-                    //         }
-                    //     }
-                    //     types::apps::AppType::HttpClient => todo!(),
-                    // }
+                    if let Err(e) = GLOBAL_DEVICE_MANAGER
+                        .add_source_ref(&source_node.app_id, &source_node.source_id, &rule_id)
+                        .await
+                    {
+                        add_ref_nodes.push(&node);
+                        error = Some(format!("引用应用错误: {}", e).to_owned());
+                        break;
+                    }
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    // match sink_node.typ {
-                    //     types::devices::DeviceType::Modbus => todo!(),
-                    //     types::devices::DeviceType::Opcua => todo!(),
-                    //     types::devices::DeviceType::Coap => todo!(),
-                    // }
+                    if let Err(e) = GLOBAL_DEVICE_MANAGER
+                        .add_sink_ref(&sink_node.device_id, &sink_node.sink_id, &rule_id)
+                        .await
+                    {
+                        add_ref_nodes.push(&node);
+                        error = Some(format!("引用设备错误: {}", e).to_owned());
+                        break;
+                    }
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    // match sink_node.typ {
-                    //     types::apps::AppType::MqttClient => {
-                    //         let sink: mqtt_client::Sink =
-                    //             serde_json::from_value(sink_node.conf.clone())?;
-                    //         match GLOBAL_MQTT_CLIENT_MANAGER.add_sink_ref(
-                    //             &sink.app_id,
-                    //             &sink.sink_id,
-                    //             &rule_id,
-                    //         ) {
-                    //             Ok(_) => {}
-                    //             Err(_) => todo!(),
-                    //         }
-                    //     }
-                    //     types::apps::AppType::HttpClient => todo!(),
-                    // }
+                    if let Err(e) = GLOBAL_DEVICE_MANAGER
+                        .add_sink_ref(&sink_node.app_id, &sink_node.sink_id, &rule_id)
+                        .await
+                    {
+                        add_ref_nodes.push(&node);
+                        error = Some(format!("引用应用错误: {}", e).to_owned());
+                        break;
+                    }
                 }
                 _ => {}
             }
@@ -115,8 +86,8 @@ impl Rule {
             return Err(HaliaError::Common(e));
         }
 
-        if !recover {
-            // persistence::create_rule(&rule_id, serde_json::to_string(&req).unwrap()).await?;
+        if persist {
+            persistence::create_rule(&rule_id, &serde_json::to_string(&req).unwrap()).await?;
         }
 
         Ok(Self {

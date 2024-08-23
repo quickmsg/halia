@@ -115,29 +115,30 @@ impl App for HttpClient {
         }
     }
 
-    async fn update(&mut self, req: CreateUpdateAppReq) -> HaliaResult<()> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+    async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
+        // let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
 
-        persistence::update_app_conf(&self.id, &data).await?;
+        // persistence::update_app_conf(&self.id, &data).await?;
 
-        let mut restart = false;
-        if self.ext_conf != ext_conf {
-            restart = true;
-        }
-        self.base_conf = base_conf;
-        self.ext_conf = ext_conf;
+        // let mut restart = false;
+        // if self.ext_conf != ext_conf {
+        //     restart = true;
+        // }
+        // self.base_conf = base_conf;
+        // self.ext_conf = ext_conf;
 
-        if self.on && restart {
-            for source in self.sources.iter_mut() {
-                source.restart().await;
-            }
+        // if self.on && restart {
+        //     for source in self.sources.iter_mut() {
+        //         source.restart().await;
+        //     }
 
-            for sink in self.sinks.iter_mut() {
-                sink.restart().await;
-            }
-        }
+        //     for sink in self.sinks.iter_mut() {
+        //         sink.restart().await;
+        //     }
+        // }
 
-        Ok(())
+        // Ok(())
+        todo!()
     }
 
     async fn start(&mut self) -> HaliaResult<()> {

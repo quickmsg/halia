@@ -51,12 +51,6 @@ pub enum Qos {
     ExactlyOnce = 2,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SourcesQueryParams {
-    pub name: Option<String>,
-    pub err: Option<bool>,
-}
-
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
     pub topic: String,
