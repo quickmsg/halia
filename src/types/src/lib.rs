@@ -20,6 +20,12 @@ pub struct Pagination {
     pub size: usize,
 }
 
+impl Pagination {
+    pub fn check(&self, index: usize) -> bool {
+        index >= (self.page - 1) * self.size && index < self.page * self.size
+    }
+}
+
 #[derive(Deserialize)]
 pub struct Value {
     pub value: serde_json::Value,

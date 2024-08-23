@@ -247,11 +247,10 @@ impl DeviceManager {
                 }
             }
 
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
+            if pagination.check(total) {
                 data.push(device);
             }
+
             total += 1;
         }
 

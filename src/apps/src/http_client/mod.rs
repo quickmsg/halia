@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use async_trait::async_trait;
 use common::{
     check_and_set_on_true,
@@ -12,8 +10,8 @@ use source::Source;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
-        http_client::HttpClientConf, AppConf, AppType, CreateUpdateAppReq, QueryParams,
-        SearchAppsItemConf, SearchAppsItemResp,
+        http_client::HttpClientConf, AppConf, AppType, QueryParams, SearchAppsItemConf,
+        SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
@@ -188,22 +186,25 @@ impl App for HttpClient {
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
         let mut data = vec![];
-        for source in self
-            .sources
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(source.search());
-            if data.len() == pagination.size {
-                break;
+        let mut total = 0;
+        for source in self.sources.iter().rev() {
+            let source = source.search();
+            if let Some(name) = &query.name {
+                if !source.conf.base.name.contains(name) {
+                    continue;
+                }
             }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(source);
+            }
+
+            total += 1;
         }
 
-        SearchSourcesOrSinksResp {
-            total: todo!(),
-            data,
-        }
+        SearchSourcesOrSinksResp { total, data }
     }
 
     async fn update_source(
@@ -259,21 +260,24 @@ impl App for HttpClient {
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
         let mut data = vec![];
-        for sink in self
-            .sinks
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(sink.search());
-            if data.len() == pagination.size {
-                break;
+        let mut total = 0;
+        for sink in self.sinks.iter().rev() {
+            let sink = sink.search();
+            if let Some(name) = &query.name {
+                if !sink.conf.base.name.contains(name) {
+                    continue;
+                }
             }
+
+            if total >= (pagination.page - 1) * pagination.size
+                && total < pagination.page * pagination.size
+            {
+                data.push(sink);
+            }
+
+            total += 1;
         }
-        SearchSourcesOrSinksResp {
-            total: self.sinks.len(),
-            data,
-        }
+        SearchSourcesOrSinksResp { total, data }
     }
 
     async fn update_sink(

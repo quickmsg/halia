@@ -533,9 +533,7 @@ impl Device for Modbus {
                 }
             }
 
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
+            if pagination.check(total) {
                 data.push(source);
             }
 
@@ -658,9 +656,7 @@ impl Device for Modbus {
                 }
             }
 
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
+            if pagination.check(total) {
                 data.push(sink);
             }
 
