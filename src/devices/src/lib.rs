@@ -8,7 +8,6 @@ use common::{
 };
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc, RwLock};
-use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemResp,
@@ -148,8 +147,6 @@ impl DeviceManager {
                         self.create_sink(device_id, sink_id, req, false).await?;
                     }
 
-                    debug!("here");
-
                     match items[1] {
                         "0" => {}
                         "1" => self.start_device(device_id).await.unwrap(),
@@ -160,7 +157,6 @@ impl DeviceManager {
             }
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => {
-                    debug!("here");
                     persistence::init_devices().await?;
                     Ok(())
                 }

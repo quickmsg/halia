@@ -13,9 +13,12 @@ pub struct MqttClientConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
 
-    // pub ca: Option<String>,
-    // pub client_cert: Option<String>,
-    // pub client_key: Option<String>,
+    pub ssl: bool,
+    pub ca: Option<String>,
+    pub client_cert: Option<String>,
+    pub client_key: Option<String>,
+    pub verify_server_cert: Option<bool>,
+
     pub version: Version,
     pub timeout: usize,
     pub keep_alive: u64,
@@ -39,6 +42,10 @@ pub enum Version {
 pub struct SourceConf {
     pub topic: String,
     pub qos: Qos,
+
+    // v5
+    pub subscribe_id: Option<usize>,
+    pub topic_alias: Option<u16>,
 }
 
 #[derive(Deserialize_repr, Serialize_repr, Clone, PartialEq)]

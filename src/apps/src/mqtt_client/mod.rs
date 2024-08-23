@@ -14,7 +14,7 @@ use tokio::{
     sync::{broadcast, mpsc, RwLock},
     time,
 };
-use tracing::error;
+use tracing::{error, warn};
 use types::{
     apps::{
         mqtt_client::{MqttClientConf, Qos},
@@ -83,17 +83,19 @@ impl MqttClient {
 
         let err = self.err.clone();
 
-        // match (
-        //     &self.ext_conf.ca,
-        //     &self.ext_conf.client_cert,
-        //     &self.ext_conf.client_key,
-        // ) {
-        //     (Some(ca), Some(client_cert), Some(client_key)) => {
-        //         let mut root_store = RootCertStore::empty();
-        //         // root_store.add(ca);
-        //     }
-        //     _ => {}
-        // }
+        if self.ext_conf.ssl {
+            match (
+                &self.ext_conf.ca,
+                &self.ext_conf.client_cert,
+                &self.ext_conf.client_key,
+            ) {
+                (Some(ca), Some(client_cert), Some(client_key)) => {
+                    // let mut root_store = RootCertStore::empty();
+                    // root_store.add(ca);
+                }
+                _ => {}
+            }
+        }
 
         let sources = self.sources.clone();
         for source in sources.read().await.iter() {
@@ -122,7 +124,7 @@ impl MqttClient {
                     }
 
                     event = event_loop.poll() => {
-                        MqttClient::handle_v311_event(event, &sources).await;
+                        Self::handle_v311_event(event, &sources).await;
                     }
                 }
             }
@@ -210,41 +212,76 @@ impl MqttClient {
                     }
 
                     event = event_loop.poll() => {
-                        match event {
-                            Ok(v5::Event::Incoming(v5::Incoming::Publish(p))) => {
-                                match MessageBatch::from_json(p.payload) {
-                                    Ok(msg) => {
-                                        // for source in sources.write().await.iter_mut() {
-                                        //     if matches(&source.conf.topic, p.topic) {
-                                        //         match &source.tx {
-                                        //             Some(tx) => {
-                                        //                 let _ = tx.send(msg.clone());
-                                        //             }
-                                        //             None => {}
-                                        //         }
-                                        //     }
-                                        // }
-                                    }
-                                    Err(e) => error!("Failed to decode msg:{}", e),
-                                }
-                            }
-                            Ok(_) => (),
-                            Err(e) => {
-                                match e {
-                                    v5::ConnectionError::MqttState(_) => todo!(),
-                                    v5::ConnectionError::Timeout(_) => todo!(),
-                                    v5::ConnectionError::Tls(_) => todo!(),
-                                    v5::ConnectionError::Io(_) => todo!(),
-                                    v5::ConnectionError::ConnectionRefused(_) => todo!(),
-                                    v5::ConnectionError::NotConnAck(_) => todo!(),
-                                    v5::ConnectionError::RequestsDone => todo!(),
-                                }
-                            }
-                        }
+                        Self::handle_v50_event(event, &sources).await;
                     }
                 }
             }
         });
+    }
+
+    async fn handle_v50_event(
+        event: Result<v5::Event, rumqttc::v5::ConnectionError>,
+        sources: &Arc<RwLock<Vec<Source>>>,
+    ) {
+        match event {
+            Ok(v5::Event::Incoming(v5::Incoming::Publish(p))) => {
+                match MessageBatch::from_json(p.payload) {
+                    Ok(msg) => {
+                        if p.topic.len() > 0 {
+                            match String::from_utf8(p.topic.into()) {
+                                Ok(topic) => {
+                                    for source in sources.write().await.iter_mut() {
+                                        if matches(&source.ext_conf.topic, &topic) {
+                                            match &source.mb_tx {
+                                                Some(tx) => {
+                                                    let _ = tx.send(msg.clone());
+                                                }
+                                                None => {}
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => warn!("{}", e),
+                            }
+                        } else {
+                            match p.properties {
+                                Some(properties) => match properties.topic_alias {
+                                    Some(msg_topic_alias) => {
+                                        for source in sources.write().await.iter_mut() {
+                                            match source.ext_conf.topic_alias {
+                                                Some(source_topic_alias) => {
+                                                    if source_topic_alias == msg_topic_alias {
+                                                        _ = source
+                                                            .mb_tx
+                                                            .as_ref()
+                                                            .unwrap()
+                                                            .send(msg.clone());
+                                                    }
+                                                }
+                                                None => {}
+                                            }
+                                        }
+                                    }
+                                    None => {}
+                                },
+                                None => {}
+                            }
+                        }
+                    }
+                    Err(e) => error!("Failed to decode msg:{}", e),
+                }
+            }
+            Ok(_) => (),
+            Err(e) => match e {
+                v5::ConnectionError::MqttState(_) => todo!(),
+                v5::ConnectionError::Timeout(_) => todo!(),
+                v5::ConnectionError::Tls(_) => todo!(),
+                v5::ConnectionError::Io(_) => todo!(),
+                v5::ConnectionError::ConnectionRefused(_) => todo!(),
+                v5::ConnectionError::NotConnAck(_) => todo!(),
+                v5::ConnectionError::RequestsDone => todo!(),
+            },
+        }
     }
 }
 
@@ -699,26 +736,17 @@ impl App for MqttClient {
         }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn del_source_ref<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        source_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .sources
+            .write()
+            .await
+            .iter_mut()
+            .find(|source| source.id == *source_id)
+        {
+            Some(source) => Ok(source.ref_info.deactive_ref(rule_id)),
+            None => source_not_found_err!(),
+        }
     }
 
     async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
