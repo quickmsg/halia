@@ -195,9 +195,7 @@ impl App for HttpClient {
                 }
             }
 
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
+            if pagination.check(total) {
                 data.push(source);
             }
 
@@ -217,10 +215,7 @@ impl App for HttpClient {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => match source.update(req).await {
-                Ok(()) => Ok(()),
-                Err(e) => Err(e),
-            },
+            Some(source) => source.update(req).await,
             None => source_not_found_err!(),
         }
     }
@@ -305,26 +300,15 @@ impl App for HttpClient {
         }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn add_source_ref<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        source_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self
+            .sources
+            .iter_mut()
+            .find(|source| source.id == *source_id)
+        {
+            Some(source) => Ok(source.ref_info.add_ref(rule_id)),
+            None => source_not_found_err!(),
+        }
     }
 
     async fn get_source_rx(

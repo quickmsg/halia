@@ -64,59 +64,6 @@ async fn search_apps(
     )
 }
 
-// async fn create_todo(mut multipart: Multipart) -> AppResult<AppSuccess<()>> {
-//     let mut req: Option<CreateUpdateMqttClientReq> = None;
-
-//     let mut ca: Option<Bytes> = None;
-//     let mut client_cert: Option<Bytes> = None;
-//     let mut client_key: Option<Bytes> = None;
-//     while let Some(field) = multipart.next_field().await.unwrap() {
-//         match field.name() {
-//             Some(name) => match name {
-//                 "req" => match field.bytes().await {
-//                     Ok(data) => match serde_json::from_slice::<CreateUpdateMqttClientReq>(&data) {
-//                         Ok(json_req) => req = Some(json_req),
-//                         Err(e) => {
-//                             return Err(AppError::new(format!("序列化错误:{}", e.to_string())))
-//                         }
-//                     },
-//                     Err(e) => return Err(AppError::new(e.to_string())),
-//                 },
-//                 "ca" => match field.bytes().await {
-//                     Ok(data) => ca = Some(data),
-//                     Err(e) => return Err(AppError::new(e.to_string())),
-//                 },
-
-//                 "client_cert" => match field.bytes().await {
-//                     Ok(data) => client_cert = Some(data),
-//                     Err(e) => return Err(AppError::new(e.to_string())),
-//                 },
-
-//                 "client_key" => match field.bytes().await {
-//                     Ok(data) => client_key = Some(data),
-//                     Err(e) => return Err(AppError::new(e.to_string())),
-//                 },
-
-//                 _ => {
-//                     return Err(AppError {
-//                         code: 1,
-//                         data: format!("多余的字段:{}", name).to_owned(),
-//                     })
-//                 }
-//             },
-//             None => return Err(AppError::new("缺少字段名".to_owned())),
-//         }
-//     }
-
-//     match req {
-//         Some(req) => match GLOBAL_MQTT_CLIENT_MANAGER.create(None, req).await {
-//             Ok(_) => Ok(AppSuccess::empty()),
-//             Err(e) => Err(e.into()),
-//         },
-//         None => Err(AppError::new("缺少配置".to_owned())),
-//     }
-// }
-
 async fn update_app(
     Path(app_id): Path<Uuid>,
     Json(req): Json<CreateUpdateAppReq>,

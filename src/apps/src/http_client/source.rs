@@ -41,14 +41,6 @@ impl Source {
         })
     }
 
-    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
-        let data = serde_json::to_string(&req)?;
-        let conf: SourceConf = serde_json::from_value(req.ext)?;
-
-        // TODO 其他检查
-        Ok((req.base, conf, data))
-    }
-
     // pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
     //     if self.conf.base.name == req.base.name {
     //         return Err(HaliaError::NameExists);

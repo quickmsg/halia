@@ -17,9 +17,9 @@ pub fn rule_routes() -> Router {
         .route("/summary", get(get_rules_summary))
         .route("/", post(create))
         .route("/", get(search))
+        .route("/:id", put(update))
         .route("/:id/start", put(start))
         .route("/:id/stop", put(stop))
-        .route("/:id", put(update))
         .route("/:id", routing::delete(delete))
 }
 
