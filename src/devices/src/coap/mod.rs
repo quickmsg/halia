@@ -18,7 +18,8 @@ use types::{
             CreateUpdateAPIReq, CreateUpdateCoapReq, CreateUpdateObserveReq, CreateUpdateSinkReq,
             QueryObserves, SearchAPIsResp, SearchObservesResp, SearchSinksResp,
         },
-        DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf, SearchDevicesItemResp,
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
+        SearchDevicesItemResp,
     },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
@@ -662,6 +663,10 @@ impl Coap {
 impl Device for Coap {
     fn get_id(&self) -> &Uuid {
         &self.id
+    }
+
+    fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
+        todo!()
     }
 
     async fn search(&self) -> SearchDevicesItemResp {

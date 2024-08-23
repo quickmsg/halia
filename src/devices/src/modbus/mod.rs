@@ -28,8 +28,9 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{trace, warn};
 use types::{
     devices::{
-        modbus::{Area, DataType, Encode, ModbusConf, Type},
-        DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf, SearchDevicesItemResp,
+        modbus::{Area, DataType, Encode, ModbusConf, SourceConf, Type},
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
+        SearchDevicesItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
@@ -67,8 +68,9 @@ struct Modbus {
     >,
 }
 
-pub async fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+pub fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     let ext_conf: ModbusConf = serde_json::from_value(device_conf.ext)?;
+    Modbus::validate_conf(&ext_conf)?;
 
     Ok(Box::new(Modbus {
         id: device_id,
@@ -87,58 +89,15 @@ pub async fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dy
 }
 
 impl Modbus {
-    // fn parse_conf(req: CreateUpdateDeviceReq) -> HaliaResult<(BaseConf, ModbusConf, String)> {
-    //     let data = serde_json::to_string(&req)?;
+    fn validate_conf(conf: &ModbusConf) -> HaliaResult<()> {
+        if conf.ethernet.is_none() && conf.serial.is_none() {
+            return Err(HaliaError::Common(
+                "必须提供以太网或串口的配置！".to_owned(),
+            ));
+        }
 
-    //     let conf: ModbusConf = serde_json::from_value(req.conf.ext)?;
-
-    //     if conf.ethernet.is_none() && conf.serial.is_none() {
-    //         return Err(HaliaError::Common(
-    //             "必须提供以太网或串口的配置！".to_owned(),
-    //         ));
-    //     }
-
-    //     // TODO 判断host是否合法
-
-    //     Ok((req.conf.base, conf, data))
-    // }
-
-    // pub fn check_duplicate(&self, req: &CreateUpdateModbusReq) -> HaliaResult<()> {
-    //     if self.base_c.name == req.base.name {
-    //         return Err(HaliaError::Common(format!("名称{}已存在！", req.base.name)));
-    //     }
-
-    //     match (&self.conf.ext.ethernet, &req.ext.ethernet) {
-    //         (Some(eth_conf), Some(eth_req)) => {
-    //             if eth_conf.host == eth_req.host && eth_conf.port == eth_req.port {
-    //                 return Err(HaliaError::Common(format!("地址已存在").to_owned()));
-    //             }
-    //         }
-    //         _ => {}
-    //     }
-
-    //     match (&self.conf.ext.serial, &req.ext.serial) {
-    //         (Some(serial_conf), Some(serial_req)) => {
-    //             if serial_conf == serial_req {
-    //                 return Err(HaliaError::Common(format!("地址已存在")));
-    //             }
-    //         }
-    //         _ => {}
-    //     }
-
-    //     Ok(())
-    // }
-
-    // // 重复时返回true
-    // pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> bool {
-    //     if let Some(device_id) = device_id {
-    //         if *device_id == self.id {
-    //             return false;
-    //         }
-    //     }
-
-    //     self.conf.base.name == name
-    // }
+        Ok(())
+    }
 
     async fn event_loop(
         &mut self,
@@ -368,6 +327,36 @@ impl Device for Modbus {
         &self.id
     }
 
+    fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
+        if self.base_conf.name == req.conf.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        if req.typ == DeviceType::Modbus {
+            let conf: ModbusConf = serde_json::from_value(req.conf.ext.clone())?;
+
+            match (&self.ext_conf.ethernet, &conf.ethernet) {
+                (Some(eth_conf), Some(eth_req)) => {
+                    if eth_conf.host == eth_req.host && eth_conf.port == eth_req.port {
+                        return Err(HaliaError::Common(format!("地址已存在").to_owned()));
+                    }
+                }
+                _ => {}
+            }
+
+            match (&self.ext_conf.serial, &conf.serial) {
+                (Some(serial_conf), Some(serial_req)) => {
+                    if serial_conf == serial_req {
+                        return Err(HaliaError::Common(format!("地址已存在")));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
     async fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id.clone(),
@@ -501,21 +490,21 @@ impl Device for Modbus {
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        // for point in self.points.read().await.iter() {
-        //     point.check_duplicate(&req)?;
-        // }
-        match Source::new(source_id, req).await {
-            Ok(mut source) => {
-                if self.on {
-                    source
-                        .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
-                        .await;
-                }
-                self.sources.write().await.push(source);
-                Ok(())
-            }
-            Err(e) => Err(e),
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+
+        for source in self.sources.read().await.iter() {
+            source.check_duplicate(&req.base, &ext_conf)?;
         }
+
+        let mut source = Source::new(source_id, req.base, ext_conf)?;
+        if self.on {
+            source
+                .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
+                .await;
+        }
+
+        self.sources.write().await.push(source);
+        Ok(())
     }
 
     async fn search_sources(
@@ -548,6 +537,14 @@ impl Device for Modbus {
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+
+        for source in self.sources.read().await.iter() {
+            if source.id != source_id {
+                source.check_duplicate(&req.base, &ext_conf)?;
+            }
+        }
+
         match self
             .sources
             .write()
@@ -555,7 +552,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.update(req).await,
+            Some(source) => source.update(req.base, ext_conf).await,
             None => source_not_found_err!(),
         }
     }

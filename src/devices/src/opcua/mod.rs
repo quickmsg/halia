@@ -632,6 +632,10 @@ impl Device for Opcua {
         &self.id
     }
 
+    fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
+        todo!()
+    }
+
     async fn search(&self) -> SearchDevicesItemResp {
         todo!()
     }

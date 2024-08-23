@@ -24,6 +24,7 @@ pub mod mqtt_server;
 #[async_trait]
 pub trait App: Send + Sync {
     fn get_id(&self) -> &Uuid;
+    fn check_duplicate(&self, req: &CreateUpdateAppReq) -> HaliaResult<()>;
     async fn search(&self) -> SearchAppsItemResp;
     async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()>;
     async fn start(&mut self) -> HaliaResult<()>;
@@ -199,6 +200,10 @@ impl AppManager {
         req: CreateUpdateAppReq,
         persist: bool,
     ) -> HaliaResult<()> {
+        for app in self.apps.read().await.iter() {
+            app.check_duplicate(&req)?;
+        }
+
         let data = serde_json::to_string(&req)?;
         let device = match req.typ {
             AppType::MqttClient => mqtt_client::new(app_id, req.conf).await?,
@@ -253,6 +258,12 @@ impl AppManager {
     }
 
     pub async fn update_app(&self, app_id: Uuid, req: CreateUpdateAppReq) -> HaliaResult<()> {
+        for app in self.apps.read().await.iter() {
+            if *app.get_id() != app_id {
+                app.check_duplicate(&req)?;
+            }
+        }
+
         match self
             .apps
             .write()

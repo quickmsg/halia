@@ -45,12 +45,13 @@ pub struct Source {
 }
 
 impl Source {
-    pub async fn new(source_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
+        Self::validate_conf(&ext_conf)?;
+
         let quantity = ext_conf.data_type.get_quantity();
         Ok(Self {
             id: source_id,
-            base_conf: req.base,
+            base_conf,
             ext_conf,
             quantity,
             value: Value::Null,
@@ -62,33 +63,29 @@ impl Source {
         })
     }
 
-    // fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
-    //     let data = serde_json::to_string(&req)?;
-    //     let conf: SourceConf = serde_json::from_value(req.ext)?;
+    fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
+        if conf.interval == 0 {
+            return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
+        }
 
-    //     if conf.interval == 0 {
-    //         return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
-    //     }
+        Ok(())
+    }
 
-    //     // TODO 其他检查
-    //     Ok((req.base, conf, data))
-    // }
+    pub fn check_duplicate(&self, base_conf: &BaseConf, ext_conf: &SourceConf) -> HaliaResult<()> {
+        if self.base_conf.name == base_conf.name {
+            return Err(HaliaError::NameExists);
+        }
 
-    // pub fn check_duplicate(&self, req: &CreateUpdatePointReq) -> HaliaResult<()> {
-    //     if self.conf.base.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
+        if self.ext_conf.data_type == ext_conf.data_type
+            && self.ext_conf.slave == ext_conf.slave
+            && self.ext_conf.area == ext_conf.area
+            && self.ext_conf.address == ext_conf.address
+        {
+            return Err(HaliaError::AddressExists);
+        }
 
-    //     if self.conf.ext.data_type == req.ext.data_type
-    //         && self.conf.ext.slave == req.ext.slave
-    //         && self.conf.ext.area == req.ext.area
-    //         && self.conf.ext.address == req.ext.address
-    //     {
-    //         return Err(HaliaError::AddressExists);
-    //     }
-
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn search(&self) -> SearchSourcesOrSinksItemResp {
         SearchSourcesOrSinksItemResp {
@@ -156,15 +153,15 @@ impl Source {
         self.stop_signal_tx = None;
     }
 
-    pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
+        Self::validate_conf(&ext_conf)?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
         self.quantity = ext_conf.data_type.get_quantity();
-        self.base_conf = req.base;
+        self.base_conf = base_conf;
         self.ext_conf = ext_conf;
 
         if self.stop_signal_tx.is_some() && restart {

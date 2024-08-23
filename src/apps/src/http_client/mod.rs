@@ -10,8 +10,8 @@ use source::Source;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
-        http_client::HttpClientConf, AppConf, AppType, QueryParams, SearchAppsItemConf,
-        SearchAppsItemResp,
+        http_client::HttpClientConf, AppConf, AppType, CreateUpdateAppReq, QueryParams,
+        SearchAppsItemConf, SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
@@ -59,6 +59,18 @@ pub async fn new(
 impl App for HttpClient {
     fn get_id(&self) -> &Uuid {
         &self.id
+    }
+
+    fn check_duplicate(&self, req: &CreateUpdateAppReq) -> HaliaResult<()> {
+        if self.base_conf.name == req.conf.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        if req.typ == AppType::HttpClient {
+            // TODO
+        }
+
+        Ok(())
     }
 
     async fn search(&self) -> SearchAppsItemResp {

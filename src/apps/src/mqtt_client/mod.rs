@@ -6,19 +6,20 @@ use common::{
     error::{HaliaError, HaliaResult},
 };
 use message::MessageBatch;
-use rumqttc::{mqttbytes, v5, AsyncClient, Event, Incoming, MqttOptions, QoS};
+use rumqttc::{
+    mqttbytes, v5, AsyncClient, Event, Incoming, MqttOptions, QoS, TlsConfiguration, Transport,
+};
 use sink::Sink;
 use source::Source;
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
-    time,
 };
 use tracing::{error, warn};
 use types::{
     apps::{
-        mqtt_client::{MqttClientConf, Qos},
-        AppConf, AppType, QueryParams, SearchAppsItemConf, SearchAppsItemResp,
+        mqtt_client::{MqttClientConf, Qos, SinkConf, SourceConf},
+        AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf, SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
@@ -47,6 +48,7 @@ pub struct MqttClient {
 
 pub async fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
     let ext_conf: MqttClientConf = serde_json::from_value(app_conf.ext)?;
+    MqttClient::validate_conf(&ext_conf)?;
 
     Ok(Box::new(MqttClient {
         id: app_id,
@@ -63,6 +65,10 @@ pub async fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
 }
 
 impl MqttClient {
+    fn validate_conf(conf: &MqttClientConf) -> HaliaResult<()> {
+        Ok(())
+    }
+
     async fn start_v311(&mut self) {
         let mut mqtt_options = MqttOptions::new(
             self.ext_conf.client_id.clone(),
@@ -79,23 +85,29 @@ impl MqttClient {
             (_, _) => {}
         }
 
-        let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
-
-        let err = self.err.clone();
-
         if self.ext_conf.ssl {
-            match (
-                &self.ext_conf.ca,
-                &self.ext_conf.client_cert,
-                &self.ext_conf.client_key,
-            ) {
-                (Some(ca), Some(client_cert), Some(client_key)) => {
-                    // let mut root_store = RootCertStore::empty();
-                    // root_store.add(ca);
-                }
-                _ => {}
-            }
+            let transport = Transport::Tls(TlsConfiguration::Simple {
+                ca: self.ext_conf.ca_cert.as_ref().unwrap().clone().into_bytes(),
+                alpn: None,
+                client_auth: Some((
+                    self.ext_conf
+                        .client_cert
+                        .as_ref()
+                        .unwrap()
+                        .clone()
+                        .into_bytes(),
+                    self.ext_conf
+                        .client_key
+                        .as_ref()
+                        .unwrap()
+                        .clone()
+                        .into_bytes(),
+                )),
+            });
+            mqtt_options.set_transport(transport);
         }
+
+        let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
 
         let sources = self.sources.clone();
         for source in sources.read().await.iter() {
@@ -116,6 +128,7 @@ impl MqttClient {
         let (tx, mut rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(tx);
 
+        let err = self.err.clone();
         tokio::spawn(async move {
             loop {
                 select! {
@@ -124,7 +137,7 @@ impl MqttClient {
                     }
 
                     event = event_loop.poll() => {
-                        Self::handle_v311_event(event, &sources).await;
+                        Self::handle_v311_event(event, &sources, &err).await;
                     }
                 }
             }
@@ -134,6 +147,7 @@ impl MqttClient {
     async fn handle_v311_event(
         event: Result<Event, rumqttc::ConnectionError>,
         sources: &Arc<RwLock<Vec<Source>>>,
+        err: &Arc<RwLock<Option<String>>>,
     ) {
         match event {
             Ok(Event::Incoming(Incoming::Publish(p))) => match MessageBatch::from_json(p.payload) {
@@ -151,25 +165,9 @@ impl MqttClient {
                 }
                 Err(e) => error!("Failed to decode msg:{}", e),
             },
-            Ok(_) => (),
+            Ok(_) => *err.write().await = None,
             Err(e) => {
-                match e {
-                    rumqttc::ConnectionError::MqttState(e) => {
-                        error!("mqtt connection refused:{:?}", e);
-                    }
-                    rumqttc::ConnectionError::NetworkTimeout => todo!(),
-                    rumqttc::ConnectionError::FlushTimeout => todo!(),
-                    rumqttc::ConnectionError::Tls(_) => todo!(),
-                    rumqttc::ConnectionError::Io(e) => {
-                        error!("mqtt connection refused:{:?}", e);
-                    }
-                    rumqttc::ConnectionError::ConnectionRefused(e) => {
-                        error!("mqtt connection refused:{:?}", e);
-                    }
-                    rumqttc::ConnectionError::NotConnAck(_) => todo!(),
-                    rumqttc::ConnectionError::RequestsDone => todo!(),
-                }
-                time::sleep(10 * Duration::SECOND).await;
+                *err.write().await = Some(e.to_string());
             }
         }
     }
@@ -342,6 +340,18 @@ impl App for MqttClient {
         &self.id
     }
 
+    fn check_duplicate(&self, req: &CreateUpdateAppReq) -> HaliaResult<()> {
+        if self.base_conf.name == req.conf.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        if req.typ == AppType::MqttClient {
+            // TODO
+        }
+
+        Ok(())
+    }
+
     async fn search(&self) -> SearchAppsItemResp {
         SearchAppsItemResp {
             id: self.id,
@@ -465,50 +475,48 @@ impl App for MqttClient {
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        // for source in self.sources.read().await.iter() {
-        //     source.check_duplicate(&req)?;
-        // }
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        for source in self.sources.read().await.iter() {
+            source.check_duplicate(&req.base, &ext_conf)?;
+        }
 
-        match Source::new(source_id, req).await {
-            Ok(source) => {
-                if self.on {
-                    match self.ext_conf.version {
-                        types::apps::mqtt_client::Version::V311 => {
-                            if let Err(e) = self
-                                .client_v311
-                                .as_ref()
-                                .unwrap()
-                                .subscribe(
-                                    source.ext_conf.topic.clone(),
-                                    get_mqtt_v311_qos(&source.ext_conf.qos),
-                                )
-                                .await
-                            {
-                                error!("client subscribe err:{e}");
-                            }
-                        }
-                        types::apps::mqtt_client::Version::V50 => {
-                            if let Err(e) = self
-                                .client_v50
-                                .as_ref()
-                                .unwrap()
-                                .subscribe(
-                                    source.ext_conf.topic.clone(),
-                                    get_mqtt_v50_qos(&source.ext_conf.qos),
-                                )
-                                .await
-                            {
-                                error!("client subscribe err:{e}");
-                            }
-                        }
+        let source = Source::new(source_id, req.base, ext_conf).await?;
+        if self.on {
+            match self.ext_conf.version {
+                types::apps::mqtt_client::Version::V311 => {
+                    if let Err(e) = self
+                        .client_v311
+                        .as_ref()
+                        .unwrap()
+                        .subscribe(
+                            source.ext_conf.topic.clone(),
+                            get_mqtt_v311_qos(&source.ext_conf.qos),
+                        )
+                        .await
+                    {
+                        error!("client subscribe err:{e}");
                     }
                 }
-                self.sources.write().await.push(source);
-
-                Ok(())
+                types::apps::mqtt_client::Version::V50 => {
+                    if let Err(e) = self
+                        .client_v50
+                        .as_ref()
+                        .unwrap()
+                        .subscribe(
+                            source.ext_conf.topic.clone(),
+                            get_mqtt_v50_qos(&source.ext_conf.qos),
+                        )
+                        .await
+                    {
+                        error!("client subscribe err:{e}");
+                    }
+                }
             }
-            Err(e) => Err(e),
         }
+
+        self.sources.write().await.push(source);
+
+        Ok(())
     }
 
     async fn search_sources(
@@ -545,6 +553,13 @@ impl App for MqttClient {
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        for source in self.sources.read().await.iter() {
+            if source.id != source_id {
+                source.check_duplicate(&req.base, &ext_conf)?;
+            }
+        }
+
         match self
             .sources
             .write()
@@ -552,7 +567,7 @@ impl App for MqttClient {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => match source.update(req).await {
+            Some(source) => match source.update(req.base, ext_conf).await {
                 Ok(restart) => {
                     if self.on && restart {
                         match self.ext_conf.version {
@@ -633,13 +648,14 @@ impl App for MqttClient {
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        match Sink::new(sink_id, req).await {
-            Ok(sink) => {
-                self.sinks.push(sink);
-                Ok(())
-            }
-            Err(e) => Err(e),
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        for sink in self.sinks.iter() {
+            sink.check_duplicate(&req.base, &ext_conf)?;
         }
+
+        let sink = Sink::new(sink_id, req.base, ext_conf).await?;
+        self.sinks.push(sink);
+        Ok(())
     }
 
     async fn search_sinks(
@@ -673,8 +689,15 @@ impl App for MqttClient {
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        for sink in self.sinks.iter() {
+            if sink.id != sink_id {
+                sink.check_duplicate(&req.base, &ext_conf)?;
+            }
+        }
+
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(req).await,
+            Some(sink) => sink.update(req.base, ext_conf).await,
             None => sink_not_found_err!(),
         }
     }
@@ -728,10 +751,7 @@ impl App for MqttClient {
             .iter_mut()
             .find(|source| source.id == *source_id)
         {
-            Some(source) => {
-                source.del_mb_rx(rule_id);
-                Ok(())
-            }
+            Some(source) => Ok(source.ref_info.deactive_ref(rule_id)),
             None => source_not_found_err!(),
         }
     }

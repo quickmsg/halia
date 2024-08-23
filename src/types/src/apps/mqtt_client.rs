@@ -14,7 +14,7 @@ pub struct MqttClientConf {
     pub password: Option<String>,
 
     pub ssl: bool,
-    pub ca: Option<String>,
+    pub ca_cert: Option<String>,
     pub client_cert: Option<String>,
     pub client_key: Option<String>,
     pub verify_server_cert: Option<bool>,

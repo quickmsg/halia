@@ -6,8 +6,10 @@ use common::{
 };
 use message::MessageBatch;
 use rumqttc::{
-    mqttbytes,
-    v5::{self, mqttbytes::v5::PublishProperties},
+    v5::{
+        self,
+        mqttbytes::{self, v5::PublishProperties},
+    },
     AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
@@ -41,14 +43,14 @@ pub struct Sink {
 }
 
 impl Sink {
-    pub async fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+    pub async fn new(sink_id: Uuid, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<Self> {
+        Self::validate_conf(&ext_conf)?;
 
         let publish_properties = get_publish_properties(&ext_conf);
 
         Ok(Sink {
             id: sink_id,
-            base_conf: req.base,
+            base_conf,
             ext_conf,
             mb_tx: None,
             ref_info: RefInfo::new(),
@@ -58,28 +60,25 @@ impl Sink {
         })
     }
 
-    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SinkConf, String)> {
-        let data = serde_json::to_string(&req)?;
-        let conf: SinkConf = serde_json::from_value(req.ext)?;
-
+    fn validate_conf(conf: &SinkConf) -> HaliaResult<()> {
         if !mqttbytes::valid_topic(&conf.topic) {
             return Err(HaliaError::Common("topic不合法！".to_owned()));
         }
 
-        Ok((req.base, conf, data))
+        Ok(())
     }
 
-    // pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
-    //     if self.conf.base.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
+    pub fn check_duplicate(&self, base_conf: &BaseConf, ext_conf: &SinkConf) -> HaliaResult<()> {
+        if self.base_conf.name == base_conf.name {
+            return Err(HaliaError::NameExists);
+        }
 
-    //     if self.conf.ext.topic == req.ext.topic {
-    //         return Err(HaliaError::Common("主题重复！".to_owned()));
-    //     }
+        if self.ext_conf.topic == ext_conf.topic {
+            return Err(HaliaError::Common("主题重复！".to_owned()));
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn search(&self) -> SearchSourcesOrSinksItemResp {
         SearchSourcesOrSinksItemResp {
@@ -92,14 +91,14 @@ impl Sink {
         }
     }
 
-    pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-        let ext_conf = serde_json::from_value(req.ext)?;
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<()> {
+        Self::validate_conf(&ext_conf)?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.base_conf = req.base;
+        self.base_conf = base_conf;
         self.ext_conf = ext_conf;
 
         if restart && self.stop_signal_tx.is_some() {

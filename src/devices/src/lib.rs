@@ -25,6 +25,7 @@ pub mod opcua;
 #[async_trait]
 pub trait Device: Send + Sync {
     fn get_id(&self) -> &Uuid;
+    fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()>;
     async fn search(&self) -> SearchDevicesItemResp;
     async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()>;
     async fn start(&mut self) -> HaliaResult<()>;
@@ -202,7 +203,7 @@ impl DeviceManager {
     ) -> HaliaResult<()> {
         let data = serde_json::to_string(&req)?;
         let device = match req.typ {
-            DeviceType::Modbus => modbus::new(device_id, req.conf).await?,
+            DeviceType::Modbus => modbus::new(device_id, req.conf)?,
             DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
             DeviceType::Coap => coap::new(device_id, req.conf).await?,
         };

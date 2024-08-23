@@ -15,48 +15,45 @@ pub struct Source {
     pub id: Uuid,
     pub base_conf: BaseConf,
     pub ext_conf: SourceConf,
-
     pub ref_info: RefInfo,
-
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
 impl Source {
-    pub async fn new(source_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+    pub async fn new(
+        source_id: Uuid,
+        base_conf: BaseConf,
+        ext_conf: SourceConf,
+    ) -> HaliaResult<Self> {
+        Self::validate_conf(&ext_conf)?;
         Ok(Source {
             id: source_id,
-            base_conf: req.base,
+            base_conf,
             ext_conf,
             mb_tx: None,
             ref_info: RefInfo::new(),
         })
     }
 
-    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
-        let data = serde_json::to_string(&req)?;
-        let conf: SourceConf = serde_json::from_value(req.ext)?;
-
-        // TODO 其他检查
-
+    pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
         if !valid_topic(&conf.topic) {
-            return Err(HaliaError::Common("topic不合法".to_owned()));
+            return Err(HaliaError::Common("topic错误!".to_owned()));
         }
 
-        Ok((req.base, conf, data))
+        Ok(())
     }
 
-    // pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
-    //     if self.conf.base.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
+    pub fn check_duplicate(&self, base_conf: &BaseConf, ext_conf: &SourceConf) -> HaliaResult<()> {
+        if self.base_conf.name == base_conf.name {
+            return Err(HaliaError::NameExists);
+        }
 
-    //     if self.conf.ext.topic == req.ext.topic {
-    //         return Err(HaliaError::Common("主题重复！".to_owned()));
-    //     }
+        if self.ext_conf.topic == ext_conf.topic {
+            return Err(HaliaError::Common("主题重复！".to_owned()));
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn search(&self) -> SearchSourcesOrSinksItemResp {
         SearchSourcesOrSinksItemResp {
@@ -69,13 +66,12 @@ impl Source {
         }
     }
 
-    pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<bool> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<bool> {
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.base_conf = req.base;
+        self.base_conf = base_conf;
         self.ext_conf = ext_conf;
 
         Ok(restart)
@@ -90,20 +86,6 @@ impl Source {
 
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
         self.ref_info.active_ref(rule_id);
-        match &self.mb_tx {
-            Some(mb_tx) => mb_tx.subscribe(),
-            None => {
-                let (mb_tx, mb_rx) = broadcast::channel(16);
-                self.mb_tx = Some(mb_tx);
-                mb_rx
-            }
-        }
-    }
-
-    pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
-        self.ref_info.deactive_ref(rule_id);
-        if self.ref_info.can_stop() {
-            self.mb_tx = None;
-        }
+        self.mb_tx.as_ref().unwrap().subscribe()
     }
 }

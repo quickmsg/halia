@@ -54,6 +54,8 @@ pub struct SearchSourcesOrSinksResp {
 #[derive(Serialize)]
 pub struct SearchSourcesOrSinksItemResp {
     pub id: Uuid,
+    #[serde(flatten)]
     pub conf: CreateUpdateSourceOrSinkReq,
+    #[serde(flatten)]
     pub rule_ref: RuleRef,
 }
