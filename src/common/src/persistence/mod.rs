@@ -301,7 +301,7 @@ pub async fn create_sink(id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(),
 }
 
 pub async fn read_sinks(id: &Uuid) -> Result<Vec<String>, io::Error> {
-    read(get_source_file_path(id)).await
+    read(get_sink_file_path(id)).await
 }
 
 pub async fn update_sink(id: &Uuid, sink_id: &Uuid, data: &String) -> Result<(), io::Error> {

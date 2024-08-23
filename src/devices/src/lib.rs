@@ -8,6 +8,7 @@ use common::{
 };
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc, RwLock};
+use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemResp,
@@ -123,7 +124,7 @@ impl DeviceManager {
 
                     let device_id = Uuid::from_str(items[0]).unwrap();
                     let req: CreateUpdateDeviceReq = serde_json::from_str(items[2])?;
-                    self.create_device(device_id, req, true).await?;
+                    self.create_device(device_id, req, false).await?;
 
                     let sources = persistence::read_sources(&device_id).await?;
                     for source_data in sources {
@@ -147,6 +148,8 @@ impl DeviceManager {
                         self.create_sink(device_id, sink_id, req, false).await?;
                     }
 
+                    debug!("here");
+
                     match items[1] {
                         "0" => {}
                         "1" => self.start_device(device_id).await.unwrap(),
@@ -157,6 +160,7 @@ impl DeviceManager {
             }
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => {
+                    debug!("here");
                     persistence::init_devices().await?;
                     Ok(())
                 }
