@@ -120,11 +120,6 @@ impl DeviceManager {
     //         GLOBAL_OPCUA_MANAGER.check_duplicate_name(device_id, name)?;
     //         Ok(())
     //     }
-
-    //     pub async fn delete(&self, device_id: &Uuid) {
-    //         self.devices.write().await.retain(|(_, id)| id != device_id);
-    //     }
-
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::read_devices().await {
             Ok(datas) => {
@@ -209,7 +204,7 @@ impl DeviceManager {
         &self,
         device_id: Uuid,
         req: CreateUpdateDeviceReq,
-        recover: bool,
+        persist: bool,
     ) -> HaliaResult<()> {
         let data = serde_json::to_string(&req)?;
         let device = match req.typ {
@@ -217,7 +212,7 @@ impl DeviceManager {
             DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
             DeviceType::Coap => coap::new(device_id, req.conf).await?,
         };
-        if !recover {
+        if persist {
             persistence::create_device(device.get_id(), &data).await?;
         }
         self.devices.write().await.push(device);

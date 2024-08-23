@@ -51,7 +51,7 @@ async fn get_devices_summary() -> AppSuccess<Summary> {
 async fn create_device(Json(req): Json<CreateUpdateDeviceReq>) -> AppResult<AppSuccess<()>> {
     let device_id = Uuid::new_v4();
     GLOBAL_DEVICE_MANAGER
-        .create_device(device_id, req, false)
+        .create_device(device_id, req, true)
         .await?;
     Ok(AppSuccess::empty())
 }

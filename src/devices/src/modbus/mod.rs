@@ -264,45 +264,6 @@ impl Modbus {
             }
         }
     }
-
-    pub async fn write_point_value(&self, point_id: Uuid, value: Value) -> HaliaResult<()> {
-        if !self.on {
-            return Err(HaliaError::Stopped);
-        }
-
-        match self.err.read().await.as_ref() {
-            Some(err) => return Err(HaliaError::Common(err.to_string())),
-            None => {}
-        }
-
-        match self
-            .sources
-            .read()
-            .await
-            .iter()
-            .find(|point| point.id == point_id)
-        {
-            Some(point) => {
-                match WritePointEvent::new(
-                    point.ext_conf.slave,
-                    point.ext_conf.area.clone(),
-                    point.ext_conf.address,
-                    point.ext_conf.data_type.clone(),
-                    value.value,
-                ) {
-                    Ok(wpe) => {
-                        match self.write_tx.as_ref().unwrap().send(wpe).await {
-                            Ok(_) => trace!("send write value success"),
-                            Err(e) => warn!("send write value err:{:?}", e),
-                        }
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
-                }
-            }
-            None => source_not_found_err!(),
-        }
-    }
 }
 
 #[derive(Debug)]

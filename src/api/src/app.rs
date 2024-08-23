@@ -49,7 +49,7 @@ async fn get_apps_summary() -> AppSuccess<Summary> {
 
 async fn create_app(Json(req): Json<CreateUpdateAppReq>) -> AppResult<AppSuccess<()>> {
     let app_id = Uuid::new_v4();
-    GLOBAL_APP_MANAGER.create_app(app_id, req, false).await?;
+    GLOBAL_APP_MANAGER.create_app(app_id, req, true).await?;
     Ok(AppSuccess::empty())
 }
 
