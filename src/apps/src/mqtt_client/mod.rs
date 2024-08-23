@@ -63,18 +63,6 @@ pub async fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
 }
 
 impl MqttClient {
-    // pub fn check_duplicate(&self, req: &CreateUpdateMqttClientReq) -> HaliaResult<()> {
-    //     if self.conf.base.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
-
-    //     if self.ext_conf.host == req.ext.host && self.ext_conf.port == req.ext.port {
-    //         return Err(HaliaError::AddressExists);
-    //     }
-
-    //     Ok(())
-    // }
-
     async fn start_v311(&mut self) {
         let mut mqtt_options = MqttOptions::new(
             self.ext_conf.client_id.clone(),

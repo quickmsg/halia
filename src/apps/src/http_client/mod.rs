@@ -57,44 +57,6 @@ pub async fn new(
     }))
 }
 
-impl HttpClient {
-    fn parse_conf(req: CreateUpdateAppReq) -> HaliaResult<(BaseConf, HttpClientConf, String)> {
-        let data = serde_json::to_string(&req)?;
-
-        let conf: HttpClientConf = serde_json::from_value(req.conf.ext)?;
-
-        Ok((req.conf.base, conf, data))
-    }
-
-    // pub fn check_duplicate(&self, req: &CreateUpdateHttpClientReq) -> HaliaResult<()> {
-    //     if self.conf.base.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
-
-    //     Ok(())
-    // }
-
-    pub async fn recover(&mut self) -> HaliaResult<()> {
-        match persistence::read_sinks(&self.id).await {
-            Ok(datas) => {
-                for data in datas {
-                    if data.len() == 0 {
-                        continue;
-                    }
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 2);
-                    let sink_id = Uuid::from_str(items[0]).unwrap();
-                    self.create_sink(sink_id, serde_json::from_str(items[1]).unwrap())
-                        .await?;
-                }
-            }
-            Err(e) => return Err(e.into()),
-        }
-
-        Ok(())
-    }
-}
-
 #[async_trait]
 impl App for HttpClient {
     fn get_id(&self) -> &Uuid {
@@ -116,29 +78,26 @@ impl App for HttpClient {
     }
 
     async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
-        // let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
+        let ext_conf: HttpClientConf = serde_json::from_value(app_conf.ext)?;
 
-        // persistence::update_app_conf(&self.id, &data).await?;
+        let mut restart = false;
+        if self.ext_conf != ext_conf {
+            restart = true;
+        }
+        self.base_conf = app_conf.base;
+        self.ext_conf = ext_conf;
 
-        // let mut restart = false;
-        // if self.ext_conf != ext_conf {
-        //     restart = true;
-        // }
-        // self.base_conf = base_conf;
-        // self.ext_conf = ext_conf;
+        if self.on && restart {
+            for source in self.sources.iter_mut() {
+                source.restart().await;
+            }
 
-        // if self.on && restart {
-        //     for source in self.sources.iter_mut() {
-        //         source.restart().await;
-        //     }
+            for sink in self.sinks.iter_mut() {
+                sink.restart().await;
+            }
+        }
 
-        //     for sink in self.sinks.iter_mut() {
-        //         sink.restart().await;
-        //     }
-        // }
-
-        // Ok(())
-        todo!()
+        Ok(())
     }
 
     async fn start(&mut self) -> HaliaResult<()> {

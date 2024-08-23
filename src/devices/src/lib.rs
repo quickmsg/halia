@@ -114,12 +114,6 @@ macro_rules! sink_not_found_err {
 }
 
 impl DeviceManager {
-    //     pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> HaliaResult<()> {
-    //         GLOBAL_MODBUS_MANAGER.check_duplicate_name(device_id, name)?;
-    //         GLOBAL_COAP_MANAGER.check_duplicate_name(device_id, name)?;
-    //         GLOBAL_OPCUA_MANAGER.check_duplicate_name(device_id, name)?;
-    //         Ok(())
-    //     }
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::read_devices().await {
             Ok(datas) => {
