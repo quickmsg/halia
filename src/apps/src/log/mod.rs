@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    check_and_set_on_false, check_and_set_on_true,
+    error::{HaliaError, HaliaResult},
+};
 use message::MessageBatch;
 use sink::Sink;
 use tokio::sync::{broadcast, mpsc};
@@ -12,7 +15,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::App;
+use crate::{sink_not_found_err, App};
 
 mod sink;
 
@@ -107,24 +110,17 @@ impl App for Log {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        todo!()
+        check_and_set_on_true!(self);
+        for sink in self.sinks.iter_mut() {
+            sink.start();
+        }
+
+        Ok(())
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn stop<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn stop(&mut self) -> HaliaResult<()> {
+        check_and_set_on_false!(self);
+
         todo!()
     }
 
@@ -156,49 +152,25 @@ impl App for Log {
 
     async fn search_sources(
         &self,
-        pagination: Pagination,
-        query: QueryParams,
+        _pagination: Pagination,
+        _query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
-        todo!()
+        SearchSourcesOrSinksResp {
+            total: 0,
+            data: vec![],
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update_source<'life0, 'async_trait>(
-        &'life0 mut self,
-        source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn update_source(
+        &mut self,
+        _source_id: Uuid,
+        _req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
+        log_not_support_source!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete_source<'life0, 'async_trait>(
-        &'life0 mut self,
-        source_id: Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn delete_source(&mut self, _source_id: Uuid) -> HaliaResult<()> {
+        log_not_support_source!()
     }
 
     async fn create_sink(
@@ -206,27 +178,38 @@ impl App for Log {
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        todo!()
+        let mut sink = Sink::new(sink_id, req)?;
+        if self.on {
+            sink.start();
+        }
+
+        Ok(())
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn search_sinks<'life0, 'async_trait>(
-        &'life0 self,
+    async fn search_sinks(
+        &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> SearchSourcesOrSinksResp {
+        let mut total = 0;
+        let mut data = vec![];
+        for sink in self.sinks.iter().rev() {
+            let sink = sink.search();
+
+            if let Some(name) = &query.name {
+                if !sink.conf.base.name.contains(name) {
+                    continue;
+                }
+            }
+
+            if pagination.check(total) {
+                data.push(sink);
+            }
+
+            total += 1;
+        }
+
+        SearchSourcesOrSinksResp { total, data }
     }
 
     #[must_use]
@@ -268,179 +251,55 @@ impl App for Log {
         todo!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn add_source_ref<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        source_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn add_source_ref(&mut self, _source_id: &Uuid, _rule_id: &Uuid) -> HaliaResult<()> {
+        log_not_support_source!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn get_source_rx<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        source_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<broadcast::Receiver<MessageBatch>>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn get_source_rx(
+        &mut self,
+        _source_id: &Uuid,
+        _rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        log_not_support_source!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn del_source_rx<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        source_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn del_source_rx(&mut self, _source_id: &Uuid, _rule_id: &Uuid) -> HaliaResult<()> {
+        log_not_support_source!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn del_source_ref<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        source_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn del_source_ref(&mut self, _source_id: &Uuid, _rule_id: &Uuid) -> HaliaResult<()> {
+        log_not_support_source!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn add_sink_ref<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        sink_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
+            None => sink_not_found_err!(),
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn get_sink_tx<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        sink_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<mpsc::Sender<MessageBatch>>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn get_sink_tx(
+        &mut self,
+        sink_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.get_tx(rule_id)),
+            None => sink_not_found_err!(),
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn del_sink_tx<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        sink_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.ref_info.deactive_ref(rule_id)),
+            None => sink_not_found_err!(),
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn del_sink_ref<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 mut self,
-        sink_id: &'life1 Uuid,
-        rule_id: &'life2 Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
+            None => sink_not_found_err!(),
+        }
     }
 }
