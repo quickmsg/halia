@@ -1,5 +1,7 @@
 use common::{
-    error::{HaliaError, HaliaResult}, get_search_sources_or_sinks_item_resp, ref_info::RefInfo
+    error::{HaliaError, HaliaResult},
+    get_search_sources_or_sinks_item_resp,
+    ref_info::RefInfo,
 };
 use message::MessageBatch;
 use tokio::{

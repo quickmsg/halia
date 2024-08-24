@@ -194,7 +194,7 @@ impl App for HttpClient {
         let mut data = vec![];
         let mut total = 0;
         for source in self.sources.iter().rev() {
-            let source =  source.search();
+            let source = source.search();
             if let Some(name) = &query.name {
                 if !source.conf.base.name.contains(name) {
                     continue;
