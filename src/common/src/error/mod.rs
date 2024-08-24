@@ -18,7 +18,7 @@ pub enum HaliaError {
     Stopped(String),
     #[error("引用中，无法删除！")]
     DeleteRefing,
-    #[error("有规则引用，运行中！")]
+    #[error("有规则引用运行中，无法停止！")]
     StopActiveRefing,
     #[error("名称已存在！")]
     NameExists,

@@ -53,11 +53,19 @@ pub struct SearchSourcesOrSinksResp {
 
 #[derive(Serialize)]
 pub struct SearchSourcesOrSinksItemResp {
+    #[serde(flatten)]
+    pub info: SearchSourcesOrSinksInfoResp,
+    #[serde(flatten)]
+    pub rule_ref: RuleRef,
+}
+
+#[derive(Serialize)]
+pub struct SearchSourcesOrSinksInfoResp {
     pub id: Uuid,
     #[serde(flatten)]
     pub conf: CreateUpdateSourceOrSinkReq,
-    #[serde(flatten)]
-    pub rule_ref: RuleRef,
+    // #[serde(flatten)]
+    // pub rule_ref: RuleRef,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<serde_json::Value>,
 }

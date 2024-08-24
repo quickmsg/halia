@@ -1,10 +1,7 @@
 use std::{io, sync::Arc, time::Duration};
 
 use base64::{prelude::BASE64_STANDARD, Engine as _};
-use common::{
-    error::{HaliaError, HaliaResult},
-    ref_info::RefInfo,
-};
+use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch};
 use protocol::modbus::Context;
 use serde_json::Value;
@@ -17,7 +14,7 @@ use tokio::{
 use tracing::warn;
 use types::{
     devices::modbus::{Area, SourceConf},
-    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use uuid::Uuid;
 
@@ -40,7 +37,6 @@ pub struct Source {
     value: serde_json::Value,
     err_info: Option<String>,
 
-    pub ref_info: RefInfo,
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
@@ -54,7 +50,6 @@ impl Source {
             quantity,
             value: Value::Null,
             stop_signal_tx: None,
-            ref_info: RefInfo::new(),
             mb_tx: None,
             join_handle: None,
             err_info: None,
@@ -85,14 +80,13 @@ impl Source {
         Ok(())
     }
 
-    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        SearchSourcesOrSinksItemResp {
+    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
+        SearchSourcesOrSinksInfoResp {
             id: self.id.clone(),
             conf: CreateUpdateSourceOrSinkReq {
                 base: self.base_conf.clone(),
                 ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
             },
-            rule_ref: self.ref_info.get_rule_ref(),
             value: Some(self.value.clone()),
         }
     }
@@ -171,13 +165,6 @@ impl Source {
                 self.join_handle.take().unwrap().await.unwrap();
             self.event_loop(self.ext_conf.interval, stop_signal_rx, read_tx, device_err)
                 .await;
-        }
-    }
-
-    pub async fn delete(&mut self) {
-        match self.stop_signal_tx.is_some() {
-            true => self.stop().await,
-            false => {}
         }
     }
 

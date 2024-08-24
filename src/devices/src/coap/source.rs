@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_search_sources_or_sinks_item_resp, persistence,
+    get_search_sources_or_sinks_info_resp,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -20,7 +20,8 @@ use tokio::{
 use tracing::{debug, warn};
 use types::{
     devices::coap::{CoapConf, SourceConf, SourceMethod},
-    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
+    SearchSourcesOrSinksItemResp,
 };
 use uuid::Uuid;
 
@@ -40,14 +41,8 @@ pub struct Source {
 }
 
 impl Source {
-    pub async fn new(
-        device_id: &Uuid,
-        source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<Self> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        Ok(Self {
+    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> Self {
+        Self {
             id: source_id,
             base_conf,
             ext_conf,
@@ -56,12 +51,10 @@ impl Source {
             mb_tx: None,
             stop_signal_tx: None,
             join_handle: None,
-        })
+        }
     }
 
-    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SourceConf, String)> {
-        let data = serde_json::to_string(&req)?;
-        let conf: SourceConf = serde_json::from_value(req.ext)?;
+    pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
         match conf.method {
             SourceMethod::Get => {
                 if conf.get_conf.is_none() {
@@ -74,9 +67,8 @@ impl Source {
                 }
             }
         }
-        // TODO check
 
-        Ok((req.base, conf, data))
+        Ok(())
     }
 
     // pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
@@ -87,26 +79,22 @@ impl Source {
     //     Ok(())
     // }
 
-    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        get_search_sources_or_sinks_item_resp!(self)
+    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
+        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub async fn update(
         &mut self,
-        device_id: &Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        base_conf: BaseConf,
+        ext_conf: SourceConf,
         coap_conf: &CoapConf,
     ) -> HaliaResult<()> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
         self.base_conf = base_conf;
         self.ext_conf = ext_conf;
-
-        persistence::update_source(device_id, &self.id, &data).await?;
 
         if restart {
             _ = self.restart(coap_conf).await;
@@ -116,7 +104,6 @@ impl Source {
     }
 
     pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
-        persistence::delete_source(device_id, &self.id).await?;
         Ok(())
     }
 

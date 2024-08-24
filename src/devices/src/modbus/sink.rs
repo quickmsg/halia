@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use common::{
     error::{HaliaError, HaliaResult},
-    get_dynamic_value_from_json, get_search_sources_or_sinks_item_resp,
-    ref_info::RefInfo,
+    get_dynamic_value_from_json, get_search_sources_or_sinks_info_resp,
 };
 use message::MessageBatch;
 use tokio::{
@@ -13,7 +12,7 @@ use tokio::{
 };
 use tracing::debug;
 use types::{
-    devices::modbus::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
+    devices::modbus::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use uuid::Uuid;
 
@@ -36,7 +35,6 @@ pub struct Sink {
         )>,
     >,
 
-    pub ref_info: RefInfo,
     pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
@@ -48,12 +46,11 @@ impl Sink {
             ext_conf,
             stop_signal_tx: None,
             join_handle: None,
-            ref_info: RefInfo::new(),
             mb_tx: None,
         }
     }
 
-    pub fn validate_conf(conf: &SinkConf) -> HaliaResult<()> {
+    pub fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
         Ok(())
     }
 
@@ -65,8 +62,8 @@ impl Sink {
         Ok(())
     }
 
-    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        get_search_sources_or_sinks_item_resp!(self)
+    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
+        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) {
