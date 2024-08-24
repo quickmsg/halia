@@ -35,13 +35,7 @@ pub struct HttpClient {
     sinks: Vec<Sink>,
 }
 
-pub async fn new(
-    app_id: Uuid,
-    app_conf: AppConf,
-    // ca: Option<Bytes>,
-    // client_cert: Option<Bytes>,
-    // client_key: Option<Bytes>,
-) -> HaliaResult<Box<dyn App>> {
+pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
     let ext_conf: HttpClientConf = serde_json::from_value(app_conf.ext)?;
 
     Ok(Box::new(HttpClient {
@@ -66,7 +60,7 @@ impl App for HttpClient {
             return Err(HaliaError::NameExists);
         }
 
-        if req.typ == AppType::HttpClient {
+        if req.app_type == AppType::HttpClient {
             // TODO
         }
 
@@ -77,7 +71,7 @@ impl App for HttpClient {
         SearchAppsItemResp {
             id: self.id,
             on: self.on,
-            typ: AppType::HttpClient,
+            app_type: AppType::HttpClient,
             conf: SearchAppsItemConf {
                 base: self.base_conf.clone(),
                 ext: serde_json::to_value(&self.ext_conf).unwrap(),

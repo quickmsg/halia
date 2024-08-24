@@ -149,7 +149,7 @@ impl Opcua {
     fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id,
-            typ: DeviceType::Opcua,
+            device_type: DeviceType::Opcua,
             on: self.on,
             err: self.err.clone(),
             rtt: 9999,

@@ -15,7 +15,7 @@ use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
 };
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use types::{
     apps::{
         mqtt_client::{MqttClientConf, Qos, SinkConf, SourceConf},
@@ -46,7 +46,7 @@ pub struct MqttClient {
     client_v50: Option<Arc<v5::AsyncClient>>,
 }
 
-pub async fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
+pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
     let ext_conf: MqttClientConf = serde_json::from_value(app_conf.ext)?;
     MqttClient::validate_conf(&ext_conf)?;
 
@@ -97,7 +97,9 @@ impl MqttClient {
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
 
         let sources = self.sources.clone();
-        for source in sources.read().await.iter() {
+        for source in sources.write().await.iter_mut() {
+            let (mb_tx, _) = broadcast::channel(16);
+            source.mb_tx = Some(mb_tx);
             let _ = client
                 .subscribe(
                     source.ext_conf.topic.clone(),
@@ -136,6 +138,7 @@ impl MqttClient {
         sources: &Arc<RwLock<Vec<Source>>>,
         err: &Arc<RwLock<Option<String>>>,
     ) {
+        debug!("{:?}", event);
         match event {
             Ok(Event::Incoming(Incoming::Publish(p))) => match MessageBatch::from_json(p.payload) {
                 Ok(msg) => {
@@ -143,7 +146,9 @@ impl MqttClient {
                         if matches(&source.ext_conf.topic, &p.topic) {
                             match &source.mb_tx {
                                 Some(tx) => {
-                                    let _ = tx.send(msg.clone());
+                                    if let Err(e) = tx.send(msg.clone()) {
+                                        debug!("{}", e);
+                                    }
                                 }
                                 None => {}
                             }
@@ -185,7 +190,9 @@ impl MqttClient {
 
         let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
         let sources = self.sources.clone();
-        for source in sources.read().await.iter() {
+        for source in sources.write().await.iter_mut() {
+            let (mb_tx, _) = broadcast::channel(16);
+            source.mb_tx = Some(mb_tx);
             let _ = client
                 .subscribe(
                     source.ext_conf.topic.clone(),
@@ -341,7 +348,7 @@ impl App for MqttClient {
             return Err(HaliaError::NameExists);
         }
 
-        if req.typ == AppType::MqttClient {
+        if req.app_type == AppType::MqttClient {
             // TODO
         }
 
@@ -352,7 +359,7 @@ impl App for MqttClient {
         SearchAppsItemResp {
             id: self.id,
             on: self.on,
-            typ: AppType::MqttClient,
+            app_type: AppType::MqttClient,
             conf: SearchAppsItemConf {
                 base: self.base_conf.clone(),
                 ext: serde_json::json!(self.ext_conf),

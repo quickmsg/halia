@@ -12,8 +12,7 @@ pub mod opcua;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateDeviceReq {
-    #[serde(rename = "type")]
-    pub typ: DeviceType,
+    pub device_type: DeviceType,
     #[serde(flatten)]
     pub conf: DeviceConf,
 }
@@ -68,8 +67,7 @@ pub struct Summary {
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    #[serde(rename = "type")]
-    pub typ: Option<DeviceType>,
+    pub device_type: Option<DeviceType>,
     pub on: Option<bool>,
     pub err: Option<bool>,
 }
@@ -83,8 +81,7 @@ pub struct SearchDevicesResp {
 #[derive(Serialize)]
 pub struct SearchDevicesItemResp {
     pub id: Uuid,
-    #[serde(rename = "type")]
-    pub typ: DeviceType,
+    pub device_type: DeviceType,
     pub on: bool,
     pub err: Option<String>,
     pub rtt: u16,

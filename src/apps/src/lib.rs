@@ -18,6 +18,7 @@ use types::{
 use uuid::Uuid;
 
 pub mod http_client;
+mod log;
 pub mod mqtt_client;
 pub mod mqtt_server;
 
@@ -205,9 +206,10 @@ impl AppManager {
         }
 
         let data = serde_json::to_string(&req)?;
-        let device = match req.typ {
-            AppType::MqttClient => mqtt_client::new(app_id, req.conf).await?,
-            AppType::HttpClient => http_client::new(app_id, req.conf).await?,
+        let device = match req.app_type {
+            AppType::MqttClient => mqtt_client::new(app_id, req.conf)?,
+            AppType::HttpClient => http_client::new(app_id, req.conf)?,
+            AppType::Log => log::new(app_id, req.conf)?,
         };
 
         if persist {
@@ -223,8 +225,8 @@ impl AppManager {
 
         for app in self.apps.read().await.iter().rev() {
             let app = app.search().await;
-            if let Some(typ) = &query.typ {
-                if *typ != app.typ {
+            if let Some(app_type) = &query.app_type {
+                if *app_type != app.app_type {
                     continue;
                 }
             }
@@ -289,7 +291,11 @@ impl AppManager {
             .iter_mut()
             .find(|app| *app.get_id() == app_id)
         {
-            Some(app) => app.start().await,
+            Some(app) => {
+                app.start().await?;
+                persistence::update_app_status(app.get_id(), persistence::Status::Runing).await?;
+                Ok(())
+            }
             None => app_not_found_err!(),
         }
     }
@@ -302,7 +308,11 @@ impl AppManager {
             .iter_mut()
             .find(|app| *app.get_id() == app_id)
         {
-            Some(app) => app.stop().await,
+            Some(app) => {
+                app.stop().await?;
+                persistence::update_app_status(app.get_id(), persistence::Status::Stopped).await?;
+                Ok(())
+            }
             None => app_not_found_err!(),
         }
     }

@@ -82,7 +82,7 @@ impl Coap {
     pub fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id.clone(),
-            typ: DeviceType::Coap,
+            device_type: DeviceType::Coap,
             on: self.on,
             err: self.err.clone(),
             rtt: 999,

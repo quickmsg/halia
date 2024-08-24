@@ -26,6 +26,7 @@ impl Source {
         ext_conf: SourceConf,
     ) -> HaliaResult<Self> {
         Self::validate_conf(&ext_conf)?;
+
         Ok(Source {
             id: source_id,
             base_conf,

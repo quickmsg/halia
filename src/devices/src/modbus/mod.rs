@@ -332,7 +332,7 @@ impl Device for Modbus {
             return Err(HaliaError::NameExists);
         }
 
-        if req.typ == DeviceType::Modbus {
+        if req.device_type == DeviceType::Modbus {
             let conf: ModbusConf = serde_json::from_value(req.conf.ext.clone())?;
 
             match (&self.ext_conf.ethernet, &conf.ethernet) {
@@ -360,7 +360,7 @@ impl Device for Modbus {
     async fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             id: self.id.clone(),
-            typ: DeviceType::Modbus,
+            device_type: DeviceType::Modbus,
             rtt: self.rtt.load(Ordering::SeqCst),
             on: self.on,
             err: self.err.read().await.clone(),

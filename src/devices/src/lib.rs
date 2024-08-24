@@ -202,7 +202,7 @@ impl DeviceManager {
         persist: bool,
     ) -> HaliaResult<()> {
         let data = serde_json::to_string(&req)?;
-        let device = match req.typ {
+        let device = match req.device_type {
             DeviceType::Modbus => modbus::new(device_id, req.conf)?,
             DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
             DeviceType::Coap => coap::new(device_id, req.conf).await?,
@@ -224,8 +224,8 @@ impl DeviceManager {
 
         for device in self.devices.read().await.iter().rev() {
             let device = device.search().await;
-            if let Some(typ) = &query_params.typ {
-                if *typ != device.typ {
+            if let Some(device_type) = &query_params.device_type {
+                if *device_type != device.device_type {
                     continue;
                 }
             }

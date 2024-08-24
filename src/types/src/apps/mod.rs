@@ -7,12 +7,12 @@ use uuid::Uuid;
 use crate::BaseConf;
 
 pub mod http_client;
+pub mod log;
 pub mod mqtt_client;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateAppReq {
-    #[serde(rename = "type")]
-    pub typ: AppType,
+    pub app_type: AppType,
     #[serde(flatten)]
     pub conf: AppConf,
 }
@@ -22,6 +22,7 @@ pub struct CreateUpdateAppReq {
 pub enum AppType {
     MqttClient,
     HttpClient,
+    Log,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -37,6 +38,7 @@ impl fmt::Display for AppType {
         match self {
             AppType::MqttClient => write!(f, "mqtt_client"),
             AppType::HttpClient => write!(f, "http_client"),
+            AppType::Log => write!(f, "log"),
         }
     }
 }
@@ -48,6 +50,7 @@ impl TryFrom<&str> for AppType {
         match value {
             "mqtt_client" => Ok(AppType::MqttClient),
             "http_client" => Ok(AppType::HttpClient),
+            "log" => Ok(AppType::Log),
             _ => bail!("未知应用类型: {}", value),
         }
     }
@@ -64,8 +67,7 @@ pub struct Summary {
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    #[serde(rename = "type")]
-    pub typ: Option<AppType>,
+    pub app_type: Option<AppType>,
     pub on: Option<bool>,
     pub err: Option<bool>,
 }
@@ -79,8 +81,7 @@ pub struct SearchAppsResp {
 #[derive(Serialize)]
 pub struct SearchAppsItemResp {
     pub id: Uuid,
-    #[serde(rename = "type")]
-    pub typ: AppType,
+    pub app_type: AppType,
     pub on: bool,
     pub err: Option<String>,
     pub rtt: u16,

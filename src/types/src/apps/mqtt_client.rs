@@ -49,7 +49,9 @@ pub struct SourceConf {
     pub qos: Qos,
 
     // v5
+    // 订阅标识符
     pub subscribe_id: Option<usize>,
+    // topic别名
     pub topic_alias: Option<u16>,
 }
 
