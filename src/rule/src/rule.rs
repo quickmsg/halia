@@ -45,7 +45,7 @@ impl Rule {
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = GLOBAL_DEVICE_MANAGER
+                    if let Err(e) = GLOBAL_APP_MANAGER
                         .add_source_ref(&source_node.app_id, &source_node.source_id, &rule_id)
                         .await
                     {
@@ -67,7 +67,7 @@ impl Rule {
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = GLOBAL_DEVICE_MANAGER
+                    if let Err(e) = GLOBAL_APP_MANAGER
                         .add_sink_ref(&sink_node.app_id, &sink_node.sink_id, &rule_id)
                         .await
                     {

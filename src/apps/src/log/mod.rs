@@ -33,7 +33,6 @@ pub struct Log {
 
     on: bool,
     sinks: Vec<Sink>,
-    stop_signal_tx: Option<mpsc::Sender<()>>,
 }
 
 pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
@@ -48,7 +47,6 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
         // err: Arc::new(RwLock::new(None)),
         err: None,
         sinks: vec![],
-        stop_signal_tx: None,
     }))
 }
 
@@ -182,6 +180,7 @@ impl App for Log {
         if self.on {
             sink.start();
         }
+        self.sinks.push(sink);
 
         Ok(())
     }
@@ -284,7 +283,15 @@ impl App for Log {
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.get_tx(rule_id)),
+            Some(sink) => {
+                if !self.on {
+                    return Err(HaliaError::Stopped(format!(
+                        "应用日志: {}",
+                        self.base_conf.name.clone()
+                    )));
+                }
+                Ok(sink.get_tx(rule_id))
+            }
             None => sink_not_found_err!(),
         }
     }

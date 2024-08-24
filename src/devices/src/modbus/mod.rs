@@ -99,6 +99,16 @@ impl Modbus {
         Ok(())
     }
 
+    fn check_on(&self) -> HaliaResult<()> {
+        match self.on {
+            true => Ok(()),
+            false => Err(HaliaError::Stopped(format!(
+                "modbus设备:{}",
+                self.base_conf.name
+            ))),
+        }
+    }
+
     async fn event_loop(
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
@@ -558,9 +568,7 @@ impl Device for Modbus {
     }
 
     async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
-        if !self.on {
-            return Err(HaliaError::Stopped);
-        }
+        self.check_on()?;
 
         match self.err.read().await.as_ref() {
             Some(err) => return Err(HaliaError::Common(err.to_string())),
@@ -703,9 +711,7 @@ impl Device for Modbus {
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        if !self.on {
-            return Err(HaliaError::Stopped);
-        }
+        self.check_on()?;
         match self
             .sources
             .write()
@@ -756,6 +762,7 @@ impl Device for Modbus {
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        self.check_on()?;
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.get_tx(rule_id)),
             None => sink_not_found_err!(),

@@ -14,8 +14,8 @@ pub enum HaliaError {
     Io(#[from] io::Error),
     #[error("运行中")]
     Running,
-    #[error("已停止")]
-    Stopped,
+    #[error("{0} 已停止")]
+    Stopped(String),
     #[error("引用中，无法删除！")]
     DeleteRefing,
     #[error("有规则引用，运行中！")]

@@ -323,7 +323,10 @@ impl App for HttpClient {
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         if !self.on {
-            return Err(HaliaError::Stopped);
+            return Err(HaliaError::Stopped(format!(
+                "应用http客户端:{}",
+                self.base_conf.name
+            )));
         }
         match self
             .sources
@@ -337,7 +340,10 @@ impl App for HttpClient {
 
     async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         if !self.on {
-            return Err(HaliaError::Stopped);
+            return Err(HaliaError::Stopped(format!(
+                "应用http客户端: {}",
+                self.base_conf.name
+            )));
         }
         match self
             .sources
