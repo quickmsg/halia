@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use common::{
-    error::{HaliaError, HaliaResult},
-    ref_info::RefInfo,
+    error::{HaliaError, HaliaResult}, get_search_sources_or_sinks_item_resp, ref_info::RefInfo
 };
 use message::MessageBatch;
 use rumqttc::{
@@ -81,14 +80,7 @@ impl Sink {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        SearchSourcesOrSinksItemResp {
-            id: self.id.clone(),
-            conf: CreateUpdateSourceOrSinkReq {
-                base: self.base_conf.clone(),
-                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
-            },
-            rule_ref: self.ref_info.get_rule_ref(),
-        }
+        get_search_sources_or_sinks_item_resp!(self)
     }
 
     pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<()> {

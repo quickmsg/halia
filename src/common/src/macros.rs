@@ -17,3 +17,18 @@ macro_rules! check_and_set_on_false {
         }
     };
 }
+
+#[macro_export]
+macro_rules! get_search_sources_or_sinks_item_resp {
+    ($self:expr) => {
+        SearchSourcesOrSinksItemResp {
+            id: $self.id.clone(),
+            conf: CreateUpdateSourceOrSinkReq {
+                base: $self.base_conf.clone(),
+                ext: serde_json::to_value(&$self.ext_conf).unwrap(),
+            },
+            rule_ref: $self.ref_info.get_rule_ref(),
+            value: None,
+        }
+    };
+}

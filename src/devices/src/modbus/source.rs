@@ -14,7 +14,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use types::{
     devices::modbus::{Area, SourceConf},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
@@ -41,15 +41,13 @@ pub struct Source {
     err_info: Option<String>,
 
     pub ref_info: RefInfo,
-    mb_tx: Option<broadcast::Sender<MessageBatch>>,
+    pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
 impl Source {
-    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
-        Self::validate_conf(&ext_conf)?;
-
+    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> Self {
         let quantity = ext_conf.data_type.get_quantity();
-        Ok(Self {
+        Self {
             id: source_id,
             base_conf,
             ext_conf,
@@ -60,10 +58,10 @@ impl Source {
             mb_tx: None,
             join_handle: None,
             err_info: None,
-        })
+        }
     }
 
-    fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
+    pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
         if conf.interval == 0 {
             return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
         }
@@ -92,9 +90,10 @@ impl Source {
             id: self.id.clone(),
             conf: CreateUpdateSourceOrSinkReq {
                 base: self.base_conf.clone(),
-                ext: serde_json::to_value(&self.ext_conf).unwrap(),
+                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
             },
             rule_ref: self.ref_info.get_rule_ref(),
+            value: Some(self.value.clone()),
         }
     }
 
@@ -132,9 +131,7 @@ impl Source {
 
                     _ = interval.tick() => {
                         if device_err.read().await.is_none() {
-                            if let Err(e) = read_tx.send(point_id).await {
-                                debug!("send point info err :{}", e);
-                            }
+                            _ = read_tx.send(point_id).await;
                         }
                     }
                 }
@@ -153,9 +150,7 @@ impl Source {
         self.stop_signal_tx = None;
     }
 
-    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
-        Self::validate_conf(&ext_conf)?;
-
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) {
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
@@ -177,17 +172,13 @@ impl Source {
             self.event_loop(self.ext_conf.interval, stop_signal_rx, read_tx, device_err)
                 .await;
         }
-
-        Ok(())
     }
 
-    pub async fn delete(&mut self) -> HaliaResult<()> {
-        if !self.ref_info.can_delete() {
-            return Err(HaliaError::DeleteRefing);
+    pub async fn delete(&mut self) {
+        match self.stop_signal_tx.is_some() {
+            true => self.stop().await,
+            false => {}
         }
-
-        self.stop().await;
-        Ok(())
     }
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {
@@ -234,9 +225,7 @@ impl Source {
                         message.add(self.base_conf.name.clone(), value);
                         let mut message_batch = MessageBatch::default();
                         message_batch.push_message(message);
-                        if let Err(e) = tx.send(message_batch) {
-                            warn!("send err :{:?}", e);
-                        }
+                        _ = tx.send(message_batch);
                     }
                     None => {}
                 }
@@ -254,14 +243,5 @@ impl Source {
                 }
             },
         }
-    }
-
-    pub fn get_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        self.ref_info.active_ref(rule_id);
-        self.mb_tx.as_ref().unwrap().subscribe()
-    }
-
-    pub fn del_rx(&mut self, rule_id: &Uuid) {
-        self.ref_info.deactive_ref(rule_id)
     }
 }

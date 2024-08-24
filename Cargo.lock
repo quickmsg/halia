@@ -3112,6 +3112,7 @@ dependencies = [
  "anyhow",
  "api",
  "apps",
+ "common",
  "devices",
  "protocol",
  "rule",

@@ -1,4 +1,4 @@
-use common::{error::HaliaResult, ref_info::RefInfo};
+use common::{error::HaliaResult, get_search_sources_or_sinks_item_resp, ref_info::RefInfo};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::debug;
@@ -34,14 +34,7 @@ impl Sink {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        SearchSourcesOrSinksItemResp {
-            id: self.id.clone(),
-            conf: CreateUpdateSourceOrSinkReq {
-                base: self.base_conf.clone(),
-                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
-            },
-            rule_ref: self.ref_info.get_rule_ref(),
-        }
+        get_search_sources_or_sinks_item_resp!(self)
     }
 
     pub fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {

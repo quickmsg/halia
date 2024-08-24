@@ -83,6 +83,7 @@ pub struct SearchDevicesItemResp {
     pub id: Uuid,
     pub device_type: DeviceType,
     pub on: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     pub rtt: u16,
     pub conf: SearchDevicesItemConf,

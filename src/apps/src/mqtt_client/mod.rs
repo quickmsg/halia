@@ -479,11 +479,13 @@ impl App for MqttClient {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        Source::validate_conf(&ext_conf)?;
+
         for source in self.sources.read().await.iter() {
             source.check_duplicate(&req.base, &ext_conf)?;
         }
 
-        let source = Source::new(source_id, req.base, ext_conf).await?;
+        let source = Source::new(source_id, req.base, ext_conf);
         if self.on {
             match self.ext_conf.version {
                 types::apps::mqtt_client::Version::V311 => {
@@ -557,6 +559,8 @@ impl App for MqttClient {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        Source::validate_conf(&ext_conf)?;
+
         for source in self.sources.read().await.iter() {
             if source.id != source_id {
                 source.check_duplicate(&req.base, &ext_conf)?;
@@ -570,65 +574,63 @@ impl App for MqttClient {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => match source.update(req.base, ext_conf).await {
-                Ok(restart) => {
-                    if self.on && restart {
-                        match self.ext_conf.version {
-                            types::apps::mqtt_client::Version::V311 => {
-                                if let Err(e) = self
-                                    .client_v311
-                                    .as_ref()
-                                    .unwrap()
-                                    .unsubscribe(source.ext_conf.topic.clone())
-                                    .await
-                                {
-                                    error!("unsubscribe err:{e}");
-                                }
-
-                                if let Err(e) = self
-                                    .client_v311
-                                    .as_ref()
-                                    .unwrap()
-                                    .subscribe(
-                                        source.ext_conf.topic.clone(),
-                                        get_mqtt_v311_qos(&source.ext_conf.qos),
-                                    )
-                                    .await
-                                {
-                                    error!("subscribe err:{e}");
-                                }
+            Some(source) => {
+                let restart = source.update(req.base, ext_conf);
+                if self.on && restart {
+                    match self.ext_conf.version {
+                        types::apps::mqtt_client::Version::V311 => {
+                            if let Err(e) = self
+                                .client_v311
+                                .as_ref()
+                                .unwrap()
+                                .unsubscribe(source.ext_conf.topic.clone())
+                                .await
+                            {
+                                error!("unsubscribe err:{e}");
                             }
-                            types::apps::mqtt_client::Version::V50 => {
-                                if let Err(e) = self
-                                    .client_v50
-                                    .as_ref()
-                                    .unwrap()
-                                    .unsubscribe(source.ext_conf.topic.clone())
-                                    .await
-                                {
-                                    error!("unsubscribe err:{e}");
-                                }
 
-                                if let Err(e) = self
-                                    .client_v50
-                                    .as_ref()
-                                    .unwrap()
-                                    .subscribe(
-                                        source.ext_conf.topic.clone(),
-                                        get_mqtt_v50_qos(&source.ext_conf.qos),
-                                    )
-                                    .await
-                                {
-                                    error!("subscribe err:{e}");
-                                }
+                            if let Err(e) = self
+                                .client_v311
+                                .as_ref()
+                                .unwrap()
+                                .subscribe(
+                                    source.ext_conf.topic.clone(),
+                                    get_mqtt_v311_qos(&source.ext_conf.qos),
+                                )
+                                .await
+                            {
+                                error!("subscribe err:{e}");
+                            }
+                        }
+                        types::apps::mqtt_client::Version::V50 => {
+                            if let Err(e) = self
+                                .client_v50
+                                .as_ref()
+                                .unwrap()
+                                .unsubscribe(source.ext_conf.topic.clone())
+                                .await
+                            {
+                                error!("unsubscribe err:{e}");
+                            }
+
+                            if let Err(e) = self
+                                .client_v50
+                                .as_ref()
+                                .unwrap()
+                                .subscribe(
+                                    source.ext_conf.topic.clone(),
+                                    get_mqtt_v50_qos(&source.ext_conf.qos),
+                                )
+                                .await
+                            {
+                                error!("subscribe err:{e}");
                             }
                         }
                     }
-
-                    Ok(())
                 }
-                Err(e) => Err(e),
-            },
+
+                Ok(())
+            }
             None => source_not_found_err!(),
         }
     }
@@ -641,9 +643,20 @@ impl App for MqttClient {
             .iter()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.delete().await,
-            None => source_not_found_err!(),
+            Some(source) => {
+                if !source.ref_info.can_delete() {
+                    return Err(HaliaError::DeleteRefing);
+                }
+            }
+            None => return source_not_found_err!(),
         }
+
+        self.sources
+            .write()
+            .await
+            .retain(|source| source.id == source_id);
+
+        Ok(())
     }
 
     async fn create_sink(

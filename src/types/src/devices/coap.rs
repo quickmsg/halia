@@ -108,8 +108,9 @@ pub struct CreateUpdateSourceReq {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct SourceConf {
     pub method: SourceMethod,
-
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub get_conf: Option<GetConf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub observe_conf: Option<ObeserveConf>,
     // #[serde(flatten)]
     // pub conf: serde_json::Value,

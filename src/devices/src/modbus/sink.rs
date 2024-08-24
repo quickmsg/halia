@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common::{
     error::{HaliaError, HaliaResult},
-    get_dynamic_value_from_json,
+    get_dynamic_value_from_json, get_search_sources_or_sinks_item_resp,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -37,59 +37,44 @@ pub struct Sink {
     >,
 
     pub ref_info: RefInfo,
-    mb_tx: Option<mpsc::Sender<MessageBatch>>,
+    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 impl Sink {
-    pub async fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
-        // let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-
-        Ok(Sink {
+    pub fn new(sink_id: Uuid, base_conf: BaseConf, ext_conf: SinkConf) -> Self {
+        Sink {
             id: sink_id,
-            base_conf: req.base,
+            base_conf,
             ext_conf,
             stop_signal_tx: None,
             join_handle: None,
             ref_info: RefInfo::new(),
             mb_tx: None,
-        })
-    }
-
-    // fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SinkConf, String)> {
-    //     let data = serde_json::to_string(&req)?;
-    //     let conf: SinkConf = serde_json::from_value(req.ext)?;
-
-    //     Ok((req.base, conf, data))
-    // }
-
-    // pub fn check_duplicate(&self, req: &CreateUpdateSinkReq) -> HaliaResult<()> {
-    //     if self.conf.base.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
-
-    //     Ok(())
-    // }
-
-    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        SearchSourcesOrSinksItemResp {
-            id: self.id.clone(),
-            conf: CreateUpdateSourceOrSinkReq {
-                base: self.base_conf.clone(),
-                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
-            },
-            rule_ref: self.ref_info.get_rule_ref(),
         }
     }
 
-    pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+    pub fn validate_conf(conf: &SinkConf) -> HaliaResult<()> {
+        Ok(())
+    }
 
+    pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SinkConf) -> HaliaResult<()> {
+        if self.base_conf.name == base_conf.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        Ok(())
+    }
+
+    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
+        get_search_sources_or_sinks_item_resp!(self)
+    }
+
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) {
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.base_conf = req.base;
+        self.base_conf = base_conf;
         self.ext_conf = ext_conf;
 
         if restart {
@@ -111,25 +96,13 @@ impl Sink {
                 None => {}
             }
         }
-        Ok(())
     }
 
-    pub async fn delete(&mut self) -> HaliaResult<()> {
-        if !self.ref_info.can_delete() {
-            return Err(HaliaError::Common("该动作含有引用规则".to_owned()));
+    pub async fn delete(&mut self) {
+        match self.stop_signal_tx.is_some() {
+            true => self.stop().await,
+            false => {}
         }
-
-        match self.stop_signal_tx {
-            Some(_) => self.stop().await,
-            None => {}
-        }
-
-        Ok(())
-    }
-
-    pub fn get_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
-        self.ref_info.active_ref(rule_id);
-        self.mb_tx.as_ref().unwrap().clone()
     }
 
     pub async fn start(

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use apps::GLOBAL_APP_MANAGER;
+use common::persistence;
 use devices::GLOBAL_DEVICE_MANAGER;
 use rule::GLOBAL_RULE_MANAGER;
 use tracing::{info, Level};
@@ -13,6 +14,7 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
+    persistence::init_dir().await.unwrap();
     GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
     GLOBAL_APP_MANAGER.recover().await.unwrap();
     GLOBAL_RULE_MANAGER.recover().await.unwrap();

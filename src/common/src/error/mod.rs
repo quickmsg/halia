@@ -24,4 +24,6 @@ pub enum HaliaError {
     NameExists,
     #[error("地址已存在！")]
     AddressExists,
+    #[error("连接断开！")]
+    Disconnect,
 }

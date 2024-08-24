@@ -44,6 +44,14 @@ impl Display for Status {
     }
 }
 
+pub async fn init_dir() -> Result<(), io::Error> {
+    if !Path::new(ROOT_DIR).exists() {
+        fs::create_dir(ROOT_DIR).await?;
+    }
+
+    Ok(())
+}
+
 pub async fn init_devices() -> Result<(), io::Error> {
     create_file(get_device_file_path()).await
 }

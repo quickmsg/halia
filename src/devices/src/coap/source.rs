@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    get_search_sources_or_sinks_item_resp, persistence,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -88,14 +88,7 @@ impl Source {
     // }
 
     pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        SearchSourcesOrSinksItemResp {
-            id: self.id.clone(),
-            conf: CreateUpdateSourceOrSinkReq {
-                base: self.base_conf.clone(),
-                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
-            },
-            rule_ref: self.ref_info.get_rule_ref(),
-        }
+        get_search_sources_or_sinks_item_resp!(self)
     }
 
     pub async fn update(

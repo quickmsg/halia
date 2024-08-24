@@ -28,7 +28,7 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{trace, warn};
 use types::{
     devices::{
-        modbus::{Area, DataType, Encode, ModbusConf, SourceConf, Type},
+        modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
         SearchDevicesItemResp,
     },
@@ -501,12 +501,13 @@ impl Device for Modbus {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        Source::validate_conf(&ext_conf)?;
 
         for source in self.sources.read().await.iter() {
             source.check_duplicate(&req.base, &ext_conf)?;
         }
 
-        let mut source = Source::new(source_id, req.base, ext_conf)?;
+        let mut source = Source::new(source_id, req.base, ext_conf);
         if self.on {
             source
                 .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
@@ -548,6 +549,7 @@ impl Device for Modbus {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        Source::validate_conf(&ext_conf)?;
 
         for source in self.sources.read().await.iter() {
             if source.id != source_id {
@@ -562,7 +564,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.update(req.base, ext_conf).await,
+            Some(source) => Ok(source.update(req.base, ext_conf).await),
             None => source_not_found_err!(),
         }
     }
@@ -612,7 +614,12 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.delete().await?,
+            Some(source) => {
+                if !source.ref_info.can_delete() {
+                    return Err(HaliaError::DeleteRefing);
+                }
+                source.delete().await;
+            }
             None => return source_not_found_err!(),
         }
 
@@ -628,21 +635,20 @@ impl Device for Modbus {
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        // for sink in &self.sinks {
-        //     sink.check_duplicate(&req)?;
-        // }
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        Sink::validate_conf(&ext_conf)?;
 
-        match Sink::new(sink_id, req).await {
-            Ok(mut sink) => {
-                if self.on {
-                    sink.start(self.write_tx.as_ref().unwrap().clone(), self.err.clone())
-                        .await;
-                }
-                self.sinks.push(sink);
-                Ok(())
-            }
-            Err(e) => Err(e),
+        for sink in self.sinks.iter() {
+            sink.check_duplicate(&req.base, &ext_conf)?;
         }
+
+        let mut sink = Sink::new(sink_id, req.base, ext_conf);
+        if self.on {
+            sink.start(self.write_tx.as_ref().unwrap().clone(), self.err.clone())
+                .await;
+        }
+
+        Ok(())
     }
 
     async fn search_sinks(
@@ -676,8 +682,17 @@ impl Device for Modbus {
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        Sink::validate_conf(&ext_conf)?;
+
+        for sink in self.sinks.iter() {
+            if sink.id != sink_id {
+                sink.check_duplicate(&req.base, &ext_conf)?;
+            }
+        }
+
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(req).await,
+            Some(sink) => Ok(sink.update(req.base, ext_conf).await),
             None => sink_not_found_err!(),
         }
     }
@@ -685,12 +700,16 @@ impl Device for Modbus {
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => {
-                sink.delete().await?;
-                self.sinks.retain(|sink| sink.id != sink_id);
-                Ok(())
+                if !sink.ref_info.can_delete() {
+                    return Err(HaliaError::DeleteRefing);
+                }
+                sink.delete().await;
             }
-            None => sink_not_found_err!(),
+            None => return sink_not_found_err!(),
         }
+
+        self.sinks.retain(|sink| sink.id != sink_id);
+        Ok(())
     }
 
     async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
@@ -719,7 +738,10 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == *source_id)
         {
-            Some(source) => Ok(source.get_rx(rule_id)),
+            Some(source) => {
+                source.ref_info.active_ref(rule_id);
+                Ok(source.mb_tx.as_ref().unwrap().subscribe())
+            }
             None => source_not_found_err!(),
         }
     }
@@ -732,7 +754,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == *source_id)
         {
-            Some(source) => Ok(source.del_rx(rule_id)),
+            Some(source) => Ok(source.ref_info.deactive_ref(rule_id)),
             None => source_not_found_err!(),
         }
     }
@@ -764,7 +786,10 @@ impl Device for Modbus {
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.check_on()?;
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.get_tx(rule_id)),
+            Some(sink) => {
+                sink.ref_info.active_ref(rule_id);
+                Ok(sink.mb_tx.as_ref().unwrap().clone())
+            }
             None => sink_not_found_err!(),
         }
     }

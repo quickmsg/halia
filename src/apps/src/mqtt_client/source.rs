@@ -1,5 +1,6 @@
 use common::{
     error::{HaliaError, HaliaResult},
+    get_search_sources_or_sinks_item_resp,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -20,20 +21,14 @@ pub struct Source {
 }
 
 impl Source {
-    pub async fn new(
-        source_id: Uuid,
-        base_conf: BaseConf,
-        ext_conf: SourceConf,
-    ) -> HaliaResult<Self> {
-        Self::validate_conf(&ext_conf)?;
-
-        Ok(Source {
+    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> Self {
+        Source {
             id: source_id,
             base_conf,
             ext_conf,
             mb_tx: None,
             ref_info: RefInfo::new(),
-        })
+        }
     }
 
     pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
@@ -57,17 +52,10 @@ impl Source {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        SearchSourcesOrSinksItemResp {
-            id: self.id.clone(),
-            conf: CreateUpdateSourceOrSinkReq {
-                base: self.base_conf.clone(),
-                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
-            },
-            rule_ref: self.ref_info.get_rule_ref(),
-        }
+        get_search_sources_or_sinks_item_resp!(self)
     }
 
-    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<bool> {
+    pub fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> bool {
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
@@ -75,14 +63,7 @@ impl Source {
         self.base_conf = base_conf;
         self.ext_conf = ext_conf;
 
-        Ok(restart)
-    }
-
-    pub async fn delete(&self) -> HaliaResult<()> {
-        if !self.ref_info.can_delete() {
-            return Err(HaliaError::DeleteRefing);
-        }
-        Ok(())
+        restart
     }
 
     pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
