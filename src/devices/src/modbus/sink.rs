@@ -95,13 +95,6 @@ impl Sink {
         }
     }
 
-    pub async fn delete(&mut self) {
-        match self.stop_signal_tx.is_some() {
-            true => self.stop().await,
-            false => {}
-        }
-    }
-
     pub async fn start(
         &mut self,
         device_tx: mpsc::Sender<WritePointEvent>,

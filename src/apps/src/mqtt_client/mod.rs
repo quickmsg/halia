@@ -2,8 +2,10 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true,
+    check_and_set_on_false, check_and_set_on_true, check_delete, check_delete_item, check_stop,
     error::{HaliaError, HaliaResult},
+    find_source_add_ref,
+    ref_info::RefInfo,
 };
 use message::MessageBatch;
 use rumqttc::{
@@ -21,7 +23,8 @@ use types::{
         mqtt_client::{MqttClientConf, Qos, SinkConf, SourceConf},
         AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf, SearchAppsItemResp,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
+    SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -41,7 +44,9 @@ pub struct MqttClient {
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
     sources: Arc<RwLock<Vec<Source>>>,
+    sources_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: Vec<Sink>,
+    sinks_ref_infos: Vec<(Uuid, RefInfo)>,
     client_v311: Option<Arc<AsyncClient>>,
     client_v50: Option<Arc<v5::AsyncClient>>,
 }
@@ -57,7 +62,9 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
         on: false,
         err: Arc::new(RwLock::new(None)),
         sources: Arc::new(RwLock::new(vec![])),
+        sources_ref_infos: vec![],
         sinks: vec![],
+        sinks_ref_infos: vec![],
         client_v311: None,
         client_v50: None,
         stop_signal_tx: None,
@@ -65,7 +72,7 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
 }
 
 impl MqttClient {
-    fn validate_conf(conf: &MqttClientConf) -> HaliaResult<()> {
+    fn validate_conf(_conf: &MqttClientConf) -> HaliaResult<()> {
         Ok(())
     }
 
@@ -417,21 +424,10 @@ impl App for MqttClient {
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
+        check_stop!(self, sources_ref_infos);
+        check_stop!(self, sinks_ref_infos);
+
         check_and_set_on_false!(self);
-
-        if self
-            .sources
-            .read()
-            .await
-            .iter()
-            .any(|source| source.ref_info.can_stop())
-        {
-            return Err(HaliaError::Common("有源正在被引用中".to_owned()));
-        }
-
-        if self.sinks.iter().any(|sink| sink.ref_info.can_stop()) {
-            return Err(HaliaError::Common("有动作正在被引用中".to_owned()));
-        }
 
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
@@ -456,19 +452,8 @@ impl App for MqttClient {
             return Err(HaliaError::Running);
         }
 
-        if self
-            .sources
-            .read()
-            .await
-            .iter()
-            .any(|source| !source.ref_info.can_delete())
-        {
-            return Err(HaliaError::Common("有源正在被引用中".to_owned()));
-        }
-
-        if self.sinks.iter().any(|sink| !sink.ref_info.can_delete()) {
-            return Err(HaliaError::Common("有动作正被规则正在被引用中".to_owned()));
-        }
+        check_delete!(self, sources_ref_infos);
+        check_delete!(self, sinks_ref_infos);
 
         Ok(())
     }
@@ -532,7 +517,7 @@ impl App for MqttClient {
         let mut total = 0;
         let mut data = vec![];
 
-        for source in self.sources.read().await.iter().rev() {
+        for (index, source) in self.sources.read().await.iter().rev().enumerate() {
             let source = source.search();
 
             if let Some(query_name) = &query_params.name {
@@ -541,10 +526,13 @@ impl App for MqttClient {
                 }
             }
 
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
-                data.push(source);
+            if pagination.check(total) {
+                unsafe {
+                    data.push(SearchSourcesOrSinksItemResp {
+                        info: source,
+                        rule_ref: self.sinks_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                    })
+                }
             }
 
             total += 1;
@@ -636,20 +624,7 @@ impl App for MqttClient {
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        match self
-            .sources
-            .read()
-            .await
-            .iter()
-            .find(|source| source.id == source_id)
-        {
-            Some(source) => {
-                if !source.ref_info.can_delete() {
-                    return Err(HaliaError::DeleteRefing);
-                }
-            }
-            None => return source_not_found_err!(),
-        }
+        check_delete_item!(self, sources_ref_infos, source_id);
 
         self.sources
             .write()
@@ -681,7 +656,7 @@ impl App for MqttClient {
     ) -> SearchSourcesOrSinksResp {
         let mut total = 0;
         let mut data = vec![];
-        for sink in self.sinks.iter().rev() {
+        for (index, sink) in self.sinks.iter().rev().enumerate() {
             let sink = sink.search();
             if let Some(query_name) = &query_params.name {
                 if !sink.conf.base.name.contains(query_name) {
@@ -689,10 +664,13 @@ impl App for MqttClient {
                 }
             }
 
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
-                data.push(sink);
+            if pagination.check(total) {
+                unsafe {
+                    data.push(SearchSourcesOrSinksItemResp {
+                        info: sink,
+                        rule_ref: self.sinks_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                    })
+                }
             }
 
             total += 1;
@@ -719,27 +697,22 @@ impl App for MqttClient {
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => {
-                sink.delete().await?;
-                self.sinks.retain(|sink| sink.id == sink_id);
-                Ok(())
+        check_delete_item!(self, sinks_ref_infos, sink_id);
+
+        if self.on {
+            match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+                Some(sink) => sink.stop().await,
+                None => unreachable!(),
             }
-            None => sink_not_found_err!(),
         }
+
+        self.sinks.retain(|sink| sink.id != sink_id);
+        self.sinks_ref_infos.retain(|(id, _)| *id != sink_id);
+        Ok(())
     }
 
     async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sources
-            .write()
-            .await
-            .iter_mut()
-            .find(|source| source.id == *source_id)
-        {
-            Some(source) => Ok(source.ref_info.add_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
+        find_source_add_ref!(self, source_id, rule_id);
     }
 
     async fn get_source_rx(

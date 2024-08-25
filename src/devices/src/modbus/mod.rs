@@ -10,9 +10,7 @@ use std::{
 
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true,
-    error::{HaliaError, HaliaResult},
-    ref_info::RefInfo,
+    check_and_set_on_false, check_and_set_on_true, error::{HaliaError, HaliaResult}, find_source_add_ref, ref_info::RefInfo
 };
 use message::MessageBatch;
 use protocol::modbus::{rtu, tcp, Context};
@@ -453,7 +451,7 @@ impl Device for Modbus {
             return Err(HaliaError::StopActiveRefing);
         }
 
-        check_and_set_on_false!(self);
+        check_and_set_on_false!();
         trace!("停止");
 
         for source in self.sources.write().await.iter_mut() {
@@ -755,14 +753,7 @@ impl Device for Modbus {
     }
 
     async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sources_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == source_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.add_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
+        find_source_add_ref!(self, source_id, rule_id)
     }
 
     async fn get_source_rx(
