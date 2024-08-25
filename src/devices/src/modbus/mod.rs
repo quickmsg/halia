@@ -11,7 +11,7 @@ use std::{
 use async_trait::async_trait;
 use common::{
     active_sink_ref, active_source_ref, check_and_set_on_false, check_and_set_on_true,
-    deactive_sink_ref, deactive_source_ref, del_sink_ref, del_source_ref,
+    check_delete_item, deactive_sink_ref, deactive_source_ref, del_sink_ref, del_source_ref,
     error::{HaliaError, HaliaResult},
     find_sink_add_ref, find_source_add_ref,
     ref_info::RefInfo,
@@ -625,18 +625,7 @@ impl Device for Modbus {
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        match self
-            .sources_ref_infos
-            .iter()
-            .find(|(id, _)| *id == source_id)
-        {
-            Some((_, ref_info)) => {
-                if !ref_info.can_delete() {
-                    return Err(HaliaError::DeleteRefing);
-                }
-            }
-            None => return source_not_found_err!(),
-        }
+        check_delete_item!(self, sources_ref_infos, source_id);
 
         if self.on {
             match self
@@ -735,15 +724,7 @@ impl Device for Modbus {
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        match self.sinks_ref_infos.iter().find(|(id, _)| *id == sink_id) {
-            Some((_, ref_info)) => {
-                if !ref_info.can_delete() {
-                    return Err(HaliaError::DeleteRefing);
-                }
-            }
-            None => return source_not_found_err!(),
-        }
-
+        check_delete_item!(self, sinks_ref_infos, sink_id);
         if self.on {
             match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
                 Some(sink) => sink.stop().await,

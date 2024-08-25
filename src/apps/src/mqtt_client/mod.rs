@@ -642,12 +642,11 @@ impl App for MqttClient {
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
         check_delete_item!(self, sources_ref_infos, source_id);
-
         self.sources
             .write()
             .await
-            .retain(|source| source.id == source_id);
-
+            .retain(|source| source.id != source_id);
+        self.sources_ref_infos.retain(|(id, _)| *id != source_id);
         Ok(())
     }
 
@@ -715,14 +714,12 @@ impl App for MqttClient {
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         check_delete_item!(self, sinks_ref_infos, sink_id);
-
         if self.on {
             match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
                 Some(sink) => sink.stop().await,
                 None => unreachable!(),
             }
         }
-
         self.sinks.retain(|sink| sink.id != sink_id);
         self.sinks_ref_infos.retain(|(id, _)| *id != sink_id);
         Ok(())

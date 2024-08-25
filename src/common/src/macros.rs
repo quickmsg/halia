@@ -142,7 +142,6 @@ macro_rules! find_sink_add_ref {
     };
 }
 
-
 #[macro_export]
 macro_rules! active_sink_ref {
     ($self:expr, $sink_id:expr, $rule_id:expr) => {
