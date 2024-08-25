@@ -262,7 +262,7 @@ impl WritePointEvent {
     ) -> HaliaResult<Self> {
         match area {
             Area::InputDiscrete | Area::InputRegisters => {
-                return Err(HaliaError::Common("区域不支持写入操作".to_owned()));
+                return Err(HaliaError::Common("区域不支持写入操作!".to_owned()));
             }
             _ => {}
         }
@@ -781,26 +781,10 @@ impl Device for Modbus {
 
     async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         deactive_source_ref!(self, source_id, rule_id)
-        // match self
-        //     .sources_ref_infos
-        //     .iter_mut()
-        //     .find(|(id, _)| id == source_id)
-        // {
-        //     Some((_, ref_info)) => Ok(ref_info.deactive_ref(rule_id)),
-        //     None => source_not_found_err!(),
-        // }
     }
 
     async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         del_source_ref!(self, source_id, rule_id)
-        // match self
-        //     .sources_ref_infos
-        //     .iter_mut()
-        //     .find(|(id, _)| id == source_id)
-        // {
-        //     Some((_, ref_info)) => Ok(ref_info.del_ref(rule_id)),
-        //     None => source_not_found_err!(),
-        // }
     }
 
     async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
@@ -822,25 +806,9 @@ impl Device for Modbus {
 
     async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         deactive_sink_ref!(self, sink_id, rule_id)
-        // match self
-        //     .sinks_ref_infos
-        //     .iter_mut()
-        //     .find(|(id, _)| id == sink_id)
-        // {
-        //     Some((_, ref_info)) => Ok(ref_info.deactive_ref(rule_id)),
-        //     None => sink_not_found_err!(),
-        // }
     }
 
     async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         del_sink_ref!(self, sink_id, rule_id)
-        // match self
-        //     .sinks_ref_infos
-        //     .iter_mut()
-        //     .find(|(id, _)| id == sink_id)
-        // {
-        //     Some((_, ref_info)) => Ok(ref_info.del_ref(rule_id)),
-        //     None => sink_not_found_err!(),
-        // }
     }
 }

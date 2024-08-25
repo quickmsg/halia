@@ -171,7 +171,6 @@ impl Sink {
                 None => return,
             },
         };
-        debug!("{:?}", value);
 
         match WritePointEvent::new(
             sink_conf.slave,

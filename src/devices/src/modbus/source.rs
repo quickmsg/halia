@@ -218,9 +218,11 @@ impl Source {
                 protocol::modbus::ModbusError::Transport(e) => Err(e),
                 protocol::modbus::ModbusError::Protocol(e) => {
                     warn!("{}", e);
+                    self.err_info = Some(e.to_string());
                     Ok(())
                 }
                 protocol::modbus::ModbusError::Exception(e) => {
+                    self.err_info = Some(e.to_string());
                     warn!("{}", e);
                     Ok(())
                 }
