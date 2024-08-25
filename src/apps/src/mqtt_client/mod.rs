@@ -219,7 +219,12 @@ impl MqttClient {
                 )
                 .await;
         }
-        self.client_v50 = Some(Arc::new(client));
+
+        let arc_client = Arc::new(client);
+        for sink in self.sinks.iter_mut() {
+            sink.start_v50(arc_client.clone());
+        }
+        self.client_v50 = Some(arc_client);
 
         let (tx, mut rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(tx);
