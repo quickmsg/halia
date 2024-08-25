@@ -10,7 +10,10 @@ use protocol::coap::{
     request::{Method, RequestBuilder},
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use types::devices::coap::{CoapConf, CreateUpdateSinkReq, SearchSinksItemResp};
+use types::{
+    devices::coap::{CoapConf, CreateUpdateSinkReq},
+    SearchSourcesOrSinksInfoResp,
+};
 use uuid::Uuid;
 
 use super::transform_options;
@@ -55,12 +58,13 @@ impl Sink {
         Ok(())
     }
 
-    pub fn search(&self) -> SearchSinksItemResp {
-        SearchSinksItemResp {
-            id: self.id.clone(),
-            conf: self.conf.clone(),
-            rule_ref: self.ref_info.get_rule_ref(),
-        }
+    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
+        todo!()
+        // SearchSinksItemResp {
+        //     id: self.id.clone(),
+        //     conf: self.conf.clone(),
+        //     rule_ref: self.ref_info.get_rule_ref(),
+        // }
     }
 
     pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {

@@ -461,23 +461,24 @@ impl Coap {
     }
 
     pub async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
-        let mut data = vec![];
-        for sink in self
-            .sinks
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(sink.search());
-            if data.len() == pagination.size {
-                break;
-            }
-        }
+        // let mut data = vec![];
+        // for sink in self
+        //     .sinks
+        //     .iter()
+        //     .rev()
+        //     .skip((pagination.page - 1) * pagination.size)
+        // {
+        //     data.push(sink.search());
+        //     if data.len() == pagination.size {
+        //         break;
+        //     }
+        // }
 
-        SearchSinksResp {
-            total: self.sinks.len(),
-            data,
-        }
+        // SearchSinksResp {
+        //     total: self.sinks.len(),
+        //     data,
+        // }
+        todo!()
     }
 
     pub async fn update_sink(

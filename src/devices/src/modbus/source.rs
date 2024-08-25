@@ -1,7 +1,10 @@
 use std::{io, sync::Arc, time::Duration};
 
 use base64::{prelude::BASE64_STANDARD, Engine as _};
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    get_search_sources_or_sinks_info_resp,
+};
 use message::{Message, MessageBatch};
 use protocol::modbus::Context;
 use serde_json::Value;
@@ -81,14 +84,7 @@ impl Source {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        SearchSourcesOrSinksInfoResp {
-            id: self.id.clone(),
-            conf: CreateUpdateSourceOrSinkReq {
-                base: self.base_conf.clone(),
-                ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
-            },
-            value: Some(self.value.clone()),
-        }
+        get_search_sources_or_sinks_info_resp!(self, Some(self.value.clone()))
     }
 
     pub async fn start(

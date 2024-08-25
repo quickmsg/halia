@@ -51,7 +51,7 @@ impl Source {
     // }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        get_search_sources_or_sinks_info_resp!(self)
+        get_search_sources_or_sinks_info_resp!(self, None)
     }
 
     pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
