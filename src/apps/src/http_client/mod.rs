@@ -191,24 +191,25 @@ impl App for HttpClient {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
-        let mut data = vec![];
-        let mut total = 0;
-        for source in self.sources.iter().rev() {
-            let source = source.search();
-            if let Some(name) = &query.name {
-                if !source.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
+        todo!()
+        // let mut data = vec![];
+        // let mut total = 0;
+        // for source in self.sources.iter().rev() {
+        //     let source = source.search();
+        //     if let Some(name) = &query.name {
+        //         if !source.conf.base.name.contains(name) {
+        //             continue;
+        //         }
+        //     }
 
-            if pagination.check(total) {
-                data.push(source);
-            }
+        //     if pagination.check(total) {
+        //         data.push(source);
+        //     }
 
-            total += 1;
-        }
+        //     total += 1;
+        // }
 
-        SearchSourcesOrSinksResp { total, data }
+        // SearchSourcesOrSinksResp { total, data }
     }
 
     async fn update_source(
@@ -260,25 +261,26 @@ impl App for HttpClient {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
-        let mut data = vec![];
-        let mut total = 0;
-        for sink in self.sinks.iter().rev() {
-            let sink = sink.search();
-            if let Some(name) = &query.name {
-                if !sink.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
+        todo!()
+        // let mut data = vec![];
+        // let mut total = 0;
+        // for sink in self.sinks.iter().rev() {
+        //     let sink = sink.search();
+        //     if let Some(name) = &query.name {
+        //         if !sink.conf.base.name.contains(name) {
+        //             continue;
+        //         }
+        //     }
 
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
-                data.push(sink);
-            }
+        //     if total >= (pagination.page - 1) * pagination.size
+        //         && total < pagination.page * pagination.size
+        //     {
+        //         data.push(sink);
+        //     }
 
-            total += 1;
-        }
-        SearchSourcesOrSinksResp { total, data }
+        //     total += 1;
+        // }
+        // SearchSourcesOrSinksResp { total, data }
     }
 
     async fn update_sink(

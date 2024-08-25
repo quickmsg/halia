@@ -1,6 +1,6 @@
 use common::{
     error::{HaliaError, HaliaResult},
-    get_search_sources_or_sinks_item_resp,
+    get_search_sources_or_sinks_info_resp,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -11,7 +11,7 @@ use tokio::{
 use tracing::{trace, warn};
 use types::{
     apps::http_client::{HttpClientConf, SinkConf, SourceConf},
-    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use uuid::Uuid;
 
@@ -50,8 +50,8 @@ impl Source {
     //     Ok(())
     // }
 
-    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        get_search_sources_or_sinks_item_resp!(self)
+    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
+        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {

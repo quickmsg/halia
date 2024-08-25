@@ -1,9 +1,9 @@
-use common::{error::HaliaResult, get_search_sources_or_sinks_item_resp, ref_info::RefInfo};
+use common::{error::HaliaResult, get_search_sources_or_sinks_info_resp, ref_info::RefInfo};
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::debug;
 use types::{
-    apps::log::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
+    apps::log::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use uuid::Uuid;
 
@@ -33,8 +33,8 @@ impl Sink {
         })
     }
 
-    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        get_search_sources_or_sinks_item_resp!(self)
+    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
+        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {

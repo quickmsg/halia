@@ -2,9 +2,11 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true, check_delete, check_delete_item, check_stop,
+    active_sink_ref, active_source_ref, check_and_set_on_false, check_and_set_on_true,
+    check_delete, check_delete_item, check_stop, deactive_sink_ref, deactive_source_ref,
+    del_sink_ref, del_source_ref,
     error::{HaliaError, HaliaResult},
-    find_source_add_ref,
+    find_sink_add_ref, find_source_add_ref,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -74,6 +76,16 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
 impl MqttClient {
     fn validate_conf(_conf: &MqttClientConf) -> HaliaResult<()> {
         Ok(())
+    }
+
+    fn check_on(&self) -> HaliaResult<()> {
+        match self.on {
+            true => Ok(()),
+            false => Err(HaliaError::Stopped(format!(
+                "mqtt客户端应用:{}",
+                self.base_conf.name
+            ))),
+        }
     }
 
     async fn start_v311(&mut self) {
@@ -712,7 +724,7 @@ impl App for MqttClient {
     }
 
     async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        find_source_add_ref!(self, source_id, rule_id);
+        find_source_add_ref!(self, source_id, rule_id)
     }
 
     async fn get_source_rx(
@@ -720,6 +732,8 @@ impl App for MqttClient {
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        self.check_on()?;
+        active_source_ref!(self, source_id, rule_id);
         match self
             .sources
             .write()
@@ -727,42 +741,21 @@ impl App for MqttClient {
             .iter_mut()
             .find(|source| source.id == *source_id)
         {
-            Some(source) => Ok(source.get_mb_rx(rule_id)),
+            Some(source) => Ok(source.mb_tx.as_ref().unwrap().subscribe()),
             None => source_not_found_err!(),
         }
     }
 
     async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sources
-            .write()
-            .await
-            .iter_mut()
-            .find(|source| source.id == *source_id)
-        {
-            Some(source) => Ok(source.ref_info.deactive_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
+        deactive_source_ref!(self, source_id, rule_id)
     }
 
     async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sources
-            .write()
-            .await
-            .iter_mut()
-            .find(|source| source.id == *source_id)
-        {
-            Some(source) => Ok(source.ref_info.deactive_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
+        del_source_ref!(self, source_id, rule_id)
     }
 
     async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
+        find_sink_add_ref!(self, sink_id, rule_id)
     }
 
     async fn get_sink_tx(
@@ -770,36 +763,19 @@ impl App for MqttClient {
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        self.check_on()?;
+        active_sink_ref!(self, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => {
-                if sink.stop_signal_tx.is_none() {
-                    match self.ext_conf.version {
-                        types::apps::mqtt_client::Version::V311 => {
-                            sink.start_v311(self.client_v311.as_ref().unwrap().clone())
-                        }
-                        types::apps::mqtt_client::Version::V50 => {
-                            sink.start_v50(self.client_v50.as_ref().unwrap().clone())
-                        }
-                    }
-                }
-
-                Ok(sink.get_mb_tx(rule_id))
-            }
-            None => sink_not_found_err!(),
+            Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
+            None => unreachable!(),
         }
     }
 
     async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.del_mb_tx(rule_id)),
-            None => sink_not_found_err!(),
-        }
+        deactive_sink_ref!(self, sink_id, rule_id)
     }
 
     async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
+        del_sink_ref!(self, sink_id, rule_id)
     }
 }

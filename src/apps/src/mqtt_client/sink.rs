@@ -13,7 +13,10 @@ use rumqttc::{
     AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use types::{apps::mqtt_client::SinkConf, BaseConf, SearchSourcesOrSinksInfoResp};
+use types::{
+    apps::mqtt_client::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq,
+    SearchSourcesOrSinksInfoResp,
+};
 use uuid::Uuid;
 
 pub struct Sink {

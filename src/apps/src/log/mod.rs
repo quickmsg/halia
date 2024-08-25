@@ -190,25 +190,26 @@ impl App for Log {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for sink in self.sinks.iter().rev() {
-            let sink = sink.search();
+        todo!()
+        // let mut total = 0;
+        // let mut data = vec![];
+        // for sink in self.sinks.iter().rev() {
+        //     let sink = sink.search();
 
-            if let Some(name) = &query.name {
-                if !sink.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
+        //     if let Some(name) = &query.name {
+        //         if !sink.conf.base.name.contains(name) {
+        //             continue;
+        //         }
+        //     }
 
-            if pagination.check(total) {
-                data.push(sink);
-            }
+        //     if pagination.check(total) {
+        //         data.push(sink);
+        //     }
 
-            total += 1;
-        }
+        //     total += 1;
+        // }
 
-        SearchSourcesOrSinksResp { total, data }
+        // SearchSourcesOrSinksResp { total, data }
     }
 
     #[must_use]

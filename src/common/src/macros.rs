@@ -87,10 +87,8 @@ macro_rules! find_source_add_ref {
 }
 
 #[macro_export]
-macro_rules! get_source_rx {
+macro_rules! active_source_ref {
     ($self:expr, $source_id:expr, $rule_id:expr) => {
-        $self.check_on()?;
-
         match $self
             .sources_ref_infos
             .iter_mut()
@@ -99,16 +97,33 @@ macro_rules! get_source_rx {
             Some((_, ref_info)) => ref_info.active_ref($rule_id),
             None => return source_not_found_err!(),
         }
+    };
+}
 
-        match self
-            .sources
-            .write()
-            .await
+#[macro_export]
+macro_rules! deactive_source_ref {
+    ($self:expr, $source_id:expr, $rule_id:expr) => {
+        match $self
+            .sources_ref_infos
             .iter_mut()
-            .find(|source| source.id == *source_id)
+            .find(|(id, _)| id == $source_id)
         {
-            Some(source) => Ok(source.mb_tx.as_ref().unwrap().subscribe()),
-            None => unreachable!(),
+            Some((_, ref_info)) => Ok(ref_info.deactive_ref($rule_id)),
+            None => return source_not_found_err!(),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! del_source_ref {
+    ($self:expr, $source_id:expr, $rule_id:expr) => {
+        match $self
+            .sources_ref_infos
+            .iter_mut()
+            .find(|(id, _)| id == $source_id)
+        {
+            Some((_, ref_info)) => Ok(ref_info.del_ref($rule_id)),
+            None => return source_not_found_err!(),
         }
     };
 }
@@ -123,6 +138,49 @@ macro_rules! find_sink_add_ref {
         {
             Some((_, ref_info)) => Ok(ref_info.add_ref($rule_id)),
             None => sink_not_found_err!(),
+        }
+    };
+}
+
+
+#[macro_export]
+macro_rules! active_sink_ref {
+    ($self:expr, $sink_id:expr, $rule_id:expr) => {
+        match $self
+            .sinks_ref_infos
+            .iter_mut()
+            .find(|(id, _)| id == $sink_id)
+        {
+            Some((_, ref_info)) => ref_info.active_ref($rule_id),
+            None => return sink_not_found_err!(),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! deactive_sink_ref {
+    ($self:expr, $sink_id:expr, $rule_id:expr) => {
+        match $self
+            .sinks_ref_infos
+            .iter_mut()
+            .find(|(id, _)| id == $sink_id)
+        {
+            Some((_, ref_info)) => Ok(ref_info.deactive_ref($rule_id)),
+            None => return sink_not_found_err!(),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! del_sink_ref {
+    ($self:expr, $sink_id:expr, $rule_id:expr) => {
+        match $self
+            .sinks_ref_infos
+            .iter_mut()
+            .find(|(id, _)| id == $sink_id)
+        {
+            Some((_, ref_info)) => Ok(ref_info.del_ref($rule_id)),
+            None => return sink_not_found_err!(),
         }
     };
 }

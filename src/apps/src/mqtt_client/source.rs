@@ -5,7 +5,10 @@ use common::{
 use message::MessageBatch;
 use rumqttc::valid_filter;
 use tokio::sync::broadcast;
-use types::{apps::mqtt_client::SourceConf, BaseConf, SearchSourcesOrSinksInfoResp};
+use types::{
+    apps::mqtt_client::SourceConf, BaseConf, CreateUpdateSourceOrSinkReq,
+    SearchSourcesOrSinksInfoResp,
+};
 use uuid::Uuid;
 
 pub struct Source {

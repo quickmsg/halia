@@ -10,7 +10,11 @@ use std::{
 
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true, error::{HaliaError, HaliaResult}, find_source_add_ref, ref_info::RefInfo
+    active_sink_ref, active_source_ref, check_and_set_on_false, check_and_set_on_true,
+    deactive_sink_ref, deactive_source_ref, del_sink_ref, del_source_ref,
+    error::{HaliaError, HaliaResult},
+    find_sink_add_ref, find_source_add_ref,
+    ref_info::RefInfo,
 };
 use message::MessageBatch;
 use protocol::modbus::{rtu, tcp, Context};
@@ -451,7 +455,7 @@ impl Device for Modbus {
             return Err(HaliaError::StopActiveRefing);
         }
 
-        check_and_set_on_false!();
+        check_and_set_on_false!(self);
         trace!("停止");
 
         for source in self.sources.write().await.iter_mut() {
@@ -762,16 +766,7 @@ impl Device for Modbus {
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         self.check_on()?;
-
-        match self
-            .sources_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == source_id)
-        {
-            Some((_, ref_info)) => ref_info.active_ref(rule_id),
-            None => return source_not_found_err!(),
-        }
-
+        active_source_ref!(self, source_id, rule_id);
         match self
             .sources
             .write()
@@ -785,36 +780,31 @@ impl Device for Modbus {
     }
 
     async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sources_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == source_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.deactive_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
+        deactive_source_ref!(self, source_id, rule_id)
+        // match self
+        //     .sources_ref_infos
+        //     .iter_mut()
+        //     .find(|(id, _)| id == source_id)
+        // {
+        //     Some((_, ref_info)) => Ok(ref_info.deactive_ref(rule_id)),
+        //     None => source_not_found_err!(),
+        // }
     }
 
     async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sources_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == source_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.del_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
+        del_source_ref!(self, source_id, rule_id)
+        // match self
+        //     .sources_ref_infos
+        //     .iter_mut()
+        //     .find(|(id, _)| id == source_id)
+        // {
+        //     Some((_, ref_info)) => Ok(ref_info.del_ref(rule_id)),
+        //     None => source_not_found_err!(),
+        // }
     }
 
     async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sinks_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == sink_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.add_ref(rule_id)),
-            None => source_not_found_err!(),
-        }
+        find_sink_add_ref!(self, sink_id, rule_id)
     }
 
     async fn get_sink_tx(
@@ -823,16 +813,7 @@ impl Device for Modbus {
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.check_on()?;
-
-        match self
-            .sources_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == sink_id)
-        {
-            Some((_, ref_info)) => ref_info.active_ref(rule_id),
-            None => return sink_not_found_err!(),
-        }
-
+        active_sink_ref!(self, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
@@ -840,24 +821,26 @@ impl Device for Modbus {
     }
 
     async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sinks_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == sink_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.deactive_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
+        deactive_sink_ref!(self, sink_id, rule_id)
+        // match self
+        //     .sinks_ref_infos
+        //     .iter_mut()
+        //     .find(|(id, _)| id == sink_id)
+        // {
+        //     Some((_, ref_info)) => Ok(ref_info.deactive_ref(rule_id)),
+        //     None => sink_not_found_err!(),
+        // }
     }
 
     async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .sinks_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == sink_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.del_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
+        del_sink_ref!(self, sink_id, rule_id)
+        // match self
+        //     .sinks_ref_infos
+        //     .iter_mut()
+        //     .find(|(id, _)| id == sink_id)
+        // {
+        //     Some((_, ref_info)) => Ok(ref_info.del_ref(rule_id)),
+        //     None => sink_not_found_err!(),
+        // }
     }
 }

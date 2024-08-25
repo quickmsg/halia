@@ -1,12 +1,12 @@
 use common::{
-    error::HaliaResult, get_search_sources_or_sinks_item_resp, persistence, ref_info::RefInfo,
+    error::HaliaResult, get_search_sources_or_sinks_info_resp, persistence, ref_info::RefInfo,
 };
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
 use tracing::{trace, warn};
 use types::{
     apps::http_client::{HttpClientConf, SinkConf},
-    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksItemResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use uuid::Uuid;
 
@@ -43,8 +43,8 @@ impl Sink {
         Ok((req.base, conf, data))
     }
 
-    pub fn search(&self) -> SearchSourcesOrSinksItemResp {
-        get_search_sources_or_sinks_item_resp!(self)
+    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
+        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub async fn update(

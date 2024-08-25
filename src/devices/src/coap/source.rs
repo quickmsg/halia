@@ -21,7 +21,6 @@ use tracing::{debug, warn};
 use types::{
     devices::coap::{CoapConf, SourceConf, SourceMethod},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
-    SearchSourcesOrSinksItemResp,
 };
 use uuid::Uuid;
 
