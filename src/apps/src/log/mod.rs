@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true,
+    check_and_set_on_false, check_and_set_on_true, check_delete,
     error::{HaliaError, HaliaResult},
+    ref_info::RefInfo,
 };
 use message::MessageBatch;
 use sink::Sink;
@@ -11,7 +12,8 @@ use types::{
         log::LogConf, AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf,
         SearchAppsItemResp,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
+    SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -33,6 +35,7 @@ pub struct Log {
 
     on: bool,
     sinks: Vec<Sink>,
+    sinks_ref_infos: Vec<(Uuid, RefInfo)>,
 }
 
 pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
@@ -47,6 +50,7 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
         // err: Arc::new(RwLock::new(None)),
         err: None,
         sinks: vec![],
+        sinks_ref_infos: vec![],
     }))
 }
 
@@ -122,22 +126,10 @@ impl App for Log {
         todo!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn delete(&mut self) -> HaliaResult<()> {
+        check_delete!(self, sinks_ref_infos);
+
+        Ok(())
     }
 
     async fn create_source(
@@ -190,26 +182,28 @@ impl App for Log {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
-        todo!()
-        // let mut total = 0;
-        // let mut data = vec![];
-        // for sink in self.sinks.iter().rev() {
-        //     let sink = sink.search();
+        let mut total = 0;
+        let mut data = vec![];
+        for (index, sink) in self.sinks.iter().rev().enumerate() {
+            let sink = sink.search();
+            if let Some(name) = &query.name {
+                if !sink.conf.base.name.contains(name) {
+                    continue;
+                }
+            }
 
-        //     if let Some(name) = &query.name {
-        //         if !sink.conf.base.name.contains(name) {
-        //             continue;
-        //         }
-        //     }
+            if pagination.check(total) {
+                unsafe {
+                    data.push(SearchSourcesOrSinksItemResp {
+                        info: sink,
+                        rule_ref: self.sinks_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                    })
+                }
+            }
 
-        //     if pagination.check(total) {
-        //         data.push(sink);
-        //     }
-
-        //     total += 1;
-        // }
-
-        // SearchSourcesOrSinksResp { total, data }
+            total += 1;
+        }
+        SearchSourcesOrSinksResp { total, data }
     }
 
     #[must_use]

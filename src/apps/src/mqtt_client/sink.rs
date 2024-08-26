@@ -59,7 +59,7 @@ impl Sink {
     }
 
     fn validate_conf(conf: &SinkConf) -> HaliaResult<()> {
-        if !mqttbytes::valid_topic(&conf.topic) {
+        if !mqttbytes::valid_filter(&conf.topic) {
             return Err(HaliaError::Common("topic不合法！".to_owned()));
         }
 

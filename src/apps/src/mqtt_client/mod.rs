@@ -522,6 +522,7 @@ impl App for MqttClient {
         }
 
         self.sources.write().await.push(source);
+        self.sources_ref_infos.push((source_id, RefInfo::new()));
 
         Ok(())
     }
@@ -547,7 +548,7 @@ impl App for MqttClient {
                 unsafe {
                     data.push(SearchSourcesOrSinksItemResp {
                         info: source,
-                        rule_ref: self.sinks_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                        rule_ref: self.sources_ref_infos.get_unchecked(index).1.get_rule_ref(),
                     })
                 }
             }
@@ -660,8 +661,19 @@ impl App for MqttClient {
             sink.check_duplicate(&req.base, &ext_conf)?;
         }
 
-        let sink = Sink::new(sink_id, req.base, ext_conf).await?;
+        let mut sink = Sink::new(sink_id, req.base, ext_conf).await?;
+        if self.on {
+            if let Some(client) = &self.client_v311 {
+                sink.start_v311(client.clone());
+            }
+
+            if let Some(client) = &self.client_v50 {
+                sink.start_v50(client.clone());
+            }
+        }
+
         self.sinks.push(sink);
+        self.sinks_ref_infos.push((sink_id, RefInfo::new()));
         Ok(())
     }
 
