@@ -177,10 +177,10 @@ impl DeviceManager {
             let device = device.search().await;
             total += 1;
 
-            if device.base.err.is_some() {
+            if device.common.err.is_some() {
                 err_cnt += 1;
             } else {
-                if device.base.on {
+                if device.common.on {
                     running_cnt += 1;
                 } else {
                     off_cnt += 1;
@@ -225,7 +225,7 @@ impl DeviceManager {
         for device in self.devices.read().await.iter().rev() {
             let device = device.search().await;
             if let Some(device_type) = &query_params.device_type {
-                if *device_type != device.base.device_type {
+                if *device_type != device.common.device_type {
                     continue;
                 }
             }
@@ -237,13 +237,13 @@ impl DeviceManager {
             }
 
             if let Some(on) = &query_params.on {
-                if device.base.on != *on {
+                if device.common.on != *on {
                     continue;
                 }
             }
 
             if let Some(err) = &query_params.err {
-                if device.base.err.is_some() != *err {
+                if device.common.err.is_some() != *err {
                     continue;
                 }
             }

@@ -9,7 +9,7 @@ use sink::Sink;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
-        log::LogConf, AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemBase,
+        log::LogConf, AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemCommon,
         SearchAppsItemConf, SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
@@ -80,7 +80,7 @@ impl App for Log {
 
     async fn search(&self) -> SearchAppsItemResp {
         SearchAppsItemResp {
-            base: SearchAppsItemBase {
+            common: SearchAppsItemCommon {
                 id: self.id,
                 app_type: AppType::Log,
                 on: self.on,

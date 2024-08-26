@@ -78,12 +78,12 @@ pub struct SearchDevicesResp {
 
 #[derive(Serialize)]
 pub struct SearchDevicesItemResp {
-    pub base: SearchDevicesItemBase,
+    pub common: SearchDevicesItemCommon,
     pub conf: SearchDevicesItemConf,
 }
 
 #[derive(Serialize)]
-pub struct SearchDevicesItemBase {
+pub struct SearchDevicesItemCommon {
     pub id: Uuid,
     pub device_type: DeviceType,
     pub on: bool,
