@@ -27,9 +27,7 @@ pub enum AppType {
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct AppConf {
-    #[serde(flatten)]
     pub base: BaseConf,
-    #[serde(flatten)]
     pub ext: serde_json::Value,
 }
 
@@ -80,18 +78,21 @@ pub struct SearchAppsResp {
 
 #[derive(Serialize)]
 pub struct SearchAppsItemResp {
+    pub base: SearchAppsItemBase,
+    pub conf: SearchAppsItemConf,
+}
+
+#[derive(Serialize)]
+pub struct SearchAppsItemBase {
     pub id: Uuid,
     pub app_type: AppType,
     pub on: bool,
     pub err: Option<String>,
     pub rtt: u16,
-    pub conf: SearchAppsItemConf,
 }
 
 #[derive(Serialize)]
 pub struct SearchAppsItemConf {
-    #[serde(flatten)]
     pub base: BaseConf,
-    #[serde(flatten)]
     pub ext: serde_json::Value,
 }

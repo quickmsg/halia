@@ -9,8 +9,8 @@ use sink::Sink;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
-        log::LogConf, AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf,
-        SearchAppsItemResp,
+        log::LogConf, AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemBase,
+        SearchAppsItemConf, SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
     SearchSourcesOrSinksResp,
@@ -80,11 +80,13 @@ impl App for Log {
 
     async fn search(&self) -> SearchAppsItemResp {
         SearchAppsItemResp {
-            id: self.id,
-            app_type: AppType::Log,
-            on: self.on,
-            err: self.err.clone(),
-            rtt: 0,
+            base: SearchAppsItemBase {
+                id: self.id,
+                app_type: AppType::Log,
+                on: self.on,
+                err: self.err.clone(),
+                rtt: 0,
+            },
             conf: SearchAppsItemConf {
                 base: self.base_conf.clone(),
                 ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),

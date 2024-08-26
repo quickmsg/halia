@@ -68,17 +68,18 @@ impl App for HttpClient {
     }
 
     async fn search(&self) -> SearchAppsItemResp {
-        SearchAppsItemResp {
-            id: self.id,
-            on: self.on,
-            app_type: AppType::HttpClient,
-            conf: SearchAppsItemConf {
-                base: self.base_conf.clone(),
-                ext: serde_json::to_value(&self.ext_conf).unwrap(),
-            },
-            err: self.err.clone(),
-            rtt: 1,
-        }
+        // SearchAppsItemResp {
+        //     id: self.id,
+        //     on: self.on,
+        //     app_type: AppType::HttpClient,
+        //     conf: SearchAppsItemConf {
+        //         base: self.base_conf.clone(),
+        //         ext: serde_json::to_value(&self.ext_conf).unwrap(),
+        //     },
+        //     err: self.err.clone(),
+        //     rtt: 1,
+        // }
+        todo!()
     }
 
     async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {

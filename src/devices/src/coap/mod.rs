@@ -80,17 +80,18 @@ impl Coap {
     }
 
     pub fn search(&self) -> SearchDevicesItemResp {
-        SearchDevicesItemResp {
-            id: self.id.clone(),
-            device_type: DeviceType::Coap,
-            on: self.on,
-            err: self.err.clone(),
-            rtt: 999,
-            conf: SearchDevicesItemConf {
-                base: self.conf.base.clone(),
-                ext: serde_json::json!(self.conf.ext),
-            },
-        }
+        // SearchDevicesItemResp {
+        //     id: self.id.clone(),
+        //     device_type: DeviceType::Coap,
+        //     on: self.on,
+        //     err: self.err.clone(),
+        //     rtt: 999,
+        //     conf: SearchDevicesItemConf {
+        //         base: self.conf.base.clone(),
+        //         ext: serde_json::json!(self.conf.ext),
+        //     },
+        // }
+        todo!()
     }
 
     pub async fn update(&mut self, req: CreateUpdateCoapReq) -> HaliaResult<()> {

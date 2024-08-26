@@ -27,9 +27,7 @@ pub enum DeviceType {
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct DeviceConf {
-    #[serde(flatten)]
     pub base: BaseConf,
-    #[serde(flatten)]
     pub ext: serde_json::Value,
 }
 
@@ -80,19 +78,22 @@ pub struct SearchDevicesResp {
 
 #[derive(Serialize)]
 pub struct SearchDevicesItemResp {
+    pub base: SearchDevicesItemBase,
+    pub conf: SearchDevicesItemConf,
+}
+
+#[derive(Serialize)]
+pub struct SearchDevicesItemBase {
     pub id: Uuid,
     pub device_type: DeviceType,
     pub on: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     pub rtt: u16,
-    pub conf: SearchDevicesItemConf,
 }
 
 #[derive(Serialize)]
 pub struct SearchDevicesItemConf {
-    #[serde(flatten)]
     pub base: BaseConf,
-    #[serde(flatten)]
     pub ext: serde_json::Value,
 }

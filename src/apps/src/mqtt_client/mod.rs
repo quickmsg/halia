@@ -23,7 +23,8 @@ use tracing::{debug, error, warn};
 use types::{
     apps::{
         mqtt_client::{MqttClientConf, Qos, SinkConf, SourceConf},
-        AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemConf, SearchAppsItemResp,
+        AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemBase, SearchAppsItemConf,
+        SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
     SearchSourcesOrSinksResp,
@@ -381,15 +382,17 @@ impl App for MqttClient {
 
     async fn search(&self) -> SearchAppsItemResp {
         SearchAppsItemResp {
-            id: self.id,
-            on: self.on,
-            app_type: AppType::MqttClient,
+            base: SearchAppsItemBase {
+                id: self.id,
+                on: self.on,
+                app_type: AppType::MqttClient,
+                err: self.err.read().await.clone(),
+                rtt: 1,
+            },
             conf: SearchAppsItemConf {
                 base: self.base_conf.clone(),
                 ext: serde_json::json!(self.ext_conf),
             },
-            err: self.err.read().await.clone(),
-            rtt: 1,
         }
     }
 

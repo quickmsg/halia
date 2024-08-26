@@ -177,10 +177,10 @@ impl AppManager {
             let app = app.search().await;
             total += 1;
 
-            if app.err.is_some() {
+            if app.base.err.is_some() {
                 err_cnt += 1;
             } else {
-                if app.on {
+                if app.base.on {
                     running_cnt += 1;
                 } else {
                     off_cnt += 1;
@@ -226,7 +226,7 @@ impl AppManager {
         for app in self.apps.read().await.iter().rev() {
             let app = app.search().await;
             if let Some(app_type) = &query.app_type {
-                if *app_type != app.app_type {
+                if *app_type != app.base.app_type {
                     continue;
                 }
             }
@@ -237,13 +237,13 @@ impl AppManager {
                 }
             }
             if let Some(on) = &query.on {
-                if app.on != *on {
+                if app.base.on != *on {
                     continue;
                 }
             }
 
             if let Some(err) = &query.err {
-                if app.err.is_some() != *err {
+                if app.base.err.is_some() != *err {
                     continue;
                 }
             }

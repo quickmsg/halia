@@ -265,7 +265,7 @@ pub async fn update_app_status(app_id: &Uuid, status: Status) -> Result<(), io::
 
 pub async fn delete_app(app_id: &Uuid) -> Result<(), io::Error> {
     delete(get_app_file_path(), app_id).await?;
-    fs::remove_dir_all(app_id.to_string()).await
+    fs::remove_dir_all(Path::new(ROOT_DIR).join(app_id.to_string())).await
 }
 
 fn get_source_file_path(id: &Uuid) -> PathBuf {

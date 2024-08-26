@@ -32,8 +32,8 @@ use tracing::{trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
-        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
-        SearchDevicesItemResp,
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemBase,
+        SearchDevicesItemConf, SearchDevicesItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
     SearchSourcesOrSinksResp, Value,
@@ -377,11 +377,13 @@ impl Device for Modbus {
 
     async fn search(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
-            id: self.id.clone(),
-            device_type: DeviceType::Modbus,
-            rtt: self.rtt.load(Ordering::SeqCst),
-            on: self.on,
-            err: self.err.read().await.clone(),
+            base: SearchDevicesItemBase {
+                id: self.id.clone(),
+                device_type: DeviceType::Modbus,
+                rtt: self.rtt.load(Ordering::SeqCst),
+                on: self.on,
+                err: self.err.read().await.clone(),
+            },
             conf: SearchDevicesItemConf {
                 base: self.base_conf.clone(),
                 ext: serde_json::json!(self.ext_conf),

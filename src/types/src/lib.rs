@@ -39,9 +39,7 @@ pub struct RuleRef {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSourceOrSinkReq {
-    #[serde(flatten)]
     pub base: BaseConf,
-    #[serde(flatten)]
     pub ext: serde_json::Value,
 }
 
@@ -55,17 +53,13 @@ pub struct SearchSourcesOrSinksResp {
 pub struct SearchSourcesOrSinksItemResp {
     #[serde(flatten)]
     pub info: SearchSourcesOrSinksInfoResp,
-    #[serde(flatten)]
     pub rule_ref: RuleRef,
 }
 
 #[derive(Serialize)]
 pub struct SearchSourcesOrSinksInfoResp {
     pub id: Uuid,
-    #[serde(flatten)]
     pub conf: CreateUpdateSourceOrSinkReq,
-    // #[serde(flatten)]
-    // pub rule_ref: RuleRef,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<serde_json::Value>,
 }
