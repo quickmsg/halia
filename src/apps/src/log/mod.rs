@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true, check_delete,
+    active_sink_ref, add_sink_ref, check_and_set_on_false, check_and_set_on_true, check_delete,
+    check_delete_sink, deactive_sink_ref, del_sink_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -9,7 +10,8 @@ use sink::Sink;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
-        log::LogConf, AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemCommon,
+        log::{LogConf, SinkConf},
+        AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemCommon,
         SearchAppsItemConf, SearchAppsItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
@@ -23,7 +25,7 @@ mod sink;
 
 macro_rules! log_not_support_source {
     () => {
-        Err(HaliaError::Common("日志应用不支持源".to_owned()))
+        Err(HaliaError::Common("日志应用不支持源!".to_owned()))
     };
 }
 
@@ -47,7 +49,6 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
         base_conf: app_conf.base,
         ext_conf,
         on: false,
-        // err: Arc::new(RwLock::new(None)),
         err: None,
         sinks: vec![],
         sinks_ref_infos: vec![],
@@ -55,8 +56,18 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
 }
 
 impl Log {
-    fn validate_conf(conf: &LogConf) -> HaliaResult<()> {
+    fn validate_conf(_conf: &LogConf) -> HaliaResult<()> {
         Ok(())
+    }
+
+    fn check_on(&self) -> HaliaResult<()> {
+        match self.on {
+            true => Ok(()),
+            false => Err(HaliaError::Stopped(format!(
+                "log应用:{}",
+                self.base_conf.name
+            ))),
+        }
     }
 }
 
@@ -94,23 +105,11 @@ impl App for Log {
         }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update<'life0, 'async_trait>(
-        &'life0 mut self,
-        app_conf: AppConf,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
+        // let ext_conf = serde_json::from_value(app_conf.ext)?;
+        self.base_conf = app_conf.base;
+
+        Ok(())
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
@@ -124,12 +123,21 @@ impl App for Log {
 
     async fn stop(&mut self) -> HaliaResult<()> {
         check_and_set_on_false!(self);
+        for sink in self.sinks.iter_mut() {
+            sink.stop().await;
+        }
 
-        todo!()
+        Ok(())
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
         check_delete!(self, sinks_ref_infos);
+
+        if self.on {
+            for sink in self.sinks.iter_mut() {
+                sink.stop().await;
+            }
+        }
 
         Ok(())
     }
@@ -170,11 +178,20 @@ impl App for Log {
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let mut sink = Sink::new(sink_id, req)?;
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        Sink::validate_conf(&ext_conf)?;
+
+        for sink in self.sinks.iter() {
+            sink.check_duplicate(&req.base, &ext_conf)?;
+        }
+
+        let mut sink = Sink::new(sink_id, req.base, ext_conf);
         if self.on {
             sink.start();
         }
+
         self.sinks.push(sink);
+        self.sinks_ref_infos.push((sink_id, RefInfo::new()));
 
         Ok(())
     }
@@ -208,43 +225,40 @@ impl App for Log {
         SearchSourcesOrSinksResp { total, data }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update_sink<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn update_sink(
+        &mut self,
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> HaliaResult<()> {
+        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        Sink::validate_conf(&ext_conf)?;
+
+        for sink in self.sinks.iter() {
+            if sink.id != sink_id {
+                sink.check_duplicate(&req.base, &ext_conf)?;
+            }
+        }
+
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => Ok(sink.update(req.base, ext_conf).await),
+            None => sink_not_found_err!(),
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete_sink<'life0, 'async_trait>(
-        &'life0 mut self,
-        sink_id: Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+        check_delete_sink!(self, sink_id);
+
+        if self.on {
+            match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+                Some(sink) => sink.stop().await,
+                None => unreachable!(),
+            }
+        }
+
+        self.sinks.retain(|sink| sink.id != sink_id);
+        self.sinks_ref_infos.retain(|(id, _)| *id != sink_id);
+
+        Ok(())
     }
 
     async fn add_source_ref(&mut self, _source_id: &Uuid, _rule_id: &Uuid) -> HaliaResult<()> {
@@ -268,10 +282,7 @@ impl App for Log {
     }
 
     async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
+        add_sink_ref!(self, sink_id, rule_id)
     }
 
     async fn get_sink_tx(
@@ -279,31 +290,19 @@ impl App for Log {
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        self.check_on()?;
+        active_sink_ref!(self, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => {
-                if !self.on {
-                    return Err(HaliaError::Stopped(format!(
-                        "应用日志: {}",
-                        self.base_conf.name.clone()
-                    )));
-                }
-                Ok(sink.get_tx(rule_id))
-            }
-            None => sink_not_found_err!(),
+            Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
+            None => unreachable!(),
         }
     }
 
     async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.deactive_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
+        deactive_sink_ref!(self, sink_id, rule_id)
     }
 
     async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
-            None => sink_not_found_err!(),
-        }
+        del_sink_ref!(self, sink_id, rule_id)
     }
 }

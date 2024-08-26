@@ -59,11 +59,15 @@ macro_rules! check_delete {
 }
 
 #[macro_export]
-macro_rules! check_delete_item {
-    ($self:expr, $ref_infos:ident, $source_id:ident) => {
-        match $self.$ref_infos.iter().find(|(id, _)| *id == $source_id) {
-            Some((_, ref_info)) => {
-                if !ref_info.can_delete() {
+macro_rules! check_delete_source {
+    ($self:expr, $source_id:ident) => {
+        match $self
+            .sources_ref_infos
+            .iter()
+            .find(|(id, _)| *id == $source_id)
+        {
+            Some((_, source_ref_info)) => {
+                if !source_ref_info.can_delete() {
                     return Err(HaliaError::DeleteRefing);
                 }
             }
@@ -73,7 +77,25 @@ macro_rules! check_delete_item {
 }
 
 #[macro_export]
-macro_rules! find_source_add_ref {
+macro_rules! check_delete_sink {
+    ($self:expr,  $source_id:ident) => {
+        match $self
+            .sinks_ref_infos
+            .iter()
+            .find(|(id, _)| *id == $source_id)
+        {
+            Some((_, sink_ref_info)) => {
+                if !sink_ref_info.can_delete() {
+                    return Err(HaliaError::DeleteRefing);
+                }
+            }
+            None => return sink_not_found_err!(),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! add_source_ref {
     ($self:expr, $source_id:expr, $rule_id:expr) => {
         match $self
             .sources_ref_infos
@@ -129,7 +151,7 @@ macro_rules! del_source_ref {
 }
 
 #[macro_export]
-macro_rules! find_sink_add_ref {
+macro_rules! add_sink_ref {
     ($self:expr, $sink_id:expr, $rule_id:expr) => {
         match $self
             .sinks_ref_infos

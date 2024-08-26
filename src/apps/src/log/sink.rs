@@ -1,6 +1,9 @@
-use common::{error::HaliaResult, get_search_sources_or_sinks_info_resp, ref_info::RefInfo};
+use common::{
+    error::{HaliaError, HaliaResult},
+    get_search_sources_or_sinks_info_resp,
+};
 use message::MessageBatch;
-use tokio::{select, sync::mpsc};
+use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::debug;
 use types::{
     apps::log::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
@@ -13,44 +16,52 @@ pub struct Sink {
     base_conf: BaseConf,
     ext_conf: SinkConf,
 
-    pub stop_signal_tx: Option<mpsc::Sender<()>>,
+    stop_signal_tx: Option<mpsc::Sender<()>>,
+    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
 
-    pub ref_info: RefInfo,
     pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 impl Sink {
-    pub fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
-
-        Ok(Self {
+    pub fn new(sink_id: Uuid, base_conf: BaseConf, ext_conf: SinkConf) -> Self {
+        Self {
             id: sink_id,
-            base_conf: req.base,
+            base_conf,
             ext_conf,
             stop_signal_tx: None,
-            ref_info: RefInfo::new(),
+            join_handle: None,
             mb_tx: None,
-        })
+        }
+    }
+
+    pub fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SinkConf) -> HaliaResult<()> {
+        if self.base_conf.name == base_conf.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        Ok(())
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
         get_search_sources_or_sinks_info_resp!(self, None)
     }
 
-    pub fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-        todo!()
-        // let mut restart = false;
-        // if self.ext_conf != ext_conf {
-        //     restart = true;
-        // }
-        // self.base_conf = base_conf;
-        // self.ext_conf = ext_conf;
+    pub async fn update(&mut self, base_conf: BaseConf, _ext_conf: SinkConf) {
+        self.base_conf = base_conf;
 
-        // if self.on && restart {}
-    }
+        match &self.stop_signal_tx {
+            Some(stop_signal_tx) => {
+                stop_signal_tx.send(()).await.unwrap();
 
-    pub fn delete(&mut self) -> HaliaResult<()> {
-        Ok(())
+                let (stop_signal_rx, mb_rx) = self.join_handle.take().unwrap().await.unwrap();
+                self.event_loop(stop_signal_rx, mb_rx);
+            }
+            None => {}
+        }
     }
 
     pub fn start(&mut self) {
@@ -68,25 +79,30 @@ impl Sink {
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
     ) {
-        tokio::spawn(async move {
+        let name = self.base_conf.name.clone();
+        let join_handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return;
+                        return (stop_signal_rx, mb_rx);
                     }
 
                     mb = mb_rx.recv() => {
-                        debug!("{:?}", mb);
+                        debug!("{} received {:?}", name, mb);
                     }
                 }
             }
         });
+        self.join_handle = Some(join_handle);
     }
 
-    pub fn stop(&mut self) {}
-
-    pub fn get_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
-        self.ref_info.active_ref(rule_id);
-        self.mb_tx.as_ref().unwrap().clone()
+    pub async fn stop(&mut self) {
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+        self.stop_signal_tx = None;
     }
 }

@@ -1,5 +1,6 @@
 use common::{
-    error::HaliaResult, get_search_sources_or_sinks_info_resp, persistence, ref_info::RefInfo,
+    error::{HaliaError, HaliaResult},
+    get_search_sources_or_sinks_info_resp, persistence,
 };
 use message::MessageBatch;
 use tokio::{select, sync::mpsc};
@@ -16,20 +17,16 @@ pub struct Sink {
     ext_conf: SinkConf,
     on: bool,
 
-    mb_tx: Option<mpsc::Sender<MessageBatch>>,
+    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    pub ref_info: RefInfo,
 }
 
 impl Sink {
-    pub async fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Sink> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
-
+    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<Sink> {
         Ok(Sink {
-            id: sink_id,
-            base_conf: req.base,
+            id,
+            base_conf,
             ext_conf,
-            ref_info: RefInfo::new(),
             on: false,
             stop_signal_tx: None,
             mb_tx: None,
@@ -43,18 +40,19 @@ impl Sink {
         Ok((req.base, conf, data))
     }
 
+    pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SinkConf) -> HaliaResult<()> {
+        if self.base_conf.name == base_conf.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        Ok(())
+    }
+
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
         get_search_sources_or_sinks_info_resp!(self, None)
     }
 
-    pub async fn update(
-        &mut self,
-        app_id: &Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
-        let (base_conf, ext_conf, data) = Self::parse_conf(req)?;
-        persistence::update_sink(app_id, &self.id, &data).await?;
-
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<()> {
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
@@ -65,17 +63,6 @@ impl Sink {
         if self.on && restart {}
 
         todo!()
-    }
-
-    pub async fn delete(&mut self, app_id: &Uuid) -> HaliaResult<()> {
-        if !self.ref_info.can_delete() {
-            return Err(common::error::HaliaError::Common(
-                "引用中，不能删除".to_owned(),
-            ));
-        }
-        persistence::delete_sink(app_id, &self.id).await?;
-
-        Ok(())
     }
 
     pub async fn start(&mut self, base_conf: HttpClientConf) {
@@ -142,13 +129,4 @@ impl Sink {
     pub async fn restart(&mut self) {}
 
     pub async fn stop(&mut self) {}
-
-    pub fn get_tx(&mut self, rule_id: &Uuid) -> mpsc::Sender<MessageBatch> {
-        self.ref_info.active_ref(rule_id);
-        self.mb_tx.as_ref().unwrap().clone()
-    }
-
-    pub fn del_tx(&mut self, rule_id: &Uuid) {
-        self.ref_info.deactive_ref(rule_id);
-    }
 }

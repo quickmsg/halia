@@ -2,11 +2,10 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::{
-    active_sink_ref, active_source_ref, check_and_set_on_false, check_and_set_on_true,
-    check_delete, check_delete_item, check_stop, deactive_sink_ref, deactive_source_ref,
-    del_sink_ref, del_source_ref,
+    active_sink_ref, active_source_ref, add_sink_ref, add_source_ref, check_and_set_on_false,
+    check_and_set_on_true, check_delete, check_delete_sink, check_delete_source, check_stop,
+    deactive_sink_ref, deactive_source_ref, del_sink_ref, del_source_ref,
     error::{HaliaError, HaliaResult},
-    find_sink_add_ref, find_source_add_ref,
     ref_info::RefInfo,
 };
 use message::MessageBatch;
@@ -645,7 +644,7 @@ impl App for MqttClient {
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        check_delete_item!(self, sources_ref_infos, source_id);
+        check_delete_source!(self, source_id);
         self.sources
             .write()
             .await
@@ -728,7 +727,7 @@ impl App for MqttClient {
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        check_delete_item!(self, sinks_ref_infos, sink_id);
+        check_delete_sink!(self, sink_id);
         if self.on {
             match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
                 Some(sink) => sink.stop().await,
@@ -741,7 +740,7 @@ impl App for MqttClient {
     }
 
     async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        find_source_add_ref!(self, source_id, rule_id)
+        add_source_ref!(self, source_id, rule_id)
     }
 
     async fn get_source_rx(
@@ -772,7 +771,7 @@ impl App for MqttClient {
     }
 
     async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        find_sink_add_ref!(self, sink_id, rule_id)
+        add_sink_ref!(self, sink_id, rule_id)
     }
 
     async fn get_sink_tx(

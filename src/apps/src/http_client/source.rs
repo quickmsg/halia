@@ -1,7 +1,6 @@
 use common::{
     error::{HaliaError, HaliaResult},
     get_search_sources_or_sinks_info_resp,
-    ref_info::RefInfo,
 };
 use message::MessageBatch;
 use tokio::{
@@ -19,59 +18,57 @@ pub struct Source {
     pub id: Uuid,
     base_conf: BaseConf,
     ext_conf: SourceConf,
-    on: bool,
 
-    mb_tx: Option<broadcast::Sender<MessageBatch>>,
+    pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    pub ref_info: RefInfo,
 }
 
 impl Source {
-    pub async fn new(source_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Source> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
-
-        Ok(Source {
-            id: source_id,
-            base_conf: req.base,
+    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
+        Self::validate_conf(&ext_conf)?;
+        Ok(Self {
+            id,
+            base_conf,
             ext_conf,
-            ref_info: RefInfo::new(),
-            on: false,
             stop_signal_tx: None,
             mb_tx: None,
         })
     }
 
-    // pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
-    //     if self.conf.base.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
+    fn validate_conf(_conf: &SourceConf) -> HaliaResult<()> {
+        Ok(())
+    }
 
-    //     Ok(())
-    // }
+    pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SourceConf) -> HaliaResult<()> {
+        if self.base_conf.name == base_conf.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        Ok(())
+    }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
         get_search_sources_or_sinks_info_resp!(self, None)
     }
 
-    pub async fn update(&mut self, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
+        Self::validate_conf(&ext_conf)?;
 
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
         }
-        self.base_conf = req.base;
+        self.base_conf = base_conf;
         self.ext_conf = ext_conf;
 
-        if self.on && restart {}
-
-        Ok(())
-    }
-
-    pub async fn delete(&mut self) -> HaliaResult<()> {
-        if !self.ref_info.can_delete() {
-            return Err(HaliaError::DeleteRefing);
+        match (&self.stop_signal_tx, restart) {
+            (None, true) => todo!(),
+            (None, false) => todo!(),
+            (Some(stop_singal_tx), true) => {
+                todo!()
+            }
+            (Some(_), false) => todo!(),
         }
 
         Ok(())
@@ -142,13 +139,4 @@ impl Source {
     pub async fn restart(&mut self) {}
 
     pub async fn stop(&mut self) {}
-
-    pub fn get_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        self.ref_info.active_ref(rule_id);
-        self.mb_tx.as_ref().unwrap().subscribe()
-    }
-
-    pub fn del_rx(&mut self, rule_id: &Uuid) {
-        self.ref_info.deactive_ref(rule_id)
-    }
 }
