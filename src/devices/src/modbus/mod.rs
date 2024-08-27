@@ -736,7 +736,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         add_source_ref!(self, source_id, rule_id)
     }
 
@@ -759,15 +759,15 @@ impl Device for Modbus {
         }
     }
 
-    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         deactive_source_ref!(self, source_id, rule_id)
     }
 
-    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         del_source_ref!(self, source_id, rule_id)
     }
 
-    async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         add_sink_ref!(self, sink_id, rule_id)
     }
 
@@ -784,11 +784,11 @@ impl Device for Modbus {
         }
     }
 
-    async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         deactive_sink_ref!(self, sink_id, rule_id)
     }
 
-    async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         del_sink_ref!(self, sink_id, rule_id)
     }
 }

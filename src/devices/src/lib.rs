@@ -67,23 +67,23 @@ pub trait Device: Send + Sync {
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()>;
 
-    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
     async fn get_source_rx(
         &mut self,
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
-    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
-    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
 
-    async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
     async fn get_sink_tx(
         &mut self,
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>>;
-    async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
-    async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
 }
 
 pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
@@ -536,7 +536,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| *device.get_id() == *device_id)
         {
-            Some(device) => device.add_source_ref(source_id, rule_id).await,
+            Some(device) => device.add_source_ref(source_id, rule_id),
             None => device_not_found_err!(),
         }
     }
@@ -572,7 +572,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| *device.get_id() == *device_id)
         {
-            Some(device) => device.del_source_rx(source_id, rule_id).await,
+            Some(device) => device.del_source_rx(source_id, rule_id),
             None => device_not_found_err!(),
         }
     }
@@ -590,7 +590,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| *device.get_id() == *device_id)
         {
-            Some(device) => device.del_source_ref(source_id, rule_id).await,
+            Some(device) => device.del_source_ref(source_id, rule_id),
             None => device_not_found_err!(),
         }
     }
@@ -608,7 +608,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| *device.get_id() == *device_id)
         {
-            Some(device) => device.add_sink_ref(sink_id, rule_id).await,
+            Some(device) => device.add_sink_ref(sink_id, rule_id),
             None => device_not_found_err!(),
         }
     }
@@ -644,7 +644,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| *device.get_id() == *device_id)
         {
-            Some(device) => device.del_sink_tx(sink_id, rule_id).await,
+            Some(device) => device.del_sink_tx(sink_id, rule_id),
             None => device_not_found_err!(),
         }
     }
@@ -662,7 +662,7 @@ impl DeviceManager {
             .iter_mut()
             .find(|device| *device.get_id() == *device_id)
         {
-            Some(device) => device.del_sink_ref(sink_id, rule_id).await,
+            Some(device) => device.del_sink_ref(sink_id, rule_id),
             None => device_not_found_err!(),
         }
     }

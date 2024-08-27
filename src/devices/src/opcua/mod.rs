@@ -2,9 +2,10 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true,
+    check_and_set_on_false, check_and_set_on_true, check_delete,
     error::{HaliaError, HaliaResult},
     persistence::{self, Status},
+    ref_info::RefInfo,
 };
 use group::Group;
 use message::MessageBatch;
@@ -13,6 +14,7 @@ use opcua::{
     types::{EndpointDescription, StatusCode},
 };
 use sink::Sink;
+use source::Source;
 use subscription::Subscription;
 use tokio::{
     select,
@@ -26,27 +28,28 @@ use types::{
         opcua::{
             CreateUpdateGroupReq, CreateUpdateOpcuaReq, CreateUpdateSinkReq,
             CreateUpdateSubscriptionReq, CreateUpdateVariableReq, OpcuaConf, SearchGroupsResp,
-            SearchSinksResp, SearchSubscriptionsResp, SearchVariablesResp,
+            SearchSinksResp, SearchSubscriptionsResp, SearchVariablesResp, SourceConf,
         },
-        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemConf,
-        SearchDevicesItemResp,
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemCommon,
+        SearchDevicesItemConf, SearchDevicesItemResp,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
 
 use crate::{sink_not_found_err, source_not_found_err, Device};
 
 mod group;
-// pub mod manager;
 mod monitored_item;
 mod sink;
+mod source;
 mod subscription;
 mod variable;
 
 struct Opcua {
     id: Uuid,
-    conf: CreateUpdateOpcuaReq,
+    base_conf: BaseConf,
+    ext_conf: OpcuaConf,
 
     on: bool,
     err: Option<String>,
@@ -56,39 +59,36 @@ struct Opcua {
     groups: Arc<RwLock<Vec<Group>>>,
     subscriptions: Vec<Subscription>,
 
+    sources: Vec<Source>,
+    sources_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: Vec<Sink>,
+    sinks_ref_infos: Vec<(Uuid, RefInfo)>,
 }
 
-pub async fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
-    // Self::check_conf(&req)?;
+pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+    let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
+    Opcua::validate_conf(&ext_conf)?;
 
     Ok(Box::new(Opcua {
-        id: device_id,
+        id: id,
+        base_conf: device_conf.base,
+        ext_conf,
         on: false,
         err: None,
-        // conf: req,
-        conf: todo!(),
         session: Arc::new(RwLock::new(None)),
         stop_signal_tx: None,
         groups: Arc::new(RwLock::new(vec![])),
         subscriptions: vec![],
+        sources: vec![],
+        sources_ref_infos: vec![],
         sinks: vec![],
+        sinks_ref_infos: vec![],
     }))
 }
 
 impl Opcua {
-    fn check_conf(req: &CreateUpdateOpcuaReq) -> HaliaResult<()> {
+    fn validate_conf(_conf: &OpcuaConf) -> HaliaResult<()> {
         Ok(())
-    }
-
-    pub fn check_duplicate_name(&self, device_id: &Option<Uuid>, name: &str) -> bool {
-        if let Some(device_id) = device_id {
-            if *device_id == self.id {
-                return false;
-            }
-        }
-
-        self.conf.base.name == name
     }
 
     async fn connect(
@@ -161,55 +161,55 @@ impl Opcua {
         // }
     }
 
-    async fn start(&mut self) -> HaliaResult<()> {
-        check_and_set_on_true!(self);
+    // async fn start(&mut self) -> HaliaResult<()> {
+    //     check_and_set_on_true!(self);
 
-        persistence::update_device_status(&self.id, Status::Runing).await?;
+    //     persistence::update_device_status(&self.id, Status::Runing).await?;
 
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(stop_signal_tx);
+    //     let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+    //     self.stop_signal_tx = Some(stop_signal_tx);
 
-        self.event_loop(stop_signal_rx).await;
-        Ok(())
-    }
+    //     self.event_loop(stop_signal_rx).await;
+    //     Ok(())
+    // }
 
-    async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>) {
-        let opcua_conf = self.conf.ext.clone();
-        let global_session = self.session.clone();
-        let reconnect = self.conf.ext.reconnect;
-        let groups = self.groups.clone();
-        tokio::spawn(async move {
-            loop {
-                match Opcua::connect(&opcua_conf).await {
-                    Ok((session, join_handle)) => {
-                        for group in groups.write().await.iter_mut() {
-                            group.start(session.clone()).await;
-                        }
+    // async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>) {
+    //     let opcua_conf = self.conf.ext.clone();
+    //     let global_session = self.session.clone();
+    //     let reconnect = self.conf.ext.reconnect;
+    //     let groups = self.groups.clone();
+    //     tokio::spawn(async move {
+    //         loop {
+    //             match Opcua::connect(&opcua_conf).await {
+    //                 Ok((session, join_handle)) => {
+    //                     for group in groups.write().await.iter_mut() {
+    //                         group.start(session.clone()).await;
+    //                     }
 
-                        *(global_session.write().await) = Some(session);
-                        match join_handle.await {
-                            Ok(s) => {
-                                debug!("{}", s);
-                            }
-                            Err(e) => debug!("{}", e),
-                        }
-                    }
-                    Err(e) => {
-                        let sleep = time::sleep(Duration::from_secs(reconnect));
-                        tokio::pin!(sleep);
-                        select! {
-                            _ = stop_signal_rx.recv() => {
-                                return
-                            }
+    //                     *(global_session.write().await) = Some(session);
+    //                     match join_handle.await {
+    //                         Ok(s) => {
+    //                             debug!("{}", s);
+    //                         }
+    //                         Err(e) => debug!("{}", e),
+    //                     }
+    //                 }
+    //                 Err(e) => {
+    //                     let sleep = time::sleep(Duration::from_secs(reconnect));
+    //                     tokio::pin!(sleep);
+    //                     select! {
+    //                         _ = stop_signal_rx.recv() => {
+    //                             return
+    //                         }
 
-                            _ = &mut sleep => {}
-                        }
-                        debug!("{e}");
-                    }
-                }
-            }
-        });
-    }
+    //                         _ = &mut sleep => {}
+    //                     }
+    //                     debug!("{e}");
+    //                 }
+    //             }
+    //         }
+    //     });
+    // }
 
     async fn stop(&mut self) -> HaliaResult<()> {
         if self
@@ -253,29 +253,6 @@ impl Opcua {
             Err(e) => {
                 debug!("err code is :{}", e);
             }
-        }
-
-        Ok(())
-    }
-
-    async fn update(&mut self, req: CreateUpdateOpcuaReq) -> HaliaResult<()> {
-        Self::check_conf(&req)?;
-
-        // persistence::update_device_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
-
-        let mut restart = false;
-        if self.conf.ext != req.ext {
-            restart = true;
-        }
-        self.conf = req;
-
-        if restart && self.on {
-            self.stop_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(())
-                .await
-                .unwrap();
         }
 
         Ok(())
@@ -634,68 +611,77 @@ impl Device for Opcua {
     }
 
     fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
-        todo!()
+        if self.base_conf.name == req.conf.base.name {
+            return Err(HaliaError::NameExists);
+        }
+
+        Ok(())
     }
 
     async fn search(&self) -> SearchDevicesItemResp {
-        todo!()
+        SearchDevicesItemResp {
+            common: SearchDevicesItemCommon {
+                id: self.id.clone(),
+                device_type: DeviceType::Opcua,
+                rtt: 999,
+                on: self.on,
+                err: self.err.clone(),
+            },
+            conf: SearchDevicesItemConf {
+                base: self.base_conf.clone(),
+                ext: serde_json::json!(self.ext_conf),
+            },
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update<'life0, 'async_trait>(
-        &'life0 mut self,
-        req: DeviceConf,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()> {
+        let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
+        Self::validate_conf(&ext_conf)?;
+
+        let mut restart = false;
+        if self.ext_conf != ext_conf {
+            restart = true;
+        }
+        self.base_conf = device_conf.base;
+        self.ext_conf = ext_conf;
+
+        if restart && self.on {
+            self.stop_signal_tx
+                .as_ref()
+                .unwrap()
+                .send(())
+                .await
+                .unwrap();
+        }
+
+        Ok(())
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    async fn delete(&mut self) -> HaliaResult<()> {
+        check_delete!(self, sources_ref_infos);
+        check_delete!(self, sinks_ref_infos);
+
+        if self.on {
+            self.stop().await?;
+        }
+
+        Ok(())
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn create_source<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn create_source(
+        &mut self,
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> HaliaResult<()> {
+        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        for source in self.sources.iter() {
+            source.check_duplicate(&req.base, &ext_conf)?;
+        }
+
+        let mut source = Source::new(source_id, req.base, ext_conf)?;
+        if self.on {}
+
+        Ok(())
     }
 
     #[must_use]
@@ -836,7 +822,7 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         todo!()
     }
 
@@ -848,15 +834,15 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         todo!()
     }
 
-    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         todo!()
     }
 
-    async fn add_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn add_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         todo!()
     }
 
@@ -868,11 +854,11 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn del_sink_tx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn del_sink_tx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         todo!()
     }
 
-    async fn del_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    fn del_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         todo!()
     }
 

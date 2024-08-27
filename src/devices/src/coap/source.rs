@@ -106,7 +106,7 @@ impl Source {
         let (mb_tx, _) = broadcast::channel(16);
 
         match self.ext_conf.method {
-            SourceMethod::Get => todo!(),
+            SourceMethod::Get => self.start_api(client).await?,
             SourceMethod::Observe => self.start_observe(client, mb_tx.clone()).await?,
         }
 
@@ -210,14 +210,17 @@ impl Source {
             warn!("stop send msg err:{:?}", e);
         }
 
-        // let observe_mb_tx = self.mb_tx.as_ref().unwrap().clone();
-        // let client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
-        // let observe_tx = client
-        //     .observe(&self.ext_conf.path, move |msg| {
-        //         Self::observe_handler(msg, &observe_mb_tx)
-        //     })
-        //     .await?;
-        // self.observe_tx = Some(observe_tx);
+        _ = self.stop_signal_tx.as_ref().unwrap().send(()).await;
+
+        let coap_client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
+
+        match self.ext_conf.method {
+            SourceMethod::Get => self.start_api(coap_client).await?,
+            SourceMethod::Observe => {
+                let (mb_tx, _) = broadcast::channel(16);
+                self.start_observe(coap_client, mb_tx.clone()).await?;
+            }
+        }
 
         Ok(())
     }

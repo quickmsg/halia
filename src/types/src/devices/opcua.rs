@@ -128,7 +128,7 @@ pub struct MonitoredItemconf {
 
     pub client_handle: u32,
     pub sampling_interval: f64,
-    // pub filter: 
+    // pub filter:
     pub queue_size: u32,
     pub discard_oleds: bool,
 }
@@ -200,3 +200,8 @@ pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
 }
+
+// TODO
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct SourceConf {}
