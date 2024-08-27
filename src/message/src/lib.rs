@@ -2,10 +2,10 @@ use std::{collections::HashMap, fmt};
 
 use anyhow::{bail, Result};
 
-mod json;
+mod avro;
 mod csv;
+mod json;
 mod protobuf;
-
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
