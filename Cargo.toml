@@ -50,6 +50,8 @@ md5 = "0.7.0"
 sha1 = "0.10.6"
 reqwest = "0.12.5"
 
+rusqlite = { version = "0.32.1", features = ["bundled"] }
+
 [profile.release]
 strip = true
 opt-level = "z"
