@@ -12,6 +12,10 @@ use tokio::{
 };
 use uuid::Uuid;
 
+mod local;
+
+use crate::error::HaliaResult;
+
 static ROOT_DIR: &str = "storage";
 pub static DELIMITER: char = '|';
 static DEVICE_FILE: &str = "devices";
@@ -19,11 +23,25 @@ static APP_FILE: &str = "apps";
 static SOURCE_FILE: &str = "sources";
 static SINK_FILE: &str = "sinks";
 static RULE_FILE: &str = "rules";
+pub(crate) static DEVICE_TABLE_NAME: &str = "devices";
 
 #[derive(Debug, PartialEq)]
 pub enum Status {
     Stopped = 0,
     Runing = 1,
+}
+
+pub struct Device {
+    id: String,
+    status: bool,
+    conf: String,
+}
+
+pub struct SourceOrSink {
+    id: String,
+    // device or app id
+    parent_id: String,
+    conf: String,
 }
 
 impl Status {
@@ -42,6 +60,38 @@ impl Display for Status {
             Status::Runing => write!(f, "1"),
         }
     }
+}
+
+pub trait Persistence {
+    fn init(&self) -> HaliaResult<()>;
+
+    fn create_device(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
+    fn read_devices(&self) -> HaliaResult<Vec<Device>>;
+    fn update_device_status(&self, id: &Uuid, status: bool) -> HaliaResult<()>;
+    fn update_device_conf(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
+    fn delete_device(&self, id: &Uuid) -> HaliaResult<()>;
+
+    fn create_source(&self, parent_id: &Uuid, source_id: &Uuid, conf: String) -> HaliaResult<()>;
+    fn read_sources(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>>;
+    fn update_source(&self, source_id: &Uuid, conf: String) -> HaliaResult<()>;
+    fn delete_source(&self, source_id: &Uuid) -> HaliaResult<()>;
+
+    fn create_sink(&self, parent_id: &Uuid, sink_id: &Uuid, conf: String) -> HaliaResult<()>;
+    fn read_sinks(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>>;
+    fn update_sink(&self, sink_id: &Uuid, conf: String) -> HaliaResult<()>;
+    fn delete_sink(&self, sink_id: &Uuid) -> HaliaResult<()>;
+
+    fn create_app(&self, id: &Uuid, conf: &Status) -> HaliaResult<()>;
+    fn read_apps(&self) -> HaliaResult<Vec<String>>;
+    fn update_app_status(&self, id: &Uuid, status: Status) -> HaliaResult<()>;
+    fn update_app_conf(&self, id: &Uuid, conf: &String) -> HaliaResult<()>;
+    fn delete_app(&self, id: &Uuid) -> HaliaResult<()>;
+
+    fn create_rule(&self, id: &Uuid, conf: &Status) -> HaliaResult<()>;
+    fn read_rules(&self) -> HaliaResult<Vec<String>>;
+    fn update_rule_status(&self, id: &Uuid, stauts: Status) -> HaliaResult<()>;
+    fn update_rule_conf(&self, id: &Uuid, conf: &String) -> HaliaResult<()>;
+    fn delete_rule(&self, id: &Uuid) -> HaliaResult<()>;
 }
 
 pub async fn init_dir() -> Result<(), io::Error> {
