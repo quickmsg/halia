@@ -3,6 +3,9 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 mod json;
+mod csv;
+mod protobuf;
+
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {

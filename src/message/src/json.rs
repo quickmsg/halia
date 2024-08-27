@@ -1,7 +1,6 @@
 use crate::{Message, MessageBatch, MessageValue};
 use anyhow::{bail, Result};
 use bytes::Bytes;
-use tracing::debug;
 
 impl MessageBatch {
     pub fn from_json(bytes: Bytes) -> Result<Self> {
