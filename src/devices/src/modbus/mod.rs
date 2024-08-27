@@ -515,13 +515,11 @@ impl Device for Modbus {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
-        Source::validate_conf(&ext_conf)?;
-
         for source in self.sources.read().await.iter() {
             source.check_duplicate(&req.base, &ext_conf)?;
         }
 
-        let mut source = Source::new(source_id, req.base, ext_conf);
+        let mut source = Source::new(source_id, req.base, ext_conf)?;
         if self.on {
             source
                 .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
@@ -569,8 +567,6 @@ impl Device for Modbus {
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
-        Source::validate_conf(&ext_conf)?;
-
         for source in self.sources.read().await.iter() {
             if source.id != source_id {
                 source.check_duplicate(&req.base, &ext_conf)?;
@@ -584,7 +580,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => Ok(source.update(req.base, ext_conf).await),
+            Some(source) => source.update(req.base, ext_conf).await,
             None => source_not_found_err!(),
         }
     }

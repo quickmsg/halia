@@ -44,9 +44,11 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> Self {
+    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
+        Self::validate_conf(&ext_conf)?;
+
         let quantity = ext_conf.data_type.get_quantity();
-        Self {
+        Ok(Self {
             id: source_id,
             base_conf,
             ext_conf,
@@ -56,10 +58,10 @@ impl Source {
             mb_tx: None,
             join_handle: None,
             err_info: None,
-        }
+        })
     }
 
-    pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
+    fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
         if conf.interval == 0 {
             return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
         }
@@ -140,7 +142,9 @@ impl Source {
         self.stop_signal_tx = None;
     }
 
-    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) {
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
+        Self::validate_conf(&ext_conf)?;
+
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
@@ -162,6 +166,8 @@ impl Source {
             self.event_loop(self.ext_conf.interval, stop_signal_rx, read_tx, device_err)
                 .await;
         }
+
+        Ok(())
     }
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {

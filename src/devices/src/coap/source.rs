@@ -4,7 +4,6 @@ use anyhow::Result;
 use common::{
     error::{HaliaError, HaliaResult},
     get_search_sources_or_sinks_info_resp,
-    ref_info::RefInfo,
 };
 use message::MessageBatch;
 use protocol::coap::{
@@ -26,7 +25,6 @@ use uuid::Uuid;
 
 pub struct Source {
     pub id: Uuid,
-
     base_conf: BaseConf,
     ext_conf: SourceConf,
 
@@ -35,22 +33,22 @@ pub struct Source {
 
     observe_tx: Option<oneshot::Sender<ObserveMessage>>,
 
-    pub ref_info: RefInfo,
-    mb_tx: Option<broadcast::Sender<MessageBatch>>,
+    pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
 impl Source {
-    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> Self {
-        Self {
-            id: source_id,
+    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
+        Self::validate_conf(&ext_conf)?;
+
+        Ok(Self {
+            id,
             base_conf,
             ext_conf,
             observe_tx: None,
-            ref_info: RefInfo::new(),
             mb_tx: None,
             stop_signal_tx: None,
             join_handle: None,
-        }
+        })
     }
 
     pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
@@ -70,13 +68,13 @@ impl Source {
         Ok(())
     }
 
-    // pub fn check_duplicate(&self, req: &CreateUpdateSourceReq) -> HaliaResult<()> {
-    //     if self.base_conf.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
+    pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SourceConf) -> HaliaResult<()> {
+        if self.base_conf.name == base_conf.name {
+            return Err(HaliaError::NameExists);
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
         get_search_sources_or_sinks_info_resp!(self, None)
@@ -99,10 +97,6 @@ impl Source {
             _ = self.restart(coap_conf).await;
         }
 
-        Ok(())
-    }
-
-    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
         Ok(())
     }
 
@@ -226,13 +220,5 @@ impl Source {
         // self.observe_tx = Some(observe_tx);
 
         Ok(())
-    }
-
-    pub fn get_mb_rx(&mut self, rule_id: &Uuid) -> broadcast::Receiver<MessageBatch> {
-        todo!()
-    }
-
-    pub fn del_mb_rx(&mut self, rule_id: &Uuid) {
-        todo!()
     }
 }
