@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -6,22 +5,53 @@ use crate::CertInfo;
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientConf {
+    pub version: Version,
+    #[serde(flatten)]
+    pub v311: Option<MqttClientV311Conf>,
+    #[serde(flatten)]
+    pub v50: Option<MqttClientV50Conf>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Version {
+    V311,
+    V50,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct MqttClientV311Conf {
     pub client_id: String,
     pub host: String,
     pub port: u16,
 
-    #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth: Option<MqttClientAuth>,
 
-    #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cert_info: Option<CertInfo>,
 
-    pub version: Version,
+    pub timeout: usize,
+    // 秒
+    pub keep_alive: u64,
+    pub clean_session: bool,
+
+    pub last_will: Option<LastWillV311>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct MqttClientV50Conf {
+    pub client_id: String,
+    pub host: String,
+    pub port: u16,
     pub timeout: usize,
     pub keep_alive: u64,
     pub clean_session: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<MqttClientAuth>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cert_info: Option<CertInfo>,
+    pub last_will: Option<LastWillV50>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
@@ -30,17 +60,31 @@ pub struct MqttClientAuth {
     pub password: String,
 }
 
-pub struct CertConf {
-    pub ca: Bytes,
-    pub client_cert: Bytes,
-    pub client_key: Bytes,
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct LastWillV311 {
+    pub topic: String,
+    // base64 编码的信息
+    pub message: String,
+    pub qos: Qos,
+    pub retain: bool,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum Version {
-    V311,
-    V50,
+pub struct LastWillV50 {
+    pub topic: String,
+    // base64 编码的信息
+    pub message: String,
+    pub qos: Qos,
+    pub retain: bool,
+
+    pub delay_interval: Option<u32>,
+    pub payload_format_indicator: Option<u8>,
+    pub message_expiry_interval: Option<u32>,
+    pub content_type: Option<String>,
+    pub response_topic: Option<String>,
+    // base 64 编码
+    pub correlation_data: Option<String>,
+    pub user_properties: Vec<(String, String)>,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
@@ -55,7 +99,7 @@ pub struct SourceConf {
     pub topic_alias: Option<u16>,
 }
 
-#[derive(Deserialize_repr, Serialize_repr, Clone, PartialEq)]
+#[derive(Deserialize_repr, Serialize_repr, Clone, PartialEq, Copy)]
 #[repr(u8)]
 pub enum Qos {
     AtMostOnce = 0,

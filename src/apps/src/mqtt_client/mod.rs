@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
+use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
     active_sink_ref, active_source_ref, add_sink_ref, add_source_ref, check_and_set_on_false,
     check_and_set_on_true, check_delete, check_delete_sink, check_delete_source, check_stop,
@@ -10,7 +11,8 @@ use common::{
 };
 use message::MessageBatch;
 use rumqttc::{
-    mqttbytes, v5, AsyncClient, Event, Incoming, MqttOptions, QoS, TlsConfiguration, Transport,
+    mqttbytes, v5, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS, TlsConfiguration,
+    Transport,
 };
 use sink::Sink;
 use source::Source;
@@ -74,7 +76,38 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
 }
 
 impl MqttClient {
-    fn validate_conf(_conf: &MqttClientConf) -> HaliaResult<()> {
+    fn validate_conf(conf: &MqttClientConf) -> HaliaResult<()> {
+        match conf.version {
+            types::apps::mqtt_client::Version::V311 => match &conf.v311 {
+                Some(conf) => {
+                    if let Some(last_will) = &conf.last_will {
+                        BASE64_STANDARD.decode(&last_will.message).map_err(|e| {
+                            HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e))
+                        })?;
+                    }
+                }
+                None => {
+                    return Err(HaliaError::Common(
+                        "配置错误,未填写mqtt v311的配置!".to_string(),
+                    ))
+                }
+            },
+            types::apps::mqtt_client::Version::V50 => match &conf.v50 {
+                Some(conf) => {
+                    if let Some(last_will) = &conf.last_will {
+                        BASE64_STANDARD.decode(&last_will.message).map_err(|e| {
+                            HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e))
+                        })?;
+                    }
+                }
+                None => {
+                    return Err(HaliaError::Common(
+                        "配置错误,未填写mqtt v5.0的配置!".to_string(),
+                    ))
+                }
+            },
+        }
+
         Ok(())
     }
 
@@ -89,19 +122,15 @@ impl MqttClient {
     }
 
     async fn start_v311(&mut self) {
-        let mut mqtt_options = MqttOptions::new(
-            self.ext_conf.client_id.clone(),
-            self.ext_conf.host.clone(),
-            self.ext_conf.port,
-        );
+        let conf = self.ext_conf.v311.as_ref().unwrap();
 
-        mqtt_options.set_keep_alive(Duration::from_secs(self.ext_conf.keep_alive));
-
-        if let Some(auth) = &self.ext_conf.auth {
+        let mut mqtt_options = MqttOptions::new(&conf.client_id, &conf.host, conf.port);
+        mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
+        mqtt_options.set_clean_session(conf.clean_session);
+        if let Some(auth) = &self.ext_conf.v311.as_ref().unwrap().auth {
             mqtt_options.set_credentials(auth.username.clone(), auth.password.clone());
         }
-
-        if let Some(cert_info) = &self.ext_conf.cert_info {
+        if let Some(cert_info) = &conf.cert_info {
             let transport = Transport::Tls(TlsConfiguration::Simple {
                 ca: cert_info.ca_cert.clone().into_bytes(),
                 alpn: None,
@@ -111,6 +140,15 @@ impl MqttClient {
                 )),
             });
             mqtt_options.set_transport(transport);
+        }
+        if let Some(last_will) = &conf.last_will {
+            let message = BASE64_STANDARD.decode(&last_will.message).unwrap();
+            mqtt_options.set_last_will(LastWill {
+                topic: last_will.topic.clone(),
+                message: message.into(),
+                qos: qos_to_v311(&last_will.qos),
+                retain: last_will.retain,
+            });
         }
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
@@ -122,7 +160,7 @@ impl MqttClient {
             let _ = client
                 .subscribe(
                     source.ext_conf.topic.clone(),
-                    get_mqtt_v311_qos(&source.ext_conf.qos),
+                    qos_to_v311(&source.ext_conf.qos),
                 )
                 .await;
         }
@@ -184,18 +222,15 @@ impl MqttClient {
     }
 
     async fn start_v50(&mut self) {
-        let mut mqtt_options = v5::MqttOptions::new(
-            self.ext_conf.client_id.clone(),
-            self.ext_conf.host.clone(),
-            self.ext_conf.port,
-        );
-        mqtt_options.set_keep_alive(Duration::from_secs(self.ext_conf.keep_alive));
+        let conf = self.ext_conf.v50.as_ref().unwrap();
+        let mut mqtt_options = v5::MqttOptions::new(&conf.client_id, &conf.host, conf.port);
+        mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
 
-        if let Some(auth) = &self.ext_conf.auth {
-            mqtt_options.set_credentials(auth.username.clone(), auth.password.clone());
+        if let Some(auth) = &conf.auth {
+            mqtt_options.set_credentials(&auth.username, &auth.password);
         }
 
-        if let Some(cert_info) = &self.ext_conf.cert_info {
+        if let Some(cert_info) = &conf.cert_info {
             let transport = Transport::Tls(TlsConfiguration::Simple {
                 ca: cert_info.ca_cert.clone().into_bytes(),
                 alpn: None,
@@ -215,7 +250,7 @@ impl MqttClient {
             let _ = client
                 .subscribe(
                     source.ext_conf.topic.clone(),
-                    get_mqtt_v50_qos(&source.ext_conf.qos),
+                    qos_to_v50(&source.ext_conf.qos),
                 )
                 .await;
         }
@@ -345,7 +380,7 @@ pub fn matches(topic: &str, filter: &str) -> bool {
     true
 }
 
-fn get_mqtt_v311_qos(qos: &Qos) -> mqttbytes::QoS {
+fn qos_to_v311(qos: &Qos) -> mqttbytes::QoS {
     match qos {
         Qos::AtMostOnce => QoS::AtMostOnce,
         Qos::AtLeastOnce => QoS::AtLeastOnce,
@@ -353,7 +388,7 @@ fn get_mqtt_v311_qos(qos: &Qos) -> mqttbytes::QoS {
     }
 }
 
-fn get_mqtt_v50_qos(qos: &Qos) -> v5::mqttbytes::QoS {
+fn qos_to_v50(qos: &Qos) -> v5::mqttbytes::QoS {
     match qos {
         Qos::AtMostOnce => v5::mqttbytes::QoS::AtMostOnce,
         Qos::AtLeastOnce => v5::mqttbytes::QoS::AtLeastOnce,
@@ -499,7 +534,7 @@ impl App for MqttClient {
                         .unwrap()
                         .subscribe(
                             source.ext_conf.topic.clone(),
-                            get_mqtt_v311_qos(&source.ext_conf.qos),
+                            qos_to_v311(&source.ext_conf.qos),
                         )
                         .await
                     {
@@ -513,7 +548,7 @@ impl App for MqttClient {
                         .unwrap()
                         .subscribe(
                             source.ext_conf.topic.clone(),
-                            get_mqtt_v50_qos(&source.ext_conf.qos),
+                            qos_to_v50(&source.ext_conf.qos),
                         )
                         .await
                     {
@@ -603,7 +638,7 @@ impl App for MqttClient {
                                 .unwrap()
                                 .subscribe(
                                     source.ext_conf.topic.clone(),
-                                    get_mqtt_v311_qos(&source.ext_conf.qos),
+                                    qos_to_v311(&source.ext_conf.qos),
                                 )
                                 .await
                             {
@@ -627,7 +662,7 @@ impl App for MqttClient {
                                 .unwrap()
                                 .subscribe(
                                     source.ext_conf.topic.clone(),
-                                    get_mqtt_v50_qos(&source.ext_conf.qos),
+                                    qos_to_v50(&source.ext_conf.qos),
                                 )
                                 .await
                             {
