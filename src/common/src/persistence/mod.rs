@@ -12,7 +12,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-mod local;
+pub mod local;
 
 use crate::error::HaliaResult;
 
@@ -23,7 +23,6 @@ static APP_FILE: &str = "apps";
 static SOURCE_FILE: &str = "sources";
 static SINK_FILE: &str = "sinks";
 static RULE_FILE: &str = "rules";
-pub(crate) static DEVICE_TABLE_NAME: &str = "devices";
 
 #[derive(Debug, PartialEq)]
 pub enum Status {

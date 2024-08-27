@@ -115,6 +115,57 @@ macro_rules! sink_not_found_err {
 }
 
 impl DeviceManager {
+    // pub async fn recover(&self) -> HaliaResult<()> {
+    //     match persistence::read_devices().await {
+    //         Ok(datas) => {
+    //             for data in datas {
+    //                 let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+    //                 assert_eq!(items.len(), 3);
+
+    //                 let device_id = Uuid::from_str(items[0]).unwrap();
+    //                 let req: CreateUpdateDeviceReq = serde_json::from_str(items[2])?;
+    //                 self.create_device(device_id, req, false).await?;
+
+    //                 let sources = persistence::read_sources(&device_id).await?;
+    //                 for source_data in sources {
+    //                     let items = source_data
+    //                         .split(persistence::DELIMITER)
+    //                         .collect::<Vec<&str>>();
+    //                     assert_eq!(items.len(), 2);
+    //                     let source_id = Uuid::from_str(items[0]).unwrap();
+    //                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
+    //                     self.create_source(device_id, source_id, req, false).await?;
+    //                 }
+
+    //                 let sinks = persistence::read_sinks(&device_id).await?;
+    //                 for sink_data in sinks {
+    //                     let items = sink_data
+    //                         .split(persistence::DELIMITER)
+    //                         .collect::<Vec<&str>>();
+    //                     assert_eq!(items.len(), 2);
+    //                     let sink_id = Uuid::from_str(items[0]).unwrap();
+    //                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
+    //                     self.create_sink(device_id, sink_id, req, false).await?;
+    //                 }
+
+    //                 match items[1] {
+    //                     "0" => {}
+    //                     "1" => self.start_device(device_id).await.unwrap(),
+    //                     _ => panic!("文件已损坏"),
+    //                 }
+    //             }
+    //             Ok(())
+    //         }
+    //         Err(e) => match e.kind() {
+    //             std::io::ErrorKind::NotFound => {
+    //                 persistence::init_devices().await?;
+    //                 Ok(())
+    //             }
+    //             _ => Err(e.into()),
+    //         },
+    //     }
+    // }
+
     pub async fn recover(&self) -> HaliaResult<()> {
         match persistence::read_devices().await {
             Ok(datas) => {

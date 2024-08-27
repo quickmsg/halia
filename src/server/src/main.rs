@@ -14,6 +14,10 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
+    let state = AppState {
+        perisitence: persistence::local::Local::new("./db").unwrap(),
+    };
+
     persistence::init_dir().await.unwrap();
     GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
     GLOBAL_APP_MANAGER.recover().await.unwrap();

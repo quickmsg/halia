@@ -3,13 +3,20 @@ use uuid::Uuid;
 
 use crate::{error::HaliaResult, persistence::Device};
 
-use super::{Persistence, SourceOrSink, DEVICE_TABLE_NAME};
+use super::{Persistence, SourceOrSink};
 
 pub struct Local {
     conn: Connection,
 }
 
-impl Local {}
+impl Local {
+    pub fn new(path: &str) -> HaliaResult<Self> {
+        let conn = Connection::open(path)?;
+        let local = Local { conn };
+        local.init()?;
+        Ok(local)
+    }
+}
 
 impl Persistence for Local {
     fn init(&self) -> HaliaResult<()> {
@@ -44,16 +51,14 @@ impl Persistence for Local {
     fn create_device(&self, id: &uuid::Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
-            .prepare("INSERT INTO persons (name) VALUES (?1), (?2), (?3)")?;
+            .prepare("INSERT INTO devices VALUES (?1), (?2), (?3)")?;
         stmt.execute([id.to_string(), false.to_string(), conf])?;
 
         Ok(())
     }
 
     fn read_devices(&self) -> crate::error::HaliaResult<Vec<Device>> {
-        let mut stmt = self
-            .conn
-            .prepare(format!("SELECT id, status, name FROM {}", DEVICE_TABLE_NAME).as_str())?;
+        let mut stmt = self.conn.prepare("SELECT id, status, conf FROM devies")?;
         let rows = stmt.query_map([], |row| {
             Ok(Device {
                 id: row.get(0)?,
@@ -92,11 +97,11 @@ impl Persistence for Local {
         Ok(())
     }
 
-    fn create_source(&self, device_id: &Uuid, source_id: &Uuid, conf: String) -> HaliaResult<()> {
+    fn create_source(&self, parent_id: &Uuid, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
             .prepare("INSERT INTO sources VALUES (?1), (?2), (?3)")?;
-        stmt.execute([source_id.to_string(), device_id.to_string(), conf])?;
+        stmt.execute([id.to_string(), parent_id.to_string(), conf])?;
 
         Ok(())
     }
@@ -114,32 +119,32 @@ impl Persistence for Local {
         })?;
 
         let mut sources = vec![];
-        for source_result in rows {
-            sources.push(source_result?);
+        for source_res in rows {
+            sources.push(source_res?);
         }
 
         Ok(sources)
     }
 
-    fn update_source(&self, source_id: &Uuid, conf: String) -> HaliaResult<()> {
+    fn update_source(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
             .prepare("UPDATE sources SET conf = ?1 WHERE id = ?2")?;
-        stmt.execute([conf, source_id.to_string()])?;
+        stmt.execute([conf, id.to_string()])?;
         Ok(())
     }
 
-    fn delete_source(&self, source_id: &Uuid) -> HaliaResult<()> {
+    fn delete_source(&self, id: &Uuid) -> HaliaResult<()> {
         let mut stmt = self.conn.prepare("DELETE sources WHERE id = ?1")?;
-        stmt.execute([source_id.to_string()])?;
+        stmt.execute([id.to_string()])?;
         Ok(())
     }
 
-    fn create_sink(&self, parent_id: &Uuid, sink_id: &Uuid, conf: String) -> HaliaResult<()> {
+    fn create_sink(&self, parent_id: &Uuid, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
             .prepare("INSERT INTO sinks VALUES (?1), (?2), (?3)")?;
-        stmt.execute([sink_id.to_string(), parent_id.to_string(), conf])?;
+        stmt.execute([id.to_string(), parent_id.to_string(), conf])?;
 
         Ok(())
     }
@@ -147,7 +152,7 @@ impl Persistence for Local {
     fn read_sinks(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT * FROM sources WHERE parent_id = ?1")?;
+            .prepare("SELECT * FROM sinks WHERE parent_id = ?1")?;
         let rows = stmt.query_map([parent_id.to_string()], |row| {
             Ok(SourceOrSink {
                 id: row.get(0)?,
@@ -156,25 +161,25 @@ impl Persistence for Local {
             })
         })?;
 
-        let mut sources = vec![];
-        for source_result in rows {
-            sources.push(source_result?);
+        let mut sinks = vec![];
+        for sink_res in rows {
+            sinks.push(sink_res?);
         }
 
-        Ok(sources)
+        Ok(sinks)
     }
 
-    fn update_sink(&self, source_id: &Uuid, conf: String) -> HaliaResult<()> {
+    fn update_sink(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
-            .prepare("UPDATE device_sources SET conf = ?1 WHERE id = ?2")?;
-        stmt.execute([conf, source_id.to_string()])?;
+            .prepare("UPDATE sinks SET conf = ?1 WHERE id = ?2")?;
+        stmt.execute([conf, id.to_string()])?;
         Ok(())
     }
 
-    fn delete_sink(&self, source_id: &Uuid) -> HaliaResult<()> {
+    fn delete_sink(&self, id: &Uuid) -> HaliaResult<()> {
         let mut stmt = self.conn.prepare("DELETE sinks WHERE id = ?1")?;
-        stmt.execute([source_id.to_string()])?;
+        stmt.execute([id.to_string()])?;
         Ok(())
     }
 

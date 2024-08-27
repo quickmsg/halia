@@ -3,6 +3,7 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
+use common::persistence::{self, Persistence};
 use devices::GLOBAL_DEVICE_MANAGER;
 use types::{
     devices::{CreateUpdateDeviceReq, QueryParams, SearchDevicesResp, Summary},
@@ -12,7 +13,14 @@ use uuid::Uuid;
 
 use crate::{AppResult, AppSuccess};
 
+struct AppState {
+    perisitence: impl Persistence,
+}
+
 pub fn routes() -> Router {
+    let state = AppState {
+        perisitence: persistence::local::Local::new("./db").unwrap(),
+    };
     Router::new()
         .route("/summary", get(get_devices_summary))
         .route("/", post(create_device))
@@ -42,6 +50,7 @@ pub fn routes() -> Router {
                         .route("/:sink_id", delete(delete_sink)),
                 ),
         )
+        .with_state(state)
 }
 
 async fn get_devices_summary() -> AppSuccess<Summary> {
