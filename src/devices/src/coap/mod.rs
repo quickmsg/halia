@@ -2,8 +2,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
-    active_sink_ref, active_source_ref, add_sink_ref, add_source_ref, check_delete_sink,
-    check_delete_source, deactive_sink_ref, del_sink_ref, del_source_ref,
+    active_sink_ref, active_source_ref, add_sink_ref, add_source_ref, check_and_set_on_false,
+    check_and_set_on_true, check_delete, check_delete_sink, check_delete_source, check_stop,
+    deactive_sink_ref, del_sink_ref, del_source_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -29,6 +30,12 @@ mod api;
 mod observe;
 mod sink;
 mod source;
+
+macro_rules! coap_not_support_write_source_value {
+    () => {
+        Err(HaliaError::Common("coap设备不支持写入源数据!".to_owned()))
+    };
+}
 
 struct Coap {
     id: Uuid,
@@ -75,573 +82,7 @@ impl Coap {
             ))),
         }
     }
-
-    // pub async fn update(&mut self, req: CreateUpdateCoapReq) -> HaliaResult<()> {
-    //     // persistence::update_device_conf(&self.id, serde_json::to_string(&req).unwrap()).await?;
-
-    //     let mut restart = false;
-    //     if self.conf.ext != req.ext {
-    //         restart = true;
-    //     }
-
-    //     self.conf = req;
-
-    //     if restart && self.on {
-    //         for observe in self.observes.iter_mut() {
-    //             _ = observe.restart(&self.conf.ext).await;
-    //         }
-    //         for api in self.apis.iter_mut() {
-    //             _ = api.restart(&self.conf.ext).await;
-    //         }
-    //         for sink in self.sinks.iter_mut() {
-    //             _ = sink.restart(&self.conf.ext).await;
-    //         }
-    //     }
-
-    //     Ok(())
-    // }
-
-    // pub async fn start(&mut self) -> HaliaResult<()> {
-    //     check_and_set_on_true!(self);
-
-    //     for observe in self.observes.iter_mut() {
-    //         if let Err(e) = observe.start(&self.conf.ext).await {
-    //             warn!("observe start err:{}", e);
-    //         }
-    //     }
-
-    //     for api in self.apis.iter_mut() {
-    //         _ = api.start(&self.conf.ext).await;
-    //     }
-
-    //     for sink in self.sinks.iter_mut() {
-    //         _ = sink.start(&self.conf.ext).await;
-    //     }
-
-    //     Ok(())
-    // }
-
-    // pub async fn stop(&mut self) -> HaliaResult<()> {
-    //     if self
-    //         .observes
-    //         .iter()
-    //         .any(|observe| !observe.ref_info.can_stop())
-    //     {
-    //         return Err(HaliaError::Common("有观察器正被引用中".to_owned()));
-    //     }
-    //     if self.apis.iter().any(|api| !api.ref_info.can_stop()) {
-    //         return Err(HaliaError::Common("有api正被引用中".to_owned()));
-    //     }
-    //     if self.sinks.iter().any(|sink| sink.ref_info.can_stop()) {
-    //         return Err(HaliaError::Common("有动作正被引用中".to_owned()));
-    //     }
-
-    //     check_and_set_on_false!(self);
-
-    //     for observe in self.observes.iter_mut() {
-    //         _ = observe.stop().await;
-    //     }
-    //     for api in self.apis.iter_mut() {
-    //         _ = api.stop().await;
-    //     }
-    //     for sink in self.sinks.iter_mut() {
-    //         _ = sink.stop().await;
-    //     }
-
-    //     Ok(())
-    // }
-
-    // pub async fn delete(&mut self) -> HaliaResult<()> {
-    //     if self.on {
-    //         return Err(HaliaError::Running);
-    //     }
-
-    //     if self
-    //         .observes
-    //         .iter()
-    //         .any(|observe| !observe.ref_info.can_delete())
-    //     {
-    //         return Err(HaliaError::Common("有观察器正被引用中".to_owned()));
-    //     }
-    //     if self.apis.iter().any(|api| !api.ref_info.can_delete()) {
-    //         return Err(HaliaError::Common("有api正被引用中".to_owned()));
-    //     }
-    //     if self.sinks.iter().any(|sink| !sink.ref_info.can_delete()) {
-    //         return Err(HaliaError::Common("有动作正被引用中".to_owned()));
-    //     }
-
-    //     Ok(())
-    // }
 }
-
-pub(crate) fn transform_options(
-    input_options: &Vec<(types::devices::coap::CoapOption, String)>,
-) -> Result<Vec<(CoapOption, Vec<u8>)>> {
-    let mut options = vec![];
-    for (k, v) in input_options {
-        let v = BASE64_STANDARD.decode(&v)?;
-        match k {
-            types::devices::coap::CoapOption::IfMatch => options.push((CoapOption::IfMatch, v)),
-            types::devices::coap::CoapOption::UriHost => options.push((CoapOption::UriHost, v)),
-            types::devices::coap::CoapOption::ETag => options.push((CoapOption::ETag, v)),
-            types::devices::coap::CoapOption::IfNoneMatch => {
-                options.push((CoapOption::IfNoneMatch, v))
-            }
-            types::devices::coap::CoapOption::Observe => options.push((CoapOption::Observe, v)),
-            types::devices::coap::CoapOption::UriPort => options.push((CoapOption::UriPort, v)),
-            types::devices::coap::CoapOption::LocationPath => {
-                options.push((CoapOption::LocationPath, v))
-            }
-            types::devices::coap::CoapOption::Oscore => options.push((CoapOption::Oscore, v)),
-            types::devices::coap::CoapOption::UriPath => options.push((CoapOption::UriPath, v)),
-            types::devices::coap::CoapOption::ContentFormat => {
-                options.push((CoapOption::ContentFormat, v))
-            }
-            types::devices::coap::CoapOption::MaxAge => options.push((CoapOption::MaxAge, v)),
-            types::devices::coap::CoapOption::UriQuery => options.push((CoapOption::UriQuery, v)),
-            types::devices::coap::CoapOption::Accept => options.push((CoapOption::Accept, v)),
-            types::devices::coap::CoapOption::LocationQuery => {
-                options.push((CoapOption::LocationQuery, v))
-            }
-            types::devices::coap::CoapOption::Block2 => options.push((CoapOption::Block2, v)),
-            types::devices::coap::CoapOption::Block1 => options.push((CoapOption::Block1, v)),
-            types::devices::coap::CoapOption::ProxyUri => options.push((CoapOption::ProxyUri, v)),
-            types::devices::coap::CoapOption::ProxyScheme => {
-                options.push((CoapOption::ProxyScheme, v))
-            }
-            types::devices::coap::CoapOption::Size1 => options.push((CoapOption::Size1, v)),
-            types::devices::coap::CoapOption::Size2 => options.push((CoapOption::Size2, v)),
-            types::devices::coap::CoapOption::NoResponse => {
-                options.push((CoapOption::NoResponse, v))
-            }
-        }
-    }
-    Ok(options)
-}
-
-// observe 代码块
-// impl Coap {
-//     pub async fn create_observe(
-//         &mut self,
-//         observe_id: Uuid,
-//         req: CreateUpdateObserveReq,
-//     ) -> HaliaResult<()> {
-//         for observe in self.observes.iter() {
-//             observe.check_duplicate(&req)?;
-//         }
-
-//         let mut observe = Observe::new(&self.id, observe_id, req).await?;
-//         if self.on {
-//             _ = observe.start(&self.conf.ext).await;
-//         }
-//         self.observes.push(observe);
-
-//         Ok(())
-//     }
-
-//     pub async fn search_observes(
-//         &self,
-//         pagination: Pagination,
-//         query: QueryObserves,
-//     ) -> SearchObservesResp {
-//         let mut total = 0;
-//         let mut data = vec![];
-//         for observe in self.observes.iter().rev() {
-//             let observe = observe.search();
-
-//             if let Some(name) = &query.name {
-//                 if !observe.conf.base.name.contains(name) {
-//                     continue;
-//                 }
-//             }
-
-//             if total >= ((pagination.page - 1) * pagination.size)
-//                 && total < (pagination.page * pagination.size)
-//             {
-//                 data.push(observe);
-//             }
-//             total += 1;
-//         }
-
-//         SearchObservesResp { total, data }
-//     }
-
-//     pub async fn update_observe(
-//         &mut self,
-//         observe_id: Uuid,
-//         req: CreateUpdateObserveReq,
-//     ) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == observe_id)
-//         {
-//             Some(observe) => observe.update(&self.id, req, &self.conf.ext).await,
-//             None => source_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn delete_observe(&mut self, observe_id: Uuid) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == observe_id)
-//         {
-//             Some(observe) => observe.delete(&self.id).await?,
-//             None => return source_not_found_err!(),
-//         }
-//         self.observes.retain(|observe| observe.id != observe_id);
-//         Ok(())
-//     }
-
-//     pub fn add_observe_ref(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == *observe_id)
-//         {
-//             Some(observe) => Ok(observe.ref_info.add_ref(rule_id)),
-//             None => return source_not_found_err!(),
-//         }
-//     }
-
-//     pub fn get_observe_rx(
-//         &mut self,
-//         observe_id: &Uuid,
-//         rule_id: &Uuid,
-//     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == *observe_id)
-//         {
-//             Some(observe) => Ok(observe.get_mb_rx(rule_id)),
-//             None => source_not_found_err!(),
-//         }
-//     }
-
-//     pub fn del_observe_rx(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == *observe_id)
-//         {
-//             Some(observe) => Ok(observe.del_mb_rx(rule_id)),
-//             None => source_not_found_err!(),
-//         }
-//     }
-
-//     pub fn del_observe_ref(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == *observe_id)
-//         {
-//             Some(observe) => Ok(observe.ref_info.del_ref(rule_id)),
-//             None => source_not_found_err!(),
-//         }
-//     }
-// }
-
-// impl Coap {
-//     pub async fn create_api(&mut self, api_id: Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
-//         for api in self.apis.iter() {
-//             api.check_duplicate(&req)?;
-//         }
-
-//         let mut api = API::new(&self.id, api_id, req).await?;
-//         if self.on {
-//             _ = api.start(&self.conf.ext).await;
-//         }
-//         self.apis.push(api);
-
-//         Ok(())
-//     }
-
-//     pub async fn search_apis(&self, pagination: Pagination) -> SearchAPIsResp {
-//         let mut data = vec![];
-//         for api in self
-//             .apis
-//             .iter()
-//             .rev()
-//             .skip((pagination.page - 1) * pagination.size)
-//         {
-//             data.push(api.search());
-//         }
-
-//         SearchAPIsResp {
-//             total: self.apis.len(),
-//             data,
-//         }
-//     }
-
-//     pub async fn update_api(&mut self, api_id: Uuid, req: CreateUpdateAPIReq) -> HaliaResult<()> {
-//         for api in self.apis.iter() {
-//             if api.id != api_id {
-//                 api.check_duplicate(&req)?;
-//             }
-//         }
-
-//         match self.apis.iter_mut().find(|api| api.id == api_id) {
-//             Some(api) => api.update(&self.id, req).await,
-//             None => source_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn delete_api(&mut self, api_id: Uuid) -> HaliaResult<()> {
-//         match self.apis.iter_mut().find(|api| api.id == api_id) {
-//             Some(api) => api.delete(&self.id).await?,
-//             None => return source_not_found_err!(),
-//         }
-//         self.apis.retain(|api| api.id != api_id);
-//         Ok(())
-//     }
-
-//     pub async fn add_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self.apis.iter_mut().find(|api| api.id == *api_id) {
-//             Some(api) => Ok(api.ref_info.add_ref(rule_id)),
-//             None => source_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn get_api_rx(
-//         &mut self,
-//         api_id: &Uuid,
-//         rule_id: &Uuid,
-//     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-//         match self.apis.iter_mut().find(|api| api.id == *api_id) {
-//             Some(api) => Ok(api.get_rx(rule_id)),
-//             None => source_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn del_api_ref(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self.apis.iter_mut().find(|api| api.id == *api_id) {
-//             Some(api) => Ok(api.ref_info.del_ref(rule_id)),
-//             None => source_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn del_api_rx(&mut self, api_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self.apis.iter_mut().find(|api| api.id == *api_id) {
-//             Some(api) => Ok(api.del_rx(rule_id)),
-//             None => source_not_found_err!(),
-//         }
-//     }
-// }
-
-// // sink
-// impl Coap {
-//     pub async fn create_sink(
-//         &mut self,
-//         sink_id: Uuid,
-//         req: CreateUpdateSinkReq,
-//     ) -> HaliaResult<()> {
-//         match Sink::new(&self.id, sink_id, req).await {
-//             Ok(sink) => Ok(self.sinks.push(sink)),
-//             Err(e) => Err(e),
-//         }
-//     }
-
-//     pub async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
-//         // let mut data = vec![];
-//         // for sink in self
-//         //     .sinks
-//         //     .iter()
-//         //     .rev()
-//         //     .skip((pagination.page - 1) * pagination.size)
-//         // {
-//         //     data.push(sink.search());
-//         //     if data.len() == pagination.size {
-//         //         break;
-//         //     }
-//         // }
-
-//         // SearchSinksResp {
-//         //     total: self.sinks.len(),
-//         //     data,
-//         // }
-//         todo!()
-//     }
-
-//     pub async fn update_sink(
-//         &mut self,
-//         sink_id: Uuid,
-//         req: CreateUpdateSinkReq,
-//     ) -> HaliaResult<()> {
-//         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-//             Some(sink) => sink.update(&self.id, req).await,
-//             None => sink_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-//         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-//             Some(sink) => {
-//                 sink.delete(&self.id).await?;
-//                 self.sinks.retain(|sink| sink.id != sink_id);
-//                 Ok(())
-//             }
-//             None => sink_not_found_err!(),
-//         }
-//     }
-
-//     pub fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-//             Some(sink) => Ok(sink.ref_info.add_ref(rule_id)),
-//             None => sink_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn get_sink_tx(
-//         &mut self,
-//         sink_id: &Uuid,
-//         rule_id: &Uuid,
-//     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-//         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-//             Some(sink) => Ok(sink.get_tx(rule_id)),
-//             None => sink_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-//             Some(sink) => Ok(sink.ref_info.del_ref(rule_id)),
-//             None => sink_not_found_err!(),
-//         }
-//     }
-
-//     pub async fn del_sink_rx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-//             Some(sink) => Ok(sink.del_tx(rule_id)),
-//             None => sink_not_found_err!(),
-//         }
-//     }
-// }
-
-// // source
-// impl Coap {
-//     pub async fn create_source(
-//         &mut self,
-//         observe_id: Option<Uuid>,
-//         req: CreateUpdateObserveReq,
-//     ) -> HaliaResult<()> {
-//         for observe in self.observes.iter() {
-//             observe.check_duplicate(&req)?;
-//         }
-
-//         let mut observe = Observe::new(&self.id, observe_id, req).await?;
-//         if self.on {
-//             _ = observe.start(&self.conf.ext).await;
-//         }
-//         self.observes.push(observe);
-
-//         Ok(())
-//     }
-
-//     pub async fn search_observes(
-//         &self,
-//         pagination: Pagination,
-//         query: QueryObserves,
-//     ) -> SearchObservesResp {
-//         let mut total = 0;
-//         let mut data = vec![];
-//         for observe in self.observes.iter().rev() {
-//             let observe = observe.search();
-
-//             if let Some(name) = &query.name {
-//                 if !observe.conf.base.name.contains(name) {
-//                     continue;
-//                 }
-//             }
-
-//             if total >= ((pagination.page - 1) * pagination.size)
-//                 && total < (pagination.page * pagination.size)
-//             {
-//                 data.push(observe);
-//             }
-//             total += 1;
-//         }
-
-//         SearchObservesResp { total, data }
-//     }
-
-//     pub async fn update_observe(
-//         &mut self,
-//         observe_id: Uuid,
-//         req: CreateUpdateObserveReq,
-//     ) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == observe_id)
-//         {
-//             Some(observe) => observe.update(&self.id, req, &self.conf.ext).await,
-//             None => observe_not_found_err!(observe_id),
-//         }
-//     }
-
-//     pub async fn delete_observe(&mut self, observe_id: Uuid) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == observe_id)
-//         {
-//             Some(observe) => observe.delete(&self.id).await?,
-//             None => return observe_not_found_err!(observe_id),
-//         }
-//         self.observes.retain(|observe| observe.id != observe_id);
-//         Ok(())
-//     }
-
-//     pub fn add_observe_ref(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == *observe_id)
-//         {
-//             Some(observe) => Ok(observe.ref_info.add_ref(rule_id)),
-//             None => return observe_not_found_err!(observe_id.clone()),
-//         }
-//     }
-
-//     pub fn get_observe_rx(
-//         &mut self,
-//         observe_id: &Uuid,
-//         rule_id: &Uuid,
-//     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == *observe_id)
-//         {
-//             Some(observe) => Ok(observe.get_mb_rx(rule_id)),
-//             None => observe_not_found_err!(observe_id.clone()),
-//         }
-//     }
-
-//     pub fn del_observe_rx(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == *observe_id)
-//         {
-//             Some(observe) => Ok(observe.del_mb_rx(rule_id)),
-//             None => observe_not_found_err!(observe_id.clone()),
-//         }
-//     }
-
-//     pub fn del_observe_ref(&mut self, observe_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-//         match self
-//             .observes
-//             .iter_mut()
-//             .find(|observe| observe.id == *observe_id)
-//         {
-//             Some(observe) => Ok(observe.ref_info.del_ref(rule_id)),
-//             None => return observe_not_found_err!(observe_id.clone()),
-//         }
-//     }
-// }
 
 #[async_trait]
 impl Device for Coap {
@@ -679,14 +120,34 @@ impl Device for Coap {
         let ext_conf: CoapConf = serde_json::from_value(device_conf.ext)?;
         Self::validate_conf(&ext_conf)?;
 
+        let mut restart = false;
+        if self.ext_conf != ext_conf {
+            restart = true;
+        }
         self.base_conf = device_conf.base;
         self.ext_conf = ext_conf;
+
+        if self.on && restart {
+            for source in self.sources.iter_mut() {
+                _ = source.restart(&self.ext_conf);
+            }
+            for sink in self.sinks.iter_mut() {
+                _ = sink.restart(&self.ext_conf);
+            }
+        }
 
         Ok(())
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
-        todo!()
+        check_delete!(self, sources_ref_infos);
+        check_delete!(self, sinks_ref_infos);
+
+        if self.on {
+            self.stop().await?;
+        }
+
+        Ok(())
     }
 
     async fn create_source(
@@ -921,14 +382,81 @@ impl Device for Coap {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        todo!()
+        check_and_set_on_true!(self);
+
+        for source in self.sources.iter_mut() {
+            _ = source.start(&self.ext_conf).await;
+        }
+
+        for sink in self.sinks.iter_mut() {
+            _ = sink.start(&self.ext_conf).await;
+        }
+
+        Ok(())
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        todo!()
+        check_stop!(self, sources_ref_infos);
+        check_stop!(self, sinks_ref_infos);
+
+        check_and_set_on_false!(self);
+
+        for source in self.sources.iter_mut() {
+            _ = source.stop().await;
+        }
+        for sink in self.sinks.iter_mut() {
+            _ = sink.stop().await;
+        }
+
+        Ok(())
     }
 
-    async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
-        todo!()
+    async fn write_source_value(&mut self, _source_id: Uuid, _req: Value) -> HaliaResult<()> {
+        coap_not_support_write_source_value!()
     }
+}
+
+pub(crate) fn transform_options(
+    input_options: &Vec<(types::devices::coap::CoapOption, String)>,
+) -> Result<Vec<(CoapOption, Vec<u8>)>> {
+    let mut options = vec![];
+    for (k, v) in input_options {
+        let v = BASE64_STANDARD.decode(&v)?;
+        match k {
+            types::devices::coap::CoapOption::IfMatch => options.push((CoapOption::IfMatch, v)),
+            types::devices::coap::CoapOption::UriHost => options.push((CoapOption::UriHost, v)),
+            types::devices::coap::CoapOption::ETag => options.push((CoapOption::ETag, v)),
+            types::devices::coap::CoapOption::IfNoneMatch => {
+                options.push((CoapOption::IfNoneMatch, v))
+            }
+            types::devices::coap::CoapOption::Observe => options.push((CoapOption::Observe, v)),
+            types::devices::coap::CoapOption::UriPort => options.push((CoapOption::UriPort, v)),
+            types::devices::coap::CoapOption::LocationPath => {
+                options.push((CoapOption::LocationPath, v))
+            }
+            types::devices::coap::CoapOption::Oscore => options.push((CoapOption::Oscore, v)),
+            types::devices::coap::CoapOption::UriPath => options.push((CoapOption::UriPath, v)),
+            types::devices::coap::CoapOption::ContentFormat => {
+                options.push((CoapOption::ContentFormat, v))
+            }
+            types::devices::coap::CoapOption::MaxAge => options.push((CoapOption::MaxAge, v)),
+            types::devices::coap::CoapOption::UriQuery => options.push((CoapOption::UriQuery, v)),
+            types::devices::coap::CoapOption::Accept => options.push((CoapOption::Accept, v)),
+            types::devices::coap::CoapOption::LocationQuery => {
+                options.push((CoapOption::LocationQuery, v))
+            }
+            types::devices::coap::CoapOption::Block2 => options.push((CoapOption::Block2, v)),
+            types::devices::coap::CoapOption::Block1 => options.push((CoapOption::Block1, v)),
+            types::devices::coap::CoapOption::ProxyUri => options.push((CoapOption::ProxyUri, v)),
+            types::devices::coap::CoapOption::ProxyScheme => {
+                options.push((CoapOption::ProxyScheme, v))
+            }
+            types::devices::coap::CoapOption::Size1 => options.push((CoapOption::Size1, v)),
+            types::devices::coap::CoapOption::Size2 => options.push((CoapOption::Size2, v)),
+            types::devices::coap::CoapOption::NoResponse => {
+                options.push((CoapOption::NoResponse, v))
+            }
+        }
+    }
+    Ok(options)
 }
