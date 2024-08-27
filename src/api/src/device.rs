@@ -1,9 +1,8 @@
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     routing::{delete, get, post, put},
     Json, Router,
 };
-use common::persistence::{self, Persistence};
 use devices::GLOBAL_DEVICE_MANAGER;
 use types::{
     devices::{CreateUpdateDeviceReq, QueryParams, SearchDevicesResp, Summary},
@@ -11,16 +10,9 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{AppResult, AppSuccess};
+use crate::{AppResult, AppState, AppSuccess};
 
-struct AppState {
-    perisitence: impl Persistence,
-}
-
-pub fn routes() -> Router {
-    let state = AppState {
-        perisitence: persistence::local::Local::new("./db").unwrap(),
-    };
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/summary", get(get_devices_summary))
         .route("/", post(create_device))
@@ -50,14 +42,16 @@ pub fn routes() -> Router {
                         .route("/:sink_id", delete(delete_sink)),
                 ),
         )
-        .with_state(state)
 }
 
 async fn get_devices_summary() -> AppSuccess<Summary> {
     AppSuccess::data(GLOBAL_DEVICE_MANAGER.get_summary().await)
 }
 
-async fn create_device(Json(req): Json<CreateUpdateDeviceReq>) -> AppResult<AppSuccess<()>> {
+async fn create_device(
+    State(state): State<AppState>,
+    Json(req): Json<CreateUpdateDeviceReq>,
+) -> AppResult<AppSuccess<()>> {
     let device_id = Uuid::new_v4();
     GLOBAL_DEVICE_MANAGER
         .create_device(device_id, req, true)

@@ -61,37 +61,7 @@ impl Display for Status {
     }
 }
 
-pub trait Persistence {
-    fn init(&self) -> HaliaResult<()>;
 
-    fn create_device(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn read_devices(&self) -> HaliaResult<Vec<Device>>;
-    fn update_device_status(&self, id: &Uuid, status: bool) -> HaliaResult<()>;
-    fn update_device_conf(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_device(&self, id: &Uuid) -> HaliaResult<()>;
-
-    fn create_source(&self, parent_id: &Uuid, source_id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn read_sources(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>>;
-    fn update_source(&self, source_id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_source(&self, source_id: &Uuid) -> HaliaResult<()>;
-
-    fn create_sink(&self, parent_id: &Uuid, sink_id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn read_sinks(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>>;
-    fn update_sink(&self, sink_id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_sink(&self, sink_id: &Uuid) -> HaliaResult<()>;
-
-    fn create_app(&self, id: &Uuid, conf: &Status) -> HaliaResult<()>;
-    fn read_apps(&self) -> HaliaResult<Vec<String>>;
-    fn update_app_status(&self, id: &Uuid, status: Status) -> HaliaResult<()>;
-    fn update_app_conf(&self, id: &Uuid, conf: &String) -> HaliaResult<()>;
-    fn delete_app(&self, id: &Uuid) -> HaliaResult<()>;
-
-    fn create_rule(&self, id: &Uuid, conf: &Status) -> HaliaResult<()>;
-    fn read_rules(&self) -> HaliaResult<Vec<String>>;
-    fn update_rule_status(&self, id: &Uuid, stauts: Status) -> HaliaResult<()>;
-    fn update_rule_conf(&self, id: &Uuid, conf: &String) -> HaliaResult<()>;
-    fn delete_rule(&self, id: &Uuid) -> HaliaResult<()>;
-}
 
 pub async fn init_dir() -> Result<(), io::Error> {
     if !Path::new(ROOT_DIR).exists() {

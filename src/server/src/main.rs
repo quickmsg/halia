@@ -1,6 +1,6 @@
 use anyhow::Result;
 use apps::GLOBAL_APP_MANAGER;
-use common::persistence;
+use common::persistence::{self, Persistence};
 use devices::GLOBAL_DEVICE_MANAGER;
 use rule::GLOBAL_RULE_MANAGER;
 use tracing::{info, Level};
@@ -14,17 +14,16 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let state = AppState {
-        perisitence: persistence::local::Local::new("./db").unwrap(),
-    };
+    let local_persistence = persistence::local::Local::new("./db").unwrap();
+    local_persistence.init().unwrap();
 
-    persistence::init_dir().await.unwrap();
-    GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
-    GLOBAL_APP_MANAGER.recover().await.unwrap();
-    GLOBAL_RULE_MANAGER.recover().await.unwrap();
+    // persistence::init_dir().await.unwrap();
+    // GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
+    // GLOBAL_APP_MANAGER.recover().await.unwrap();
+    // GLOBAL_RULE_MANAGER.recover().await.unwrap();
 
     info!("server starting...");
-    api::start().await;
+    api::start(local_persistence).await;
 
     Ok(())
 }

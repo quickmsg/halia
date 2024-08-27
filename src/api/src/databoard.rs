@@ -10,9 +10,9 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{AppResult, AppSuccess};
+use crate::{AppResult, AppState, AppSuccess};
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/summary", get(get_databoards_summary))
         .route("/", post(create_databoard))

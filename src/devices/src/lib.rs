@@ -1,4 +1,3 @@
-#![feature(io_error_more)]
 use std::{str::FromStr, sync::LazyLock};
 
 use async_trait::async_trait;

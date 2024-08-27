@@ -1,4 +1,3 @@
-#![feature(duration_constants)]
 use std::{str::FromStr, sync::LazyLock, vec};
 
 use async_trait::async_trait;

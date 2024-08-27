@@ -1,13 +1,13 @@
-use std::result;
+use std::{result, sync::Arc};
 
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
     Json, Router,
 };
-use common::error::HaliaError;
+use common::{error::HaliaError, persistence::local::Local};
 use serde::Serialize;
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::Mutex};
 use tower_http::cors::{Any, CorsLayer};
 
 mod app;
@@ -73,8 +73,17 @@ impl IntoResponse for AppError {
     }
 }
 
-pub async fn start() {
+#[derive(Clone)]
+struct AppState {
+    perisitence: Arc<Mutex<Local>>,
+}
+
+pub async fn start(local_persistence: Local) {
+    let state = AppState {
+        perisitence: Arc::new(Mutex::new(local_persistence)),
+    };
     let app = Router::new()
+        .with_state(state.clone())
         .nest("/api/device", device::routes())
         .nest("/api/app", app::routes())
         .nest("/api/rule", rule::routes())
@@ -87,5 +96,5 @@ pub async fn start() {
         );
 
     let listener = TcpListener::bind("0.0.0.0:13000").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app.with_state(state)).await.unwrap();
 }
