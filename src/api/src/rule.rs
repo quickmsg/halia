@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{AppResult, AppSuccess};
 
-pub fn rule_routes() -> Router {
+pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_rules_summary))
         .route("/", post(create))

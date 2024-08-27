@@ -204,7 +204,7 @@ impl MqttClient {
                             match &source.mb_tx {
                                 Some(tx) => {
                                     if let Err(e) = tx.send(msg.clone()) {
-                                        debug!("{}", e);
+                                        warn!("{}", e);
                                     }
                                 }
                                 None => {}

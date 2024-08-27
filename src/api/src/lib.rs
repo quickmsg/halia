@@ -11,6 +11,7 @@ use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
 mod app;
+mod databoard;
 mod device;
 mod rule;
 
@@ -76,7 +77,8 @@ pub async fn start() {
     let app = Router::new()
         .nest("/api/device", device::routes())
         .nest("/api/app", app::routes())
-        .nest("/api/rule", rule::rule_routes())
+        .nest("/api/rule", rule::routes())
+        .nest("/api/databoard", databoard::routes())
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

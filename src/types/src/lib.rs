@@ -4,6 +4,7 @@ use uuid::Uuid;
 pub mod apps;
 pub mod devices;
 pub mod rules;
+pub mod databoard;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct BaseConf {

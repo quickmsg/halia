@@ -17,10 +17,9 @@ use types::{
 };
 use uuid::Uuid;
 
-pub mod http_client;
+mod http_client;
 mod log;
-pub mod mqtt_client;
-pub mod mqtt_server;
+mod mqtt_client;
 
 #[async_trait]
 pub trait App: Send + Sync {

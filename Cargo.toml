@@ -9,7 +9,7 @@ members = [
     "src/functions",
     "src/protocol",
     "src/rule",
-    "src/apps",
+    "src/apps", "src/databoard", "src/mqtt-server",
 ]
 resolver = "2"
 
