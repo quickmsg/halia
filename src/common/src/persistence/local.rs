@@ -74,7 +74,7 @@ impl Persistence for Local {
     }
 
     fn read_devices(&self) -> HaliaResult<Vec<Device>> {
-        let mut stmt = self.conn.prepare("SELECT id, status, conf FROM devies")?;
+        let mut stmt = self.conn.prepare("SELECT id, status, conf FROM devices")?;
         let rows = stmt.query_map([], |row| {
             Ok(Device {
                 id: row.get(0)?,
@@ -112,7 +112,7 @@ impl Persistence for Local {
     }
 
     fn delete_device(&self, id: &Uuid) -> HaliaResult<()> {
-        let mut stmt = self.conn.prepare("DELETE devices WHERE id = ?1")?;
+        let mut stmt = self.conn.prepare("DELETE FROM devices WHERE id = ?1")?;
         stmt.execute([id.to_string()])?;
         Ok(())
     }
@@ -165,7 +165,7 @@ impl Persistence for Local {
     }
 
     fn delete_app(&self, id: &Uuid) -> HaliaResult<()> {
-        let mut stmt = self.conn.prepare("DELETE apps WHERE id = ?1")?;
+        let mut stmt = self.conn.prepare("DELETE FROM apps WHERE id = ?1")?;
         stmt.execute([id.to_string()])?;
         Ok(())
     }
@@ -173,7 +173,7 @@ impl Persistence for Local {
     fn create_source(&self, parent_id: &Uuid, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
-            .prepare("INSERT INTO (id, parent_id, conf) VALUES (?1, ?2, ?3)")?;
+            .prepare("INSERT INTO sources (id, parent_id, conf) VALUES (?1, ?2, ?3)")?;
         stmt.execute([id.to_string(), parent_id.to_string(), conf])?;
 
         Ok(())
@@ -182,7 +182,7 @@ impl Persistence for Local {
     fn read_sources(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT (id, conf) FROM sources WHERE parent_id = ?0")?;
+            .prepare("SELECT id, conf FROM sources WHERE parent_id = ?1")?;
         let rows = stmt.query_map([parent_id.to_string()], |row| {
             Ok(SourceOrSink {
                 id: row.get(0)?,
@@ -207,7 +207,7 @@ impl Persistence for Local {
     }
 
     fn delete_source(&self, id: &Uuid) -> HaliaResult<()> {
-        let mut stmt = self.conn.prepare("DELETE sources WHERE id = ?1")?;
+        let mut stmt = self.conn.prepare("DELETE FROM sources WHERE id = ?1")?;
         stmt.execute([id.to_string()])?;
         Ok(())
     }
@@ -224,7 +224,7 @@ impl Persistence for Local {
     fn read_sinks(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT (id, conf) FROM sinks WHERE parent_id = ?1")?;
+            .prepare("SELECT id, conf FROM sinks WHERE parent_id = ?1")?;
         let rows = stmt.query_map([parent_id.to_string()], |row| {
             Ok(SourceOrSink {
                 id: row.get(0)?,
@@ -302,7 +302,7 @@ impl Persistence for Local {
     }
 
     fn delete_rule(&self, id: &Uuid) -> HaliaResult<()> {
-        let mut stmt = self.conn.prepare("DELETE rules WHERE id = ?1")?;
+        let mut stmt = self.conn.prepare("DELETE FROM rules WHERE id = ?1")?;
         stmt.execute([id.to_string()])?;
         Ok(())
     }

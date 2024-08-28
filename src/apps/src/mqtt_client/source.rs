@@ -19,9 +19,9 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> Self {
+    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> Self {
         Source {
-            id: source_id,
+            id,
             base_conf,
             ext_conf,
             mb_tx: None,

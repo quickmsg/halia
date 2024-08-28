@@ -44,12 +44,12 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
+    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
         Self::validate_conf(&ext_conf)?;
 
         let quantity = ext_conf.data_type.get_quantity();
         Ok(Self {
-            id: source_id,
+            id,
             base_conf,
             ext_conf,
             quantity,
@@ -64,6 +64,58 @@ impl Source {
     fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
         if conf.interval == 0 {
             return Err(HaliaError::Common("点位频率必须大于0".to_owned()));
+        }
+
+        match &conf.data_type.typ {
+            types::devices::modbus::Type::Bool => match &conf.area {
+                Area::InputRegisters | Area::HoldingRegisters => {
+                    if conf.data_type.pos.is_none() {
+                        return Err(HaliaError::Common("必须填写位置！".to_owned()));
+                    }
+                }
+                _ => {}
+            },
+            types::devices::modbus::Type::Int8
+            | types::devices::modbus::Type::Uint8
+            | types::devices::modbus::Type::Int16
+            | types::devices::modbus::Type::Uint16 => {
+                if conf.data_type.single_endian.is_none() {
+                    return Err(HaliaError::Common("必须填写单字节序配置！".to_owned()));
+                }
+            }
+            types::devices::modbus::Type::Int32
+            | types::devices::modbus::Type::Uint32
+            | types::devices::modbus::Type::Int64
+            | types::devices::modbus::Type::Uint64
+            | types::devices::modbus::Type::Float32
+            | types::devices::modbus::Type::Float64 => {
+                if conf.data_type.single_endian.is_none() {
+                    return Err(HaliaError::Common("必须填写单字节序配置！".to_owned()));
+                }
+
+                if conf.data_type.double_endian.is_none() {
+                    return Err(HaliaError::Common("必须填写双字节序配置！".to_owned()));
+                }
+            }
+
+            types::devices::modbus::Type::String => {
+                if conf.data_type.single_endian.is_none() {
+                    return Err(HaliaError::Common("必须填写单字节序配置！".to_owned()));
+                }
+
+                if conf.data_type.double_endian.is_none() {
+                    return Err(HaliaError::Common("必须填写双字节序配置！".to_owned()));
+                }
+
+                if conf.data_type.len.is_none() {
+                    return Err(HaliaError::Common("必须填写长度配置！".to_owned()));
+                }
+            }
+            types::devices::modbus::Type::Bytes => {
+                if conf.data_type.len.is_none() {
+                    return Err(HaliaError::Common("必须填写长度配置！".to_owned()));
+                }
+            }
         }
 
         Ok(())

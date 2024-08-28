@@ -13,6 +13,7 @@ use rumqttc::{
     AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
+use tracing::{trace, warn};
 use types::{
     apps::mqtt_client::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq,
     SearchSourcesOrSinksInfoResp,
@@ -59,7 +60,7 @@ impl Sink {
     }
 
     fn validate_conf(conf: &SinkConf) -> HaliaResult<()> {
-        if !mqttbytes::valid_filter(&conf.topic) {
+        if !mqttbytes::valid_topic(&conf.topic) {
             return Err(HaliaError::Common("topic不合法！".to_owned()));
         }
 
@@ -161,7 +162,9 @@ impl Sink {
                     mb = mb_rx.recv() => {
                         match mb {
                             Some(mb) => {
-                                let _ = client.publish(&topic, qos, retain, mb.to_json()).await;
+                                if let Err(e) = client.publish(&topic, qos, retain, mb.to_json()).await {
+                                    warn!("{:?}", e);
+                                }
                             }
                             None => {}
                         }

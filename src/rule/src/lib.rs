@@ -171,6 +171,7 @@ pub async fn delete(
         None => return rule_not_fonnd_err!(),
     }
 
+    rules.write().await.retain(|rule| rule.id != id);
     persistence.lock().await.delete_rule(&id)?;
     Ok(())
 }

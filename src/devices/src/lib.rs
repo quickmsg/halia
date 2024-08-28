@@ -7,6 +7,7 @@ use common::{
 };
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemResp,
@@ -113,9 +114,11 @@ pub async fn load_from_persistence(
     for db_device in db_devices {
         let device_id = Uuid::from_str(&db_device.id).unwrap();
 
-        let db_sources = persistence.lock().await.read_sources(&device_id)?;
-        let db_sinks = persistence.lock().await.read_sinks(&device_id)?;
-        create_device(persistence, &devices, device_id, db_device.conf, false).await?;
+        let db_sources = persistence.lock().await.read_sources(&device_id).unwrap();
+        let db_sinks = persistence.lock().await.read_sinks(&device_id).unwrap();
+        create_device(persistence, &devices, device_id, db_device.conf, false)
+            .await
+            .unwrap();
 
         for db_source in db_sources {
             create_source(
