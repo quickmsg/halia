@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use rusqlite::Connection;
 use uuid::Uuid;
 
@@ -204,7 +203,7 @@ impl Persistence for Local {
         todo!()
     }
 
-    fn create_rule(&self, id: &uuid::Uuid, conf: &super::Status) -> crate::error::HaliaResult<()> {
+    fn create_rule(&self, id: &uuid::Uuid, body: String) -> crate::error::HaliaResult<()> {
         todo!()
     }
 
@@ -212,15 +211,11 @@ impl Persistence for Local {
         todo!()
     }
 
-    fn update_rule_status(
-        &self,
-        id: &uuid::Uuid,
-        stauts: super::Status,
-    ) -> crate::error::HaliaResult<()> {
+    fn update_rule_status(&self, id: &uuid::Uuid, stauts: bool) -> crate::error::HaliaResult<()> {
         todo!()
     }
 
-    fn update_rule_conf(&self, id: &uuid::Uuid, conf: &String) -> crate::error::HaliaResult<()> {
+    fn update_rule_conf(&self, id: &uuid::Uuid, body: String) -> crate::error::HaliaResult<()> {
         todo!()
     }
 

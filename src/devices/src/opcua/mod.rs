@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use common::{
     check_and_set_on_false, check_and_set_on_true, check_delete,
     error::{HaliaError, HaliaResult},
-    persistence::{self, Status},
+    persistence::{self},
     ref_info::RefInfo,
 };
 use group::Group;
@@ -123,27 +123,28 @@ impl Opcua {
     }
 
     async fn recover(&mut self) -> HaliaResult<()> {
-        let group_datas = persistence::read_sources(&self.id).await?;
-        for group_data in group_datas {
-            if group_data.len() == 0 {
-                continue;
-            }
+        // let group_datas = persistence::read_sources(&self.id).await?;
+        // for group_data in group_datas {
+        //     if group_data.len() == 0 {
+        //         continue;
+        //     }
 
-            let items = group_data
-                .split(persistence::DELIMITER)
-                .collect::<Vec<&str>>();
-            assert_eq!(items.len(), 2);
+        //     let items = group_data
+        //         .split(persistence::DELIMITER)
+        //         .collect::<Vec<&str>>();
+        //     assert_eq!(items.len(), 2);
 
-            let group_id = Uuid::from_str(items[0]).unwrap();
-            let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
-            self.create_group(group_id, req).await?;
-        }
+        //     let group_id = Uuid::from_str(items[0]).unwrap();
+        //     let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
+        //     self.create_group(group_id, req).await?;
+        // }
 
-        for group in self.groups.write().await.iter_mut() {
-            group.recover(&self.id).await?;
-        }
+        // for group in self.groups.write().await.iter_mut() {
+        //     group.recover(&self.id).await?;
+        // }
 
-        Ok(())
+        // Ok(())
+        todo!()
     }
 
     fn search(&self) -> SearchDevicesItemResp {
@@ -231,8 +232,6 @@ impl Opcua {
         }
 
         check_and_set_on_false!(self);
-
-        persistence::update_device_status(&self.id, Status::Stopped).await?;
 
         for group in self.groups.write().await.iter_mut() {
             group.stop().await?;

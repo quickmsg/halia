@@ -1,11 +1,10 @@
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     routing::{self, get, post, put},
-    Json, Router,
+    Router,
 };
-use rule::GLOBAL_RULE_MANAGER;
 use types::{
-    rules::{CreateUpdateRuleReq, QueryParams, SearchRulesResp, Summary},
+    rules::{QueryParams, SearchRulesResp, Summary},
     Pagination,
 };
 use uuid::Uuid;
@@ -23,42 +22,61 @@ pub fn routes() -> Router<AppState> {
         .route("/:id", routing::delete(delete))
 }
 
-async fn get_rules_summary() -> AppSuccess<Summary> {
-    AppSuccess::data(GLOBAL_RULE_MANAGER.get_summary().await)
+async fn get_rules_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
+    let summary = rule::get_summary(&state.rules).await;
+    AppSuccess::data(summary)
 }
 
-async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()>> {
-    let rule_id = Uuid::new_v4();
-    GLOBAL_RULE_MANAGER.create(rule_id, req, true).await?;
+async fn create(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
+    rule::create(
+        &state.rules,
+        &state.devices,
+        &state.apps,
+        &state.persistence,
+        Uuid::new_v4(),
+        body,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search(
+    State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppSuccess<SearchRulesResp> {
-    AppSuccess::data(GLOBAL_RULE_MANAGER.search(pagination, query_params).await)
+    let rules = rule::search(&state.rules, pagination, query_params).await;
+    AppSuccess::data(rules)
 }
 
-async fn start(Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_RULE_MANAGER.start(id).await?;
+async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    rule::start(
+        &state.rules,
+        &state.devices,
+        &state.apps,
+        &state.persistence,
+        id,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
-async fn stop(Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_RULE_MANAGER.stop(id).await?;
+async fn stop(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    rule::stop(&state.rules, &state.persistence, id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn update(
+    State(state): State<AppState>,
     Path(id): Path<Uuid>,
-    Json(req): Json<CreateUpdateRuleReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_RULE_MANAGER.update(id, req).await?;
+    rule::update(&state.rules, &state.persistence, id, body).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete(Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_RULE_MANAGER.delete(id).await?;
+async fn delete(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+    rule::delete(&state.rules, &state.persistence, id).await?;
     Ok(AppSuccess::empty())
 }

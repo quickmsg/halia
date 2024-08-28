@@ -1,12 +1,9 @@
-use std::{
-    str::FromStr,
-    sync::{Arc, LazyLock},
-};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence::{self, local::Local, Persistence},
+    persistence::{local::Local, Persistence},
 };
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
@@ -86,14 +83,6 @@ pub trait Device: Send + Sync {
     ) -> HaliaResult<mpsc::Sender<MessageBatch>>;
     fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
     fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
-}
-
-pub static GLOBAL_DEVICE_MANAGER: LazyLock<DeviceManager> = LazyLock::new(|| DeviceManager {
-    devices: RwLock::new(vec![]),
-});
-
-pub struct DeviceManager {
-    devices: RwLock<Vec<Box<dyn Device>>>,
 }
 
 macro_rules! device_not_found_err {
@@ -406,6 +395,74 @@ pub async fn delete_source(
     Ok(())
 }
 
+pub async fn add_source_ref(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    device_id: &Uuid,
+    source_id: &Uuid,
+    rule_id: &Uuid,
+) -> HaliaResult<()> {
+    match devices
+        .write()
+        .await
+        .iter_mut()
+        .find(|device| *device.get_id() == *device_id)
+    {
+        Some(device) => device.add_source_ref(source_id, rule_id),
+        None => device_not_found_err!(),
+    }
+}
+
+pub async fn get_source_rx(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    device_id: &Uuid,
+    source_id: &Uuid,
+    rule_id: &Uuid,
+) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+    match devices
+        .write()
+        .await
+        .iter_mut()
+        .find(|device| *device.get_id() == *device_id)
+    {
+        Some(device) => device.get_source_rx(source_id, rule_id).await,
+        None => device_not_found_err!(),
+    }
+}
+
+pub async fn del_source_rx(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    device_id: &Uuid,
+    source_id: &Uuid,
+    rule_id: &Uuid,
+) -> HaliaResult<()> {
+    match devices
+        .write()
+        .await
+        .iter_mut()
+        .find(|device| *device.get_id() == *device_id)
+    {
+        Some(device) => device.del_source_rx(source_id, rule_id),
+        None => device_not_found_err!(),
+    }
+}
+
+pub async fn del_source_ref(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    device_id: &Uuid,
+    source_id: &Uuid,
+    rule_id: &Uuid,
+) -> HaliaResult<()> {
+    match devices
+        .write()
+        .await
+        .iter_mut()
+        .find(|device| *device.get_id() == *device_id)
+    {
+        Some(device) => device.del_source_ref(source_id, rule_id),
+        None => device_not_found_err!(),
+    }
+}
+
 pub async fn create_sink(
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     persistence: &Arc<Mutex<Local>>,
@@ -496,607 +553,174 @@ pub async fn delete_sink(
     Ok(())
 }
 
-impl DeviceManager {
-    // pub async fn recover(&self) -> HaliaResult<()> {
-    //     match persistence::read_devices().await {
-    //         Ok(datas) => {
-    //             for data in datas {
-    //                 let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-    //                 assert_eq!(items.len(), 3);
-
-    //                 let device_id = Uuid::from_str(items[0]).unwrap();
-    //                 let req: CreateUpdateDeviceReq = serde_json::from_str(items[2])?;
-    //                 self.create_device(device_id, req, false).await?;
-
-    //                 let sources = persistence::read_sources(&device_id).await?;
-    //                 for source_data in sources {
-    //                     let items = source_data
-    //                         .split(persistence::DELIMITER)
-    //                         .collect::<Vec<&str>>();
-    //                     assert_eq!(items.len(), 2);
-    //                     let source_id = Uuid::from_str(items[0]).unwrap();
-    //                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
-    //                     self.create_source(device_id, source_id, req, false).await?;
-    //                 }
-
-    //                 let sinks = persistence::read_sinks(&device_id).await?;
-    //                 for sink_data in sinks {
-    //                     let items = sink_data
-    //                         .split(persistence::DELIMITER)
-    //                         .collect::<Vec<&str>>();
-    //                     assert_eq!(items.len(), 2);
-    //                     let sink_id = Uuid::from_str(items[0]).unwrap();
-    //                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
-    //                     self.create_sink(device_id, sink_id, req, false).await?;
-    //                 }
-
-    //                 match items[1] {
-    //                     "0" => {}
-    //                     "1" => self.start_device(device_id).await.unwrap(),
-    //                     _ => panic!("文件已损坏"),
-    //                 }
-    //             }
-    //             Ok(())
-    //         }
-    //         Err(e) => match e.kind() {
-    //             std::io::ErrorKind::NotFound => {
-    //                 persistence::init_devices().await?;
-    //                 Ok(())
-    //             }
-    //             _ => Err(e.into()),
-    //         },
-    //     }
-    // }
-
-    pub async fn recover(&self) -> HaliaResult<()> {
-        match persistence::read_devices().await {
-            Ok(datas) => {
-                for data in datas {
-                    let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
-                    assert_eq!(items.len(), 3);
-
-                    let device_id = Uuid::from_str(items[0]).unwrap();
-                    let req: CreateUpdateDeviceReq = serde_json::from_str(items[2])?;
-                    self.create_device(device_id, req, false).await?;
-
-                    let sources = persistence::read_sources(&device_id).await?;
-                    for source_data in sources {
-                        let items = source_data
-                            .split(persistence::DELIMITER)
-                            .collect::<Vec<&str>>();
-                        assert_eq!(items.len(), 2);
-                        let source_id = Uuid::from_str(items[0]).unwrap();
-                        let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
-                        self.create_source(device_id, source_id, req, false).await?;
-                    }
-
-                    let sinks = persistence::read_sinks(&device_id).await?;
-                    for sink_data in sinks {
-                        let items = sink_data
-                            .split(persistence::DELIMITER)
-                            .collect::<Vec<&str>>();
-                        assert_eq!(items.len(), 2);
-                        let sink_id = Uuid::from_str(items[0]).unwrap();
-                        let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
-                        self.create_sink(device_id, sink_id, req, false).await?;
-                    }
-
-                    match items[1] {
-                        "0" => {}
-                        "1" => self.start_device(device_id).await.unwrap(),
-                        _ => panic!("文件已损坏"),
-                    }
-                }
-                Ok(())
-            }
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => {
-                    persistence::init_devices().await?;
-                    Ok(())
-                }
-                _ => Err(e.into()),
-            },
-        }
+pub async fn add_sink_ref(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    rule_id: &Uuid,
+) -> HaliaResult<()> {
+    match devices
+        .write()
+        .await
+        .iter_mut()
+        .find(|device| *device.get_id() == *device_id)
+    {
+        Some(device) => device.add_sink_ref(sink_id, rule_id),
+        None => device_not_found_err!(),
     }
 }
 
-impl DeviceManager {
-    pub async fn get_summary(&self) -> Summary {
-        let mut total = 0;
-        let mut running_cnt = 0;
-        let mut err_cnt = 0;
-        let mut off_cnt = 0;
-        for device in self.devices.read().await.iter().rev() {
-            let device = device.search().await;
-            total += 1;
-
-            if device.common.err.is_some() {
-                err_cnt += 1;
-            } else {
-                if device.common.on {
-                    running_cnt += 1;
-                } else {
-                    off_cnt += 1;
-                }
-            }
-        }
-        Summary {
-            total,
-            running_cnt,
-            err_cnt,
-            off_cnt,
-        }
-    }
-
-    pub async fn create_device(
-        &self,
-        device_id: Uuid,
-        req: CreateUpdateDeviceReq,
-        persist: bool,
-    ) -> HaliaResult<()> {
-        let data = serde_json::to_string(&req)?;
-        let device = match req.device_type {
-            DeviceType::Modbus => modbus::new(device_id, req.conf)?,
-            DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
-            DeviceType::Coap => coap::new(device_id, req.conf).await?,
-        };
-        if persist {
-            persistence::create_device(device.get_id(), &data).await?;
-        }
-        self.devices.write().await.push(device);
-        Ok(())
-    }
-
-    pub async fn search_devices(
-        &self,
-        pagination: Pagination,
-        query_params: QueryParams,
-    ) -> SearchDevicesResp {
-        let mut data = vec![];
-        let mut total = 0;
-
-        for device in self.devices.read().await.iter().rev() {
-            let device = device.search().await;
-            if let Some(device_type) = &query_params.device_type {
-                if *device_type != device.common.device_type {
-                    continue;
-                }
-            }
-
-            if let Some(name) = &query_params.name {
-                if !device.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
-
-            if let Some(on) = &query_params.on {
-                if device.common.on != *on {
-                    continue;
-                }
-            }
-
-            if let Some(err) = &query_params.err {
-                if device.common.err.is_some() != *err {
-                    continue;
-                }
-            }
-
-            if pagination.check(total) {
-                data.push(device);
-            }
-
-            total += 1;
-        }
-
-        SearchDevicesResp { total, data }
-    }
-
-    pub async fn update_device(
-        &self,
-        device_id: Uuid,
-        req: CreateUpdateDeviceReq,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => {
-                let data = serde_json::to_string(&req)?;
-                device.update(req.conf).await?;
-                persistence::update_device_conf(device.get_id(), &data).await?;
-                Ok(())
-            }
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn start_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => {
-                device.start().await?;
-                persistence::update_device_status(device.get_id(), persistence::Status::Runing)
-                    .await?;
-                Ok(())
-            }
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn stop_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => {
-                device.stop().await?;
-                persistence::update_device_status(device.get_id(), persistence::Status::Stopped)
-                    .await?;
-                Ok(())
-            }
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn delete_device(&self, device_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => {
-                device.delete().await?;
-                persistence::delete_device(device.get_id()).await?;
-            }
-            None => return device_not_found_err!(),
-        }
-
-        self.devices
-            .write()
-            .await
-            .retain(|device| *device.get_id() != device_id);
-
-        Ok(())
+pub async fn get_sink_tx(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    rule_id: &Uuid,
+) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    match devices
+        .write()
+        .await
+        .iter_mut()
+        .find(|device| *device.get_id() == *device_id)
+    {
+        Some(device) => device.get_sink_tx(sink_id, rule_id).await,
+        None => device_not_found_err!(),
     }
 }
 
-impl DeviceManager {
-    pub async fn create_source(
-        &self,
-        device_id: Uuid,
-        source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-        persist: bool,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => {
-                let data = serde_json::to_string(&req)?;
-                device.create_source(source_id.clone(), req).await?;
-                if persist {
-                    persistence::create_source(device.get_id(), &source_id, &data).await?;
-                }
-                Ok(())
-            }
-
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn search_sources(
-        &self,
-        device_id: Uuid,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> HaliaResult<SearchSourcesOrSinksResp> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => Ok(device.search_sources(pagination, query).await),
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn update_source(
-        &self,
-        device_id: Uuid,
-        source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => {
-                let data = serde_json::to_string(&req)?;
-                device.update_source(source_id, req).await?;
-                persistence::update_source(device.get_id(), &source_id, &data).await?;
-                Ok(())
-            }
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn write_source_value(
-        &self,
-        device_id: Uuid,
-        source_id: Uuid,
-        req: Value,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => device.write_source_value(source_id, req).await,
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn delete_source(&self, device_id: Uuid, source_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => {
-                device.delete_source(source_id).await?;
-                persistence::delete_source(device.get_id(), &source_id).await?;
-                Ok(())
-            }
-            None => device_not_found_err!(),
-        }
+pub async fn del_sink_tx(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    rule_id: &Uuid,
+) -> HaliaResult<()> {
+    match devices
+        .write()
+        .await
+        .iter_mut()
+        .find(|device| *device.get_id() == *device_id)
+    {
+        Some(device) => device.del_sink_tx(sink_id, rule_id),
+        None => device_not_found_err!(),
     }
 }
 
-impl DeviceManager {
-    pub async fn create_sink(
-        &self,
-        device_id: Uuid,
-        sink_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-        persist: bool,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => {
-                let data = serde_json::to_string(&req)?;
-                device.create_sink(sink_id, req).await?;
-                if persist {
-                    persistence::create_sink(device.get_id(), &sink_id, &data).await?;
-                }
-                Ok(())
-            }
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn search_sinks(
-        &self,
-        device_id: Uuid,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> HaliaResult<SearchSourcesOrSinksResp> {
-        match self
-            .devices
-            .read()
-            .await
-            .iter()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => Ok(device.search_sinks(pagination, query).await),
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn update_sink(
-        &self,
-        device_id: Uuid,
-        sink_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => device.update_sink(sink_id, req).await,
-            None => device_not_found_err!(),
-        }
-    }
-
-    pub async fn delete_sink(&self, device_id: Uuid, sink_id: Uuid) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == device_id)
-        {
-            Some(device) => device.delete_sink(sink_id).await,
-            None => device_not_found_err!(),
-        }
+pub async fn del_sink_ref(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    device_id: &Uuid,
+    sink_id: &Uuid,
+    rule_id: &Uuid,
+) -> HaliaResult<()> {
+    match devices
+        .write()
+        .await
+        .iter_mut()
+        .find(|device| *device.get_id() == *device_id)
+    {
+        Some(device) => device.del_sink_ref(sink_id, rule_id),
+        None => device_not_found_err!(),
     }
 }
 
-impl DeviceManager {
-    pub async fn add_source_ref(
-        &self,
-        device_id: &Uuid,
-        source_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == *device_id)
-        {
-            Some(device) => device.add_source_ref(source_id, rule_id),
-            None => device_not_found_err!(),
-        }
-    }
+// impl DeviceManager {
+// pub async fn recover(&self) -> HaliaResult<()> {
+//     match persistence::read_devices().await {
+//         Ok(datas) => {
+//             for data in datas {
+//                 let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+//                 assert_eq!(items.len(), 3);
 
-    pub async fn get_source_rx(
-        &self,
-        device_id: &Uuid,
-        source_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == *device_id)
-        {
-            Some(device) => device.get_source_rx(source_id, rule_id).await,
-            None => device_not_found_err!(),
-        }
-    }
+//                 let device_id = Uuid::from_str(items[0]).unwrap();
+//                 let req: CreateUpdateDeviceReq = serde_json::from_str(items[2])?;
+//                 self.create_device(device_id, req, false).await?;
 
-    pub async fn del_source_rx(
-        &self,
-        device_id: &Uuid,
-        source_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == *device_id)
-        {
-            Some(device) => device.del_source_rx(source_id, rule_id),
-            None => device_not_found_err!(),
-        }
-    }
+//                 let sources = persistence::read_sources(&device_id).await?;
+//                 for source_data in sources {
+//                     let items = source_data
+//                         .split(persistence::DELIMITER)
+//                         .collect::<Vec<&str>>();
+//                     assert_eq!(items.len(), 2);
+//                     let source_id = Uuid::from_str(items[0]).unwrap();
+//                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
+//                     self.create_source(device_id, source_id, req, false).await?;
+//                 }
 
-    pub async fn del_source_ref(
-        &self,
-        device_id: &Uuid,
-        source_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == *device_id)
-        {
-            Some(device) => device.del_source_ref(source_id, rule_id),
-            None => device_not_found_err!(),
-        }
-    }
+//                 let sinks = persistence::read_sinks(&device_id).await?;
+//                 for sink_data in sinks {
+//                     let items = sink_data
+//                         .split(persistence::DELIMITER)
+//                         .collect::<Vec<&str>>();
+//                     assert_eq!(items.len(), 2);
+//                     let sink_id = Uuid::from_str(items[0]).unwrap();
+//                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
+//                     self.create_sink(device_id, sink_id, req, false).await?;
+//                 }
 
-    pub async fn add_sink_ref(
-        &self,
-        device_id: &Uuid,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == *device_id)
-        {
-            Some(device) => device.add_sink_ref(sink_id, rule_id),
-            None => device_not_found_err!(),
-        }
-    }
+//                 match items[1] {
+//                     "0" => {}
+//                     "1" => self.start_device(device_id).await.unwrap(),
+//                     _ => panic!("文件已损坏"),
+//                 }
+//             }
+//             Ok(())
+//         }
+//         Err(e) => match e.kind() {
+//             std::io::ErrorKind::NotFound => {
+//                 persistence::init_devices().await?;
+//                 Ok(())
+//             }
+//             _ => Err(e.into()),
+//         },
+//     }
+// }
 
-    pub async fn get_sink_tx(
-        &self,
-        device_id: &Uuid,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == *device_id)
-        {
-            Some(device) => device.get_sink_tx(sink_id, rule_id).await,
-            None => device_not_found_err!(),
-        }
-    }
+// pub async fn recover(&self) -> HaliaResult<()> {
+//     match persistence::read_devices().await {
+//         Ok(datas) => {
+//             for data in datas {
+//                 let items = data.split(persistence::DELIMITER).collect::<Vec<&str>>();
+//                 assert_eq!(items.len(), 3);
 
-    pub async fn del_sink_tx(
-        &self,
-        device_id: &Uuid,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == *device_id)
-        {
-            Some(device) => device.del_sink_tx(sink_id, rule_id),
-            None => device_not_found_err!(),
-        }
-    }
+//                 let device_id = Uuid::from_str(items[0]).unwrap();
+//                 let req: CreateUpdateDeviceReq = serde_json::from_str(items[2])?;
+//                 self.create_device(device_id, req, false).await?;
 
-    pub async fn del_sink_ref(
-        &self,
-        device_id: &Uuid,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<()> {
-        match self
-            .devices
-            .write()
-            .await
-            .iter_mut()
-            .find(|device| *device.get_id() == *device_id)
-        {
-            Some(device) => device.del_sink_ref(sink_id, rule_id),
-            None => device_not_found_err!(),
-        }
-    }
-}
+//                 let sources = persistence::read_sources(&device_id).await?;
+//                 for source_data in sources {
+//                     let items = source_data
+//                         .split(persistence::DELIMITER)
+//                         .collect::<Vec<&str>>();
+//                     assert_eq!(items.len(), 2);
+//                     let source_id = Uuid::from_str(items[0]).unwrap();
+//                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
+//                     self.create_source(device_id, source_id, req, false).await?;
+//                 }
+
+//                 let sinks = persistence::read_sinks(&device_id).await?;
+//                 for sink_data in sinks {
+//                     let items = sink_data
+//                         .split(persistence::DELIMITER)
+//                         .collect::<Vec<&str>>();
+//                     assert_eq!(items.len(), 2);
+//                     let sink_id = Uuid::from_str(items[0]).unwrap();
+//                     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
+//                     self.create_sink(device_id, sink_id, req, false).await?;
+//                 }
+
+//                 match items[1] {
+//                     "0" => {}
+//                     "1" => self.start_device(device_id).await.unwrap(),
+//                     _ => panic!("文件已损坏"),
+//                 }
+//             }
+//             Ok(())
+//         }
+//         Err(e) => match e.kind() {
+//             std::io::ErrorKind::NotFound => {
+//                 persistence::init_devices().await?;
+//                 Ok(())
+//             }
+//             _ => Err(e.into()),
+//         },
+//     }
+// }
+// }

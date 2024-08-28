@@ -1,12 +1,11 @@
-use apps::GLOBAL_APP_MANAGER;
 use axum::{
     extract::{Path, Query, State},
     routing::{self, get, post, put},
-    Json, Router,
+    Router,
 };
 use types::{
     apps::{QueryParams, SearchAppsResp, Summary},
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -96,73 +95,89 @@ async fn delete_app(
 }
 
 async fn create_source(
+    State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    let source_id = Uuid::new_v4();
-    GLOBAL_APP_MANAGER
-        .create_source(app_id, source_id, req, true)
-        .await?;
+    apps::create_source(
+        &state.apps,
+        &state.persistence,
+        app_id,
+        Uuid::new_v4(),
+        body,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_sources(
+    State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let data = GLOBAL_APP_MANAGER
-        .search_sources(app_id, pagination, query)
-        .await?;
-    Ok(AppSuccess::data(data))
+    let sources = apps::search_sources(&state.apps, app_id, pagination, query).await?;
+    Ok(AppSuccess::data(sources))
 }
 
 async fn update_source(
+    State(state): State<AppState>,
     Path((app_id, source_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER
-        .update_source(app_id, source_id, req)
-        .await?;
+    apps::update_source(&state.apps, &state.persistence, app_id, source_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete_source(Path((app_id, source_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.delete_source(app_id, source_id).await?;
+async fn delete_source(
+    State(state): State<AppState>,
+    Path((app_id, source_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    apps::delete_source(&state.apps, &state.persistence, app_id, source_id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn create_sink(
+    State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    let sink_id = Uuid::new_v4();
-    GLOBAL_APP_MANAGER
-        .create_sink(app_id, sink_id, req, true)
-        .await?;
+    apps::create_sink(
+        &state.apps,
+        &state.persistence,
+        app_id,
+        Uuid::new_v4(),
+        body,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_sinks(
+    State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let data = GLOBAL_APP_MANAGER
-        .search_sinks(app_id, pagination, query)
-        .await?;
-    Ok(AppSuccess::data(data))
+    let sinks = apps::search_sinks(&state.apps, app_id, pagination, query).await?;
+    Ok(AppSuccess::data(sinks))
 }
 
 async fn update_sink(
+    State(state): State<AppState>,
     Path((app_id, sink_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.update_sink(app_id, sink_id, req).await?;
+    apps::update_sink(&state.apps, &state.persistence, app_id, sink_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete_sink(Path((app_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.delete_sink(app_id, sink_id).await?;
+async fn delete_sink(
+    State(state): State<AppState>,
+    Path((app_id, sink_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    apps::delete_sink(&state.apps, &state.persistence, app_id, sink_id).await?;
     Ok(AppSuccess::empty())
 }

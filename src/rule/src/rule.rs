@@ -1,14 +1,14 @@
 use anyhow::Result;
-use apps::GLOBAL_APP_MANAGER;
+use apps::App;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
 };
-use devices::GLOBAL_DEVICE_MANAGER;
+use devices::Device;
 use functions::{computes, filter, merge::merge::Merge, window};
 use message::MessageBatch;
-use std::collections::HashMap;
-use tokio::sync::{broadcast, mpsc};
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
@@ -27,16 +27,25 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub async fn new(rule_id: Uuid, req: CreateUpdateRuleReq) -> HaliaResult<Self> {
+    pub async fn new(
+        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        rule_id: Uuid,
+        req: CreateUpdateRuleReq,
+    ) -> HaliaResult<Self> {
         let mut error = None;
         let mut add_ref_nodes = vec![];
         for node in req.ext.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = GLOBAL_DEVICE_MANAGER
-                        .add_source_ref(&source_node.device_id, &source_node.source_id, &rule_id)
-                        .await
+                    if let Err(e) = devices::add_source_ref(
+                        devices,
+                        &source_node.device_id,
+                        &source_node.source_id,
+                        &rule_id,
+                    )
+                    .await
                     {
                         add_ref_nodes.push(&node);
                         error = Some(format!("引用设备错误: {}", e).to_owned());
@@ -45,9 +54,13 @@ impl Rule {
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = GLOBAL_APP_MANAGER
-                        .add_source_ref(&source_node.app_id, &source_node.source_id, &rule_id)
-                        .await
+                    if let Err(e) = apps::add_source_ref(
+                        apps,
+                        &source_node.app_id,
+                        &source_node.source_id,
+                        &rule_id,
+                    )
+                    .await
                     {
                         add_ref_nodes.push(&node);
                         error = Some(format!("引用应用错误: {}", e).to_owned());
@@ -56,9 +69,13 @@ impl Rule {
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = GLOBAL_DEVICE_MANAGER
-                        .add_sink_ref(&sink_node.device_id, &sink_node.sink_id, &rule_id)
-                        .await
+                    if let Err(e) = devices::add_sink_ref(
+                        devices,
+                        &sink_node.device_id,
+                        &sink_node.sink_id,
+                        &rule_id,
+                    )
+                    .await
                     {
                         add_ref_nodes.push(&node);
                         error = Some(format!("引用设备错误: {}", e).to_owned());
@@ -67,9 +84,9 @@ impl Rule {
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = GLOBAL_APP_MANAGER
-                        .add_sink_ref(&sink_node.app_id, &sink_node.sink_id, &rule_id)
-                        .await
+                    if let Err(e) =
+                        apps::add_sink_ref(apps, &sink_node.app_id, &sink_node.sink_id, &rule_id)
+                            .await
                     {
                         add_ref_nodes.push(&node);
                         error = Some(format!("引用应用错误: {}", e).to_owned());
@@ -101,7 +118,11 @@ impl Rule {
         }
     }
 
-    pub async fn start(&mut self) -> Result<()> {
+    pub async fn start(
+        &mut self,
+        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    ) -> Result<()> {
         check_and_set_on_true!(self);
 
         let (stop_signal_tx, _) = broadcast::channel(16);
@@ -132,14 +153,14 @@ impl Rule {
                     let mut rxs = vec![];
                     for _ in 0..cnt {
                         rxs.push(
-                            GLOBAL_DEVICE_MANAGER
-                                .get_source_rx(
-                                    &source_node.device_id,
-                                    &source_node.source_id,
-                                    &self.id,
-                                )
-                                .await
-                                .unwrap(),
+                            devices::get_source_rx(
+                                devices,
+                                &source_node.device_id,
+                                &source_node.source_id,
+                                &self.id,
+                            )
+                            .await
+                            .unwrap(),
                         )
                     }
                     receivers.insert(source_id, rxs);
@@ -150,14 +171,14 @@ impl Rule {
                     let mut rxs = vec![];
                     for _ in 0..cnt {
                         rxs.push(
-                            GLOBAL_APP_MANAGER
-                                .get_source_rx(
-                                    &source_node.app_id,
-                                    &source_node.source_id,
-                                    &self.id,
-                                )
-                                .await
-                                .unwrap(),
+                            apps::get_source_rx(
+                                apps,
+                                &source_node.app_id,
+                                &source_node.source_id,
+                                &self.id,
+                            )
+                            .await
+                            .unwrap(),
                         )
                     }
                     receivers.insert(source_id, rxs);
@@ -237,19 +258,27 @@ impl Rule {
                         NodeType::DeviceSink => {
                             let sink_node: DeviceSinkNode =
                                 serde_json::from_value(node.conf.clone())?;
-                            let tx = GLOBAL_DEVICE_MANAGER
-                                .get_sink_tx(&sink_node.device_id, &sink_node.sink_id, &self.id)
-                                .await
-                                .unwrap();
+                            let tx = devices::get_sink_tx(
+                                devices,
+                                &sink_node.device_id,
+                                &sink_node.sink_id,
+                                &self.id,
+                            )
+                            .await
+                            .unwrap();
                             mpsc_tx = Some(tx);
                         }
                         NodeType::AppSink => {
                             ids.push(id);
                             let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = GLOBAL_APP_MANAGER
-                                .get_sink_tx(&sink_node.app_id, &sink_node.sink_id, &self.id)
-                                .await
-                                .unwrap();
+                            let tx = apps::get_sink_tx(
+                                apps,
+                                &sink_node.app_id,
+                                &sink_node.sink_id,
+                                &self.id,
+                            )
+                            .await
+                            .unwrap();
                             mpsc_tx = Some(tx);
                         }
                         _ => {}

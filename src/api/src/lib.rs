@@ -1,5 +1,6 @@
 use std::{result, sync::Arc};
 
+use ::rule::rule::Rule;
 use apps::App;
 use axum::{
     http::StatusCode,
@@ -16,7 +17,7 @@ use tokio::{
 use tower_http::cors::{Any, CorsLayer};
 
 mod app;
-mod databoard;
+// mod databoard;
 mod device;
 mod rule;
 
@@ -83,7 +84,7 @@ struct AppState {
     persistence: Arc<Mutex<Local>>,
     devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: Arc<RwLock<Vec<Box<dyn App>>>>,
-    // rules: Arc<RwLock<Vec<Rule>>>,
+    rules: Arc<RwLock<Vec<Rule>>>,
 }
 
 pub async fn start(local_persistence: Local) {
@@ -91,13 +92,14 @@ pub async fn start(local_persistence: Local) {
         persistence: Arc::new(Mutex::new(local_persistence)),
         devices: Arc::new(RwLock::new(vec![])),
         apps: Arc::new(RwLock::new(vec![])),
+        rules: Arc::new(RwLock::new(vec![])),
     };
     let app = Router::new()
         .with_state(state.clone())
         .nest("/api/device", device::routes())
         .nest("/api/app", app::routes())
         .nest("/api/rule", rule::routes())
-        .nest("/api/databoard", databoard::routes())
+        // .nest("/api/databoard", databoard::routes())
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

@@ -28,4 +28,6 @@ pub enum HaliaError {
     Disconnect,
     #[error("存储错误: {0}")]
     LocalPerisistenceErr(#[from] rusqlite::Error),
+    #[error("{0}")]
+    Error(#[from] anyhow::Error),
 }
