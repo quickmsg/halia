@@ -1,12 +1,16 @@
-use std::{str::FromStr, sync::LazyLock, vec};
+use std::{
+    str::FromStr,
+    sync::{Arc, LazyLock},
+    vec,
+};
 
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    persistence::{self, local::Local, Persistence},
 };
 use message::MessageBatch;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use types::{
     apps::{
         AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemResp, SearchAppsResp,
@@ -109,6 +113,273 @@ macro_rules! sink_not_found_err {
     () => {
         Err(HaliaError::NotFound("动作".to_owned()))
     };
+}
+
+pub async fn get_summary(apps: &Arc<RwLock<Vec<Box<dyn App>>>>) -> Summary {
+    let mut total = 0;
+    let mut running_cnt = 0;
+    let mut err_cnt = 0;
+    let mut off_cnt = 0;
+    for app in apps.read().await.iter().rev() {
+        let app = app.search().await;
+        total += 1;
+
+        if app.common.err.is_some() {
+            err_cnt += 1;
+        } else {
+            if app.common.on {
+                running_cnt += 1;
+            } else {
+                off_cnt += 1;
+            }
+        }
+    }
+    Summary {
+        total,
+        running_cnt,
+        err_cnt,
+        off_cnt,
+    }
+}
+
+pub async fn create_app(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    persistence: &Arc<Mutex<Local>>,
+    app_id: Uuid,
+    body: String,
+    persist: bool,
+) -> HaliaResult<()> {
+    let req: CreateUpdateAppReq = serde_json::from_str(&body)?;
+    for app in apps.read().await.iter() {
+        app.check_duplicate(&req)?;
+    }
+
+    let app = match req.app_type {
+        AppType::MqttClient => mqtt_client::new(app_id, req.conf)?,
+        AppType::HttpClient => http_client::new(app_id, req.conf)?,
+        AppType::Log => log::new(app_id, req.conf)?,
+    };
+
+    if persist {
+        persistence.lock().await.create_app(&app_id, body)?;
+    }
+    apps.write().await.push(app);
+    Ok(())
+}
+
+pub async fn search_apps(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    pagination: Pagination,
+    query: QueryParams,
+) -> SearchAppsResp {
+    let mut data = vec![];
+    let mut total = 0;
+
+    for app in apps.read().await.iter().rev() {
+        let app = app.search().await;
+        if let Some(app_type) = &query.app_type {
+            if *app_type != app.common.app_type {
+                continue;
+            }
+        }
+
+        if let Some(name) = &query.name {
+            if !app.conf.base.name.contains(name) {
+                continue;
+            }
+        }
+        if let Some(on) = &query.on {
+            if app.common.on != *on {
+                continue;
+            }
+        }
+
+        if let Some(err) = &query.err {
+            if app.common.err.is_some() != *err {
+                continue;
+            }
+        }
+
+        if total >= (pagination.page - 1) * pagination.size
+            && total < pagination.page * pagination.size
+        {
+            data.push(app);
+        }
+        total += 1;
+    }
+
+    SearchAppsResp { total, data }
+}
+
+pub async fn update_app(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    persistence: &Arc<Mutex<Local>>,
+    app_id: Uuid,
+    body: String,
+) -> HaliaResult<()> {
+    let req: CreateUpdateAppReq = serde_json::from_str(&body)?;
+
+    for app in apps.read().await.iter() {
+        if *app.get_id() != app_id {
+            app.check_duplicate(&req)?;
+        }
+    }
+
+    match apps
+        .write()
+        .await
+        .iter_mut()
+        .find(|app| *app.get_id() == app_id)
+    {
+        Some(app) => app.update(req.conf).await?,
+        None => return app_not_found_err!(),
+    }
+
+    persistence.lock().await.update_app_conf(&app_id, body)?;
+
+    Ok(())
+}
+
+pub async fn start_app(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    persistence: &Arc<Mutex<Local>>,
+    app_id: Uuid,
+) -> HaliaResult<()> {
+    match apps
+        .write()
+        .await
+        .iter_mut()
+        .find(|app| *app.get_id() == app_id)
+    {
+        Some(app) => app.start().await?,
+        None => return app_not_found_err!(),
+    }
+
+    persistence.lock().await.update_app_status(&app_id, true)?;
+
+    Ok(())
+}
+
+pub async fn stop_app(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    persistence: &Arc<Mutex<Local>>,
+    app_id: Uuid,
+) -> HaliaResult<()> {
+    match apps
+        .write()
+        .await
+        .iter_mut()
+        .find(|app| *app.get_id() == app_id)
+    {
+        Some(app) => app.stop().await?,
+        None => return app_not_found_err!(),
+    }
+
+    persistence.lock().await.update_app_status(&app_id, false)?;
+    Ok(())
+}
+
+pub async fn delete_app(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    persistence: &Arc<Mutex<Local>>,
+    app_id: Uuid,
+) -> HaliaResult<()> {
+    match apps
+        .write()
+        .await
+        .iter_mut()
+        .find(|app| *app.get_id() == app_id)
+    {
+        Some(app) => app.delete().await?,
+        None => return app_not_found_err!(),
+    }
+
+    apps.write().await.retain(|app| *app.get_id() != app_id);
+    persistence.lock().await.delete_app(&app_id)?;
+    Ok(())
+}
+
+pub async fn create_source(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    persistence: &Arc<Mutex<Local>>,
+    app_id: Uuid,
+    source_id: Uuid,
+    body: String,
+    persist: bool,
+) -> HaliaResult<()> {
+    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
+    match apps
+        .write()
+        .await
+        .iter_mut()
+        .find(|app| *app.get_id() == app_id)
+    {
+        Some(app) => app.create_source(source_id, req).await?,
+        None => return app_not_found_err!(),
+    }
+
+    if persist {
+        persistence
+            .lock()
+            .await
+            .create_source(&app_id, &source_id, body)?;
+    }
+
+    Ok(())
+}
+
+pub async fn search_sources(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    app_id: Uuid,
+    pagination: Pagination,
+    query: QueryParams,
+) -> HaliaResult<SearchSourcesOrSinksResp> {
+    match apps.read().await.iter().find(|app| *app.get_id() == app_id) {
+        Some(app) => Ok(app.search_sources(pagination, query).await),
+        None => app_not_found_err!(),
+    }
+}
+
+pub async fn update_source(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    persistence: &Arc<Mutex<Local>>,
+    app_id: Uuid,
+    source_id: Uuid,
+    body: String,
+) -> HaliaResult<()> {
+    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
+    match apps
+        .write()
+        .await
+        .iter_mut()
+        .find(|app| *app.get_id() == app_id)
+    {
+        Some(app) => app.update_source(source_id, req).await?,
+        None => return app_not_found_err!(),
+    }
+
+    persistence.lock().await.update_source(&source_id, body)?;
+    Ok(())
+}
+
+pub async fn delete_source(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    persistence: &Arc<Mutex<Local>>,
+    app_id: Uuid,
+    source_id: Uuid,
+) -> HaliaResult<()> {
+    match apps
+        .write()
+        .await
+        .iter_mut()
+        .find(|app| *app.get_id() == app_id)
+    {
+        Some(app) => app.delete_source(source_id).await?,
+        None => return app_not_found_err!(),
+    }
+
+    persistence.lock().await.delete_source(&source_id)?;
+    Ok(())
 }
 
 impl AppManager {

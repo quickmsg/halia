@@ -184,7 +184,7 @@ impl Persistence for Local {
         Ok(())
     }
 
-    fn create_app(&self, id: &uuid::Uuid, conf: &super::Status) -> crate::error::HaliaResult<()> {
+    fn create_app(&self, id: &uuid::Uuid, body: String) -> crate::error::HaliaResult<()> {
         todo!()
     }
 
@@ -192,15 +192,11 @@ impl Persistence for Local {
         todo!()
     }
 
-    fn update_app_status(
-        &self,
-        id: &uuid::Uuid,
-        stauts: super::Status,
-    ) -> crate::error::HaliaResult<()> {
+    fn update_app_status(&self, id: &uuid::Uuid, stauts: bool) -> crate::error::HaliaResult<()> {
         todo!()
     }
 
-    fn update_app_conf(&self, id: &uuid::Uuid, conf: &String) -> crate::error::HaliaResult<()> {
+    fn update_app_conf(&self, id: &uuid::Uuid, conf: String) -> crate::error::HaliaResult<()> {
         todo!()
     }
 

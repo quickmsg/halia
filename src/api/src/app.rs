@@ -1,11 +1,11 @@
 use apps::GLOBAL_APP_MANAGER;
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     routing::{self, get, post, put},
     Json, Router,
 };
 use types::{
-    apps::{CreateUpdateAppReq, QueryParams, SearchAppsResp, Summary},
+    apps::{QueryParams, SearchAppsResp, Summary},
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
@@ -43,47 +43,55 @@ pub fn routes() -> Router<AppState> {
         )
 }
 
-async fn get_apps_summary() -> AppSuccess<Summary> {
-    AppSuccess::data(GLOBAL_APP_MANAGER.get_summary().await)
+async fn get_apps_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
+    let summary = apps::get_summary(&state.apps).await;
+    AppSuccess::data(summary)
 }
 
-async fn create_app(Json(req): Json<CreateUpdateAppReq>) -> AppResult<AppSuccess<()>> {
-    let app_id = Uuid::new_v4();
-    GLOBAL_APP_MANAGER.create_app(app_id, req, true).await?;
+async fn create_app(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
+    apps::create_app(&state.apps, &state.persistence, Uuid::new_v4(), body, true).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_apps(
+    State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
-    Query(query_params): Query<QueryParams>,
+    Query(query): Query<QueryParams>,
 ) -> AppSuccess<SearchAppsResp> {
-    AppSuccess::data(
-        GLOBAL_APP_MANAGER
-            .search_apps(pagination, query_params)
-            .await,
-    )
+    let apps = apps::search_apps(&state.apps, pagination, query).await;
+    AppSuccess::data(apps)
 }
 
 async fn update_app(
+    State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateAppReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.update_app(app_id, req).await?;
+    apps::update_app(&state.apps, &state.persistence, app_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn start_app(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.start_app(app_id).await?;
+async fn start_app(
+    State(state): State<AppState>,
+    Path(app_id): Path<Uuid>,
+) -> AppResult<AppSuccess<()>> {
+    apps::start_app(&state.apps, &state.persistence, app_id).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn stop_app(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.stop_app(app_id).await?;
+async fn stop_app(
+    State(state): State<AppState>,
+    Path(app_id): Path<Uuid>,
+) -> AppResult<AppSuccess<()>> {
+    apps::stop_app(&state.apps, &state.persistence, app_id).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete_app(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.delete_app(app_id).await?;
+async fn delete_app(
+    State(state): State<AppState>,
+    Path(app_id): Path<Uuid>,
+) -> AppResult<AppSuccess<()>> {
+    apps::delete_app(&state.apps, &state.persistence, app_id).await?;
     Ok(AppSuccess::empty())
 }
 

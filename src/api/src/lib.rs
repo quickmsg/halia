@@ -1,5 +1,6 @@
 use std::{result, sync::Arc};
 
+use apps::App;
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -81,12 +82,15 @@ impl IntoResponse for AppError {
 struct AppState {
     persistence: Arc<Mutex<Local>>,
     devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
+    apps: Arc<RwLock<Vec<Box<dyn App>>>>,
+    // rules: Arc<RwLock<Vec<Rule>>>,
 }
 
 pub async fn start(local_persistence: Local) {
     let state = AppState {
         persistence: Arc::new(Mutex::new(local_persistence)),
         devices: Arc::new(RwLock::new(vec![])),
+        apps: Arc::new(RwLock::new(vec![])),
     };
     let app = Router::new()
         .with_state(state.clone())

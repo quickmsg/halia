@@ -63,14 +63,14 @@ pub trait Persistence {
     fn update_sink(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
     fn delete_sink(&self, id: &Uuid) -> HaliaResult<()>;
 
-    fn create_app(&self, id: &uuid::Uuid, conf: &Status) -> crate::error::HaliaResult<()>;
+    fn create_app(&self, id: &uuid::Uuid, body: String) -> crate::error::HaliaResult<()>;
     fn read_apps(&self) -> crate::error::HaliaResult<Vec<String>>;
 
-    fn update_app_status(&self, id: &uuid::Uuid, stauts: Status) -> crate::error::HaliaResult<()> {
+    fn update_app_status(&self, id: &uuid::Uuid, stauts: bool) -> crate::error::HaliaResult<()> {
         todo!()
     }
 
-    fn update_app_conf(&self, id: &uuid::Uuid, conf: &String) -> crate::error::HaliaResult<()> {
+    fn update_app_conf(&self, id: &uuid::Uuid, conf: String) -> crate::error::HaliaResult<()> {
         todo!()
     }
 
