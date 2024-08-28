@@ -1,11 +1,21 @@
 use common::error::HaliaResult;
-use types::databoard::CreateUpdateDataboardReq;
+use types::{databoard::CreateUpdateDataboardReq, BaseConf};
 use uuid::Uuid;
 
-pub struct Databoard {}
+use crate::data::Data;
+
+pub struct Databoard {
+    pub id: Uuid,
+    pub base_conf: BaseConf,
+    pub datas: Vec<Data>,
+}
 
 impl Databoard {
     pub fn new(id: Uuid, req: CreateUpdateDataboardReq) -> Self {
+        todo!()
+    }
+
+    pub fn check_duplicate(&self, req: &CreateUpdateDataboardReq) -> HaliaResult<()> {
         todo!()
     }
 

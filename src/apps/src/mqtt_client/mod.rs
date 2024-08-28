@@ -20,7 +20,7 @@ use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
 };
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 use types::{
     apps::{
         mqtt_client::{MqttClientConf, Qos, SinkConf, SourceConf},
@@ -155,8 +155,7 @@ impl MqttClient {
 
         let sources = self.sources.clone();
         for source in sources.write().await.iter_mut() {
-            let (mb_tx, _) = broadcast::channel(16);
-            source.mb_tx = Some(mb_tx);
+            source.start();
             let _ = client
                 .subscribe(
                     source.ext_conf.topic.clone(),
@@ -195,7 +194,6 @@ impl MqttClient {
         sources: &Arc<RwLock<Vec<Source>>>,
         err: &Arc<RwLock<Option<String>>>,
     ) {
-        debug!("{:?}", event);
         match event {
             Ok(Event::Incoming(Incoming::Publish(p))) => match MessageBatch::from_json(p.payload) {
                 Ok(msg) => {
@@ -524,8 +522,9 @@ impl App for MqttClient {
             source.check_duplicate(&req.base, &ext_conf)?;
         }
 
-        let source = Source::new(source_id, req.base, ext_conf);
+        let mut source = Source::new(source_id, req.base, ext_conf);
         if self.on {
+            source.start();
             match self.ext_conf.version {
                 types::apps::mqtt_client::Version::V311 => {
                     if let Err(e) = self

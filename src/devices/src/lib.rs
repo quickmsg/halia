@@ -7,7 +7,6 @@ use common::{
 };
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
-use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemResp,

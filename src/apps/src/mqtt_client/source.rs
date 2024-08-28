@@ -62,4 +62,9 @@ impl Source {
 
         restart
     }
+
+    pub fn start(&mut self) {
+        let (mb_tx, _) = broadcast::channel(16);
+        self.mb_tx = Some(mb_tx);
+    }
 }

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{error::HaliaResult, persistence::Device};
 
-use super::{App, Persistence, Rule, SourceOrSink};
+use super::{App, Databoard, DataboardData, Persistence, Rule, SourceOrSink};
 
 pub struct Local {
     conn: Connection,
@@ -44,9 +44,23 @@ impl Persistence for Local {
                 )",
             (),
         )?;
-
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS sinks (
+                    id TEXT PRIMARY KEY,
+                    parent_id TEXT NOT NULL,
+                    conf TEXT NOT NULL
+                )",
+            (),
+        )?;
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS databoards (
+                    id TEXT PRIMARY KEY,
+                    conf TEXT NOT NULL
+                )",
+            (),
+        )?;
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS databoard_datas (
                     id TEXT PRIMARY KEY,
                     parent_id TEXT NOT NULL,
                     conf TEXT NOT NULL
@@ -114,6 +128,16 @@ impl Persistence for Local {
     fn delete_device(&self, id: &Uuid) -> HaliaResult<()> {
         let mut stmt = self.conn.prepare("DELETE FROM devices WHERE id = ?1")?;
         stmt.execute([id.to_string()])?;
+
+        let mut stmt = self
+            .conn
+            .prepare("DELETE FROM sources WHERE parent_id = ?1")?;
+        stmt.execute([id.to_string()])?;
+
+        let mut stmt = self
+            .conn
+            .prepare("DELETE FROM sinks WHERE parent_id = ?1")?;
+        stmt.execute([id.to_string()])?;
         Ok(())
     }
 
@@ -166,6 +190,16 @@ impl Persistence for Local {
 
     fn delete_app(&self, id: &Uuid) -> HaliaResult<()> {
         let mut stmt = self.conn.prepare("DELETE FROM apps WHERE id = ?1")?;
+        stmt.execute([id.to_string()])?;
+
+        let mut stmt = self
+            .conn
+            .prepare("DELETE FROM sources WHERE parent_id = ?1")?;
+        stmt.execute([id.to_string()])?;
+
+        let mut stmt = self
+            .conn
+            .prepare("DELETE FROM sinks WHERE parent_id = ?1")?;
         stmt.execute([id.to_string()])?;
         Ok(())
     }
@@ -251,6 +285,102 @@ impl Persistence for Local {
     fn delete_sink(&self, id: &Uuid) -> HaliaResult<()> {
         let mut stmt = self.conn.prepare("DELETE sinks WHERE id = ?1")?;
         stmt.execute([id.to_string()])?;
+        Ok(())
+    }
+
+    fn create_databoard(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("INSERT INTO databoards (id, conf) VALUES (?1, ?2)")?;
+        stmt.execute([id.to_string(), conf])?;
+        Ok(())
+    }
+
+    fn read_databoards(&self) -> HaliaResult<Vec<Databoard>> {
+        let mut stmt = self.conn.prepare("SELECT id, conf FROM databoards")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Databoard {
+                id: row.get(0)?,
+                conf: row.get(1)?,
+            })
+        })?;
+
+        let mut databoards = vec![];
+        for databoard_result in rows {
+            databoards.push(databoard_result?);
+        }
+
+        Ok(databoards)
+    }
+
+    fn update_databoard(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("UPDATE databoards SET conf = ?1 WHERE id = ?2")?;
+        stmt.execute([conf, id.to_string()])?;
+        Ok(())
+    }
+
+    fn delete_databoard(&self, id: &Uuid) -> HaliaResult<()> {
+        let mut stmt = self.conn.prepare("DELETE FROM databoards WHERE id = ?1")?;
+        stmt.execute([id.to_string()])?;
+
+        let mut stmt = self
+            .conn
+            .prepare("DELETE FROM databoard_datas WHERE parent_id = ?1")?;
+        stmt.execute([id.to_string()])?;
+        Ok(())
+    }
+
+    fn create_databoard_data(
+        &self,
+        databoard_id: &Uuid,
+        databoard_data_id: &Uuid,
+        conf: String,
+    ) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("INSERT INTO databoard_datas (id, parent_id, conf) VALUES (?1, ?2, ?3)")?;
+        stmt.execute([
+            databoard_data_id.to_string(),
+            databoard_id.to_string(),
+            conf,
+        ])?;
+        Ok(())
+    }
+
+    fn read_databoard_datas(&self, databoard_id: &Uuid) -> HaliaResult<Vec<DataboardData>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, conf FROM databoard_datas WHERE parent_id = ?1")?;
+        let rows = stmt.query_map([databoard_id.to_string()], |row| {
+            Ok(DataboardData {
+                id: row.get(0)?,
+                conf: row.get(1)?,
+            })
+        })?;
+
+        let mut databoard_datas = vec![];
+        for databoard_data_result in rows {
+            databoard_datas.push(databoard_data_result?);
+        }
+
+        Ok(databoard_datas)
+    }
+
+    fn update_databoard_data(&self, databoard_data_id: &Uuid, conf: String) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("UPDATE databoard_datas SET conf = ?1 WHERE id = ?2")?;
+        stmt.execute([conf, databoard_data_id.to_string()])?;
+        Ok(())
+    }
+
+    fn delete_databoard_data(&self, databoard_data_id: &Uuid) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("DELETE FROM databoard_datas WHERE id = ?1")?;
+        stmt.execute([databoard_data_id.to_string()])?;
         Ok(())
     }
 

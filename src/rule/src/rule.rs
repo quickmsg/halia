@@ -142,7 +142,6 @@ impl Rule {
 
         let source_ids =
             take_source_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
-        debug!("source ids {:?}", source_ids);
 
         for source_id in source_ids {
             let node = node_map.get(&source_id).unwrap();
@@ -153,14 +152,17 @@ impl Rule {
                     let mut rxs = vec![];
                     for _ in 0..cnt {
                         rxs.push(
-                            devices::get_source_rx(
+                            match devices::get_source_rx(
                                 devices,
                                 &source_node.device_id,
                                 &source_node.source_id,
                                 &self.id,
                             )
                             .await
-                            .unwrap(),
+                            {
+                                Ok(rx) => rx,
+                                Err(e) => return Err(e.into()),
+                            },
                         )
                     }
                     receivers.insert(source_id, rxs);
@@ -170,15 +172,19 @@ impl Rule {
                     let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
                     let mut rxs = vec![];
                     for _ in 0..cnt {
+                        debug!("here");
                         rxs.push(
-                            apps::get_source_rx(
+                            match apps::get_source_rx(
                                 apps,
                                 &source_node.app_id,
                                 &source_node.source_id,
                                 &self.id,
                             )
                             .await
-                            .unwrap(),
+                            {
+                                Ok(rx) => rx,
+                                Err(e) => return Err(e.into()),
+                            },
                         )
                     }
                     receivers.insert(source_id, rxs);
@@ -194,11 +200,8 @@ impl Rule {
             &mut tmp_outgoing_edges,
         )?;
 
-        debug!("{:?}", threed_ids);
-
         for twod_ids in threed_ids {
             for oned_ids in twod_ids {
-                debug!("{:?}", oned_ids);
                 let mut functions = vec![];
                 let mut ids = vec![];
                 let mut mpsc_tx: Option<mpsc::Sender<MessageBatch>> = None;
@@ -244,9 +247,7 @@ impl Rule {
                             window::run(window_conf, rx, tx, stop_signal_tx.subscribe()).unwrap();
                         }
                         NodeType::Filter => {
-                            debug!("{:?}", node.conf);
                             let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
-                            debug!("{:?}", conf);
                             functions.push(filter::new(conf)?);
                             ids.push(id);
                         }
@@ -256,29 +257,36 @@ impl Rule {
                             ids.push(id);
                         }
                         NodeType::DeviceSink => {
+                            ids.push(id);
                             let sink_node: DeviceSinkNode =
                                 serde_json::from_value(node.conf.clone())?;
-                            let tx = devices::get_sink_tx(
+                            let tx = match devices::get_sink_tx(
                                 devices,
                                 &sink_node.device_id,
                                 &sink_node.sink_id,
                                 &self.id,
                             )
                             .await
-                            .unwrap();
+                            {
+                                Ok(tx) => tx,
+                                Err(e) => return Err(e.into()),
+                            };
                             mpsc_tx = Some(tx);
                         }
                         NodeType::AppSink => {
                             ids.push(id);
                             let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = apps::get_sink_tx(
+                            let tx = match apps::get_sink_tx(
                                 apps,
                                 &sink_node.app_id,
                                 &sink_node.sink_id,
                                 &self.id,
                             )
                             .await
-                            .unwrap();
+                            {
+                                Ok(tx) => tx,
+                                Err(e) => return Err(e.into()),
+                            };
                             mpsc_tx = Some(tx);
                         }
                         _ => {}
