@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{error::HaliaResult, persistence::Device};
 
-use super::{Persistence, SourceOrSink};
+use super::{App, Persistence, Rule, SourceOrSink};
 
 pub struct Local {
     conn: Connection,
@@ -29,10 +29,18 @@ impl Persistence for Local {
             (),
         )?;
         self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS apps (
+                    id TEXT PRIMARY KEY,
+                    status INTEGER NOT NULL,
+                    conf TEXT NOT NULL
+                )",
+            (),
+        )?;
+        self.conn.execute(
             "CREATE TABLE IF NOT EXISTS sources (
                     id TEXT PRIMARY KEY,
-                    device_id TEXT NOT NULL,
-                    name TEXT NOT NULL
+                    parent_id TEXT NOT NULL,
+                    conf TEXT NOT NULL
                 )",
             (),
         )?;
@@ -40,15 +48,23 @@ impl Persistence for Local {
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS sinks (
                     id TEXT PRIMARY KEY,
-                    device_id TEXT NOT NULL,
-                    name TEXT NOT NULL
+                    parent_id TEXT NOT NULL,
+                    conf TEXT NOT NULL
+                )",
+            (),
+        )?;
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS rules (
+                    id TEXT PRIMARY KEY,
+                    status INTEGER NOT NULL,
+                    conf TEXT NOT NULL
                 )",
             (),
         )?;
         Ok(())
     }
 
-    fn create_device(&self, id: &uuid::Uuid, conf: String) -> HaliaResult<()> {
+    fn create_device(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
             .prepare("INSERT INTO devices (id, status, conf) VALUES (?1, ?2, ?3)")?;
@@ -57,7 +73,7 @@ impl Persistence for Local {
         Ok(())
     }
 
-    fn read_devices(&self) -> crate::error::HaliaResult<Vec<Device>> {
+    fn read_devices(&self) -> HaliaResult<Vec<Device>> {
         let mut stmt = self.conn.prepare("SELECT id, status, conf FROM devies")?;
         let rows = stmt.query_map([], |row| {
             Ok(Device {
@@ -75,7 +91,11 @@ impl Persistence for Local {
         Ok(devices)
     }
 
-    fn update_device_status(&self, id: &uuid::Uuid, status: bool) -> crate::error::HaliaResult<()> {
+    fn update_device_status(&self, id: &Uuid, status: bool) -> HaliaResult<()> {
+        let status = match status {
+            true => "1",
+            false => "0",
+        };
         let mut stmt = self
             .conn
             .prepare("UPDATE devices SET status = ?1 WHERE id = ?2")?;
@@ -83,7 +103,7 @@ impl Persistence for Local {
         Ok(())
     }
 
-    fn update_device_conf(&self, id: &uuid::Uuid, conf: String) -> crate::error::HaliaResult<()> {
+    fn update_device_conf(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
             .prepare("UPDATE devices SET conf = ?1 WHERE id = ?2")?;
@@ -91,8 +111,61 @@ impl Persistence for Local {
         Ok(())
     }
 
-    fn delete_device(&self, id: &uuid::Uuid) -> crate::error::HaliaResult<()> {
+    fn delete_device(&self, id: &Uuid) -> HaliaResult<()> {
         let mut stmt = self.conn.prepare("DELETE devices WHERE id = ?1")?;
+        stmt.execute([id.to_string()])?;
+        Ok(())
+    }
+
+    fn create_app(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("INSERT INTO apps (id, status, conf) VALUES (?1, ?2, ?3)")?;
+        stmt.execute([id.to_string(), 0.to_string(), conf])?;
+
+        Ok(())
+    }
+
+    fn read_apps(&self) -> HaliaResult<Vec<App>> {
+        let mut stmt = self.conn.prepare("SELECT id, status, conf FROM apps")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(App {
+                id: row.get(0)?,
+                status: row.get(1)?,
+                conf: row.get(2)?,
+            })
+        })?;
+
+        let mut apps = vec![];
+        for app_result in rows {
+            apps.push(app_result?);
+        }
+
+        Ok(apps)
+    }
+
+    fn update_app_status(&self, id: &Uuid, status: bool) -> HaliaResult<()> {
+        let status = match status {
+            true => "1",
+            false => "0",
+        };
+        let mut stmt = self
+            .conn
+            .prepare("UPDATE apps SET status = ?1 WHERE id = ?2")?;
+        stmt.execute([status.to_string(), id.to_string()])?;
+        Ok(())
+    }
+
+    fn update_app_conf(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("UPDATE apps SET conf = ?1 WHERE id = ?2")?;
+        stmt.execute([conf, id.to_string()])?;
+        Ok(())
+    }
+
+    fn delete_app(&self, id: &Uuid) -> HaliaResult<()> {
+        let mut stmt = self.conn.prepare("DELETE apps WHERE id = ?1")?;
         stmt.execute([id.to_string()])?;
         Ok(())
     }
@@ -100,7 +173,7 @@ impl Persistence for Local {
     fn create_source(&self, parent_id: &Uuid, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
-            .prepare("INSERT INTO sources VALUES (?1), (?2), (?3)")?;
+            .prepare("INSERT INTO (id, parent_id, conf) VALUES (?1, ?2, ?3)")?;
         stmt.execute([id.to_string(), parent_id.to_string(), conf])?;
 
         Ok(())
@@ -109,12 +182,11 @@ impl Persistence for Local {
     fn read_sources(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT * FROM sources WHERE parent_id = ?0")?;
+            .prepare("SELECT (id, conf) FROM sources WHERE parent_id = ?0")?;
         let rows = stmt.query_map([parent_id.to_string()], |row| {
             Ok(SourceOrSink {
                 id: row.get(0)?,
-                parent_id: row.get(1)?,
-                conf: row.get(2)?,
+                conf: row.get(1)?,
             })
         })?;
 
@@ -143,7 +215,7 @@ impl Persistence for Local {
     fn create_sink(&self, parent_id: &Uuid, id: &Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
-            .prepare("INSERT INTO sinks VALUES (?1), (?2), (?3)")?;
+            .prepare("INSERT INTO sinks (id, parent_id, conf) VALUES (?1, ?2, ?3)")?;
         stmt.execute([id.to_string(), parent_id.to_string(), conf])?;
 
         Ok(())
@@ -152,12 +224,11 @@ impl Persistence for Local {
     fn read_sinks(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT * FROM sinks WHERE parent_id = ?1")?;
+            .prepare("SELECT (id, conf) FROM sinks WHERE parent_id = ?1")?;
         let rows = stmt.query_map([parent_id.to_string()], |row| {
             Ok(SourceOrSink {
                 id: row.get(0)?,
-                parent_id: row.get(1)?,
-                conf: row.get(2)?,
+                conf: row.get(1)?,
             })
         })?;
 
@@ -183,43 +254,56 @@ impl Persistence for Local {
         Ok(())
     }
 
-    fn create_app(&self, id: &uuid::Uuid, body: String) -> crate::error::HaliaResult<()> {
-        todo!()
+    fn create_rule(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("INSERT INTO rules (id, status, conf) VALUES (?1, ?2, ?3)")?;
+        stmt.execute([id.to_string(), 0.to_string(), conf])?;
+
+        Ok(())
     }
 
-    fn read_apps(&self) -> crate::error::HaliaResult<Vec<String>> {
-        todo!()
+    fn read_rules(&self) -> HaliaResult<Vec<Rule>> {
+        let mut stmt = self.conn.prepare("SELECT id, status, conf FROM rules")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Rule {
+                id: row.get(0)?,
+                status: row.get(1)?,
+                conf: row.get(2)?,
+            })
+        })?;
+
+        let mut rules = vec![];
+        for rule_result in rows {
+            rules.push(rule_result?);
+        }
+
+        Ok(rules)
     }
 
-    fn update_app_status(&self, id: &uuid::Uuid, stauts: bool) -> crate::error::HaliaResult<()> {
-        todo!()
+    fn update_rule_status(&self, id: &Uuid, status: bool) -> HaliaResult<()> {
+        let status = match status {
+            true => "1",
+            false => "0",
+        };
+        let mut stmt = self
+            .conn
+            .prepare("UPDATE rules SET status = ?1 WHERE id = ?2")?;
+        stmt.execute([status.to_string(), id.to_string()])?;
+        Ok(())
     }
 
-    fn update_app_conf(&self, id: &uuid::Uuid, conf: String) -> crate::error::HaliaResult<()> {
-        todo!()
+    fn update_rule_conf(&self, id: &Uuid, conf: String) -> HaliaResult<()> {
+        let mut stmt = self
+            .conn
+            .prepare("UPDATE rules SET conf = ?1 WHERE id = ?2")?;
+        stmt.execute([conf, id.to_string()])?;
+        Ok(())
     }
 
-    fn delete_app(&self, id: &uuid::Uuid) -> crate::error::HaliaResult<()> {
-        todo!()
-    }
-
-    fn create_rule(&self, id: &uuid::Uuid, body: String) -> crate::error::HaliaResult<()> {
-        todo!()
-    }
-
-    fn read_rules(&self) -> crate::error::HaliaResult<Vec<String>> {
-        todo!()
-    }
-
-    fn update_rule_status(&self, id: &uuid::Uuid, stauts: bool) -> crate::error::HaliaResult<()> {
-        todo!()
-    }
-
-    fn update_rule_conf(&self, id: &uuid::Uuid, body: String) -> crate::error::HaliaResult<()> {
-        todo!()
-    }
-
-    fn delete_rule(&self, id: &uuid::Uuid) -> crate::error::HaliaResult<()> {
-        todo!()
+    fn delete_rule(&self, id: &Uuid) -> HaliaResult<()> {
+        let mut stmt = self.conn.prepare("DELETE rules WHERE id = ?1")?;
+        stmt.execute([id.to_string()])?;
+        Ok(())
     }
 }

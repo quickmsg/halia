@@ -49,7 +49,14 @@ async fn get_devices_summary(State(state): State<AppState>) -> AppSuccess<Summar
 }
 
 async fn create_device(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
-    devices::create_device(&state.devices, &state.persistence, Uuid::new_v4(), body).await?;
+    devices::create_device(
+        &state.persistence,
+        &state.devices,
+        Uuid::new_v4(),
+        body,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
@@ -66,7 +73,7 @@ async fn update_device(
     Path(device_id): Path<Uuid>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_device(&state.devices, &state.persistence, device_id, body).await?;
+    devices::update_device(&state.persistence, &state.devices, device_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -74,7 +81,7 @@ async fn start_device(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::start_device(&state.devices, &state.persistence, device_id).await?;
+    devices::start_device(&state.persistence, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -82,7 +89,7 @@ async fn stop_device(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::stop_device(&state.devices, &state.persistence, device_id).await?;
+    devices::stop_device(&state.persistence, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -90,7 +97,7 @@ async fn delete_device(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::stop_device(&state.devices, &state.persistence, device_id).await?;
+    devices::stop_device(&state.persistence, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -100,8 +107,8 @@ async fn create_source(
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_source(
-        &state.devices,
         &state.persistence,
+        &state.devices,
         device_id,
         Uuid::new_v4(),
         body,
@@ -128,8 +135,8 @@ async fn update_source(
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     devices::update_source(
-        &state.devices,
         &state.persistence,
+        &state.devices,
         device_id,
         source_id,
         body,
@@ -151,7 +158,7 @@ async fn delete_source(
     State(state): State<AppState>,
     Path((device_id, source_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_source(&state.devices, &state.persistence, device_id, source_id).await?;
+    devices::delete_source(&state.persistence, &state.devices, device_id, source_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -161,8 +168,8 @@ async fn create_sink(
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_sink(
-        &state.devices,
         &state.persistence,
+        &state.devices,
         device_id,
         Uuid::new_v4(),
         body,
@@ -187,7 +194,7 @@ async fn update_sink(
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_sink(&state.devices, &state.persistence, device_id, sink_id, body).await?;
+    devices::update_sink(&state.persistence, &state.devices, device_id, sink_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -195,6 +202,6 @@ async fn delete_sink(
     State(state): State<AppState>,
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_sink(&state.devices, &state.persistence, device_id, sink_id).await?;
+    devices::delete_sink(&state.persistence, &state.devices, device_id, sink_id).await?;
     Ok(AppSuccess::empty())
 }

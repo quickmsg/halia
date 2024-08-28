@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use common::persistence::{self, Persistence};
+use tokio::sync::Mutex;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -13,14 +16,16 @@ async fn main() -> Result<()> {
 
     let local_persistence = persistence::local::Local::new("./db").unwrap();
     local_persistence.init().unwrap();
+    let persistence = Arc::new(Mutex::new(local_persistence));
 
-    // persistence::init_dir().await.unwrap();
-    // GLOBAL_DEVICE_MANAGER.recover().await.unwrap();
-    // GLOBAL_APP_MANAGER.recover().await.unwrap();
-    // GLOBAL_RULE_MANAGER.recover().await.unwrap();
+    let devices = devices::load_from_persistence(&persistence).await.unwrap();
+    let apps = apps::load_from_persistence(&persistence).await.unwrap();
+    let rules = rule::load_from_persistence(&persistence, &devices, &apps)
+        .await
+        .unwrap();
 
     info!("server starting...");
-    api::start(local_persistence).await;
+    api::start(persistence, devices, apps, rules).await;
 
     Ok(())
 }

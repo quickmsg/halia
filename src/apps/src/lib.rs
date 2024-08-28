@@ -1,4 +1,4 @@
-use std::{sync::Arc, vec};
+use std::{str::FromStr, sync::Arc, vec};
 
 use async_trait::async_trait;
 use common::{
@@ -103,6 +103,50 @@ macro_rules! sink_not_found_err {
     };
 }
 
+pub async fn load_from_persistence(
+    persistence: &Arc<Mutex<Local>>,
+) -> HaliaResult<Arc<RwLock<Vec<Box<dyn App>>>>> {
+    let db_apps = persistence.lock().await.read_apps()?;
+    let apps: Arc<RwLock<Vec<Box<dyn App>>>> = Arc::new(RwLock::new(vec![]));
+    for db_app in db_apps {
+        let app_id = Uuid::from_str(&db_app.id).unwrap();
+
+        let db_sources = persistence.lock().await.read_sources(&app_id)?;
+        let db_sinks = persistence.lock().await.read_sinks(&app_id)?;
+        create_app(persistence, &apps, app_id, db_app.conf, false).await?;
+
+        for db_source in db_sources {
+            create_source(
+                persistence,
+                &apps,
+                app_id,
+                Uuid::from_str(&db_source.id).unwrap(),
+                db_source.conf,
+                false,
+            )
+            .await?;
+        }
+
+        for db_sink in db_sinks {
+            create_sink(
+                persistence,
+                &apps,
+                app_id,
+                Uuid::from_str(&db_sink.id).unwrap(),
+                db_sink.conf,
+                false,
+            )
+            .await?;
+        }
+
+        if db_app.status == 1 {
+            start_app(persistence, &apps, app_id).await?;
+        }
+    }
+
+    Ok(apps)
+}
+
 pub async fn get_summary(apps: &Arc<RwLock<Vec<Box<dyn App>>>>) -> Summary {
     let mut total = 0;
     let mut running_cnt = 0;
@@ -131,8 +175,8 @@ pub async fn get_summary(apps: &Arc<RwLock<Vec<Box<dyn App>>>>) -> Summary {
 }
 
 pub async fn create_app(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     body: String,
     persist: bool,
@@ -200,8 +244,8 @@ pub async fn search_apps(
 }
 
 pub async fn update_app(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     body: String,
 ) -> HaliaResult<()> {
@@ -229,8 +273,8 @@ pub async fn update_app(
 }
 
 pub async fn start_app(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
     match apps
@@ -249,8 +293,8 @@ pub async fn start_app(
 }
 
 pub async fn stop_app(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
     match apps
@@ -268,8 +312,8 @@ pub async fn stop_app(
 }
 
 pub async fn delete_app(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
     match apps
@@ -288,8 +332,8 @@ pub async fn delete_app(
 }
 
 pub async fn create_source(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     source_id: Uuid,
     body: String,
@@ -329,8 +373,8 @@ pub async fn search_sources(
 }
 
 pub async fn update_source(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     source_id: Uuid,
     body: String,
@@ -351,8 +395,8 @@ pub async fn update_source(
 }
 
 pub async fn delete_source(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     source_id: Uuid,
 ) -> HaliaResult<()> {
@@ -439,8 +483,8 @@ pub async fn del_source_ref(
 }
 
 pub async fn create_sink(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     sink_id: Uuid,
     body: String,
@@ -480,8 +524,8 @@ pub async fn search_sinks(
 }
 
 pub async fn update_sink(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     sink_id: Uuid,
     body: String,
@@ -502,8 +546,8 @@ pub async fn update_sink(
 }
 
 pub async fn delete_sink(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     persistence: &Arc<Mutex<Local>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     sink_id: Uuid,
 ) -> HaliaResult<()> {
@@ -589,57 +633,3 @@ pub async fn del_sink_ref(
         None => app_not_found_err!(),
     }
 }
-
-// impl AppManager {
-//     pub async fn recover(&self) -> HaliaResult<()> {
-//         match persistence::read_apps().await {
-//             Ok(datas) => {
-//                 for data in datas {
-//                     let items: Vec<&str> = data.split(persistence::DELIMITER).collect();
-//                     assert_eq!(items.len(), 3);
-
-//                     let app_id = Uuid::from_str(items[0]).unwrap();
-//                     let req: CreateUpdateAppReq = serde_json::from_str(items[2])?;
-//                     self.create_app(app_id, req, false).await?;
-
-//                     let sources = persistence::read_sources(&app_id).await?;
-//                     for source_data in sources {
-//                         let items = source_data
-//                             .split(persistence::DELIMITER)
-//                             .collect::<Vec<&str>>();
-//                         assert_eq!(items.len(), 2);
-//                         let source_id = Uuid::from_str(items[0]).unwrap();
-//                         let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
-//                         self.create_source(app_id, source_id, req, false).await?;
-//                     }
-
-//                     let sinks = persistence::read_sinks(&app_id).await?;
-//                     for sink_data in sinks {
-//                         let items = sink_data
-//                             .split(persistence::DELIMITER)
-//                             .collect::<Vec<&str>>();
-//                         assert_eq!(items.len(), 2);
-//                         let sink_id = Uuid::from_str(items[0]).unwrap();
-//                         let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(items[1])?;
-//                         self.create_sink(app_id, sink_id, req, false).await?;
-//                     }
-
-//                     match items[1] {
-//                         "0" => {}
-//                         "1" => self.start_app(app_id).await.unwrap(),
-//                         _ => panic!("文件已损坏"),
-//                     }
-//                 }
-
-//                 Ok(())
-//             }
-//             Err(e) => match e.kind() {
-//                 std::io::ErrorKind::NotFound => {
-//                     persistence::init_apps().await?;
-//                     Ok(())
-//                 }
-//                 _ => return Err(e.into()),
-//             },
-//         }
-//     }
-// }

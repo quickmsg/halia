@@ -5,7 +5,7 @@ use common::{
 };
 use devices::Device;
 use rule::Rule;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, SearchRulesResp, Summary},
@@ -20,6 +20,34 @@ macro_rules! rule_not_fonnd_err {
     () => {
         Err(HaliaError::NotFound("规则".to_owned()))
     };
+}
+
+pub async fn load_from_persistence(
+    persistence: &Arc<Mutex<Local>>,
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+) -> HaliaResult<Arc<RwLock<Vec<Rule>>>> {
+    let db_rules = persistence.lock().await.read_rules()?;
+    let rules: Arc<RwLock<Vec<Rule>>> = Arc::new(RwLock::new(vec![]));
+    for db_rule in db_rules {
+        let rule_id = Uuid::from_str(&db_rule.id).unwrap();
+        create(
+            persistence,
+            &rules,
+            devices,
+            apps,
+            rule_id,
+            db_rule.conf,
+            false,
+        )
+        .await?;
+
+        if db_rule.status == 1 {
+            start(persistence, &rules, &devices, &apps, rule_id).await?;
+        }
+    }
+
+    Ok(rules)
 }
 
 pub async fn get_summary(rules: &Arc<RwLock<Vec<Rule>>>) -> Summary {
@@ -45,10 +73,10 @@ pub async fn get_summary(rules: &Arc<RwLock<Vec<Rule>>>) -> Summary {
 }
 
 pub async fn create(
+    persistence: &Arc<Mutex<Local>>,
     rules: &Arc<RwLock<Vec<Rule>>>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    persistence: &Arc<Mutex<Local>>,
     id: Uuid,
     body: String,
     persist: bool,
@@ -95,10 +123,10 @@ pub async fn search(
 }
 
 pub async fn start(
+    persistence: &Arc<Mutex<Local>>,
     rules: &Arc<RwLock<Vec<Rule>>>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    persistence: &Arc<Mutex<Local>>,
     id: Uuid,
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
@@ -111,8 +139,8 @@ pub async fn start(
 }
 
 pub async fn stop(
-    rules: &Arc<RwLock<Vec<Rule>>>,
     persistence: &Arc<Mutex<Local>>,
+    rules: &Arc<RwLock<Vec<Rule>>>,
     id: Uuid,
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
@@ -125,8 +153,8 @@ pub async fn stop(
 }
 
 pub async fn update(
-    rules: &Arc<RwLock<Vec<Rule>>>,
     persistence: &Arc<Mutex<Local>>,
+    rules: &Arc<RwLock<Vec<Rule>>>,
     id: Uuid,
     body: String,
 ) -> HaliaResult<()> {
@@ -134,8 +162,8 @@ pub async fn update(
 }
 
 pub async fn delete(
-    rules: &Arc<RwLock<Vec<Rule>>>,
     persistence: &Arc<Mutex<Local>>,
+    rules: &Arc<RwLock<Vec<Rule>>>,
     id: Uuid,
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
@@ -146,37 +174,3 @@ pub async fn delete(
     persistence.lock().await.delete_rule(&id)?;
     Ok(())
 }
-
-// pub async fn recover(&self) -> HaliaResult<()> {
-//     match persistence::read_rules().await {
-//         Ok(rule_datas) => {
-//             for rule_data in rule_datas {
-//                 if rule_data.len() == 0 {
-//                     continue;
-//                 }
-//                 let items = rule_data
-//                     .split(persistence::DELIMITER)
-//                     .collect::<Vec<&str>>();
-//                 assert_eq!(items.len(), 3);
-
-//                 let rule_id = Uuid::from_str(items[0]).unwrap();
-//                 let req: CreateUpdateRuleReq = serde_json::from_str(&items[2])?;
-//                 self.create(rule_id, req, false).await?;
-//                 match items[1] {
-//                     "0" => {}
-//                     "1" => GLOBAL_RULE_MANAGER.start(rule_id).await.unwrap(),
-//                     _ => panic!("文件损坏"),
-//                 }
-//             }
-
-//             Ok(())
-//         }
-//         Err(e) => match e.kind() {
-//             std::io::ErrorKind::NotFound => {
-//                 persistence::init_rules().await?;
-//                 Ok(())
-//             }
-//             _ => Err(e.into()),
-//         },
-//     }
-// }

@@ -7,7 +7,10 @@ use axum::{
     response::{IntoResponse, Response},
     Json, Router,
 };
-use common::{error::HaliaError, persistence::local::Local};
+use common::{
+    error::HaliaError,
+    persistence::{self, local::Local},
+};
 use devices::Device;
 use serde::Serialize;
 use tokio::{
@@ -87,12 +90,17 @@ struct AppState {
     rules: Arc<RwLock<Vec<Rule>>>,
 }
 
-pub async fn start(local_persistence: Local) {
+pub async fn start(
+    persistence: Arc<Mutex<Local>>,
+    devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
+    apps: Arc<RwLock<Vec<Box<dyn App>>>>,
+    rules: Arc<RwLock<Vec<Rule>>>,
+) {
     let state = AppState {
-        persistence: Arc::new(Mutex::new(local_persistence)),
-        devices: Arc::new(RwLock::new(vec![])),
-        apps: Arc::new(RwLock::new(vec![])),
-        rules: Arc::new(RwLock::new(vec![])),
+        persistence,
+        devices,
+        apps,
+        rules,
     };
     let app = Router::new()
         .with_state(state.clone())
