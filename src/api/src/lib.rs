@@ -7,10 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json, Router,
 };
-use common::{
-    error::HaliaError,
-    persistence::{self, local::Local},
-};
+use common::{error::HaliaError, persistence::local::Local};
 use devices::Device;
 use serde::Serialize;
 use tokio::{

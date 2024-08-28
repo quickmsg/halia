@@ -45,7 +45,7 @@ pub async fn create_databoard(
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateDataboardReq = serde_json::from_str(&body)?;
-    let databoard = Databoard::new(id, req);
+    let databoard = Databoard::new(id, req.base)?;
     if persist {}
     todo!()
 }

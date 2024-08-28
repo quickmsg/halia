@@ -10,8 +10,14 @@ pub struct CreateUpdateDataboardReq {
 
 #[derive(Serialize)]
 pub struct SearchDataboardsResp {
+    pub total: usize,
+    pub data: Vec<SearchDataboardsItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchDataboardsItemResp {
     pub id: Uuid,
-    pub base: BaseConf,
+    pub conf: CreateUpdateDataReq,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]

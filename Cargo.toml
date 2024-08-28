@@ -52,11 +52,12 @@ md5 = "0.7.0"
 sha1 = "0.10.6"
 reqwest = "0.12.5"
 rusqlite = { version = "0.32.1", features = ["bundled"] }
-
+# sea-query = "0.31.0"
+# sea-query-rusqlite = "0.6.0"
 
 [profile.release]
 strip = true
 opt-level = "z"
 lto = true
 codegen-units = 1
-panic = "abort"
+# panic = "abort"
