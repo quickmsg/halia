@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use rusqlite::Connection;
 use uuid::Uuid;
 
@@ -23,8 +24,8 @@ impl Persistence for Local {
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS devices (
                     id TEXT PRIMARY KEY,
-                    on BOOLEAN NOT NULL,
-                    name TEXT NOT NULL
+                    status INTEGER NOT NULL,
+                    conf TEXT NOT NULL
                 )",
             (),
         )?;
@@ -51,8 +52,8 @@ impl Persistence for Local {
     fn create_device(&self, id: &uuid::Uuid, conf: String) -> HaliaResult<()> {
         let mut stmt = self
             .conn
-            .prepare("INSERT INTO devices VALUES (?1), (?2), (?3)")?;
-        stmt.execute([id.to_string(), false.to_string(), conf])?;
+            .prepare("INSERT INTO devices (id, status, conf) VALUES (?1, ?2, ?3)")?;
+        stmt.execute([id.to_string(), 0.to_string(), conf])?;
 
         Ok(())
     }

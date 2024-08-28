@@ -6,8 +6,12 @@ use axum::{
     Json, Router,
 };
 use common::{error::HaliaError, persistence::local::Local};
+use devices::Device;
 use serde::Serialize;
-use tokio::{net::TcpListener, sync::Mutex};
+use tokio::{
+    net::TcpListener,
+    sync::{Mutex, RwLock},
+};
 use tower_http::cors::{Any, CorsLayer};
 
 mod app;
@@ -75,12 +79,14 @@ impl IntoResponse for AppError {
 
 #[derive(Clone)]
 struct AppState {
-    perisitence: Arc<Mutex<Local>>,
+    persistence: Arc<Mutex<Local>>,
+    devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
 }
 
 pub async fn start(local_persistence: Local) {
     let state = AppState {
-        perisitence: Arc::new(Mutex::new(local_persistence)),
+        persistence: Arc::new(Mutex::new(local_persistence)),
+        devices: Arc::new(RwLock::new(vec![])),
     };
     let app = Router::new()
         .with_state(state.clone())

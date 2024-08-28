@@ -3,10 +3,9 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
-use devices::GLOBAL_DEVICE_MANAGER;
 use types::{
-    devices::{CreateUpdateDeviceReq, QueryParams, SearchDevicesResp, Summary},
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
+    devices::{QueryParams, SearchDevicesResp, Summary},
+    Pagination, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
 
@@ -44,141 +43,158 @@ pub fn routes() -> Router<AppState> {
         )
 }
 
-async fn get_devices_summary() -> AppSuccess<Summary> {
-    AppSuccess::data(GLOBAL_DEVICE_MANAGER.get_summary().await)
+async fn get_devices_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
+    let summary = devices::get_summary(&state.devices).await;
+    AppSuccess::data(summary)
 }
 
-async fn create_device(
-    State(state): State<AppState>,
-    Json(req): Json<CreateUpdateDeviceReq>,
-) -> AppResult<AppSuccess<()>> {
-    let device_id = Uuid::new_v4();
-    GLOBAL_DEVICE_MANAGER
-        .create_device(device_id, req, true)
-        .await?;
+async fn create_device(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
+    devices::create_device(&state.devices, &state.persistence, Uuid::new_v4(), body).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_devices(
+    State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppSuccess<SearchDevicesResp> {
-    AppSuccess::data(
-        GLOBAL_DEVICE_MANAGER
-            .search_devices(pagination, query_params)
-            .await,
-    )
+    AppSuccess::data(devices::search_devices(&state.devices, pagination, query_params).await)
 }
 
 async fn update_device(
+    State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateDeviceReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER.update_device(device_id, req).await?;
+    devices::update_device(&state.devices, &state.persistence, device_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn start_device(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER.start_device(device_id).await?;
+async fn start_device(
+    State(state): State<AppState>,
+    Path(device_id): Path<Uuid>,
+) -> AppResult<AppSuccess<()>> {
+    devices::start_device(&state.devices, &state.persistence, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn stop_device(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER.stop_device(device_id).await?;
+async fn stop_device(
+    State(state): State<AppState>,
+    Path(device_id): Path<Uuid>,
+) -> AppResult<AppSuccess<()>> {
+    devices::stop_device(&state.devices, &state.persistence, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete_device(Path(device_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER.delete_device(device_id).await?;
+async fn delete_device(
+    State(state): State<AppState>,
+    Path(device_id): Path<Uuid>,
+) -> AppResult<AppSuccess<()>> {
+    devices::stop_device(&state.devices, &state.persistence, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn create_source(
+    State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    let source_id = Uuid::new_v4();
-    GLOBAL_DEVICE_MANAGER
-        .create_source(device_id, source_id, req, true)
-        .await?;
+    devices::create_source(
+        &state.devices,
+        &state.persistence,
+        device_id,
+        Uuid::new_v4(),
+        body,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_sources(
+    State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sources = GLOBAL_DEVICE_MANAGER
-        .search_sources(device_id, pagination, query_params)
-        .await?;
+    let sources =
+        devices::search_sources(&state.devices, device_id, pagination, query_params).await?;
     Ok(AppSuccess::data(sources))
 }
 
 async fn update_source(
+    State(state): State<AppState>,
     Path((device_id, source_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER
-        .update_source(device_id, source_id, req)
-        .await?;
+    devices::update_source(
+        &state.devices,
+        &state.persistence,
+        device_id,
+        source_id,
+        body,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
 async fn write_source_value(
+    State(state): State<AppState>,
     Path((device_id, source_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<Value>,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER
-        .write_source_value(device_id, source_id, req)
-        .await?;
+    devices::write_source_value(&state.devices, device_id, source_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn delete_source(
+    State(state): State<AppState>,
     Path((device_id, source_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER
-        .delete_source(device_id, source_id)
-        .await?;
+    devices::delete_source(&state.devices, &state.persistence, device_id, source_id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn create_sink(
+    State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    let sink_id = Uuid::new_v4();
-    GLOBAL_DEVICE_MANAGER
-        .create_sink(device_id, sink_id, req, true)
-        .await?;
+    devices::create_sink(
+        &state.devices,
+        &state.persistence,
+        device_id,
+        Uuid::new_v4(),
+        body,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_sinks(
+    State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sinks = GLOBAL_DEVICE_MANAGER
-        .search_sinks(device_id, pagination, query)
-        .await?;
+    let sinks = devices::search_sinks(&state.devices, device_id, pagination, query).await?;
     Ok(AppSuccess::data(sinks))
 }
 
 async fn update_sink(
+    State(state): State<AppState>,
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER
-        .update_sink(device_id, sink_id, req)
-        .await?;
+    devices::update_sink(&state.devices, &state.persistence, device_id, sink_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete_sink(Path((device_id, sink_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_DEVICE_MANAGER
-        .delete_sink(device_id, sink_id)
-        .await?;
+async fn delete_sink(
+    State(state): State<AppState>,
+    Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    devices::delete_sink(&state.devices, &state.persistence, device_id, sink_id).await?;
     Ok(AppSuccess::empty())
 }
