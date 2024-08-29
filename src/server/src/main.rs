@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use common::persistence;
-use sqlx::AnyPool;
+use sqlx::{any::AnyConnectOptions, AnyPool, ConnectOptions};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -15,7 +15,10 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     sqlx::any::install_default_drivers();
-    let pool = AnyPool::connect("sqlite://db").await?;
+    let opt = AnyConnectOptions::from_str("sqlite://db")
+        .unwrap()
+        .disable_statement_logging();
+    let pool = AnyPool::connect_with(opt).await?;
 
     persistence::create_tables(&pool).await?;
     let pool = Arc::new(pool);
