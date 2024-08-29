@@ -26,8 +26,6 @@ pub enum HaliaError {
     AddressExists,
     #[error("连接断开！")]
     Disconnect,
-    #[error("存储错误: {0}")]
-    LocalPerisistenceErr(#[from] rusqlite::Error),
     #[error("{0}")]
     Error(#[from] anyhow::Error),
 }

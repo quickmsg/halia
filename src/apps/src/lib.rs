@@ -3,10 +3,11 @@ use std::{str::FromStr, sync::Arc, vec};
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence::{local::Local, Persistence},
+    persistence,
 };
 use message::MessageBatch;
-use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+use sqlx::AnyPool;
+use tokio::sync::{broadcast, mpsc, RwLock};
 use types::{
     apps::{
         AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemResp, SearchAppsResp,
@@ -104,20 +105,20 @@ macro_rules! sink_not_found_err {
 }
 
 pub async fn load_from_persistence(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<RwLock<Vec<Box<dyn App>>>>> {
-    let db_apps = persistence.lock().await.read_apps()?;
+    let db_apps = persistence::app::read_apps(pool).await?;
     let apps: Arc<RwLock<Vec<Box<dyn App>>>> = Arc::new(RwLock::new(vec![]));
     for db_app in db_apps {
         let app_id = Uuid::from_str(&db_app.id).unwrap();
 
-        let db_sources = persistence.lock().await.read_sources(&app_id)?;
-        let db_sinks = persistence.lock().await.read_sinks(&app_id)?;
-        create_app(persistence, &apps, app_id, db_app.conf, false).await?;
+        let db_sources = persistence::source::read_sources(pool, &app_id).await?;
+        let db_sinks = persistence::sink::read_sinks(pool, &app_id).await?;
+        create_app(pool, &apps, app_id, db_app.conf, false).await?;
 
         for db_source in db_sources {
             create_source(
-                persistence,
+                pool,
                 &apps,
                 app_id,
                 Uuid::from_str(&db_source.id).unwrap(),
@@ -129,7 +130,7 @@ pub async fn load_from_persistence(
 
         for db_sink in db_sinks {
             create_sink(
-                persistence,
+                pool,
                 &apps,
                 app_id,
                 Uuid::from_str(&db_sink.id).unwrap(),
@@ -140,7 +141,7 @@ pub async fn load_from_persistence(
         }
 
         if db_app.status == 1 {
-            start_app(persistence, &apps, app_id).await?;
+            start_app(pool, &apps, app_id).await?;
         }
     }
 
@@ -175,7 +176,7 @@ pub async fn get_summary(apps: &Arc<RwLock<Vec<Box<dyn App>>>>) -> Summary {
 }
 
 pub async fn create_app(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     body: String,
@@ -193,7 +194,7 @@ pub async fn create_app(
     };
 
     if persist {
-        persistence.lock().await.create_app(&app_id, body)?;
+        persistence::app::create_app(pool, &app_id, body).await?;
     }
     apps.write().await.push(app);
     Ok(())
@@ -244,7 +245,7 @@ pub async fn search_apps(
 }
 
 pub async fn update_app(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     body: String,
@@ -267,13 +268,13 @@ pub async fn update_app(
         None => return app_not_found_err!(),
     }
 
-    persistence.lock().await.update_app_conf(&app_id, body)?;
+    persistence::app::update_app_conf(pool, &app_id, body).await?;
 
     Ok(())
 }
 
 pub async fn start_app(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
@@ -287,13 +288,13 @@ pub async fn start_app(
         None => return app_not_found_err!(),
     }
 
-    persistence.lock().await.update_app_status(&app_id, true)?;
+    persistence::app::update_app_status(pool, &app_id, true).await?;
 
     Ok(())
 }
 
 pub async fn stop_app(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
@@ -307,12 +308,12 @@ pub async fn stop_app(
         None => return app_not_found_err!(),
     }
 
-    persistence.lock().await.update_app_status(&app_id, false)?;
+    persistence::app::update_app_status(pool, &app_id, false).await?;
     Ok(())
 }
 
 pub async fn delete_app(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
@@ -327,12 +328,12 @@ pub async fn delete_app(
     }
 
     apps.write().await.retain(|app| *app.get_id() != app_id);
-    persistence.lock().await.delete_app(&app_id)?;
+    persistence::app::delete_app(pool, &app_id).await?;
     Ok(())
 }
 
 pub async fn create_source(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     source_id: Uuid,
@@ -351,10 +352,7 @@ pub async fn create_source(
     }
 
     if persist {
-        persistence
-            .lock()
-            .await
-            .create_source(&app_id, &source_id, body)?;
+        persistence::source::create_source(pool, &app_id, &source_id, body).await?;
     }
 
     Ok(())
@@ -373,7 +371,7 @@ pub async fn search_sources(
 }
 
 pub async fn update_source(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     source_id: Uuid,
@@ -390,12 +388,12 @@ pub async fn update_source(
         None => return app_not_found_err!(),
     }
 
-    persistence.lock().await.update_source(&source_id, body)?;
+    persistence::source::update_source(pool, &source_id, body).await?;
     Ok(())
 }
 
 pub async fn delete_source(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     source_id: Uuid,
@@ -410,7 +408,7 @@ pub async fn delete_source(
         None => return app_not_found_err!(),
     }
 
-    persistence.lock().await.delete_source(&source_id)?;
+    persistence::source::delete_source(pool, &source_id).await?;
     Ok(())
 }
 
@@ -483,7 +481,7 @@ pub async fn del_source_ref(
 }
 
 pub async fn create_sink(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     sink_id: Uuid,
@@ -502,10 +500,7 @@ pub async fn create_sink(
     }
 
     if persist {
-        persistence
-            .lock()
-            .await
-            .create_sink(&app_id, &sink_id, body)?;
+        persistence::sink::create_sink(pool, &app_id, &sink_id, body).await?;
     }
 
     Ok(())
@@ -524,7 +519,7 @@ pub async fn search_sinks(
 }
 
 pub async fn update_sink(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     sink_id: Uuid,
@@ -541,12 +536,12 @@ pub async fn update_sink(
         None => return app_not_found_err!(),
     }
 
-    persistence.lock().await.update_sink(&sink_id, body)?;
+    persistence::sink::update_sink(pool, &sink_id, body).await?;
     Ok(())
 }
 
 pub async fn delete_sink(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     sink_id: Uuid,
@@ -561,7 +556,7 @@ pub async fn delete_sink(
         None => return app_not_found_err!(),
     }
 
-    persistence.lock().await.delete_sink(&sink_id)?;
+    persistence::sink::delete_sink(pool, &sink_id).await?;
 
     Ok(())
 }

@@ -29,7 +29,7 @@ async fn get_rules_summary(State(state): State<AppState>) -> AppSuccess<Summary>
 
 async fn create(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
     rule::create(
-        &state.persistence,
+        &state.pool,
         &state.rules,
         &state.devices,
         &state.apps,
@@ -51,19 +51,12 @@ async fn search(
 }
 
 async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    rule::start(
-        &state.persistence,
-        &state.rules,
-        &state.devices,
-        &state.apps,
-        id,
-    )
-    .await?;
+    rule::start(&state.pool, &state.rules, &state.devices, &state.apps, id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn stop(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    rule::stop(&state.persistence, &state.rules, id).await?;
+    rule::stop(&state.pool, &state.rules, id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -72,11 +65,11 @@ async fn update(
     Path(id): Path<Uuid>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    rule::update(&state.persistence, &state.rules, id, body).await?;
+    rule::update(&state.pool, &state.rules, id, body).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn delete(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    rule::delete(&state.persistence, &state.rules, id).await?;
+    rule::delete(&state.pool, &state.rules, id).await?;
     Ok(AppSuccess::empty())
 }

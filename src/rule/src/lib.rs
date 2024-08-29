@@ -1,12 +1,13 @@
 use apps::App;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence::{local::Local, Persistence},
+    persistence,
 };
 use devices::Device;
 use rule::Rule;
+use sqlx::AnyPool;
 use std::{str::FromStr, sync::Arc};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, SearchRulesResp, Summary},
     Pagination,
@@ -23,27 +24,18 @@ macro_rules! rule_not_fonnd_err {
 }
 
 pub async fn load_from_persistence(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
 ) -> HaliaResult<Arc<RwLock<Vec<Rule>>>> {
-    let db_rules = persistence.lock().await.read_rules()?;
+    let db_rules = persistence::rule::read_rules(pool).await?;
     let rules: Arc<RwLock<Vec<Rule>>> = Arc::new(RwLock::new(vec![]));
     for db_rule in db_rules {
         let rule_id = Uuid::from_str(&db_rule.id).unwrap();
-        create(
-            persistence,
-            &rules,
-            devices,
-            apps,
-            rule_id,
-            db_rule.conf,
-            false,
-        )
-        .await?;
+        create(pool, &rules, devices, apps, rule_id, db_rule.conf, false).await?;
 
         if db_rule.status == 1 {
-            start(persistence, &rules, &devices, &apps, rule_id).await?;
+            start(pool, &rules, &devices, &apps, rule_id).await?;
         }
     }
 
@@ -73,7 +65,7 @@ pub async fn get_summary(rules: &Arc<RwLock<Vec<Rule>>>) -> Summary {
 }
 
 pub async fn create(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
@@ -84,7 +76,7 @@ pub async fn create(
     let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
     let rule = Rule::new(devices, apps, id, req).await?;
     if persist {
-        persistence.lock().await.create_rule(&id, body)?;
+        persistence::rule::create_rule(pool, &id, body).await?;
     }
     rules.write().await.push(rule);
     Ok(())
@@ -123,7 +115,7 @@ pub async fn search(
 }
 
 pub async fn start(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
@@ -134,12 +126,12 @@ pub async fn start(
         None => return rule_not_fonnd_err!(),
     }
 
-    persistence.lock().await.update_rule_status(&id, true)?;
+    persistence::rule::update_rule_status(pool, &id, true).await?;
     Ok(())
 }
 
 pub async fn stop(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
     id: Uuid,
 ) -> HaliaResult<()> {
@@ -148,12 +140,12 @@ pub async fn stop(
         None => return rule_not_fonnd_err!(),
     }
 
-    persistence.lock().await.update_rule_status(&id, false)?;
+    persistence::rule::update_rule_status(pool, &id, false).await?;
     Ok(())
 }
 
 pub async fn update(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
     id: Uuid,
     body: String,
@@ -162,7 +154,7 @@ pub async fn update(
 }
 
 pub async fn delete(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
     id: Uuid,
 ) -> HaliaResult<()> {
@@ -172,6 +164,6 @@ pub async fn delete(
     }
 
     rules.write().await.retain(|rule| rule.id != id);
-    persistence.lock().await.delete_rule(&id)?;
+    persistence::rule::delete_rule(pool, &id).await?;
     Ok(())
 }

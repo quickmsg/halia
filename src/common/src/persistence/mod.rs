@@ -1,85 +1,60 @@
-use uuid::Uuid;
+use anyhow::Result;
+use sqlx::AnyPool;
 
-pub mod local;
+pub mod app;
+pub mod databoard;
+pub mod device;
+pub mod rule;
+pub mod sink;
+pub mod source;
 
-use crate::error::HaliaResult;
+pub async fn create_tables(pool: &AnyPool) -> Result<()> {
+    sqlx::query(
+        r#"
+CREATE TABLE IF NOT EXISTS devices (
+    id TEXT PRIMARY KEY,
+    status INTEGER NOT NULL,
+    conf TEXT NOT NULL
+);
 
-pub struct Device {
-    pub id: String,
-    pub status: u8,
-    pub conf: String,
-}
+CREATE TABLE IF NOT EXISTS apps (
+    id TEXT PRIMARY KEY,
+    status INTEGER NOT NULL,
+    conf TEXT NOT NULL
+);
 
-pub struct App {
-    pub id: String,
-    pub status: u8,
-    pub conf: String,
-}
+CREATE TABLE IF NOT EXISTS sources (
+    id TEXT PRIMARY KEY,
+    parent_id TEXT NOT NULL,
+    conf TEXT NOT NULL
+);
 
-pub struct SourceOrSink {
-    pub id: String,
-    pub conf: String,
-}
+CREATE TABLE IF NOT EXISTS sinks (
+    id TEXT PRIMARY KEY,
+    parent_id TEXT NOT NULL,
+    conf TEXT NOT NULL
+);
 
-pub struct Rule {
-    pub id: String,
-    pub status: u8,
-    pub conf: String,
-}
+CREATE TABLE IF NOT EXISTS databoards (
+    id TEXT PRIMARY KEY,
+    conf TEXT NOT NULL
+);
 
-pub struct Databoard {
-    pub id: String,
-    pub conf: String,
-}
+CREATE TABLE IF NOT EXISTS databoard_datas (
+    id TEXT PRIMARY KEY,
+    parent_id TEXT NOT NULL,
+    conf TEXT NOT NULL
+);
 
-pub struct DataboardData {
-    pub id: String,
-    pub conf: String,
-}
+CREATE TABLE IF NOT EXISTS rules (
+    id TEXT PRIMARY KEY,
+    status INTEGER NOT NULL,
+    conf TEXT NOT NULL
+);
+"#,
+    )
+    .execute(pool)
+    .await?;
 
-pub trait Persistence {
-    fn init(&self) -> HaliaResult<()>;
-
-    fn create_device(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn read_devices(&self) -> HaliaResult<Vec<Device>>;
-    fn update_device_status(&self, id: &Uuid, status: bool) -> HaliaResult<()>;
-    fn update_device_conf(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_device(&self, id: &Uuid) -> HaliaResult<()>;
-
-    fn create_app(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn read_apps(&self) -> HaliaResult<Vec<App>>;
-    fn update_app_status(&self, id: &Uuid, stauts: bool) -> HaliaResult<()>;
-    fn update_app_conf(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_app(&self, id: &Uuid) -> HaliaResult<()>;
-
-    fn create_source(&self, parent_id: &Uuid, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn read_sources(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>>;
-    fn update_source(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_source(&self, id: &Uuid) -> HaliaResult<()>;
-
-    fn create_sink(&self, parent_id: &Uuid, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn read_sinks(&self, parent_id: &Uuid) -> HaliaResult<Vec<SourceOrSink>>;
-    fn update_sink(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_sink(&self, id: &Uuid) -> HaliaResult<()>;
-
-    fn create_databoard(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn read_databoards(&self) -> HaliaResult<Vec<Databoard>>;
-    fn update_databoard(&self, id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_databoard(&self, id: &Uuid) -> HaliaResult<()>;
-
-    fn create_databoard_data(
-        &self,
-        databoard_id: &Uuid,
-        databoard_data_id: &Uuid,
-        conf: String,
-    ) -> HaliaResult<()>;
-    fn read_databoard_datas(&self, databoard_id: &Uuid) -> HaliaResult<Vec<DataboardData>>;
-    fn update_databoard_data(&self, databoard_data_id: &Uuid, conf: String) -> HaliaResult<()>;
-    fn delete_databoard_data(&self, databoard_data_id: &Uuid) -> HaliaResult<()>;
-
-    fn create_rule(&self, id: &Uuid, body: String) -> HaliaResult<()>;
-    fn read_rules(&self) -> HaliaResult<Vec<Rule>>;
-    fn update_rule_status(&self, id: &Uuid, stauts: bool) -> HaliaResult<()>;
-    fn update_rule_conf(&self, id: &Uuid, body: String) -> HaliaResult<()>;
-    fn delete_rule(&self, id: &Uuid) -> HaliaResult<()>;
+    Ok(())
 }

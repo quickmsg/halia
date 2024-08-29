@@ -48,7 +48,7 @@ async fn get_apps_summary(State(state): State<AppState>) -> AppSuccess<Summary> 
 }
 
 async fn create_app(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
-    apps::create_app(&state.persistence, &state.apps, Uuid::new_v4(), body, true).await?;
+    apps::create_app(&state.pool, &state.apps, Uuid::new_v4(), body, true).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -66,7 +66,7 @@ async fn update_app(
     Path(app_id): Path<Uuid>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    apps::update_app(&state.persistence, &state.apps, app_id, body).await?;
+    apps::update_app(&state.pool, &state.apps, app_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -74,7 +74,7 @@ async fn start_app(
     State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    apps::start_app(&state.persistence, &state.apps, app_id).await?;
+    apps::start_app(&state.pool, &state.apps, app_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -82,7 +82,7 @@ async fn stop_app(
     State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    apps::stop_app(&state.persistence, &state.apps, app_id).await?;
+    apps::stop_app(&state.pool, &state.apps, app_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -90,7 +90,7 @@ async fn delete_app(
     State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    apps::delete_app(&state.persistence, &state.apps, app_id).await?;
+    apps::delete_app(&state.pool, &state.apps, app_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -99,15 +99,7 @@ async fn create_source(
     Path(app_id): Path<Uuid>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    apps::create_source(
-        &state.persistence,
-        &state.apps,
-        app_id,
-        Uuid::new_v4(),
-        body,
-        true,
-    )
-    .await?;
+    apps::create_source(&state.pool, &state.apps, app_id, Uuid::new_v4(), body, true).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -126,7 +118,7 @@ async fn update_source(
     Path((app_id, source_id)): Path<(Uuid, Uuid)>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    apps::update_source(&state.persistence, &state.apps, app_id, source_id, body).await?;
+    apps::update_source(&state.pool, &state.apps, app_id, source_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -134,7 +126,7 @@ async fn delete_source(
     State(state): State<AppState>,
     Path((app_id, source_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
-    apps::delete_source(&state.persistence, &state.apps, app_id, source_id).await?;
+    apps::delete_source(&state.pool, &state.apps, app_id, source_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -143,15 +135,7 @@ async fn create_sink(
     Path(app_id): Path<Uuid>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    apps::create_sink(
-        &state.persistence,
-        &state.apps,
-        app_id,
-        Uuid::new_v4(),
-        body,
-        true,
-    )
-    .await?;
+    apps::create_sink(&state.pool, &state.apps, app_id, Uuid::new_v4(), body, true).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -170,7 +154,7 @@ async fn update_sink(
     Path((app_id, sink_id)): Path<(Uuid, Uuid)>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    apps::update_sink(&state.persistence, &state.apps, app_id, sink_id, body).await?;
+    apps::update_sink(&state.pool, &state.apps, app_id, sink_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -178,6 +162,6 @@ async fn delete_sink(
     State(state): State<AppState>,
     Path((app_id, sink_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
-    apps::delete_sink(&state.persistence, &state.apps, app_id, sink_id).await?;
+    apps::delete_sink(&state.pool, &state.apps, app_id, sink_id).await?;
     Ok(AppSuccess::empty())
 }

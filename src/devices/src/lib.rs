@@ -3,10 +3,11 @@ use std::{str::FromStr, sync::Arc};
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence::{local::Local, Persistence},
+    persistence,
 };
 use message::MessageBatch;
-use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+use sqlx::AnyPool;
+use tokio::sync::{broadcast, mpsc, RwLock};
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemResp,
@@ -106,15 +107,17 @@ macro_rules! sink_not_found_err {
 }
 
 pub async fn load_from_persistence(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<RwLock<Vec<Box<dyn Device>>>>> {
-    let db_devices = persistence.lock().await.read_devices()?;
+    let db_devices = persistence::device::read_devices(&persistence).await?;
+
     let devices: Arc<RwLock<Vec<Box<dyn Device>>>> = Arc::new(RwLock::new(vec![]));
     for db_device in db_devices {
         let device_id = Uuid::from_str(&db_device.id).unwrap();
 
-        let db_sources = persistence.lock().await.read_sources(&device_id).unwrap();
-        let db_sinks = persistence.lock().await.read_sinks(&device_id).unwrap();
+        let db_sources = persistence::source::read_sources(&persistence, &device_id).await?;
+        let db_sinks = persistence::sink::read_sinks(&persistence, &device_id).await?;
+
         create_device(persistence, &devices, device_id, db_device.conf, false)
             .await
             .unwrap();
@@ -179,7 +182,7 @@ pub async fn get_summary(devices: &Arc<RwLock<Vec<Box<dyn Device>>>>) -> Summary
 }
 
 pub async fn create_device(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     body: String,
@@ -193,7 +196,7 @@ pub async fn create_device(
     };
     devices.write().await.push(device);
     if persist {
-        persistence.lock().await.create_device(&device_id, body)?;
+        persistence::device::create_device(&persistence, &device_id, body).await?;
     }
     Ok(())
 }
@@ -243,7 +246,7 @@ pub async fn search_devices(
 }
 
 pub async fn update_device(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     body: String,
@@ -260,16 +263,13 @@ pub async fn update_device(
         None => return device_not_found_err!(),
     }
 
-    persistence
-        .lock()
-        .await
-        .update_device_conf(&device_id, body)?;
+    persistence::device::update_device_conf(persistence, &device_id, body).await?;
 
     Ok(())
 }
 
 pub async fn start_device(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
@@ -283,15 +283,12 @@ pub async fn start_device(
         None => return device_not_found_err!(),
     }
 
-    persistence
-        .lock()
-        .await
-        .update_device_status(&device_id, true)?;
+    persistence::device::update_device_status(persistence, &device_id, true).await?;
     Ok(())
 }
 
 pub async fn stop_device(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
@@ -305,16 +302,13 @@ pub async fn stop_device(
         None => return device_not_found_err!(),
     }
 
-    persistence
-        .lock()
-        .await
-        .update_device_status(&device_id, false)?;
+    persistence::device::update_device_status(persistence, &device_id, false).await?;
 
     Ok(())
 }
 
 pub async fn delete_device(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
@@ -332,13 +326,13 @@ pub async fn delete_device(
         .write()
         .await
         .retain(|device| *device.get_id() != device_id);
-    persistence.lock().await.delete_device(&device_id)?;
+    persistence::device::delete_device(persistence, &device_id).await?;
 
     Ok(())
 }
 
 pub async fn create_source(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     source_id: Uuid,
@@ -357,10 +351,7 @@ pub async fn create_source(
     }
 
     if persist {
-        persistence
-            .lock()
-            .await
-            .create_source(&device_id, &source_id, body)?;
+        persistence::source::create_source(persistence, &device_id, &source_id, body).await?;
     }
 
     Ok(())
@@ -384,7 +375,7 @@ pub async fn search_sources(
 }
 
 pub async fn update_source(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     source_id: Uuid,
@@ -401,7 +392,7 @@ pub async fn update_source(
         None => return device_not_found_err!(),
     }
 
-    persistence.lock().await.update_source(&source_id, body)?;
+    persistence::source::update_source(persistence, &source_id, body).await?;
 
     Ok(())
 }
@@ -424,7 +415,7 @@ pub async fn write_source_value(
 }
 
 pub async fn delete_source(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     source_id: Uuid,
@@ -439,7 +430,7 @@ pub async fn delete_source(
         None => return device_not_found_err!(),
     }
 
-    persistence.lock().await.delete_source(&source_id)?;
+    persistence::source::delete_source(persistence, &source_id).await?;
 
     Ok(())
 }
@@ -513,7 +504,7 @@ pub async fn del_source_ref(
 }
 
 pub async fn create_sink(
-    persistence: &Arc<Mutex<Local>>,
+    persistence: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     sink_id: Uuid,
@@ -532,10 +523,7 @@ pub async fn create_sink(
     }
 
     if persist {
-        persistence
-            .lock()
-            .await
-            .create_sink(&device_id, &sink_id, body)?;
+        persistence::sink::create_sink(persistence, &device_id, &sink_id, body).await?;
     }
 
     Ok(())
@@ -559,7 +547,7 @@ pub async fn search_sinks(
 }
 
 pub async fn update_sink(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     sink_id: Uuid,
@@ -576,13 +564,13 @@ pub async fn update_sink(
         None => return device_not_found_err!(),
     }
 
-    persistence.lock().await.update_sink(&sink_id, body)?;
+    persistence::sink::update_sink(pool, &sink_id, body).await?;
 
     Ok(())
 }
 
 pub async fn delete_sink(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     sink_id: Uuid,
@@ -597,7 +585,7 @@ pub async fn delete_sink(
         None => return device_not_found_err!(),
     }
 
-    persistence.lock().await.delete_sink(&sink_id)?;
+    persistence::sink::delete_sink(pool, &sink_id).await?;
 
     Ok(())
 }

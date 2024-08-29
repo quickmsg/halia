@@ -17,3 +17,4 @@ functions = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 bytes = { workspace = true }
+sqlx = { workspace = true }

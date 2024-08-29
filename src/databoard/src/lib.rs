@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use common::{error::HaliaResult, persistence::local::Local};
+use common::error::HaliaResult;
 use databoard::Databoard;
+use sqlx::AnyPool;
 use tokio::sync::{Mutex, RwLock};
 use types::databoard::CreateUpdateDataboardReq;
 use uuid::Uuid;
@@ -38,7 +39,7 @@ pub async fn get_summary() -> HaliaResult<()> {
 }
 
 pub async fn create_databoard(
-    persistence: &Arc<Mutex<Local>>,
+    pool: &Arc<AnyPool>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
     body: String,

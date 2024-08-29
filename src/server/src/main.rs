@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common::persistence::{self, Persistence};
-use tokio::sync::Mutex;
+use common::persistence;
+use sqlx::AnyPool;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -14,18 +14,19 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let local_persistence = persistence::local::Local::new("./db").unwrap();
-    local_persistence.init().unwrap();
-    let persistence = Arc::new(Mutex::new(local_persistence));
+    sqlx::any::install_default_drivers();
+    let pool = AnyPool::connect("sqlite://db").await?;
 
-    let devices = devices::load_from_persistence(&persistence).await.unwrap();
-    let apps = apps::load_from_persistence(&persistence).await.unwrap();
-    let rules = rule::load_from_persistence(&persistence, &devices, &apps)
+    persistence::create_tables(&pool).await?;
+    let pool = Arc::new(pool);
+    let devices = devices::load_from_persistence(&pool).await.unwrap();
+    let apps = apps::load_from_persistence(&pool).await.unwrap();
+    let rules = rule::load_from_persistence(&pool, &devices, &apps)
         .await
         .unwrap();
 
     info!("server starting...");
-    api::start(persistence, devices, apps, rules).await;
+    api::start(pool, devices, apps, rules).await;
 
     Ok(())
 }

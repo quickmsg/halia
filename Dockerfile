@@ -1,19 +1,30 @@
-FROM rustlang/rust:nightly AS compiler
-RUN apt-get install musl-tools
+# 第一阶段：构建阶段
+FROM rust:latest as builder
 
-WORKDIR /
+# 设置工作目录
+WORKDIR /usr/src/myapp
 
-COPY    . .
-RUN     rustup target add x86_64-unknown-linux-musl
-RUN     cargo build --release --target=x86_64-unknown-linux-musl
+# 将 Cargo.toml 和 Cargo.lock 复制到容器中
+COPY Cargo.toml Cargo.lock ./
 
-FROM    alpine:3.20
+COPY src ./src
 
-COPY    --from=compiler /target/release/server /bin/server
-WORKDIR /storage
-RUN touch /storage/data
-RUSTFLAGS="-C target-feature=+crt-static" cargo build --release --target x86_64-unknown-linux-gnu
+# 编译最终的可执行文件
+RUN cargo build --release
 
-EXPOSE  3000/tcp
-RUN chmod +x /bin/server
-ENTRYPOINT ["/bin/server"]
+# 第二阶段：运行阶段
+FROM debian:buster-slim
+
+# 设置工作目录
+WORKDIR /usr/local/bin
+
+# 从构建阶段复制编译后的可执行文件
+COPY --from=builder /usr/src/myapp/target/release/server .
+RUN apt update
+RUN apt install -y libssl-dev
+
+# 暴露服务端口（如果适用）
+EXPOSE 13000
+
+# 设置启动命令
+CMD ["./server"]
