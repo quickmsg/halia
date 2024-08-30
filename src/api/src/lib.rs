@@ -108,10 +108,14 @@ pub async fn start(
     let app = Router::new()
         .with_state(state.clone())
         .nest("/api/user", user::routes())
-        .nest("/api/device", device::routes())
-        .nest("/api/app", app::routes())
-        .nest("/api/databoard", databoard::routes())
-        .nest("/api/rule", rule::routes())
+        .nest(
+            "/",
+            Router::new()
+                .nest("/api/device", device::routes())
+                .nest("/api/app", app::routes())
+                .nest("/api/databoard", databoard::routes())
+                .nest("/api/rule", rule::routes()),
+        )
         // .fallback_service(
         //     ServeDir::new("./dist").not_found_service(ServeFile::new("./dist/index.html")),
         // )

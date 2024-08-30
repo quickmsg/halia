@@ -7,10 +7,16 @@ pub mod device;
 pub mod rule;
 pub mod sink;
 pub mod source;
+pub mod user;
 
 pub async fn create_tables(pool: &AnyPool) -> Result<()> {
     sqlx::query(
         r#"
+CREATE TABLE IF NOT EXISTS users (
+    username TEXT NOT NULL,
+    password TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS devices (
     id TEXT PRIMARY KEY,
     status INTEGER NOT NULL,

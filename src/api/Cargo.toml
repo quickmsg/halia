@@ -20,3 +20,4 @@ uuid = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "fs"] }
 bytes = { workspace = true }
 sqlx = { workspace = true }
+# tower = { version = "0.5.0", features = ["full"] }
