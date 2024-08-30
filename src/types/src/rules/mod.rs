@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::{apps::AppType, devices::DeviceType, BaseConf};
+use crate::BaseConf;
 
 pub mod apps;
 pub mod devices;

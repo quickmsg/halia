@@ -1,12 +1,12 @@
-use apps::GLOBAL_APP_MANAGER;
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     routing::{self, get, post, put},
-    Json, Router,
+    Router,
 };
 use types::{
-    apps::{CreateUpdateAppReq, QueryParams, SearchAppsResp, Summary},
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    apps::Summary,
+    databoard::{QueryParams, SearchDataboardsResp, SearchDatasResp},
+    Pagination,
 };
 use uuid::Uuid;
 
@@ -33,69 +33,94 @@ async fn get_databoards_summary() -> AppSuccess<Summary> {
     todo!()
 }
 
-async fn create_databoard(Json(req): Json<CreateUpdateAppReq>) -> AppResult<AppSuccess<()>> {
-    let app_id = Uuid::new_v4();
-    GLOBAL_APP_MANAGER.create_app(app_id, req, true).await?;
+async fn create_databoard(
+    State(state): State<AppState>,
+    body: String,
+) -> AppResult<AppSuccess<()>> {
+    databoard::create_databoard(&state.pool, &state.databoards, Uuid::new_v4(), body, true).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_databoards(
+    State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppSuccess<SearchAppsResp> {
+) -> AppSuccess<SearchDataboardsResp> {
     AppSuccess::data(
-        GLOBAL_APP_MANAGER
-            .search_apps(pagination, query_params)
-            .await,
+        databoard::search_databoards(&state.databoards, pagination, query_params).await,
     )
 }
 
 async fn update_databoard(
-    Path(app_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateAppReq>,
+    State(state): State<AppState>,
+    Path(databoard_id): Path<Uuid>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.update_app(app_id, req).await?;
+    databoard::update_databoard(&state.pool, &state.databoards, databoard_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete_databoard(Path(app_id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.delete_app(app_id).await?;
+async fn delete_databoard(
+    State(state): State<AppState>,
+    Path(databoard_id): Path<Uuid>,
+) -> AppResult<AppSuccess<()>> {
+    databoard::delete_databoard(&state.pool, &state.databoards, databoard_id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn create_data(
-    Path(app_id): Path<Uuid>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    State(state): State<AppState>,
+    Path(databoard_id): Path<Uuid>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    let source_id = Uuid::new_v4();
-    GLOBAL_APP_MANAGER
-        .create_source(app_id, source_id, req, true)
-        .await?;
+    databoard::create_data(
+        &state.pool,
+        &state.databoards,
+        databoard_id,
+        Uuid::new_v4(),
+        body,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_datas(
-    Path(app_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Path(databoard_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
-) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let data = GLOBAL_APP_MANAGER
-        .search_sources(app_id, pagination, query)
-        .await?;
+) -> AppResult<AppSuccess<SearchDatasResp>> {
+    let data = databoard::search_datas(&state.databoards, databoard_id, pagination, query).await?;
     Ok(AppSuccess::data(data))
 }
 
 async fn update_data(
-    Path((app_id, source_id)): Path<(Uuid, Uuid)>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    State(state): State<AppState>,
+    Path((databoard_id, databoard_data_id)): Path<(Uuid, Uuid)>,
+    body: String,
 ) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER
-        .update_source(app_id, source_id, req)
-        .await?;
+    databoard::update_data(
+        &state.pool,
+        &state.databoards,
+        databoard_id,
+        databoard_data_id,
+        body,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete_data(Path((app_id, source_id)): Path<(Uuid, Uuid)>) -> AppResult<AppSuccess<()>> {
-    GLOBAL_APP_MANAGER.delete_source(app_id, source_id).await?;
+async fn delete_data(
+    State(state): State<AppState>,
+    Path((databoard_id, databoard_data_id)): Path<(Uuid, Uuid)>,
+) -> AppResult<AppSuccess<()>> {
+    databoard::delete_data(
+        &state.pool,
+        &state.databoards,
+        databoard_id,
+        databoard_data_id,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }

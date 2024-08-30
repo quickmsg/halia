@@ -3,6 +3,11 @@ use uuid::Uuid;
 
 use crate::BaseConf;
 
+#[derive(Debug, Deserialize)]
+pub struct QueryParams {
+    pub name: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateDataboardReq {
     pub base: BaseConf,

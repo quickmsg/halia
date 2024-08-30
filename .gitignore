@@ -2,3 +2,5 @@
 /storage
 /pki
 db
+/dist
+dist.tgz

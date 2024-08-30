@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 common = { workspace = true }
 types = { workspace = true }
+message = { workspace = true }
 
 tokio = { workspace = true }
 uuid = { workspace = true }

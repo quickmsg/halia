@@ -29,6 +29,7 @@ protocol = { path = "src/protocol" }
 functions = { path = "src/functions" }
 rule = { path = "src/rule" }
 apps = { path = "src/apps" }
+databoard = { path = "src/databoard" }
 
 serde_json = { version = "1.0.120" }
 serde_repr = "0.1.19"

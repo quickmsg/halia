@@ -1,5 +1,6 @@
 use std::{result, sync::Arc};
 
+use ::databoard::databoard::Databoard;
 use ::rule::rule::Rule;
 use apps::App;
 use axum::{
@@ -12,10 +13,13 @@ use devices::Device;
 use serde::Serialize;
 use sqlx::AnyPool;
 use tokio::{net::TcpListener, sync::RwLock};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::{
+    cors::{Any, CorsLayer},
+    services::{ServeDir, ServeFile},
+};
 
 mod app;
-// mod databoard;
+mod databoard;
 mod device;
 mod rule;
 
@@ -82,6 +86,7 @@ struct AppState {
     pool: Arc<AnyPool>,
     devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: Arc<RwLock<Vec<Databoard>>>,
     rules: Arc<RwLock<Vec<Rule>>>,
 }
 
@@ -96,13 +101,17 @@ pub async fn start(
         devices,
         apps,
         rules,
+        databoards: Arc::new(RwLock::new(vec![])),
     };
     let app = Router::new()
         .with_state(state.clone())
         .nest("/api/device", device::routes())
         .nest("/api/app", app::routes())
         .nest("/api/rule", rule::routes())
-        // .nest("/api/databoard", databoard::routes())
+        .nest("/api/databoard", databoard::routes())
+        .fallback_service(
+            ServeDir::new("./dist").not_found_service(ServeFile::new("./dist/index.html")),
+        )
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

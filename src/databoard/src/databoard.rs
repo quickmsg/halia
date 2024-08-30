@@ -2,9 +2,10 @@ use common::{
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
+use message::MessageBatch;
+use tokio::sync::broadcast;
 use types::{
-    databoard::{CreateUpdateDataReq, SearchDataboardsItemResp},
-    rules::QueryParams,
+    databoard::{CreateUpdateDataReq, QueryParams, SearchDataboardsItemResp, SearchDatasResp},
     BaseConf, Pagination,
 };
 use uuid::Uuid;
@@ -51,7 +52,7 @@ impl Databoard {
         Ok(())
     }
 
-    pub fn delete(&mut self, base_conf: BaseConf) -> HaliaResult<()> {
+    pub fn delete(&mut self) -> HaliaResult<()> {
         todo!()
     }
 
@@ -63,7 +64,7 @@ impl Databoard {
         &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> HaliaResult<()> {
+    ) -> HaliaResult<SearchDatasResp> {
         todo!()
     }
 
@@ -83,7 +84,11 @@ impl Databoard {
         todo!()
     }
 
-    pub async fn get_data_tx(&mut self, data_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+    pub async fn get_data_tx(
+        &mut self,
+        data_id: &Uuid,
+        rule_id: &Uuid,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         todo!()
     }
 

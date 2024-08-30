@@ -9,6 +9,7 @@ devices = { workspace = true }
 common = { workspace = true }
 rule = { workspace = true }
 apps = { workspace = true }
+databoard = { workspace = true }
 
 axum = { version = "0.7.5", features = ["macros", "query", "multipart"] }
 tracing = { workspace = true }
@@ -16,6 +17,6 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
-tower-http = { version = "0.5.2", features = ["cors"] }
+tower-http = { version = "0.5.2", features = ["cors", "fs"] }
 bytes = { workspace = true }
 sqlx = { workspace = true }
