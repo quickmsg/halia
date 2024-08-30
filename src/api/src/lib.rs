@@ -94,21 +94,22 @@ pub async fn start(
     pool: Arc<AnyPool>,
     devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: Arc<RwLock<Vec<Databoard>>>,
     rules: Arc<RwLock<Vec<Rule>>>,
 ) {
     let state = AppState {
         pool,
         devices,
         apps,
+        databoards,
         rules,
-        databoards: Arc::new(RwLock::new(vec![])),
     };
     let app = Router::new()
         .with_state(state.clone())
         .nest("/api/device", device::routes())
         .nest("/api/app", app::routes())
-        .nest("/api/rule", rule::routes())
         .nest("/api/databoard", databoard::routes())
+        .nest("/api/rule", rule::routes())
         .fallback_service(
             ServeDir::new("./dist").not_found_service(ServeFile::new("./dist/index.html")),
         )

@@ -4,6 +4,7 @@ use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
 };
+use databoard::databoard::Databoard;
 use devices::Device;
 use functions::{computes, filter, merge::merge::Merge, window};
 use message::MessageBatch;
@@ -12,8 +13,8 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error};
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
-    AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DeviceSinkNode, DeviceSourceNode, Node,
-    NodeType, SearchRulesItemResp,
+    AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
+    DeviceSourceNode, Node, NodeType, SearchRulesItemResp,
 };
 use uuid::Uuid;
 
@@ -30,6 +31,7 @@ impl Rule {
     pub async fn new(
         devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        databoards: &Arc<RwLock<Vec<Databoard>>>,
         rule_id: Uuid,
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<Self> {
@@ -90,6 +92,21 @@ impl Rule {
                     {
                         add_ref_nodes.push(&node);
                         error = Some(format!("引用应用错误: {}", e).to_owned());
+                        break;
+                    }
+                }
+                NodeType::Databoard => {
+                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
+                    if let Err(e) = databoard::add_data_ref(
+                        databoards,
+                        &databoard_node.databoard_id,
+                        &databoard_node.data_id,
+                        &rule_id,
+                    )
+                    .await
+                    {
+                        add_ref_nodes.push(&node);
+                        error = Some(format!("引用数据看板错误: {}", e).to_owned());
                         break;
                     }
                 }

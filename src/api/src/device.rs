@@ -14,6 +14,7 @@ use crate::{AppResult, AppState, AppSuccess};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/summary", get(get_devices_summary))
+        .route("/rule", get(get_rule_info))
         .route("/", post(create_device))
         .route("/", get(search_devices))
         .route("/:device_id", put(update_device))
@@ -44,6 +45,11 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn get_devices_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
+    let summary = devices::get_summary(&state.devices).await;
+    AppSuccess::data(summary)
+}
+
+async fn get_rule_info(State(state): State<AppState>) -> AppSuccess<Summary> {
     let summary = devices::get_summary(&state.devices).await;
     AppSuccess::data(summary)
 }

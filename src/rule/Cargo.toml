@@ -8,6 +8,7 @@ message = { workspace = true }
 common = { workspace = true }
 apps = { workspace = true }
 devices = { workspace = true }
+databoard = { workspace = true }
 
 tokio = { workspace = true }
 tracing = { workspace = true }

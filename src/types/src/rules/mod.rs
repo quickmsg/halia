@@ -8,6 +8,7 @@ use crate::BaseConf;
 pub mod apps;
 pub mod devices;
 pub mod functions;
+pub mod databoard;
 
 #[derive(Serialize)]
 pub struct Summary {
@@ -62,6 +63,7 @@ pub enum NodeType {
     Computer,
     DeviceSink,
     AppSink,
+    Databoard,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -87,6 +89,13 @@ pub struct AppSinkNode {
     pub app_id: Uuid,
     pub sink_id: Uuid,
 }
+
+#[derive(Deserialize, Serialize)]
+pub struct DataboardNode {
+    pub databoard_id: Uuid,
+    pub data_id: Uuid,
+}
+
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateUpdateRuleSink {

@@ -33,6 +33,7 @@ async fn create(State(state): State<AppState>, body: String) -> AppResult<AppSuc
         &state.rules,
         &state.devices,
         &state.apps,
+        &state.databoards,
         Uuid::new_v4(),
         body,
         true,

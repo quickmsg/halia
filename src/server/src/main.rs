@@ -24,12 +24,13 @@ async fn main() -> Result<()> {
     let pool = Arc::new(pool);
     let devices = devices::load_from_persistence(&pool).await.unwrap();
     let apps = apps::load_from_persistence(&pool).await.unwrap();
-    let rules = rule::load_from_persistence(&pool, &devices, &apps)
+    let databoards = databoard::load_from_persistence(&pool).await.unwrap();
+    let rules = rule::load_from_persistence(&pool, &devices, &apps, &databoards)
         .await
         .unwrap();
 
     info!("server starting...");
-    api::start(pool, devices, apps, rules).await;
+    api::start(pool, devices, apps, databoards, rules).await;
 
     Ok(())
 }

@@ -3,6 +3,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
+use databoard::databoard::Databoard;
 use devices::Device;
 use rule::Rule;
 use sqlx::AnyPool;
@@ -21,12 +22,23 @@ pub async fn load_from_persistence(
     pool: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: &Arc<RwLock<Vec<Databoard>>>,
 ) -> HaliaResult<Arc<RwLock<Vec<Rule>>>> {
     let db_rules = persistence::rule::read_rules(pool).await?;
     let rules: Arc<RwLock<Vec<Rule>>> = Arc::new(RwLock::new(vec![]));
     for db_rule in db_rules {
         let rule_id = Uuid::from_str(&db_rule.id).unwrap();
-        create(pool, &rules, devices, apps, rule_id, db_rule.conf, false).await?;
+        create(
+            pool,
+            &rules,
+            devices,
+            apps,
+            databoards,
+            rule_id,
+            db_rule.conf,
+            false,
+        )
+        .await?;
 
         if db_rule.status == 1 {
             start(pool, &rules, &devices, &apps, rule_id).await?;
@@ -63,12 +75,13 @@ pub async fn create(
     rules: &Arc<RwLock<Vec<Rule>>>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
     body: String,
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
-    let rule = Rule::new(devices, apps, id, req).await?;
+    let rule = Rule::new(devices, apps, databoards, id, req).await?;
     if persist {
         persistence::rule::create_rule(pool, &id, body).await?;
     }

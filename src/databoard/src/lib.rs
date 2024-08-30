@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use common::{
     error::{HaliaError, HaliaResult},
@@ -19,6 +19,33 @@ use uuid::Uuid;
 
 mod data;
 pub mod databoard;
+
+pub async fn load_from_persistence(
+    pool: &Arc<AnyPool>,
+) -> HaliaResult<Arc<RwLock<Vec<Databoard>>>> {
+    let db_databoards = persistence::databoard::read_databoards(pool).await?;
+    let databoards: Arc<RwLock<Vec<Databoard>>> = Arc::new(RwLock::new(vec![]));
+    for db_databoard in db_databoards {
+        let databoard_id = Uuid::from_str(&db_databoard.id).unwrap();
+
+        let db_datas = persistence::databoard::read_databoard_datas(pool, &databoard_id).await?;
+        create_databoard(pool, &databoards, databoard_id, db_databoard.conf, false).await?;
+
+        for db_data in db_datas {
+            create_data(
+                pool,
+                &databoards,
+                databoard_id,
+                Uuid::from_str(&db_data.id).unwrap(),
+                db_data.conf,
+                false,
+            )
+            .await?;
+        }
+    }
+
+    Ok(databoards)
+}
 
 pub async fn get_summary(databoards: &Arc<RwLock<Vec<Databoard>>>) -> Summary {
     Summary {
