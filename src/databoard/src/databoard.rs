@@ -87,7 +87,7 @@ impl Databoard {
         let mut total = 0;
         let mut datas = vec![];
         for (index, data) in self.datas.iter().rev().enumerate() {
-            let data = data.search();
+            let data = data.search().await;
             if let Some(name) = &query.name {
                 if !data.conf.base.name.contains(name) {
                     continue;

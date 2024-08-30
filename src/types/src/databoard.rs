@@ -41,7 +41,9 @@ pub struct CreateUpdateDataReq {
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct DataConf {}
+pub struct DataConf {
+    pub field: String,
+}
 
 #[derive(Serialize)]
 pub struct SearchDatasResp {
@@ -60,4 +62,6 @@ pub struct SearchDatasItemResp {
 pub struct SearchDatasInfoResp {
     pub id: Uuid,
     pub conf: CreateUpdateDataReq,
+    pub value: serde_json::Value,
+    pub ts: u64,
 }
