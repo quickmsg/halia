@@ -65,3 +65,15 @@ pub struct SearchDatasInfoResp {
     pub value: serde_json::Value,
     pub ts: u64,
 }
+
+#[derive(Deserialize)]
+pub struct QueryRuleInfo {
+    pub databoard_id: Uuid,
+    pub data_id: Uuid,
+}
+
+#[derive(Serialize)]
+pub struct SearchRuleInfo {
+    pub databoard: SearchDataboardsItemResp,
+    pub data: SearchDatasInfoResp,
+}

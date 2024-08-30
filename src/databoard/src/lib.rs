@@ -10,8 +10,8 @@ use sqlx::AnyPool;
 use tokio::sync::{mpsc, RwLock};
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, QueryParams, SearchDataboardsResp,
-        SearchDatasResp, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, QueryParams, QueryRuleInfo,
+        SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
     },
     Pagination,
 };
@@ -50,6 +50,28 @@ pub async fn load_from_persistence(
 pub async fn get_summary(databoards: &Arc<RwLock<Vec<Databoard>>>) -> Summary {
     Summary {
         total: databoards.read().await.len(),
+    }
+}
+
+pub async fn get_rule_info(
+    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    query: QueryRuleInfo,
+) -> HaliaResult<SearchRuleInfo> {
+    match databoards
+        .read()
+        .await
+        .iter()
+        .find(|databoard| databoard.id == query.databoard_id)
+    {
+        Some(databoard) => {
+            let databoard_info = databoard.search();
+            let data_info = databoard.search_data(&query.data_id).await?;
+            Ok(SearchRuleInfo {
+                databoard: databoard_info,
+                data: data_info,
+            })
+        }
+        None => Err(HaliaError::NotFound),
     }
 }
 

@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
 };
 use types::{
-    devices::{QueryParams, SearchDevicesResp, Summary},
+    devices::{QueryParams, QueryRuleInfo, SearchDevicesResp, SearchRuleInfo, Summary},
     Pagination, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
@@ -49,10 +49,12 @@ async fn get_devices_summary(State(state): State<AppState>) -> AppSuccess<Summar
     AppSuccess::data(summary)
 }
 
-// TODO
-async fn get_rule_info(State(state): State<AppState>) -> AppSuccess<Summary> {
-    let summary = devices::get_summary(&state.devices).await;
-    AppSuccess::data(summary)
+async fn get_rule_info(
+    State(state): State<AppState>,
+    Query(query): Query<QueryRuleInfo>,
+) -> AppResult<AppSuccess<SearchRuleInfo>> {
+    let rule_info = devices::get_rule_info(&state.devices, query).await?;
+    Ok(AppSuccess::data(rule_info))
 }
 
 async fn create_device(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {

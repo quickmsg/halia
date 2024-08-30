@@ -10,8 +10,8 @@ use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use types::{
     apps::{
-        AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemResp, SearchAppsResp,
-        Summary,
+        AppConf, AppType, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsItemResp,
+        SearchAppsResp, SearchRuleInfo, Summary,
     },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksResp,
@@ -155,6 +155,37 @@ pub async fn get_summary(apps: &Arc<RwLock<Vec<Box<dyn App>>>>) -> Summary {
         running_cnt,
         err_cnt,
         off_cnt,
+    }
+}
+
+pub async fn get_rule_info(
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    query: QueryRuleInfo,
+) -> HaliaResult<SearchRuleInfo> {
+    match apps
+        .read()
+        .await
+        .iter()
+        .find(|app| *app.get_id() == query.app_id)
+    {
+        Some(app) => {
+            let app_info = app.search().await;
+            let source_or_sink_info = match (query.source_id, query.sink_id) {
+                (Some(source_id), None) => app.search_source(&source_id).await?,
+                (None, Some(sink_id)) => app.search_source(&sink_id).await?,
+                _ => {
+                    return Err(HaliaError::Common(
+                        "查询source_id或sink_id参数错误！".to_string(),
+                    ))
+                }
+            };
+
+            Ok(SearchRuleInfo {
+                app: app_info,
+                item: source_or_sink_info,
+            })
+        }
+        None => Err(HaliaError::NotFound),
     }
 }
 

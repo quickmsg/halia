@@ -5,7 +5,9 @@ use axum::{
 };
 use types::{
     apps::Summary,
-    databoard::{QueryParams, SearchDataboardsResp, SearchDatasResp},
+    databoard::{
+        QueryParams, QueryRuleInfo, SearchDataboardsResp, SearchDatasResp, SearchRuleInfo,
+    },
     Pagination,
 };
 use uuid::Uuid;
@@ -15,6 +17,7 @@ use crate::{AppResult, AppState, AppSuccess};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/summary", get(get_databoards_summary))
+        .route("/rule", get(get_rule_info))
         .route("/", post(create_databoard))
         .route("/", get(search_databoards))
         .route("/:databoard_id", put(update_databoard))
@@ -31,6 +34,14 @@ pub fn routes() -> Router<AppState> {
 
 async fn get_databoards_summary() -> AppSuccess<Summary> {
     todo!()
+}
+
+async fn get_rule_info(
+    State(state): State<AppState>,
+    Query(query): Query<QueryRuleInfo>,
+) -> AppResult<AppSuccess<SearchRuleInfo>> {
+    let rule_info = databoard::get_rule_info(&state.databoards, query).await?;
+    Ok(AppSuccess::data(rule_info))
 }
 
 async fn create_databoard(

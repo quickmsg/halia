@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use types::{
     databoard::{
         CreateUpdateDataReq, CreateUpdateDataboardReq, DataboardConf, QueryParams,
-        SearchDataboardsItemResp, SearchDatasItemResp, SearchDatasResp,
+        SearchDataboardsItemResp, SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp,
     },
     BaseConf, Pagination,
 };
@@ -107,6 +107,13 @@ impl Databoard {
         }
 
         SearchDatasResp { total, data: datas }
+    }
+
+    pub async fn search_data(&self, data_id: &Uuid) -> HaliaResult<SearchDatasInfoResp> {
+        match self.datas.iter().find(|data| data.id == *data_id) {
+            Some(data) => Ok(data.search().await),
+            None => return Err(HaliaError::NotFound),
+        }
     }
 
     pub async fn update_data(

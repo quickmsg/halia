@@ -105,6 +105,7 @@ pub struct QueryRuleInfo {
     pub sink_id: Option<Uuid>,
 }
 
+#[derive(Serialize)]
 pub struct SearchRuleInfo {
     pub device: SearchDevicesItemResp,
     pub item: SearchSourcesOrSinksInfoResp,

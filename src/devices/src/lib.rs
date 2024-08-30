@@ -164,7 +164,7 @@ pub async fn get_summary(devices: &Arc<RwLock<Vec<Box<dyn Device>>>>) -> Summary
     }
 }
 
-pub async fn get_rule_ino(
+pub async fn get_rule_info(
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     query: QueryRuleInfo,
 ) -> HaliaResult<SearchRuleInfo> {
@@ -176,8 +176,20 @@ pub async fn get_rule_ino(
     {
         Some(device) => {
             let device_info = device.search().await;
+            let source_or_sink_info = match (query.source_id, query.sink_id) {
+                (Some(source_id), None) => device.search_source(&source_id).await?,
+                (None, Some(sink_id)) => device.search_source(&sink_id).await?,
+                _ => {
+                    return Err(HaliaError::Common(
+                        "查询source_id或sink_id参数错误！".to_string(),
+                    ))
+                }
+            };
 
-            todo!()
+            Ok(SearchRuleInfo {
+                device: device_info,
+                item: source_or_sink_info,
+            })
         }
         None => Err(HaliaError::NotFound),
     }

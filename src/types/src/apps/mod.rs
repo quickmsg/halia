@@ -4,7 +4,7 @@ use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::BaseConf;
+use crate::{BaseConf, SearchSourcesOrSinksInfoResp};
 
 pub mod http_client;
 pub mod log;
@@ -95,4 +95,18 @@ pub struct SearchAppsItemCommon {
 pub struct SearchAppsItemConf {
     pub base: BaseConf,
     pub ext: serde_json::Value,
+}
+
+
+#[derive(Deserialize)]
+pub struct QueryRuleInfo {
+    pub app_id: Uuid,
+    pub source_id: Option<Uuid>,
+    pub sink_id: Option<Uuid>,
+}
+
+#[derive(Serialize)]
+pub struct SearchRuleInfo {
+    pub app: SearchAppsItemResp,
+    pub item: SearchSourcesOrSinksInfoResp,
 }

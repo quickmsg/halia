@@ -4,7 +4,7 @@ use axum::{
     Router,
 };
 use types::{
-    apps::{QueryParams, SearchAppsResp, Summary},
+    apps::{QueryParams, QueryRuleInfo, SearchAppsResp, SearchRuleInfo, Summary},
     Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
@@ -14,6 +14,7 @@ use crate::{AppResult, AppState, AppSuccess};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/summary", get(get_apps_summary))
+        .route("/rule", get(get_rule_info))
         .route("/", post(create_app))
         .route("/", get(search_apps))
         .route("/:app_id", put(update_app))
@@ -45,6 +46,14 @@ pub fn routes() -> Router<AppState> {
 async fn get_apps_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
     let summary = apps::get_summary(&state.apps).await;
     AppSuccess::data(summary)
+}
+
+async fn get_rule_info(
+    State(state): State<AppState>,
+    Query(query): Query<QueryRuleInfo>,
+) -> AppResult<AppSuccess<SearchRuleInfo>> {
+    let rule_info = apps::get_rule_info(&state.apps, query).await?;
+    Ok(AppSuccess::data(rule_info))
 }
 
 async fn create_app(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
