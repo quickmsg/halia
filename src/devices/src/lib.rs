@@ -10,10 +10,11 @@ use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use types::{
     devices::{
-        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemResp,
-        SearchDevicesResp, Summary,
+        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
+        SearchDevicesItemResp, SearchDevicesResp, SearchRuleInfo, Summary,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
+    SearchSourcesOrSinksResp, Value,
 };
 
 use uuid::Uuid;
@@ -42,6 +43,7 @@ pub trait Device: Send + Sync {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp;
+    async fn search_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_source(
         &mut self,
         source_id: Uuid,
@@ -60,6 +62,7 @@ pub trait Device: Send + Sync {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp;
+    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
@@ -158,6 +161,25 @@ pub async fn get_summary(devices: &Arc<RwLock<Vec<Box<dyn Device>>>>) -> Summary
         running_cnt,
         err_cnt,
         off_cnt,
+    }
+}
+
+pub async fn get_rule_ino(
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    query: QueryRuleInfo,
+) -> HaliaResult<SearchRuleInfo> {
+    match devices
+        .read()
+        .await
+        .iter()
+        .find(|device| *device.get_id() == query.device_id)
+    {
+        Some(device) => {
+            let device_info = device.search().await;
+
+            todo!()
+        }
+        None => Err(HaliaError::NotFound),
     }
 }
 

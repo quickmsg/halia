@@ -31,7 +31,8 @@ use types::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemCommon,
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
+    SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
 
@@ -701,6 +702,10 @@ impl Device for Opcua {
         todo!()
     }
 
+    async fn search_source(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+        todo!()
+    }
+
     #[must_use]
     #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
     fn update_source<'life0, 'async_trait>(
@@ -777,6 +782,10 @@ impl Device for Opcua {
         'life0: 'async_trait,
         Self: 'async_trait,
     {
+        todo!()
+    }
+
+    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
         todo!()
     }
 

@@ -13,7 +13,8 @@ use types::{
         AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemResp, SearchAppsResp,
         Summary,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
+    SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -41,6 +42,7 @@ pub trait App: Send + Sync {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp;
+    async fn search_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_source(
         &mut self,
         source_id: Uuid,
@@ -58,6 +60,7 @@ pub trait App: Send + Sync {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp;
+    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_sink(
         &mut self,
         sink_id: Uuid,

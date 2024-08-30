@@ -49,6 +49,7 @@ async fn get_devices_summary(State(state): State<AppState>) -> AppSuccess<Summar
     AppSuccess::data(summary)
 }
 
+// TODO
 async fn get_rule_info(State(state): State<AppState>) -> AppSuccess<Summary> {
     let summary = devices::get_summary(&state.devices).await;
     AppSuccess::data(summary)

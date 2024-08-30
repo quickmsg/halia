@@ -15,8 +15,8 @@ use types::{
         AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemCommon,
         SearchAppsItemConf, SearchAppsItemResp,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
-    SearchSourcesOrSinksResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
+    SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -162,6 +162,10 @@ impl App for Log {
         }
     }
 
+    async fn search_source(&self, _source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+        log_not_support_source!()
+    }
+
     async fn update_source(
         &mut self,
         _source_id: Uuid,
@@ -224,6 +228,13 @@ impl App for Log {
             total += 1;
         }
         SearchSourcesOrSinksResp { total, data }
+    }
+
+    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+        match self.sinks.iter().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.search()),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn update_sink(

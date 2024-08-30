@@ -19,8 +19,8 @@ use types::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemCommon,
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksItemResp,
-    SearchSourcesOrSinksResp, Value,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
+    SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
 
@@ -137,6 +137,36 @@ impl Device for Coap {
         Ok(())
     }
 
+    async fn start(&mut self) -> HaliaResult<()> {
+        check_and_set_on_true!(self);
+
+        for source in self.sources.iter_mut() {
+            _ = source.start(&self.ext_conf).await;
+        }
+
+        for sink in self.sinks.iter_mut() {
+            _ = sink.start(&self.ext_conf).await;
+        }
+
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> HaliaResult<()> {
+        check_stop_all!(self, source);
+        check_stop_all!(self, sink);
+
+        check_and_set_on_false!(self);
+
+        for source in self.sources.iter_mut() {
+            _ = source.stop().await;
+        }
+        for sink in self.sinks.iter_mut() {
+            _ = sink.stop().await;
+        }
+
+        Ok(())
+    }
+
     async fn delete(&mut self) -> HaliaResult<()> {
         // check_delete!(self, sources_ref_infos);
         // check_delete!(self, sinks_ref_infos);
@@ -197,6 +227,10 @@ impl Device for Coap {
         SearchSourcesOrSinksResp { total, data }
     }
 
+    async fn search_source(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+        todo!()
+    }
+
     async fn update_source(
         &mut self,
         source_id: Uuid,
@@ -217,6 +251,10 @@ impl Device for Coap {
             Some(source) => source.update(req.base, ext_conf, &self.ext_conf).await,
             None => Err(HaliaError::NotFound),
         }
+    }
+
+    async fn write_source_value(&mut self, _source_id: Uuid, _req: Value) -> HaliaResult<()> {
+        coap_not_support_write_source_value!()
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
@@ -289,6 +327,10 @@ impl Device for Coap {
         }
 
         SearchSourcesOrSinksResp { total, data }
+    }
+
+    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+        todo!()
     }
 
     async fn update_sink(
@@ -377,40 +419,6 @@ impl Device for Coap {
 
     fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
         del_ref!(self, sink, sink_id, rule_id)
-    }
-
-    async fn start(&mut self) -> HaliaResult<()> {
-        check_and_set_on_true!(self);
-
-        for source in self.sources.iter_mut() {
-            _ = source.start(&self.ext_conf).await;
-        }
-
-        for sink in self.sinks.iter_mut() {
-            _ = sink.start(&self.ext_conf).await;
-        }
-
-        Ok(())
-    }
-
-    async fn stop(&mut self) -> HaliaResult<()> {
-        check_stop_all!(self, source);
-        check_stop_all!(self, sink);
-
-        check_and_set_on_false!(self);
-
-        for source in self.sources.iter_mut() {
-            _ = source.stop().await;
-        }
-        for sink in self.sinks.iter_mut() {
-            _ = sink.stop().await;
-        }
-
-        Ok(())
-    }
-
-    async fn write_source_value(&mut self, _source_id: Uuid, _req: Value) -> HaliaResult<()> {
-        coap_not_support_write_source_value!()
     }
 }
 
