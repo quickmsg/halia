@@ -86,26 +86,6 @@ pub trait Device: Send + Sync {
     fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
 }
 
-macro_rules! device_not_found_err {
-    () => {
-        Err(HaliaError::NotFound("设备".to_owned()))
-    };
-}
-
-#[macro_export]
-macro_rules! source_not_found_err {
-    () => {
-        Err(HaliaError::NotFound("源".to_owned()))
-    };
-}
-
-#[macro_export]
-macro_rules! sink_not_found_err {
-    () => {
-        Err(HaliaError::NotFound("动作".to_owned()))
-    };
-}
-
 pub async fn load_from_persistence(
     persistence: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<RwLock<Vec<Box<dyn Device>>>>> {
@@ -260,7 +240,7 @@ pub async fn update_device(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.update(req.conf).await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::device::update_device_conf(persistence, &device_id, body).await?;
@@ -280,7 +260,7 @@ pub async fn start_device(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.start().await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::device::update_device_status(persistence, &device_id, true).await?;
@@ -299,7 +279,7 @@ pub async fn stop_device(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.stop().await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::device::update_device_status(persistence, &device_id, false).await?;
@@ -319,7 +299,7 @@ pub async fn delete_device(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.delete().await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     devices
@@ -347,7 +327,7 @@ pub async fn create_source(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.create_source(source_id.clone(), req).await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     if persist {
@@ -370,7 +350,7 @@ pub async fn search_sources(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => Ok(device.search_sources(pagination, query).await),
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -389,7 +369,7 @@ pub async fn update_source(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.update_source(source_id, req).await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::source::update_source(persistence, &source_id, body).await?;
@@ -410,7 +390,7 @@ pub async fn write_source_value(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.write_source_value(source_id, req).await,
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -427,7 +407,7 @@ pub async fn delete_source(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.delete_source(source_id).await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::source::delete_source(persistence, &source_id).await?;
@@ -448,7 +428,7 @@ pub async fn add_source_ref(
         .find(|device| *device.get_id() == *device_id)
     {
         Some(device) => device.add_source_ref(source_id, rule_id),
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -465,7 +445,7 @@ pub async fn get_source_rx(
         .find(|device| *device.get_id() == *device_id)
     {
         Some(device) => device.get_source_rx(source_id, rule_id).await,
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -482,7 +462,7 @@ pub async fn del_source_rx(
         .find(|device| *device.get_id() == *device_id)
     {
         Some(device) => device.del_source_rx(source_id, rule_id),
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -499,7 +479,7 @@ pub async fn del_source_ref(
         .find(|device| *device.get_id() == *device_id)
     {
         Some(device) => device.del_source_ref(source_id, rule_id),
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -519,7 +499,7 @@ pub async fn create_sink(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.create_sink(sink_id, req).await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     if persist {
@@ -542,7 +522,7 @@ pub async fn search_sinks(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => Ok(device.search_sinks(pagination, query).await),
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -561,7 +541,7 @@ pub async fn update_sink(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.update_sink(sink_id, req).await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::sink::update_sink(pool, &sink_id, body).await?;
@@ -582,7 +562,7 @@ pub async fn delete_sink(
         .find(|device| *device.get_id() == device_id)
     {
         Some(device) => device.delete_sink(sink_id).await?,
-        None => return device_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::sink::delete_sink(pool, &sink_id).await?;
@@ -603,7 +583,7 @@ pub async fn add_sink_ref(
         .find(|device| *device.get_id() == *device_id)
     {
         Some(device) => device.add_sink_ref(sink_id, rule_id),
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -620,7 +600,7 @@ pub async fn get_sink_tx(
         .find(|device| *device.get_id() == *device_id)
     {
         Some(device) => device.get_sink_tx(sink_id, rule_id).await,
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -637,7 +617,7 @@ pub async fn del_sink_tx(
         .find(|device| *device.get_id() == *device_id)
     {
         Some(device) => device.del_sink_tx(sink_id, rule_id),
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -654,6 +634,6 @@ pub async fn del_sink_ref(
         .find(|device| *device.get_id() == *device_id)
     {
         Some(device) => device.del_sink_ref(sink_id, rule_id),
-        None => device_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }

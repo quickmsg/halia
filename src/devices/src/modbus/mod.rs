@@ -10,13 +10,13 @@ use std::{
 
 use async_trait::async_trait;
 use common::{
-    active_sink_ref, active_source_ref, add_sink_ref, add_source_ref, check_and_set_on_false,
-    check_and_set_on_true, check_delete_sink, check_delete_source, deactive_sink_ref,
-    deactive_source_ref, del_sink_ref, del_source_ref,
+    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete, deactive_ref,
+    del_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
 use message::MessageBatch;
+use paste::paste;
 use protocol::modbus::{rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
@@ -40,7 +40,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{sink_not_found_err, source_not_found_err, Device};
+use crate::Device;
 
 mod sink;
 mod source;
@@ -581,7 +581,7 @@ impl Device for Modbus {
             .find(|source| source.id == source_id)
         {
             Some(source) => source.update(req.base, ext_conf).await,
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -618,12 +618,12 @@ impl Device for Modbus {
                     Err(e) => Err(e),
                 }
             }
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        check_delete_source!(self, source_id);
+        check_delete!(self, source, source_id);
 
         if self.on {
             match self
@@ -717,12 +717,12 @@ impl Device for Modbus {
 
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => Ok(sink.update(req.base, ext_conf).await),
-            None => sink_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        check_delete_sink!(self, sink_id);
+        check_delete!(self, sink, sink_id);
 
         if self.on {
             match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
@@ -737,7 +737,7 @@ impl Device for Modbus {
     }
 
     fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_source_ref!(self, source_id, rule_id)
+        add_ref!(self, source, source_id, rule_id)
     }
 
     async fn get_source_rx(
@@ -746,7 +746,7 @@ impl Device for Modbus {
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         self.check_on()?;
-        active_source_ref!(self, source_id, rule_id);
+        active_ref!(self, source, source_id, rule_id);
         match self
             .sources
             .write()
@@ -760,15 +760,15 @@ impl Device for Modbus {
     }
 
     fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_source_ref!(self, source_id, rule_id)
+        deactive_ref!(self, source, source_id, rule_id)
     }
 
     fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_source_ref!(self, source_id, rule_id)
+        del_ref!(self, source, source_id, rule_id)
     }
 
     fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_sink_ref!(self, sink_id, rule_id)
+        add_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn get_sink_tx(
@@ -777,7 +777,7 @@ impl Device for Modbus {
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.check_on()?;
-        active_sink_ref!(self, sink_id, rule_id);
+        active_ref!(self, sink, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
@@ -785,10 +785,10 @@ impl Device for Modbus {
     }
 
     fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_sink_ref!(self, sink_id, rule_id)
+        deactive_ref!(self, sink, sink_id, rule_id)
     }
 
     fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_sink_ref!(self, sink_id, rule_id)
+        del_ref!(self, sink, sink_id, rule_id)
     }
 }

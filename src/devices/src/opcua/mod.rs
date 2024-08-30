@@ -17,10 +17,8 @@ use sink::Sink;
 use source::Source;
 use subscription::Subscription;
 use tokio::{
-    select,
     sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
-    time,
 };
 use tracing::debug;
 use types::{
@@ -37,7 +35,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{sink_not_found_err, source_not_found_err, Device};
+use crate::Device;
 
 mod group;
 mod monitored_item;
@@ -325,7 +323,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update(&self.id, req).await,
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -340,7 +338,7 @@ impl Opcua {
             Some(group) => {
                 group.delete().await?;
             }
-            None => return source_not_found_err!(),
+            None => return Err(HaliaError::NotFound),
         }
 
         self.groups
@@ -364,7 +362,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.create_variable(&self.id, variable_id, req).await,
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -381,7 +379,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => Ok(group.search_variables(pagination).await),
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -399,7 +397,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.update_variable(&self.id, variable_id, req).await,
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -416,7 +414,7 @@ impl Opcua {
             .find(|group| group.id == group_id)
         {
             Some(group) => group.delete_variable(&self.id, variable_id).await,
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -429,7 +427,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.ref_info.add_ref(rule_id)),
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -446,7 +444,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.get_mb_rx(rule_id)),
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -459,7 +457,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.del_mb_rx(rule_id)),
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -472,7 +470,7 @@ impl Opcua {
             .find(|group| group.id == *group_id)
         {
             Some(group) => Ok(group.ref_info.del_ref(rule_id)),
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -530,7 +528,7 @@ impl Opcua {
             .find(|subscription| subscription.id == subscription_id)
         {
             Some(subscription) => subscription.update(&self.id, req).await,
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -543,7 +541,7 @@ impl Opcua {
             Some(subscription) => {
                 subscription.delete().await?;
             }
-            None => return source_not_found_err!(),
+            None => return Err(HaliaError::NotFound),
         }
 
         self.subscriptions
@@ -587,7 +585,7 @@ impl Opcua {
     async fn update_sink(&mut self, sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(&self.id, req).await,
-            None => sink_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
@@ -598,7 +596,7 @@ impl Opcua {
                 self.sinks.retain(|sink| sink.id != sink_id);
                 Ok(())
             }
-            None => sink_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 }
@@ -657,8 +655,8 @@ impl Device for Opcua {
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
-        check_delete!(self, sources_ref_infos);
-        check_delete!(self, sinks_ref_infos);
+        // check_delete!(self, sources_ref_infos);
+        // check_delete!(self, sinks_ref_infos);
 
         if self.on {
             self.stop().await?;

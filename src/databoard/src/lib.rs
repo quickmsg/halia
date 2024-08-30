@@ -7,11 +7,11 @@ use common::{
 use databoard::Databoard;
 use message::MessageBatch;
 use sqlx::AnyPool;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{mpsc, RwLock};
 use types::{
     databoard::{
         CreateUpdateDataReq, CreateUpdateDataboardReq, QueryParams, SearchDataboardsResp,
-        SearchDatasResp,
+        SearchDatasResp, Summary,
     },
     Pagination,
 };
@@ -20,38 +20,10 @@ use uuid::Uuid;
 mod data;
 pub mod databoard;
 
-macro_rules! databoard_not_found_err {
-    () => {
-        Err(HaliaError::NotFound("数据看板".to_owned()))
-    };
-}
-
-pub async fn get_summary() -> HaliaResult<()> {
-    todo!()
-    // let mut total = 0;
-    // let mut running_cnt = 0;
-    // let mut err_cnt = 0;
-    // let mut off_cnt = 0;
-    // for app in self.apps.read().await.iter().rev() {
-    //     let app = app.search().await;
-    //     total += 1;
-
-    //     if app.common.err.is_some() {
-    //         err_cnt += 1;
-    //     } else {
-    //         if app.common.on {
-    //             running_cnt += 1;
-    //         } else {
-    //             off_cnt += 1;
-    //         }
-    //     }
-    // }
-    // Summary {
-    //     total,
-    //     running_cnt,
-    //     err_cnt,
-    //     off_cnt,
-    // }
+pub async fn get_summary(databoards: &Arc<RwLock<Vec<Databoard>>>) -> Summary {
+    Summary {
+        total: databoards.read().await.len(),
+    }
 }
 
 pub async fn create_databoard(
@@ -62,7 +34,7 @@ pub async fn create_databoard(
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateDataboardReq = serde_json::from_str(&body)?;
-    let databoard = Databoard::new(id, req.base)?;
+    let databoard = Databoard::new(id, req.base, req.ext)?;
     databoards.write().await.push(databoard);
     if persist {
         persistence::databoard::create_databoard(pool, &id, body).await?;
@@ -110,7 +82,7 @@ pub async fn update_databoard(
         .find(|databoard| databoard.id == databoard_id)
     {
         Some(databoard) => databoard.update(req.base)?,
-        None => return databoard_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::databoard::update_databoard(pool, &databoard_id, body).await?;
@@ -130,7 +102,7 @@ pub async fn delete_databoard(
         .find(|databoard| databoard.id == databoard_id)
     {
         Some(databoard) => databoard.delete()?,
-        None => return databoard_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     databoards
@@ -157,8 +129,12 @@ pub async fn create_data(
         .iter_mut()
         .find(|databoard| databoard.id == databoard_id)
     {
-        Some(databoard) => databoard.create_data(databoard_data_id.clone(), req)?,
-        None => return databoard_not_found_err!(),
+        Some(databoard) => {
+            databoard
+                .create_data(databoard_data_id.clone(), req)
+                .await?
+        }
+        None => return Err(HaliaError::NotFound),
     }
 
     if persist {
@@ -186,8 +162,8 @@ pub async fn search_datas(
         .iter()
         .find(|databoard| databoard.id == databoard_id)
     {
-        Some(device) => device.search_datas(pagination, query).await,
-        None => databoard_not_found_err!(),
+        Some(device) => Ok(device.search_datas(pagination, query).await),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -206,7 +182,7 @@ pub async fn update_data(
         .find(|databoard| databoard.id == databoard_id)
     {
         Some(databoard) => databoard.update_data(databoard_data_id, req).await?,
-        None => return databoard_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::databoard::update_databoard_data(pool, &databoard_data_id, body).await?;
@@ -227,7 +203,7 @@ pub async fn delete_data(
         .find(|databoard| databoard.id == databoard_id)
     {
         Some(databoard) => databoard.delete_data(databoard_data_id).await?,
-        None => return databoard_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::databoard::delete_databoard_data(pool, &databoard_data_id).await?;
@@ -248,7 +224,7 @@ pub async fn add_data_ref(
         .find(|databoard| databoard.id == *databoard_id)
     {
         Some(databoard) => databoard.add_data_ref(&databoard_data_id, &rule_id).await,
-        None => return databoard_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 }
 
@@ -257,7 +233,7 @@ pub async fn get_data_tx(
     databoard_id: &Uuid,
     databoard_data_id: &Uuid,
     rule_id: &Uuid,
-) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+) -> HaliaResult<mpsc::Sender<MessageBatch>> {
     match databoards
         .write()
         .await
@@ -265,7 +241,7 @@ pub async fn get_data_tx(
         .find(|databoard| databoard.id == *databoard_id)
     {
         Some(databoard) => databoard.get_data_tx(&databoard_data_id, &rule_id).await,
-        None => return databoard_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 }
 
@@ -282,7 +258,7 @@ pub async fn del_data_tx(
         .find(|databoard| databoard.id == *databoard_id)
     {
         Some(databoard) => databoard.del_data_tx(&databoard_data_id, &rule_id).await,
-        None => return databoard_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 }
 
@@ -299,6 +275,6 @@ pub async fn del_data_ref(
         .find(|databoard| databoard.id == *databoard_id)
     {
         Some(databoard) => databoard.del_data_ref(&databoard_data_id, &rule_id).await,
-        None => return databoard_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 }

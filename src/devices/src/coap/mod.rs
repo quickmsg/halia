@@ -2,9 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
-    active_sink_ref, active_source_ref, add_sink_ref, add_source_ref, check_and_set_on_false,
-    check_and_set_on_true, check_delete, check_delete_sink, check_delete_source, check_stop,
-    deactive_sink_ref, del_sink_ref, del_source_ref,
+    check_delete,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -24,7 +22,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{sink_not_found_err, source_not_found_err, Device};
+use crate::Device;
 
 mod sink;
 mod source;
@@ -138,8 +136,8 @@ impl Device for Coap {
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
-        check_delete!(self, sources_ref_infos);
-        check_delete!(self, sinks_ref_infos);
+        // check_delete!(self, sources_ref_infos);
+        // check_delete!(self, sinks_ref_infos);
 
         if self.on {
             self.stop().await?;
@@ -215,12 +213,12 @@ impl Device for Coap {
             .find(|source| source.id == source_id)
         {
             Some(source) => source.update(req.base, ext_conf, &self.ext_conf).await,
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        check_delete_source!(self, source_id);
+        check_delete!(self, source, source_id);
 
         if self.on {
             match self
@@ -306,7 +304,7 @@ impl Device for Coap {
 
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(req.base, ext_conf).await,
-            None => sink_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 

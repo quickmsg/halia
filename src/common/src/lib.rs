@@ -1,3 +1,4 @@
+#![feature(concat_idents)]
 pub mod error;
 pub mod json;
 pub mod macros;

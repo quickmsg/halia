@@ -6,7 +6,7 @@ use tokio::sync::{
     broadcast::{Receiver, Sender},
     RwLock,
 };
-use tracing::{debug, error, trace};
+use tracing::debug;
 
 pub struct Merge {
     rxs: Vec<Receiver<MessageBatch>>,
@@ -19,7 +19,6 @@ impl Merge {
     }
 
     pub async fn run(&mut self) {
-        debug!("merge run");
         let messages: Arc<RwLock<Vec<Option<Message>>>> =
             Arc::new(RwLock::new(Vec::with_capacity(self.rxs.len())));
 

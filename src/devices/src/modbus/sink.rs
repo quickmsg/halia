@@ -124,7 +124,6 @@ impl Sink {
         sink_conf: SinkConf,
         device_err: Arc<RwLock<Option<String>>>,
     ) {
-        debug!("sink start");
         let join_handle = tokio::spawn(async move {
             loop {
                 select! {
@@ -133,7 +132,6 @@ impl Sink {
                     }
 
                     mb = mb_rx.recv() => {
-                        debug!("receive msg");
                         if let Some(mb) = mb {
                             if device_err.read().await.is_none() {
                                 Sink::send_write_point_event(mb, &sink_conf, &device_tx).await;

@@ -4,8 +4,8 @@ pub type HaliaResult<T, E = HaliaError> = result::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum HaliaError {
-    #[error("{0} 未找到！")]
-    NotFound(String),
+    #[error("未找到！")]
+    NotFound,
     #[error("{0}")]
     JsonErr(#[from] serde_json::Error),
     #[error("{0}")]

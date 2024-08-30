@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

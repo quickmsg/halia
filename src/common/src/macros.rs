@@ -46,7 +46,7 @@ macro_rules! check_stop {
 }
 
 #[macro_export]
-macro_rules! check_delete {
+macro_rules! check_delete_all {
     ($self:expr, $ref_infos:ident) => {
         if $self
             .$ref_infos
@@ -59,149 +59,80 @@ macro_rules! check_delete {
 }
 
 #[macro_export]
-macro_rules! check_delete_source {
-    ($self:expr, $source_id:ident) => {
-        match $self
-            .sources_ref_infos
-            .iter()
-            .find(|(id, _)| *id == $source_id)
-        {
-            Some((_, source_ref_info)) => {
-                if !source_ref_info.can_delete() {
-                    return Err(HaliaError::DeleteRefing);
+macro_rules! check_delete {
+    ($self:expr, $item:ident, $item_id:ident) => {
+        use paste::paste;
+        paste! {
+            match $self.[<$item _ref_infos>].iter().find(|(id, _)| *id == $item_id) {
+                Some((_, ref_info)) => {
+                    if !ref_info.can_delete() {
+                        return Err(HaliaError::DeleteRefing);
+                    }
                 }
+                None =>  return Err(HaliaError::DeleteRefing),
             }
-            None => return source_not_found_err!(),
         }
     };
 }
 
 #[macro_export]
-macro_rules! check_delete_sink {
-    ($self:expr,  $source_id:ident) => {
-        match $self
-            .sinks_ref_infos
-            .iter()
-            .find(|(id, _)| *id == $source_id)
-        {
-            Some((_, sink_ref_info)) => {
-                if !sink_ref_info.can_delete() {
-                    return Err(HaliaError::DeleteRefing);
-                }
-            }
-            None => return sink_not_found_err!(),
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! add_source_ref {
-    ($self:expr, $source_id:expr, $rule_id:expr) => {
-        match $self
-            .sources_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == $source_id)
+macro_rules! add_ref {
+    ($self:expr, $item:ident, $item_id:ident, $rule_id:ident) => {
+        paste! {
+            match $self.[<$item _ref_infos>].iter_mut()
+            .find(|(id, _)| id == $item_id)
         {
             Some((_, ref_info)) => Ok(ref_info.add_ref($rule_id)),
-            None => source_not_found_err!(),
+            None => return Err(HaliaError::NotFound),
+        }
         }
     };
 }
 
 #[macro_export]
-macro_rules! active_source_ref {
-    ($self:expr, $source_id:expr, $rule_id:expr) => {
-        match $self
-            .sources_ref_infos
+macro_rules! active_ref {
+    ($self:expr, $item:ident, $item_id:ident, $rule_id:ident) => {
+        paste! {
+            match $self
+            .[<$item _ref_infos>]
             .iter_mut()
-            .find(|(id, _)| id == $source_id)
+            .find(|(id, _)| id == $item_id)
         {
             Some((_, ref_info)) => ref_info.active_ref($rule_id),
-            None => return source_not_found_err!(),
+            None => return Err(HaliaError::NotFound),
+        }
         }
     };
 }
 
 #[macro_export]
-macro_rules! deactive_source_ref {
-    ($self:expr, $source_id:expr, $rule_id:expr) => {
-        match $self
-            .sources_ref_infos
+macro_rules! deactive_ref {
+    ($self:expr, $item:ident, $item_id:ident, $rule_id:ident) => {
+        paste! {
+            match $self
+            .[<$item _ref_infos>]
             .iter_mut()
-            .find(|(id, _)| id == $source_id)
-        {
+            .find(|(id, _)| id == $item_id)
+            {
             Some((_, ref_info)) => Ok(ref_info.deactive_ref($rule_id)),
-            None => return source_not_found_err!(),
+            None => return Err(HaliaError::NotFound),
+         }
         }
     };
 }
 
 #[macro_export]
-macro_rules! del_source_ref {
-    ($self:expr, $source_id:expr, $rule_id:expr) => {
-        match $self
-            .sources_ref_infos
+macro_rules! del_ref {
+    ($self:expr, $item:ident, $item_id:ident, $rule_id:ident) => {
+        paste! {
+            match $self
+            .[<$item _ref_infos>]
             .iter_mut()
-            .find(|(id, _)| id == $source_id)
+            .find(|(id, _)| id == $item_id)
         {
             Some((_, ref_info)) => Ok(ref_info.del_ref($rule_id)),
-            None => return source_not_found_err!(),
+            None => return Err(HaliaError::NotFound),
         }
-    };
-}
-
-#[macro_export]
-macro_rules! add_sink_ref {
-    ($self:expr, $sink_id:expr, $rule_id:expr) => {
-        match $self
-            .sinks_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == $sink_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.add_ref($rule_id)),
-            None => sink_not_found_err!(),
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! active_sink_ref {
-    ($self:expr, $sink_id:expr, $rule_id:expr) => {
-        match $self
-            .sinks_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == $sink_id)
-        {
-            Some((_, ref_info)) => ref_info.active_ref($rule_id),
-            None => return sink_not_found_err!(),
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! deactive_sink_ref {
-    ($self:expr, $sink_id:expr, $rule_id:expr) => {
-        match $self
-            .sinks_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == $sink_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.deactive_ref($rule_id)),
-            None => return sink_not_found_err!(),
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! del_sink_ref {
-    ($self:expr, $sink_id:expr, $rule_id:expr) => {
-        match $self
-            .sinks_ref_infos
-            .iter_mut()
-            .find(|(id, _)| id == $sink_id)
-        {
-            Some((_, ref_info)) => Ok(ref_info.del_ref($rule_id)),
-            None => return sink_not_found_err!(),
         }
     };
 }

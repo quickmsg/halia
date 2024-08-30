@@ -24,8 +24,6 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::source_not_found_err;
-
 use super::variable::Variable;
 
 pub struct Group {
@@ -245,7 +243,7 @@ impl Group {
             }
         }
 
-        source_not_found_err!()
+        Ok(())
     }
 
     pub async fn delete_variable(&self, device_id: &Uuid, variable_id: Uuid) -> HaliaResult<()> {
