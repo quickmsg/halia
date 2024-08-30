@@ -2,11 +2,13 @@ use anyhow::Result;
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
-    check_delete,
+    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete,
+    check_stop_all, deactive_ref, del_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
 use message::MessageBatch;
+use paste::paste;
 use protocol::coap::request::CoapOption;
 use sink::Sink;
 use source::Source;
@@ -39,9 +41,9 @@ struct Coap {
     ext_conf: CoapConf,
 
     sources: Vec<Source>,
-    sources_ref_infos: Vec<(Uuid, RefInfo)>,
+    source_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: Vec<Sink>,
-    sinks_ref_infos: Vec<(Uuid, RefInfo)>,
+    sink_ref_infos: Vec<(Uuid, RefInfo)>,
 
     on: bool,
     err: Option<String>,
@@ -56,9 +58,9 @@ pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devic
         base_conf: device_conf.base,
         ext_conf,
         sources: vec![],
-        sources_ref_infos: vec![],
+        source_ref_infos: vec![],
         sinks: vec![],
-        sinks_ref_infos: vec![],
+        sink_ref_infos: vec![],
         on: false,
         err: None,
     }))
@@ -161,7 +163,7 @@ impl Device for Coap {
         }
 
         self.sources.push(source);
-        self.sources_ref_infos.push((source_id, RefInfo::new()));
+        self.source_ref_infos.push((source_id, RefInfo::new()));
         Ok(())
     }
 
@@ -184,7 +186,7 @@ impl Device for Coap {
                 unsafe {
                     data.push(SearchSourcesOrSinksItemResp {
                         info: source,
-                        rule_ref: self.sources_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                        rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
                     });
                 }
             }
@@ -232,7 +234,7 @@ impl Device for Coap {
         }
 
         self.sources.retain(|source| source.id != source_id);
-        self.sources_ref_infos.retain(|(id, _)| *id != source_id);
+        self.source_ref_infos.retain(|(id, _)| *id != source_id);
         Ok(())
     }
 
@@ -253,7 +255,7 @@ impl Device for Coap {
         }
 
         self.sinks.push(sink);
-        self.sinks_ref_infos.push((sink_id, RefInfo::new()));
+        self.sink_ref_infos.push((sink_id, RefInfo::new()));
 
         Ok(())
     }
@@ -278,7 +280,7 @@ impl Device for Coap {
                 unsafe {
                     data.push(SearchSourcesOrSinksItemResp {
                         info: sink,
-                        rule_ref: self.sinks_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                        rule_ref: self.sink_ref_infos.get_unchecked(index).1.get_rule_ref(),
                     })
                 }
             }
@@ -309,7 +311,7 @@ impl Device for Coap {
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        check_delete_sink!(self, sink_id);
+        check_delete!(self, sink, sink_id);
 
         if self.on {
             match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
@@ -319,12 +321,12 @@ impl Device for Coap {
         }
 
         self.sinks.retain(|sink| sink.id != sink_id);
-        self.sinks_ref_infos.retain(|(id, _)| *id != sink_id);
+        self.sink_ref_infos.retain(|(id, _)| *id != sink_id);
         Ok(())
     }
 
     fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_source_ref!(self, source_id, rule_id)
+        add_ref!(self, source, source_id, rule_id)
     }
 
     async fn get_source_rx(
@@ -333,7 +335,7 @@ impl Device for Coap {
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         self.check_on()?;
-        active_source_ref!(self, source_id, rule_id);
+        active_ref!(self, source, source_id, rule_id);
         match self
             .sources
             .iter_mut()
@@ -345,15 +347,15 @@ impl Device for Coap {
     }
 
     fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_source_ref!(self, source_id, rule_id)
+        del_ref!(self, source, source_id, rule_id)
     }
 
     fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_source_ref!(self, source_id, rule_id)
+        del_ref!(self, source, source_id, rule_id)
     }
 
     fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_sink_ref!(self, sink_id, rule_id)
+        add_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn get_sink_tx(
@@ -362,7 +364,7 @@ impl Device for Coap {
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.check_on()?;
-        active_sink_ref!(self, sink_id, rule_id);
+        active_ref!(self, sink, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
@@ -370,11 +372,11 @@ impl Device for Coap {
     }
 
     fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_sink_ref!(self, sink_id, rule_id)
+        deactive_ref!(self, sink, sink_id, rule_id)
     }
 
     fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_sink_ref!(self, sink_id, rule_id)
+        del_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
@@ -392,8 +394,8 @@ impl Device for Coap {
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        check_stop!(self, sources_ref_infos);
-        check_stop!(self, sinks_ref_infos);
+        check_stop_all!(self, source);
+        check_stop_all!(self, sink);
 
         check_and_set_on_false!(self);
 

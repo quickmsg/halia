@@ -10,8 +10,8 @@ use std::{
 
 use async_trait::async_trait;
 use common::{
-    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete, deactive_ref,
-    del_ref,
+    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete,
+    check_delete_all, check_stop_all, deactive_ref, del_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -53,9 +53,9 @@ struct Modbus {
     ext_conf: ModbusConf,
 
     sources: Arc<RwLock<Vec<Source>>>,
-    sources_ref_infos: Vec<(Uuid, RefInfo)>,
+    source_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: Vec<Sink>,
-    sinks_ref_infos: Vec<(Uuid, RefInfo)>,
+    sink_ref_infos: Vec<(Uuid, RefInfo)>,
 
     on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
@@ -86,9 +86,9 @@ pub fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devi
         err: Arc::new(RwLock::new(None)),
         rtt: Arc::new(AtomicU16::new(9999)),
         sources: Arc::new(RwLock::new(vec![])),
-        sources_ref_infos: vec![],
+        source_ref_infos: vec![],
         sinks: vec![],
-        sinks_ref_infos: vec![],
+        sink_ref_infos: vec![],
         read_tx: None,
         write_tx: None,
         stop_signal_tx: None,
@@ -441,21 +441,8 @@ impl Device for Modbus {
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        if self
-            .sources_ref_infos
-            .iter()
-            .any(|(_, ref_info)| !ref_info.can_stop())
-        {
-            return Err(HaliaError::StopActiveRefing);
-        }
-
-        if self
-            .sinks_ref_infos
-            .iter()
-            .any(|(_, ref_info)| !ref_info.can_stop())
-        {
-            return Err(HaliaError::StopActiveRefing);
-        }
+        check_stop_all!(self, source);
+        check_stop_all!(self, sink);
 
         check_and_set_on_false!(self);
         trace!("停止");
@@ -485,23 +472,20 @@ impl Device for Modbus {
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
-        if self.on {
-            return Err(HaliaError::Running);
-        }
+        // if self.on {
+        //     return Err(HaliaError::Running);
+        // }
+        check_delete_all!(self, source);
+        check_delete_all!(self, sink);
 
-        if self
-            .sources_ref_infos
-            .iter()
-            .any(|(_, ref_info)| ref_info.can_delete())
-        {
-            return Err(HaliaError::DeleteRefing);
-        }
-        if self
-            .sinks_ref_infos
-            .iter()
-            .any(|(_, ref_info)| ref_info.can_delete())
-        {
-            return Err(HaliaError::DeleteRefing);
+        if self.on {
+            for source in self.sources.write().await.iter_mut() {
+                source.stop().await;
+            }
+
+            for sink in self.sinks.iter_mut() {
+                sink.stop().await;
+            }
         }
 
         trace!("设备删除");
@@ -527,7 +511,7 @@ impl Device for Modbus {
         }
 
         self.sources.write().await.push(source);
-        self.sources_ref_infos.push((source_id, RefInfo::new()));
+        self.source_ref_infos.push((source_id, RefInfo::new()));
         Ok(())
     }
 
@@ -550,7 +534,7 @@ impl Device for Modbus {
                 unsafe {
                     data.push(SearchSourcesOrSinksItemResp {
                         info: source,
-                        rule_ref: self.sources_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                        rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
                     });
                 }
             }
@@ -642,7 +626,7 @@ impl Device for Modbus {
             .write()
             .await
             .retain(|source| source.id != source_id);
-        self.sources_ref_infos.retain(|(id, _)| *id != source_id);
+        self.source_ref_infos.retain(|(id, _)| *id != source_id);
         Ok(())
     }
 
@@ -665,7 +649,7 @@ impl Device for Modbus {
         }
 
         self.sinks.push(sink);
-        self.sinks_ref_infos.push((sink_id, RefInfo::new()));
+        self.sink_ref_infos.push((sink_id, RefInfo::new()));
 
         Ok(())
     }
@@ -690,7 +674,7 @@ impl Device for Modbus {
                 unsafe {
                     data.push(SearchSourcesOrSinksItemResp {
                         info: sink,
-                        rule_ref: self.sinks_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                        rule_ref: self.sink_ref_infos.get_unchecked(index).1.get_rule_ref(),
                     })
                 }
             }
@@ -732,7 +716,7 @@ impl Device for Modbus {
         }
 
         self.sinks.retain(|sink| sink.id != sink_id);
-        self.sinks_ref_infos.retain(|(id, _)| *id != sink_id);
+        self.sink_ref_infos.retain(|(id, _)| *id != sink_id);
         Ok(())
     }
 

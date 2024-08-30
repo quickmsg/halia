@@ -1,11 +1,12 @@
 use async_trait::async_trait;
 use common::{
-    active_sink_ref, add_sink_ref, check_and_set_on_false, check_and_set_on_true, check_delete,
-    check_delete_sink, deactive_sink_ref, del_sink_ref,
+    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete,
+    check_delete_all, deactive_ref, del_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
 use message::MessageBatch;
+use paste::paste;
 use sink::Sink;
 use tokio::sync::{broadcast, mpsc};
 use types::{
@@ -19,7 +20,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{sink_not_found_err, App};
+use crate::App;
 
 mod sink;
 
@@ -37,7 +38,7 @@ pub struct Log {
 
     on: bool,
     sinks: Vec<Sink>,
-    sinks_ref_infos: Vec<(Uuid, RefInfo)>,
+    sink_ref_infos: Vec<(Uuid, RefInfo)>,
 }
 
 pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
@@ -51,7 +52,7 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
         on: false,
         err: None,
         sinks: vec![],
-        sinks_ref_infos: vec![],
+        sink_ref_infos: vec![],
     }))
 }
 
@@ -131,7 +132,7 @@ impl App for Log {
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
-        check_delete!(self, sinks_ref_infos);
+        check_delete_all!(self, sink);
 
         if self.on {
             for sink in self.sinks.iter_mut() {
@@ -191,7 +192,7 @@ impl App for Log {
         }
 
         self.sinks.push(sink);
-        self.sinks_ref_infos.push((sink_id, RefInfo::new()));
+        self.sink_ref_infos.push((sink_id, RefInfo::new()));
 
         Ok(())
     }
@@ -215,7 +216,7 @@ impl App for Log {
                 unsafe {
                     data.push(SearchSourcesOrSinksItemResp {
                         info: sink,
-                        rule_ref: self.sinks_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                        rule_ref: self.sink_ref_infos.get_unchecked(index).1.get_rule_ref(),
                     })
                 }
             }
@@ -241,12 +242,12 @@ impl App for Log {
 
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => Ok(sink.update(req.base, ext_conf).await),
-            None => sink_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        check_delete_sink!(self, sink_id);
+        check_delete!(self, sink, sink_id);
 
         if self.on {
             match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
@@ -256,7 +257,7 @@ impl App for Log {
         }
 
         self.sinks.retain(|sink| sink.id != sink_id);
-        self.sinks_ref_infos.retain(|(id, _)| *id != sink_id);
+        self.sink_ref_infos.retain(|(id, _)| *id != sink_id);
 
         Ok(())
     }
@@ -282,7 +283,7 @@ impl App for Log {
     }
 
     async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_sink_ref!(self, sink_id, rule_id)
+        add_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn get_sink_tx(
@@ -291,7 +292,7 @@ impl App for Log {
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.check_on()?;
-        active_sink_ref!(self, sink_id, rule_id);
+        active_ref!(self, sink, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
@@ -299,10 +300,10 @@ impl App for Log {
     }
 
     async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_sink_ref!(self, sink_id, rule_id)
+        deactive_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_sink_ref!(self, sink_id, rule_id)
+        del_ref!(self, sink, sink_id, rule_id)
     }
 }

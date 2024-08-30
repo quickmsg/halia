@@ -192,6 +192,7 @@ dependencies = [
  "common",
  "dashmap",
  "message",
+ "paste",
  "reqwest",
  "rumqttc",
  "rumqttd",
@@ -1008,6 +1009,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "message",
+ "paste",
  "serde_json",
  "sqlx",
  "tokio",

@@ -17,12 +17,6 @@ use uuid::Uuid;
 pub mod rule;
 mod segment;
 
-macro_rules! rule_not_fonnd_err {
-    () => {
-        Err(HaliaError::NotFound("规则".to_owned()))
-    };
-}
-
 pub async fn load_from_persistence(
     pool: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
@@ -123,7 +117,7 @@ pub async fn start(
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
         Some(rule) => rule.start(devices, apps).await?,
-        None => return rule_not_fonnd_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::rule::update_rule_status(pool, &id, true).await?;
@@ -137,7 +131,7 @@ pub async fn stop(
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
         Some(rule) => rule.stop()?,
-        None => return rule_not_fonnd_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::rule::update_rule_status(pool, &id, false).await?;
@@ -160,7 +154,7 @@ pub async fn delete(
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
         Some(rule) => rule.stop()?,
-        None => return rule_not_fonnd_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     rules.write().await.retain(|rule| rule.id != id);

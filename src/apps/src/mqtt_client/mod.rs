@@ -3,13 +3,13 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
-    active_sink_ref, active_source_ref, add_sink_ref, add_source_ref, check_and_set_on_false,
-    check_and_set_on_true, check_delete, check_delete_sink, check_delete_source, check_stop,
-    deactive_sink_ref, deactive_source_ref, del_sink_ref, del_source_ref,
+    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete,
+    check_delete_all, check_stop_all, deactive_ref, del_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
 use message::MessageBatch;
+use paste::paste;
 use rumqttc::{
     mqttbytes, v5, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS, TlsConfiguration,
     Transport,
@@ -32,7 +32,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{sink_not_found_err, source_not_found_err, App};
+use crate::App;
 
 mod sink;
 mod source;
@@ -48,9 +48,9 @@ pub struct MqttClient {
     stop_signal_tx: Option<mpsc::Sender<()>>,
 
     sources: Arc<RwLock<Vec<Source>>>,
-    sources_ref_infos: Vec<(Uuid, RefInfo)>,
+    source_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: Vec<Sink>,
-    sinks_ref_infos: Vec<(Uuid, RefInfo)>,
+    sink_ref_infos: Vec<(Uuid, RefInfo)>,
     client_v311: Option<Arc<AsyncClient>>,
     client_v50: Option<Arc<v5::AsyncClient>>,
 }
@@ -66,9 +66,9 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
         on: false,
         err: Arc::new(RwLock::new(None)),
         sources: Arc::new(RwLock::new(vec![])),
-        sources_ref_infos: vec![],
+        source_ref_infos: vec![],
         sinks: vec![],
-        sinks_ref_infos: vec![],
+        sink_ref_infos: vec![],
         client_v311: None,
         client_v50: None,
         stop_signal_tx: None,
@@ -476,8 +476,8 @@ impl App for MqttClient {
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        check_stop!(self, sources_ref_infos);
-        check_stop!(self, sinks_ref_infos);
+        check_stop_all!(self, source);
+        check_stop_all!(self, sink);
 
         check_and_set_on_false!(self);
 
@@ -500,12 +500,16 @@ impl App for MqttClient {
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
-        if self.on {
-            return Err(HaliaError::Running);
-        }
+        // if self.on {
+        //     return Err(HaliaError::Running);
+        // }
 
-        check_delete!(self, sources_ref_infos);
-        check_delete!(self, sinks_ref_infos);
+        check_delete_all!(self, source);
+        check_delete_all!(self, sink);
+
+        if self.on {
+            self.stop().await?;
+        }
 
         Ok(())
     }
@@ -558,7 +562,7 @@ impl App for MqttClient {
         }
 
         self.sources.write().await.push(source);
-        self.sources_ref_infos.push((source_id, RefInfo::new()));
+        self.source_ref_infos.push((source_id, RefInfo::new()));
 
         Ok(())
     }
@@ -584,7 +588,7 @@ impl App for MqttClient {
                 unsafe {
                     data.push(SearchSourcesOrSinksItemResp {
                         info: source,
-                        rule_ref: self.sources_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                        rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
                     })
                 }
             }
@@ -673,17 +677,17 @@ impl App for MqttClient {
 
                 Ok(())
             }
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        check_delete_source!(self, source_id);
+        check_delete!(self, source, source_id);
         self.sources
             .write()
             .await
             .retain(|source| source.id != source_id);
-        self.sources_ref_infos.retain(|(id, _)| *id != source_id);
+        self.source_ref_infos.retain(|(id, _)| *id != source_id);
         Ok(())
     }
 
@@ -709,7 +713,7 @@ impl App for MqttClient {
         }
 
         self.sinks.push(sink);
-        self.sinks_ref_infos.push((sink_id, RefInfo::new()));
+        self.sink_ref_infos.push((sink_id, RefInfo::new()));
         Ok(())
     }
 
@@ -732,7 +736,7 @@ impl App for MqttClient {
                 unsafe {
                     data.push(SearchSourcesOrSinksItemResp {
                         info: sink,
-                        rule_ref: self.sinks_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                        rule_ref: self.sink_ref_infos.get_unchecked(index).1.get_rule_ref(),
                     })
                 }
             }
@@ -756,12 +760,12 @@ impl App for MqttClient {
 
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
             Some(sink) => sink.update(req.base, ext_conf).await,
-            None => sink_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        check_delete_sink!(self, sink_id);
+        check_delete!(self, sink, sink_id);
         if self.on {
             match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
                 Some(sink) => sink.stop().await,
@@ -769,12 +773,12 @@ impl App for MqttClient {
             }
         }
         self.sinks.retain(|sink| sink.id != sink_id);
-        self.sinks_ref_infos.retain(|(id, _)| *id != sink_id);
+        self.sink_ref_infos.retain(|(id, _)| *id != sink_id);
         Ok(())
     }
 
     async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_source_ref!(self, source_id, rule_id)
+        add_ref!(self, source, source_id, rule_id)
     }
 
     async fn get_source_rx(
@@ -783,7 +787,7 @@ impl App for MqttClient {
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         self.check_on()?;
-        active_source_ref!(self, source_id, rule_id);
+        active_ref!(self, source, source_id, rule_id);
         match self
             .sources
             .write()
@@ -792,20 +796,20 @@ impl App for MqttClient {
             .find(|source| source.id == *source_id)
         {
             Some(source) => Ok(source.mb_tx.as_ref().unwrap().subscribe()),
-            None => source_not_found_err!(),
+            None => Err(HaliaError::NotFound),
         }
     }
 
     async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_source_ref!(self, source_id, rule_id)
+        deactive_ref!(self, source, source_id, rule_id)
     }
 
     async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_source_ref!(self, source_id, rule_id)
+        del_ref!(self, source, source_id, rule_id)
     }
 
     async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_sink_ref!(self, sink_id, rule_id)
+        add_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn get_sink_tx(
@@ -814,7 +818,7 @@ impl App for MqttClient {
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.check_on()?;
-        active_sink_ref!(self, sink_id, rule_id);
+        active_ref!(self, sink, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
@@ -822,10 +826,10 @@ impl App for MqttClient {
     }
 
     async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_sink_ref!(self, sink_id, rule_id)
+        deactive_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_sink_ref!(self, sink_id, rule_id)
+        del_ref!(self, sink, sink_id, rule_id)
     }
 }

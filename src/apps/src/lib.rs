@@ -84,26 +84,6 @@ pub trait App: Send + Sync {
     async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
 }
 
-macro_rules! app_not_found_err {
-    () => {
-        Err(HaliaError::NotFound("应用".to_owned()))
-    };
-}
-
-#[macro_export]
-macro_rules! source_not_found_err {
-    () => {
-        Err(HaliaError::NotFound("源".to_owned()))
-    };
-}
-
-#[macro_export]
-macro_rules! sink_not_found_err {
-    () => {
-        Err(HaliaError::NotFound("动作".to_owned()))
-    };
-}
-
 pub async fn load_from_persistence(
     pool: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<RwLock<Vec<Box<dyn App>>>>> {
@@ -265,7 +245,7 @@ pub async fn update_app(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.update(req.conf).await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::app::update_app_conf(pool, &app_id, body).await?;
@@ -285,7 +265,7 @@ pub async fn start_app(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.start().await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::app::update_app_status(pool, &app_id, true).await?;
@@ -305,7 +285,7 @@ pub async fn stop_app(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.stop().await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::app::update_app_status(pool, &app_id, false).await?;
@@ -324,7 +304,7 @@ pub async fn delete_app(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.delete().await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     apps.write().await.retain(|app| *app.get_id() != app_id);
@@ -348,7 +328,7 @@ pub async fn create_source(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.create_source(source_id, req).await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     if persist {
@@ -366,7 +346,7 @@ pub async fn search_sources(
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
     match apps.read().await.iter().find(|app| *app.get_id() == app_id) {
         Some(app) => Ok(app.search_sources(pagination, query).await),
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -385,7 +365,7 @@ pub async fn update_source(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.update_source(source_id, req).await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::source::update_source(pool, &source_id, body).await?;
@@ -405,7 +385,7 @@ pub async fn delete_source(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.delete_source(source_id).await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::source::delete_source(pool, &source_id).await?;
@@ -425,7 +405,7 @@ pub async fn add_source_ref(
         .find(|app| *app.get_id() == *app_id)
     {
         Some(app) => app.add_source_ref(source_id, rule_id).await,
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -442,7 +422,7 @@ pub async fn get_source_rx(
         .find(|app| *app.get_id() == *app_id)
     {
         Some(app) => app.get_source_rx(source_id, rule_id).await,
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -459,7 +439,7 @@ pub async fn del_source_rx(
         .find(|app| *app.get_id() == *app_id)
     {
         Some(app) => app.del_source_rx(source_id, rule_id).await,
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -476,7 +456,7 @@ pub async fn del_source_ref(
         .find(|app| *app.get_id() == *app_id)
     {
         Some(app) => app.del_source_ref(source_id, rule_id).await,
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -496,7 +476,7 @@ pub async fn create_sink(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.create_sink(sink_id, req).await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     if persist {
@@ -514,7 +494,7 @@ pub async fn search_sinks(
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
     match apps.read().await.iter().find(|app| *app.get_id() == app_id) {
         Some(device) => Ok(device.search_sinks(pagination, query).await),
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -533,7 +513,7 @@ pub async fn update_sink(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.update_sink(sink_id, req).await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::sink::update_sink(pool, &sink_id, body).await?;
@@ -553,7 +533,7 @@ pub async fn delete_sink(
         .find(|app| *app.get_id() == app_id)
     {
         Some(app) => app.delete_sink(sink_id).await?,
-        None => return app_not_found_err!(),
+        None => return Err(HaliaError::NotFound),
     }
 
     persistence::sink::delete_sink(pool, &sink_id).await?;
@@ -574,7 +554,7 @@ pub async fn add_sink_ref(
         .find(|app| *app.get_id() == *app_id)
     {
         Some(app) => app.add_sink_ref(sink_id, rule_id).await,
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -591,7 +571,7 @@ pub async fn get_sink_tx(
         .find(|app| *app.get_id() == *app_id)
     {
         Some(app) => app.get_sink_tx(sink_id, rule_id).await,
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -608,7 +588,7 @@ pub async fn del_sink_tx(
         .find(|app| *app.get_id() == *app_id)
     {
         Some(app) => app.del_sink_tx(sink_id, rule_id).await,
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
 
@@ -625,6 +605,6 @@ pub async fn del_sink_ref(
         .find(|app| *app.get_id() == *app_id)
     {
         Some(app) => app.del_sink_ref(sink_id, rule_id).await,
-        None => app_not_found_err!(),
+        None => Err(HaliaError::NotFound),
     }
 }
