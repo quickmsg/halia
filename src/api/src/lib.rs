@@ -22,6 +22,7 @@ mod app;
 mod databoard;
 mod device;
 mod rule;
+mod user;
 
 pub(crate) type AppResult<T, E = AppError> = result::Result<T, E>;
 
@@ -106,6 +107,7 @@ pub async fn start(
     };
     let app = Router::new()
         .with_state(state.clone())
+        .nest("/api/user", user::routes())
         .nest("/api/device", device::routes())
         .nest("/api/app", app::routes())
         .nest("/api/databoard", databoard::routes())
