@@ -1,9 +1,16 @@
+use std::task::{Context, Poll};
+
 use axum::{
-    extract::State,
+    extract::{Request, State},
+    http::{HeaderMap, StatusCode},
+    middleware::Next,
+    response::Response,
     routing::{post, put},
     Router,
 };
-// use tower::{Layer, Service};
+use futures_util::future::BoxFuture;
+use tower::{Layer, Service};
+use tracing::debug;
 
 use crate::{AppResult, AppState, AppSuccess};
 
@@ -27,41 +34,69 @@ async fn password(State(state): State<AppState>) -> AppSuccess<()> {
     todo!()
 }
 
-// #[derive(Clone)]
-// struct AuthLayer;
+pub async fn auth(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let b = headers.get("Authorization");
+    if b.is_none() {
+        Err(StatusCode::UNAUTHORIZED)
+    } else {
+        let response = next.run(request).await;
+        Ok(response)
+    }
+}
 
-// impl<S> Layer<S> for AuthLayer {
-//     type Service = MyMiddleware<S>;
+#[derive(Clone)]
+pub struct AuthLayer {
+    pub state: AppState,
+}
 
-//     fn layer(&self, inner: S) -> Self::Service {
-//         MyMiddleware { inner }
-//     }
-// }
+impl<S> Layer<S> for AuthLayer {
+    type Service = AuthMiddleware<S>;
 
-// #[derive(Clone)]
-// struct MyMiddleware<S> {
-//     inner: S,
-// }
+    fn layer(&self, inner: S) -> Self::Service {
+        AuthMiddleware {
+            inner,
+            state: self.state.clone(),
+        }
+    }
+}
 
-// impl<S> Service<Request> for MyMiddleware<S>
-// where
-//     S: Service<Request, Response = Response> + Send + 'static,
-//     S::Future: Send + 'static,
-// {
-//     type Response = S::Response;
-//     type Error = S::Error;
-//     // `BoxFuture` is a type alias for `Pin<Box<dyn Future + Send + 'a>>`
-//     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+#[derive(Clone)]
+pub struct AuthMiddleware<S> {
+    inner: S,
+    state: AppState,
+}
 
-//     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-//         self.inner.poll_ready(cx)
-//     }
+impl<S> Service<Request> for AuthMiddleware<S>
+where
+    S: Service<Request, Response = Response> + Send + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    // `BoxFuture` is a type alias for `Pin<Box<dyn Future + Send + 'a>>`
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-//     fn call(&mut self, request: Request) -> Self::Future {
-//         let future = self.inner.call(request);
-//         Box::pin(async move {
-//             let response: Response = future.await?;
-//             Ok(response)
-//         })
-//     }
-// }
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request) -> Self::Future {
+        debug!("{:?}", request);
+        let headers = request.headers();
+        let b = headers.get("Authorization");
+        if b.is_none() {
+            // let resp = Response::builder().status(StatusCode::OK).body() ;
+        }
+        debug!("{:?}", b);
+        let future = self.inner.call(request);
+        Box::pin(async move {
+            let response: Response = future.await?;
+            Ok(response)
+        })
+    }
+}

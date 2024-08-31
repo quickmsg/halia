@@ -5,6 +5,7 @@ use ::rule::rule::Rule;
 use apps::App;
 use axum::{
     http::StatusCode,
+    middleware,
     response::{IntoResponse, Response},
     Json, Router,
 };
@@ -13,10 +14,12 @@ use devices::Device;
 use serde::Serialize;
 use sqlx::AnyPool;
 use tokio::{net::TcpListener, sync::RwLock};
+use tower::layer;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::{ServeDir, ServeFile},
 };
+use user::{auth, AuthLayer};
 
 mod app;
 mod databoard;
@@ -114,7 +117,8 @@ pub async fn start(
                 .nest("/api/device", device::routes())
                 .nest("/api/app", app::routes())
                 .nest("/api/databoard", databoard::routes())
-                .nest("/api/rule", rule::routes()),
+                .nest("/api/rule", rule::routes())
+                .route_layer(middleware::from_fn_with_state(state.clone(), auth)),
         )
         // .fallback_service(
         //     ServeDir::new("./dist").not_found_service(ServeFile::new("./dist/index.html")),

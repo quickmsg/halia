@@ -62,6 +62,7 @@ sqlx = { version = "0.8.1", features = [
     "tls-rustls-aws-lc-rs",
 ] }
 paste = "1.0.15"
+futures-util = "0.3.30"
 
 [profile.release]
 strip = true
