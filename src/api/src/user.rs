@@ -13,7 +13,7 @@ use time::{Duration, OffsetDateTime};
 use tracing::{debug, warn};
 use types::{AuthInfo, Password, User};
 
-use crate::{empty_user_code, wrong_password_code, AppError, AppResult, AppState, AppSuccess};
+use crate::{AppError, AppResult, AppState, AppSuccess, EMPTY_USER_CODE, WRONG_PASSWORD_CODE};
 
 const SECRET: &str = "must be random,todo";
 
@@ -103,7 +103,7 @@ async fn login(
             Some(user) => user,
             None => {
                 return Err(AppError::new(
-                    empty_user_code,
+                    EMPTY_USER_CODE,
                     "数据库无账户，请注册！".to_string(),
                 ))
             }
@@ -113,7 +113,7 @@ async fn login(
 
     if db_user.username != user.username || db_user.password != user.password {
         return Err(AppError::new(
-            wrong_password_code,
+            WRONG_PASSWORD_CODE,
             "账户或密码错误！".to_string(),
         ));
     }
@@ -140,7 +140,6 @@ async fn password(State(state): State<AppState>) -> AppSuccess<()> {
 }
 
 pub async fn auth(
-    State(state): State<AppState>,
     headers: HeaderMap,
     request: Request,
     next: Next,

@@ -77,7 +77,7 @@ impl Source {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        get_search_sources_or_sinks_info_resp!(self, None)
+        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub async fn update(

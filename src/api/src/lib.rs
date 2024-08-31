@@ -26,9 +26,9 @@ mod device;
 mod rule;
 mod user;
 
-pub static empty_user_code: u16 = 2;
-pub static wrong_password_code: u16 = 3;
-pub static jwt_expired_code: u16 = 4;
+pub static EMPTY_USER_CODE: u16 = 2;
+pub static WRONG_PASSWORD_CODE: u16 = 3;
+pub static JWT_EXPIRED_CODE: u16 = 4;
 
 pub(crate) type AppResult<T, E = AppError> = result::Result<T, E>;
 
@@ -121,7 +121,7 @@ pub async fn start(
                 .nest("/api/app", app::routes())
                 .nest("/api/databoard", databoard::routes())
                 .nest("/api/rule", rule::routes())
-                .route_layer(middleware::from_fn_with_state(state.clone(), auth)),
+                // .route_layer(middleware::from_fn(auth)),
         )
         // .fallback_service(
         //     ServeDir::new("./dist").not_found_service(ServeFile::new("./dist/index.html")),

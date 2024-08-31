@@ -108,5 +108,8 @@ pub struct QueryRuleInfo {
 #[derive(Serialize)]
 pub struct SearchRuleInfo {
     pub device: SearchDevicesItemResp,
-    pub item: SearchSourcesOrSinksInfoResp,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<SearchSourcesOrSinksInfoResp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sink: Option<SearchSourcesOrSinksInfoResp>,
 }

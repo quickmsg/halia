@@ -138,7 +138,7 @@ impl Source {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        get_search_sources_or_sinks_info_resp!(self, Some(self.value.clone()))
+        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub async fn start(
