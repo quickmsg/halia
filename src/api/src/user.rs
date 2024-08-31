@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
-    routing::{post, put},
+    routing::{get, post, put},
     Json, Router,
 };
 use common::{error::HaliaError, persistence};
@@ -11,7 +11,7 @@ use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, 
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 use tracing::{debug, warn};
-use types::{AuthInfo, Password, User};
+use types::{AdminExists, AuthInfo, Password, User};
 
 use crate::{AppError, AppResult, AppState, AppSuccess, EMPTY_USER_CODE, WRONG_PASSWORD_CODE};
 
@@ -70,9 +70,18 @@ mod jwt_numeric_date {
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/emptyuser", get(check_empty_user))
         .route("/registration", post(registration))
         .route("/login", post(login))
         .route("/password", put(password))
+}
+
+async fn check_empty_user(State(state): State<AppState>) -> AppResult<AppSuccess<AdminExists>> {
+    let exists = persistence::user::check_admin_exists(&state.pool)
+        .await
+        .map_err(|e| HaliaError::Common(e.to_string()))?;
+
+    Ok(AppSuccess::data(AdminExists { exists }))
 }
 
 async fn registration(

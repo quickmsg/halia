@@ -80,6 +80,8 @@ pub struct SearchAppsResp {
 pub struct SearchAppsItemResp {
     pub common: SearchAppsItemCommon,
     pub conf: SearchAppsItemConf,
+    pub source_cnt: usize,
+    pub sink_cnt: usize,
 }
 
 #[derive(Serialize)]
@@ -96,7 +98,6 @@ pub struct SearchAppsItemConf {
     pub base: BaseConf,
     pub ext: serde_json::Value,
 }
-
 
 #[derive(Deserialize)]
 pub struct QueryRuleInfo {

@@ -86,3 +86,8 @@ pub struct Password {
 pub struct AuthInfo {
     pub token: String,
 }
+
+#[derive(Serialize)]
+pub struct AdminExists {
+    pub exists: bool,
+}

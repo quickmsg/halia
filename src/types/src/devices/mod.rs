@@ -80,6 +80,8 @@ pub struct SearchDevicesResp {
 pub struct SearchDevicesItemResp {
     pub common: SearchDevicesItemCommon,
     pub conf: SearchDevicesItemConf,
+    pub source_cnt: usize,
+    pub sink_cnt: usize,
 }
 
 #[derive(Serialize)]

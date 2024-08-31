@@ -212,6 +212,10 @@ pub async fn create_device(
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateDeviceReq = serde_json::from_str(&body)?;
+    for device in devices.read().await.iter() {
+        device.check_duplicate(&req)?;
+    }
+
     let device = match req.device_type {
         DeviceType::Modbus => modbus::new(device_id, req.conf)?,
         DeviceType::Opcua => opcua::new(device_id, req.conf).await?,

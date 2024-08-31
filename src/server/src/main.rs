@@ -20,6 +20,8 @@ async fn main() -> Result<()> {
         .disable_statement_logging();
     let pool = AnyPool::connect_with(opt).await?;
 
+    common::sys::load_info();
+
     persistence::create_tables(&pool).await?;
     let pool = Arc::new(pool);
     let devices = devices::load_from_persistence(&pool).await.unwrap();

@@ -15,4 +15,5 @@ anyhow = { workspace = true }
 bytes = { workspace = true }
 thiserror = { workspace = true }
 sqlx = { workspace = true }
-paste = "1.0.15"
+paste = { workspace = true }
+sysinfo = { workspace = true }

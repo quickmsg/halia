@@ -11,7 +11,7 @@ members = [
     "src/rule",
     "src/apps",
     "src/databoard",
-    "src/mqtt-server",
+    "src/mqtt-server", "src/schema",
 ]
 resolver = "2"
 
@@ -64,6 +64,7 @@ sqlx = { version = "0.8.1", features = [
 paste = "1.0.15"
 futures-util = "0.3.30"
 jsonwebtoken = "9.3.0"
+sysinfo = "0.31.4"
 
 [profile.release]
 strip = true

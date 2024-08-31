@@ -617,19 +617,22 @@ impl Device for Opcua {
     }
 
     async fn search(&self) -> SearchDevicesItemResp {
-        SearchDevicesItemResp {
-            common: SearchDevicesItemCommon {
-                id: self.id.clone(),
-                device_type: DeviceType::Opcua,
-                rtt: 999,
-                on: self.on,
-                err: self.err.clone(),
-            },
-            conf: SearchDevicesItemConf {
-                base: self.base_conf.clone(),
-                ext: serde_json::json!(self.ext_conf),
-            },
-        }
+        // SearchDevicesItemResp {
+        //     common: SearchDevicesItemCommon {
+        //         id: self.id.clone(),
+        //         device_type: DeviceType::Opcua,
+        //         rtt: 999,
+        //         on: self.on,
+        //         err: self.err.clone(),
+        //     },
+        //     conf: SearchDevicesItemConf {
+        //         base: self.base_conf.clone(),
+        //         ext: serde_json::json!(self.ext_conf),
+        //     },
+        //     source_cnt: self.source_ref_infos.len(),
+        //     sink_cnt: self.sink_ref_infos.len(),
+        // }
+        todo!()
     }
 
     async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()> {

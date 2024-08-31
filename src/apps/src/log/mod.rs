@@ -103,6 +103,8 @@ impl App for Log {
                 base: self.base_conf.clone(),
                 ext: serde_json::to_value(self.ext_conf.clone()).unwrap(),
             },
+            source_cnt: 0,
+            sink_cnt: self.sink_ref_infos.len(),
         }
     }
 
