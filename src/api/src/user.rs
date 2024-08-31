@@ -1,18 +1,72 @@
-use std::task::{Context, Poll};
-
 use axum::{
     extract::{Request, State},
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
     routing::{post, put},
-    Router,
+    Json, Router,
 };
-use futures_util::future::BoxFuture;
-use tower::{Layer, Service};
-use tracing::debug;
+use common::{error::HaliaError, persistence};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
+use time::{Duration, OffsetDateTime};
+use tracing::{debug, warn};
+use types::{AuthInfo, Password, User};
 
-use crate::{AppResult, AppState, AppSuccess};
+use crate::{empty_user_code, wrong_password_code, AppError, AppResult, AppState, AppSuccess};
+
+const SECRET: &str = "must be random,todo";
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub username: String,
+    #[serde(with = "jwt_numeric_date")]
+    iat: OffsetDateTime,
+    #[serde(with = "jwt_numeric_date")]
+    exp: OffsetDateTime,
+}
+
+impl Claims {
+    pub fn new(username: String, iat: OffsetDateTime, exp: OffsetDateTime) -> Self {
+        // normalize the timestamps by stripping of microseconds
+        let iat = iat
+            .date()
+            .with_hms_milli(iat.hour(), iat.minute(), iat.second(), 0)
+            .unwrap()
+            .assume_utc();
+        let exp = exp
+            .date()
+            .with_hms_milli(exp.hour(), exp.minute(), exp.second(), 0)
+            .unwrap()
+            .assume_utc();
+
+        Self { username, iat, exp }
+    }
+}
+
+mod jwt_numeric_date {
+    //! Custom serialization of OffsetDateTime to conform with the JWT spec (RFC 7519 section 2, "Numeric Date")
+    use serde::{self, Deserialize, Deserializer, Serializer};
+    use time::OffsetDateTime;
+
+    /// Serializes an OffsetDateTime to a Unix timestamp (milliseconds since 1970/1/1T00:00:00T)
+    pub fn serialize<S>(date: &OffsetDateTime, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let timestamp = date.unix_timestamp();
+        serializer.serialize_i64(timestamp)
+    }
+
+    /// Attempts to deserialize an i64 and use as a Unix timestamp
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        OffsetDateTime::from_unix_timestamp(i64::deserialize(deserializer)?)
+            .map_err(|_| serde::de::Error::custom("invalid Unix timestamp value"))
+    }
+}
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -21,13 +75,64 @@ pub fn routes() -> Router<AppState> {
         .route("/password", put(password))
 }
 
-async fn registration(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
+async fn registration(
+    State(state): State<AppState>,
+    Json(password): Json<Password>,
+) -> AppResult<AppSuccess<()>> {
+    let exists = persistence::user::check_admin_exists(&state.pool)
+        .await
+        .map_err(|e| HaliaError::Common(e.to_string()))?;
+
+    if exists {
+        return Err(AppError::new(1, "管理员账户已存在！".to_string()));
+    }
+
+    persistence::user::create_user(&state.pool, "admin".to_string(), password.password)
+        .await
+        .map_err(|e| HaliaError::Common(e.to_string()))?;
+
     Ok(AppSuccess::empty())
 }
 
-async fn login(State(state): State<AppState>) -> AppSuccess<()> {
-    // AppSuccess::data(rules)
-    todo!()
+async fn login(
+    State(state): State<AppState>,
+    Json(user): Json<User>,
+) -> AppResult<AppSuccess<AuthInfo>> {
+    let db_user = match persistence::user::read_user(&state.pool).await {
+        Ok(user) => match user {
+            Some(user) => user,
+            None => {
+                return Err(AppError::new(
+                    empty_user_code,
+                    "数据库无账户，请注册！".to_string(),
+                ))
+            }
+        },
+        Err(e) => return Err(AppError::new(1, e.to_string())),
+    };
+
+    if db_user.username != user.username || db_user.password != user.password {
+        return Err(AppError::new(
+            wrong_password_code,
+            "账户或密码错误！".to_string(),
+        ));
+    }
+
+    let iat = OffsetDateTime::now_utc();
+    let exp = iat + Duration::hours(2);
+    let claims = Claims::new(user.username, iat, exp);
+
+    let header = Header {
+        kid: Some("signing_key".to_owned()),
+        alg: Algorithm::HS512,
+        ..Default::default()
+    };
+    let token = match encode(&header, &claims, &EncodingKey::from_secret(SECRET.as_ref())) {
+        Ok(t) => t,
+        Err(_) => panic!(), // in practice you would return the error
+    };
+
+    Ok(AppSuccess::data(AuthInfo { token }))
 }
 
 async fn password(State(state): State<AppState>) -> AppSuccess<()> {
@@ -40,63 +145,24 @@ pub async fn auth(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let b = headers.get("Authorization");
-    if b.is_none() {
-        Err(StatusCode::UNAUTHORIZED)
-    } else {
-        let response = next.run(request).await;
-        Ok(response)
-    }
-}
-
-#[derive(Clone)]
-pub struct AuthLayer {
-    pub state: AppState,
-}
-
-impl<S> Layer<S> for AuthLayer {
-    type Service = AuthMiddleware<S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        AuthMiddleware {
-            inner,
-            state: self.state.clone(),
+    let token = match headers.get("Authorization") {
+        Some(t) => t.to_str().or_else(|_| Err(StatusCode::UNAUTHORIZED))?,
+        None => return Err(StatusCode::UNAUTHORIZED),
+    };
+    let token_data = match decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(SECRET.as_ref()),
+        &Validation::new(Algorithm::HS512),
+    ) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("{:?}", e);
+            return Err(StatusCode::UNAUTHORIZED);
         }
-    }
-}
+    };
 
-#[derive(Clone)]
-pub struct AuthMiddleware<S> {
-    inner: S,
-    state: AppState,
-}
+    debug!("{:?}", token_data);
 
-impl<S> Service<Request> for AuthMiddleware<S>
-where
-    S: Service<Request, Response = Response> + Send + 'static,
-    S::Future: Send + 'static,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    // `BoxFuture` is a type alias for `Pin<Box<dyn Future + Send + 'a>>`
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: Request) -> Self::Future {
-        debug!("{:?}", request);
-        let headers = request.headers();
-        let b = headers.get("Authorization");
-        if b.is_none() {
-            // let resp = Response::builder().status(StatusCode::OK).body() ;
-        }
-        debug!("{:?}", b);
-        let future = self.inner.call(request);
-        Box::pin(async move {
-            let response: Response = future.await?;
-            Ok(response)
-        })
-    }
+    let response = next.run(request).await;
+    Ok(response)
 }

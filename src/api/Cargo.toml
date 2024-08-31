@@ -22,3 +22,5 @@ bytes = { workspace = true }
 sqlx = { workspace = true }
 tower = { version = "0.5.0", features = ["full"] }
 futures-util = { workspace = true }
+jsonwebtoken = { workspace = true }
+time = "0.3.36"

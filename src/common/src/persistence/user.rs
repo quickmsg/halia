@@ -30,6 +30,19 @@ pub async fn read_user(pool: &AnyPool) -> Result<Option<User>> {
     }
 }
 
+pub async fn check_admin_exists(pool: &AnyPool) -> Result<bool> {
+    let users =
+        sqlx::query_as::<_, User>("SELECT username, password FROM users WHERE username = 'admin'")
+            .fetch_all(pool)
+            .await?;
+
+    if users.len() == 0 {
+        Ok(false)
+    } else {
+        Ok(true)
+    }
+}
+
 pub async fn update_user(pool: &AnyPool, id: &Uuid, status: bool) -> Result<()> {
     sqlx::query("UPDATE apps SET status = ?1 WHERE id = ?2")
         .bind(status as i32)

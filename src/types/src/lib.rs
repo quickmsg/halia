@@ -72,3 +72,19 @@ pub struct CertInfo {
     pub client_key: String,
     pub verify_server_cert: bool,
 }
+
+#[derive(Deserialize)]
+pub struct User {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Deserialize)]
+pub struct Password {
+    pub password: String,
+}
+
+#[derive(Serialize)]
+pub struct AuthInfo {
+    pub token: String,
+}

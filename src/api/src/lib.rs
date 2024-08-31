@@ -14,18 +14,21 @@ use devices::Device;
 use serde::Serialize;
 use sqlx::AnyPool;
 use tokio::{net::TcpListener, sync::RwLock};
-use tower::layer;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::{ServeDir, ServeFile},
 };
-use user::{auth, AuthLayer};
+use user::auth;
 
 mod app;
 mod databoard;
 mod device;
 mod rule;
 mod user;
+
+pub static empty_user_code: u16 = 2;
+pub static wrong_password_code: u16 = 3;
+pub static jwt_expired_code: u16 = 4;
 
 pub(crate) type AppResult<T, E = AppError> = result::Result<T, E>;
 
@@ -64,11 +67,11 @@ pub(crate) struct AppError {
     data: String,
 }
 
-// impl AppError {
-//     pub fn new(e: String) -> Self {
-//         AppError { code: 1, data: e }
-//     }
-// }
+impl AppError {
+    pub fn new(code: u16, e: String) -> Self {
+        AppError { code, data: e }
+    }
+}
 
 impl From<HaliaError> for AppError {
     fn from(value: HaliaError) -> Self {
@@ -110,7 +113,7 @@ pub async fn start(
     };
     let app = Router::new()
         .with_state(state.clone())
-        .nest("/api/user", user::routes())
+        .nest("/api", user::routes())
         .nest(
             "/",
             Router::new()
