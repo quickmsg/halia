@@ -2,6 +2,11 @@ mod length;
 mod lower;
 mod reverse;
 mod upper;
+// mod hex;
+mod ltrim;
+mod rtrim;
+mod split;
+mod trim;
 
 use anyhow::{bail, Result};
 use types::rules::functions::ComputerConfItem;

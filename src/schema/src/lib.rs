@@ -1,8 +1,8 @@
-pub mod avron;
+pub mod avro;
 pub mod csv;
 
 pub enum Schema {
     Json,
     Csv,
-    Avron,
+    Avro,
 }
