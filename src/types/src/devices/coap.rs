@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -88,17 +86,6 @@ pub struct CreateUpdateObserveReq {
     pub ext: ObserveConf,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct ObserveConf {
-    pub path: String,
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub data: Option<Vec<u8>>,
-    // pub options: Vec<(CoapOption, String)>,
-    // pub domain: String,
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub token: Option<Vec<u8>>,
-}
-
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateUpdateSourceReq {
     #[serde(flatten)]
@@ -113,7 +100,7 @@ pub struct SourceConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub get_conf: Option<GetConf>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub observe_conf: Option<ObeserveConf>,
+    pub observe_conf: Option<ObserveConf>,
     // #[serde(flatten)]
     // pub conf: serde_json::Value,
     // #[serde(skip_serializing_if = "Option::is_none")]
@@ -139,7 +126,7 @@ pub struct GetConf {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct ObeserveConf {
+pub struct ObserveConf {
     pub path: String,
     pub options: Vec<(CoapOption, String)>,
 }

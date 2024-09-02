@@ -24,9 +24,9 @@ use types::{
 use url::form_urlencoded;
 use uuid::Uuid;
 
-use super::{get_source::GetSource, observe_source::ObserveSource, transform_options};
+use super::transform_options;
 
-pub struct Source {
+pub struct GetSource {
     pub id: Uuid,
     base_conf: BaseConf,
     ext_conf: SourceConf,
@@ -43,12 +43,7 @@ pub struct Source {
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 
-pub enum SourceItem {
-    Observe(ObserveSource),
-    Get(GetSource),
-}
-
-impl Source {
+impl GetSource {
     pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
         Self::validate_conf(&ext_conf)?;
 
