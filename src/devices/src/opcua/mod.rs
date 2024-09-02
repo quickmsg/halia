@@ -616,7 +616,7 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn search(&self) -> SearchDevicesItemResp {
+    async fn read(&self) -> SearchDevicesItemResp {
         // SearchDevicesItemResp {
         //     common: SearchDevicesItemCommon {
         //         id: self.id.clone(),
@@ -705,7 +705,7 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn search_source(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+    async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
         todo!()
     }
 
@@ -788,7 +788,7 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+    async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
         todo!()
     }
 

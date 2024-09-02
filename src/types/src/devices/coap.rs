@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -116,13 +118,14 @@ pub struct SourceConf {
     // pub conf: serde_json::Value,
     // #[serde(skip_serializing_if = "Option::is_none")]
     // pub data: Option<Vec<u8>>,
-    // pub options: Vec<(CoapOption, String)>,
+
     // pub domain: String,
     // #[serde(skip_serializing_if = "Option::is_none")]
     // pub token: Option<Vec<u8>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum SourceMethod {
     Get,
     Observe,
@@ -132,11 +135,13 @@ pub enum SourceMethod {
 pub struct GetConf {
     pub interval: u64,
     pub path: String,
+    pub querys: Option<Vec<(String, String)>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ObeserveConf {
     pub path: String,
+    pub options: Vec<(CoapOption, String)>,
 }
 
 #[derive(Deserialize)]

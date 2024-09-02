@@ -29,3 +29,4 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 sqlx = { workspace = true }
 paste = { workspace = true }
+url = { workspace = true }

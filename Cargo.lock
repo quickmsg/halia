@@ -1117,6 +1117,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "types",
+ "url 2.5.2",
  "uuid",
 ]
 

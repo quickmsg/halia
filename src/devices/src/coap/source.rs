@@ -21,7 +21,10 @@ use types::{
     devices::coap::{CoapConf, SourceConf, SourceMethod},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
+use url::form_urlencoded;
 use uuid::Uuid;
+
+use super::transform_options;
 
 pub struct Source {
     pub id: Uuid,
@@ -135,9 +138,7 @@ impl Source {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        if let Err(e) = self.event_loop(client, stop_signal_rx).await {
-            return Err(HaliaError::Common(e.to_string()));
-        }
+        self.event_loop(client, stop_signal_rx).await?;
 
         Ok(())
     }
@@ -147,12 +148,21 @@ impl Source {
         client: UdpCoAPClient,
         mut stop_signal_rx: mpsc::Receiver<()>,
     ) -> Result<()> {
-        // let options = transform_options(&self.ext_conf.observe_conf.as_ref().unwrap().options)?;
-        let request =
-            RequestBuilder::new(&self.ext_conf.get_conf.as_ref().unwrap().path, Method::Get)
-                // .domain(self.conf.ext.domain.clone())
-                // .options(options)
-                .build();
+        let mut request_builder =
+            RequestBuilder::new(&self.ext_conf.get_conf.as_ref().unwrap().path, Method::Get);
+
+        if let Some(querys) = &self.ext_conf.get_conf.as_ref().unwrap().querys {
+            let encoded_params: String = form_urlencoded::Serializer::new(String::new())
+                .extend_pairs(querys)
+                .finish();
+            request_builder = request_builder.queries(Some(encoded_params.into_bytes()));
+        }
+
+        let options = transform_options(&self.ext_conf.observe_conf.as_ref().unwrap().options)?;
+        let request = request_builder
+            // .domain(self.conf.ext.domain.clone())
+            .options(options)
+            .build();
         let mut interval = time::interval(Duration::from_millis(
             self.ext_conf.get_conf.as_ref().unwrap().interval,
         ));
@@ -180,11 +190,6 @@ impl Source {
         if mb_tx.receiver_count() > 0 {
             _ = mb_tx.send(MessageBatch::from_json(msg.payload.into()).unwrap());
         }
-        // match String::from_utf8(msg.payload) {
-        //     Ok(data) => debug!("{}", data),
-        //     Err(e) => warn!("{}", e),
-        // }
-        // debug!("receive msg :{:?}", msg.payload);
     }
 
     pub async fn stop(&mut self) {

@@ -27,7 +27,7 @@ pub mod opcua;
 pub trait Device: Send + Sync {
     fn get_id(&self) -> &Uuid;
     fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()>;
-    async fn search(&self) -> SearchDevicesItemResp;
+    async fn read(&self) -> SearchDevicesItemResp;
     async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()>;
     async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
@@ -43,7 +43,7 @@ pub trait Device: Send + Sync {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp;
-    async fn search_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
+    async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_source(
         &mut self,
         source_id: Uuid,
@@ -62,7 +62,7 @@ pub trait Device: Send + Sync {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp;
-    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
+    async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
@@ -143,7 +143,7 @@ pub async fn get_summary(devices: &Arc<RwLock<Vec<Box<dyn Device>>>>) -> Summary
     let mut err_cnt = 0;
     let mut off_cnt = 0;
     for device in devices.read().await.iter().rev() {
-        let device = device.search().await;
+        let device = device.read().await;
         total += 1;
 
         if device.common.err.is_some() {
@@ -175,10 +175,10 @@ pub async fn get_rule_info(
         .find(|device| *device.get_id() == query.device_id)
     {
         Some(device) => {
-            let device_info = device.search().await;
+            let device_info = device.read().await;
             match (query.source_id, query.sink_id) {
                 (Some(source_id), None) => {
-                    let source_info = device.search_source(&source_id).await?;
+                    let source_info = device.read_source(&source_id).await?;
                     Ok(SearchRuleInfo {
                         device: device_info,
                         source: Some(source_info),
@@ -186,7 +186,7 @@ pub async fn get_rule_info(
                     })
                 }
                 (None, Some(sink_id)) => {
-                    let sink_info = device.search_source(&sink_id).await?;
+                    let sink_info = device.read_sink(&sink_id).await?;
                     Ok(SearchRuleInfo {
                         device: device_info,
                         source: None,
@@ -237,7 +237,7 @@ pub async fn search_devices(
     let mut total = 0;
 
     for device in devices.read().await.iter().rev() {
-        let device = device.search().await;
+        let device = device.read().await;
         if let Some(device_type) = &query_params.device_type {
             if *device_type != device.common.device_type {
                 continue;

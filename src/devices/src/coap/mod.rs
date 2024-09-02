@@ -96,15 +96,13 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn search(&self) -> SearchDevicesItemResp {
+    async fn read(&self) -> SearchDevicesItemResp {
         SearchDevicesItemResp {
             common: SearchDevicesItemCommon {
                 id: self.id.clone(),
-                device_type: DeviceType::Modbus,
-                // rtt: self.rtt.load(Ordering::SeqCst),
-                rtt: 0,
+                device_type: DeviceType::Coap,
+                rtt: None,
                 on: self.on,
-                // err: self.err.read().await.clone(),
                 err: self.err.clone(),
             },
             conf: SearchDevicesItemConf {
@@ -229,8 +227,11 @@ impl Device for Coap {
         SearchSourcesOrSinksResp { total, data }
     }
 
-    async fn search_source(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        todo!()
+    async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+        match self.sources.iter().find(|source| source.id == *source_id) {
+            Some(source) => Ok(source.search()),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn update_source(
@@ -331,8 +332,11 @@ impl Device for Coap {
         SearchSourcesOrSinksResp { total, data }
     }
 
-    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        todo!()
+    async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+        match self.sinks.iter().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.search()),
+            None => Err(HaliaError::NotFound),
+        }
     }
 
     async fn update_sink(

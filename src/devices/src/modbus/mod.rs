@@ -375,12 +375,18 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn search(&self) -> SearchDevicesItemResp {
+    async fn read(&self) -> SearchDevicesItemResp {
+        let err = self.err.read().await.clone();
+        let rtt = match (self.on, &err) {
+            (true, None) => Some(self.rtt.load(Ordering::SeqCst)),
+            _ => None,
+        };
+
         SearchDevicesItemResp {
             common: SearchDevicesItemCommon {
                 id: self.id.clone(),
                 device_type: DeviceType::Modbus,
-                rtt: self.rtt.load(Ordering::SeqCst),
+                rtt,
                 on: self.on,
                 err: self.err.read().await.clone(),
             },
@@ -547,7 +553,7 @@ impl Device for Modbus {
         SearchSourcesOrSinksResp { total, data }
     }
 
-    async fn search_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+    async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
         match self
             .sources
             .read()
@@ -700,7 +706,7 @@ impl Device for Modbus {
         SearchSourcesOrSinksResp { total, data }
     }
 
-    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
+    async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
         match self.sinks.iter().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.search()),
             None => Err(HaliaError::NotFound),
