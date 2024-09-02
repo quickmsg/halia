@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
@@ -6,10 +8,7 @@ use protocol::coap::{
     request::{Method, RequestBuilder},
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use types::{
-    devices::coap::{CoapConf, SinkConf},
-    BaseConf, SearchSourcesOrSinksInfoResp,
-};
+use types::{devices::coap::SinkConf, BaseConf, SearchSourcesOrSinksInfoResp};
 use uuid::Uuid;
 
 use super::transform_options;
@@ -25,7 +24,7 @@ pub struct Sink {
 
     join_handle: Option<
         JoinHandle<(
-            UdpCoAPClient,
+            Arc<UdpCoAPClient>,
             mpsc::Receiver<MessageBatch>,
             mpsc::Receiver<()>,
         )>,
@@ -85,27 +84,27 @@ impl Sink {
                 .await
                 .unwrap();
 
-            let (client, mb_rx, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
-            _ = self.event_loop(stop_signal_rx, mb_rx, client).await;
+            let (coap_client, mb_rx, stop_signal_rx) =
+                self.join_handle.take().unwrap().await.unwrap();
+            _ = self.event_loop(stop_signal_rx, mb_rx, coap_client).await;
         }
 
         Ok(())
     }
 
-    pub async fn start(&mut self, coap_conf: &CoapConf) -> HaliaResult<()> {
+    pub async fn start(&mut self, client: Arc<UdpCoAPClient>) -> HaliaResult<()> {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
 
-        let client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
         _ = self.event_loop(stop_signal_rx, mb_rx, client).await;
 
         Ok(())
     }
 
-    pub async fn restart(&mut self, coap_conf: &CoapConf) -> HaliaResult<()> {
+    pub async fn restart(&mut self) -> HaliaResult<()> {
         self.stop_signal_tx
             .as_ref()
             .unwrap()
@@ -113,9 +112,8 @@ impl Sink {
             .await
             .unwrap();
 
-        let (_, mb_rx, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
-        let client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
-        _ = self.event_loop(stop_signal_rx, mb_rx, client).await;
+        let (coap_client, mb_rx, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
+        _ = self.event_loop(stop_signal_rx, mb_rx, coap_client).await;
 
         Ok(())
     }
@@ -124,7 +122,7 @@ impl Sink {
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut publish_rx: mpsc::Receiver<MessageBatch>,
-        client: UdpCoAPClient,
+        client: Arc<UdpCoAPClient>,
     ) -> Result<()> {
         let method = match &self.ext_conf.method {
             types::devices::coap::SinkMethod::Post => Method::Post,

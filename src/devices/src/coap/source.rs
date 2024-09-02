@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use common::{
@@ -32,7 +32,7 @@ pub struct Source {
     ext_conf: SourceConf,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    join_handle: Option<JoinHandle<(UdpCoAPClient, mpsc::Receiver<()>)>>,
+    join_handle: Option<JoinHandle<(Arc<UdpCoAPClient>, mpsc::Receiver<()>)>>,
 
     observe_tx: Option<oneshot::Sender<ObserveMessage>>,
 
@@ -83,12 +83,9 @@ impl Source {
         get_search_sources_or_sinks_info_resp!(self)
     }
 
-    pub async fn update(
-        &mut self,
-        base_conf: BaseConf,
-        ext_conf: SourceConf,
-        coap_conf: &CoapConf,
-    ) -> HaliaResult<()> {
+    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
+        Self::validate_conf(&ext_conf)?;
+
         let mut restart = false;
         if self.ext_conf != ext_conf {
             restart = true;
@@ -97,15 +94,13 @@ impl Source {
         self.ext_conf = ext_conf;
 
         if restart {
-            _ = self.restart(coap_conf).await;
+            // _ = self.restart().await;
         }
 
         Ok(())
     }
 
-    pub async fn start(&mut self, conf: &CoapConf) -> Result<()> {
-        let client = UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?;
-
+    pub async fn start(&mut self, client: Arc<UdpCoAPClient>) -> Result<()> {
         let (mb_tx, _) = broadcast::channel(16);
 
         match self.ext_conf.method {
@@ -120,7 +115,7 @@ impl Source {
 
     async fn start_observe(
         &mut self,
-        client: UdpCoAPClient,
+        client: Arc<UdpCoAPClient>,
         observe_mb_tx: broadcast::Sender<MessageBatch>,
     ) -> Result<()> {
         let observe_tx = client
@@ -134,7 +129,7 @@ impl Source {
         Ok(())
     }
 
-    async fn start_api(&mut self, client: UdpCoAPClient) -> HaliaResult<()> {
+    async fn start_api(&mut self, client: Arc<UdpCoAPClient>) -> HaliaResult<()> {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
@@ -145,7 +140,7 @@ impl Source {
 
     async fn event_loop(
         &mut self,
-        client: UdpCoAPClient,
+        client: Arc<UdpCoAPClient>,
         mut stop_signal_rx: mpsc::Receiver<()>,
     ) -> Result<()> {
         let mut request_builder =
@@ -205,28 +200,28 @@ impl Source {
         self.mb_tx = None;
     }
 
-    pub async fn restart(&mut self, coap_conf: &CoapConf) -> Result<()> {
-        if let Err(e) = self
-            .observe_tx
-            .take()
-            .unwrap()
-            .send(ObserveMessage::Terminate)
-        {
-            warn!("stop send msg err:{:?}", e);
-        }
+    // pub async fn restart(&mut self) -> Result<()> {
+    //     if let Err(e) = self
+    //         .observe_tx
+    //         .take()
+    //         .unwrap()
+    //         .send(ObserveMessage::Terminate)
+    //     {
+    //         warn!("stop send msg err:{:?}", e);
+    //     }
 
-        _ = self.stop_signal_tx.as_ref().unwrap().send(()).await;
+    //     _ = self.stop_signal_tx.as_ref().unwrap().send(()).await;
+    //     let (coap_client, stop_signal_rx) =
+    //         self.join_handle.take().unwrap().await.unwrap();
 
-        let coap_client = UdpCoAPClient::new_udp((coap_conf.host.clone(), coap_conf.port)).await?;
+    //     match self.ext_conf.method {
+    //         SourceMethod::Get => self.start_api(coap_client).await?,
+    //         SourceMethod::Observe => {
+    //             let (mb_tx, _) = broadcast::channel(16);
+    //             self.start_observe(coap_client, mb_tx.clone()).await?;
+    //         }
+    //     }
 
-        match self.ext_conf.method {
-            SourceMethod::Get => self.start_api(coap_client).await?,
-            SourceMethod::Observe => {
-                let (mb_tx, _) = broadcast::channel(16);
-                self.start_observe(coap_client, mb_tx.clone()).await?;
-            }
-        }
-
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }

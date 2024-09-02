@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
@@ -9,7 +11,7 @@ use common::{
 };
 use message::MessageBatch;
 use paste::paste;
-use protocol::coap::request::CoapOption;
+use protocol::coap::{client::UdpCoAPClient, request::CoapOption};
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
@@ -46,6 +48,7 @@ struct Coap {
     sink_ref_infos: Vec<(Uuid, RefInfo)>,
 
     on: bool,
+    coap_client: Option<Arc<UdpCoAPClient>>,
     err: Option<String>,
 }
 
@@ -62,6 +65,7 @@ pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devic
         sinks: vec![],
         sink_ref_infos: vec![],
         on: false,
+        coap_client: None,
         err: None,
     }))
 }
@@ -127,25 +131,39 @@ impl Device for Coap {
 
         if self.on && restart {
             for source in self.sources.iter_mut() {
-                _ = source.restart(&self.ext_conf);
+                _ = source.stop();
             }
             for sink in self.sinks.iter_mut() {
-                _ = sink.restart(&self.ext_conf);
+                _ = sink.stop();
             }
+
+            let coap_client = Arc::new(
+                UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
+            );
+            for source in self.sources.iter_mut() {
+                _ = source.start(coap_client.clone());
+            }
+            for sink in self.sinks.iter_mut() {
+                _ = sink.start(coap_client.clone());
+            }
+            self.coap_client = Some(coap_client);
         }
 
         Ok(())
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
+        let client = Arc::new(
+            UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
+        );
         check_and_set_on_true!(self);
 
         for source in self.sources.iter_mut() {
-            _ = source.start(&self.ext_conf).await;
+            _ = source.start(client.clone()).await;
         }
 
         for sink in self.sinks.iter_mut() {
-            _ = sink.start(&self.ext_conf).await;
+            _ = sink.start(client.clone()).await;
         }
 
         Ok(())
@@ -189,7 +207,9 @@ impl Device for Coap {
         }
         let mut source = Source::new(source_id, req.base, ext_conf)?;
         if self.on {
-            _ = source.start(&self.ext_conf).await;
+            _ = source
+                .start(self.coap_client.as_ref().unwrap().clone())
+                .await;
         }
 
         self.sources.push(source);
@@ -251,7 +271,7 @@ impl Device for Coap {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.update(req.base, ext_conf, &self.ext_conf).await,
+            Some(source) => source.update(req.base, ext_conf).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -292,7 +312,7 @@ impl Device for Coap {
 
         let mut sink = Sink::new(sink_id, req.base, ext_conf)?;
         if self.on {
-            _ = sink.start(&self.ext_conf).await;
+            _ = sink.start(self.coap_client.as_ref().unwrap().clone()).await;
         }
 
         self.sinks.push(sink);
