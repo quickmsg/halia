@@ -41,7 +41,7 @@ pub async fn load_from_persistence(
         .await?;
 
         if db_rule.status == 1 {
-            start(pool, &rules, &devices, &apps, rule_id).await?;
+            start(pool, &rules, &devices, &apps, &databoards, rule_id).await?;
         }
     }
 
@@ -126,10 +126,11 @@ pub async fn start(
     rules: &Arc<RwLock<Vec<Rule>>>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
-        Some(rule) => rule.start(devices, apps).await?,
+        Some(rule) => rule.start(devices, apps, databoards).await?,
         None => return Err(HaliaError::NotFound),
     }
 
@@ -140,10 +141,13 @@ pub async fn start(
 pub async fn stop(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
-        Some(rule) => rule.stop()?,
+        Some(rule) => rule.stop(devices, apps, databoards).await?,
         None => return Err(HaliaError::NotFound),
     }
 
@@ -154,19 +158,34 @@ pub async fn stop(
 pub async fn update(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
     body: String,
 ) -> HaliaResult<()> {
-    todo!()
+    let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
+
+    match rules.write().await.iter_mut().find(|rule| rule.id == id) {
+        Some(rule) => rule.update(devices, apps, databoards, req).await?,
+        None => return Err(HaliaError::NotFound),
+    }
+
+    persistence::rule::update_rule_conf(pool, &id, body).await?;
+
+    Ok(())
 }
 
 pub async fn delete(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
 ) -> HaliaResult<()> {
     match rules.write().await.iter_mut().find(|rule| rule.id == id) {
-        Some(rule) => rule.stop()?,
+        Some(rule) => rule.delete(devices, apps, databoards).await?,
         None => return Err(HaliaError::NotFound),
     }
 

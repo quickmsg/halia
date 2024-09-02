@@ -22,7 +22,7 @@ use crate::segment::{get_3d_ids, start_segment, take_source_ids};
 
 pub struct Rule {
     pub id: Uuid,
-    pub conf: CreateUpdateRuleReq,
+    conf: CreateUpdateRuleReq,
     pub on: bool,
     pub stop_signal_tx: Option<broadcast::Sender<()>>,
 }
@@ -36,12 +36,16 @@ impl Rule {
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<Self> {
         let mut error = None;
-        let mut add_ref_nodes = vec![];
+        let mut device_source_add_ref_nodes = vec![];
+        let mut device_sink_add_ref_nodes = vec![];
+        let mut app_source_add_ref_nodes = vec![];
+        let mut app_sink_add_ref_nodes = vec![];
+        let mut databoard_add_ref_nodes = vec![];
         for node in req.ext.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = devices::add_source_ref(
+                    match devices::add_source_ref(
                         devices,
                         &source_node.device_id,
                         &source_node.source_id,
@@ -49,14 +53,17 @@ impl Rule {
                     )
                     .await
                     {
-                        add_ref_nodes.push(&node);
-                        error = Some(format!("引用设备错误: {}", e).to_owned());
-                        break;
+                        Ok(_) => device_source_add_ref_nodes
+                            .push((source_node.device_id, source_node.source_id)),
+                        Err(_) => {
+                            error = Some("引用设备错误！".to_owned());
+                            break;
+                        }
                     }
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = apps::add_source_ref(
+                    match apps::add_source_ref(
                         apps,
                         &source_node.app_id,
                         &source_node.source_id,
@@ -64,14 +71,17 @@ impl Rule {
                     )
                     .await
                     {
-                        add_ref_nodes.push(&node);
-                        error = Some(format!("引用应用错误: {}", e).to_owned());
-                        break;
+                        Ok(_) => app_source_add_ref_nodes
+                            .push((source_node.app_id, source_node.source_id)),
+                        Err(_) => {
+                            error = Some("引用应用错误！".to_owned());
+                            break;
+                        }
                     }
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = devices::add_sink_ref(
+                    match devices::add_sink_ref(
                         devices,
                         &sink_node.device_id,
                         &sink_node.sink_id,
@@ -79,25 +89,30 @@ impl Rule {
                     )
                     .await
                     {
-                        add_ref_nodes.push(&node);
-                        error = Some(format!("引用设备错误: {}", e).to_owned());
-                        break;
+                        Ok(_) => {
+                            device_sink_add_ref_nodes.push((sink_node.device_id, sink_node.sink_id))
+                        }
+                        Err(_) => {
+                            error = Some("引用设备动作错误！".to_owned());
+                            break;
+                        }
                     }
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) =
-                        apps::add_sink_ref(apps, &sink_node.app_id, &sink_node.sink_id, &rule_id)
-                            .await
+                    match apps::add_sink_ref(apps, &sink_node.app_id, &sink_node.sink_id, &rule_id)
+                        .await
                     {
-                        add_ref_nodes.push(&node);
-                        error = Some(format!("引用应用错误: {}", e).to_owned());
-                        break;
+                        Ok(_) => app_sink_add_ref_nodes.push((sink_node.app_id, sink_node.sink_id)),
+                        Err(_) => {
+                            error = Some("引用应用动作错误！".to_owned());
+                            break;
+                        }
                     }
                 }
                 NodeType::Databoard => {
                     let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    if let Err(e) = databoard::add_data_ref(
+                    match databoard::add_data_ref(
                         databoards,
                         &databoard_node.databoard_id,
                         &databoard_node.data_id,
@@ -105,9 +120,12 @@ impl Rule {
                     )
                     .await
                     {
-                        add_ref_nodes.push(&node);
-                        error = Some(format!("引用数据看板错误: {}", e).to_owned());
-                        break;
+                        Ok(_) => databoard_add_ref_nodes
+                            .push((databoard_node.databoard_id, databoard_node.data_id)),
+                        Err(_) => {
+                            error = Some("引用数据看板数据错误！".to_owned());
+                            break;
+                        }
                     }
                 }
                 _ => {}
@@ -115,7 +133,22 @@ impl Rule {
         }
 
         if let Some(e) = error {
-            // TODO 回滚
+            for (device_id, source_id) in device_source_add_ref_nodes {
+                devices::del_source_ref(devices, &device_id, &source_id, &rule_id).await?;
+            }
+            for (device_id, sink_id) in device_sink_add_ref_nodes {
+                devices::del_sink_ref(devices, &device_id, &sink_id, &rule_id).await?;
+            }
+            for (app_id, source_id) in app_source_add_ref_nodes {
+                apps::del_source_ref(apps, &app_id, &source_id, &rule_id).await?;
+            }
+            for (app_id, sink_id) in app_sink_add_ref_nodes {
+                apps::del_sink_ref(apps, &app_id, &sink_id, &rule_id).await?;
+            }
+            for (databorad_id, data_id) in databoard_add_ref_nodes {
+                databoard::del_data_ref(databoards, &databorad_id, &data_id, &rule_id).await?;
+            }
+
             return Err(HaliaError::Common(e));
         }
 
@@ -139,6 +172,7 @@ impl Rule {
         &mut self,
         devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        databoards: &Arc<RwLock<Vec<Databoard>>>,
     ) -> Result<()> {
         check_and_set_on_true!(self);
 
@@ -306,6 +340,23 @@ impl Rule {
                             };
                             mpsc_tx = Some(tx);
                         }
+                        NodeType::Databoard => {
+                            ids.push(id);
+                            let databoard_node: DataboardNode =
+                                serde_json::from_value(node.conf.clone())?;
+                            let tx = match databoard::get_data_tx(
+                                databoards,
+                                &databoard_node.databoard_id,
+                                &databoard_node.data_id,
+                                &self.id,
+                            )
+                            .await
+                            {
+                                Ok(tx) => tx,
+                                Err(e) => return Err(e.into()),
+                            };
+                            mpsc_tx = Some(tx);
+                        }
                         _ => {}
                     }
                 }
@@ -340,11 +391,152 @@ impl Rule {
         Ok(())
     }
 
-    pub fn stop(&mut self) -> HaliaResult<()> {
+    pub async fn stop(
+        &mut self,
+        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        databoards: &Arc<RwLock<Vec<Databoard>>>,
+    ) -> HaliaResult<()> {
         check_and_set_on_false!(self);
 
         if let Err(e) = self.stop_signal_tx.as_ref().unwrap().send(()) {
             error!("rule stop send signal err:{}", e);
+        }
+
+        for node in self.conf.ext.nodes.iter() {
+            match node.node_type {
+                NodeType::DeviceSource => {
+                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                    devices::del_source_rx(
+                        devices,
+                        &source_node.device_id,
+                        &source_node.source_id,
+                        &self.id,
+                    )
+                    .await?;
+                }
+                NodeType::AppSource => {
+                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                    apps::del_source_rx(
+                        apps,
+                        &source_node.app_id,
+                        &source_node.source_id,
+                        &self.id,
+                    )
+                    .await?;
+                }
+                NodeType::DeviceSink => {
+                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                    devices::del_sink_tx(
+                        devices,
+                        &sink_node.device_id,
+                        &sink_node.sink_id,
+                        &self.id,
+                    )
+                    .await?;
+                }
+                NodeType::AppSink => {
+                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+                    apps::del_sink_tx(apps, &sink_node.app_id, &sink_node.sink_id, &self.id)
+                        .await?;
+                }
+                NodeType::Databoard => {
+                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
+                    databoard::del_data_tx(
+                        databoards,
+                        &databoard_node.databoard_id,
+                        &databoard_node.data_id,
+                        &self.id,
+                    )
+                    .await?;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn update(
+        &mut self,
+        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        databoards: &Arc<RwLock<Vec<Databoard>>>,
+        req: CreateUpdateRuleReq,
+    ) -> HaliaResult<()> {
+        let mut restart = false;
+        if self.conf.ext != req.ext {
+            restart = true;
+        }
+        self.conf = req;
+
+        if self.on && restart {
+            self.stop(devices, apps, databoards).await?;
+            self.start(devices, apps, databoards).await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn delete(
+        &mut self,
+        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        databoards: &Arc<RwLock<Vec<Databoard>>>,
+    ) -> HaliaResult<()> {
+        if self.on {
+            self.stop(devices, apps, databoards).await?;
+        }
+
+        for node in self.conf.ext.nodes.iter() {
+            match node.node_type {
+                NodeType::DeviceSource => {
+                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                    devices::del_source_ref(
+                        devices,
+                        &source_node.device_id,
+                        &source_node.source_id,
+                        &self.id,
+                    )
+                    .await?;
+                }
+                NodeType::AppSource => {
+                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                    apps::del_source_ref(
+                        apps,
+                        &source_node.app_id,
+                        &source_node.source_id,
+                        &self.id,
+                    )
+                    .await?;
+                }
+                NodeType::DeviceSink => {
+                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                    devices::del_sink_ref(
+                        devices,
+                        &sink_node.device_id,
+                        &sink_node.sink_id,
+                        &self.id,
+                    )
+                    .await?;
+                }
+                NodeType::AppSink => {
+                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+                    apps::del_sink_ref(apps, &sink_node.app_id, &sink_node.sink_id, &self.id)
+                        .await?;
+                }
+                NodeType::Databoard => {
+                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
+                    databoard::del_data_ref(
+                        databoards,
+                        &databoard_node.databoard_id,
+                        &databoard_node.data_id,
+                        &self.id,
+                    )
+                    .await?;
+                }
+                _ => {}
+            }
         }
 
         Ok(())

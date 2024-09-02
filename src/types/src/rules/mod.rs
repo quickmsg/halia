@@ -6,9 +6,9 @@ use uuid::Uuid;
 use crate::BaseConf;
 
 pub mod apps;
+pub mod databoard;
 pub mod devices;
 pub mod functions;
-pub mod databoard;
 
 #[derive(Serialize)]
 pub struct Summary {
@@ -31,13 +31,13 @@ pub struct CreateUpdateRuleReq {
     pub ext: RuleConf,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct RuleConf {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Node {
     pub index: usize,
     pub node_type: NodeType,
@@ -45,13 +45,13 @@ pub struct Node {
     pub conf: Value,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Edge {
     pub source: usize,
     pub target: usize,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum NodeType {
     DeviceSource,
@@ -95,7 +95,6 @@ pub struct DataboardNode {
     pub databoard_id: Uuid,
     pub data_id: Uuid,
 }
-
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateUpdateRuleSink {

@@ -24,17 +24,12 @@ use types::{
 use url::form_urlencoded;
 use uuid::Uuid;
 
-use super::{
-    get_source::GetSource,
-    observe_source::{self, ObserveSource},
-    transform_options,
-};
+use super::transform_options;
 
 pub struct Source {
     pub id: Uuid,
     base_conf: BaseConf,
-
-    source_item: SourceItem,
+    ext_conf: SourceConf,
 
     on: bool,
 
@@ -47,29 +42,23 @@ pub struct Source {
 
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
-
-pub enum SourceItem {
-    Observe(ObserveSource),
-    Get(GetSource),
-}
-
 impl Source {
     pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
-        let source_item = match ext_conf.method {
-            SourceMethod::Get => match ext_conf.get_conf {
-                Some(get_conf) => GetSource::new(get_conf)?,
-                None => return Err(HaliaError::Common("配置为空！".to_owned())),
-            },
-            SourceMethod::Observe => match ext_conf.observe_conf {
-                Some(observe_conf) => ObserveSource::new(observe_conf)?,
-                None => return Err(HaliaError::Common("配置为空!".to_owned())),
-            },
-        };
+        // let source_item = match ext_conf.method {
+        //     SourceMethod::Get => match ext_conf.get_conf {
+        //         Some(get_conf) => GetSource::new(get_conf)?,
+        //         None => return Err(HaliaError::Common("配置为空！".to_owned())),
+        //     },
+        //     SourceMethod::Observe => match ext_conf.observe_conf {
+        //         Some(observe_conf) => ObserveSource::new(observe_conf)?,
+        //         None => return Err(HaliaError::Common("配置为空!".to_owned())),
+        //     },
+        // };
 
         Ok(Self {
             id,
             base_conf,
-            source_item,
+            ext_conf,
             on: false,
             observe_tx: None,
             mb_tx: None,
@@ -78,18 +67,18 @@ impl Source {
         })
     }
 
-    fn new_source_item(ext_conf: SourceConf) -> HaliaResult<SourceItem> {
-        match ext_conf.method {
-            SourceMethod::Get => match ext_conf.get_conf {
-                Some(get_conf) => GetSource::new(get_conf),
-                None => Err(HaliaError::Common("配置为空！".to_owned())),
-            },
-            SourceMethod::Observe => match ext_conf.observe_conf {
-                Some(observe_conf) => ObserveSource::new(observe_conf),
-                None => Err(HaliaError::Common("配置为空!".to_owned())),
-            },
-        }
-    }
+    // fn new_source_item(ext_conf: SourceConf) -> HaliaResult<SourceItem> {
+    //     match ext_conf.method {
+    //         SourceMethod::Get => match ext_conf.get_conf {
+    //             Some(get_conf) => GetSource::new(get_conf),
+    //             None => Err(HaliaError::Common("配置为空！".to_owned())),
+    //         },
+    //         SourceMethod::Observe => match ext_conf.observe_conf {
+    //             Some(observe_conf) => ObserveSource::new(observe_conf),
+    //             None => Err(HaliaError::Common("配置为空!".to_owned())),
+    //         },
+    //     }
+    // }
 
     // pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
     //     match conf.method {
@@ -127,24 +116,6 @@ impl Source {
     ) -> HaliaResult<()> {
         // Self::validate_conf(&ext_conf)?;
         self.base_conf = base_conf;
-
-        match (&mut self.source_item, &ext_conf.method) {
-            (SourceItem::Observe(observe_source), SourceMethod::Get) => {
-                observe_source.stop();
-            }
-            (SourceItem::Observe(observe_source), SourceMethod::Observe) => {
-                // observe_source.update_conf(conf);
-                todo!()
-            }
-            (SourceItem::Get(get_source), SourceMethod::Get) => {
-                // get_source.update_conf(base_conf, ext_conf);
-                todo!()
-            }
-
-            (SourceItem::Get(get_source), SourceMethod::Observe) => {
-                get_source.stop();
-            }
-        }
 
         // let mut restart = false;
         // let method = self.ext_conf.method.clone();
@@ -193,11 +164,12 @@ impl Source {
         self.on = true;
         let (mb_tx, _) = broadcast::channel(16);
 
-        match &self.source_item {
-            SourceItem::Observe(observe) => observe.start(coap_client),
-            SourceItem::Get(get_source) => get_source.start(coap_client),
-            // SourceMethod::Get => self.start_api(client).await?,
-            // SourceMethod::Observe => self.start_observe(client, mb_tx.clone()).await?,
+        match &self.ext_conf.method {
+            SourceMethod::Get => self.start_api(coap_client).await,
+            SourceMethod::Observe => {
+                let observe_mb_tx = mb_tx.clone();
+                self.start_observe(coap_client, observe_mb_tx).await;
+            }
         }
 
         self.mb_tx = Some(mb_tx);
@@ -207,34 +179,31 @@ impl Source {
 
     async fn start_observe(
         &mut self,
-        client: Arc<UdpCoAPClient>,
+        coap_client: Arc<UdpCoAPClient>,
         mb_tx: broadcast::Sender<MessageBatch>,
-    ) -> Result<()> {
-        let observe_tx = client
+    ) {
+        let observe_tx = coap_client
             .observe(
                 &self.ext_conf.observe_conf.as_ref().unwrap().path,
                 move |msg| Self::observe_handler(msg, &mb_tx),
             )
-            .await?;
+            .await
+            .unwrap();
         self.observe_tx = Some(observe_tx);
-
-        Ok(())
     }
 
-    async fn start_api(&mut self, client: Arc<UdpCoAPClient>) -> HaliaResult<()> {
+    async fn start_api(&mut self, client: Arc<UdpCoAPClient>) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
-        self.event_loop(client, stop_signal_rx).await?;
-
-        Ok(())
+        self.event_loop(client, stop_signal_rx).await;
     }
 
     async fn event_loop(
         &mut self,
         client: Arc<UdpCoAPClient>,
         mut stop_signal_rx: mpsc::Receiver<()>,
-    ) -> Result<()> {
+    ) {
         let mut request_builder =
             RequestBuilder::new(&self.ext_conf.get_conf.as_ref().unwrap().path, Method::Get);
 
@@ -245,7 +214,8 @@ impl Source {
             request_builder = request_builder.queries(Some(encoded_params.into_bytes()));
         }
 
-        let options = transform_options(&self.ext_conf.observe_conf.as_ref().unwrap().options)?;
+        let options =
+            transform_options(&self.ext_conf.observe_conf.as_ref().unwrap().options).unwrap();
         let request = request_builder
             // .domain(self.conf.ext.domain.clone())
             .options(options)
@@ -270,7 +240,6 @@ impl Source {
             }
         });
         self.join_handle = Some(join_handle);
-        Ok(())
     }
 
     fn observe_handler(msg: Packet, mb_tx: &broadcast::Sender<MessageBatch>) {
@@ -308,10 +277,10 @@ impl Source {
         let (coap_client, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
 
         match self.ext_conf.method {
-            SourceMethod::Get => self.start_api(coap_client).await?,
+            SourceMethod::Get => self.start_api(coap_client).await,
             SourceMethod::Observe => {
                 let (mb_tx, _) = broadcast::channel(16);
-                self.start_observe(coap_client, mb_tx.clone()).await?;
+                self.start_observe(coap_client, mb_tx.clone()).await;
             }
         }
 

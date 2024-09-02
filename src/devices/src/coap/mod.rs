@@ -30,8 +30,8 @@ use crate::Device;
 
 mod sink;
 mod source;
-mod observe_source;
-mod get_source;
+// mod observe_source;
+// mod get_source;
 
 macro_rules! coap_not_support_write_source_value {
     () => {
