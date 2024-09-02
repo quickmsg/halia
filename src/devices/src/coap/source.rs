@@ -8,7 +8,7 @@ use common::{
 use message::MessageBatch;
 use protocol::coap::{
     client::{ObserveMessage, UdpCoAPClient},
-    request::{Method, Packet, RequestBuilder},
+    request::{Method, RequestBuilder},
 };
 use tokio::{
     select,
@@ -39,63 +39,43 @@ pub struct Source {
 
     // for observe
     observe_tx: Option<oneshot::Sender<ObserveMessage>>,
+    coap_client: Option<Arc<UdpCoAPClient>>,
 
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
 impl Source {
     pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
-        // let source_item = match ext_conf.method {
-        //     SourceMethod::Get => match ext_conf.get_conf {
-        //         Some(get_conf) => GetSource::new(get_conf)?,
-        //         None => return Err(HaliaError::Common("配置为空！".to_owned())),
-        //     },
-        //     SourceMethod::Observe => match ext_conf.observe_conf {
-        //         Some(observe_conf) => ObserveSource::new(observe_conf)?,
-        //         None => return Err(HaliaError::Common("配置为空!".to_owned())),
-        //     },
-        // };
+        Self::validate_conf(&ext_conf)?;
 
         Ok(Self {
             id,
             base_conf,
             ext_conf,
             on: false,
-            observe_tx: None,
-            mb_tx: None,
             stop_signal_tx: None,
             join_handle: None,
+            observe_tx: None,
+            coap_client: None,
+            mb_tx: None,
         })
     }
 
-    // fn new_source_item(ext_conf: SourceConf) -> HaliaResult<SourceItem> {
-    //     match ext_conf.method {
-    //         SourceMethod::Get => match ext_conf.get_conf {
-    //             Some(get_conf) => GetSource::new(get_conf),
-    //             None => Err(HaliaError::Common("配置为空！".to_owned())),
-    //         },
-    //         SourceMethod::Observe => match ext_conf.observe_conf {
-    //             Some(observe_conf) => ObserveSource::new(observe_conf),
-    //             None => Err(HaliaError::Common("配置为空!".to_owned())),
-    //         },
-    //     }
-    // }
+    fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
+        match conf.method {
+            SourceMethod::Get => {
+                if conf.get_conf.is_none() {
+                    return Err(HaliaError::Common("get请求为空！".to_owned()));
+                }
+            }
+            SourceMethod::Observe => {
+                if conf.observe_conf.is_none() {
+                    return Err(HaliaError::Common("observe配置为空！".to_owned()));
+                }
+            }
+        }
 
-    // pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
-    //     match conf.method {
-    //         SourceMethod::Get => {
-    //             if conf.get_conf.is_none() {
-    //                 return Err(HaliaError::Common("get请求为空！".to_owned()));
-    //             }
-    //         }
-    //         SourceMethod::Observe => {
-    //             if conf.observe_conf.is_none() {
-    //                 return Err(HaliaError::Common("observe配置为空！".to_owned()));
-    //             }
-    //         }
-    //     }
-
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SourceConf) -> HaliaResult<()> {
         if self.base_conf.name == base_conf.name {
@@ -114,94 +94,95 @@ impl Source {
         base_conf: BaseConf,
         ext_conf: SourceConf,
     ) -> HaliaResult<()> {
-        // Self::validate_conf(&ext_conf)?;
+        Self::validate_conf(&ext_conf)?;
+
         self.base_conf = base_conf;
+        if self.ext_conf == ext_conf {
+            return Ok(());
+        }
 
-        // let mut restart = false;
-        // let method = self.ext_conf.method.clone();
-        // if self.ext_conf != ext_conf {
-        //     restart = true;
-        // }
-        // self.base_conf = base_conf;
-        // self.ext_conf = ext_conf;
+        if !self.on {
+            self.ext_conf = ext_conf;
+            return Ok(());
+        }
 
-        // if self.on && restart {
-        //     if method == SourceMethod::Observe {
-        //         if let Err(e) = self
-        //             .observe_tx
-        //             .take()
-        //             .unwrap()
-        //             .send(ObserveMessage::Terminate)
-        //         {
-        //             warn!("stop send msg err:{:?}", e);
-        //         }
-        //     }
+        match (&self.ext_conf.method, &ext_conf.method) {
+            (SourceMethod::Get, SourceMethod::Get) => {
+                self.ext_conf = ext_conf;
+                self.stop_get().await;
+                let (coap_client, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
+                self.start_get(coap_client, stop_signal_rx).await;
+            }
+            (SourceMethod::Get, SourceMethod::Observe) => {
+                self.ext_conf = ext_conf;
+                self.stop_get().await;
+                let (coap_client, _) = self.join_handle.take().unwrap().await.unwrap();
+                self.stop_signal_tx = None;
+                self.join_handle = None;
 
-        //     _ = self.restart().await;
-        // }
+                self.coap_client = Some(coap_client);
+                self.start_observe().await;
+            }
+            (SourceMethod::Observe, SourceMethod::Get) => {
+                self.ext_conf = ext_conf;
+                self.stop_obeserve();
+                self.observe_tx = None;
+                let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+                self.stop_signal_tx = Some(stop_signal_tx);
+                let coap_client = self.coap_client.take().unwrap();
+                self.start_get(coap_client, stop_signal_rx).await;
+            }
+            (SourceMethod::Observe, SourceMethod::Observe) => {
+                self.ext_conf = ext_conf;
+                self.stop_obeserve();
+                self.start_observe().await;
+            }
+        }
 
         Ok(())
     }
 
     pub async fn update_coap_client(&mut self, coap_client: Arc<UdpCoAPClient>) -> HaliaResult<()> {
-        match &self.observe_tx {
-            Some(observe_tx) => {
-                if let Err(e) = self
-                    .observe_tx
-                    .take()
-                    .unwrap()
-                    .send(ObserveMessage::Terminate)
-                {
-                    warn!("stop send msg err:{:?}", e);
-                }
+        match &self.ext_conf.method {
+            SourceMethod::Get => {
+                self.stop_get().await;
+                let (_, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
+                self.start_get(coap_client, stop_signal_rx).await;
             }
-            None => {}
+            SourceMethod::Observe => {
+                self.stop_obeserve();
+                self.coap_client = Some(coap_client);
+                self.start_observe().await;
+            }
         }
+
         Ok(())
     }
 
     pub async fn start(&mut self, coap_client: Arc<UdpCoAPClient>) -> Result<()> {
         self.on = true;
+
         let (mb_tx, _) = broadcast::channel(16);
+        self.mb_tx = Some(mb_tx);
 
         match &self.ext_conf.method {
-            SourceMethod::Get => self.start_api(coap_client).await,
+            SourceMethod::Get => {
+                let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+                self.stop_signal_tx = Some(stop_signal_tx);
+                self.start_get(coap_client, stop_signal_rx).await;
+            }
             SourceMethod::Observe => {
-                let observe_mb_tx = mb_tx.clone();
-                self.start_observe(coap_client, observe_mb_tx).await;
+                self.coap_client = Some(coap_client);
+                self.start_observe().await;
             }
         }
-
-        self.mb_tx = Some(mb_tx);
 
         Ok(())
     }
 
-    async fn start_observe(
+    async fn start_get(
         &mut self,
         coap_client: Arc<UdpCoAPClient>,
-        mb_tx: broadcast::Sender<MessageBatch>,
-    ) {
-        let observe_tx = coap_client
-            .observe(
-                &self.ext_conf.observe_conf.as_ref().unwrap().path,
-                move |msg| Self::observe_handler(msg, &mb_tx),
-            )
-            .await
-            .unwrap();
-        self.observe_tx = Some(observe_tx);
-    }
-
-    async fn start_api(&mut self, client: Arc<UdpCoAPClient>) {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(stop_signal_tx);
-
-        self.event_loop(client, stop_signal_rx).await;
-    }
-
-    async fn event_loop(
-        &mut self,
-        client: Arc<UdpCoAPClient>,
         mut stop_signal_rx: mpsc::Receiver<()>,
     ) {
         let mut request_builder =
@@ -227,11 +208,11 @@ impl Source {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (client, stop_signal_rx)
+                        return (coap_client, stop_signal_rx)
                     }
 
                     _ = interval.tick() => {
-                        match client.send(request.clone()).await {
+                        match coap_client.send(request.clone()).await {
                             Ok(resp) => debug!("{:?}", resp),
                             Err(e) => debug!("{:?}", e),
                         }
@@ -242,28 +223,44 @@ impl Source {
         self.join_handle = Some(join_handle);
     }
 
-    fn observe_handler(msg: Packet, mb_tx: &broadcast::Sender<MessageBatch>) {
-        if mb_tx.receiver_count() > 0 {
-            _ = mb_tx.send(MessageBatch::from_json(msg.payload.into()).unwrap());
-        }
+    async fn start_observe(&mut self) {
+        let mb_tx = self.mb_tx.as_ref().unwrap().clone();
+        let observe_tx = self
+            .coap_client
+            .as_ref()
+            .unwrap()
+            .observe(
+                &self.ext_conf.observe_conf.as_ref().unwrap().path,
+                // move |msg| Self::observe_handler(msg, &mb_tx),
+                move |msg| {
+                    if mb_tx.receiver_count() > 0 {
+                        _ = mb_tx.send(MessageBatch::from_json(msg.payload.into()).unwrap());
+                    }
+                },
+            )
+            .await
+            .unwrap();
+
+        self.observe_tx = Some(observe_tx);
     }
 
     pub async fn stop(&mut self) {
         self.on = false;
 
-        if let Err(e) = self
-            .observe_tx
-            .take()
-            .unwrap()
-            .send(ObserveMessage::Terminate)
-        {
-            warn!("stop send msg err:{:?}", e);
-        }
         self.observe_tx = None;
         self.mb_tx = None;
     }
 
-    pub async fn restart(&mut self) -> Result<()> {
+    async fn stop_get(&mut self) {
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+    }
+
+    fn stop_obeserve(&mut self) {
         if let Err(e) = self
             .observe_tx
             .take()
@@ -272,18 +269,5 @@ impl Source {
         {
             warn!("stop send msg err:{:?}", e);
         }
-
-        _ = self.stop_signal_tx.as_ref().unwrap().send(()).await;
-        let (coap_client, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
-
-        match self.ext_conf.method {
-            SourceMethod::Get => self.start_api(coap_client).await,
-            SourceMethod::Observe => {
-                let (mb_tx, _) = broadcast::channel(16);
-                self.start_observe(coap_client, mb_tx.clone()).await;
-            }
-        }
-
-        Ok(())
     }
 }

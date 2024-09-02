@@ -30,8 +30,6 @@ use crate::Device;
 
 mod sink;
 mod source;
-// mod observe_source;
-// mod get_source;
 
 macro_rules! coap_not_support_write_source_value {
     () => {
@@ -132,22 +130,25 @@ impl Device for Coap {
         self.ext_conf = ext_conf;
 
         if self.on && restart {
-            for source in self.sources.iter_mut() {
-                _ = source.stop();
-            }
-            for sink in self.sinks.iter_mut() {
-                _ = sink.stop();
-            }
-
             let coap_client = Arc::new(
                 UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
             );
             for source in self.sources.iter_mut() {
-                _ = source.start(coap_client.clone());
+                _ = source.update_coap_client(coap_client.clone());
             }
-            for sink in self.sinks.iter_mut() {
-                _ = sink.start(coap_client.clone());
-            }
+            // for sink in self.sinks.iter_mut() {
+            //     _ = sink.stop();
+            // }
+
+            // let coap_client = Arc::new(
+            //     UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
+            // );
+            // for source in self.sources.iter_mut() {
+            //     _ = source.start(coap_client.clone());
+            // }
+            // for sink in self.sinks.iter_mut() {
+            //     _ = sink.start(coap_client.clone());
+            // }
             self.coap_client = Some(coap_client);
         }
 
