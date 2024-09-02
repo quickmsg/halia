@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{fs::File, path::Path, str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use common::persistence;
@@ -15,6 +15,13 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     sqlx::any::install_default_drivers();
+
+
+    // sqlite模式需要，其他模式不需要，后期进行处理
+    let path = Path::new("db");
+    if !path.exists() {
+        File::create("db")?;
+    }
     let opt = AnyConnectOptions::from_str("sqlite://db")
         .unwrap()
         .disable_statement_logging();

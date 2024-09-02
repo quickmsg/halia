@@ -8,6 +8,7 @@ pub mod merge;
 pub mod window;
 pub mod template;
 pub mod types;
+pub mod compress;
 
 #[macro_export]
 macro_rules! add_or_set_message_value {
