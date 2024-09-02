@@ -1,6 +1,5 @@
 use anyhow::Result;
 use sqlx::{prelude::FromRow, AnyPool};
-use uuid::Uuid;
 
 #[derive(FromRow)]
 pub struct User {
@@ -43,10 +42,17 @@ pub async fn check_admin_exists(pool: &AnyPool) -> Result<bool> {
     }
 }
 
-pub async fn update_user(pool: &AnyPool, id: &Uuid, status: bool) -> Result<()> {
-    sqlx::query("UPDATE apps SET status = ?1 WHERE id = ?2")
-        .bind(status as i32)
-        .bind(id.to_string())
+// todo
+pub async fn update_user_password(
+    pool: &AnyPool,
+    username: String,
+    password: String,
+    new_password: String,
+) -> Result<()> {
+    sqlx::query("UPDATE users SET password = ?1 WHERE username = ?2 AND passwowrd = ?3")
+        .bind(new_password)
+        .bind(username)
+        .bind(password)
         .execute(pool)
         .await?;
 

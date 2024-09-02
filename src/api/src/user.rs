@@ -11,7 +11,7 @@ use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, 
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 use tracing::{debug, warn};
-use types::{AdminExists, AuthInfo, Password, User};
+use types::user::{AdminExists, AuthInfo, Password, UpdatePassword, User};
 
 use crate::{AppError, AppResult, AppState, AppSuccess, EMPTY_USER_CODE, WRONG_PASSWORD_CODE};
 
@@ -144,8 +144,26 @@ async fn login(
     Ok(AppSuccess::data(AuthInfo { token }))
 }
 
-async fn password(State(state): State<AppState>) -> AppSuccess<()> {
-    todo!()
+async fn password(
+    State(state): State<AppState>,
+    Json(update_password): Json<UpdatePassword>,
+) -> AppResult<AppSuccess<()>> {
+    // 从token中读取
+    let username = "xxs".to_owned();
+    match persistence::user::update_user_password(
+        &state.pool,
+        username,
+        update_password.password,
+        update_password.new_password,
+    )
+    .await
+    {
+        Ok(_) => Ok(AppSuccess::empty()),
+        Err(e) => {
+            warn!("{}", e);
+            return Err(AppError::new(1, "密码错误".to_owned()));
+        }
+    }
 }
 
 pub async fn auth(

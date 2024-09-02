@@ -1,21 +1,19 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true, check_delete,
+    check_and_set_on_false, check_and_set_on_true, check_delete, check_delete_all,
     error::{HaliaError, HaliaResult},
-    persistence::{self},
     ref_info::RefInfo,
 };
-use group::Group;
 use message::MessageBatch;
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, StatusCode},
 };
+use paste::paste;
 use sink::Sink;
 use source::Source;
-use subscription::Subscription;
 use tokio::{
     sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
@@ -23,16 +21,12 @@ use tokio::{
 use tracing::debug;
 use types::{
     devices::{
-        opcua::{
-            CreateUpdateGroupReq, CreateUpdateOpcuaReq, CreateUpdateSinkReq,
-            CreateUpdateSubscriptionReq, CreateUpdateVariableReq, OpcuaConf, SearchGroupsResp,
-            SearchSinksResp, SearchSubscriptionsResp, SearchVariablesResp, SourceConf,
-        },
+        opcua::{CreateUpdateSinkReq, OpcuaConf, SearchSinksResp, SourceConf},
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemCommon,
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
-    SearchSourcesOrSinksResp, Value,
+    SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
 
@@ -55,13 +49,10 @@ struct Opcua {
     stop_signal_tx: Option<mpsc::Sender<()>>,
     session: Arc<RwLock<Option<Arc<Session>>>>,
 
-    groups: Arc<RwLock<Vec<Group>>>,
-    subscriptions: Vec<Subscription>,
-
     sources: Vec<Source>,
-    sources_ref_infos: Vec<(Uuid, RefInfo)>,
+    source_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: Vec<Sink>,
-    sinks_ref_infos: Vec<(Uuid, RefInfo)>,
+    sink_ref_infos: Vec<(Uuid, RefInfo)>,
 }
 
 pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
@@ -76,12 +67,10 @@ pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devic
         err: None,
         session: Arc::new(RwLock::new(None)),
         stop_signal_tx: None,
-        groups: Arc::new(RwLock::new(vec![])),
-        subscriptions: vec![],
         sources: vec![],
-        sources_ref_infos: vec![],
+        source_ref_infos: vec![],
         sinks: vec![],
-        sinks_ref_infos: vec![],
+        sink_ref_infos: vec![],
     }))
 }
 
@@ -119,31 +108,6 @@ impl Opcua {
         let handle = event_loop.spawn();
         session.wait_for_connection().await;
         Ok((session, handle))
-    }
-
-    async fn recover(&mut self) -> HaliaResult<()> {
-        // let group_datas = persistence::read_sources(&self.id).await?;
-        // for group_data in group_datas {
-        //     if group_data.len() == 0 {
-        //         continue;
-        //     }
-
-        //     let items = group_data
-        //         .split(persistence::DELIMITER)
-        //         .collect::<Vec<&str>>();
-        //     assert_eq!(items.len(), 2);
-
-        //     let group_id = Uuid::from_str(items[0]).unwrap();
-        //     let req: CreateUpdateGroupReq = serde_json::from_str(items[1])?;
-        //     self.create_group(group_id, req).await?;
-        // }
-
-        // for group in self.groups.write().await.iter_mut() {
-        //     group.recover(&self.id).await?;
-        // }
-
-        // Ok(())
-        todo!()
     }
 
     fn search(&self) -> SearchDevicesItemResp {
@@ -212,29 +176,11 @@ impl Opcua {
     // }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        if self
-            .groups
-            .read()
-            .await
-            .iter()
-            .any(|group| !group.ref_info.can_stop())
-        {
-            return Err(HaliaError::Common("有组被启动规则引用中！".to_owned()));
-        }
-
-        if self
-            .subscriptions
-            .iter()
-            .any(|subscription| !subscription.ref_info.can_stop())
-        {
-            return Err(HaliaError::Common("有订阅被启动规则引用中！".to_owned()));
-        }
-
         check_and_set_on_false!(self);
 
-        for group in self.groups.write().await.iter_mut() {
-            group.stop().await?;
-        }
+        // for group in self.groups.write().await.iter_mut() {
+        //     group.stop().await?;
+        // }
 
         match self
             .session
@@ -257,297 +203,25 @@ impl Opcua {
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        if self
-            .groups
-            .read()
-            .await
-            .iter()
-            .any(|group| !group.ref_info.can_delete())
-        {
-            return Err(HaliaError::Common("有组被规则引用中！".to_owned()));
-        }
+        // if self
+        //     .groups
+        //     .read()
+        //     .await
+        //     .iter()
+        //     .any(|group| !group.ref_info.can_delete())
+        // {
+        //     return Err(HaliaError::Common("有组被规则引用中！".to_owned()));
+        // }
 
-        if self
-            .subscriptions
-            .iter()
-            .any(|subscription| !subscription.ref_info.can_delete())
-        {
-            return Err(HaliaError::Common("有订阅被规则引用中！".to_owned()));
-        }
+        // if self
+        //     .subscriptions
+        //     .iter()
+        //     .any(|subscription| !subscription.ref_info.can_delete())
+        // {
+        //     return Err(HaliaError::Common("有订阅被规则引用中！".to_owned()));
+        // }
 
         todo!()
-    }
-
-    async fn create_group(&mut self, group_id: Uuid, req: CreateUpdateGroupReq) -> HaliaResult<()> {
-        match Group::new(&self.id, group_id, req).await {
-            Ok(mut group) => {
-                if self.on && self.session.read().await.is_some() {
-                    group
-                        .start(self.session.read().await.as_ref().unwrap().clone())
-                        .await;
-                }
-                self.groups.write().await.push(group);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    async fn search_groups(&self, pagination: Pagination) -> HaliaResult<SearchGroupsResp> {
-        let mut data = vec![];
-        for group in self
-            .groups
-            .read()
-            .await
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(group.search().await);
-            if data.len() == pagination.size {
-                break;
-            }
-        }
-
-        Ok(SearchGroupsResp {
-            total: self.groups.read().await.len(),
-            data,
-        })
-    }
-
-    async fn update_group(&self, group_id: Uuid, req: CreateUpdateGroupReq) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn delete_group(&self, group_id: Uuid) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => {
-                group.delete().await?;
-            }
-            None => return Err(HaliaError::NotFound),
-        }
-
-        self.groups
-            .write()
-            .await
-            .retain(|group| group.id != group_id);
-        Ok(())
-    }
-
-    async fn create_group_variable(
-        &mut self,
-        group_id: Uuid,
-        variable_id: Uuid,
-        req: CreateUpdateVariableReq,
-    ) -> HaliaResult<()> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.create_variable(&self.id, variable_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn read_group_variables(
-        &self,
-        group_id: Uuid,
-        pagination: Pagination,
-    ) -> HaliaResult<SearchVariablesResp> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => Ok(group.search_variables(pagination).await),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn update_group_variable(
-        &self,
-        group_id: Uuid,
-        variable_id: Uuid,
-        req: CreateUpdateVariableReq,
-    ) -> HaliaResult<()> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.update_variable(&self.id, variable_id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn delete_group_variable(
-        &self,
-        group_id: Uuid,
-        variable_id: Uuid,
-    ) -> HaliaResult<()> {
-        match self
-            .groups
-            .read()
-            .await
-            .iter()
-            .find(|group| group.id == group_id)
-        {
-            Some(group) => group.delete_variable(&self.id, variable_id).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn add_group_ref(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == *group_id)
-        {
-            Some(group) => Ok(group.ref_info.add_ref(rule_id)),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn get_group_mb_rx(
-        &self,
-        group_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == *group_id)
-        {
-            Some(group) => Ok(group.get_mb_rx(rule_id)),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn del_group_mb_rx(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == *group_id)
-        {
-            Some(group) => Ok(group.del_mb_rx(rule_id)),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    pub async fn del_group_ref(&self, group_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        match self
-            .groups
-            .write()
-            .await
-            .iter_mut()
-            .find(|group| group.id == *group_id)
-        {
-            Some(group) => Ok(group.ref_info.del_ref(rule_id)),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn create_subscription(
-        &mut self,
-        subscription_id: Uuid,
-        req: CreateUpdateSubscriptionReq,
-    ) -> HaliaResult<()> {
-        for subscription in self.subscriptions.iter() {
-            subscription.check_duplicate(&req)?;
-        }
-
-        let mut subscription = Subscription::new(&self.id, subscription_id, req).await?;
-        if self.on && self.session.read().await.is_some() {
-            _ = subscription
-                .start(self.session.read().await.as_ref().unwrap().clone())
-                .await;
-        }
-        self.subscriptions.push(subscription);
-
-        Ok(())
-    }
-
-    async fn search_subscriptions(
-        &self,
-        pagination: Pagination,
-    ) -> HaliaResult<SearchSubscriptionsResp> {
-        let mut data = vec![];
-        for subscription in self
-            .subscriptions
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(subscription.search());
-            if data.len() == pagination.size {
-                break;
-            }
-        }
-
-        Ok(SearchSubscriptionsResp {
-            total: self.subscriptions.len(),
-            data,
-        })
-    }
-
-    async fn update_subscription(
-        &mut self,
-        subscription_id: Uuid,
-        req: CreateUpdateSubscriptionReq,
-    ) -> HaliaResult<()> {
-        match self
-            .subscriptions
-            .iter_mut()
-            .find(|subscription| subscription.id == subscription_id)
-        {
-            Some(subscription) => subscription.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn delete_subscription(&mut self, subscription_id: Uuid) -> HaliaResult<()> {
-        match self
-            .subscriptions
-            .iter_mut()
-            .find(|subscription| subscription.id == subscription_id)
-        {
-            Some(subscription) => {
-                subscription.delete().await?;
-            }
-            None => return Err(HaliaError::NotFound),
-        }
-
-        self.subscriptions
-            .retain(|subscription| subscription.id != subscription_id);
-        Ok(())
     }
 
     async fn create_sink(&mut self, sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
@@ -617,22 +291,26 @@ impl Device for Opcua {
     }
 
     async fn read(&self) -> SearchDevicesItemResp {
-        // SearchDevicesItemResp {
-        //     common: SearchDevicesItemCommon {
-        //         id: self.id.clone(),
-        //         device_type: DeviceType::Opcua,
-        //         rtt: 999,
-        //         on: self.on,
-        //         err: self.err.clone(),
-        //     },
-        //     conf: SearchDevicesItemConf {
-        //         base: self.base_conf.clone(),
-        //         ext: serde_json::json!(self.ext_conf),
-        //     },
-        //     source_cnt: self.source_ref_infos.len(),
-        //     sink_cnt: self.sink_ref_infos.len(),
-        // }
-        todo!()
+        // let err = self.err.read().await.clone();
+        let rtt = match (self.on, &self.err) {
+            (true, None) => Some(999),
+            _ => None,
+        };
+        SearchDevicesItemResp {
+            common: SearchDevicesItemCommon {
+                id: self.id.clone(),
+                device_type: DeviceType::Opcua,
+                on: self.on,
+                err: self.err.clone(),
+                rtt,
+            },
+            conf: SearchDevicesItemConf {
+                base: self.base_conf.clone(),
+                ext: serde_json::json!(self.ext_conf),
+            },
+            source_cnt: self.source_ref_infos.len(),
+            sink_cnt: self.sink_ref_infos.len(),
+        }
     }
 
     async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()> {
@@ -659,8 +337,8 @@ impl Device for Opcua {
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
-        // check_delete!(self, sources_ref_infos);
-        // check_delete!(self, sinks_ref_infos);
+        check_delete_all!(self, source);
+        check_delete_all!(self, sink);
 
         if self.on {
             self.stop().await?;
@@ -685,24 +363,34 @@ impl Device for Opcua {
         Ok(())
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn search_sources<'life0, 'async_trait>(
-        &'life0 self,
+    async fn search_sources(
+        &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> SearchSourcesOrSinksResp {
+        let mut total = 0;
+        let mut data = vec![];
+        for (index, source) in self.sources.iter().rev().enumerate() {
+            let source = source.search();
+            if let Some(name) = &query.name {
+                if !source.conf.base.name.contains(name) {
+                    continue;
+                }
+            }
+
+            if pagination.check(total) {
+                unsafe {
+                    data.push(SearchSourcesOrSinksItemResp {
+                        info: source,
+                        rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
+                    });
+                }
+            }
+
+            total += 1;
+        }
+
+        SearchSourcesOrSinksResp { total, data }
     }
 
     async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
@@ -872,7 +560,13 @@ impl Device for Opcua {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
-        todo!()
+        check_and_set_on_true!(self);
+
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        self.stop_signal_tx = Some(stop_signal_tx);
+
+        // self.event_loop(stop_signal_rx).await;
+        Ok(())
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {

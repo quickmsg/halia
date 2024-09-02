@@ -480,9 +480,6 @@ impl Device for Modbus {
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
-        // if self.on {
-        //     return Err(HaliaError::Running);
-        // }
         check_delete_all!(self, source);
         check_delete_all!(self, sink);
 

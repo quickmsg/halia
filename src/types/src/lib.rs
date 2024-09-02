@@ -5,6 +5,7 @@ pub mod apps;
 pub mod databoard;
 pub mod devices;
 pub mod rules;
+pub mod user;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct BaseConf {
@@ -69,25 +70,4 @@ pub struct CertInfo {
     pub client_cert: String,
     pub client_key: String,
     pub verify_server_cert: bool,
-}
-
-#[derive(Deserialize)]
-pub struct User {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Deserialize)]
-pub struct Password {
-    pub password: String,
-}
-
-#[derive(Serialize)]
-pub struct AuthInfo {
-    pub token: String,
-}
-
-#[derive(Serialize)]
-pub struct AdminExists {
-    pub exists: bool,
 }
