@@ -1,22 +1,17 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::Result;
-use common::error::{HaliaError, HaliaResult};
+use common::error::HaliaResult;
 use message::MessageBatch;
 use protocol::coap::{
     client::{ObserveMessage, UdpCoAPClient},
-    request::{Method, Packet, RequestBuilder},
+    request::Packet,
 };
-use tokio::{
-    select,
-    sync::{broadcast, mpsc, oneshot},
-    time,
-};
-use tracing::{debug, warn};
-use types::devices::coap::{ObserveConf, SourceMethod};
-use url::form_urlencoded;
+use tokio::sync::{broadcast, oneshot};
+use tracing::warn;
+use types::devices::coap::ObserveConf;
 
-use super::transform_options;
+use super::source::SourceItem;
 
 pub struct ObserveSource {
     on: bool,
@@ -27,15 +22,15 @@ pub struct ObserveSource {
 }
 
 impl ObserveSource {
-    pub fn new(conf: ObserveConf) -> HaliaResult<Self> {
+    pub fn new(conf: ObserveConf) -> HaliaResult<SourceItem> {
         Self::validate_conf(&conf)?;
 
-        Ok(Self {
+        Ok(SourceItem::Observe(Self {
             on: false,
             conf,
             observe_tx: None,
             mb_tx: None,
-        })
+        }))
     }
 
     fn validate_conf(_conf: &ObserveConf) -> HaliaResult<()> {

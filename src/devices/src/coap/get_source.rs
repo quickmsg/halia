@@ -18,19 +18,15 @@ use tokio::{
 };
 use tracing::{debug, warn};
 use types::{
-    devices::coap::{SourceConf, SourceMethod},
+    devices::coap::{GetConf, SourceConf, SourceMethod},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use url::form_urlencoded;
-use uuid::Uuid;
 
-use super::transform_options;
+use super::{source::SourceItem, transform_options};
 
 pub struct GetSource {
-    pub id: Uuid,
-    base_conf: BaseConf,
-    ext_conf: SourceConf,
-
+    conf: GetConf,
     on: bool,
 
     // for api
@@ -44,35 +40,20 @@ pub struct GetSource {
 }
 
 impl GetSource {
-    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
-        Self::validate_conf(&ext_conf)?;
+    pub fn new(conf: GetConf) -> HaliaResult<SourceItem> {
+        Self::validate_conf(&conf)?;
 
-        Ok(Self {
-            id,
-            base_conf,
-            ext_conf,
+        Ok(SourceItem::Get(Self {
+            conf,
             on: false,
             observe_tx: None,
             mb_tx: None,
             stop_signal_tx: None,
             join_handle: None,
-        })
+        }))
     }
 
-    pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
-        match conf.method {
-            SourceMethod::Get => {
-                if conf.get_conf.is_none() {
-                    return Err(HaliaError::Common("get请求为空！".to_owned()));
-                }
-            }
-            SourceMethod::Observe => {
-                if conf.observe_conf.is_none() {
-                    return Err(HaliaError::Common("observe配置为空！".to_owned()));
-                }
-            }
-        }
-
+    pub fn validate_conf(_conf: &GetConf) -> Result<()> {
         Ok(())
     }
 
