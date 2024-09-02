@@ -271,7 +271,7 @@ impl Device for Coap {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.update(req.base, ext_conf).await,
+            Some(source) => source.update_conf(req.base, ext_conf).await,
             None => Err(HaliaError::NotFound),
         }
     }

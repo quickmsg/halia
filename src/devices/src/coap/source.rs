@@ -18,7 +18,7 @@ use tokio::{
 };
 use tracing::{debug, warn};
 use types::{
-    devices::coap::{CoapConf, SourceConf, SourceMethod},
+    devices::coap::{SourceConf, SourceMethod},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use url::form_urlencoded;
@@ -31,9 +31,13 @@ pub struct Source {
     base_conf: BaseConf,
     ext_conf: SourceConf,
 
+    on: bool,
+
+    // for api
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<JoinHandle<(Arc<UdpCoAPClient>, mpsc::Receiver<()>)>>,
 
+    // for observe
     observe_tx: Option<oneshot::Sender<ObserveMessage>>,
 
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
@@ -47,6 +51,7 @@ impl Source {
             id,
             base_conf,
             ext_conf,
+            on: false,
             observe_tx: None,
             mb_tx: None,
             stop_signal_tx: None,
@@ -83,24 +88,58 @@ impl Source {
         get_search_sources_or_sinks_info_resp!(self)
     }
 
-    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
+    pub async fn update_conf(
+        &mut self,
+        base_conf: BaseConf,
+        ext_conf: SourceConf,
+    ) -> HaliaResult<()> {
         Self::validate_conf(&ext_conf)?;
 
         let mut restart = false;
+        let method = self.ext_conf.method.clone();
         if self.ext_conf != ext_conf {
             restart = true;
         }
         self.base_conf = base_conf;
         self.ext_conf = ext_conf;
 
-        if restart {
-            // _ = self.restart().await;
+        if self.on && restart {
+            if method == SourceMethod::Observe {
+                if let Err(e) = self
+                    .observe_tx
+                    .take()
+                    .unwrap()
+                    .send(ObserveMessage::Terminate)
+                {
+                    warn!("stop send msg err:{:?}", e);
+                }
+            }
+
+            _ = self.restart().await;
         }
 
         Ok(())
     }
 
+    pub async fn update_coap_client(&mut self, coap_client: Arc<UdpCoAPClient>) -> HaliaResult<()> {
+        match &self.observe_tx {
+            Some(observe_tx) => {
+                if let Err(e) = self
+                    .observe_tx
+                    .take()
+                    .unwrap()
+                    .send(ObserveMessage::Terminate)
+                {
+                    warn!("stop send msg err:{:?}", e);
+                }
+            }
+            None => {}
+        }
+        Ok(())
+    }
+
     pub async fn start(&mut self, client: Arc<UdpCoAPClient>) -> Result<()> {
+        self.on = true;
         let (mb_tx, _) = broadcast::channel(16);
 
         match self.ext_conf.method {
@@ -116,12 +155,12 @@ impl Source {
     async fn start_observe(
         &mut self,
         client: Arc<UdpCoAPClient>,
-        observe_mb_tx: broadcast::Sender<MessageBatch>,
+        mb_tx: broadcast::Sender<MessageBatch>,
     ) -> Result<()> {
         let observe_tx = client
             .observe(
                 &self.ext_conf.observe_conf.as_ref().unwrap().path,
-                move |msg| Self::observe_handler(msg, &observe_mb_tx),
+                move |msg| Self::observe_handler(msg, &mb_tx),
             )
             .await?;
         self.observe_tx = Some(observe_tx);
@@ -188,6 +227,8 @@ impl Source {
     }
 
     pub async fn stop(&mut self) {
+        self.on = false;
+
         if let Err(e) = self
             .observe_tx
             .take()
@@ -200,28 +241,27 @@ impl Source {
         self.mb_tx = None;
     }
 
-    // pub async fn restart(&mut self) -> Result<()> {
-    //     if let Err(e) = self
-    //         .observe_tx
-    //         .take()
-    //         .unwrap()
-    //         .send(ObserveMessage::Terminate)
-    //     {
-    //         warn!("stop send msg err:{:?}", e);
-    //     }
+    pub async fn restart(&mut self) -> Result<()> {
+        if let Err(e) = self
+            .observe_tx
+            .take()
+            .unwrap()
+            .send(ObserveMessage::Terminate)
+        {
+            warn!("stop send msg err:{:?}", e);
+        }
 
-    //     _ = self.stop_signal_tx.as_ref().unwrap().send(()).await;
-    //     let (coap_client, stop_signal_rx) =
-    //         self.join_handle.take().unwrap().await.unwrap();
+        _ = self.stop_signal_tx.as_ref().unwrap().send(()).await;
+        let (coap_client, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
 
-    //     match self.ext_conf.method {
-    //         SourceMethod::Get => self.start_api(coap_client).await?,
-    //         SourceMethod::Observe => {
-    //             let (mb_tx, _) = broadcast::channel(16);
-    //             self.start_observe(coap_client, mb_tx.clone()).await?;
-    //         }
-    //     }
+        match self.ext_conf.method {
+            SourceMethod::Get => self.start_api(coap_client).await?,
+            SourceMethod::Observe => {
+                let (mb_tx, _) = broadcast::channel(16);
+                self.start_observe(coap_client, mb_tx.clone()).await?;
+            }
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 }

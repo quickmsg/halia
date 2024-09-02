@@ -14,7 +14,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use types::{
     devices::modbus::{Area, SourceConf},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,

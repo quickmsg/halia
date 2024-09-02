@@ -1,5 +1,5 @@
 use common::{
-    active_ref, add_ref, check_delete, deactive_ref, del_ref,
+    active_ref, add_ref, check_delete, check_delete_all, deactive_ref, del_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -60,7 +60,9 @@ impl Databoard {
     }
 
     pub fn delete(&mut self) -> HaliaResult<()> {
-        todo!()
+        check_delete_all!(self, data);
+
+        Ok(())
     }
 
     pub async fn create_data(
