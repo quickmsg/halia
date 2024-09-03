@@ -6,6 +6,7 @@ pub mod databoard;
 pub mod devices;
 pub mod rules;
 pub mod user;
+pub mod mqtt_server;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct BaseConf {

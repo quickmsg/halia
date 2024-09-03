@@ -99,7 +99,7 @@ async fn delete_device(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::stop_device(&state.pool, &state.devices, device_id).await?;
+    devices::delete_device(&state.pool, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
 }
 

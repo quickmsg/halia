@@ -4,3 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+types = { workspace = true }
+
+rumqttd = "0.19.0"
+tokio = { workspace = true }

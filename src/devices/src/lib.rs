@@ -8,6 +8,7 @@ use common::{
 use message::MessageBatch;
 use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
+use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
@@ -339,6 +340,7 @@ pub async fn delete_device(
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
+    debug!("{}", device_id);
     match devices
         .write()
         .await
@@ -349,6 +351,7 @@ pub async fn delete_device(
         None => return Err(HaliaError::NotFound),
     }
 
+    debug!("here");
     devices
         .write()
         .await

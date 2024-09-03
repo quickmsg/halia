@@ -15,6 +15,7 @@ use protocol::coap::{client::UdpCoAPClient, request::CoapOption};
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
+use tracing::debug;
 use types::{
     devices::{
         coap::{CoapConf, SinkConf, SourceConf},
@@ -89,6 +90,7 @@ impl Coap {
 #[async_trait]
 impl Device for Coap {
     fn get_id(&self) -> &Uuid {
+        debug!("{}", self.id);
         &self.id
     }
 
@@ -189,6 +191,7 @@ impl Device for Coap {
     }
 
     async fn delete(&mut self) -> HaliaResult<()> {
+        debug!("here");
         // check_delete!(self, sources_ref_infos);
         // check_delete!(self, sinks_ref_infos);
 
