@@ -5,5 +5,5 @@ mod gzip;
 mod zlib;
 
 pub(crate) trait Compresser {
-    fn code(&self, mb: &mut MessageBatch);
+    fn code(&mut self, mb: &mut MessageBatch);
 }
