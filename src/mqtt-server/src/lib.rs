@@ -7,12 +7,6 @@ pub struct MqttServer {
 
 impl MqttServer {
     pub fn start(&self) {
-        // let config = config::Config::builder()
-        //     .add_source(config::File::with_name("rumqttd.toml"))
-        //     .build()
-        //     .unwrap();
-
-        // let config: Config = config.try_deserialize().unwrap();
         let config: Config = Config {
             id: todo!(),
             router: todo!(),

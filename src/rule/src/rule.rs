@@ -10,7 +10,7 @@ use functions::{computes, filter, merge::merge::Merge, window};
 use message::MessageBatch;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{broadcast, mpsc, RwLock};
-use tracing::{debug, error};
+use tracing::error;
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
     AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
@@ -194,6 +194,13 @@ impl Rule {
         let source_ids =
             take_source_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
 
+        let mut error = None;
+        let mut device_source_active_ref_nodes = vec![];
+        let mut device_sink_active_ref_nodes = vec![];
+        let mut app_source_active_ref_nodes = vec![];
+        let mut app_sink_active_ref_nodes = vec![];
+        let mut databoard_active_ref_nodes = vec![];
+
         for source_id in source_ids {
             let node = node_map.get(&source_id).unwrap();
             match node.node_type {
@@ -211,8 +218,15 @@ impl Rule {
                             )
                             .await
                             {
-                                Ok(rx) => rx,
-                                Err(e) => return Err(e.into()),
+                                Ok(rx) => {
+                                    device_source_active_ref_nodes
+                                        .push((source_node.device_id, source_node.source_id));
+                                    rx
+                                }
+                                Err(e) => {
+                                    error = Some(e);
+                                    break;
+                                }
                             },
                         )
                     }
@@ -223,7 +237,6 @@ impl Rule {
                     let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
                     let mut rxs = vec![];
                     for _ in 0..cnt {
-                        debug!("here");
                         rxs.push(
                             match apps::get_source_rx(
                                 apps,
@@ -233,7 +246,11 @@ impl Rule {
                             )
                             .await
                             {
-                                Ok(rx) => rx,
+                                Ok(rx) => {
+                                    app_source_active_ref_nodes
+                                        .push((source_node.app_id, source_node.source_id));
+                                    rx
+                                }
                                 Err(e) => return Err(e.into()),
                             },
                         )
@@ -319,8 +336,15 @@ impl Rule {
                             )
                             .await
                             {
-                                Ok(tx) => tx,
-                                Err(e) => return Err(e.into()),
+                                Ok(tx) => {
+                                    device_sink_active_ref_nodes
+                                        .push((sink_node.device_id, sink_node.sink_id));
+                                    tx
+                                }
+                                Err(e) => {
+                                    error = Some(e);
+                                    break;
+                                }
                             };
                             mpsc_tx = Some(tx);
                         }
@@ -335,8 +359,15 @@ impl Rule {
                             )
                             .await
                             {
-                                Ok(tx) => tx,
-                                Err(e) => return Err(e.into()),
+                                Ok(tx) => {
+                                    app_sink_active_ref_nodes
+                                        .push((sink_node.app_id, sink_node.sink_id));
+                                    tx
+                                }
+                                Err(e) => {
+                                    error = Some(e);
+                                    break;
+                                }
                             };
                             mpsc_tx = Some(tx);
                         }
@@ -352,8 +383,17 @@ impl Rule {
                             )
                             .await
                             {
-                                Ok(tx) => tx,
-                                Err(e) => return Err(e.into()),
+                                Ok(tx) => {
+                                    databoard_active_ref_nodes.push((
+                                        databoard_node.databoard_id,
+                                        databoard_node.data_id,
+                                    ));
+                                    tx
+                                }
+                                Err(e) => {
+                                    error = Some(e);
+                                    break;
+                                }
                             };
                             mpsc_tx = Some(tx);
                         }
@@ -387,8 +427,30 @@ impl Rule {
             }
         }
 
-        self.stop_signal_tx = Some(stop_signal_tx);
-        Ok(())
+        match error {
+            Some(e) => {
+                for (device_id, source_id) in device_source_active_ref_nodes.iter() {
+                    _ = devices::del_source_rx(devices, device_id, source_id, &self.id).await;
+                }
+                for (device_id, sink_id) in device_sink_active_ref_nodes.iter() {
+                    _ = devices::del_sink_tx(devices, device_id, sink_id, &self.id).await;
+                }
+                for (app_id, source_id) in app_source_active_ref_nodes.iter() {
+                    _ = apps::del_source_rx(apps, app_id, source_id, &self.id).await;
+                }
+                for (app_id, sink_id) in app_sink_active_ref_nodes.iter() {
+                    _ = apps::del_sink_tx(apps, app_id, sink_id, &self.id).await;
+                }
+                for (databoard_id, data_id) in databoard_active_ref_nodes.iter() {
+                    _ = databoard::del_data_tx(databoards, databoard_id, data_id, &self.id).await;
+                }
+                Err(e.into())
+            }
+            None => {
+                self.stop_signal_tx = Some(stop_signal_tx);
+                Ok(())
+            }
+        }
     }
 
     pub async fn stop(
