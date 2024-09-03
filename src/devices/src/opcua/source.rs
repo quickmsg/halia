@@ -1,32 +1,31 @@
-use std::{io, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
     error::{HaliaError, HaliaResult},
     get_search_sources_or_sinks_info_resp,
 };
-use message::{Message, MessageBatch};
-use protocol::modbus::Context;
-use serde_json::Value;
+use message::MessageBatch;
+use opcua::types::ReadValueId;
 use tokio::{
     select,
     sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
     time,
 };
-use tracing::warn;
 use types::{
-    devices::{modbus::Area, opcua::SourceConf},
-    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
+    devices::opcua::SourceConf, BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use uuid::Uuid;
 
-#[derive(Debug)]
+use super::variable::Variable;
+
 pub struct Source {
     pub id: Uuid,
 
     pub base_conf: BaseConf,
     pub ext_conf: SourceConf,
+
+    variables: Option<Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>>,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<
@@ -36,8 +35,7 @@ pub struct Source {
             Arc<RwLock<Option<String>>>,
         )>,
     >,
-    value: serde_json::Value,
-    err_info: Option<String>,
+    err: Option<String>,
 
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 }
@@ -50,11 +48,11 @@ impl Source {
             id: source_id,
             base_conf,
             ext_conf,
-            value: Value::Null,
+            variables: None,
             stop_signal_tx: None,
             mb_tx: None,
             join_handle: None,
-            err_info: None,
+            err: None,
         })
     }
 

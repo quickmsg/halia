@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use common::{
     error::{HaliaError, HaliaResult},
     get_search_sources_or_sinks_info_resp,
@@ -23,6 +25,7 @@ pub struct Sink {
 
 impl Sink {
     pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<Sink> {
+        Self::validate_conf(&ext_conf)?;
         Ok(Sink {
             id,
             base_conf,
@@ -33,11 +36,8 @@ impl Sink {
         })
     }
 
-    fn parse_conf(req: CreateUpdateSourceOrSinkReq) -> HaliaResult<(BaseConf, SinkConf, String)> {
-        let data = serde_json::to_string(&req)?;
-        let conf: SinkConf = serde_json::from_value(req.ext)?;
-
-        Ok((req.base, conf, data))
+    fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
+        Ok(())
     }
 
     pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SinkConf) -> HaliaResult<()> {
@@ -65,20 +65,20 @@ impl Sink {
         todo!()
     }
 
-    pub async fn start(&mut self, base_conf: HttpClientConf) {
+    pub async fn start(&mut self, http_client_conf: Arc<HttpClientConf>) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
         let conf = self.ext_conf.clone();
-        self.event_loop(base_conf, stop_signal_rx, mb_rx, conf)
+        self.event_loop(http_client_conf, stop_signal_rx, mb_rx, conf)
             .await;
     }
 
     async fn event_loop(
         &mut self,
-        base_conf: HttpClientConf,
+        http_client_conf: Arc<HttpClientConf>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
         conf: SinkConf,
@@ -92,7 +92,7 @@ impl Sink {
 
                     mb = mb_rx.recv() => {
                         match mb {
-                            Some(mb) => Sink::send_request(&base_conf.host, &conf, mb).await,
+                            Some(mb) => Sink::send_request(&http_client_conf.host, &conf, mb).await,
                             None => warn!("http客户端收到空消息"),
                         }
                     }
@@ -126,7 +126,7 @@ impl Sink {
         }
     }
 
-    pub async fn restart(&mut self) {}
+    pub async fn restart(&mut self, http_client_conf: Arc<HttpClientConf>) {}
 
     pub async fn stop(&mut self) {}
 }

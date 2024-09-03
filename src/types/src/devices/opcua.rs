@@ -204,4 +204,12 @@ pub struct SearchSinksItemResp {
 // TODO
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct SourceConf {}
+pub struct SourceConf {
+    pub typ: SourceType,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub enum SourceType {
+    Group,
+    Subscription,
+}

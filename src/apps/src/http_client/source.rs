@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use common::{
     error::{HaliaError, HaliaResult},
     get_search_sources_or_sinks_info_resp,
@@ -6,6 +8,7 @@ use message::MessageBatch;
 use tokio::{
     select,
     sync::{broadcast, mpsc},
+    task::JoinHandle,
 };
 use tracing::{trace, warn};
 use types::{
@@ -22,6 +25,7 @@ pub struct Source {
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
+    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, HttpClientConf)>>,
 }
 
 impl Source {
@@ -32,6 +36,7 @@ impl Source {
             base_conf,
             ext_conf,
             stop_signal_tx: None,
+            join_handle: None,
             mb_tx: None,
         })
     }
@@ -40,9 +45,16 @@ impl Source {
         Ok(())
     }
 
-    pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SourceConf) -> HaliaResult<()> {
+    pub fn check_duplicate(&self, base_conf: &BaseConf, ext_conf: &SourceConf) -> HaliaResult<()> {
         if self.base_conf.name == base_conf.name {
             return Err(HaliaError::NameExists);
+        }
+
+        if self.ext_conf.method == ext_conf.method
+            && self.ext_conf.path == ext_conf.path
+            && self.ext_conf.query_params == ext_conf.query_params
+        {
+            return Err(HaliaError::AddressExists);
         }
 
         Ok(())
@@ -55,40 +67,37 @@ impl Source {
     pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
         Self::validate_conf(&ext_conf)?;
 
-        let mut restart = false;
-        if self.ext_conf != ext_conf {
-            restart = true;
-        }
         self.base_conf = base_conf;
+        if self.ext_conf == ext_conf {
+            return Ok(());
+        }
         self.ext_conf = ext_conf;
 
-        match (&self.stop_signal_tx, restart) {
-            (None, true) => todo!(),
-            (None, false) => todo!(),
-            (Some(stop_singal_tx), true) => {
-                todo!()
+        match &self.stop_signal_tx {
+            Some(stop_signal_tx) => {
+                _ = stop_signal_tx.send(()).await;
+                // todo
+                Ok(())
             }
-            (Some(_), false) => todo!(),
+            None => Ok(()),
         }
-
-        Ok(())
     }
 
-    pub async fn start(&mut self, base_conf: HttpClientConf) {
+    pub async fn start(&mut self, http_client_conf: Arc<HttpClientConf>) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (mb_tx, mb_rx) = broadcast::channel(16);
         self.mb_tx = Some(mb_tx);
         let conf = self.ext_conf.clone();
-        self.event_loop(base_conf, stop_signal_rx, mb_rx, conf)
+        self.event_loop(http_client_conf, stop_signal_rx, mb_rx, conf)
             .await;
     }
 
     // TODO
     async fn event_loop(
         &mut self,
-        base_conf: HttpClientConf,
+        http_client_conf: Arc<HttpClientConf>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: broadcast::Receiver<MessageBatch>,
         conf: SourceConf,
@@ -136,7 +145,7 @@ impl Source {
         }
     }
 
-    pub async fn restart(&mut self) {}
+    pub async fn restart(&mut self, http_client_conf: Arc<HttpClientConf>) {}
 
     pub async fn stop(&mut self) {}
 }

@@ -6,10 +6,10 @@ pub struct HttpClientConf {
     pub host: String,
     pub port: u16,
 
-    pub ssl: bool,
-    pub certifacte_verfication: bool,
-
+    // pub ssl: bool,
+    // pub certifacte_verfication: bool,
     pub headers: Option<Vec<(String, String)>>,
+    pub query_params: Option<Vec<(String, String)>>,
     // 超时时间，单位为s
     // pub timeout: usize,
 }

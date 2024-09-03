@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use common::{
     active_ref, add_ref, check_and_set_on_true, check_delete, check_delete_all, check_stop_all,
@@ -30,7 +32,7 @@ pub struct HttpClient {
     pub id: Uuid,
 
     base_conf: BaseConf,
-    ext_conf: HttpClientConf,
+    ext_conf: Arc<HttpClientConf>,
 
     on: bool,
     err: Option<String>,
@@ -48,7 +50,7 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
     Ok(Box::new(HttpClient {
         id: app_id,
         base_conf: app_conf.base,
-        ext_conf,
+        ext_conf: Arc::new(ext_conf),
         on: false,
         err: None,
         sources: vec![],
@@ -86,7 +88,10 @@ impl App for HttpClient {
         }
 
         if req.app_type == AppType::HttpClient {
-            // TODO
+            let ext_conf: HttpClientConf = serde_json::from_value(req.conf.ext.clone())?;
+            if self.ext_conf.host == ext_conf.host && self.ext_conf.port == ext_conf.port {
+                return Err(HaliaError::AddressExists);
+            }
         }
 
         Ok(())
@@ -97,7 +102,7 @@ impl App for HttpClient {
             common: SearchAppsItemCommon {
                 id: self.id.clone(),
                 app_type: AppType::HttpClient,
-                on: false,
+                on: self.on,
                 err: None,
                 rtt: 999,
             },
@@ -115,19 +120,19 @@ impl App for HttpClient {
         HttpClient::validate_conf(&ext_conf)?;
 
         let mut restart = false;
-        if self.ext_conf != ext_conf {
+        if *self.ext_conf != ext_conf {
             restart = true;
         }
         self.base_conf = app_conf.base;
-        self.ext_conf = ext_conf;
+        self.ext_conf = Arc::new(ext_conf);
 
         if self.on && restart {
             for source in self.sources.iter_mut() {
-                source.restart().await;
+                source.restart(self.ext_conf.clone()).await;
             }
 
             for sink in self.sinks.iter_mut() {
-                sink.restart().await;
+                sink.restart(self.ext_conf.clone()).await;
             }
         }
 
@@ -186,7 +191,6 @@ impl App for HttpClient {
         }
 
         let mut source = Source::new(source_id, req.base, ext_conf)?;
-
         if self.on {
             source.start(self.ext_conf.clone()).await;
         }
