@@ -1,15 +1,16 @@
 use message::MessageBatch;
 
 pub mod aggregate;
+pub mod compress;
 pub mod computes;
 pub mod field;
 pub mod filter;
 pub mod merge;
-pub mod window;
 pub mod template;
-pub mod types;
-pub mod compress;
+pub mod type_conversion;
 pub mod type_judgment;
+pub mod types;
+pub mod window;
 
 #[macro_export]
 macro_rules! add_or_set_message_value {
