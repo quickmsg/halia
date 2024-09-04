@@ -1,52 +1,51 @@
-use sysinfo::{Disks, Networks, System};
+use sysinfo::{Disks, System};
 
 pub fn load_info() {
     let mut sys = System::new_all();
-    sys.refresh_all();
+    sys.refresh_cpu_all();
+    sys.refresh_memory();
     println!("=> system:");
-    // RAM and swap information:
     println!(
         "total memory: {} GB",
-        sys.total_memory() / 1024 / 1024 / 1024
+        format!(
+            "{:.2}",
+            sys.total_memory() as f64 / (1024 * 1024 * 1024) as f64
+        ),
     );
     println!(
         "used memory : {} GB",
-        sys.used_memory() / 1024 / 1024 / 1024
+        format!(
+            "{:.2}",
+            sys.used_memory() as f64 / (1024 * 1024 * 1024) as f64
+        ),
     );
-    println!("total swap  : {} bytes", sys.total_swap());
-    println!("used swap   : {} bytes", sys.used_swap());
 
-    // Display system information:
-    println!("System name:             {:?}", System::name());
-    println!("System kernel version:   {:?}", System::kernel_version());
-    // println!("System OS version:       {:?}", System::os_version());
-    println!("System host name:        {:?}", System::host_name());
-
-    // Number of CPUs:
-    // println!("NB CPUs: {}", sys.cpus().len());
-
-    // Display processes ID, name na disk usage:
-    // for (pid, process) in sys.processes() {
-    //     println!("[{pid}] {:?} {:?}", process.name(), process.disk_usage());
-    // }
-
-    // We display all disks' information:
-    // println!("=> disks:");
-    // let disks = Disks::new_with_refreshed_list();
-    // for disk in &disks {
-    //     println!("{disk:?}");
-    // }
-
-    // Network interfaces name, total data received and total data transmitted:
-    // let networks = Networks::new_with_refreshed_list();
-    // println!("=> networks:");
-    // for (interface_name, data) in &networks {
-    //     println!(
-    //         "{interface_name}: {} B (down) / {} B (up)",
-    //         data.total_received(),
-    //         data.total_transmitted(),
-    //     );
-    //     // If you want the amount of data received/transmitted since last call
-    //     // to `Networks::refresh`, use `received`/`transmitted`.
-    // }
+    let pid = sysinfo::get_current_pid().unwrap();
+    if let Some(process) = sys.process(pid) {
+        println!(
+            "Memory usage: {} GB",
+            format!(
+                "{:.2}",
+                (process.memory() as f64) / ((1024 * 1024 * 1024) as f64)
+            )
+        );
+    }
+    println!("Total CPU usage: {:.2}%", sys.global_cpu_usage() * 100.0);
+    let disks = Disks::new_with_refreshed_list();
+    for disk in &disks {
+        println!(
+            "{}",
+            format!(
+                "{:.2}",
+                (disk.available_space() as f64) / ((1024 * 1024 * 1024) as f64)
+            )
+        );
+        println!(
+            "{}",
+            format!(
+                "{:.2}",
+                (disk.total_space() as f64) / ((1024 * 1024 * 1024) as f64)
+            )
+        );
+    }
 }
