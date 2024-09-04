@@ -1,31 +1,32 @@
-use common::{error::HaliaResult, ref_info::RefInfo};
-use types::devices::opcua::{CreateUpdateSinkReq, SearchSinksItemResp};
+use common::error::HaliaResult;
+use message::MessageBatch;
+use tokio::sync::mpsc;
+use types::{CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp};
 use uuid::Uuid;
 
 pub struct Sink {
     pub id: Uuid,
-    conf: CreateUpdateSinkReq,
-
-    ref_info: RefInfo,
+    conf: CreateUpdateSourceOrSinkReq,
+    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 impl Sink {
-    pub async fn new(sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<Self> {
+    pub async fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
         todo!()
     }
 
-    pub fn search(&self) -> SearchSinksItemResp {
-        SearchSinksItemResp {
+    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
+        SearchSourcesOrSinksInfoResp {
             id: self.id.clone(),
             conf: self.conf.clone(),
         }
     }
 
-    pub async fn update(&mut self, device_id: &Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        todo!()
-    }
-
-    pub async fn delete(&mut self, device_id: &Uuid) -> HaliaResult<()> {
+    pub async fn update(
+        &mut self,
+        device_id: &Uuid,
+        req: CreateUpdateSourceOrSinkReq,
+    ) -> HaliaResult<()> {
         todo!()
     }
 }

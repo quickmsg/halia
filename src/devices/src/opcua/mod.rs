@@ -2,7 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::{
-    check_and_set_on_false, check_and_set_on_true, check_delete, check_delete_all,
+    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete_all,
+    deactive_ref, del_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -21,7 +22,7 @@ use tokio::{
 use tracing::debug;
 use types::{
     devices::{
-        opcua::{CreateUpdateSinkReq, OpcuaConf, SearchSinksResp, SourceConf},
+        opcua::{OpcuaConf, SourceConf},
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemCommon,
         SearchDevicesItemConf, SearchDevicesItemResp,
     },
@@ -43,7 +44,7 @@ struct Opcua {
     on: bool,
     err: Option<String>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    session: Arc<RwLock<Option<Arc<Session>>>>,
+    opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
 
     sources: Vec<Source>,
     source_ref_infos: Vec<(Uuid, RefInfo)>,
@@ -61,7 +62,7 @@ pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devic
         ext_conf,
         on: false,
         err: None,
-        session: Arc::new(RwLock::new(None)),
+        opcua_client: Arc::new(RwLock::new(None)),
         stop_signal_tx: None,
         sources: vec![],
         source_ref_infos: vec![],
@@ -179,7 +180,7 @@ impl Opcua {
         // }
 
         match self
-            .session
+            .opcua_client
             .read()
             .await
             .as_ref()
@@ -196,79 +197,6 @@ impl Opcua {
         }
 
         Ok(())
-    }
-
-    pub async fn delete(&mut self) -> HaliaResult<()> {
-        // if self
-        //     .groups
-        //     .read()
-        //     .await
-        //     .iter()
-        //     .any(|group| !group.ref_info.can_delete())
-        // {
-        //     return Err(HaliaError::Common("有组被规则引用中！".to_owned()));
-        // }
-
-        // if self
-        //     .subscriptions
-        //     .iter()
-        //     .any(|subscription| !subscription.ref_info.can_delete())
-        // {
-        //     return Err(HaliaError::Common("有订阅被规则引用中！".to_owned()));
-        // }
-
-        todo!()
-    }
-
-    async fn create_sink(&mut self, sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        match Sink::new(sink_id, req).await {
-            Ok(sink) => {
-                if self.on {
-                    //
-                }
-                self.sinks.push(sink);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    async fn search_sinks(&self, pagination: Pagination) -> SearchSinksResp {
-        let mut data = vec![];
-        for sink in self
-            .sinks
-            .iter()
-            .rev()
-            .skip((pagination.page - 1) * pagination.size)
-        {
-            data.push(sink.search());
-            if data.len() == pagination.size {
-                break;
-            }
-        }
-
-        SearchSinksResp {
-            total: self.sinks.len(),
-            data,
-        }
-    }
-
-    async fn update_sink(&mut self, sink_id: Uuid, req: CreateUpdateSinkReq) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(&self.id, req).await,
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
-    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => {
-                sink.delete(&self.id).await?;
-                self.sinks.retain(|sink| sink.id != sink_id);
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound),
-        }
     }
 }
 
@@ -354,7 +282,9 @@ impl Device for Opcua {
         }
 
         let mut source = Source::new(source_id, req.base, ext_conf)?;
-        if self.on {}
+        if self.on {
+            // source.start(self.opcua_client.as_ref().unwarp());
+        }
 
         Ok(())
     }
@@ -393,82 +323,40 @@ impl Device for Opcua {
         todo!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update_source<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn update_source(
+        &mut self,
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    ) -> HaliaResult<()> {
         todo!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete_source<'life0, 'async_trait>(
-        &'life0 mut self,
-        source_id: Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn create_sink<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn create_sink(
+        &mut self,
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        todo!()
+    ) -> HaliaResult<()> {
+        match Sink::new(sink_id, req).await {
+            Ok(sink) => {
+                if self.on {
+                    //
+                }
+                self.sinks.push(sink);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn search_sinks<'life0, 'async_trait>(
-        &'life0 self,
+    async fn search_sinks(
+        &self,
         pagination: Pagination,
         query: QueryParams,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = SearchSourcesOrSinksResp>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    ) -> SearchSourcesOrSinksResp {
         todo!()
     }
 
@@ -476,42 +364,15 @@ impl Device for Opcua {
         todo!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn update_sink<'life0, 'async_trait>(
-        &'life0 mut self,
+    async fn update_sink(
+        &mut self,
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    ) -> HaliaResult<()> {
         todo!()
     }
 
-    #[must_use]
-    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
-    fn delete_sink<'life0, 'async_trait>(
-        &'life0 mut self,
-        sink_id: Uuid,
-    ) -> ::core::pin::Pin<
-        Box<
-            dyn ::core::future::Future<Output = HaliaResult<()>>
-                + ::core::marker::Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
+    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         todo!()
     }
 
@@ -524,19 +385,28 @@ impl Device for Opcua {
         source_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        todo!()
+        // self.check_on()?;
+        active_ref!(self, source, source_id, rule_id);
+        match self
+            .sources
+            .iter_mut()
+            .find(|source| source.id == *source_id)
+        {
+            Some(source) => Ok(source.mb_tx.as_ref().unwrap().subscribe()),
+            None => unreachable!(),
+        }
     }
 
     fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+        deactive_ref!(self, source, source_id, rule_id)
     }
 
     fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+        del_ref!(self, source, source_id, rule_id)
     }
 
-    fn add_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        add_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn get_sink_tx(
@@ -544,15 +414,20 @@ impl Device for Opcua {
         sink_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        todo!()
+        // self.check_on()?;
+        active_ref!(self, sink, sink_id, rule_id);
+        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+            Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
+            None => unreachable!(),
+        }
     }
 
-    fn del_sink_tx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        deactive_ref!(self, sink, sink_id, rule_id)
     }
 
-    fn del_sink_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
+    fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
+        del_ref!(self, sink, sink_id, rule_id)
     }
 
     async fn start(&mut self) -> HaliaResult<()> {

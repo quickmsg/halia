@@ -121,11 +121,11 @@ pub async fn start(
                 .nest("/api/app", app::routes())
                 .nest("/api/databoard", databoard::routes())
                 .nest("/api/rule", rule::routes())
-                // .route_layer(middleware::from_fn(auth)),
+                .route_layer(middleware::from_fn(auth)),
         )
-        // .fallback_service(
-        //     ServeDir::new("./dist").not_found_service(ServeFile::new("./dist/index.html")),
-        // )
+        .fallback_service(
+            ServeDir::new("./dist").not_found_service(ServeFile::new("./dist/index.html")),
+        )
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

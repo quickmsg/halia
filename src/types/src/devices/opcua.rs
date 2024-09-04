@@ -114,24 +114,4 @@ pub enum MonitoringMode {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateSinkReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: SinkConf,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
 pub struct SinkConf {}
-
-#[derive(Serialize)]
-pub struct SearchSinksResp {
-    pub total: usize,
-    pub data: Vec<SearchSinksItemResp>,
-}
-
-#[derive(Serialize, Clone)]
-pub struct SearchSinksItemResp {
-    pub id: Uuid,
-    pub conf: CreateUpdateSinkReq,
-}
