@@ -27,7 +27,7 @@ pub struct Source {
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
-    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<HttpClientConf>)>>,
+    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<HttpClientConf>, Client)>>,
 }
 
 impl Source {
@@ -81,9 +81,10 @@ impl Source {
         match &self.stop_signal_tx {
             Some(stop_signal_tx) => {
                 _ = stop_signal_tx.send(()).await;
-                let (stop_signal_rx, http_client_conf) =
+                let (stop_signal_rx, http_client_conf, client) =
                     self.join_handle.take().unwrap().await.unwrap();
-                self.event_loop(http_client_conf, stop_signal_rx).await;
+                self.event_loop(http_client_conf, stop_signal_rx, client)
+                    .await;
                 Ok(())
             }
             None => Ok(()),
@@ -92,8 +93,9 @@ impl Source {
 
     pub async fn update_http_client(&mut self, http_client_conf: Arc<HttpClientConf>) {
         self.stop().await;
-        let (stop_signal_rx, _) = self.join_handle.take().unwrap().await.unwrap();
-        self.event_loop(http_client_conf, stop_signal_rx).await;
+        let (stop_signal_rx, _, client) = self.join_handle.take().unwrap().await.unwrap();
+        self.event_loop(http_client_conf, stop_signal_rx, client)
+            .await;
     }
 
     pub async fn start(&mut self, http_client_conf: Arc<HttpClientConf>) {
@@ -103,16 +105,17 @@ impl Source {
         let (mb_tx, _) = broadcast::channel(16);
         self.mb_tx = Some(mb_tx);
 
-        self.event_loop(http_client_conf, stop_signal_rx).await;
+        self.event_loop(http_client_conf, stop_signal_rx, reqwest::Client::new())
+            .await;
     }
 
     async fn event_loop(
         &mut self,
         http_client_conf: Arc<HttpClientConf>,
         mut stop_signal_rx: mpsc::Receiver<()>,
+        client: Client,
     ) {
         let interval = self.ext_conf.interval;
-        let client = reqwest::Client::new();
         let ext_conf = self.ext_conf.clone();
 
         let join_handle = tokio::spawn(async move {
@@ -121,7 +124,7 @@ impl Source {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return(stop_signal_rx, http_client_conf);
+                        return(stop_signal_rx, http_client_conf, client);
                     }
 
                     _ = interval.tick() => {
@@ -138,7 +141,7 @@ impl Source {
         http_client_conf: &Arc<HttpClientConf>,
         ext_conf: &Arc<SourceConf>,
     ) {
-        let mut builder = client.get(&http_client_conf.host);
+        let mut builder = client.get(format!("{}{}", &http_client_conf.host, ext_conf.path));
         if let Some(basic_auth) = &ext_conf.basic_auth {
             builder = builder.basic_auth(basic_auth.username.clone(), basic_auth.password.clone());
         }

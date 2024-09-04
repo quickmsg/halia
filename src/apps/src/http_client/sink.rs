@@ -5,7 +5,8 @@ use common::{
     get_search_sources_or_sinks_info_resp,
 };
 use message::MessageBatch;
-use tokio::{select, sync::mpsc};
+use reqwest::Client;
+use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{trace, warn};
 use types::{
     apps::http_client::{HttpClientConf, SinkConf},
@@ -16,11 +17,18 @@ use uuid::Uuid;
 pub struct Sink {
     pub id: Uuid,
     base_conf: BaseConf,
-    ext_conf: SinkConf,
-    on: bool,
+    ext_conf: Arc<SinkConf>,
 
-    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
+    join_handle: Option<
+        JoinHandle<(
+            mpsc::Receiver<()>,
+            Arc<HttpClientConf>,
+            Client,
+            mpsc::Receiver<MessageBatch>,
+        )>,
+    >,
+    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 impl Sink {
@@ -29,9 +37,9 @@ impl Sink {
         Ok(Sink {
             id,
             base_conf,
-            ext_conf,
-            on: false,
+            ext_conf: Arc::new(ext_conf),
             stop_signal_tx: None,
+            join_handle: None,
             mb_tx: None,
         })
     }
@@ -52,17 +60,20 @@ impl Sink {
         get_search_sources_or_sinks_info_resp!(self)
     }
 
-    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<()> {
-        let mut restart = false;
-        if self.ext_conf != ext_conf {
-            restart = true;
-        }
+    pub async fn update_conf(
+        &mut self,
+        base_conf: BaseConf,
+        ext_conf: SinkConf,
+    ) -> HaliaResult<()> {
         self.base_conf = base_conf;
-        self.ext_conf = ext_conf;
+        if *self.ext_conf == ext_conf {
+            return Ok(());
+        }
 
-        if self.on && restart {}
-
-        todo!()
+        match &self.stop_signal_tx {
+            Some(_) => todo!(),
+            None => todo!(),
+        }
     }
 
     pub async fn start(&mut self, http_client_conf: Arc<HttpClientConf>) {
@@ -71,9 +82,13 @@ impl Sink {
 
         let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
-        let conf = self.ext_conf.clone();
-        self.event_loop(http_client_conf, stop_signal_rx, mb_rx, conf)
-            .await;
+        self.event_loop(
+            http_client_conf,
+            stop_signal_rx,
+            mb_rx,
+            reqwest::Client::new(),
+        )
+        .await;
     }
 
     async fn event_loop(
@@ -81,35 +96,43 @@ impl Sink {
         http_client_conf: Arc<HttpClientConf>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
-        conf: SinkConf,
+        client: Client,
     ) {
-        tokio::spawn(async move {
+        let ext_conf = self.ext_conf.clone();
+        let join_handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return
+                        return (stop_signal_rx, http_client_conf, client, mb_rx);
                     }
 
                     mb = mb_rx.recv() => {
                         match mb {
-                            Some(mb) => Sink::send_request(&http_client_conf.host, &conf, mb).await,
+                            Some(mb) => Sink::send_request(&client, &http_client_conf, &ext_conf, mb).await,
                             None => warn!("http客户端收到空消息"),
                         }
                     }
                 }
             }
         });
+        self.join_handle = Some(join_handle);
     }
 
-    async fn send_request(host: &String, conf: &SinkConf, mb: MessageBatch) {
-        let client = reqwest::Client::new();
+    async fn send_request(
+        client: &Client,
+        http_client_conf: &Arc<HttpClientConf>,
+        conf: &Arc<SinkConf>,
+        mb: MessageBatch,
+    ) {
+        let url = format!("{}{}", &http_client_conf.host, &conf.path);
+
         let mut builder = match conf.method {
-            types::apps::http_client::SinkMethod::Get => client.post(host),
-            types::apps::http_client::SinkMethod::Post => client.post(host),
-            types::apps::http_client::SinkMethod::Delete => client.delete(host),
-            types::apps::http_client::SinkMethod::Patch => client.patch(host),
-            types::apps::http_client::SinkMethod::Put => client.put(host),
-            types::apps::http_client::SinkMethod::Head => client.head(host),
+            types::apps::http_client::SinkMethod::Get => client.get(url),
+            types::apps::http_client::SinkMethod::Post => client.post(url),
+            types::apps::http_client::SinkMethod::Delete => client.delete(url),
+            types::apps::http_client::SinkMethod::Patch => client.patch(url),
+            types::apps::http_client::SinkMethod::Put => client.put(url),
+            types::apps::http_client::SinkMethod::Head => client.head(url),
         };
 
         builder = builder.query(&conf.query_params);
@@ -126,7 +149,19 @@ impl Sink {
         }
     }
 
-    pub async fn update_http_client(&mut self, http_client_conf: Arc<HttpClientConf>) {}
+    pub async fn update_http_client(&mut self, http_client_conf: Arc<HttpClientConf>) {
+        self.stop().await;
+        let (stop_signal_rx, _, client, mb_rx) = self.join_handle.take().unwrap().await.unwrap();
+        self.event_loop(http_client_conf, stop_signal_rx, mb_rx, client)
+            .await;
+    }
 
-    pub async fn stop(&mut self) {}
+    pub async fn stop(&mut self) {
+        self.stop_signal_tx
+            .as_ref()
+            .unwrap()
+            .send(())
+            .await
+            .unwrap();
+    }
 }

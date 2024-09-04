@@ -352,10 +352,7 @@ impl App for HttpClient {
         }
 
         match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => match sink.update(req.base, ext_conf).await {
-                Ok(()) => Ok(()),
-                Err(e) => Err(e),
-            },
+            Some(sink) => sink.update_conf(req.base, ext_conf).await,
             None => Err(HaliaError::NotFound),
         }
     }
