@@ -16,7 +16,10 @@ pub struct HttpClientConf {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SourceConf {
-    pub method: SinkMethod,
+    // 间隔 毫秒
+    pub interval: u64,
+
+    // pub method: SinkMethod,
     pub path: String,
     pub basic_auth: Option<BasicAuth>,
     pub headers: Vec<(String, String)>,
@@ -37,7 +40,7 @@ pub struct SinkConf {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct BasicAuth {
     pub username: String,
-    pub password: String,
+    pub password: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

@@ -118,15 +118,15 @@ impl Sink {
             builder = builder.header(k, v);
         }
 
-        // builder.body();
+        let request = builder.build().unwrap();
 
-        match builder.send().await {
+        match client.execute(request).await {
             Ok(_) => trace!("http client send ok"),
             Err(e) => warn!("http client send err:{:?}", e),
         }
     }
 
-    pub async fn restart(&mut self, http_client_conf: Arc<HttpClientConf>) {}
+    pub async fn update_http_client(&mut self, http_client_conf: Arc<HttpClientConf>) {}
 
     pub async fn stop(&mut self) {}
 }

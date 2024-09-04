@@ -35,8 +35,7 @@ pub struct HttpClient {
     ext_conf: Arc<HttpClientConf>,
 
     on: bool,
-    err: Option<String>,
-
+    // err: Option<String>,
     sources: Vec<Source>,
     source_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: Vec<Sink>,
@@ -52,7 +51,7 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
         base_conf: app_conf.base,
         ext_conf: Arc::new(ext_conf),
         on: false,
-        err: None,
+        // err: None,
         sources: vec![],
         source_ref_infos: vec![],
         sinks: vec![],
@@ -128,11 +127,11 @@ impl App for HttpClient {
 
         if self.on && restart {
             for source in self.sources.iter_mut() {
-                source.restart(self.ext_conf.clone()).await;
+                source.update_http_client(self.ext_conf.clone()).await;
             }
 
             for sink in self.sinks.iter_mut() {
-                sink.restart(self.ext_conf.clone()).await;
+                sink.update_http_client(self.ext_conf.clone()).await;
             }
         }
 
@@ -256,7 +255,7 @@ impl App for HttpClient {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.update(req.base, ext_conf).await,
+            Some(source) => source.update_conf(req.base, ext_conf).await,
             None => Err(HaliaError::NotFound),
         }
     }
