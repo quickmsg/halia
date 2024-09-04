@@ -1,13 +1,11 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{BaseConf, RuleRef};
+use crate::BaseConf;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateOpcuaReq {
-    #[serde(flatten)]
     pub base: BaseConf,
-    #[serde(flatten)]
     pub ext: OpcuaConf,
 }
 
@@ -18,12 +16,26 @@ pub struct OpcuaConf {
     pub reconnect: u64,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateGroupReq {
-    #[serde(flatten)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct CreaetUpdateSourceReq {
     pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: GroupConf,
+    pub ext: SourceConf,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct SourceConf {
+    #[serde(rename = "type")]
+    pub typ: SourceType,
+    pub group: Option<GroupConf>,
+    pub subscription: Option<Subscriptionconf>,
+    pub monitored_item: Option<MonitoredItemconf>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub enum SourceType {
+    Group,
+    Subscription,
+    MonitoredItem,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -33,19 +45,7 @@ pub struct GroupConf {
     // pub max_age: f64,
     // serde_json bug,无法在flatten模式下解析f64
     pub max_age: i64,
-}
-
-#[derive(Serialize)]
-pub struct SearchGroupsResp {
-    pub total: usize,
-    pub data: Vec<SearchGroupsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchGroupsItemResp {
-    pub id: Uuid,
-    #[serde(flatten)]
-    pub conf: CreateUpdateGroupReq,
+    pub variables: Vec<VariableConf>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,27 +58,21 @@ pub enum TimestampsToReturn {
     Invalid,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateVariableReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: VariableConf,
-}
-
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct VariableConf {
+    pub name: String,
     pub namespace: u16,
     pub identifier_type: IdentifierType,
     pub identifier: serde_json::Value,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateSubscriptionReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: Subscriptionconf,
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentifierType {
+    Numeric,
+    String,
+    Guid,
+    ByteString,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -93,28 +87,6 @@ pub struct Subscriptionconf {
     pub publishing_enalbed: bool,
 
     pub monitored_items: Vec<VariableConf>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSubscriptionsResp {
-    pub total: usize,
-    pub data: Vec<SearchSubscriptionsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSubscriptionsItemResp {
-    pub id: Uuid,
-    #[serde(flatten)]
-    pub conf: CreateUpdateSubscriptionReq,
-    pub rule_ref: RuleRef,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateMonitoredItemReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: MonitoredItemconf,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -141,43 +113,6 @@ pub enum MonitoringMode {
     Reporting,
 }
 
-#[derive(Serialize)]
-pub struct SearchMonitoredItemsResp {
-    pub total: usize,
-    pub data: Vec<SearchMonitoredItemsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchMonitoredItemsItemResp {
-    pub id: Uuid,
-    #[serde(flatten)]
-    pub conf: CreateUpdateMonitoredItemReq,
-    pub rule_ref: RuleRef,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum IdentifierType {
-    Numeric,
-    String,
-    Guid,
-    ByteString,
-}
-
-#[derive(Serialize)]
-pub struct SearchVariablesResp {
-    pub total: usize,
-    pub data: Vec<SearchVariablesItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchVariablesItemResp {
-    pub id: Uuid,
-    #[serde(flatten)]
-    pub conf: CreateUpdateVariableReq,
-    pub value: serde_json::Value,
-}
-
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSinkReq {
     #[serde(flatten)]
@@ -199,17 +134,4 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: Uuid,
     pub conf: CreateUpdateSinkReq,
-}
-
-// TODO
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct SourceConf {
-    pub typ: SourceType,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub enum SourceType {
-    Group,
-    Subscription,
 }

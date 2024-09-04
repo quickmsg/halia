@@ -32,12 +32,8 @@ use uuid::Uuid;
 
 use crate::Device;
 
-mod group;
-mod monitored_item;
 mod sink;
 mod source;
-mod subscription;
-mod variable;
 
 struct Opcua {
     id: Uuid,
