@@ -1158,6 +1158,7 @@ dependencies = [
  "opcua",
  "paste",
  "protocol",
+ "rand",
  "serde",
  "serde_json",
  "smallvec",

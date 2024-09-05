@@ -61,14 +61,15 @@ impl Source {
     }
 
     fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
+        debug!("{:?}", conf);
         match conf.method {
             SourceMethod::Get => {
-                if conf.get_conf.is_none() {
+                if conf.get.is_none() {
                     return Err(HaliaError::Common("get请求为空！".to_owned()));
                 }
             }
             SourceMethod::Observe => {
-                if conf.observe_conf.is_none() {
+                if conf.observe.is_none() {
                     return Err(HaliaError::Common("observe配置为空！".to_owned()));
                 }
             }
@@ -185,25 +186,20 @@ impl Source {
         coap_client: Arc<UdpCoAPClient>,
         mut stop_signal_rx: mpsc::Receiver<()>,
     ) {
-        let mut request_builder =
-            RequestBuilder::new(&self.ext_conf.get_conf.as_ref().unwrap().path, Method::Get);
+        let get_conf = self.ext_conf.get.as_ref().unwrap();
+        let mut request_builder = RequestBuilder::new(&get_conf.path, Method::Get);
 
-        if let Some(querys) = &self.ext_conf.get_conf.as_ref().unwrap().querys {
-            let encoded_params: String = form_urlencoded::Serializer::new(String::new())
-                .extend_pairs(querys)
-                .finish();
-            request_builder = request_builder.queries(Some(encoded_params.into_bytes()));
-        }
+        let encoded_params: String = form_urlencoded::Serializer::new(String::new())
+            .extend_pairs(get_conf.querys.clone())
+            .finish();
+        request_builder = request_builder.queries(Some(encoded_params.into_bytes()));
 
-        let options =
-            transform_options(&self.ext_conf.observe_conf.as_ref().unwrap().options).unwrap();
+        let options = transform_options(&get_conf.options).unwrap();
         let request = request_builder
-            // .domain(self.conf.ext.domain.clone())
             .options(options)
+            // .token(token)
             .build();
-        let mut interval = time::interval(Duration::from_millis(
-            self.ext_conf.get_conf.as_ref().unwrap().interval,
-        ));
+        let mut interval = time::interval(Duration::from_millis(get_conf.interval));
         let join_handle = tokio::spawn(async move {
             loop {
                 select! {
@@ -225,23 +221,25 @@ impl Source {
 
     async fn start_observe(&mut self) {
         let mb_tx = self.mb_tx.as_ref().unwrap().clone();
-        let observe_tx = self
+        match self
             .coap_client
             .as_ref()
             .unwrap()
             .observe(
-                &self.ext_conf.observe_conf.as_ref().unwrap().path,
+                &self.ext_conf.observe.as_ref().unwrap().path,
                 // move |msg| Self::observe_handler(msg, &mb_tx),
                 move |msg| {
+                    debug!("{:?}", msg);
                     if mb_tx.receiver_count() > 0 {
                         _ = mb_tx.send(MessageBatch::from_json(msg.payload.into()).unwrap());
                     }
                 },
             )
             .await
-            .unwrap();
-
-        self.observe_tx = Some(observe_tx);
+        {
+            Ok(observe_tx) => self.observe_tx = Some(observe_tx),
+            Err(e) => warn!("{:?}", e),
+        }
     }
 
     pub async fn stop(&mut self) {

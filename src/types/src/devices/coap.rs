@@ -98,9 +98,9 @@ pub struct CreateUpdateSourceReq {
 pub struct SourceConf {
     pub method: SourceMethod,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub get_conf: Option<GetConf>,
+    pub get: Option<GetConf>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub observe_conf: Option<ObserveConf>,
+    pub observe: Option<ObserveConf>,
     // #[serde(flatten)]
     // pub conf: serde_json::Value,
     // #[serde(skip_serializing_if = "Option::is_none")]
@@ -122,7 +122,8 @@ pub enum SourceMethod {
 pub struct GetConf {
     pub interval: u64,
     pub path: String,
-    pub querys: Option<Vec<(String, String)>>,
+    pub querys: Vec<(String, String)>,
+    pub options: Vec<(CoapOption, String)>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

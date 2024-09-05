@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -12,6 +12,7 @@ use common::{
 use message::MessageBatch;
 use paste::paste;
 use protocol::coap::{client::UdpCoAPClient, request::CoapOption};
+use rand::{rngs::ThreadRng, Rng};
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
@@ -497,4 +498,33 @@ pub(crate) fn transform_options(
         }
     }
     Ok(options)
+}
+
+pub struct TokenManager {
+    // 0-8个字节
+    tokens: HashSet<Arc<Vec<u8>>>,
+    rng: ThreadRng,
+}
+
+impl TokenManager {
+    pub fn new() -> Self {
+        Self {
+            tokens: HashSet::new(),
+            rng: rand::thread_rng(),
+        }
+    }
+
+    pub fn acquire(&mut self) -> Arc<Vec<u8>> {
+        let mut token: Vec<u8> = vec![0; 8];
+        loop {
+            self.rng.fill(&mut token[..]);
+            if !self.tokens.contains(&token) {
+                let resp = Arc::new(token);
+                self.tokens.insert(resp.clone());
+                return resp;
+            }
+        }
+    }
+
+    pub fn release(&mut self) {}
 }
