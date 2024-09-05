@@ -44,8 +44,8 @@ pub fn routes() -> Router<AppState> {
         )
 }
 
-async fn get_devices_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
-    let summary = devices::get_summary(&state.devices).await;
+async fn get_devices_summary() -> AppSuccess<Summary> {
+    let summary = devices::get_summary().await;
     AppSuccess::data(summary)
 }
 

@@ -28,7 +28,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::Device;
+use crate::{add_device_on_count, sub_device_count, sub_device_on_count, Device};
 
 mod sink;
 mod source;
@@ -161,10 +161,12 @@ impl Device for Coap {
     }
 
     async fn start(&mut self) -> HaliaResult<()> {
+        check_and_set_on_true!(self);
+        add_device_on_count();
+
         let client = Arc::new(
             UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
         );
-        check_and_set_on_true!(self);
 
         for source in self.sources.iter_mut() {
             _ = source.start(client.clone()).await;
@@ -182,6 +184,7 @@ impl Device for Coap {
         check_stop_all!(self, sink);
 
         check_and_set_on_false!(self);
+        sub_device_on_count();
 
         for source in self.sources.iter_mut() {
             _ = source.stop().await;

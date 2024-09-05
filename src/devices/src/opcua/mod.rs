@@ -31,7 +31,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::Device;
+use crate::{add_device_on_count, sub_device_on_count, Device};
 
 mod sink;
 mod source;
@@ -159,6 +159,7 @@ impl Opcua {
 
     async fn stop(&mut self) -> HaliaResult<()> {
         check_and_set_on_false!(self);
+        sub_device_on_count();
 
         // for group in self.groups.write().await.iter_mut() {
         //     group.stop().await?;
@@ -417,6 +418,7 @@ impl Device for Opcua {
 
     async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
+        add_device_on_count();
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);

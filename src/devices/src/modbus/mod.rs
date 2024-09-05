@@ -40,7 +40,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{Device, ERR_CNT, ON_COUNT};
+use crate::{add_device_err_count, add_device_on_count, sub_device_err_count, sub_device_on_count, Device};
 
 mod sink;
 mod source;
@@ -135,7 +135,7 @@ impl Modbus {
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
-                        ERR_CNT.fetch_sub(1, Ordering::SeqCst);
+                        sub_device_err_count();
                         *err.write().await = None;
                         loop {
                             select! {
@@ -173,7 +173,7 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
-                        ERR_CNT.fetch_add(1, Ordering::SeqCst);
+                        add_device_err_count();
                         *err.write().await = Some(e.to_string());
                         let sleep = time::sleep(Duration::from_secs(reconnect));
                         tokio::pin!(sleep);
@@ -429,7 +429,7 @@ impl Device for Modbus {
     async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
         trace!("设备开启");
-        ON_COUNT.fetch_add(1, Ordering::SeqCst);
+        add_device_on_count();
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -457,7 +457,7 @@ impl Device for Modbus {
 
         check_and_set_on_false!(self);
         trace!("停止");
-        ON_COUNT.fetch_sub(1, Ordering::SeqCst);
+        sub_device_on_count();
 
         for source in self.sources.write().await.iter_mut() {
             source.stop().await;

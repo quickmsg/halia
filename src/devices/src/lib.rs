@@ -29,9 +29,45 @@ pub mod coap;
 pub mod modbus;
 pub mod opcua;
 
-pub(crate) static TOTAL_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-pub(crate) static ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-pub(crate) static ERR_CNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static DEVICE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static DEVICE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static DEVICE_ERR_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+
+fn get_device_count() -> usize {
+    DEVICE_COUNT.load(Ordering::SeqCst)
+}
+
+fn add_device_count() {
+    DEVICE_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+fn sub_device_count() {
+    DEVICE_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
+pub(crate) fn get_device_on_count() -> usize {
+    DEVICE_ON_COUNT.load(Ordering::SeqCst)
+}
+
+pub(crate) fn add_device_on_count() {
+    DEVICE_ON_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+pub(crate) fn sub_device_on_count() {
+    DEVICE_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
+pub(crate) fn get_device_err_count() -> usize {
+    DEVICE_ERR_COUNT.load(Ordering::SeqCst)
+}
+
+pub(crate) fn add_device_err_count() {
+    DEVICE_ERR_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+pub(crate) fn sub_device_err_count() {
+    DEVICE_ERR_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
 
 #[async_trait]
 pub trait Device: Send + Sync {
@@ -147,29 +183,10 @@ pub async fn load_from_persistence(
     Ok(devices)
 }
 
-pub async fn get_summary(devices: &Arc<RwLock<Vec<Box<dyn Device>>>>) -> Summary {
-    // let mut total = 0;
-    // let mut running_cnt = 0;
-    // let mut err_cnt = 0;
-    // let mut off_cnt = 0;
-    // for device in devices.read().await.iter().rev() {
-    //     let device = device.read().await;
-    //     total += 1;
-
-    //     if device.common.err.is_some() {
-    //         err_cnt += 1;
-    //     } else {
-    //         if device.common.on {
-    //             running_cnt += 1;
-    //         } else {
-    //             off_cnt += 1;
-    //         }
-    //     }
-    // }
-
-    let total = TOTAL_COUNT.load(Ordering::SeqCst);
-    let on = ON_COUNT.load(Ordering::SeqCst);
-    let err = ERR_CNT.load(Ordering::SeqCst);
+pub async fn get_summary() -> Summary {
+    let total = get_device_count();
+    let on = get_device_on_count();
+    let err = get_device_err_count();
 
     Summary {
         total,
@@ -236,7 +253,7 @@ pub async fn create_device(
         DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
         DeviceType::Coap => coap::new(device_id, req.conf).await?,
     };
-    TOTAL_COUNT.fetch_add(1, Ordering::SeqCst);
+    add_device_count();
     devices.write().await.push(device);
     if persist {
         persistence::device::create_device(&persistence, &device_id, body).await?;
@@ -365,7 +382,7 @@ pub async fn delete_device(
         None => return Err(HaliaError::NotFound),
     }
 
-    TOTAL_COUNT.fetch_sub(1, Ordering::SeqCst);
+    sub_device_count();
     devices
         .write()
         .await
