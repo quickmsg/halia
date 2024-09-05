@@ -1,4 +1,10 @@
-use std::{str::FromStr, sync::Arc};
+use std::{
+    str::FromStr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, LazyLock,
+    },
+};
 
 use async_trait::async_trait;
 use common::{
@@ -8,7 +14,6 @@ use common::{
 use message::MessageBatch;
 use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc, RwLock};
-use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
@@ -23,6 +28,10 @@ use uuid::Uuid;
 pub mod coap;
 pub mod modbus;
 pub mod opcua;
+
+pub(crate) static TOTAL_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+pub(crate) static ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+pub(crate) static ERR_CNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 
 #[async_trait]
 pub trait Device: Send + Sync {
@@ -139,29 +148,34 @@ pub async fn load_from_persistence(
 }
 
 pub async fn get_summary(devices: &Arc<RwLock<Vec<Box<dyn Device>>>>) -> Summary {
-    let mut total = 0;
-    let mut running_cnt = 0;
-    let mut err_cnt = 0;
-    let mut off_cnt = 0;
-    for device in devices.read().await.iter().rev() {
-        let device = device.read().await;
-        total += 1;
+    // let mut total = 0;
+    // let mut running_cnt = 0;
+    // let mut err_cnt = 0;
+    // let mut off_cnt = 0;
+    // for device in devices.read().await.iter().rev() {
+    //     let device = device.read().await;
+    //     total += 1;
 
-        if device.common.err.is_some() {
-            err_cnt += 1;
-        } else {
-            if device.common.on {
-                running_cnt += 1;
-            } else {
-                off_cnt += 1;
-            }
-        }
-    }
+    //     if device.common.err.is_some() {
+    //         err_cnt += 1;
+    //     } else {
+    //         if device.common.on {
+    //             running_cnt += 1;
+    //         } else {
+    //             off_cnt += 1;
+    //         }
+    //     }
+    // }
+
+    let total = TOTAL_COUNT.load(Ordering::SeqCst);
+    let on = ON_COUNT.load(Ordering::SeqCst);
+    let err = ERR_CNT.load(Ordering::SeqCst);
+
     Summary {
         total,
-        running_cnt,
-        err_cnt,
-        off_cnt,
+        running_cnt: on - err,
+        err_cnt: err,
+        off_cnt: total - on,
     }
 }
 
@@ -222,6 +236,7 @@ pub async fn create_device(
         DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
         DeviceType::Coap => coap::new(device_id, req.conf).await?,
     };
+    TOTAL_COUNT.fetch_add(1, Ordering::SeqCst);
     devices.write().await.push(device);
     if persist {
         persistence::device::create_device(&persistence, &device_id, body).await?;
@@ -340,7 +355,6 @@ pub async fn delete_device(
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
-    debug!("{}", device_id);
     match devices
         .write()
         .await
@@ -351,7 +365,7 @@ pub async fn delete_device(
         None => return Err(HaliaError::NotFound),
     }
 
-    debug!("here");
+    TOTAL_COUNT.fetch_sub(1, Ordering::SeqCst);
     devices
         .write()
         .await
