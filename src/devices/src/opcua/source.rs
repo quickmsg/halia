@@ -70,7 +70,7 @@ impl Source {
     fn validate_conf(ext_conf: &SourceConf) -> Result<()> {
         match ext_conf.typ {
             types::devices::opcua::SourceType::Group => match &ext_conf.group {
-                Some(group) => Ok(()),
+                Some(_group) => Ok(()),
                 None => bail!("类型为组类型，配置为空"),
             },
             types::devices::opcua::SourceType::Subscription => match &ext_conf.subscription {
@@ -83,7 +83,7 @@ impl Source {
                 None => bail!("类型为订阅类型，配置为空"),
             },
             types::devices::opcua::SourceType::MonitoredItem => match &ext_conf.monitored_item {
-                Some(monitored_item) => Ok(()),
+                Some(_monitored_item) => Ok(()),
                 None => bail!("类型为监控类型，配置为空"),
             },
         }

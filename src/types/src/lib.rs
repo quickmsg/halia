@@ -78,7 +78,7 @@ pub struct MessageRetain {
     #[serde(rename = "type")]
     pub typ: MessageRetainType,
     pub count: Option<usize>,
-    pub time: Option<usize>,
+    pub time: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]

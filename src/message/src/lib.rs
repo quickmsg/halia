@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::HashMap,
+    fmt,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::{bail, Result};
 
@@ -9,6 +13,7 @@ mod protobuf;
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
+    ts: u64,
     name: String,
     messages: Vec<Message>,
 }
@@ -45,11 +50,23 @@ impl MessageBatch {
     pub fn extend(&mut self, other: MessageBatch) {
         self.messages.extend(other.messages);
     }
+
+    pub fn set_ts(&mut self, ts: u64) {
+        self.ts = ts;
+    }
+
+    pub fn get_ts(&self) -> u64 {
+        self.ts
+    }
 }
 
 impl Default for MessageBatch {
     fn default() -> Self {
         Self {
+            ts: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
             name: "_none".to_string(),
             messages: Default::default(),
         }
