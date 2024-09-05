@@ -12,10 +12,10 @@ use common::{
 use message::MessageBatch;
 use paste::paste;
 use protocol::coap::{client::UdpCoAPClient, request::CoapOption};
-use rand::{rngs::ThreadRng, Rng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use sink::Sink;
 use source::Source;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, Mutex};
 use tracing::debug;
 use types::{
     devices::{
@@ -52,6 +52,7 @@ struct Coap {
     on: bool,
     coap_client: Option<Arc<UdpCoAPClient>>,
     err: Option<String>,
+    token_manager: Arc<Mutex<TokenManager>>,
 }
 
 pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
@@ -69,6 +70,7 @@ pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devic
         on: false,
         coap_client: None,
         err: None,
+        token_manager: Arc::new(Mutex::new(TokenManager::new())),
     }))
 }
 
@@ -212,7 +214,7 @@ impl Device for Coap {
         for source in self.sources.iter() {
             source.check_duplicate(&req.base, &ext_conf)?;
         }
-        let mut source = Source::new(source_id, req.base, ext_conf)?;
+        let mut source = Source::new(source_id, req.base, ext_conf, self.token_manager.clone())?;
         if self.on {
             _ = source
                 .start(self.coap_client.as_ref().unwrap().clone())
@@ -317,7 +319,7 @@ impl Device for Coap {
             sink.check_duplicate(&req.base, &ext_conf)?;
         }
 
-        let mut sink = Sink::new(sink_id, req.base, ext_conf)?;
+        let mut sink = Sink::new(sink_id, req.base, ext_conf, self.token_manager.clone())?;
         if self.on {
             _ = sink.start(self.coap_client.as_ref().unwrap().clone()).await;
         }
@@ -502,29 +504,30 @@ pub(crate) fn transform_options(
 
 pub struct TokenManager {
     // 0-8个字节
-    tokens: HashSet<Arc<Vec<u8>>>,
-    rng: ThreadRng,
+    tokens: HashSet<Vec<u8>>,
+    rng: StdRng,
 }
 
 impl TokenManager {
     pub fn new() -> Self {
         Self {
             tokens: HashSet::new(),
-            rng: rand::thread_rng(),
+            rng: StdRng::from_entropy(),
         }
     }
 
-    pub fn acquire(&mut self) -> Arc<Vec<u8>> {
+    pub fn acquire(&mut self) -> Vec<u8> {
         let mut token: Vec<u8> = vec![0; 8];
         loop {
             self.rng.fill(&mut token[..]);
             if !self.tokens.contains(&token) {
-                let resp = Arc::new(token);
-                self.tokens.insert(resp.clone());
-                return resp;
+                self.tokens.insert(token.clone());
+                return token;
             }
         }
     }
 
-    pub fn release(&mut self) {}
+    pub fn release(&mut self, token: Vec<u8>) {
+        self.tokens.remove(&token);
+    }
 }

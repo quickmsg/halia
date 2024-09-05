@@ -7,11 +7,15 @@ use protocol::coap::{
     client::UdpCoAPClient,
     request::{Method, RequestBuilder},
 };
-use tokio::{select, sync::mpsc, task::JoinHandle};
+use tokio::{
+    select,
+    sync::{mpsc, Mutex},
+    task::JoinHandle,
+};
 use types::{devices::coap::SinkConf, BaseConf, SearchSourcesOrSinksInfoResp};
 use uuid::Uuid;
 
-use super::transform_options;
+use super::{transform_options, TokenManager};
 
 pub struct Sink {
     pub id: Uuid,
@@ -29,10 +33,17 @@ pub struct Sink {
             mpsc::Receiver<()>,
         )>,
     >,
+
+    token_manager: Arc<Mutex<TokenManager>>,
 }
 
 impl Sink {
-    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<Self> {
+    pub fn new(
+        id: Uuid,
+        base_conf: BaseConf,
+        ext_conf: SinkConf,
+        token_manager: Arc<Mutex<TokenManager>>,
+    ) -> HaliaResult<Self> {
         Self::validate_conf(&ext_conf)?;
 
         Ok(Self {
@@ -42,6 +53,7 @@ impl Sink {
             stop_signal_tx: None,
             mb_tx: None,
             join_handle: None,
+            token_manager,
         })
     }
 

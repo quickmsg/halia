@@ -12,19 +12,19 @@ use protocol::coap::{
 };
 use tokio::{
     select,
-    sync::{broadcast, mpsc, oneshot},
+    sync::{broadcast, mpsc, oneshot, Mutex},
     task::JoinHandle,
     time,
 };
 use tracing::{debug, warn};
 use types::{
-    devices::coap::{SourceConf, SourceMethod},
+    devices::coap::{GetConf, SourceConf, SourceMethod},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use url::form_urlencoded;
 use uuid::Uuid;
 
-use super::transform_options;
+use super::{transform_options, TokenManager};
 
 pub struct Source {
     pub id: Uuid,
@@ -42,9 +42,16 @@ pub struct Source {
     coap_client: Option<Arc<UdpCoAPClient>>,
 
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
+
+    token_manager: Arc<Mutex<TokenManager>>,
 }
 impl Source {
-    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
+    pub fn new(
+        id: Uuid,
+        base_conf: BaseConf,
+        ext_conf: SourceConf,
+        token_manager: Arc<Mutex<TokenManager>>,
+    ) -> HaliaResult<Self> {
         Self::validate_conf(&ext_conf)?;
 
         Ok(Self {
@@ -57,6 +64,7 @@ impl Source {
             observe_tx: None,
             coap_client: None,
             mb_tx: None,
+            token_manager,
         })
     }
 
@@ -186,20 +194,10 @@ impl Source {
         coap_client: Arc<UdpCoAPClient>,
         mut stop_signal_rx: mpsc::Receiver<()>,
     ) {
-        let get_conf = self.ext_conf.get.as_ref().unwrap();
-        let mut request_builder = RequestBuilder::new(&get_conf.path, Method::Get);
+        let get_conf = self.ext_conf.get.as_ref().unwrap().clone();
 
-        let encoded_params: String = form_urlencoded::Serializer::new(String::new())
-            .extend_pairs(get_conf.querys.clone())
-            .finish();
-        request_builder = request_builder.queries(Some(encoded_params.into_bytes()));
-
-        let options = transform_options(&get_conf.options).unwrap();
-        let request = request_builder
-            .options(options)
-            // .token(token)
-            .build();
         let mut interval = time::interval(Duration::from_millis(get_conf.interval));
+        let token_manager = self.token_manager.clone();
         let join_handle = tokio::spawn(async move {
             loop {
                 select! {
@@ -208,10 +206,7 @@ impl Source {
                     }
 
                     _ = interval.tick() => {
-                        match coap_client.send(request.clone()).await {
-                            Ok(resp) => debug!("{:?}", resp),
-                            Err(e) => debug!("{:?}", e),
-                        }
+                        Self::coap_get(&coap_client, &token_manager, &get_conf).await;
                     }
                 }
             }
@@ -219,22 +214,53 @@ impl Source {
         self.join_handle = Some(join_handle);
     }
 
+    async fn coap_get(
+        coap_client: &Arc<UdpCoAPClient>,
+        token_manager: &Arc<Mutex<TokenManager>>,
+        get_conf: &GetConf,
+    ) {
+        let mut request_builder = RequestBuilder::new(&get_conf.path, Method::Get);
+
+        if get_conf.querys.len() > 0 {
+            let encoded_params: String = form_urlencoded::Serializer::new(String::new())
+                .extend_pairs(get_conf.querys.clone())
+                .finish();
+            request_builder = request_builder.queries(Some(encoded_params.into_bytes()));
+        }
+
+        if get_conf.options.len() > 0 {
+            let options = transform_options(&get_conf.options).unwrap();
+            request_builder = request_builder.options(options);
+        }
+
+        let token = token_manager.lock().await.acquire();
+        let request = request_builder.token(Some(token.clone())).build();
+        match coap_client.send(request).await {
+            Ok(_) => debug!("success"),
+            Err(e) => warn!("{:?}", e),
+        }
+        token_manager.lock().await.release(token);
+    }
+
     async fn start_observe(&mut self) {
+        let observe_conf = self.ext_conf.observe.as_ref().unwrap();
         let mb_tx = self.mb_tx.as_ref().unwrap().clone();
+        let token = self.token_manager.lock().await.acquire();
+        let request_builder =
+            RequestBuilder::new(&observe_conf.path, Method::Get).token(Some(token));
+
+        let request = request_builder.build();
+
         match self
             .coap_client
             .as_ref()
             .unwrap()
-            .observe(
-                &self.ext_conf.observe.as_ref().unwrap().path,
-                // move |msg| Self::observe_handler(msg, &mb_tx),
-                move |msg| {
-                    debug!("{:?}", msg);
-                    if mb_tx.receiver_count() > 0 {
-                        _ = mb_tx.send(MessageBatch::from_json(msg.payload.into()).unwrap());
-                    }
-                },
-            )
+            .observe_with(request, move |msg| {
+                debug!("{:?}", msg);
+                if mb_tx.receiver_count() > 0 {
+                    _ = mb_tx.send(MessageBatch::from_json(msg.payload.into()).unwrap());
+                }
+            })
             .await
         {
             Ok(observe_tx) => self.observe_tx = Some(observe_tx),
