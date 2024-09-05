@@ -229,11 +229,11 @@ impl Source {
     pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
         Self::validate_conf(&ext_conf)?;
 
-        let mut restart = false;
-        if self.ext_conf != ext_conf {
-            restart = true;
-        }
         self.base_conf = base_conf;
+
+        if self.ext_conf == ext_conf {
+            return Ok(());
+        }
         self.ext_conf = ext_conf;
 
         // if self.stop_signal_tx.is_some() && restart {
@@ -255,15 +255,20 @@ impl Source {
 }
 
 pub struct Group {
-    variables: Arc<RwLock<(String, Vec<ReadValueId>)>>,
+    variables: Arc<RwLock<Vec<(String, ReadValueId)>>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
 }
 
 impl Group {
     pub fn new(conf: &GroupConf) -> Self {
+        let mut variables = vec![];
+        for variable_conf in conf.variables.iter() {
+            let read_value_id = Self::get_read_value_id(variable_conf);
+            variables.push((variable_conf.name.clone(), read_value_id));
+        }
         Self {
-            variables: todo!(),
-            stop_signal_tx: todo!(),
+            variables: Arc::new(RwLock::new(variables)),
+            stop_signal_tx: None,
         }
     }
 
@@ -360,7 +365,7 @@ impl Group {
                 }
                 let mut mb = MessageBatch::default();
                 mb.push_message(message);
-                mb_tx.send(mb);
+                _ = mb_tx.send(mb);
             }
             Err(e) => {
                 debug!("err code :{:?}", e);

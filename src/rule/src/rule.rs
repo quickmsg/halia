@@ -261,6 +261,26 @@ impl Rule {
             }
         }
 
+        if let Some(e) = error {
+            for (device_id, source_id) in device_source_active_ref_nodes.iter() {
+                _ = devices::del_source_rx(devices, device_id, source_id, &self.id).await;
+            }
+            for (device_id, sink_id) in device_sink_active_ref_nodes.iter() {
+                _ = devices::del_sink_tx(devices, device_id, sink_id, &self.id).await;
+            }
+            for (app_id, source_id) in app_source_active_ref_nodes.iter() {
+                _ = apps::del_source_rx(apps, app_id, source_id, &self.id).await;
+            }
+            for (app_id, sink_id) in app_sink_active_ref_nodes.iter() {
+                _ = apps::del_sink_tx(apps, app_id, sink_id, &self.id).await;
+            }
+            for (databoard_id, data_id) in databoard_active_ref_nodes.iter() {
+                _ = databoard::del_data_tx(databoards, databoard_id, data_id, &self.id).await;
+            }
+            self.on = false;
+            return Err(e.into());
+        }
+
         let threed_ids = get_3d_ids(
             &mut ids,
             &node_map,
@@ -427,30 +447,8 @@ impl Rule {
             }
         }
 
-        match error {
-            Some(e) => {
-                for (device_id, source_id) in device_source_active_ref_nodes.iter() {
-                    _ = devices::del_source_rx(devices, device_id, source_id, &self.id).await;
-                }
-                for (device_id, sink_id) in device_sink_active_ref_nodes.iter() {
-                    _ = devices::del_sink_tx(devices, device_id, sink_id, &self.id).await;
-                }
-                for (app_id, source_id) in app_source_active_ref_nodes.iter() {
-                    _ = apps::del_source_rx(apps, app_id, source_id, &self.id).await;
-                }
-                for (app_id, sink_id) in app_sink_active_ref_nodes.iter() {
-                    _ = apps::del_sink_tx(apps, app_id, sink_id, &self.id).await;
-                }
-                for (databoard_id, data_id) in databoard_active_ref_nodes.iter() {
-                    _ = databoard::del_data_tx(databoards, databoard_id, data_id, &self.id).await;
-                }
-                Err(e.into())
-            }
-            None => {
-                self.stop_signal_tx = Some(stop_signal_tx);
-                Ok(())
-            }
-        }
+        self.stop_signal_tx = Some(stop_signal_tx);
+        Ok(())
     }
 
     pub async fn stop(

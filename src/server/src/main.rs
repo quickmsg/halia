@@ -3,7 +3,8 @@ use std::{fs::File, path::Path, str::FromStr, sync::Arc};
 use anyhow::Result;
 use common::persistence;
 use sqlx::{any::AnyConnectOptions, AnyPool, ConnectOptions};
-use tracing::{info, Level};
+use tokio::sync::RwLock;
+use tracing::{debug, info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
@@ -15,7 +16,6 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     sqlx::any::install_default_drivers();
-
 
     // sqlite模式需要，其他模式不需要，后期进行处理
     let path = Path::new("db");

@@ -8,6 +8,7 @@ use databoard::Databoard;
 use message::MessageBatch;
 use sqlx::AnyPool;
 use tokio::sync::{mpsc, RwLock};
+use tracing::debug;
 use types::{
     databoard::{
         CreateUpdateDataReq, CreateUpdateDataboardReq, QueryParams, QueryRuleInfo,
@@ -29,6 +30,7 @@ pub async fn load_from_persistence(
         let databoard_id = Uuid::from_str(&db_databoard.id).unwrap();
 
         let db_datas = persistence::databoard::read_databoard_datas(pool, &databoard_id).await?;
+        debug!("{}", db_datas.len());
         create_databoard(pool, &databoards, databoard_id, db_databoard.conf, false).await?;
 
         for db_data in db_datas {
@@ -189,7 +191,7 @@ pub async fn create_data(
     if persist {
         persistence::databoard::create_databoard_data(
             pool,
-            &databoard_data_id,
+            &databoard_id,
             &databoard_data_id,
             body,
         )

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sqlx::{prelude::FromRow, AnyPool, Row};
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(FromRow)]
@@ -79,6 +80,7 @@ pub async fn read_databoard_datas(
     pool: &AnyPool,
     databoard_id: &Uuid,
 ) -> Result<Vec<DataboardData>> {
+    debug!("{}", databoard_id);
     let databoard_datas = sqlx::query_as::<_, DataboardData>(
         "SELECT id, conf FROM databoard_datas WHERE parent_id = ?1",
     )

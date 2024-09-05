@@ -171,23 +171,23 @@ pub async fn auth(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let token = match headers.get("Authorization") {
-        Some(t) => t.to_str().or_else(|_| Err(StatusCode::UNAUTHORIZED))?,
-        None => return Err(StatusCode::UNAUTHORIZED),
-    };
-    let token_data = match decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(SECRET.as_ref()),
-        &Validation::new(Algorithm::HS512),
-    ) {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("{:?}", e);
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-    };
+    // let token = match headers.get("Authorization") {
+    //     Some(t) => t.to_str().or_else(|_| Err(StatusCode::UNAUTHORIZED))?,
+    //     None => return Err(StatusCode::UNAUTHORIZED),
+    // };
+    // let token_data = match decode::<Claims>(
+    //     token,
+    //     &DecodingKey::from_secret(SECRET.as_ref()),
+    //     &Validation::new(Algorithm::HS512),
+    // ) {
+    //     Ok(c) => c,
+    //     Err(e) => {
+    //         warn!("{:?}", e);
+    //         return Err(StatusCode::UNAUTHORIZED);
+    //     }
+    // };
 
-    debug!("{:?}", token_data);
+    // debug!("{:?}", token_data);
 
     let response = next.run(request).await;
     Ok(response)
