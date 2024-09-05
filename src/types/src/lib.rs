@@ -4,9 +4,9 @@ use uuid::Uuid;
 pub mod apps;
 pub mod databoard;
 pub mod devices;
+pub mod mqtt_server;
 pub mod rules;
 pub mod user;
-pub mod mqtt_server;
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct BaseConf {
@@ -71,4 +71,20 @@ pub struct CertInfo {
     pub client_cert: String,
     pub client_key: String,
     pub verify_server_cert: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct MessageRetain {
+    #[serde(rename = "type")]
+    pub typ: MessageRetainType,
+    pub count: Option<usize>,
+    pub time: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum MessageRetainType {
+    All,
+    LatestCount,
+    LatestTime,
 }

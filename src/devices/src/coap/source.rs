@@ -40,11 +40,13 @@ pub struct Source {
     // for observe
     observe_tx: Option<oneshot::Sender<ObserveMessage>>,
     coap_client: Option<Arc<UdpCoAPClient>>,
+    token: Option<Vec<u8>>,
 
     pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
 
     token_manager: Arc<Mutex<TokenManager>>,
 }
+
 impl Source {
     pub fn new(
         id: Uuid,
@@ -65,6 +67,7 @@ impl Source {
             coap_client: None,
             mb_tx: None,
             token_manager,
+            token: None,
         })
     }
 
@@ -134,7 +137,7 @@ impl Source {
             }
             (SourceMethod::Observe, SourceMethod::Get) => {
                 self.ext_conf = ext_conf;
-                self.stop_obeserve();
+                self.stop_obeserve().await;
                 self.observe_tx = None;
                 let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
                 self.stop_signal_tx = Some(stop_signal_tx);
@@ -143,7 +146,7 @@ impl Source {
             }
             (SourceMethod::Observe, SourceMethod::Observe) => {
                 self.ext_conf = ext_conf;
-                self.stop_obeserve();
+                self.stop_obeserve().await;
                 self.start_observe().await;
             }
         }
@@ -159,7 +162,7 @@ impl Source {
                 self.start_get(coap_client, stop_signal_rx).await;
             }
             SourceMethod::Observe => {
-                self.stop_obeserve();
+                self.stop_obeserve().await;
                 self.coap_client = Some(coap_client);
                 self.start_observe().await;
             }
@@ -246,11 +249,13 @@ impl Source {
         let observe_conf = self.ext_conf.observe.as_ref().unwrap();
         let mb_tx = self.mb_tx.as_ref().unwrap().clone();
         let token = self.token_manager.lock().await.acquire();
+        self.token = Some(token.clone());
         let request_builder =
             RequestBuilder::new(&observe_conf.path, Method::Get).token(Some(token));
 
         let request = request_builder.build();
 
+        // 加入重试功能
         match self
             .coap_client
             .as_ref()
@@ -284,7 +289,7 @@ impl Source {
             .unwrap();
     }
 
-    fn stop_obeserve(&mut self) {
+    async fn stop_obeserve(&mut self) {
         if let Err(e) = self
             .observe_tx
             .take()
@@ -293,5 +298,9 @@ impl Source {
         {
             warn!("stop send msg err:{:?}", e);
         }
+        self.token_manager
+            .lock()
+            .await
+            .release(self.token.take().unwrap());
     }
 }
