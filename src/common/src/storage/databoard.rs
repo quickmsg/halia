@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{prelude::FromRow, AnyPool, Row};
+use sqlx::{prelude::FromRow, AnyPool};
 use tracing::debug;
 use uuid::Uuid;
 

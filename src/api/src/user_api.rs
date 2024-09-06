@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post, put},
     Json, Router,
 };
-use common::{error::HaliaError, persistence};
+use common::{error::HaliaError, storage};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
@@ -77,7 +77,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn check_empty_user(State(state): State<AppState>) -> AppResult<AppSuccess<AdminExists>> {
-    let exists = persistence::user::check_admin_exists(&state.pool)
+    let exists = storage::user::check_admin_exists(&state.pool)
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
@@ -88,7 +88,7 @@ async fn registration(
     State(state): State<AppState>,
     Json(password): Json<Password>,
 ) -> AppResult<AppSuccess<()>> {
-    let exists = persistence::user::check_admin_exists(&state.pool)
+    let exists = storage::user::check_admin_exists(&state.pool)
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
@@ -96,7 +96,7 @@ async fn registration(
         return Err(AppError::new(1, "管理员账户已存在！".to_string()));
     }
 
-    persistence::user::create_user(&state.pool, "admin".to_string(), password.password)
+    storage::user::create_user(&state.pool, "admin".to_string(), password.password)
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
@@ -107,7 +107,7 @@ async fn login(
     State(state): State<AppState>,
     Json(user): Json<User>,
 ) -> AppResult<AppSuccess<AuthInfo>> {
-    let db_user = match persistence::user::read_user(&state.pool).await {
+    let db_user = match storage::user::read_user(&state.pool).await {
         Ok(user) => match user {
             Some(user) => user,
             None => {
@@ -150,7 +150,7 @@ async fn password(
 ) -> AppResult<AppSuccess<()>> {
     // 从token中读取
     let username = "xxs".to_owned();
-    match persistence::user::update_user_password(
+    match storage::user::update_user_password(
         &state.pool,
         username,
         update_password.password,

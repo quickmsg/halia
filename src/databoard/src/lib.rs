@@ -8,7 +8,7 @@ use std::{
 
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    storage,
 };
 use databoard_struct::Databoard;
 use message::MessageBatch;
@@ -50,12 +50,12 @@ pub fn get_summary() -> Summary {
 pub async fn load_from_persistence(
     pool: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<RwLock<Vec<Databoard>>>> {
-    let db_databoards = persistence::databoard::read_databoards(pool).await?;
+    let db_databoards = storage::databoard::read_databoards(pool).await?;
     let databoards: Arc<RwLock<Vec<Databoard>>> = Arc::new(RwLock::new(vec![]));
     for db_databoard in db_databoards {
         let databoard_id = Uuid::from_str(&db_databoard.id).unwrap();
 
-        let db_datas = persistence::databoard::read_databoard_datas(pool, &databoard_id).await?;
+        let db_datas = storage::databoard::read_databoard_datas(pool, &databoard_id).await?;
         debug!("{}", db_datas.len());
         create_databoard(pool, &databoards, databoard_id, db_databoard.conf, false).await?;
 
@@ -109,7 +109,7 @@ pub async fn create_databoard(
     databoards.write().await.push(databoard);
     add_databoard_count();
     if persist {
-        persistence::databoard::create_databoard(pool, &id, body).await?;
+        storage::databoard::create_databoard(pool, &id, body).await?;
     }
     Ok(())
 }
@@ -157,7 +157,7 @@ pub async fn update_databoard(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::databoard::update_databoard(pool, &databoard_id, body).await?;
+    storage::databoard::update_databoard(pool, &databoard_id, body).await?;
 
     Ok(())
 }
@@ -182,7 +182,7 @@ pub async fn delete_databoard(
         .await
         .retain(|databoard| databoard.id != databoard_id);
     sub_databoard_count();
-    persistence::databoard::delete_databoard(pool, &databoard_id).await?;
+    storage::databoard::delete_databoard(pool, &databoard_id).await?;
 
     Ok(())
 }
@@ -211,13 +211,8 @@ pub async fn create_data(
     }
 
     if persist {
-        persistence::databoard::create_databoard_data(
-            pool,
-            &databoard_id,
-            &databoard_data_id,
-            body,
-        )
-        .await?;
+        storage::databoard::create_databoard_data(pool, &databoard_id, &databoard_data_id, body)
+            .await?;
     }
 
     Ok(())
@@ -258,7 +253,7 @@ pub async fn update_data(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::databoard::update_databoard_data(pool, &databoard_data_id, body).await?;
+    storage::databoard::update_databoard_data(pool, &databoard_data_id, body).await?;
 
     Ok(())
 }
@@ -279,7 +274,7 @@ pub async fn delete_data(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::databoard::delete_databoard_data(pool, &databoard_data_id).await?;
+    storage::databoard::delete_databoard_data(pool, &databoard_data_id).await?;
 
     Ok(())
 }

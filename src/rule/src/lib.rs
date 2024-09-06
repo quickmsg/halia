@@ -1,7 +1,7 @@
 use apps::App;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    storage,
 };
 use databoard::databoard_struct::Databoard;
 use devices::Device;
@@ -64,7 +64,7 @@ pub async fn load_from_persistence(
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
 ) -> HaliaResult<Arc<RwLock<Vec<Rule>>>> {
-    let db_rules = persistence::rule::read_rules(pool).await?;
+    let db_rules = storage::rule::read_rules(pool).await?;
     let rules: Arc<RwLock<Vec<Rule>>> = Arc::new(RwLock::new(vec![]));
     for db_rule in db_rules {
         let rule_id = Uuid::from_str(&db_rule.id).unwrap();
@@ -102,7 +102,7 @@ pub async fn create(
     let rule = Rule::new(devices, apps, databoards, id, req).await?;
     add_rule_count();
     if persist {
-        persistence::rule::create_rule(pool, &id, body).await?;
+        storage::rule::create_rule(pool, &id, body).await?;
     }
     rules.write().await.push(rule);
     Ok(())
@@ -153,7 +153,7 @@ pub async fn start(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::rule::update_rule_status(pool, &id, true).await?;
+    storage::rule::update_rule_status(pool, &id, true).await?;
     Ok(())
 }
 
@@ -170,7 +170,7 @@ pub async fn stop(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::rule::update_rule_status(pool, &id, false).await?;
+    storage::rule::update_rule_status(pool, &id, false).await?;
     Ok(())
 }
 
@@ -190,7 +190,7 @@ pub async fn update(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::rule::update_rule_conf(pool, &id, body).await?;
+    storage::rule::update_rule_conf(pool, &id, body).await?;
 
     Ok(())
 }
@@ -210,6 +210,6 @@ pub async fn delete(
 
     sub_rule_count();
     rules.write().await.retain(|rule| rule.id != id);
-    persistence::rule::delete_rule(pool, &id).await?;
+    storage::rule::delete_rule(pool, &id).await?;
     Ok(())
 }

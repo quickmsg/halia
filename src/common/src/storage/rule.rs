@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{prelude::FromRow, AnyPool, Row};
+use sqlx::{prelude::FromRow, AnyPool};
 use uuid::Uuid;
 
 #[derive(FromRow)]
@@ -23,13 +23,6 @@ pub async fn read_rules(pool: &AnyPool) -> Result<Vec<Rule>> {
     let rules = sqlx::query_as::<_, Rule>("SELECT id, status, conf FROM rules")
         .fetch_all(pool)
         .await?;
-    // let mut rules = vec![];
-    // for row in rows {
-    //     let id: String = row.get("id");
-    //     let status: bool = row.get("status");
-    //     let conf: String = row.get("conf");
-    //     rules.push(Rule { id, status, conf });
-    // }
 
     Ok(rules)
 }

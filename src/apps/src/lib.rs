@@ -10,7 +10,7 @@ use std::{
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    storage,
 };
 use message::MessageBatch;
 use sqlx::AnyPool;
@@ -137,13 +137,13 @@ pub trait App: Send + Sync {
 pub async fn load_from_persistence(
     pool: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<RwLock<Vec<Box<dyn App>>>>> {
-    let db_apps = persistence::app::read_apps(pool).await?;
+    let db_apps = storage::app::read_apps(pool).await?;
     let apps: Arc<RwLock<Vec<Box<dyn App>>>> = Arc::new(RwLock::new(vec![]));
     for db_app in db_apps {
         let app_id = Uuid::from_str(&db_app.id).unwrap();
 
-        let db_sources = persistence::source::read_sources(pool, &app_id).await?;
-        let db_sinks = persistence::sink::read_sinks(pool, &app_id).await?;
+        let db_sources = storage::source::read_sources(pool, &app_id).await?;
+        let db_sinks = storage::sink::read_sinks(pool, &app_id).await?;
         create_app(pool, &apps, app_id, db_app.conf, false).await?;
 
         for db_source in db_sources {
@@ -242,7 +242,7 @@ pub async fn create_app(
 
     add_app_count();
     if persist {
-        persistence::app::create_app(pool, &app_id, body).await?;
+        storage::app::create_app(pool, &app_id, body).await?;
     }
     apps.write().await.push(app);
     Ok(())
@@ -316,7 +316,7 @@ pub async fn update_app(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::app::update_app_conf(pool, &app_id, body).await?;
+    storage::app::update_app_conf(pool, &app_id, body).await?;
 
     Ok(())
 }
@@ -336,7 +336,7 @@ pub async fn start_app(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::app::update_app_status(pool, &app_id, true).await?;
+    storage::app::update_app_status(pool, &app_id, true).await?;
 
     Ok(())
 }
@@ -356,7 +356,7 @@ pub async fn stop_app(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::app::update_app_status(pool, &app_id, false).await?;
+    storage::app::update_app_status(pool, &app_id, false).await?;
     Ok(())
 }
 
@@ -377,7 +377,7 @@ pub async fn delete_app(
 
     sub_app_count();
     apps.write().await.retain(|app| *app.get_id() != app_id);
-    persistence::app::delete_app(pool, &app_id).await?;
+    storage::app::delete_app(pool, &app_id).await?;
     Ok(())
 }
 
@@ -401,7 +401,7 @@ pub async fn create_source(
     }
 
     if persist {
-        persistence::source::create_source(pool, &app_id, &source_id, body).await?;
+        storage::source::create_source(pool, &app_id, &source_id, body).await?;
     }
 
     Ok(())
@@ -437,7 +437,7 @@ pub async fn update_source(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::source::update_source(pool, &source_id, body).await?;
+    storage::source::update_source(pool, &source_id, body).await?;
     Ok(())
 }
 
@@ -457,7 +457,7 @@ pub async fn delete_source(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::source::delete_source(pool, &source_id).await?;
+    storage::source::delete_source(pool, &source_id).await?;
     Ok(())
 }
 
@@ -549,7 +549,7 @@ pub async fn create_sink(
     }
 
     if persist {
-        persistence::sink::create_sink(pool, &app_id, &sink_id, body).await?;
+        storage::sink::create_sink(pool, &app_id, &sink_id, body).await?;
     }
 
     Ok(())
@@ -585,7 +585,7 @@ pub async fn update_sink(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::sink::update_sink(pool, &sink_id, body).await?;
+    storage::sink::update_sink(pool, &sink_id, body).await?;
     Ok(())
 }
 
@@ -605,7 +605,7 @@ pub async fn delete_sink(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::sink::delete_sink(pool, &sink_id).await?;
+    storage::sink::delete_sink(pool, &sink_id).await?;
 
     Ok(())
 }

@@ -24,14 +24,6 @@ pub async fn read_devices(pool: &AnyPool) -> Result<Vec<Device>> {
         .fetch_all(pool)
         .await?;
 
-    // let mut devices = vec![];
-    // for row in rows {
-    //     let id: String = row.get("id");
-    //     let status: bool = row.get("status");
-    //     let conf: String = row.get("conf");
-    //     devices.push(Device { id, status, conf })
-    // }
-
     Ok(devices)
 }
 

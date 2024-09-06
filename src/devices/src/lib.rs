@@ -9,7 +9,7 @@ use std::{
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    persistence,
+    storage,
 };
 use message::MessageBatch;
 use sqlx::AnyPool;
@@ -138,14 +138,14 @@ pub trait Device: Send + Sync {
 pub async fn load_from_persistence(
     persistence: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<RwLock<Vec<Box<dyn Device>>>>> {
-    let db_devices = persistence::device::read_devices(&persistence).await?;
+    let db_devices = storage::device::read_devices(&persistence).await?;
 
     let devices: Arc<RwLock<Vec<Box<dyn Device>>>> = Arc::new(RwLock::new(vec![]));
     for db_device in db_devices {
         let device_id = Uuid::from_str(&db_device.id).unwrap();
 
-        let db_sources = persistence::source::read_sources(&persistence, &device_id).await?;
-        let db_sinks = persistence::sink::read_sinks(&persistence, &device_id).await?;
+        let db_sources = storage::source::read_sources(&persistence, &device_id).await?;
+        let db_sinks = storage::sink::read_sinks(&persistence, &device_id).await?;
 
         create_device(persistence, &devices, device_id, db_device.conf, false)
             .await
@@ -251,7 +251,7 @@ pub async fn create_device(
     add_device_count();
     devices.write().await.push(device);
     if persist {
-        persistence::device::create_device(&persistence, &device_id, body).await?;
+        storage::device::create_device(&persistence, &device_id, body).await?;
     }
     Ok(())
 }
@@ -318,7 +318,7 @@ pub async fn update_device(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::device::update_device_conf(persistence, &device_id, body).await?;
+    storage::device::update_device_conf(persistence, &device_id, body).await?;
 
     Ok(())
 }
@@ -338,7 +338,7 @@ pub async fn start_device(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::device::update_device_status(persistence, &device_id, true).await?;
+    storage::device::update_device_status(persistence, &device_id, true).await?;
     Ok(())
 }
 
@@ -357,7 +357,7 @@ pub async fn stop_device(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::device::update_device_status(persistence, &device_id, false).await?;
+    storage::device::update_device_status(persistence, &device_id, false).await?;
 
     Ok(())
 }
@@ -382,7 +382,7 @@ pub async fn delete_device(
         .write()
         .await
         .retain(|device| *device.get_id() != device_id);
-    persistence::device::delete_device(persistence, &device_id).await?;
+    storage::device::delete_device(persistence, &device_id).await?;
 
     Ok(())
 }
@@ -407,7 +407,7 @@ pub async fn create_source(
     }
 
     if persist {
-        persistence::source::create_source(persistence, &device_id, &source_id, body).await?;
+        storage::source::create_source(persistence, &device_id, &source_id, body).await?;
     }
 
     Ok(())
@@ -448,7 +448,7 @@ pub async fn update_source(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::source::update_source(persistence, &source_id, body).await?;
+    storage::source::update_source(persistence, &source_id, body).await?;
 
     Ok(())
 }
@@ -486,7 +486,7 @@ pub async fn delete_source(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::source::delete_source(persistence, &source_id).await?;
+    storage::source::delete_source(persistence, &source_id).await?;
 
     Ok(())
 }
@@ -579,7 +579,7 @@ pub async fn create_sink(
     }
 
     if persist {
-        persistence::sink::create_sink(persistence, &device_id, &sink_id, body).await?;
+        storage::sink::create_sink(persistence, &device_id, &sink_id, body).await?;
     }
 
     Ok(())
@@ -620,7 +620,7 @@ pub async fn update_sink(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::sink::update_sink(pool, &sink_id, body).await?;
+    storage::sink::update_sink(pool, &sink_id, body).await?;
 
     Ok(())
 }
@@ -641,7 +641,7 @@ pub async fn delete_sink(
         None => return Err(HaliaError::NotFound),
     }
 
-    persistence::sink::delete_sink(pool, &sink_id).await?;
+    storage::sink::delete_sink(pool, &sink_id).await?;
 
     Ok(())
 }

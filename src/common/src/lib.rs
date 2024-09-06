@@ -2,7 +2,7 @@
 pub mod error;
 pub mod json;
 pub mod macros;
-pub mod persistence;
+pub mod storage;
 pub mod ref_info;
 pub mod sys;
 pub mod sink_message_ratain;

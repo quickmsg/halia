@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::Result;
-use common::{config, persistence, sys};
+use common::{config, storage, sys};
 use sqlx::{any::AnyConnectOptions, AnyPool, ConnectOptions};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
 
     let pool = AnyPool::connect_with(opt).await?;
 
-    persistence::create_tables(&pool).await?;
+    storage::create_tables(&pool).await?;
     let pool = Arc::new(pool);
     let devices = devices::load_from_persistence(&pool).await.unwrap();
     let apps = apps::load_from_persistence(&pool).await.unwrap();
