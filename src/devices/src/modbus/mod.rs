@@ -40,7 +40,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{add_device_err_count, add_device_on_count, sub_device_err_count, sub_device_on_count, Device};
+use crate::{add_device_on_count, add_device_running_count, sub_device_on_count, sub_device_running_count, Device};
 
 mod sink;
 mod source;
@@ -135,7 +135,7 @@ impl Modbus {
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
-                        sub_device_err_count();
+                        add_device_running_count();
                         *err.write().await = None;
                         loop {
                             select! {
@@ -173,7 +173,7 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
-                        add_device_err_count();
+                        sub_device_running_count();
                         *err.write().await = Some(e.to_string());
                         let sleep = time::sleep(Duration::from_secs(reconnect));
                         tokio::pin!(sleep);

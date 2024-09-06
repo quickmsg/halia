@@ -4,7 +4,7 @@ use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
 };
-use databoard::databoard::Databoard;
+use databoard::databoard_struct::Databoard;
 use devices::Device;
 use functions::{computes, filter, merge::merge::Merge, window};
 use message::MessageBatch;
@@ -18,7 +18,11 @@ use types::rules::{
 };
 use uuid::Uuid;
 
-use crate::{add_rule_count, add_rule_on_count, segment::{get_3d_ids, start_segment, take_source_ids}, sub_rule_on_count};
+use crate::{
+    add_rule_count, add_rule_on_count,
+    segment::{get_3d_ids, start_segment, take_source_ids},
+    sub_rule_on_count,
+};
 
 pub struct Rule {
     pub id: Uuid,

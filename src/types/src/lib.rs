@@ -8,6 +8,16 @@ pub mod mqtt_server;
 pub mod rules;
 pub mod user;
 
+#[derive(Serialize)]
+pub struct Dashboard {
+    pub machine_info: MachineInfo,
+    pub device_summary: devices::Summary,
+    pub app_summary: apps::Summary,
+    pub databoard_summary: databoard::Summary,
+    pub rule_summary: rules::Summary,
+}
+
+#[derive(Serialize)]
 pub struct MachineInfo {
     pub total_memory: u64,
     pub used_memory: u64,

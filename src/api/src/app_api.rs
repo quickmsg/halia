@@ -43,9 +43,8 @@ pub fn routes() -> Router<AppState> {
         )
 }
 
-async fn get_apps_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
-    let summary = apps::get_summary(&state.apps).await;
-    AppSuccess::data(summary)
+async fn get_apps_summary() -> AppSuccess<Summary> {
+    AppSuccess::data(apps::get_summary().await)
 }
 
 async fn get_rule_info(

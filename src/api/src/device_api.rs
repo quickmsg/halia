@@ -45,8 +45,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn get_devices_summary() -> AppSuccess<Summary> {
-    let summary = devices::get_summary().await;
-    AppSuccess::data(summary)
+    AppSuccess::data(devices::get_summary())
 }
 
 async fn get_rule_info(

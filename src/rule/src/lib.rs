@@ -3,7 +3,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
-use databoard::databoard::Databoard;
+use databoard::databoard_struct::Databoard;
 use devices::Device;
 use rule::Rule;
 use sqlx::AnyPool;
@@ -51,8 +51,11 @@ pub(crate) fn sub_rule_on_count() {
     RULE_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
-pub async fn get_summary() -> Summary {
-    todo!()
+pub fn get_summary() -> Summary {
+    Summary {
+        total: get_rule_count(),
+        on: get_rule_on_count(),
+    }
 }
 
 pub async fn load_from_persistence(

@@ -13,8 +13,7 @@ pub mod functions;
 #[derive(Serialize)]
 pub struct Summary {
     pub total: usize,
-    pub running_cnt: usize,
-    pub off_cnt: usize,
+    pub on: usize,
 }
 
 #[derive(Debug, Deserialize)]

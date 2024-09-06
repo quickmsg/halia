@@ -1,10 +1,16 @@
-use std::{str::FromStr, sync::Arc};
+use std::{
+    str::FromStr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, LazyLock,
+    },
+};
 
 use common::{
     error::{HaliaError, HaliaResult},
     persistence,
 };
-use databoard::Databoard;
+use databoard_struct::Databoard;
 use message::MessageBatch;
 use sqlx::AnyPool;
 use tokio::sync::{mpsc, RwLock};
@@ -18,8 +24,28 @@ use types::{
 };
 use uuid::Uuid;
 
-mod data;
-pub mod databoard;
+pub mod data;
+pub mod databoard_struct;
+
+static DATABOARD_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+
+fn get_databoard_count() -> usize {
+    DATABOARD_COUNT.load(Ordering::SeqCst)
+}
+
+fn add_databoard_count() {
+    DATABOARD_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+fn sub_databoard_count() {
+    DATABOARD_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
+pub fn get_summary() -> Summary {
+    Summary {
+        total: get_databoard_count(),
+    }
+}
 
 pub async fn load_from_persistence(
     pool: &Arc<AnyPool>,
@@ -47,12 +73,6 @@ pub async fn load_from_persistence(
     }
 
     Ok(databoards)
-}
-
-pub async fn get_summary(databoards: &Arc<RwLock<Vec<Databoard>>>) -> Summary {
-    Summary {
-        total: databoards.read().await.len(),
-    }
 }
 
 pub async fn get_rule_info(
@@ -87,6 +107,7 @@ pub async fn create_databoard(
     let req: CreateUpdateDataboardReq = serde_json::from_str(&body)?;
     let databoard = Databoard::new(id, req.base, req.ext)?;
     databoards.write().await.push(databoard);
+    add_databoard_count();
     if persist {
         persistence::databoard::create_databoard(pool, &id, body).await?;
     }
@@ -160,6 +181,7 @@ pub async fn delete_databoard(
         .write()
         .await
         .retain(|databoard| databoard.id != databoard_id);
+    sub_databoard_count();
     persistence::databoard::delete_databoard(pool, &databoard_id).await?;
 
     Ok(())

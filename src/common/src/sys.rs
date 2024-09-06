@@ -1,7 +1,7 @@
 use sysinfo::{Disks, System};
 use types::MachineInfo;
 
-pub fn load_info() -> MachineInfo {
+pub fn get_machine_info() -> MachineInfo {
     let mut sys = System::new_all();
     sys.refresh_cpu_all();
     sys.refresh_memory();

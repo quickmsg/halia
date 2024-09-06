@@ -57,9 +57,8 @@ impl TryFrom<&str> for AppType {
 #[derive(Serialize)]
 pub struct Summary {
     pub total: usize,
-    pub running_cnt: usize,
-    pub err_cnt: usize,
-    pub off_cnt: usize,
+    pub on: usize,
+    pub running: usize,
 }
 
 #[derive(Debug, Deserialize)]

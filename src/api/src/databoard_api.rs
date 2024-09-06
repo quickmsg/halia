@@ -4,9 +4,8 @@ use axum::{
     Router,
 };
 use types::{
-    apps::Summary,
     databoard::{
-        QueryParams, QueryRuleInfo, SearchDataboardsResp, SearchDatasResp, SearchRuleInfo,
+        QueryParams, QueryRuleInfo, SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
     },
     Pagination,
 };
@@ -33,7 +32,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn get_databoards_summary() -> AppSuccess<Summary> {
-    todo!()
+    AppSuccess::data(databoard::get_summary())
 }
 
 async fn get_rule_info(

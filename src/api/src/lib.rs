@@ -1,16 +1,17 @@
 use std::{result, sync::Arc};
 
-use ::databoard::databoard::Databoard;
-use ::rule::rule::Rule;
 use apps::App;
 use axum::{
     http::StatusCode,
     middleware,
     response::{IntoResponse, Response},
+    routing::get,
     Json, Router,
 };
-use common::error::HaliaError;
+use common::{error::HaliaError, sys::get_machine_info};
+use databoard::databoard_struct::Databoard;
 use devices::Device;
+use rule::rule::Rule;
 use serde::Serialize;
 use sqlx::AnyPool;
 use tokio::{net::TcpListener, sync::RwLock};
@@ -18,13 +19,14 @@ use tower_http::{
     cors::{Any, CorsLayer},
     services::{ServeDir, ServeFile},
 };
-use user::auth;
+use types::Dashboard;
+use user_api::auth;
 
-mod app;
-mod databoard;
-mod device;
-mod rule;
-mod user;
+mod app_api;
+mod databoard_api;
+mod device_api;
+mod rule_api;
+mod user_api;
 
 pub static EMPTY_USER_CODE: u16 = 2;
 pub static WRONG_PASSWORD_CODE: u16 = 3;
@@ -113,14 +115,15 @@ pub async fn start(
     };
     let app = Router::new()
         .with_state(state.clone())
-        .nest("/api", user::routes())
+        .nest("/api", user_api::routes())
         .nest(
-            "/",
+            "/api",
             Router::new()
-                .nest("/api/device", device::routes())
-                .nest("/api/app", app::routes())
-                .nest("/api/databoard", databoard::routes())
-                .nest("/api/rule", rule::routes())
+                .route("/dashboard", get(get_dashboard))
+                .nest("/device", device_api::routes())
+                .nest("/app", app_api::routes())
+                .nest("/databoard", databoard_api::routes())
+                .nest("/rule", rule_api::routes())
                 .route_layer(middleware::from_fn(auth)),
         )
         .fallback_service(
@@ -135,4 +138,14 @@ pub async fn start(
 
     let listener = TcpListener::bind("0.0.0.0:13000").await.unwrap();
     axum::serve(listener, app.with_state(state)).await.unwrap();
+}
+
+async fn get_dashboard() -> AppSuccess<Dashboard> {
+    AppSuccess::data(Dashboard {
+        machine_info: get_machine_info(),
+        device_summary: devices::get_summary(),
+        app_summary: apps::get_summary().await,
+        databoard_summary: databoard::get_summary(),
+        rule_summary: rule::get_summary(),
+    })
 }

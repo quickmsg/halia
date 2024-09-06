@@ -31,7 +31,7 @@ mod mqtt_client;
 
 static APP_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 static APP_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-static APP_ERR_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static APP_RUNNING_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 
 fn get_app_count() -> usize {
     APP_COUNT.load(Ordering::SeqCst)
@@ -57,16 +57,16 @@ pub(crate) fn sub_app_on_count() {
     APP_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
-pub(crate) fn get_app_err_count() -> usize {
-    APP_ERR_COUNT.load(Ordering::SeqCst)
+pub(crate) fn get_app_running_count() -> usize {
+    APP_RUNNING_COUNT.load(Ordering::SeqCst)
 }
 
-pub(crate) fn add_app_err_count() {
-    APP_ERR_COUNT.fetch_add(1, Ordering::SeqCst);
+pub(crate) fn add_app_running_count() {
+    APP_RUNNING_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
-pub(crate) fn sub_app_err_count() {
-    APP_ERR_COUNT.fetch_sub(1, Ordering::SeqCst);
+pub(crate) fn sub_app_running_count() {
+    APP_RUNNING_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
 #[async_trait]
@@ -178,30 +178,11 @@ pub async fn load_from_persistence(
     Ok(apps)
 }
 
-pub async fn get_summary(apps: &Arc<RwLock<Vec<Box<dyn App>>>>) -> Summary {
-    let mut total = 0;
-    let mut running_cnt = 0;
-    let mut err_cnt = 0;
-    let mut off_cnt = 0;
-    for app in apps.read().await.iter().rev() {
-        let app = app.search().await;
-        total += 1;
-
-        if app.common.err.is_some() {
-            err_cnt += 1;
-        } else {
-            if app.common.on {
-                running_cnt += 1;
-            } else {
-                off_cnt += 1;
-            }
-        }
-    }
+pub async fn get_summary() -> Summary {
     Summary {
-        total,
-        running_cnt,
-        err_cnt,
-        off_cnt,
+        total: get_app_count(),
+        on: get_app_on_count(),
+        running: get_app_running_count(),
     }
 }
 

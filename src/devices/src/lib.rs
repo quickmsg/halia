@@ -31,7 +31,7 @@ pub mod opcua;
 
 static DEVICE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 static DEVICE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-static DEVICE_ERR_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static DEVICE_RUNNING_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 
 fn get_device_count() -> usize {
     DEVICE_COUNT.load(Ordering::SeqCst)
@@ -57,16 +57,16 @@ pub(crate) fn sub_device_on_count() {
     DEVICE_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
-pub(crate) fn get_device_err_count() -> usize {
-    DEVICE_ERR_COUNT.load(Ordering::SeqCst)
+pub(crate) fn get_device_running_count() -> usize {
+    DEVICE_RUNNING_COUNT.load(Ordering::SeqCst)
 }
 
-pub(crate) fn add_device_err_count() {
-    DEVICE_ERR_COUNT.fetch_add(1, Ordering::SeqCst);
+pub(crate) fn add_device_running_count() {
+    DEVICE_RUNNING_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
-pub(crate) fn sub_device_err_count() {
-    DEVICE_ERR_COUNT.fetch_sub(1, Ordering::SeqCst);
+pub(crate) fn sub_device_running_count() {
+    DEVICE_RUNNING_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
 #[async_trait]
@@ -183,17 +183,12 @@ pub async fn load_from_persistence(
     Ok(devices)
 }
 
-pub async fn get_summary() -> Summary {
+pub fn get_summary() -> Summary {
     let total = get_device_count();
     let on = get_device_on_count();
-    let err = get_device_err_count();
+    let running = get_device_running_count();
 
-    Summary {
-        total,
-        running_cnt: on - err,
-        err_cnt: err,
-        off_cnt: total - on,
-    }
+    Summary { total, on, running }
 }
 
 pub async fn get_rule_info(
