@@ -6,6 +6,7 @@ pub mod persistence;
 pub mod ref_info;
 pub mod sys;
 pub mod sink_message_ratain;
+pub mod config;
 
 pub fn check_page_size(i: usize, page: usize, size: usize) -> bool {
     i >= (page - 1) * size && i < page * size

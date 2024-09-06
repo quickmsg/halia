@@ -1,7 +1,7 @@
 use std::{fs::File, path::Path, str::FromStr, sync::Arc};
 
 use anyhow::Result;
-use common::persistence;
+use common::{persistence, sys};
 use sqlx::{any::AnyConnectOptions, AnyPool, ConnectOptions};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -13,6 +13,8 @@ async fn main() -> Result<()> {
         .with_line_number(true)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    sys::init();
 
     sqlx::any::install_default_drivers();
 

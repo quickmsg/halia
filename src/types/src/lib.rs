@@ -19,6 +19,7 @@ pub struct Dashboard {
 
 #[derive(Serialize)]
 pub struct MachineInfo {
+    pub start_time: u64,
     pub total_memory: u64,
     pub used_memory: u64,
     pub halia_memory: u64,

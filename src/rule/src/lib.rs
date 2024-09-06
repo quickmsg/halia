@@ -88,28 +88,6 @@ pub async fn load_from_persistence(
     Ok(rules)
 }
 
-// pub async fn get_summary(rules: &Arc<RwLock<Vec<Rule>>>) -> Summary {
-//     let mut total = 0;
-//     let mut running_cnt = 0;
-//     let mut off_cnt = 0;
-
-//     for rule in rules.read().await.iter() {
-//         let resp = rule.search();
-//         total += 1;
-//         if resp.on {
-//             running_cnt += 1;
-//         } else {
-//             off_cnt += 1;
-//         }
-//     }
-
-//     Summary {
-//         total,
-//         running_cnt,
-//         off_cnt,
-//     }
-// }
-
 pub async fn create(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,

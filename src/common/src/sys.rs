@@ -1,7 +1,21 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use sysinfo::{Disks, System};
 use types::MachineInfo;
 
+static mut START_TIME: u64 = 0;
+
+pub fn init() {
+    unsafe {
+        START_TIME = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+    }
+}
+
 pub fn get_machine_info() -> MachineInfo {
+    debug_assert!(unsafe { START_TIME } != 0);
     let mut sys = System::new_all();
     sys.refresh_cpu_all();
     sys.refresh_memory();
@@ -20,6 +34,7 @@ pub fn get_machine_info() -> MachineInfo {
     }
 
     MachineInfo {
+        start_time: unsafe { START_TIME },
         total_memory: sys.total_memory(),
         used_memory: sys.used_memory(),
         halia_memory,
