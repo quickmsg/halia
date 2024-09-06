@@ -32,7 +32,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{add_app_on_count, sub_app_count, sub_app_on_count, App};
+use crate::{add_app_on_count, add_app_running_count, sub_app_on_count, App};
 
 mod sink;
 mod source;
@@ -469,6 +469,8 @@ impl App for MqttClient {
     async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
         add_app_on_count();
+        // TODO 判断错误
+        add_app_running_count();
 
         match self.ext_conf.version {
             types::apps::mqtt_client::Version::V311 => self.start_v311().await,

@@ -10,7 +10,7 @@ use common::{error::HaliaError, persistence};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
-use tracing::{debug, warn};
+use tracing::warn;
 use types::user::{AdminExists, AuthInfo, Password, UpdatePassword, User};
 
 use crate::{AppError, AppResult, AppState, AppSuccess, EMPTY_USER_CODE, WRONG_PASSWORD_CODE};

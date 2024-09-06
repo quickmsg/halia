@@ -1,4 +1,0 @@
-[build]
-# Target musl-libc by default when running Cargo.
-# cargo build --release --target=x86_64-unknown-linux-musl
-target = "x86_64-unknown-linux-musl"

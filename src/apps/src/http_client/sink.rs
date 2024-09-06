@@ -122,7 +122,7 @@ impl Sink {
         client: &Client,
         http_client_conf: &Arc<HttpClientConf>,
         conf: &Arc<SinkConf>,
-        mb: MessageBatch,
+        _mb: MessageBatch,
     ) {
         let url = format!("{}{}", &http_client_conf.host, &conf.path);
 

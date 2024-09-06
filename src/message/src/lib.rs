@@ -9,7 +9,6 @@ use anyhow::{bail, Result};
 mod avro;
 mod csv;
 mod json;
-mod protobuf;
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {

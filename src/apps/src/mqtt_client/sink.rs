@@ -13,7 +13,7 @@ use rumqttc::{
     AsyncClient, QoS,
 };
 use tokio::{select, sync::mpsc, task::JoinHandle};
-use tracing::{trace, warn};
+use tracing::warn;
 use types::{
     apps::mqtt_client::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq,
     SearchSourcesOrSinksInfoResp,

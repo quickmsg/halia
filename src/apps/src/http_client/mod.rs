@@ -23,7 +23,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{add_app_count, add_app_on_count, sub_app_count, sub_app_on_count, App};
+use crate::{add_app_on_count, sub_app_on_count, App};
 
 mod sink;
 mod source;
