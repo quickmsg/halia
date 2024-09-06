@@ -6,84 +6,94 @@ use std::{
 use message::MessageBatch;
 use types::MessageRetain;
 
-pub struct SinkMessageRetain {
-    strategy: Strategy,
+pub trait SinkMessageRetain {
+    fn push(&mut self, mb: MessageBatch);
+    fn pop(&mut self) -> Option<MessageBatch>;
+}
+
+pub fn new(mr: &MessageRetain) -> Box<dyn SinkMessageRetain> {
+    match mr.typ {
+        types::MessageRetainType::All => Box::new(SinkMessageRetainAll {
+            mbs: VecDeque::new(),
+        }),
+        types::MessageRetainType::None => Box::new(SinkMessageRetainNone {}),
+        types::MessageRetainType::LatestCount => Box::new(SinkMessageRetainCount {
+            count: *mr.count.as_ref().unwrap(),
+            mbs: VecDeque::new(),
+        }),
+        types::MessageRetainType::LatestTime => Box::new(SinkMessageRetainTime {
+            duration: *mr.time.as_ref().unwrap(),
+            mbs: VecDeque::new(),
+        }),
+    }
+}
+
+pub struct SinkMessageRetainAll {
     mbs: VecDeque<MessageBatch>,
 }
 
-impl SinkMessageRetain {
-    pub fn new(mr: &MessageRetain) -> Self {
-        match mr.typ {
-            types::MessageRetainType::All => Self {
-                strategy: Strategy::All,
-                mbs: VecDeque::new(),
-            },
-            types::MessageRetainType::LatestCount => {
-                // 创建时验证
-                let count = mr.count.as_ref().unwrap();
-                Self {
-                    strategy: Strategy::Count(*count),
-                    mbs: VecDeque::new(),
-                }
-            }
-            types::MessageRetainType::LatestTime => {
-                let time = mr.time.as_ref().unwrap();
-                Self {
-                    strategy: Strategy::Time(*time),
-                    mbs: VecDeque::new(),
-                }
-            }
-        }
+impl SinkMessageRetain for SinkMessageRetainAll {
+    fn push(&mut self, mb: MessageBatch) {
+        self.mbs.push_back(mb);
     }
 
-    pub fn push(&mut self, mb: MessageBatch) {
-        match self.strategy {
-            Strategy::All => self.mbs.push_back(mb),
-            Strategy::Count(n) => {
-                self.mbs.push_back(mb);
-                if self.mbs.len() > n {
-                    self.mbs.pop_front();
-                }
-            }
-            Strategy::Time(duration) => {
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64;
-                self.mbs.retain(|mb| mb.get_ts() + duration < now);
-            }
-        }
-    }
-
-    pub fn pop(&mut self) -> Option<MessageBatch> {
-        match self.strategy {
-            Strategy::Time(duration) => {
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64;
-                loop {
-                    let mb = self.mbs.pop_front();
-                    match mb {
-                        Some(mb) => {
-                            if mb.get_ts() + duration > now {
-                                return Some(mb);
-                            }
-                        }
-                        None => return None,
-                    }
-                }
-            }
-            _ => self.mbs.pop_front(),
-        }
+    fn pop(&mut self) -> Option<MessageBatch> {
+        self.mbs.pop_front()
     }
 }
 
-pub enum Strategy {
-    // 所有消息保留
-    All,
-    // 保留最近的n条数据，参数必须大于0
-    Count(usize),
-    // 保留时间内的数据，消息到达时间 + time <= 现在时间
-    Time(u64),
+pub struct SinkMessageRetainNone {}
+
+impl SinkMessageRetain for SinkMessageRetainNone {
+    fn push(&mut self, _mb: MessageBatch) {}
+
+    fn pop(&mut self) -> Option<MessageBatch> {
+        None
+    }
+}
+
+pub struct SinkMessageRetainCount {
+    count: usize,
+    mbs: VecDeque<MessageBatch>,
+}
+
+impl SinkMessageRetain for SinkMessageRetainCount {
+    fn push(&mut self, mb: MessageBatch) {
+        self.mbs.push_back(mb);
+        if self.mbs.len() > self.count {
+            self.mbs.pop_front();
+        }
+    }
+
+    fn pop(&mut self) -> Option<MessageBatch> {
+        self.mbs.pop_front()
+    }
+}
+
+struct SinkMessageRetainTime {
+    // 秒
+    duration: u64,
+    mbs: VecDeque<MessageBatch>,
+}
+
+impl SinkMessageRetainTime {
+    fn remove_expire_mbs(&mut self) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        self.mbs.retain(|mb| mb.get_ts() + self.duration < now);
+    }
+}
+
+impl SinkMessageRetain for SinkMessageRetainTime {
+    fn push(&mut self, mb: MessageBatch) {
+        self.mbs.push_back(mb);
+        self.remove_expire_mbs();
+    }
+
+    fn pop(&mut self) -> Option<MessageBatch> {
+        self.remove_expire_mbs();
+        self.mbs.pop_front()
+    }
 }

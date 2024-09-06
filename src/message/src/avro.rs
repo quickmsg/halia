@@ -1,5 +1,8 @@
+use std::io::Cursor;
+
 use crate::{Message, MessageBatch, MessageValue};
 use anyhow::{bail, Result};
+use apache_avro::{from_avro_datum, to_avro_datum, Reader, Schema};
 use bytes::Bytes;
 
 // let raw_schema_1 = r#"{
@@ -20,22 +23,14 @@ use bytes::Bytes;
 
 impl MessageBatch {
     pub fn from_avro(bytes: Bytes, schema: &String) -> Result<Self> {
-        let value: serde_json::Value = serde_json::from_slice(&bytes)?;
-        match value {
-            serde_json::Value::Array(values) => {
-                let mut mb = MessageBatch::default();
-                for value in values {
-                    mb.messages.push(Message::from(value));
-                }
-                Ok(mb)
-            }
-            serde_json::Value::Object(_) => {
-                let mut mb = MessageBatch::default();
-                mb.messages.push(Message::from(value));
-                Ok(mb)
-            }
-            _ => bail!("not support type"),
+        let reader_schema = Schema::parse_str(schema)?;
+        let reader = Cursor::new(bytes);
+        let reader = Reader::with_schema(&reader_schema, reader)?;
+        for value in reader {
+            todo!()
         }
+
+        Ok(MessageBatch::default())
     }
 
     pub fn to_avro(&self) -> Vec<u8> {

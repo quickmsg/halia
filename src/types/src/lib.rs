@@ -104,6 +104,7 @@ pub struct MessageRetain {
 #[serde(rename_all = "snake_case")]
 pub enum MessageRetainType {
     All,
+    None,
     LatestCount,
     LatestTime,
 }
