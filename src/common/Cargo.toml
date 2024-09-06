@@ -18,3 +18,4 @@ thiserror = { workspace = true }
 sqlx = { workspace = true }
 paste = { workspace = true }
 sysinfo = { workspace = true }
+toml = { workspace = true }

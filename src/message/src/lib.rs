@@ -9,6 +9,7 @@ use anyhow::{bail, Result};
 mod avro;
 mod csv;
 mod json;
+pub mod decoder;
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {

@@ -1,0 +1,8 @@
+[package]
+name = "events"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sqlx = { workspace = true }
+uuid = { workspace = true }

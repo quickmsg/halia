@@ -100,6 +100,7 @@ struct AppState {
 }
 
 pub async fn start(
+    port: u16,
     pool: Arc<AnyPool>,
     devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
     apps: Arc<RwLock<Vec<Box<dyn App>>>>,
@@ -136,7 +137,9 @@ pub async fn start(
                 .allow_headers(Any),
         );
 
-    let listener = TcpListener::bind("0.0.0.0:13000").await.unwrap();
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
     axum::serve(listener, app.with_state(state)).await.unwrap();
 }
 
