@@ -13,7 +13,7 @@ use crate::{AppResult, AppState, AppSuccess};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/summary", get(get_rules_summary))
+        // .route("/summary", get(get_rules_summary))
         .route("/", post(create))
         .route("/", get(search))
         .route("/:id", put(update))
@@ -22,10 +22,10 @@ pub fn routes() -> Router<AppState> {
         .route("/:id", routing::delete(delete))
 }
 
-async fn get_rules_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
-    let summary = rule::get_summary(&state.rules).await;
-    AppSuccess::data(summary)
-}
+// async fn get_rules_summary(State(state): State<AppState>) -> AppSuccess<Summary> {
+//     let summary = rule::get_summary(&state.rules).await;
+//     AppSuccess::data(summary)
+// }
 
 async fn create(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
     rule::create(

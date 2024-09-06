@@ -8,6 +8,14 @@ pub mod mqtt_server;
 pub mod rules;
 pub mod user;
 
+pub struct MachineInfo {
+    pub total_memory: u64,
+    pub used_memory: u64,
+    pub halia_memory: u64,
+    pub global_cpu_usage: f32,
+    pub disks: Vec<(String, u64, u64)>,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct BaseConf {
     pub name: String,

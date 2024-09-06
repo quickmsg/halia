@@ -18,7 +18,7 @@ use types::rules::{
 };
 use uuid::Uuid;
 
-use crate::segment::{get_3d_ids, start_segment, take_source_ids};
+use crate::{add_rule_count, add_rule_on_count, segment::{get_3d_ids, start_segment, take_source_ids}, sub_rule_on_count};
 
 pub struct Rule {
     pub id: Uuid,
@@ -175,6 +175,7 @@ impl Rule {
         databoards: &Arc<RwLock<Vec<Databoard>>>,
     ) -> Result<()> {
         check_and_set_on_true!(self);
+        add_rule_on_count();
 
         let (stop_signal_tx, _) = broadcast::channel(16);
 
@@ -458,6 +459,7 @@ impl Rule {
         databoards: &Arc<RwLock<Vec<Databoard>>>,
     ) -> HaliaResult<()> {
         check_and_set_on_false!(self);
+        sub_rule_on_count();
 
         if let Err(e) = self.stop_signal_tx.as_ref().unwrap().send(()) {
             error!("rule stop send signal err:{}", e);

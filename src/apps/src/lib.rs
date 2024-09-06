@@ -1,4 +1,11 @@
-use std::{str::FromStr, sync::Arc, vec};
+use std::{
+    str::FromStr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, LazyLock,
+    },
+    vec,
+};
 
 use async_trait::async_trait;
 use common::{
@@ -21,6 +28,46 @@ use uuid::Uuid;
 mod http_client;
 mod log;
 mod mqtt_client;
+
+static APP_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static APP_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static APP_ERR_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+
+fn get_app_count() -> usize {
+    APP_COUNT.load(Ordering::SeqCst)
+}
+
+fn add_app_count() {
+    APP_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+fn sub_app_count() {
+    APP_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
+pub(crate) fn get_app_on_count() -> usize {
+    APP_ON_COUNT.load(Ordering::SeqCst)
+}
+
+pub(crate) fn add_app_on_count() {
+    APP_ON_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+pub(crate) fn sub_app_on_count() {
+    APP_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
+pub(crate) fn get_app_err_count() -> usize {
+    APP_ERR_COUNT.load(Ordering::SeqCst)
+}
+
+pub(crate) fn add_app_err_count() {
+    APP_ERR_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+pub(crate) fn sub_app_err_count() {
+    APP_ERR_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
 
 #[async_trait]
 pub trait App: Send + Sync {
@@ -170,20 +217,25 @@ pub async fn get_rule_info(
     {
         Some(app) => {
             let app_info = app.search().await;
-            let source_or_sink_info = match (query.source_id, query.sink_id) {
-                (Some(source_id), None) => app.search_source(&source_id).await?,
-                (None, Some(sink_id)) => app.search_source(&sink_id).await?,
-                _ => {
-                    return Err(HaliaError::Common(
-                        "查询source_id或sink_id参数错误！".to_string(),
-                    ))
+            match (query.source_id, query.sink_id) {
+                (Some(source_id), None) => {
+                    let source_info = app.search_source(&source_id).await?;
+                    Ok(SearchRuleInfo {
+                        app: app_info,
+                        source: Some(source_info),
+                        sink: None,
+                    })
                 }
-            };
-
-            Ok(SearchRuleInfo {
-                app: app_info,
-                item: source_or_sink_info,
-            })
+                (None, Some(sink_id)) => {
+                    let sink_info = app.search_sink(&sink_id).await?;
+                    Ok(SearchRuleInfo {
+                        app: app_info,
+                        source: None,
+                        sink: Some(sink_info),
+                    })
+                }
+                _ => return Err(HaliaError::Common("查询id错误".to_owned())),
+            }
         }
         None => Err(HaliaError::NotFound),
     }
@@ -207,6 +259,7 @@ pub async fn create_app(
         AppType::Log => log::new(app_id, req.conf)?,
     };
 
+    add_app_count();
     if persist {
         persistence::app::create_app(pool, &app_id, body).await?;
     }
@@ -341,6 +394,7 @@ pub async fn delete_app(
         None => return Err(HaliaError::NotFound),
     }
 
+    sub_app_count();
     apps.write().await.retain(|app| *app.get_id() != app_id);
     persistence::app::delete_app(pool, &app_id).await?;
     Ok(())

@@ -7,7 +7,13 @@ use databoard::databoard::Databoard;
 use devices::Device;
 use rule::Rule;
 use sqlx::AnyPool;
-use std::{str::FromStr, sync::Arc};
+use std::{
+    str::FromStr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, LazyLock,
+    },
+};
 use tokio::sync::RwLock;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, SearchRulesResp, Summary},
@@ -17,6 +23,37 @@ use uuid::Uuid;
 
 pub mod rule;
 mod segment;
+
+static RULE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static RULE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+
+fn get_rule_count() -> usize {
+    RULE_COUNT.load(Ordering::SeqCst)
+}
+
+fn add_rule_count() {
+    RULE_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+fn sub_rule_count() {
+    RULE_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
+pub(crate) fn get_rule_on_count() -> usize {
+    RULE_ON_COUNT.load(Ordering::SeqCst)
+}
+
+pub(crate) fn add_rule_on_count() {
+    RULE_ON_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+pub(crate) fn sub_rule_on_count() {
+    RULE_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
+pub async fn get_summary() -> Summary {
+    todo!()
+}
 
 pub async fn load_from_persistence(
     pool: &Arc<AnyPool>,
@@ -48,27 +85,27 @@ pub async fn load_from_persistence(
     Ok(rules)
 }
 
-pub async fn get_summary(rules: &Arc<RwLock<Vec<Rule>>>) -> Summary {
-    let mut total = 0;
-    let mut running_cnt = 0;
-    let mut off_cnt = 0;
+// pub async fn get_summary(rules: &Arc<RwLock<Vec<Rule>>>) -> Summary {
+//     let mut total = 0;
+//     let mut running_cnt = 0;
+//     let mut off_cnt = 0;
 
-    for rule in rules.read().await.iter() {
-        let resp = rule.search();
-        total += 1;
-        if resp.on {
-            running_cnt += 1;
-        } else {
-            off_cnt += 1;
-        }
-    }
+//     for rule in rules.read().await.iter() {
+//         let resp = rule.search();
+//         total += 1;
+//         if resp.on {
+//             running_cnt += 1;
+//         } else {
+//             off_cnt += 1;
+//         }
+//     }
 
-    Summary {
-        total,
-        running_cnt,
-        off_cnt,
-    }
-}
+//     Summary {
+//         total,
+//         running_cnt,
+//         off_cnt,
+//     }
+// }
 
 pub async fn create(
     pool: &Arc<AnyPool>,
@@ -82,6 +119,7 @@ pub async fn create(
 ) -> HaliaResult<()> {
     let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
     let rule = Rule::new(devices, apps, databoards, id, req).await?;
+    add_rule_count();
     if persist {
         persistence::rule::create_rule(pool, &id, body).await?;
     }
@@ -189,6 +227,7 @@ pub async fn delete(
         None => return Err(HaliaError::NotFound),
     }
 
+    sub_rule_count();
     rules.write().await.retain(|rule| rule.id != id);
     persistence::rule::delete_rule(pool, &id).await?;
     Ok(())

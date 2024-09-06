@@ -23,7 +23,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::App;
+use crate::{add_app_count, add_app_on_count, sub_app_count, sub_app_on_count, App};
 
 mod sink;
 mod source;
@@ -140,6 +140,7 @@ impl App for HttpClient {
 
     async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
+        add_app_on_count();
         for source in self.sources.iter_mut() {
             source.start(self.ext_conf.clone()).await;
         }
@@ -154,6 +155,7 @@ impl App for HttpClient {
     async fn stop(&mut self) -> HaliaResult<()> {
         check_stop_all!(self, source);
         check_stop_all!(self, sink);
+        sub_app_on_count();
 
         check_and_set_on_true!(self);
 
