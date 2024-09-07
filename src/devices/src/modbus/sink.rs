@@ -1,16 +1,15 @@
-use std::sync::Arc;
-
 use common::{
     error::{HaliaError, HaliaResult},
     get_dynamic_value_from_json, get_search_sources_or_sinks_info_resp,
+    sink_message_ratain::{self, SinkMessageRetain},
 };
 use message::MessageBatch;
 use tokio::{
     select,
-    sync::{mpsc, RwLock},
+    sync::{broadcast, mpsc},
     task::JoinHandle,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 use types::{
     devices::modbus::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
@@ -31,7 +30,8 @@ pub struct Sink {
             mpsc::Receiver<()>,
             mpsc::Receiver<MessageBatch>,
             mpsc::Sender<WritePointEvent>,
-            Arc<RwLock<Option<String>>>,
+            broadcast::Receiver<bool>,
+            Box<dyn SinkMessageRetain>,
         )>,
     >,
 
@@ -79,14 +79,15 @@ impl Sink {
                 Some(stop_signal_tx) => {
                     stop_signal_tx.send(()).await.unwrap();
 
-                    let (stop_signal_rx, publish_rx, tx, device_err) =
+                    let (stop_signal_rx, publish_rx, tx, device_err_rx, message_retainer) =
                         self.join_handle.take().unwrap().await.unwrap();
                     self.event_loop(
                         stop_signal_rx,
                         publish_rx,
                         tx,
                         self.ext_conf.clone(),
-                        device_err,
+                        device_err_rx,
+                        message_retainer,
                     )
                     .await;
                 }
@@ -98,7 +99,7 @@ impl Sink {
     pub async fn start(
         &mut self,
         device_tx: mpsc::Sender<WritePointEvent>,
-        device_err: Arc<RwLock<Option<String>>>,
+        device_err_rx: broadcast::Receiver<bool>,
     ) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -106,12 +107,15 @@ impl Sink {
         let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
 
+        let message_retainer = sink_message_ratain::new(&self.ext_conf.message_retain);
+
         self.event_loop(
             stop_signal_rx,
             mb_rx,
             device_tx,
             self.ext_conf.clone(),
-            device_err,
+            device_err_rx,
+            message_retainer,
         )
         .await;
     }
@@ -122,20 +126,42 @@ impl Sink {
         mut mb_rx: mpsc::Receiver<MessageBatch>,
         device_tx: mpsc::Sender<WritePointEvent>,
         sink_conf: SinkConf,
-        device_err: Arc<RwLock<Option<String>>>,
+        mut device_err_rx: broadcast::Receiver<bool>,
+        mut message_retainer: Box<dyn SinkMessageRetain>,
     ) {
         let join_handle = tokio::spawn(async move {
+            let mut device_err = false;
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, mb_rx, device_tx, device_err);
+                        return (stop_signal_rx, mb_rx, device_tx, device_err_rx, message_retainer);
                     }
 
+                    // todo 恢复时消息发送
                     mb = mb_rx.recv() => {
                         if let Some(mb) = mb {
-                            if device_err.read().await.is_none() {
+                            if !device_err {
                                 Sink::send_write_point_event(mb, &sink_conf, &device_tx).await;
+                            } else {
+                                message_retainer.push(mb);
                             }
+                        }
+                    }
+
+                    err = device_err_rx.recv() => {
+                        match err {
+                            Ok(err) =>{
+                                device_err = err;
+                                match err {
+                                    true => {
+                                        while let Some(mb) = message_retainer.pop() {
+                                            Self::send_write_point_event(mb, &sink_conf, &device_tx).await;
+                                        }
+                                    }
+                                    false => {}
+                                }
+                            }
+                            Err(e) => warn!("{}", e),
                         }
                     }
                 }

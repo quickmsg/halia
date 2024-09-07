@@ -1,12 +1,13 @@
 use std::{
     collections::VecDeque,
+    fmt::Debug,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use message::MessageBatch;
 use types::MessageRetain;
 
-pub trait SinkMessageRetain {
+pub trait SinkMessageRetain: Debug + Sync + Send {
     fn push(&mut self, mb: MessageBatch);
     fn pop(&mut self) -> Option<MessageBatch>;
 }
@@ -28,6 +29,7 @@ pub fn new(mr: &MessageRetain) -> Box<dyn SinkMessageRetain> {
     }
 }
 
+#[derive(Debug)]
 pub struct SinkMessageRetainAll {
     mbs: VecDeque<MessageBatch>,
 }
@@ -42,6 +44,7 @@ impl SinkMessageRetain for SinkMessageRetainAll {
     }
 }
 
+#[derive(Debug)]
 pub struct SinkMessageRetainNone {}
 
 impl SinkMessageRetain for SinkMessageRetainNone {
@@ -52,6 +55,7 @@ impl SinkMessageRetain for SinkMessageRetainNone {
     }
 }
 
+#[derive(Debug)]
 pub struct SinkMessageRetainCount {
     count: usize,
     mbs: VecDeque<MessageBatch>,
@@ -70,6 +74,7 @@ impl SinkMessageRetain for SinkMessageRetainCount {
     }
 }
 
+#[derive(Debug)]
 struct SinkMessageRetainTime {
     // 秒
     duration: u64,

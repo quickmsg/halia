@@ -92,7 +92,7 @@ pub struct CertInfo {
     pub verify_server_cert: bool,
 }
 
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct MessageRetain {
     #[serde(rename = "type")]
     pub typ: MessageRetainType,
@@ -100,7 +100,7 @@ pub struct MessageRetain {
     pub time: Option<u64>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageRetainType {
     All,

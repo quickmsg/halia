@@ -1,4 +1,4 @@
-use std::{io, sync::Arc, time::Duration};
+use std::{io, time::Duration};
 
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
@@ -10,7 +10,7 @@ use protocol::modbus::Context;
 use serde_json::Value;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, mpsc},
     task::JoinHandle,
     time,
 };
@@ -34,7 +34,7 @@ pub struct Source {
         JoinHandle<(
             mpsc::Receiver<()>,
             mpsc::Sender<Uuid>,
-            Arc<RwLock<Option<String>>>,
+            broadcast::Receiver<bool>,
         )>,
     >,
     value: serde_json::Value,
@@ -144,7 +144,7 @@ impl Source {
     pub async fn start(
         &mut self,
         read_tx: mpsc::Sender<Uuid>,
-        device_err: Arc<RwLock<Option<String>>>,
+        device_err_rx: broadcast::Receiver<bool>,
     ) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -152,8 +152,13 @@ impl Source {
         let (mb_tx, _) = broadcast::channel(16);
         self.mb_tx = Some(mb_tx);
 
-        self.event_loop(self.ext_conf.interval, stop_signal_rx, read_tx, device_err)
-            .await;
+        self.event_loop(
+            self.ext_conf.interval,
+            stop_signal_rx,
+            read_tx,
+            device_err_rx,
+        )
+        .await;
     }
 
     async fn event_loop(
@@ -161,21 +166,28 @@ impl Source {
         interval: u64,
         mut stop_signal_rx: mpsc::Receiver<()>,
         read_tx: mpsc::Sender<Uuid>,
-        device_err: Arc<RwLock<Option<String>>>,
+        mut device_err_rx: broadcast::Receiver<bool>,
     ) {
         let point_id = self.id.clone();
         let join_handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
+            let mut device_err = false;
             loop {
                 select! {
-                    biased;
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, read_tx, device_err);
+                        return (stop_signal_rx, read_tx, device_err_rx);
                     }
 
                     _ = interval.tick() => {
-                        if device_err.read().await.is_none() {
+                        if !device_err {
                             _ = read_tx.send(point_id).await;
+                        }
+                    }
+
+                    err = device_err_rx.recv() => {
+                        match err {
+                            Ok(err) => device_err = err,
+                            Err(e) => warn!("{}", e),
                         }
                     }
                 }
@@ -213,10 +225,15 @@ impl Source {
                 .await
                 .unwrap();
 
-            let (stop_signal_rx, read_tx, device_err) =
+            let (stop_signal_rx, read_tx, device_err_rx) =
                 self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(self.ext_conf.interval, stop_signal_rx, read_tx, device_err)
-                .await;
+            self.event_loop(
+                self.ext_conf.interval,
+                stop_signal_rx,
+                read_tx,
+                device_err_rx,
+            )
+            .await;
         }
 
         Ok(())

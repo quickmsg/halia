@@ -40,7 +40,10 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{add_device_on_count, add_device_running_count, sub_device_on_count, sub_device_running_count, Device};
+use crate::{
+    add_device_on_count, add_device_running_count, sub_device_on_count, sub_device_running_count,
+    Device,
+};
 
 mod sink;
 mod source;
@@ -59,6 +62,7 @@ struct Modbus {
 
     on: bool,
     stop_signal_tx: Option<mpsc::Sender<()>>,
+    device_err_tx: Option<broadcast::Sender<bool>>,
     err: Arc<RwLock<Option<String>>>,
     rtt: Arc<AtomicU16>,
 
@@ -92,6 +96,7 @@ pub fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devi
         read_tx: None,
         write_tx: None,
         stop_signal_tx: None,
+        device_err_tx: None,
         join_handle: None,
     }))
 }
@@ -437,12 +442,19 @@ impl Device for Modbus {
         let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
         let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
 
+        let (device_err_tx, _) = broadcast::channel(16);
+
         for source in self.sources.write().await.iter_mut() {
-            source.start(read_tx.clone(), self.err.clone()).await;
+            source
+                .start(read_tx.clone(), device_err_tx.subscribe())
+                .await;
         }
         for sink in self.sinks.iter_mut() {
-            sink.start(write_tx.clone(), self.err.clone()).await;
+            sink.start(write_tx.clone(), device_err_tx.subscribe())
+                .await;
         }
+
+        self.device_err_tx = Some(device_err_tx);
 
         self.read_tx = Some(read_tx);
         self.write_tx = Some(write_tx);
@@ -515,7 +527,10 @@ impl Device for Modbus {
         let mut source = Source::new(source_id, req.base, ext_conf)?;
         if self.on {
             source
-                .start(self.read_tx.as_ref().unwrap().clone(), self.err.clone())
+                .start(
+                    self.read_tx.as_ref().unwrap().clone(),
+                    self.device_err_tx.as_ref().unwrap().subscribe(),
+                )
                 .await;
         }
 
@@ -666,8 +681,11 @@ impl Device for Modbus {
 
         let mut sink = Sink::new(sink_id, req.base, ext_conf);
         if self.on {
-            sink.start(self.write_tx.as_ref().unwrap().clone(), self.err.clone())
-                .await;
+            sink.start(
+                self.write_tx.as_ref().unwrap().clone(),
+                self.device_err_tx.as_ref().unwrap().subscribe(),
+            )
+            .await;
         }
 
         self.sinks.push(sink);

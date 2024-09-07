@@ -4,6 +4,8 @@ use message::MessageValue;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+use crate::MessageRetain;
+
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ModbusConf {
     // ms
@@ -790,4 +792,5 @@ pub struct SinkConf {
     pub area: Area,
     pub address: u16,
     pub value: serde_json::Value,
+    pub message_retain: MessageRetain,
 }
