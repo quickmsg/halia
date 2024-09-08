@@ -161,3 +161,10 @@ pub struct SearchRulesItemResp {
     pub on: bool,
     pub conf: CreateUpdateRuleReq,
 }
+
+#[derive(Serialize)]
+pub struct ReadRuleNodeResp {
+    pub index: usize,
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+}

@@ -16,7 +16,9 @@ use std::{
 };
 use tokio::sync::RwLock;
 use types::{
-    rules::{CreateUpdateRuleReq, QueryParams, SearchRulesResp, Summary},
+    rules::{
+        CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary,
+    },
     Pagination,
 };
 use uuid::Uuid;
@@ -138,6 +140,19 @@ pub async fn search(
     }
 
     SearchRulesResp { total, data }
+}
+
+pub async fn read(
+    rules: &Arc<RwLock<Vec<Rule>>>,
+    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    id: Uuid,
+) -> HaliaResult<Vec<ReadRuleNodeResp>> {
+    match rules.write().await.iter_mut().find(|rule| rule.id == id) {
+        Some(rule) => rule.read(devices, apps, databoards).await,
+        None => return Err(HaliaError::NotFound),
+    }
 }
 
 pub async fn start(

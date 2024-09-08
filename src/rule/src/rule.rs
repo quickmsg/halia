@@ -14,12 +14,12 @@ use tracing::error;
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
     AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
-    DeviceSourceNode, Node, NodeType, SearchRulesItemResp,
+    DeviceSourceNode, Node, NodeType, ReadRuleNodeResp, SearchRulesItemResp,
 };
 use uuid::Uuid;
 
 use crate::{
-    add_rule_count, add_rule_on_count,
+    add_rule_on_count,
     segment::{get_3d_ids, start_segment, take_source_ids},
     sub_rule_on_count,
 };
@@ -170,6 +170,102 @@ impl Rule {
             conf: self.conf.clone(),
             on: self.on,
         }
+    }
+
+    pub async fn read(
+        &self,
+        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        databoards: &Arc<RwLock<Vec<Databoard>>>,
+    ) -> HaliaResult<Vec<ReadRuleNodeResp>> {
+        let mut read_rule_node_resp = vec![];
+        // let mut read_rule_resp = ReadRuleResp { nodes: vec![] };
+        for node in self.conf.ext.nodes.iter() {
+            match node.node_type {
+                NodeType::DeviceSource => {
+                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = devices::get_rule_info(
+                        devices,
+                        types::devices::QueryRuleInfo {
+                            device_id: source_node.device_id,
+                            source_id: Some(source_node.source_id),
+                            sink_id: None,
+                        },
+                    )
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::AppSource => {
+                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = apps::get_rule_info(
+                        apps,
+                        types::apps::QueryRuleInfo {
+                            app_id: source_node.app_id,
+                            source_id: Some(source_node.source_id),
+                            sink_id: None,
+                        },
+                    )
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::DeviceSink => {
+                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = devices::get_rule_info(
+                        devices,
+                        types::devices::QueryRuleInfo {
+                            device_id: sink_node.device_id,
+                            source_id: None,
+                            sink_id: Some(sink_node.sink_id),
+                        },
+                    )
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::AppSink => {
+                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = apps::get_rule_info(
+                        apps,
+                        types::apps::QueryRuleInfo {
+                            app_id: sink_node.app_id,
+                            source_id: None,
+                            sink_id: Some(sink_node.sink_id),
+                        },
+                    )
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::Databoard => {
+                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = databoard::get_rule_info(
+                        databoards,
+                        types::databoard::QueryRuleInfo {
+                            databoard_id: databoard_node.databoard_id,
+                            data_id: databoard_node.data_id,
+                        },
+                    )
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        Ok(read_rule_node_resp)
     }
 
     pub async fn start(

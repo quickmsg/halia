@@ -4,7 +4,7 @@ use axum::{
     Router,
 };
 use types::{
-    rules::{QueryParams, SearchRulesResp, Summary},
+    rules::{QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
 };
 use uuid::Uuid;
@@ -16,6 +16,7 @@ pub fn routes() -> Router<AppState> {
         .route("/summary", get(get_rules_summary))
         .route("/", post(create))
         .route("/", get(search))
+        .route("/:id", get(read))
         .route("/:id", put(update))
         .route("/:id/start", put(start))
         .route("/:id/stop", put(stop))
@@ -48,6 +49,22 @@ async fn search(
 ) -> AppSuccess<SearchRulesResp> {
     let rules = rule::search(&state.rules, pagination, query_params).await;
     AppSuccess::data(rules)
+}
+
+// TODO
+async fn read(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> AppResult<AppSuccess<Vec<ReadRuleNodeResp>>> {
+    let resp = rule::read(
+        &state.rules,
+        &state.devices,
+        &state.apps,
+        &state.databoards,
+        id,
+    )
+    .await?;
+    Ok(AppSuccess::data(resp))
 }
 
 async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
