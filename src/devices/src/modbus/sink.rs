@@ -1,7 +1,7 @@
 use common::{
     error::{HaliaError, HaliaResult},
     get_dynamic_value_from_json, get_search_sources_or_sinks_info_resp,
-    sink_message_ratain::{self, SinkMessageRetain},
+    sink_message_retain::{self, SinkMessageRetain},
 };
 use message::MessageBatch;
 use tokio::{
@@ -107,7 +107,7 @@ impl Sink {
         let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
 
-        let message_retainer = sink_message_ratain::new(&self.ext_conf.message_retain);
+        let message_retainer = sink_message_retain::new(&self.ext_conf.message_retain);
 
         self.event_loop(
             stop_signal_rx,
@@ -141,7 +141,7 @@ impl Sink {
                     mb = mb_rx.recv() => {
                         if let Some(mb) = mb {
                             if !device_err {
-                                Sink::send_write_point_event(mb, &sink_conf, &device_tx).await;
+                                Self::send_write_point_event(mb, &sink_conf, &device_tx).await;
                             } else {
                                 message_retainer.push(mb);
                             }

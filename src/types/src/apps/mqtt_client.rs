@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::CertInfo;
+use crate::{CertInfo, MessageRetain};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientConf {
@@ -131,4 +131,6 @@ pub struct SinkConf {
     pub correlation_data: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription_identifiers: Option<Vec<usize>>,
+
+    pub message_retain: MessageRetain,
 }

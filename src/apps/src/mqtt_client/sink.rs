@@ -3,6 +3,7 @@ use std::sync::Arc;
 use common::{
     error::{HaliaError, HaliaResult},
     get_search_sources_or_sinks_info_resp,
+    sink_message_retain::{self, SinkMessageRetain},
 };
 use message::MessageBatch;
 use rumqttc::{
@@ -12,7 +13,11 @@ use rumqttc::{
     },
     AsyncClient, QoS,
 };
-use tokio::{select, sync::mpsc, task::JoinHandle};
+use tokio::{
+    select,
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+};
 use tracing::warn;
 use types::{
     apps::mqtt_client::SinkConf, BaseConf, CreateUpdateSourceOrSinkReq,
@@ -38,6 +43,8 @@ pub struct Sink {
             mpsc::Receiver<MessageBatch>,
             Option<Arc<AsyncClient>>,
             Option<Arc<v5::AsyncClient>>,
+            broadcast::Receiver<bool>,
+            Box<dyn SinkMessageRetain>,
         )>,
     >,
 }
@@ -101,14 +108,24 @@ impl Sink {
                 .await
                 .unwrap();
 
-            let (stop_signal_rx, mb_rx, v3_client, v5_client) =
+            let (stop_signal_rx, mb_rx, v3_client, v5_client, app_err_rx, message_retainer) =
                 self.join_handle.take().unwrap().await.unwrap();
 
             match (v3_client, v5_client) {
-                (None, Some(v50_client)) => self.event_loop_v50(v50_client, stop_signal_rx, mb_rx),
-                (Some(v311_client), None) => {
-                    self.event_loop_v311(v311_client, stop_signal_rx, mb_rx)
-                }
+                (None, Some(v50_client)) => self.event_loop_v50(
+                    v50_client,
+                    stop_signal_rx,
+                    mb_rx,
+                    app_err_rx,
+                    message_retainer,
+                ),
+                (Some(v311_client), None) => self.event_loop_v311(
+                    v311_client,
+                    stop_signal_rx,
+                    mb_rx,
+                    app_err_rx,
+                    message_retainer,
+                ),
                 _ => unreachable!(),
             }
         }
@@ -116,14 +133,16 @@ impl Sink {
         Ok(())
     }
 
-    pub fn start_v311(&mut self, client: Arc<AsyncClient>) {
+    pub fn start_v311(&mut self, client: Arc<AsyncClient>, app_err_rx: broadcast::Receiver<bool>) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (mb_tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(mb_tx);
 
-        self.event_loop_v311(client, stop_signal_rx, mb_rx);
+        let message_retainer = sink_message_retain::new(&self.ext_conf.message_retain);
+
+        self.event_loop_v311(client, stop_signal_rx, mb_rx, app_err_rx, message_retainer);
     }
 
     pub async fn restart_v311(&mut self, client: Arc<AsyncClient>) {
@@ -133,9 +152,10 @@ impl Sink {
             .send(())
             .await
             .unwrap();
-        let (stop_signal_rx, mb_rx, _, _) = self.join_handle.take().unwrap().await.unwrap();
+        let (stop_signal_rx, mb_rx, _, _, app_err_rx, message_retainer) =
+            self.join_handle.take().unwrap().await.unwrap();
 
-        self.event_loop_v311(client, stop_signal_rx, mb_rx);
+        self.event_loop_v311(client, stop_signal_rx, mb_rx, app_err_rx, message_retainer);
     }
 
     fn event_loop_v311(
@@ -143,6 +163,8 @@ impl Sink {
         client: Arc<AsyncClient>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
+        mut app_err_rx: broadcast::Receiver<bool>,
+        mut message_retainer: Box<dyn SinkMessageRetain>,
     ) {
         let topic = self.ext_conf.topic.clone();
         let qos = match self.ext_conf.qos {
@@ -153,18 +175,24 @@ impl Sink {
         let retain = self.ext_conf.retain;
 
         let join_handle = tokio::spawn(async move {
+            let mut app_err = false;
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, mb_rx, Some(client), None);
+                        return (stop_signal_rx, mb_rx, Some(client), None, app_err_rx, message_retainer);
                     }
 
                     mb = mb_rx.recv() => {
                         match mb {
                             Some(mb) => {
-                                if let Err(e) = client.publish(&topic, qos, retain, mb.to_json()).await {
-                                    warn!("{:?}", e);
+                                if !app_err {
+                                    if let Err(e) = client.publish(&topic, qos, retain, mb.to_json()).await {
+                                        warn!("{:?}", e);
+                                    }
+                                } else {
+                                    message_retainer.push(mb);
                                 }
+
                             }
                             None => {}
                         }
@@ -175,14 +203,20 @@ impl Sink {
         self.join_handle = Some(join_handle);
     }
 
-    pub fn start_v50(&mut self, client: Arc<v5::AsyncClient>) {
+    pub fn start_v50(
+        &mut self,
+        client: Arc<v5::AsyncClient>,
+        app_err_rx: broadcast::Receiver<bool>,
+    ) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (tx, mb_rx) = mpsc::channel(16);
         self.mb_tx = Some(tx);
 
-        self.event_loop_v50(client, stop_signal_rx, mb_rx);
+        let message_retainer = sink_message_retain::new(&self.ext_conf.message_retain);
+
+        self.event_loop_v50(client, stop_signal_rx, mb_rx, app_err_rx, message_retainer);
     }
 
     pub async fn restart_v50(&mut self, client: Arc<v5::AsyncClient>) {
@@ -193,11 +227,12 @@ impl Sink {
             .await
             .unwrap();
 
-        let (stop_signal_rx, mb_rx, _, _) = self.join_handle.take().unwrap().await.unwrap();
+        let (stop_signal_rx, mb_rx, _, _, app_err_rx, message_retainer) =
+            self.join_handle.take().unwrap().await.unwrap();
 
         let publish_properties = self.publish_properties.clone();
 
-        self.event_loop_v50(client, stop_signal_rx, mb_rx);
+        self.event_loop_v50(client, stop_signal_rx, mb_rx, app_err_rx, message_retainer);
     }
 
     fn event_loop_v50(
@@ -205,6 +240,8 @@ impl Sink {
         client: Arc<v5::AsyncClient>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
+        mut app_err_rx: broadcast::Receiver<bool>,
+        mut message_retainer: Box<dyn SinkMessageRetain>,
     ) {
         let topic = self.ext_conf.topic.clone();
         let qos = match self.ext_conf.qos {
@@ -218,7 +255,7 @@ impl Sink {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, mb_rx, None, Some(client));
+                        return (stop_signal_rx, mb_rx, None, Some(client), app_err_rx, message_retainer);
                     }
 
                     mb = mb_rx.recv() => {

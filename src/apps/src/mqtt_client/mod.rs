@@ -46,6 +46,7 @@ pub struct MqttClient {
     on: bool,
     err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: Option<mpsc::Sender<()>>,
+    app_err_tx: Option<broadcast::Sender<bool>>,
 
     sources: Arc<RwLock<Vec<Source>>>,
     source_ref_infos: Vec<(Uuid, RefInfo)>,
@@ -72,6 +73,7 @@ pub fn new(app_id: Uuid, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
         client_v311: None,
         client_v50: None,
         stop_signal_tx: None,
+        app_err_tx: None,
     }))
 }
 
@@ -153,6 +155,8 @@ impl MqttClient {
 
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
 
+        let (app_err_tx, _) = broadcast::channel(16);
+
         let sources = self.sources.clone();
         for source in sources.write().await.iter_mut() {
             source.start();
@@ -166,14 +170,17 @@ impl MqttClient {
 
         let arc_client = Arc::new(client);
         for sink in self.sinks.iter_mut() {
-            sink.start_v311(arc_client.clone());
+            sink.start_v311(arc_client.clone(), app_err_tx.subscribe());
         }
         self.client_v311 = Some(arc_client);
+
+        self.app_err_tx = Some(app_err_tx.clone());
 
         let (tx, mut rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(tx);
 
         let err = self.err.clone();
+        // let device_err_tx = self.device_err_tx.as_ref().unwrap().clone();
         tokio::spawn(async move {
             loop {
                 select! {
@@ -182,7 +189,7 @@ impl MqttClient {
                     }
 
                     event = event_loop.poll() => {
-                        Self::handle_v311_event(event, &sources, &err).await;
+                        Self::handle_v311_event(event, &sources, &err, &app_err_tx).await;
                     }
                 }
             }
@@ -193,6 +200,7 @@ impl MqttClient {
         event: Result<Event, rumqttc::ConnectionError>,
         sources: &Arc<RwLock<Vec<Source>>>,
         err: &Arc<RwLock<Option<String>>>,
+        app_err_tx: &broadcast::Sender<bool>,
     ) {
         match event {
             Ok(Event::Incoming(Incoming::Publish(p))) => match MessageBatch::from_json(p.payload) {
@@ -212,8 +220,12 @@ impl MqttClient {
                 }
                 Err(e) => error!("Failed to decode msg:{}", e),
             },
-            Ok(_) => *err.write().await = None,
+            Ok(_) => {
+                _ = app_err_tx.send(true);
+                *err.write().await = None;
+            }
             Err(e) => {
+                _ = app_err_tx.send(false);
                 *err.write().await = Some(e.to_string());
             }
         }
@@ -255,7 +267,10 @@ impl MqttClient {
 
         let arc_client = Arc::new(client);
         for sink in self.sinks.iter_mut() {
-            sink.start_v50(arc_client.clone());
+            sink.start_v50(
+                arc_client.clone(),
+                self.app_err_tx.as_ref().unwrap().subscribe(),
+            );
         }
         self.client_v50 = Some(arc_client);
 
@@ -723,11 +738,17 @@ impl App for MqttClient {
         let mut sink = Sink::new(sink_id, req.base, ext_conf).await?;
         if self.on {
             if let Some(client) = &self.client_v311 {
-                sink.start_v311(client.clone());
+                sink.start_v311(
+                    client.clone(),
+                    self.app_err_tx.as_ref().unwrap().subscribe(),
+                );
             }
 
             if let Some(client) = &self.client_v50 {
-                sink.start_v50(client.clone());
+                sink.start_v50(
+                    client.clone(),
+                    self.app_err_tx.as_ref().unwrap().subscribe(),
+                );
             }
         }
 

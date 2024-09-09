@@ -5,7 +5,7 @@ pub mod macros;
 pub mod storage;
 pub mod ref_info;
 pub mod sys;
-pub mod sink_message_ratain;
+pub mod sink_message_retain;
 pub mod config;
 
 pub fn check_page_size(i: usize, page: usize, size: usize) -> bool {
