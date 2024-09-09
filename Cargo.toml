@@ -12,7 +12,8 @@ members = [
     "src/apps",
     "src/databoard",
     "src/mqtt-server",
-    "src/schema", "src/events",
+    "src/schema",
+    "src/events",
 ]
 resolver = "2"
 
@@ -31,6 +32,7 @@ functions = { path = "src/functions" }
 rule = { path = "src/rule" }
 apps = { path = "src/apps" }
 databoard = { path = "src/databoard" }
+events = { path = "src/events" }
 
 serde_json = { version = "1.0.120" }
 serde_repr = "0.1.19"

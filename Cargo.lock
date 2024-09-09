@@ -1215,6 +1215,7 @@ dependencies = [
  "bytes",
  "common",
  "dashmap",
+ "events",
  "message",
  "opcua",
  "paste",
@@ -1370,6 +1371,8 @@ dependencies = [
 name = "events"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "common",
  "sqlx",
  "uuid",
 ]

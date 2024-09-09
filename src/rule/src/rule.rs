@@ -8,9 +8,14 @@ use databoard::databoard_struct::Databoard;
 use devices::Device;
 use functions::{computes, filter, merge::merge::Merge, metadata, window};
 use message::{MessageBatch, MessageValue};
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{broadcast, mpsc, RwLock};
-use tracing::{debug, error};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::{
+    fs::File,
+    io::{AsyncBufReadExt, BufReader},
+    sync::{broadcast, mpsc, RwLock},
+    time,
+};
+use tracing::error;
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
     AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
@@ -285,9 +290,7 @@ impl Rule {
         check_and_set_on_true!(self);
         add_rule_on_count();
 
-        debug!("here");
-
-        let (stop_signal_tx, _) = broadcast::channel(16);
+        let (stop_signal_tx, _) = broadcast::channel(1);
 
         let (incoming_edges, outgoing_edges) = self.conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
@@ -531,13 +534,13 @@ impl Rule {
                         }
                         NodeType::Operator => todo!(),
                         NodeType::Log => {
-                            debug!("here");
                             ids.push(id);
                             let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
                             let tx = match &self.logger {
                                 Some(logger) => logger.get_mb_tx(),
                                 None => {
-                                    let logger = Logger::new(&self.id).await?;
+                                    let logger =
+                                        Logger::new(&self.id, stop_signal_tx.subscribe()).await?;
                                     let tx = logger.get_mb_tx();
                                     self.logger = Some(logger);
                                     tx
@@ -733,4 +736,27 @@ impl Rule {
 
         Ok(())
     }
+
+    pub async fn tail_log(&self) -> Result<()> {
+        let file = File::open("xxx").await?;
+        let mut reader = BufReader::new(file).lines();
+
+        while let Some(line) = reader.next_line().await? {
+            // todo
+        }
+
+        loop {
+            if let Some(line) = reader.next_line().await? {
+                // todo
+            } else {
+                time::sleep(Duration::from_millis(30)).await;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn download_log(&self) {}
+
+    pub async fn delete_log(&self) {}
 }

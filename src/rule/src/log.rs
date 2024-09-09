@@ -5,8 +5,11 @@ use std::{
 
 use anyhow::Result;
 use message::MessageBatch;
-use tokio::{select, sync::mpsc};
-use tracing::debug;
+use tokio::{
+    select,
+    sync::{broadcast, mpsc},
+};
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 pub struct Logger {
@@ -15,11 +18,10 @@ pub struct Logger {
 
 impl Logger {
     // 新建即启动
-    pub async fn new(rule_id: &Uuid) -> Result<Self> {
-        debug!("new logger");
+    pub async fn new(rule_id: &Uuid, stop_signal_rx: broadcast::Receiver<()>) -> Result<Self> {
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
-        Self::handle_message(rule_id, mb_rx).await?;
+        Self::handle_message(rule_id, mb_rx, stop_signal_rx).await?;
 
         Ok(Logger { mb_tx })
     }
@@ -27,8 +29,9 @@ impl Logger {
     pub async fn handle_message(
         rule_id: &Uuid,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
+        mut stop_signal_rx: broadcast::Receiver<()>,
     ) -> Result<()> {
-        let file = OpenOptions::new()
+        let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(rule_id.to_string())?;
@@ -36,7 +39,15 @@ impl Logger {
             loop {
                 select! {
                     mb = mb_rx.recv() => {
-                        debug!("get msg {:?}", mb);
+                        match mb {
+                            Some(mb) => Self::log(&mut file, mb),
+                            None => {}
+                        }
+                    }
+
+                    _ = stop_signal_rx.recv() => {
+                        debug!("log quit.");
+                        return
                     }
                 }
             }
@@ -45,10 +56,13 @@ impl Logger {
         Ok(())
     }
 
-    fn log(file: &mut File, name: &str, message: &str) -> Result<()> {
-        file.write_all(format!("{} {}", name, message).as_bytes())?;
-
-        Ok(())
+    fn log(file: &mut File, mb: MessageBatch) {
+        if let Err(e) = file.write_all(format!("{:?}\n", &mb.to_json()).as_bytes()) {
+            warn!("write log to file err {}", e);
+        }
+        if let Err(e) = file.flush() {
+            warn!("flush log err {}", e);
+        }
     }
 
     pub fn get_mb_tx(&self) -> mpsc::Sender<MessageBatch> {

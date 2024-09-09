@@ -8,6 +8,7 @@ pub mod rule;
 pub mod sink;
 pub mod source;
 pub mod user;
+pub mod event;
 
 pub async fn create_tables(pool: &AnyPool) -> Result<()> {
     sqlx::query(
@@ -56,6 +57,13 @@ CREATE TABLE IF NOT EXISTS rules (
     id TEXT PRIMARY KEY,
     status INTEGER NOT NULL,
     conf TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    source_type INTEGER NOT NULL,
+    event_type INTEGER NOT NULL,
+    info TEXT
 );
 "#,
     )

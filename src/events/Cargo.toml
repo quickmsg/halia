@@ -4,5 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+common = { workspace = true }
+
 sqlx = { workspace = true }
 uuid = { workspace = true }
+anyhow = { workspace = true }
