@@ -26,7 +26,6 @@ use types::{
 use uuid::Uuid;
 
 mod http_client;
-mod log;
 mod mqtt_client;
 
 static APP_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
@@ -237,7 +236,6 @@ pub async fn create_app(
     let app = match req.app_type {
         AppType::MqttClient => mqtt_client::new(app_id, req.conf)?,
         AppType::HttpClient => http_client::new(app_id, req.conf)?,
-        AppType::Log => log::new(app_id, req.conf)?,
     };
 
     add_app_count();

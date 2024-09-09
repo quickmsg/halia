@@ -22,7 +22,6 @@ pub struct CreateUpdateAppReq {
 pub enum AppType {
     MqttClient,
     HttpClient,
-    Log,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -36,7 +35,6 @@ impl fmt::Display for AppType {
         match self {
             AppType::MqttClient => write!(f, "mqtt_client"),
             AppType::HttpClient => write!(f, "http_client"),
-            AppType::Log => write!(f, "log"),
         }
     }
 }
@@ -48,7 +46,6 @@ impl TryFrom<&str> for AppType {
         match value {
             "mqtt_client" => Ok(AppType::MqttClient),
             "http_client" => Ok(AppType::HttpClient),
-            "log" => Ok(AppType::Log),
             _ => bail!("未知应用类型: {}", value),
         }
     }

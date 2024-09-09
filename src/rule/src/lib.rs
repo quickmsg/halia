@@ -25,6 +25,7 @@ use uuid::Uuid;
 
 pub mod rule;
 mod segment;
+mod log;
 
 static RULE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 static RULE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
