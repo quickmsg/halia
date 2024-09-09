@@ -8,17 +8,26 @@ use anyhow::{bail, Result};
 
 mod avro;
 mod csv;
-mod json;
 pub mod decoder;
+mod json;
 
 #[derive(Debug, Clone)]
 pub struct MessageBatch {
     ts: u64,
     name: String,
+    metadata: HashMap<String, MessageValue>,
     messages: Vec<Message>,
 }
 
 impl MessageBatch {
+    pub fn add_metadata(&mut self, key: String, value: MessageValue) {
+        self.metadata.insert(key, value);
+    }
+
+    pub fn get_metadata(&self, key: &str) -> Option<&MessageValue> {
+        self.metadata.get(key)
+    }
+
     pub fn get_name(&self) -> &String {
         return &self.name;
     }
@@ -69,6 +78,7 @@ impl Default for MessageBatch {
                 .as_millis() as u64,
             name: "_none".to_string(),
             messages: Default::default(),
+            metadata: HashMap::new(),
         }
     }
 }

@@ -76,7 +76,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             port: 13000,
-            log_level: LogLevel::Info,
+            log_level: LogLevel::Trace,
             storage: Storage::Sqlite(Sqlite {
                 path: "./db".to_string(),
             }),

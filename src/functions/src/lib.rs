@@ -11,6 +11,7 @@ pub mod type_conversion;
 pub mod type_judgment;
 pub mod types;
 pub mod window;
+pub mod metadata;
 
 #[macro_export]
 macro_rules! add_or_set_message_value {

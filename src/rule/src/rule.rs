@@ -6,20 +6,21 @@ use common::{
 };
 use databoard::databoard_struct::Databoard;
 use devices::Device;
-use functions::{computes, filter, merge::merge::Merge, window};
-use message::MessageBatch;
+use functions::{computes, filter, merge::merge::Merge, metadata, window};
+use message::{MessageBatch, MessageValue};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{broadcast, mpsc, RwLock};
-use tracing::error;
+use tracing::{debug, error};
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
     AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
-    DeviceSourceNode, Node, NodeType, ReadRuleNodeResp, SearchRulesItemResp,
+    DeviceSourceNode, LogNode, Node, NodeType, ReadRuleNodeResp, SearchRulesItemResp,
 };
 use uuid::Uuid;
 
 use crate::{
     add_rule_on_count,
+    log::Logger,
     segment::{get_3d_ids, start_segment, take_source_ids},
     sub_rule_on_count,
 };
@@ -29,6 +30,7 @@ pub struct Rule {
     conf: CreateUpdateRuleReq,
     pub on: bool,
     pub stop_signal_tx: Option<broadcast::Sender<()>>,
+    logger: Option<Logger>,
 }
 
 impl Rule {
@@ -161,6 +163,7 @@ impl Rule {
             id: rule_id,
             conf: req,
             stop_signal_tx: None,
+            logger: None,
         })
     }
 
@@ -261,7 +264,12 @@ impl Rule {
                         data: serde_json::to_value(rule_info).unwrap(),
                     });
                 }
-                _ => {}
+                NodeType::Merge
+                | NodeType::Window
+                | NodeType::Filter
+                | NodeType::Operator
+                | NodeType::Computer
+                | NodeType::Log => {}
             }
         }
 
@@ -276,6 +284,8 @@ impl Rule {
     ) -> Result<()> {
         check_and_set_on_true!(self);
         add_rule_on_count();
+
+        debug!("here");
 
         let (stop_signal_tx, _) = broadcast::channel(16);
 
@@ -399,6 +409,7 @@ impl Rule {
                 for id in oned_ids {
                     let node = node_map.get(&id).unwrap();
                     match node.node_type {
+                        NodeType::DeviceSource | NodeType::AppSource => {}
                         NodeType::Merge => {
                             let source_ids = incoming_edges.get(&id).unwrap();
                             let mut rxs = vec![];
@@ -518,7 +529,26 @@ impl Rule {
                             };
                             mpsc_tx = Some(tx);
                         }
-                        _ => {}
+                        NodeType::Operator => todo!(),
+                        NodeType::Log => {
+                            debug!("here");
+                            ids.push(id);
+                            let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
+                            let tx = match &self.logger {
+                                Some(logger) => logger.get_mb_tx(),
+                                None => {
+                                    let logger = Logger::new(&self.id).await?;
+                                    let tx = logger.get_mb_tx();
+                                    self.logger = Some(logger);
+                                    tx
+                                }
+                            };
+                            functions.push(metadata::new_add_metadata(
+                                "log".to_string(),
+                                MessageValue::String(log_node.name),
+                            ));
+                            mpsc_tx = Some(tx);
+                        }
                     }
                 }
 

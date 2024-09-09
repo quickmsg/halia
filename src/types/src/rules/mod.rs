@@ -63,6 +63,7 @@ pub enum NodeType {
     DeviceSink,
     AppSink,
     Databoard,
+    Log,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -93,6 +94,11 @@ pub struct AppSinkNode {
 pub struct DataboardNode {
     pub databoard_id: Uuid,
     pub data_id: Uuid,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct LogNode {
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize)]
