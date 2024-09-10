@@ -1,8 +1,12 @@
 use axum::{
+    body::Body,
     extract::{Path, Query, State},
+    http::{header, StatusCode},
+    response::IntoResponse,
     routing::{self, get, post, put},
     Router,
 };
+use tokio_util::io::ReaderStream;
 use types::{
     rules::{QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
@@ -20,6 +24,7 @@ pub fn routes() -> Router<AppState> {
         .route("/:id", put(update))
         .route("/:id/start", put(start))
         .route("/:id/stop", put(stop))
+        .route("/:id/log/download", get(download_log))
         .route("/:id", routing::delete(delete))
 }
 
@@ -91,6 +96,31 @@ async fn stop(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<
     )
     .await?;
     Ok(AppSuccess::empty())
+}
+
+async fn download_log(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
+    let filename = match rule::get_log_filename(&state.rules, id).await {
+        Ok(filename) => filename,
+        Err(_) => return Err((StatusCode::NOT_FOUND, format!("规则 not found"))),
+    };
+
+    let file = match tokio::fs::File::open(filename).await {
+        Ok(file) => file,
+        Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
+    };
+
+    let stream = ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    let headers = [
+        (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
+        (
+            header::CONTENT_DISPOSITION,
+            "attachment; filename=\"download_file.txt\"",
+        ),
+    ];
+
+    Ok((headers, body))
 }
 
 async fn update(

@@ -738,25 +738,85 @@ impl Rule {
     }
 
     pub async fn tail_log(&self) -> Result<()> {
-        let file = File::open("xxx").await?;
-        let mut reader = BufReader::new(file).lines();
+        // let (tx, rx) = tokio::sync::mpsc::channel(16);
 
-        while let Some(line) = reader.next_line().await? {
-            // todo
-        }
+        // let file = File::open("xxx").await?;
+        // let mut reader = BufReader::new(file).lines();
 
-        loop {
-            if let Some(line) = reader.next_line().await? {
-                // todo
-            } else {
-                time::sleep(Duration::from_millis(30)).await;
-            }
-        }
+        // while let Some(line) = reader.next_line().await? {
+        //     tx.send(line).await?;
+        // }
+
+        // tokio::spawn(async move {
+        //     loop {
+        //         if let Some(line) = reader.next_line().await? {
+        //             tx.send(line).await?;
+        //         } else {
+        //             time::sleep(Duration::from_millis(30)).await;
+        //         }
+        //     }
+        // });
+
+        // Body::from_stream();
+        // StreamBody::new(rx);
+
+        // StreamBody::new(rx);
 
         Ok(())
     }
 
-    pub async fn download_log(&self) {}
+    // pub async fn download_log(&self) {
+    //     let file = File::open("xxx").await.unwrap();
+    //     let (mut tx, rx) = mpsc::channel(16);
+
+    //     tokio::spawn(async move {
+    //         let mut reader = BufReader::new(file).lines();
+    //         while let Some(line) = reader.next_line().await.unwrap() {
+    //             if tx.send(Ok(line)).await.is_err() {
+    //                 break;
+    //             }
+    //         }
+    //         drop(tx);
+    //     });
+
+    //     let mut response = HttpResponse::build(StatusCode::OK)
+    //         .content_type("text/plain")
+    //         .streaming(rx.map(|result| match result {
+    //             Ok(line) => Ok(Bytes::from(line + "\n")),
+    //             Err(_) => Err(error::ErrorInternalServerError("Error reading log file")),
+    //         }));
+
+    //     response.headers_mut().insert(
+    //         header::TRANSFER_ENCODING,
+    //         header::HeaderValue::from_static("chunked"),
+    //     );
+
+    //     Ok(response)
+    // }
+
+    pub async fn get_log_filename(&self) -> String {
+        // let file = match tokio::fs::File::open("download_file.txt").await {
+        //     Ok(file) => file,
+        //     Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
+        // };
+        // let stream = ReaderStream::new(file);
+        // let body = Body::from_stream(stream);
+
+        // let mut headers = HeaderMap::new();
+        // headers.insert(
+        //     header::CONTENT_TYPE,
+        //     "text/plain; charset=utf-8".parse().unwrap(),
+        // );
+        // headers.insert(
+        //     header::CONTENT_DISPOSITION,
+        //     "attachment; filename=\"download_file.txt\""
+        //         .parse()
+        //         .unwrap(),
+        // );
+
+        // Ok((headers, body))
+        todo!()
+    }
 
     pub async fn delete_log(&self) {}
 }

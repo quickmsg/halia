@@ -16,16 +16,14 @@ use std::{
 };
 use tokio::sync::RwLock;
 use types::{
-    rules::{
-        CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary,
-    },
+    rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
 };
 use uuid::Uuid;
 
+mod log;
 pub mod rule;
 mod segment;
-mod log;
 
 static RULE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 static RULE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
@@ -228,4 +226,13 @@ pub async fn delete(
     rules.write().await.retain(|rule| rule.id != id);
     storage::rule::delete_rule(pool, &id).await?;
     Ok(())
+}
+
+pub async fn get_log_filename(rules: &Arc<RwLock<Vec<Rule>>>, id: Uuid) -> HaliaResult<String> {
+    let filename = match rules.read().await.iter().find(|rule| rule.id == id) {
+        Some(rule) => rule.get_log_filename().await,
+        None => return Err(HaliaError::NotFound),
+    };
+
+    Ok(filename)
 }
