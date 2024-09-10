@@ -4,13 +4,13 @@ use sqlx::AnyPool;
 pub mod app;
 pub mod databoard;
 pub mod device;
+pub mod event;
 pub mod rule;
 pub mod sink;
 pub mod source;
 pub mod user;
-pub mod event;
 
-pub async fn create_tables(pool: &AnyPool) -> Result<()> {
+pub async fn create_tables(storage: &AnyPool) -> Result<()> {
     sqlx::query(
         r#"
 CREATE TABLE IF NOT EXISTS users (
@@ -58,17 +58,12 @@ CREATE TABLE IF NOT EXISTS rules (
     status INTEGER NOT NULL,
     conf TEXT NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY,
-    source_type INTEGER NOT NULL,
-    event_type INTEGER NOT NULL,
-    info TEXT
-);
 "#,
     )
-    .execute(pool)
+    .execute(storage)
     .await?;
+
+    event::create_talbe(storage).await?;
 
     Ok(())
 }

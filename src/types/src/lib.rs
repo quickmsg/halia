@@ -7,6 +7,7 @@ pub mod devices;
 pub mod mqtt_server;
 pub mod rules;
 pub mod user;
+pub mod events;
 
 #[derive(Serialize)]
 pub struct Dashboard {

@@ -80,6 +80,7 @@ lz4_flex = "0.11.3"
 rand = "0.8.5"
 apache-avro = "0.17.0"
 toml = "0.8.19"
+chrono = "0.4.38"
 
 [profile.release]
 strip = true

@@ -20,6 +20,7 @@ use paste::paste;
 use protocol::modbus::{rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
+use sqlx::AnyPool;
 use tokio::{
     net::TcpStream,
     select,
@@ -52,6 +53,8 @@ mod source;
 struct Modbus {
     pub id: Uuid,
 
+    storage: Arc<AnyPool>,
+
     base_conf: BaseConf,
     ext_conf: ModbusConf,
 
@@ -78,7 +81,11 @@ struct Modbus {
     >,
 }
 
-pub fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+pub fn new(
+    device_id: Uuid,
+    device_conf: DeviceConf,
+    storage: Arc<AnyPool>,
+) -> HaliaResult<Box<dyn Device>> {
     let ext_conf: ModbusConf = serde_json::from_value(device_conf.ext)?;
     Modbus::validate_conf(&ext_conf)?;
 
@@ -98,6 +105,7 @@ pub fn new(device_id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devi
         stop_signal_tx: None,
         device_err_tx: None,
         join_handle: None,
+        storage,
     }))
 }
 
@@ -135,12 +143,22 @@ impl Modbus {
 
         let err = self.err.clone();
 
+        let storage = self.storage.clone();
+        let id = self.id.clone();
         let rtt = self.rtt.clone();
         let handle = tokio::spawn(async move {
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
                         add_device_running_count();
+                        events::create_event(
+                            &storage,
+                            &id,
+                            events::SourceType::Device,
+                            events::EventType::Connect,
+                            None,
+                        )
+                        .await;
                         *err.write().await = None;
                         loop {
                             select! {
@@ -178,6 +196,14 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
+                        events::create_event(
+                            &storage,
+                            &id,
+                            events::SourceType::Device,
+                            events::EventType::DisConnect,
+                            Some(e.to_string()),
+                        )
+                        .await;
                         sub_device_running_count();
                         *err.write().await = Some(e.to_string());
                         let sleep = time::sleep(Duration::from_secs(reconnect));
@@ -434,6 +460,14 @@ impl Device for Modbus {
     async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
         trace!("设备开启");
+        events::create_event(
+            &self.storage,
+            &self.id,
+            events::SourceType::Device,
+            events::EventType::Start,
+            None,
+        )
+        .await;
         add_device_on_count();
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
@@ -469,6 +503,14 @@ impl Device for Modbus {
 
         check_and_set_on_false!(self);
         trace!("停止");
+        events::create_event(
+            &self.storage,
+            &self.id,
+            events::SourceType::Device,
+            events::EventType::Stop,
+            None,
+        )
+        .await;
         sub_device_on_count();
 
         for source in self.sources.write().await.iter_mut() {

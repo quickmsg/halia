@@ -4,6 +4,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use common::storage;
 use sqlx::AnyPool;
+use tracing::warn;
+use types::{
+    events::{QueryParams, SearchEventsResp},
+    Pagination,
+};
 use uuid::Uuid;
 
 pub enum SourceType {
@@ -24,38 +29,55 @@ impl Into<i32> for SourceType {
 
 pub enum EventType {
     // 启动
-    On,
+    Start,
     // 停止
-    Close,
-    // 异常
-    Error,
-    // 异常恢复
-    Recover,
+    Stop,
+    // 连接成功
+    Connect,
+    // 连接断开
+    DisConnect,
 }
 
 impl Into<i32> for EventType {
     fn into(self) -> i32 {
         match self {
-            EventType::On => 1,
-            EventType::Close => 2,
-            EventType::Error => 3,
-            EventType::Recover => 4,
+            EventType::Start => 1,
+            EventType::Stop => 2,
+            EventType::Connect => 3,
+            EventType::DisConnect => 4,
         }
     }
 }
 
 pub async fn create_event(
-    pool: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     id: &Uuid,
     source_type: SourceType,
     event_type: EventType,
     info: Option<String>,
-) -> Result<()> {
-    storage::event::create_event(pool, id, source_type.into(), event_type.into(), info).await?;
-
-    Ok(())
+) {
+    if let Err(e) =
+        storage::event::create_event(storage, id, source_type.into(), event_type.into(), info).await
+    {
+        warn!("create event failed: {}", e);
+    }
 }
 
-pub async fn search_events(pool: &Arc<AnyPool>) {}
+pub async fn search_events(
+    storage: &Arc<AnyPool>,
+    query_params: QueryParams,
+    pagination: Pagination,
+) -> SearchEventsResp {
+    match storage::event::search_events(storage, query_params, pagination).await {
+        Ok((events, total)) => todo!(),
+        Err(e) => {
+            warn!("search events failed: {}", e);
+            SearchEventsResp {
+                total: 0,
+                data: vec![],
+            }
+        }
+    }
+}
 
 pub async fn delete_events(pool: &Arc<AnyPool>, id: &Uuid) {}

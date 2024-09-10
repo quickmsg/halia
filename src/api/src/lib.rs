@@ -27,6 +27,7 @@ mod databoard_api;
 mod device_api;
 mod rule_api;
 mod user_api;
+mod event_api;
 
 pub static EMPTY_USER_CODE: u16 = 2;
 pub static WRONG_PASSWORD_CODE: u16 = 3;

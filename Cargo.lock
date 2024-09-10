@@ -221,6 +221,7 @@ dependencies = [
  "common",
  "databoard",
  "devices",
+ "events",
  "futures-util",
  "jsonwebtoken",
  "rule",
@@ -886,6 +887,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "chrono",
  "message",
  "paste",
  "serde",
@@ -1375,6 +1377,8 @@ dependencies = [
  "anyhow",
  "common",
  "sqlx",
+ "tracing",
+ "types",
  "uuid",
 ]
 

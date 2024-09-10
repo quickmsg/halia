@@ -232,7 +232,7 @@ pub async fn get_rule_info(
 }
 
 pub async fn create_device(
-    persistence: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
     device_id: Uuid,
     body: String,
@@ -244,14 +244,14 @@ pub async fn create_device(
     }
 
     let device = match req.device_type {
-        DeviceType::Modbus => modbus::new(device_id, req.conf)?,
+        DeviceType::Modbus => modbus::new(device_id, req.conf, storage.clone())?,
         DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
         DeviceType::Coap => coap::new(device_id, req.conf).await?,
     };
     add_device_count();
     devices.write().await.push(device);
     if persist {
-        storage::device::create_device(&persistence, &device_id, body).await?;
+        storage::device::create_device(&storage, &device_id, body).await?;
     }
     Ok(())
 }
