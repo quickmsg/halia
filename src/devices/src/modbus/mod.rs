@@ -14,6 +14,7 @@ use common::{
     check_delete_all, check_stop_all, deactive_ref, del_ref,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
+    storage,
 };
 use message::MessageBatch;
 use paste::paste;
@@ -151,14 +152,16 @@ impl Modbus {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
                         add_device_running_count();
-                        events::create_event(
+                        if let Err(e) = storage::device::create_event(
                             &storage,
                             &id,
-                            types::events::SourceType::Device,
-                            types::events::EventType::Connect,
+                            types::events::EventType::Connect.into(),
                             None,
                         )
-                        .await;
+                        .await
+                        {
+                            warn!("create event failed: {}", e);
+                        }
                         *err.write().await = None;
                         loop {
                             select! {
@@ -196,14 +199,16 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
-                        events::create_event(
+                        if let Err(e) = storage::device::create_event(
                             &storage,
                             &id,
-                            types::events::SourceType::Device,
-                            types::events::EventType::DisConnect,
+                            types::events::EventType::DisConnect.into(),
                             Some(e.to_string()),
                         )
-                        .await;
+                        .await
+                        {
+                            warn!("create event failed: {}", e);
+                        };
                         sub_device_running_count();
                         *err.write().await = Some(e.to_string());
                         let sleep = time::sleep(Duration::from_secs(reconnect));
@@ -460,14 +465,16 @@ impl Device for Modbus {
     async fn start(&mut self) -> HaliaResult<()> {
         check_and_set_on_true!(self);
         trace!("设备开启");
-        events::create_event(
+        if let Err(e) = storage::device::create_event(
             &self.storage,
             &self.id,
-            types::events::SourceType::Device,
-            types::events::EventType::Start,
+            types::events::EventType::Start.into(),
             None,
         )
-        .await;
+        .await
+        {
+            warn!("create event failed: {}", e);
+        }
         add_device_on_count();
 
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
@@ -503,14 +510,16 @@ impl Device for Modbus {
 
         check_and_set_on_false!(self);
         trace!("停止");
-        events::create_event(
+        if let Err(e) = storage::device::create_event(
             &self.storage,
             &self.id,
-            types::events::SourceType::Device,
-            types::events::EventType::Stop,
+            types::events::EventType::Stop.into(),
             None,
         )
-        .await;
+        .await
+        {
+            warn!("create event failed: {}", e);
+        }
         sub_device_on_count();
 
         for source in self.sources.write().await.iter_mut() {

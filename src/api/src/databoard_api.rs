@@ -16,6 +16,7 @@ use crate::{AppResult, AppState, AppSuccess};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/summary", get(get_databoards_summary))
+        .route("/rule", get(get_rule_info))
         .route("/", post(create_databoard))
         .route("/", get(search_databoards))
         .route("/:databoard_id", put(update_databoard))

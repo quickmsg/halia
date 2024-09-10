@@ -239,6 +239,7 @@ pub async fn create_device(
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateDeviceReq = serde_json::from_str(&body)?;
+    let db_req = req.clone();
     for device in devices.read().await.iter() {
         device.check_duplicate(&req)?;
     }
@@ -251,7 +252,7 @@ pub async fn create_device(
     add_device_count();
     devices.write().await.push(device);
     if persist {
-        storage::device::create_device(&storage, &device_id, body).await?;
+        storage::device::create_device(&storage, &device_id, db_req).await?;
     }
     Ok(())
 }

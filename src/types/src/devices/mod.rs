@@ -1,4 +1,4 @@
-use core::fmt;
+use std::fmt;
 
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
@@ -10,14 +10,14 @@ pub mod coap;
 pub mod modbus;
 pub mod opcua;
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateUpdateDeviceReq {
     pub device_type: DeviceType,
     #[serde(flatten)]
     pub conf: DeviceConf,
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceType {
     Modbus,
@@ -25,7 +25,30 @@ pub enum DeviceType {
     Coap,
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+impl Into<String> for DeviceType {
+    fn into(self) -> String {
+        match self {
+            DeviceType::Modbus => "modbus".to_owned(),
+            DeviceType::Opcua => "opcua".to_owned(),
+            DeviceType::Coap => "coap".to_owned(),
+        }
+    }
+}
+
+impl TryFrom<String> for DeviceType {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "modbus" => Ok(DeviceType::Modbus),
+            "opcua" => Ok(DeviceType::Opcua),
+            "coap" => Ok(DeviceType::Coap),
+            _ => bail!("未知协议类型: {}", value),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct DeviceConf {
     pub base: BaseConf,
     pub ext: serde_json::Value,

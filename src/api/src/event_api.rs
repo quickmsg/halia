@@ -19,5 +19,6 @@ async fn search_events(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppSuccess<SearchEventsResp> {
-    AppSuccess::data(events::search_events(&state.pool, query_params, pagination).await)
+    // AppSuccess::data(events::search_events(&state.pool, query_params, pagination).await)
+    todo!()
 }

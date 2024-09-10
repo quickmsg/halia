@@ -15,6 +15,8 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/summary", get(get_devices_summary))
         .route("/rule", get(get_rule_info))
+        // 查询事件
+        // .route("/event", get(get_rule_info(state, query)))
         .route("/", post(create_device))
         .route("/", get(search_devices))
         .route("/:device_id", put(update_device))

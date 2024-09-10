@@ -4,7 +4,6 @@ use sqlx::AnyPool;
 pub mod app;
 pub mod databoard;
 pub mod device;
-pub mod event;
 pub mod rule;
 pub mod sink;
 pub mod source;
@@ -16,12 +15,6 @@ pub async fn create_tables(storage: &AnyPool) -> Result<()> {
 CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL,
     password TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS devices (
-    id TEXT PRIMARY KEY,
-    status INTEGER NOT NULL,
-    conf TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS apps (
@@ -63,7 +56,7 @@ CREATE TABLE IF NOT EXISTS rules (
     .execute(storage)
     .await?;
 
-    event::create_talbe(storage).await?;
+    device::init_talbe(storage).await?;
 
     Ok(())
 }
