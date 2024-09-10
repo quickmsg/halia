@@ -14,7 +14,6 @@ pub fn routes() -> Router<AppState> {
     Router::new().route("/", get(search_events))
 }
 
-#[axum::debug_handler]
 async fn search_events(
     State(state): State<AppState>,
     Query(pagination): Query<Pagination>,

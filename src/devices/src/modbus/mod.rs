@@ -154,8 +154,8 @@ impl Modbus {
                         events::create_event(
                             &storage,
                             &id,
-                            events::SourceType::Device,
-                            events::EventType::Connect,
+                            types::events::SourceType::Device,
+                            types::events::EventType::Connect,
                             None,
                         )
                         .await;
@@ -199,8 +199,8 @@ impl Modbus {
                         events::create_event(
                             &storage,
                             &id,
-                            events::SourceType::Device,
-                            events::EventType::DisConnect,
+                            types::events::SourceType::Device,
+                            types::events::EventType::DisConnect,
                             Some(e.to_string()),
                         )
                         .await;
@@ -463,8 +463,8 @@ impl Device for Modbus {
         events::create_event(
             &self.storage,
             &self.id,
-            events::SourceType::Device,
-            events::EventType::Start,
+            types::events::SourceType::Device,
+            types::events::EventType::Start,
             None,
         )
         .await;
@@ -506,8 +506,8 @@ impl Device for Modbus {
         events::create_event(
             &self.storage,
             &self.id,
-            events::SourceType::Device,
-            events::EventType::Stop,
+            types::events::SourceType::Device,
+            types::events::EventType::Stop,
             None,
         )
         .await;

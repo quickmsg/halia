@@ -15,11 +15,11 @@ pub async fn create_talbe(storage: &AnyPool) -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY,
+    id TEXT,
     source_type INTEGER NOT NULL,
     event_type INTEGER NOT NULL,
     ts INTEGER NOT NULL,
-    info TEXT,
+    info TEXT
 );
 "#,
     )
@@ -51,7 +51,7 @@ pub async fn create_event(
             .await?;
         }
         None => {
-            sqlx::query("INSERT INTO events (id, source_type, event_type) VALUES (?1, ?2, ?3, ?4)")
+            sqlx::query("INSERT INTO events (id, source_type, event_type, ts) VALUES (?1, ?2, ?3, ?4)")
                 .bind(id.to_string())
                 .bind(source_type)
                 .bind(event_type)
