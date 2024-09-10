@@ -98,7 +98,9 @@ pub struct Sqlite {
 }
 
 #[derive(Deserialize)]
-pub struct Mysql {}
+pub struct Mysql {
+
+}
 
 #[derive(Deserialize)]
 pub struct Postgresql {}

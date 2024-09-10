@@ -11,15 +11,16 @@ use common::{
     error::{HaliaError, HaliaResult},
     storage,
 };
+use dashmap::DashMap;
 use message::MessageBatch;
 use sqlx::AnyPool;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
         SearchDevicesItemResp, SearchDevicesResp, SearchRuleInfo, Summary,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksResp, Value,
 };
 
@@ -135,25 +136,36 @@ pub trait Device: Send + Sync {
     fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
 }
 
-pub async fn load_from_persistence(
-    persistence: &Arc<AnyPool>,
-) -> HaliaResult<Arc<RwLock<Vec<Box<dyn Device>>>>> {
-    let db_devices = storage::device::read_devices(&persistence).await?;
+pub async fn load_from_storage(
+    storage: &Arc<AnyPool>,
+) -> HaliaResult<Arc<DashMap<Uuid, Box<dyn Device>>>> {
+    let db_devices = storage::device::read_devices(storage).await?;
+    let devices: Arc<DashMap<Uuid, Box<dyn Device>>> = Arc::new(DashMap::new());
 
-    let devices: Arc<RwLock<Vec<Box<dyn Device>>>> = Arc::new(RwLock::new(vec![]));
     for db_device in db_devices {
         let device_id = Uuid::from_str(&db_device.id).unwrap();
 
-        let db_sources = storage::source::read_sources(&persistence, &device_id).await?;
-        let db_sinks = storage::sink::read_sinks(&persistence, &device_id).await?;
+        let db_sources = storage::source::read_sources(storage, &device_id).await?;
+        let db_sinks = storage::sink::read_sinks(storage, &device_id).await?;
 
-        create_device(persistence, &devices, device_id, db_device.conf, false)
+        let req = CreateUpdateDeviceReq {
+            device_type: DeviceType::try_from(db_device.device_type).unwrap(),
+            conf: DeviceConf {
+                base: BaseConf {
+                    name: db_device.name,
+                    desc: db_device.desc,
+                },
+                ext: serde_json::from_str::<serde_json::Value>(&db_device.conf).unwrap(),
+            },
+        };
+
+        create_device(storage, &devices, device_id, req, false)
             .await
             .unwrap();
 
         for db_source in db_sources {
             create_source(
-                persistence,
+                storage,
                 &devices,
                 device_id,
                 Uuid::from_str(&db_source.id).unwrap(),
@@ -165,7 +177,7 @@ pub async fn load_from_persistence(
 
         for db_sink in db_sinks {
             create_sink(
-                persistence,
+                storage,
                 &devices,
                 device_id,
                 Uuid::from_str(&db_sink.id).unwrap(),
@@ -176,7 +188,7 @@ pub async fn load_from_persistence(
         }
 
         if db_device.status == 1 {
-            start_device(persistence, &devices, device_id).await?;
+            start_device(storage, &devices, device_id).await?;
         }
     }
 
@@ -192,65 +204,66 @@ pub fn get_summary() -> Summary {
 }
 
 pub async fn get_rule_info(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     query: QueryRuleInfo,
 ) -> HaliaResult<SearchRuleInfo> {
-    match devices
-        .read()
-        .await
-        .iter()
-        .find(|device| *device.get_id() == query.device_id)
-    {
-        Some(device) => {
-            let device_info = device.read().await;
-            match (query.source_id, query.sink_id) {
-                (Some(source_id), None) => {
-                    let source_info = device.read_source(&source_id).await?;
-                    Ok(SearchRuleInfo {
-                        device: device_info,
-                        source: Some(source_info),
-                        sink: None,
-                    })
-                }
-                (None, Some(sink_id)) => {
-                    let sink_info = device.read_sink(&sink_id).await?;
-                    Ok(SearchRuleInfo {
-                        device: device_info,
-                        source: None,
-                        sink: Some(sink_info),
-                    })
-                }
-                _ => {
-                    return Err(HaliaError::Common(
-                        "查询source_id或sink_id参数错误！".to_string(),
-                    ))
-                }
-            }
-        }
-        None => Err(HaliaError::NotFound),
-    }
+    todo!()
+
+    // match devices
+    //     .read()
+    //     .await
+    //     .iter()
+    //     .find(|device| *device.get_id() == query.device_id)
+    // {
+    //     Some(device) => {
+    //         let device_info = device.read().await;
+    //         match (query.source_id, query.sink_id) {
+    //             (Some(source_id), None) => {
+    //                 let source_info = device.read_source(&source_id).await?;
+    //                 Ok(SearchRuleInfo {
+    //                     device: device_info,
+    //                     source: Some(source_info),
+    //                     sink: None,
+    //                 })
+    //             }
+    //             (None, Some(sink_id)) => {
+    //                 let sink_info = device.read_sink(&sink_id).await?;
+    //                 Ok(SearchRuleInfo {
+    //                     device: device_info,
+    //                     source: None,
+    //                     sink: Some(sink_info),
+    //                 })
+    //             }
+    //             _ => {
+    //                 return Err(HaliaError::Common(
+    //                     "查询source_id或sink_id参数错误！".to_string(),
+    //                 ))
+    //             }
+    //         }
+    //     }
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn create_device(
     storage: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
-    body: String,
+    req: CreateUpdateDeviceReq,
     persist: bool,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateDeviceReq = serde_json::from_str(&body)?;
     let db_req = req.clone();
-    for device in devices.read().await.iter() {
-        device.check_duplicate(&req)?;
-    }
+    // for device in devices.read().await.iter() {
+    //     device.check_duplicate(&req)?;
+    // }
 
-    let device = match req.device_type {
+    let device = match &req.device_type {
         DeviceType::Modbus => modbus::new(device_id, req.conf, storage.clone())?,
         DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
         DeviceType::Coap => coap::new(device_id, req.conf).await?,
     };
     add_device_count();
-    devices.write().await.push(device);
+    devices.insert(device_id, device);
     if persist {
         storage::device::create_device(&storage, &device_id, db_req).await?;
     }
@@ -258,105 +271,116 @@ pub async fn create_device(
 }
 
 pub async fn search_devices(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     pagination: Pagination,
     query_params: QueryParams,
 ) -> SearchDevicesResp {
     let mut data = vec![];
     let mut total = 0;
 
-    for device in devices.read().await.iter().rev() {
-        let device = device.read().await;
-        if let Some(device_type) = &query_params.device_type {
-            if *device_type != device.common.device_type {
-                continue;
-            }
-        }
+    // for device in devices.read().await.iter().rev() {
+    //     let device = device.read().await;
+    //     if let Some(device_type) = &query_params.device_type {
+    //         if *device_type != device.common.device_type {
+    //             continue;
+    //         }
+    //     }
 
-        if let Some(name) = &query_params.name {
-            if !device.conf.base.name.contains(name) {
-                continue;
-            }
-        }
+    //     if let Some(name) = &query_params.name {
+    //         if !device.conf.base.name.contains(name) {
+    //             continue;
+    //         }
+    //     }
 
-        if let Some(on) = &query_params.on {
-            if device.common.on != *on {
-                continue;
-            }
-        }
+    //     if let Some(on) = &query_params.on {
+    //         if device.common.on != *on {
+    //             continue;
+    //         }
+    //     }
 
-        if let Some(err) = &query_params.err {
-            if device.common.err.is_some() != *err {
-                continue;
-            }
-        }
+    //     if let Some(err) = &query_params.err {
+    //         if device.common.err.is_some() != *err {
+    //             continue;
+    //         }
+    //     }
 
-        if pagination.check(total) {
-            data.push(device);
-        }
+    //     if pagination.check(total) {
+    //         data.push(device);
+    //     }
 
-        total += 1;
-    }
+    //     total += 1;
+    // }
 
     SearchDevicesResp { total, data }
 }
 
 pub async fn update_device(
-    persistence: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    storage: &Arc<AnyPool>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     body: String,
 ) -> HaliaResult<()> {
     let req: CreateUpdateDeviceReq = serde_json::from_str(&body)?;
 
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.update(req.conf).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    devices
+        .get_mut(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .update(req.conf)
+        .await?;
 
-    storage::device::update_device_conf(persistence, &device_id, body).await?;
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.update(req.conf).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
+
+    // storage::device::update_device_conf(persistence, &device_id, body).await?;
 
     Ok(())
 }
 
 pub async fn start_device(
-    persistence: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    storage: &Arc<AnyPool>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.start().await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.start().await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
-    storage::device::update_device_status(persistence, &device_id, true).await?;
+    storage::device::update_device_status(storage, &device_id, true).await?;
     Ok(())
 }
 
 pub async fn stop_device(
     persistence: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.stop().await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    devices
+        .get_mut(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .stop()
+        .await?;
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.stop().await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
     storage::device::update_device_status(persistence, &device_id, false).await?;
 
@@ -365,24 +389,31 @@ pub async fn stop_device(
 
 pub async fn delete_device(
     persistence: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.delete().await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.delete().await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
+
+    devices
+        .get_mut(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .delete()
+        .await?;
 
     sub_device_count();
-    devices
-        .write()
-        .await
-        .retain(|device| *device.get_id() != device_id);
+    devices.remove(&device_id);
+    // devices
+    //     .write()
+    //     .await
+    //     .retain(|device| *device.get_id() != device_id);
     storage::device::delete_device(persistence, &device_id).await?;
 
     Ok(())
@@ -390,22 +421,22 @@ pub async fn delete_device(
 
 pub async fn create_source(
     persistence: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     source_id: Uuid,
     body: String,
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.create_source(source_id.clone(), req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.create_source(source_id.clone(), req).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
     if persist {
         storage::source::create_source(persistence, &device_id, &source_id, body).await?;
@@ -415,39 +446,50 @@ pub async fn create_source(
 }
 
 pub async fn search_sources(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    match devices
-        .read()
-        .await
-        .iter()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => Ok(device.search_sources(pagination, query).await),
-        None => Err(HaliaError::NotFound),
-    }
+    Ok(devices
+        .get(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .search_sources(pagination, query)
+        .await)
+
+    // match devices
+    //     .read()
+    //     .await
+    //     .iter()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => Ok(device.search_sources(pagination, query).await),
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn update_source(
     persistence: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     source_id: Uuid,
     body: String,
 ) -> HaliaResult<()> {
     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.update_source(source_id, req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    devices
+        .get_mut(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .update_source(source_id, req)
+        .await?;
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.update_source(source_id, req).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
     storage::source::update_source(persistence, &source_id, body).await?;
 
@@ -455,37 +497,47 @@ pub async fn update_source(
 }
 
 pub async fn write_source_value(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     source_id: Uuid,
     req: Value,
 ) -> HaliaResult<()> {
-    match devices
-        .write()
+    devices
+        .get_mut(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .write_source_value(source_id, req)
         .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.write_source_value(source_id, req).await,
-        None => Err(HaliaError::NotFound),
-    }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.write_source_value(source_id, req).await,
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn delete_source(
     persistence: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     source_id: Uuid,
 ) -> HaliaResult<()> {
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.delete_source(source_id).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    devices
+        .get_mut(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .delete_source(source_id)
+        .await?;
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.delete_source(source_id).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
     storage::source::delete_source(persistence, &source_id).await?;
 
@@ -493,91 +545,108 @@ pub async fn delete_source(
 }
 
 pub async fn add_source_ref(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     source_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
     match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == *device_id)
+        .get_mut(device_id)
+        .expect("device not found")
+        .add_source_ref(source_id, rule_id)
     {
-        Some(device) => device.add_source_ref(source_id, rule_id),
-        None => Err(HaliaError::NotFound),
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
     }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == *device_id)
+    // {
+    //     Some(device) => device.add_source_ref(source_id, rule_id),
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn get_source_rx(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     source_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-    match devices
-        .write()
+    devices
+        .get_mut(device_id)
+        .ok_or(HaliaError::NotFound)?
+        .get_source_rx(source_id, rule_id)
         .await
-        .iter_mut()
-        .find(|device| *device.get_id() == *device_id)
-    {
-        Some(device) => device.get_source_rx(source_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
+
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == *device_id)
+    // {
+    //     Some(device) => device.get_source_rx(source_id, rule_id).await,
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn del_source_rx(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     source_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == *device_id)
-    {
-        Some(device) => device.del_source_rx(source_id, rule_id),
-        None => Err(HaliaError::NotFound),
-    }
+    devices
+        .get_mut(device_id)
+        .ok_or(HaliaError::NotFound)?
+        .del_source_rx(source_id, rule_id)
 }
 
 pub async fn del_source_ref(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     source_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
     match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == *device_id)
+        .get_mut(device_id)
+        .expect("device not found")
+        .del_source_ref(source_id, rule_id)
     {
-        Some(device) => device.del_source_ref(source_id, rule_id),
-        None => Err(HaliaError::NotFound),
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
     }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == *device_id)
+    // {
+    //     Some(device) => device.del_source_ref(source_id, rule_id),
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn create_sink(
     persistence: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     sink_id: Uuid,
     body: String,
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.create_sink(sink_id, req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.create_sink(sink_id, req).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
     if persist {
         storage::sink::create_sink(persistence, &device_id, &sink_id, body).await?;
@@ -587,39 +656,49 @@ pub async fn create_sink(
 }
 
 pub async fn search_sinks(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    match devices
-        .read()
-        .await
-        .iter()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => Ok(device.search_sinks(pagination, query).await),
-        None => Err(HaliaError::NotFound),
-    }
+    Ok(devices
+        .get(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .search_sinks(pagination, query)
+        .await)
+    // match devices
+    //     .read()
+    //     .await
+    //     .iter()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => Ok(device.search_sinks(pagination, query).await),
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn update_sink(
     pool: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     sink_id: Uuid,
     body: String,
 ) -> HaliaResult<()> {
     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.update_sink(sink_id, req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    devices
+        .get_mut(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .update_sink(sink_id, req)
+        .await?;
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.update_sink(sink_id, req).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
     storage::sink::update_sink(pool, &sink_id, body).await?;
 
@@ -628,19 +707,25 @@ pub async fn update_sink(
 
 pub async fn delete_sink(
     pool: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     sink_id: Uuid,
 ) -> HaliaResult<()> {
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == device_id)
-    {
-        Some(device) => device.delete_sink(sink_id).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    devices
+        .get_mut(&device_id)
+        .ok_or(HaliaError::NotFound)?
+        .delete_sink(sink_id)
+        .await?;
+
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == device_id)
+    // {
+    //     Some(device) => device.delete_sink(sink_id).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
     storage::sink::delete_sink(pool, &sink_id).await?;
 
@@ -648,69 +733,94 @@ pub async fn delete_sink(
 }
 
 pub async fn add_sink_ref(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     sink_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
     match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == *device_id)
+        .get_mut(device_id)
+        .expect("device not found")
+        .add_sink_ref(sink_id, rule_id)
     {
-        Some(device) => device.add_sink_ref(sink_id, rule_id),
-        None => Err(HaliaError::NotFound),
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
     }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == *device_id)
+    // {
+    //     Some(device) => device.add_sink_ref(sink_id, rule_id),
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn get_sink_tx(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     sink_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    match devices
-        .write()
+    devices
+        .get_mut(device_id)
+        .ok_or(HaliaError::NotFound)?
+        .get_sink_tx(sink_id, rule_id)
         .await
-        .iter_mut()
-        .find(|device| *device.get_id() == *device_id)
-    {
-        Some(device) => device.get_sink_tx(sink_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == *device_id)
+    // {
+    //     Some(device) => device.get_sink_tx(sink_id, rule_id).await,
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn del_sink_tx(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     sink_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
-    match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == *device_id)
-    {
-        Some(device) => device.del_sink_tx(sink_id, rule_id),
-        None => Err(HaliaError::NotFound),
-    }
+    devices
+        .get_mut(device_id)
+        .ok_or(HaliaError::NotFound)?
+        .del_sink_tx(sink_id, rule_id)
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == *device_id)
+    // {
+    //     Some(device) => device.del_sink_tx(sink_id, rule_id),
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn del_sink_ref(
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     sink_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
     match devices
-        .write()
-        .await
-        .iter_mut()
-        .find(|device| *device.get_id() == *device_id)
+        .get_mut(device_id)
+        .expect("device not found")
+        .del_sink_ref(sink_id, rule_id)
     {
-        Some(device) => device.del_sink_ref(sink_id, rule_id),
-        None => Err(HaliaError::NotFound),
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
     }
+    // match devices
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|device| *device.get_id() == *device_id)
+    // {
+    //     Some(device) => device.del_sink_ref(sink_id, rule_id),
+    //     None => Err(HaliaError::NotFound),
+    // }
 }

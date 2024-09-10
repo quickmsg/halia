@@ -47,7 +47,7 @@ async fn create_databoard(
     State(state): State<AppState>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::create_databoard(&state.pool, &state.databoards, Uuid::new_v4(), body, true).await?;
+    databoard::create_databoard(&state.storage, &state.databoards, Uuid::new_v4(), body, true).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -66,7 +66,7 @@ async fn update_databoard(
     Path(databoard_id): Path<Uuid>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::update_databoard(&state.pool, &state.databoards, databoard_id, body).await?;
+    databoard::update_databoard(&state.storage, &state.databoards, databoard_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -74,7 +74,7 @@ async fn delete_databoard(
     State(state): State<AppState>,
     Path(databoard_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::delete_databoard(&state.pool, &state.databoards, databoard_id).await?;
+    databoard::delete_databoard(&state.storage, &state.databoards, databoard_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -84,7 +84,7 @@ async fn create_data(
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     databoard::create_data(
-        &state.pool,
+        &state.storage,
         &state.databoards,
         databoard_id,
         Uuid::new_v4(),
@@ -111,7 +111,7 @@ async fn update_data(
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     databoard::update_data(
-        &state.pool,
+        &state.storage,
         &state.databoards,
         databoard_id,
         databoard_data_id,
@@ -126,7 +126,7 @@ async fn delete_data(
     Path((databoard_id, databoard_data_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
     databoard::delete_data(
-        &state.pool,
+        &state.storage,
         &state.databoards,
         databoard_id,
         databoard_data_id,

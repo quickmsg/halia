@@ -1,17 +1,18 @@
 use anyhow::Result;
 use sqlx::{prelude::FromRow, AnyPool};
 use types::{
-    devices::{CreateUpdateDeviceReq, DeviceType, QueryParams},
-    BaseConf, Pagination,
+    devices::{CreateUpdateDeviceReq, QueryParams},
+    Pagination,
 };
 use uuid::Uuid;
 
-#[derive(FromRow)]
+#[derive(FromRow, Debug)]
 pub struct Device {
     pub id: String,
     pub status: i32,
+    pub device_type: String,
     pub name: String,
-    pub desc: String,
+    pub desc: Option<String>,
     pub conf: String,
 }
 
@@ -23,13 +24,13 @@ pub struct Event {
     pub info: Option<String>,
 }
 
-pub async fn init_talbe(storage: &AnyPool) -> Result<()> {
+pub async fn init_table(storage: &AnyPool) -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS devices (
     id TEXT PRIMARY KEY,
     status INTEGER NOT NULL,
-    type TEXT NOT NULL,
+    device_type TEXT NOT NULL,
     name TEXT NOT NULL,
     desc TEXT,
     conf TEXT NOT NULL
@@ -49,19 +50,11 @@ CREATE TABLE IF NOT EXISTS device_events (
     Ok(())
 }
 
-pub async fn create_device(
-    pool: &AnyPool,
-    id: &Uuid,
-    req: CreateUpdateDeviceReq,
-    // typ: DeviceType,
-    // base_conf: BaseConf,
-    // ext_conf: serde_json::Value,
-    // conf: String,
-) -> Result<()> {
+pub async fn create_device(pool: &AnyPool, id: &Uuid, req: CreateUpdateDeviceReq) -> Result<()> {
     let ext_conf = serde_json::to_string(&req.conf.ext)?;
     match req.conf.base.desc {
         Some(desc) => {
-            sqlx::query("INSERT INTO devices (id, status, type, name, desc, conf) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+            sqlx::query("INSERT INTO devices (id, status, device_type, name, desc, conf) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
                 .bind(id.to_string())
                 .bind(false as i32)
                 .bind(req.device_type.to_string())
@@ -73,7 +66,7 @@ pub async fn create_device(
         }
         None => {
             sqlx::query(
-                "INSERT INTO devices (id, status, type, name, conf) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO devices (id, status, device_type, name, conf) VALUES (?1, ?2, ?3, ?4, ?5)",
             )
             .bind(id.to_string())
             .bind(false as i32)
@@ -89,7 +82,7 @@ pub async fn create_device(
 }
 
 pub async fn read_devices(pool: &AnyPool) -> Result<Vec<Device>> {
-    let devices = sqlx::query_as::<_, Device>("SELECT id, status, conf FROM devices")
+    let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices")
         .fetch_all(pool)
         .await?;
 

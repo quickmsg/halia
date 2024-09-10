@@ -77,7 +77,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn check_empty_user(State(state): State<AppState>) -> AppResult<AppSuccess<AdminExists>> {
-    let exists = storage::user::check_admin_exists(&state.pool)
+    let exists = storage::user::check_admin_exists(&state.storage)
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
@@ -88,7 +88,7 @@ async fn registration(
     State(state): State<AppState>,
     Json(password): Json<Password>,
 ) -> AppResult<AppSuccess<()>> {
-    let exists = storage::user::check_admin_exists(&state.pool)
+    let exists = storage::user::check_admin_exists(&state.storage)
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
@@ -96,7 +96,7 @@ async fn registration(
         return Err(AppError::new(1, "管理员账户已存在！".to_string()));
     }
 
-    storage::user::create_user(&state.pool, "admin".to_string(), password.password)
+    storage::user::create_user(&state.storage, "admin".to_string(), password.password)
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
@@ -107,7 +107,7 @@ async fn login(
     State(state): State<AppState>,
     Json(user): Json<User>,
 ) -> AppResult<AppSuccess<AuthInfo>> {
-    let db_user = match storage::user::read_user(&state.pool).await {
+    let db_user = match storage::user::read_user(&state.storage).await {
         Ok(user) => match user {
             Some(user) => user,
             None => {
@@ -151,7 +151,7 @@ async fn password(
     // 从token中读取
     let username = "xxs".to_owned();
     match storage::user::update_user_password(
-        &state.pool,
+        &state.storage,
         username,
         update_password.password,
         update_password.new_password,

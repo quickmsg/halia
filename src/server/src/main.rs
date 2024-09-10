@@ -56,19 +56,19 @@ async fn main() -> Result<()> {
         config::Storage::Postgresql(_) => todo!(),
     };
 
-    let pool = AnyPool::connect_with(opt).await?;
+    let storage = AnyPool::connect_with(opt).await?;
+    storage::create_tables(&storage).await?;
 
-    storage::create_tables(&pool).await?;
-    let pool = Arc::new(pool);
-    let devices = devices::load_from_persistence(&pool).await.unwrap();
-    let apps = apps::load_from_persistence(&pool).await.unwrap();
-    let databoards = databoard::load_from_persistence(&pool).await.unwrap();
-    let rules = rule::load_from_persistence(&pool, &devices, &apps, &databoards)
+    let storage = Arc::new(storage);
+    let devices = devices::load_from_storage(&storage).await.unwrap();
+    let apps = apps::load_from_persistence(&storage).await.unwrap();
+    let databoards = databoard::load_from_persistence(&storage).await.unwrap();
+    let rules = rule::load_from_persistence(&storage, &devices, &apps, &databoards)
         .await
         .unwrap();
 
     info!("server starting...");
-    api::start(config.port, pool, devices, apps, databoards, rules).await;
+    api::start(config.port, storage, devices, apps, databoards, rules).await;
 
     Ok(())
 }

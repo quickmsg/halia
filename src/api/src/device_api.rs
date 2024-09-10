@@ -4,7 +4,10 @@ use axum::{
     Json, Router,
 };
 use types::{
-    devices::{QueryParams, QueryRuleInfo, SearchDevicesResp, SearchRuleInfo, Summary},
+    devices::{
+        CreateUpdateDeviceReq, QueryParams, QueryRuleInfo, SearchDevicesResp, SearchRuleInfo,
+        Summary,
+    },
     Pagination, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
@@ -58,8 +61,11 @@ async fn get_rule_info(
     Ok(AppSuccess::data(rule_info))
 }
 
-async fn create_device(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
-    devices::create_device(&state.pool, &state.devices, Uuid::new_v4(), body, true).await?;
+async fn create_device(
+    State(state): State<AppState>,
+    Json(req): Json<CreateUpdateDeviceReq>,
+) -> AppResult<AppSuccess<()>> {
+    devices::create_device(&state.storage, &state.devices, Uuid::new_v4(), req, true).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -76,7 +82,7 @@ async fn update_device(
     Path(device_id): Path<Uuid>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_device(&state.pool, &state.devices, device_id, body).await?;
+    devices::update_device(&state.storage, &state.devices, device_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -84,7 +90,7 @@ async fn start_device(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::start_device(&state.pool, &state.devices, device_id).await?;
+    devices::start_device(&state.storage, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -92,7 +98,7 @@ async fn stop_device(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::stop_device(&state.pool, &state.devices, device_id).await?;
+    devices::stop_device(&state.storage, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -100,7 +106,7 @@ async fn delete_device(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_device(&state.pool, &state.devices, device_id).await?;
+    devices::delete_device(&state.storage, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -110,7 +116,7 @@ async fn create_source(
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_source(
-        &state.pool,
+        &state.storage,
         &state.devices,
         device_id,
         Uuid::new_v4(),
@@ -137,7 +143,7 @@ async fn update_source(
     Path((device_id, source_id)): Path<(Uuid, Uuid)>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_source(&state.pool, &state.devices, device_id, source_id, body).await?;
+    devices::update_source(&state.storage, &state.devices, device_id, source_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -154,7 +160,7 @@ async fn delete_source(
     State(state): State<AppState>,
     Path((device_id, source_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_source(&state.pool, &state.devices, device_id, source_id).await?;
+    devices::delete_source(&state.storage, &state.devices, device_id, source_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -164,7 +170,7 @@ async fn create_sink(
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_sink(
-        &state.pool,
+        &state.storage,
         &state.devices,
         device_id,
         Uuid::new_v4(),
@@ -190,7 +196,7 @@ async fn update_sink(
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_sink(&state.pool, &state.devices, device_id, sink_id, body).await?;
+    devices::update_sink(&state.storage, &state.devices, device_id, sink_id, body).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -198,6 +204,6 @@ async fn delete_sink(
     State(state): State<AppState>,
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_sink(&state.pool, &state.devices, device_id, sink_id).await?;
+    devices::delete_sink(&state.storage, &state.devices, device_id, sink_id).await?;
     Ok(AppSuccess::empty())
 }

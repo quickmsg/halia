@@ -30,7 +30,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
@@ -87,7 +87,10 @@ pub fn new(
     device_conf: DeviceConf,
     storage: Arc<AnyPool>,
 ) -> HaliaResult<Box<dyn Device>> {
+    debug!("here");
+    debug!("{:?}", device_conf.ext);
     let ext_conf: ModbusConf = serde_json::from_value(device_conf.ext)?;
+    debug!("here");
     Modbus::validate_conf(&ext_conf)?;
 
     Ok(Box::new(Modbus {

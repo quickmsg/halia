@@ -3,6 +3,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     storage,
 };
+use dashmap::DashMap;
 use databoard::databoard_struct::Databoard;
 use devices::Device;
 use rule::Rule;
@@ -61,7 +62,7 @@ pub fn get_summary() -> Summary {
 
 pub async fn load_from_persistence(
     pool: &Arc<AnyPool>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
 ) -> HaliaResult<Arc<RwLock<Vec<Rule>>>> {
@@ -92,7 +93,7 @@ pub async fn load_from_persistence(
 pub async fn create(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
@@ -143,7 +144,7 @@ pub async fn search(
 
 pub async fn read(
     rules: &Arc<RwLock<Vec<Rule>>>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
@@ -157,7 +158,7 @@ pub async fn read(
 pub async fn start(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
@@ -174,7 +175,7 @@ pub async fn start(
 pub async fn stop(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
@@ -191,7 +192,7 @@ pub async fn stop(
 pub async fn update(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,
@@ -212,7 +213,7 @@ pub async fn update(
 pub async fn delete(
     pool: &Arc<AnyPool>,
     rules: &Arc<RwLock<Vec<Rule>>>,
-    devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<RwLock<Vec<Databoard>>>,
     id: Uuid,

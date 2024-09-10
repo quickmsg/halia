@@ -34,7 +34,7 @@ async fn get_rules_summary() -> AppSuccess<Summary> {
 
 async fn create(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
     rule::create(
-        &state.pool,
+        &state.storage,
         &state.rules,
         &state.devices,
         &state.apps,
@@ -74,7 +74,7 @@ async fn read(
 
 async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
     rule::start(
-        &state.pool,
+        &state.storage,
         &state.rules,
         &state.devices,
         &state.apps,
@@ -87,7 +87,7 @@ async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult
 
 async fn stop(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
     rule::stop(
-        &state.pool,
+        &state.storage,
         &state.rules,
         &state.devices,
         &state.apps,
@@ -129,7 +129,7 @@ async fn update(
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     rule::update(
-        &state.pool,
+        &state.storage,
         &state.rules,
         &state.devices,
         &state.apps,
@@ -143,7 +143,7 @@ async fn update(
 
 async fn delete(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
     rule::delete(
-        &state.pool,
+        &state.storage,
         &state.rules,
         &state.devices,
         &state.apps,

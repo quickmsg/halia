@@ -4,17 +4,13 @@ use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
 };
+use dashmap::DashMap;
 use databoard::databoard_struct::Databoard;
 use devices::Device;
 use functions::{computes, filter, merge::merge::Merge, metadata, window};
 use message::{MessageBatch, MessageValue};
-use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio::{
-    fs::File,
-    io::{AsyncBufReadExt, BufReader},
-    sync::{broadcast, mpsc, RwLock},
-    time,
-};
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::error;
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
@@ -40,7 +36,7 @@ pub struct Rule {
 
 impl Rule {
     pub async fn new(
-        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<RwLock<Vec<Databoard>>>,
         rule_id: Uuid,
@@ -182,7 +178,7 @@ impl Rule {
 
     pub async fn read(
         &self,
-        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<RwLock<Vec<Databoard>>>,
     ) -> HaliaResult<Vec<ReadRuleNodeResp>> {
@@ -283,7 +279,7 @@ impl Rule {
 
     pub async fn start(
         &mut self,
-        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<RwLock<Vec<Databoard>>>,
     ) -> Result<()> {
@@ -587,7 +583,7 @@ impl Rule {
 
     pub async fn stop(
         &mut self,
-        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<RwLock<Vec<Databoard>>>,
     ) -> HaliaResult<()> {
@@ -654,7 +650,7 @@ impl Rule {
 
     pub async fn update(
         &mut self,
-        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<RwLock<Vec<Databoard>>>,
         req: CreateUpdateRuleReq,
@@ -675,7 +671,7 @@ impl Rule {
 
     pub async fn delete(
         &mut self,
-        devices: &Arc<RwLock<Vec<Box<dyn Device>>>>,
+        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<RwLock<Vec<Databoard>>>,
     ) -> HaliaResult<()> {

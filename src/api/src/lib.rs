@@ -9,6 +9,7 @@ use axum::{
     Json, Router,
 };
 use common::{error::HaliaError, sys::get_machine_info};
+use dashmap::DashMap;
 use databoard::databoard_struct::Databoard;
 use devices::Device;
 use rule::rule::Rule;
@@ -21,6 +22,7 @@ use tower_http::{
 };
 use types::Dashboard;
 use user_api::auth;
+use uuid::Uuid;
 
 mod app_api;
 mod databoard_api;
@@ -93,8 +95,8 @@ impl IntoResponse for AppError {
 
 #[derive(Clone)]
 struct AppState {
-    pool: Arc<AnyPool>,
-    devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
+    storage: Arc<AnyPool>,
+    devices: Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: Arc<RwLock<Vec<Databoard>>>,
     rules: Arc<RwLock<Vec<Rule>>>,
@@ -102,14 +104,14 @@ struct AppState {
 
 pub async fn start(
     port: u16,
-    pool: Arc<AnyPool>,
-    devices: Arc<RwLock<Vec<Box<dyn Device>>>>,
+    storage: Arc<AnyPool>,
+    devices: Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: Arc<RwLock<Vec<Databoard>>>,
     rules: Arc<RwLock<Vec<Rule>>>,
 ) {
     let state = AppState {
-        pool,
+        storage,
         devices,
         apps,
         databoards,

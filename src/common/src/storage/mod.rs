@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS rules (
     .execute(storage)
     .await?;
 
-    device::init_talbe(storage).await?;
+    device::init_table(storage).await?;
 
     Ok(())
 }
