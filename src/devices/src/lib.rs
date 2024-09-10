@@ -18,8 +18,8 @@ use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
-        SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemResp, SearchDevicesResp,
-        SearchRuleInfo, Summary,
+        SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemFromMemory,
+        SearchDevicesItemResp, SearchDevicesResp, SearchRuleInfo, Summary,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksResp, Value,
@@ -75,11 +75,9 @@ pub(crate) fn sub_device_running_count() {
 pub trait Device: Send + Sync {
     fn get_id(&self) -> &Uuid;
     fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()>;
-    async fn read(&self) -> SearchDevicesItemResp;
-    async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()>;
-    // async fn start(&mut self) -> HaliaResult<()>;
+    async fn read(&self) -> SearchDevicesItemFromMemory;
+    async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
-    // async fn delete(&mut self) -> HaliaResult<()>;
 
     async fn create_source(
         &mut self,
@@ -140,52 +138,53 @@ pub trait Device: Send + Sync {
 pub async fn load_from_storage(
     storage: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<DashMap<Uuid, Box<dyn Device>>>> {
-    let db_devices = storage::device::read_devices(storage).await?;
+    let db_devices = storage::device::read_on_devices(storage).await?;
     let devices: Arc<DashMap<Uuid, Box<dyn Device>>> = Arc::new(DashMap::new());
 
     for db_device in db_devices {
         let device_id = Uuid::from_str(&db_device.id).unwrap();
 
+        start_device(storage, &devices, device_id).await?;
+
         let db_sources = storage::source::read_sources(storage, &device_id).await?;
         let db_sinks = storage::sink::read_sinks(storage, &device_id).await?;
 
-        let req = CreateUpdateDeviceReq {
-            device_type: DeviceType::try_from(db_device.device_type).unwrap(),
-            conf: DeviceConf {
-                base: BaseConf {
-                    name: db_device.name,
-                    desc: db_device.desc,
-                },
-                ext: serde_json::from_str::<serde_json::Value>(&db_device.conf).unwrap(),
-            },
-        };
-
         for db_source in db_sources {
-            // create_source(
-            //     storage,
-            //     &devices,
-            //     device_id,
-            //     Uuid::from_str(&db_source.id).unwrap(),
-            //     db_source.conf,
-            // )
-            // .await?;
-            todo!()
-        }
-
-        for db_sink in db_sinks {
-            create_sink(
+            let req = CreateUpdateSourceOrSinkReq {
+                base: BaseConf {
+                    name: db_source.name,
+                    desc: db_source.desc,
+                },
+                ext: serde_json::to_value(db_source.conf).unwrap(),
+            };
+            create_source(
                 storage,
                 &devices,
                 device_id,
-                Uuid::from_str(&db_sink.id).unwrap(),
-                db_sink.conf,
+                Uuid::from_str(&db_source.id).unwrap(),
+                req,
                 false,
             )
             .await?;
         }
 
-        if db_device.status == 1 {
-            start_device(storage, &devices, device_id).await?;
+        for db_sink in db_sinks {
+            let req = CreateUpdateSourceOrSinkReq {
+                base: BaseConf {
+                    name: db_sink.name,
+                    desc: db_sink.desc,
+                },
+                ext: serde_json::to_value(db_sink.conf).unwrap(),
+            };
+            create_sink(
+                storage,
+                &devices,
+                device_id,
+                Uuid::from_str(&db_sink.id).unwrap(),
+                req,
+                false,
+            )
+            .await?;
         }
     }
 
@@ -275,14 +274,24 @@ pub async fn search_devices(
     for db_device in db_devices {
         let device_id = Uuid::from_str(&db_device.id).unwrap();
 
+        let memory_info = match db_device.status {
+            0 => None,
+            1 => Some(devices.get(&device_id).unwrap().read().await),
+            _ => unreachable!(),
+        };
+
+        let source_cnt = storage::source::count_sources_by_parent_id(storage, &device_id).await?;
+        let sink_cnt = storage::sink::count_sinks_by_parent_id(storage, &device_id).await?;
+
         // 从内存中获取设备信息
         resp_devices.push(SearchDevicesItemResp {
             common: SearchDevicesItemCommon {
                 id: device_id,
                 device_type: DeviceType::try_from(db_device.device_type).unwrap(),
                 on: db_device.status == 1,
-                err: None,
-                rtt: None,
+                source_cnt,
+                sink_cnt,
+                memory_info,
             },
             conf: SearchDevicesItemConf {
                 base: BaseConf {
@@ -291,9 +300,6 @@ pub async fn search_devices(
                 },
                 ext: serde_json::from_str(&db_device.conf).unwrap(),
             },
-            // todo
-            source_cnt: 1,
-            sink_cnt: 1,
         });
     }
     // for device in devices.read().await.iter().rev() {
@@ -341,9 +347,10 @@ pub async fn update_device(
     device_id: Uuid,
     req: CreateUpdateDeviceReq,
 ) -> HaliaResult<()> {
-    if let Some(device) = devices.get_mut(&device_id) {
-        // device.update(&req.conf).await?;
-        todo!()
+    if let Some(mut device) = devices.get_mut(&device_id) {
+        let db_device = storage::device::read_device(storage, &device_id).await?;
+        // TODO 判断是否应该重启
+        device.update(db_device.conf, &req.conf.ext).await?;
     }
 
     storage::device::update_device_conf(storage, &device_id, req).await?;
@@ -379,9 +386,9 @@ pub async fn start_device(
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
     };
-
     devices.insert(device_id, device);
 
+    add_device_on_count();
     storage::device::update_device_status(storage, &device_id, true).await?;
     Ok(())
 }
@@ -414,6 +421,12 @@ pub async fn delete_device(
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
+    if devices.contains_key(&device_id) {
+        return Err(HaliaError::Common("运行中，不能删除".to_string()));
+    }
+
+    // todo 判断引用
+
     // TODO 停止时
     // devices
     //     .get_mut(&device_id)
@@ -434,22 +447,15 @@ pub async fn create_source(
     device_id: Uuid,
     source_id: Uuid,
     req: CreateUpdateSourceOrSinkReq,
+    persist: bool,
 ) -> HaliaResult<()> {
     if let Some(mut device) = devices.get_mut(&device_id) {
         device.create_source(source_id, &req).await?;
     }
-    // let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.create_source(source_id.clone(), req).await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
 
-    storage::source::create_source(storage, &device_id, &source_id, req).await?;
+    if persist {
+        storage::source::create_source(storage, &device_id, &source_id, req).await?;
+    }
 
     Ok(())
 }
@@ -643,10 +649,9 @@ pub async fn create_sink(
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     sink_id: Uuid,
-    body: String,
+    req: CreateUpdateSourceOrSinkReq,
     persist: bool,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
     // match devices
     //     .write()
     //     .await
@@ -658,7 +663,7 @@ pub async fn create_sink(
     // }
 
     if persist {
-        storage::sink::create_sink(persistence, &device_id, &sink_id, body).await?;
+        storage::sink::create_sink(persistence, &device_id, &sink_id, req).await?;
     }
 
     Ok(())

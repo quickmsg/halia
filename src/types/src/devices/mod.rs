@@ -102,8 +102,6 @@ pub struct SearchDevicesResp {
 pub struct SearchDevicesItemResp {
     pub common: SearchDevicesItemCommon,
     pub conf: SearchDevicesItemConf,
-    pub source_cnt: usize,
-    pub sink_cnt: usize,
 }
 
 #[derive(Serialize)]
@@ -111,10 +109,17 @@ pub struct SearchDevicesItemCommon {
     pub id: Uuid,
     pub device_type: DeviceType,
     pub on: bool,
+    pub source_cnt: usize,
+    pub sink_cnt: usize,
+    #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_info: Option<SearchDevicesItemFromMemory>,
+}
+
+#[derive(Serialize)]
+pub struct SearchDevicesItemFromMemory {
     pub err: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rtt: Option<u16>,
+    pub rtt: u16,
 }
 
 #[derive(Serialize)]

@@ -23,18 +23,6 @@ CREATE TABLE IF NOT EXISTS apps (
     conf TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS sources (
-    id TEXT PRIMARY KEY,
-    parent_id TEXT NOT NULL,
-    conf TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS sinks (
-    id TEXT PRIMARY KEY,
-    parent_id TEXT NOT NULL,
-    conf TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS databoards (
     id TEXT PRIMARY KEY,
     conf TEXT NOT NULL
@@ -57,6 +45,8 @@ CREATE TABLE IF NOT EXISTS rules (
     .await?;
 
     device::init_table(storage).await?;
+    source::init_table(storage).await?;
+    sink::init_table(storage).await?;
 
     Ok(())
 }

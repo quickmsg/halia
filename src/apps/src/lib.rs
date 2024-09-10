@@ -146,15 +146,16 @@ pub async fn load_from_persistence(
         create_app(pool, &apps, app_id, db_app.conf, false).await?;
 
         for db_source in db_sources {
-            create_source(
-                pool,
-                &apps,
-                app_id,
-                Uuid::from_str(&db_source.id).unwrap(),
-                db_source.conf,
-                false,
-            )
-            .await?;
+            // create_source(
+            //     pool,
+            //     &apps,
+            //     app_id,
+            //     Uuid::from_str(&db_source.id).unwrap(),
+            //     db_source.conf,
+            //     false,
+            // )
+            // .await?;
+            todo!()
         }
 
         for db_sink in db_sinks {
@@ -387,7 +388,7 @@ pub async fn create_source(
     req: CreateUpdateSourceOrSinkReq,
     persist: bool,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
+    // let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
     match apps
         .write()
         .await
@@ -399,7 +400,8 @@ pub async fn create_source(
     }
 
     if persist {
-        storage::source::create_source(pool, &app_id, &source_id, req).await?;
+        todo!()
+        // storage::source::create_source(pool, &app_id, &source_id, req).await?;
     }
 
     Ok(())
@@ -547,7 +549,8 @@ pub async fn create_sink(
     }
 
     if persist {
-        storage::sink::create_sink(pool, &app_id, &sink_id, body).await?;
+        // storage::sink::create_sink(pool, &app_id, &sink_id, body).await?;
+        todo!()
     }
 
     Ok(())

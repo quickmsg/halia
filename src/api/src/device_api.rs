@@ -123,6 +123,7 @@ async fn create_source(
         device_id,
         Uuid::new_v4(),
         req,
+        true,
     )
     .await?;
     Ok(AppSuccess::empty())
@@ -168,14 +169,14 @@ async fn delete_source(
 async fn create_sink(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
-    body: String,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_sink(
         &state.storage,
         &state.devices,
         device_id,
         Uuid::new_v4(),
-        body,
+        req,
         true,
     )
     .await?;

@@ -1,11 +1,32 @@
 use anyhow::Result;
-use sqlx::{AnyPool, Row};
+use sqlx::{AnyPool, FromRow};
 use types::CreateUpdateSourceOrSinkReq;
 use uuid::Uuid;
 
+#[derive(FromRow)]
 pub struct Source {
     pub id: String,
+    pub name: String,
+    pub desc: Option<String>,
     pub conf: String,
+}
+
+pub async fn init_table(storage: &AnyPool) -> Result<()> {
+    sqlx::query(
+        r#"  
+CREATE TABLE IF NOT EXISTS sources (
+    id TEXT PRIMARY KEY,
+    parent_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    desc TEXT,
+    conf TEXT NOT NULL
+);
+"#,
+    )
+    .execute(storage)
+    .await?;
+
+    Ok(())
 }
 
 pub async fn create_source(
@@ -14,30 +35,50 @@ pub async fn create_source(
     id: &Uuid,
     req: CreateUpdateSourceOrSinkReq,
 ) -> Result<()> {
-    sqlx::query("INSERT INTO sources (id, parent_id, conf) VALUES (?1, ?2, ?3)")
-        .bind(id.to_string())
-        .bind(parent_id.to_string())
-        // todo
-        // .bind(conf)
-        .execute(pool)
-        .await?;
-
+    let conf = serde_json::to_string(&req.ext)?;
+    match req.base.desc {
+        Some(desc) => {
+            sqlx::query(
+                r#"INSERT INTO sources (id, parent_id, name, desc, conf) VALUES (?1, ?2, ?3 ?4 ?5)"#,
+            )
+            .bind(id.to_string())
+            .bind(parent_id.to_string())
+            .bind(req.base.name)
+            .bind(desc)
+            .bind(conf)
+            .execute(pool)
+            .await?;
+        }
+        None => {
+            sqlx::query(
+                r#"INSERT INTO sources (id, parent_id, name, conf) VALUES (?1, ?2, ?3 ?4)"#,
+            )
+            .bind(id.to_string())
+            .bind(parent_id.to_string())
+            .bind(req.base.name)
+            .bind(conf)
+            .execute(pool)
+            .await?;
+        }
+    }
     Ok(())
 }
 
 pub async fn read_sources(pool: &AnyPool, parent_id: &Uuid) -> Result<Vec<Source>> {
-    let rows = sqlx::query("SELECT id, conf FROM sources WHERE parent_id = ?1")
-        .bind(parent_id.to_string())
-        .fetch_all(pool)
-        .await?;
-    let mut sources = vec![];
-    for row in rows {
-        let id: String = row.get(0);
-        let conf: String = row.get(1);
-        sources.push(Source { id, conf });
-    }
+    Ok(
+        sqlx::query_as::<_, Source>("SELECT * FROM sources WHERE parent_id = ?1")
+            .bind(parent_id.to_string())
+            .fetch_all(pool)
+            .await?,
+    )
+}
 
-    Ok(sources)
+pub async fn count_sources_by_parent_id(pool: &AnyPool, parent_id: &Uuid) -> Result<usize> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources WHERE parent_id = ?1")
+        .bind(parent_id.to_string())
+        .fetch_one(pool)
+        .await?;
+    Ok(count as usize)
 }
 
 pub async fn update_source(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {

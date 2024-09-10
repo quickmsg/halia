@@ -107,8 +107,8 @@ pub async fn search_devices(
     Ok((count as usize, devices))
 }
 
-pub async fn read_devices(pool: &AnyPool) -> Result<Vec<Device>> {
-    let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices")
+pub async fn read_on_devices(pool: &AnyPool) -> Result<Vec<Device>> {
+    let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE status = 1")
         .fetch_all(pool)
         .await?;
 

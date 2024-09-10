@@ -1,11 +1,11 @@
 use axum::{
     extract::{Path, Query, State},
     routing::{self, get, post, put},
-    Router,
+    Json, Router,
 };
 use types::{
     apps::{QueryParams, QueryRuleInfo, SearchAppsResp, SearchRuleInfo, Summary},
-    Pagination, SearchSourcesOrSinksResp,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -105,9 +105,17 @@ async fn delete_app(
 async fn create_source(
     State(state): State<AppState>,
     Path(app_id): Path<Uuid>,
-    body: String,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    apps::create_source(&state.storage, &state.apps, app_id, Uuid::new_v4(), body, true).await?;
+    apps::create_source(
+        &state.storage,
+        &state.apps,
+        app_id,
+        Uuid::new_v4(),
+        req,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 
@@ -143,7 +151,15 @@ async fn create_sink(
     Path(app_id): Path<Uuid>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
-    apps::create_sink(&state.storage, &state.apps, app_id, Uuid::new_v4(), body, true).await?;
+    apps::create_sink(
+        &state.storage,
+        &state.apps,
+        app_id,
+        Uuid::new_v4(),
+        body,
+        true,
+    )
+    .await?;
     Ok(AppSuccess::empty())
 }
 

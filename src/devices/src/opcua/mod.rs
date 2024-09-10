@@ -24,7 +24,7 @@ use types::{
     devices::{
         opcua::{OpcuaConf, SourceConf},
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemCommon,
-        SearchDevicesItemConf, SearchDevicesItemResp,
+        SearchDevicesItemConf, SearchDevicesItemFromMemory, SearchDevicesItemResp,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
@@ -200,50 +200,52 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn read(&self) -> SearchDevicesItemResp {
+    async fn read(&self) -> SearchDevicesItemFromMemory {
+        todo!()
         // let err = self.err.read().await.clone();
-        let rtt = match (self.on, &self.err) {
-            (true, None) => Some(999),
-            _ => None,
-        };
-        SearchDevicesItemResp {
-            common: SearchDevicesItemCommon {
-                id: self.id.clone(),
-                device_type: DeviceType::Opcua,
-                on: self.on,
-                err: self.err.clone(),
-                rtt,
-            },
-            conf: SearchDevicesItemConf {
-                base: self.base_conf.clone(),
-                ext: serde_json::json!(self.ext_conf),
-            },
-            source_cnt: self.source_ref_infos.len(),
-            sink_cnt: self.sink_ref_infos.len(),
-        }
+        // let rtt = match (self.on, &self.err) {
+        //     (true, None) => Some(999),
+        //     _ => None,
+        // };
+        // SearchDevicesItemResp {
+        //     common: SearchDevicesItemCommon {
+        //         id: self.id.clone(),
+        //         device_type: DeviceType::Opcua,
+        //         on: self.on,
+        //         err: self.err.clone(),
+        //         rtt,
+        //     },
+        //     conf: SearchDevicesItemConf {
+        //         base: self.base_conf.clone(),
+        //         ext: serde_json::json!(self.ext_conf),
+        //     },
+        //     source_cnt: self.source_ref_infos.len(),
+        //     sink_cnt: self.sink_ref_infos.len(),
+        // }
     }
 
-    async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()> {
-        let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
-        Self::validate_conf(&ext_conf)?;
+    async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()> {
+        // let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
+        // Self::validate_conf(&ext_conf)?;
 
-        let mut restart = false;
-        if self.ext_conf != ext_conf {
-            restart = true;
-        }
-        self.base_conf = device_conf.base;
-        self.ext_conf = ext_conf;
+        // let mut restart = false;
+        // if self.ext_conf != ext_conf {
+        //     restart = true;
+        // }
+        // self.base_conf = device_conf.base;
+        // self.ext_conf = ext_conf;
 
-        if restart && self.on {
-            self.stop_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(())
-                .await
-                .unwrap();
-        }
+        // if restart && self.on {
+        //     self.stop_signal_tx
+        //         .as_ref()
+        //         .unwrap()
+        //         .send(())
+        //         .await
+        //         .unwrap();
+        // }
 
-        Ok(())
+        // Ok(())
+        todo!()
     }
 
     // async fn delete(&mut self) -> HaliaResult<()> {
