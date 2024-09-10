@@ -246,33 +246,35 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn delete(&mut self) -> HaliaResult<()> {
-        check_delete_all!(self, source);
-        check_delete_all!(self, sink);
+    // async fn delete(&mut self) -> HaliaResult<()> {
+    //     check_delete_all!(self, source);
+    //     check_delete_all!(self, sink);
 
-        if self.on {
-            self.stop().await?;
-        }
+    //     if self.on {
+    //         self.stop().await?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     async fn create_source(
         &mut self,
         source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
-        for source in self.sources.iter() {
-            source.check_duplicate(&req.base, &ext_conf)?;
-        }
+        // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        // for source in self.sources.iter() {
+        //     source.check_duplicate(&req.base, &ext_conf)?;
+        // }
 
-        let mut source = Source::new(source_id, req.base, ext_conf)?;
-        if self.on {
-            // source.start(self.opcua_client.as_ref().unwarp());
-        }
+        // let mut source = Source::new(source_id, req.base, ext_conf)?;
+        // if self.on {
+        //     // source.start(self.opcua_client.as_ref().unwarp());
+        // }
 
-        Ok(())
+        // Ok(())
+
+        todo!()
     }
 
     async fn search_sources(
@@ -416,16 +418,16 @@ impl Device for Opcua {
         del_ref!(self, sink, sink_id, rule_id)
     }
 
-    async fn start(&mut self) -> HaliaResult<()> {
-        check_and_set_on_true!(self);
-        add_device_on_count();
+    // async fn start(&mut self) -> HaliaResult<()> {
+    //     check_and_set_on_true!(self);
+    //     add_device_on_count();
 
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(stop_signal_tx);
+    //     let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+    //     self.stop_signal_tx = Some(stop_signal_tx);
 
-        // self.event_loop(stop_signal_rx).await;
-        Ok(())
-    }
+    //     // self.event_loop(stop_signal_rx).await;
+    //     Ok(())
+    // }
 
     async fn stop(&mut self) -> HaliaResult<()> {
         todo!()

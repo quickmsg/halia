@@ -81,6 +81,32 @@ pub async fn create_device(pool: &AnyPool, id: &Uuid, req: CreateUpdateDeviceReq
     Ok(())
 }
 
+pub async fn read_device(storage: &AnyPool, id: &Uuid) -> Result<Device> {
+    let device = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE id = ?1")
+        .bind(id.to_string())
+        .fetch_one(storage)
+        .await?;
+
+    Ok(device)
+}
+
+pub async fn search_devices(
+    storage: &AnyPool,
+    pagination: Pagination,
+) -> Result<(usize, Vec<Device>)> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
+        .fetch_one(storage)
+        .await?;
+
+    let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices LIMIT ?1 OFFSET ?2")
+        .bind(pagination.size as i64)
+        .bind(((pagination.page - 1) * pagination.size) as i64)
+        .fetch_all(storage)
+        .await?;
+
+    Ok((count as usize, devices))
+}
+
 pub async fn read_devices(pool: &AnyPool) -> Result<Vec<Device>> {
     let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices")
         .fetch_all(pool)
@@ -99,9 +125,16 @@ pub async fn update_device_status(pool: &AnyPool, id: &Uuid, status: bool) -> Re
     Ok(())
 }
 
-pub async fn update_device_conf(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {
-    sqlx::query("UPDATE devices SET conf = ?1 WHERE id = ?2")
-        .bind(conf)
+pub async fn update_device_conf(
+    pool: &AnyPool,
+    id: &Uuid,
+    req: CreateUpdateDeviceReq,
+) -> Result<()> {
+    let ext_conf = serde_json::to_string(&req.conf.ext)?;
+    sqlx::query("UPDATE devices SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
+        .bind(req.conf.base.name)
+        .bind(req.conf.base.desc)
+        .bind(ext_conf)
         .bind(id.to_string())
         .execute(pool)
         .await?;

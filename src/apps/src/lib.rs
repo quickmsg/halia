@@ -384,7 +384,7 @@ pub async fn create_source(
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     app_id: Uuid,
     source_id: Uuid,
-    body: String,
+    req: CreateUpdateSourceOrSinkReq,
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
@@ -399,7 +399,7 @@ pub async fn create_source(
     }
 
     if persist {
-        storage::source::create_source(pool, &app_id, &source_id, body).await?;
+        storage::source::create_source(pool, &app_id, &source_id, req).await?;
     }
 
     Ok(())

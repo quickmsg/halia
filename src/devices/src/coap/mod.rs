@@ -160,24 +160,24 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn start(&mut self) -> HaliaResult<()> {
-        check_and_set_on_true!(self);
-        add_device_on_count();
+    // async fn start(&mut self) -> HaliaResult<()> {
+    //     check_and_set_on_true!(self);
+    //     add_device_on_count();
 
-        let client = Arc::new(
-            UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
-        );
+    //     let client = Arc::new(
+    //         UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
+    //     );
 
-        for source in self.sources.iter_mut() {
-            _ = source.start(client.clone()).await;
-        }
+    //     for source in self.sources.iter_mut() {
+    //         _ = source.start(client.clone()).await;
+    //     }
 
-        for sink in self.sinks.iter_mut() {
-            _ = sink.start(client.clone()).await;
-        }
+    //     for sink in self.sinks.iter_mut() {
+    //         _ = sink.start(client.clone()).await;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     async fn stop(&mut self) -> HaliaResult<()> {
         check_stop_all!(self, source);
@@ -196,37 +196,38 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn delete(&mut self) -> HaliaResult<()> {
-        debug!("here");
-        // check_delete!(self, sources_ref_infos);
-        // check_delete!(self, sinks_ref_infos);
+    // async fn delete(&mut self) -> HaliaResult<()> {
+    //     debug!("here");
+    //     // check_delete!(self, sources_ref_infos);
+    //     // check_delete!(self, sinks_ref_infos);
 
-        if self.on {
-            self.stop().await?;
-        }
+    //     if self.on {
+    //         self.stop().await?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     async fn create_source(
         &mut self,
         source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
-        for source in self.sources.iter() {
-            source.check_duplicate(&req.base, &ext_conf)?;
-        }
-        let mut source = Source::new(source_id, req.base, ext_conf, self.token_manager.clone())?;
-        if self.on {
-            _ = source
-                .start(self.coap_client.as_ref().unwrap().clone())
-                .await;
-        }
+        // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        // for source in self.sources.iter() {
+        //     source.check_duplicate(&req.base, &ext_conf)?;
+        // }
+        // let mut source = Source::new(source_id, req.base, ext_conf, self.token_manager.clone())?;
+        // if self.on {
+        //     _ = source
+        //         .start(self.coap_client.as_ref().unwrap().clone())
+        //         .await;
+        // }
 
-        self.sources.push(source);
-        self.source_ref_infos.push((source_id, RefInfo::new()));
-        Ok(())
+        // self.sources.push(source);
+        // self.source_ref_infos.push((source_id, RefInfo::new()));
+        // Ok(())
+        todo!()
     }
 
     async fn search_sources(

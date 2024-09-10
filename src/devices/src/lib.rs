@@ -18,7 +18,8 @@ use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
-        SearchDevicesItemResp, SearchDevicesResp, SearchRuleInfo, Summary,
+        SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemResp, SearchDevicesResp,
+        SearchRuleInfo, Summary,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksResp, Value,
@@ -76,14 +77,14 @@ pub trait Device: Send + Sync {
     fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()>;
     async fn read(&self) -> SearchDevicesItemResp;
     async fn update(&mut self, device_conf: DeviceConf) -> HaliaResult<()>;
-    async fn start(&mut self) -> HaliaResult<()>;
+    // async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
-    async fn delete(&mut self) -> HaliaResult<()>;
+    // async fn delete(&mut self) -> HaliaResult<()>;
 
     async fn create_source(
         &mut self,
         source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn search_sources(
         &self,
@@ -159,20 +160,16 @@ pub async fn load_from_storage(
             },
         };
 
-        create_device(storage, &devices, device_id, req, false)
-            .await
-            .unwrap();
-
         for db_source in db_sources {
-            create_source(
-                storage,
-                &devices,
-                device_id,
-                Uuid::from_str(&db_source.id).unwrap(),
-                db_source.conf,
-                false,
-            )
-            .await?;
+            // create_source(
+            //     storage,
+            //     &devices,
+            //     device_id,
+            //     Uuid::from_str(&db_source.id).unwrap(),
+            //     db_source.conf,
+            // )
+            // .await?;
+            todo!()
         }
 
         for db_sink in db_sinks {
@@ -247,37 +244,58 @@ pub async fn get_rule_info(
 
 pub async fn create_device(
     storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     req: CreateUpdateDeviceReq,
-    persist: bool,
 ) -> HaliaResult<()> {
-    let db_req = req.clone();
+    // let db_req = req.clone();
     // for device in devices.read().await.iter() {
     //     device.check_duplicate(&req)?;
     // }
 
-    let device = match &req.device_type {
-        DeviceType::Modbus => modbus::new(device_id, req.conf, storage.clone())?,
-        DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
-        DeviceType::Coap => coap::new(device_id, req.conf).await?,
-    };
-    add_device_count();
-    devices.insert(device_id, device);
-    if persist {
-        storage::device::create_device(&storage, &device_id, db_req).await?;
+    match &req.device_type {
+        DeviceType::Modbus => modbus::validate_conf(&req.conf.ext)?,
+        DeviceType::Opcua => todo!(),
+        DeviceType::Coap => todo!(),
+        // DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
+        // DeviceType::Coap => coap::new(device_id, req.conf).await?,
     }
+    add_device_count();
+    storage::device::create_device(&storage, &device_id, req).await?;
     Ok(())
 }
 
 pub async fn search_devices(
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     pagination: Pagination,
     query_params: QueryParams,
-) -> SearchDevicesResp {
-    let mut data = vec![];
-    let mut total = 0;
+) -> HaliaResult<SearchDevicesResp> {
+    let (count, db_devices) = storage::device::search_devices(storage, pagination).await?;
+    let mut resp_devices = vec![];
+    for db_device in db_devices {
+        let device_id = Uuid::from_str(&db_device.id).unwrap();
 
+        // 从内存中获取设备信息
+        resp_devices.push(SearchDevicesItemResp {
+            common: SearchDevicesItemCommon {
+                id: device_id,
+                device_type: DeviceType::try_from(db_device.device_type).unwrap(),
+                on: db_device.status == 1,
+                err: None,
+                rtt: None,
+            },
+            conf: SearchDevicesItemConf {
+                base: BaseConf {
+                    name: db_device.name,
+                    desc: db_device.desc,
+                },
+                ext: serde_json::from_str(&db_device.conf).unwrap(),
+            },
+            // todo
+            source_cnt: 1,
+            sink_cnt: 1,
+        });
+    }
     // for device in devices.read().await.iter().rev() {
     //     let device = device.read().await;
     //     if let Some(device_type) = &query_params.device_type {
@@ -311,34 +329,24 @@ pub async fn search_devices(
     //     total += 1;
     // }
 
-    SearchDevicesResp { total, data }
+    Ok(SearchDevicesResp {
+        total: count,
+        data: resp_devices,
+    })
 }
 
 pub async fn update_device(
     storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
-    body: String,
+    req: CreateUpdateDeviceReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateDeviceReq = serde_json::from_str(&body)?;
+    if let Some(device) = devices.get_mut(&device_id) {
+        // device.update(&req.conf).await?;
+        todo!()
+    }
 
-    devices
-        .get_mut(&device_id)
-        .ok_or(HaliaError::NotFound)?
-        .update(req.conf)
-        .await?;
-
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.update(req.conf).await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
-
-    // storage::device::update_device_conf(persistence, &device_id, body).await?;
+    storage::device::update_device_conf(storage, &device_id, req).await?;
 
     Ok(())
 }
@@ -348,15 +356,31 @@ pub async fn start_device(
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.start().await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
+    // 设备已启动
+    if devices.contains_key(&device_id) {
+        return Ok(());
+    }
+
+    let db_device = storage::device::read_device(storage, &device_id).await?;
+    let device_type = DeviceType::try_from(db_device.device_type)?;
+
+    // TODO 取消unwrap
+    let device_id = Uuid::from_str(&db_device.id).unwrap();
+    let device_conf: DeviceConf = DeviceConf {
+        base: BaseConf {
+            name: db_device.name,
+            desc: db_device.desc,
+        },
+        ext: serde_json::from_str(&db_device.conf).unwrap(),
+    };
+
+    let device = match device_type {
+        DeviceType::Modbus => modbus::new(device_id, device_conf, storage.clone()),
+        DeviceType::Opcua => todo!(),
+        DeviceType::Coap => todo!(),
+    };
+
+    devices.insert(device_id, device);
 
     storage::device::update_device_status(storage, &device_id, true).await?;
     Ok(())
@@ -367,20 +391,18 @@ pub async fn stop_device(
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
+    // 设备已停止
+    if !devices.contains_key(&device_id) {
+        return Ok(());
+    }
+
     devices
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
         .stop()
         .await?;
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.stop().await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
+
+    devices.remove(&device_id);
 
     storage::device::update_device_status(persistence, &device_id, false).await?;
 
@@ -392,42 +414,31 @@ pub async fn delete_device(
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.delete().await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
-
-    devices
-        .get_mut(&device_id)
-        .ok_or(HaliaError::NotFound)?
-        .delete()
-        .await?;
+    // TODO 停止时
+    // devices
+    //     .get_mut(&device_id)
+    //     .ok_or(HaliaError::NotFound)?
+    //     .delete()
+    //     .await?;
 
     sub_device_count();
     devices.remove(&device_id);
-    // devices
-    //     .write()
-    //     .await
-    //     .retain(|device| *device.get_id() != device_id);
     storage::device::delete_device(persistence, &device_id).await?;
 
     Ok(())
 }
 
 pub async fn create_source(
-    persistence: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     source_id: Uuid,
-    body: String,
-    persist: bool,
+    req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
+    if let Some(mut device) = devices.get_mut(&device_id) {
+        device.create_source(source_id, &req).await?;
+    }
+    // let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
     // match devices
     //     .write()
     //     .await
@@ -438,9 +449,7 @@ pub async fn create_source(
     //     None => return Err(HaliaError::NotFound),
     // }
 
-    if persist {
-        storage::source::create_source(persistence, &device_id, &source_id, body).await?;
-    }
+    storage::source::create_source(storage, &device_id, &source_id, req).await?;
 
     Ok(())
 }

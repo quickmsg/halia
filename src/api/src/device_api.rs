@@ -8,7 +8,7 @@ use types::{
         CreateUpdateDeviceReq, QueryParams, QueryRuleInfo, SearchDevicesResp, SearchRuleInfo,
         Summary,
     },
-    Pagination, SearchSourcesOrSinksResp, Value,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
 
@@ -65,7 +65,7 @@ async fn create_device(
     State(state): State<AppState>,
     Json(req): Json<CreateUpdateDeviceReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_device(&state.storage, &state.devices, Uuid::new_v4(), req, true).await?;
+    devices::create_device(&state.storage, Uuid::new_v4(), req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -73,16 +73,18 @@ async fn search_devices(
     State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppSuccess<SearchDevicesResp> {
-    AppSuccess::data(devices::search_devices(&state.devices, pagination, query_params).await)
+) -> AppResult<AppSuccess<SearchDevicesResp>> {
+    let resp =
+        devices::search_devices(&state.storage, &state.devices, pagination, query_params).await?;
+    Ok(AppSuccess::data(resp))
 }
 
 async fn update_device(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
-    body: String,
+    Json(req): Json<CreateUpdateDeviceReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_device(&state.storage, &state.devices, device_id, body).await?;
+    devices::update_device(&state.storage, &state.devices, device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -113,15 +115,14 @@ async fn delete_device(
 async fn create_source(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
-    body: String,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_source(
         &state.storage,
         &state.devices,
         device_id,
         Uuid::new_v4(),
-        body,
-        true,
+        req,
     )
     .await?;
     Ok(AppSuccess::empty())

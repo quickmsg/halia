@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sqlx::{AnyPool, Row};
+use types::CreateUpdateSourceOrSinkReq;
 use uuid::Uuid;
 
 pub struct Source {
@@ -11,12 +12,13 @@ pub async fn create_source(
     pool: &AnyPool,
     parent_id: &Uuid,
     id: &Uuid,
-    conf: String,
+    req: CreateUpdateSourceOrSinkReq,
 ) -> Result<()> {
     sqlx::query("INSERT INTO sources (id, parent_id, conf) VALUES (?1, ?2, ?3)")
         .bind(id.to_string())
         .bind(parent_id.to_string())
-        .bind(conf)
+        // todo
+        // .bind(conf)
         .execute(pool)
         .await?;
 
