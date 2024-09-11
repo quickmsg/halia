@@ -15,6 +15,7 @@ use common::{
     ref_info::RefInfo,
     storage,
 };
+use dashmap::DashMap;
 use message::MessageBatch;
 use paste::paste;
 use protocol::modbus::{rtu, tcp, Context};
@@ -29,7 +30,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
@@ -51,7 +52,7 @@ struct Modbus {
 
     storage: Arc<AnyPool>,
 
-    sources: Arc<RwLock<Vec<Source>>>,
+    sources: Arc<DashMap<Uuid, Source>>,
     source_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: Vec<Sink>,
     sink_ref_infos: Vec<(Uuid, RefInfo)>,
@@ -97,7 +98,7 @@ pub fn new(device_id: Uuid, device_conf: DeviceConf, storage: Arc<AnyPool>) -> B
         id: device_id,
         err: Arc::new(RwLock::new(None)),
         rtt: Arc::new(AtomicU16::new(9999)),
-        sources: Arc::new(RwLock::new(vec![])),
+        sources: Arc::new(DashMap::new()),
         source_ref_infos: vec![],
         sinks: vec![],
         sink_ref_infos: vec![],
@@ -127,6 +128,7 @@ impl Modbus {
         let err = self.err.clone();
         let sources = self.sources.clone();
         let rtt = self.rtt.clone();
+        debug!("here");
         let join_handle = tokio::spawn(async move {
             loop {
                 match Modbus::connect(&modbus_conf).await {
@@ -163,10 +165,10 @@ impl Modbus {
 
                                 point_id = read_rx.recv() => {
                                    if let Some(point_id) = point_id {
-                                        match sources.write().await.iter_mut().find(|source| source.id == point_id) {
-                                            Some(point) => {
+                                        match sources.get_mut(&point_id) {
+                                            Some(mut source) => {
                                                 let now = Instant::now();
-                                                if let Err(_) = point.read(&mut ctx).await {
+                                                if let Err(_) = source.read(&mut ctx).await {
                                                     break
                                                 }
                                                 rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
@@ -430,7 +432,7 @@ impl Device for Modbus {
             warn!("create event failed: {}", e);
         }
 
-        for source in self.sources.write().await.iter_mut() {
+        for mut source in self.sources.iter_mut() {
             source.stop().await;
         }
 
@@ -472,13 +474,16 @@ impl Device for Modbus {
         //     source.check_duplicate(&req.base, &ext_conf)?;
         // }
 
+        debug!("{:?}", conf);
+        debug!("here");
+
         let source = Source::new(
             source_id,
             conf,
             self.read_tx.clone(),
             self.device_err_tx.subscribe(),
         );
-        self.sources.write().await.push(source);
+        self.sources.insert(source_id, source);
         self.source_ref_infos.push((source_id, RefInfo::new()));
         Ok(())
     }
@@ -488,39 +493,34 @@ impl Device for Modbus {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for (index, source) in self.sources.read().await.iter().rev().enumerate() {
-            let source = source.search();
-            if let Some(name) = &query.name {
-                if !source.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
+        // let mut total = 0;
+        // let mut data = vec![];
+        // for (index, source) in self.sources.read().await.iter().rev().enumerate() {
+        //     let source = source.search();
+        //     if let Some(name) = &query.name {
+        //         if !source.conf.base.name.contains(name) {
+        //             continue;
+        //         }
+        //     }
 
-            if pagination.check(total) {
-                unsafe {
-                    data.push(SearchSourcesOrSinksItemResp {
-                        info: source,
-                        rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
-                    });
-                }
-            }
+        //     if pagination.check(total) {
+        //         unsafe {
+        //             data.push(SearchSourcesOrSinksItemResp {
+        //                 info: source,
+        //                 rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
+        //             });
+        //         }
+        //     }
 
-            total += 1;
-        }
+        //     total += 1;
+        // }
 
-        SearchSourcesOrSinksResp { total, data }
+        // SearchSourcesOrSinksResp { total, data }
+        todo!()
     }
 
     async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        match self
-            .sources
-            .read()
-            .await
-            .iter()
-            .find(|source| source.id == *source_id)
-        {
+        match self.sources.get(&source_id) {
             Some(source) => Ok(source.search()),
             None => Err(HaliaError::NotFound),
         }
@@ -539,16 +539,11 @@ impl Device for Modbus {
         // }
         // }
 
-        match self
-            .sources
-            .write()
+        self.sources
+            .get_mut(&source_id)
+            .ok_or(HaliaError::NotFound)?
+            .update(old_conf, conf)
             .await
-            .iter_mut()
-            .find(|source| source.id == source_id)
-        {
-            Some(source) => source.update(old_conf, conf).await,
-            None => Err(HaliaError::NotFound),
-        }
     }
 
     async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
@@ -557,13 +552,7 @@ impl Device for Modbus {
             None => {}
         }
 
-        match self
-            .sources
-            .read()
-            .await
-            .iter()
-            .find(|source| source.id == source_id)
-        {
+        match self.sources.get(&source_id) {
             Some(source) => {
                 match WritePointEvent::new(
                     source.conf.slave,
@@ -589,21 +578,12 @@ impl Device for Modbus {
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
         check_delete!(self, source, source_id);
 
-        match self
-            .sources
-            .write()
-            .await
-            .iter_mut()
-            .find(|source| source.id == source_id)
-        {
-            Some(source) => source.stop().await,
+        match self.sources.get_mut(&source_id) {
+            Some(mut source) => source.stop().await,
             None => unreachable!(),
         }
 
-        self.sources
-            .write()
-            .await
-            .retain(|source| source.id != source_id);
+        self.sources.remove(&source_id);
         self.source_ref_infos.retain(|(id, _)| *id != source_id);
         Ok(())
     }
@@ -711,16 +691,7 @@ impl Device for Modbus {
         rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         active_ref!(self, source, source_id, rule_id);
-        match self
-            .sources
-            .write()
-            .await
-            .iter_mut()
-            .find(|source| source.id == *source_id)
-        {
-            Some(source) => Ok(source.mb_tx.subscribe()),
-            None => unreachable!(),
-        }
+        Ok(self.sources.get_mut(source_id).unwrap().mb_tx.subscribe())
     }
 
     fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {

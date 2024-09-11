@@ -15,12 +15,14 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc};
+use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
         SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemFromMemory,
         SearchDevicesItemResp, SearchDevicesResp, SearchRuleInfo, Summary,
     },
+    events::EventType,
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, RuleRef, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
 };
@@ -139,54 +141,16 @@ pub trait Device: Send + Sync {
 pub async fn load_from_storage(
     storage: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<DashMap<Uuid, Box<dyn Device>>>> {
-    let db_devices = storage::device::read_on_devices(storage).await?;
-    let devices: Arc<DashMap<Uuid, Box<dyn Device>>> = Arc::new(DashMap::new());
+    let count = storage::device::count_devices(storage).await?;
+    DEVICE_COUNT.store(count, Ordering::SeqCst);
 
+    let db_devices = storage::device::read_on_devices(storage).await?;
+    DEVICE_ON_COUNT.store(db_devices.len(), Ordering::SeqCst);
+
+    let devices: Arc<DashMap<Uuid, Box<dyn Device>>> = Arc::new(DashMap::new());
     for db_device in db_devices {
         let device_id = Uuid::from_str(&db_device.id).unwrap();
-
         start_device(storage, &devices, device_id).await?;
-
-        let db_sources = storage::source::read_sources(storage, &device_id).await?;
-        let db_sinks = storage::sink::read_sinks(storage, &device_id).await?;
-
-        for db_source in db_sources {
-            let req = CreateUpdateSourceOrSinkReq {
-                base: BaseConf {
-                    name: db_source.name,
-                    desc: db_source.desc,
-                },
-                ext: serde_json::to_value(db_source.conf).unwrap(),
-            };
-            create_source(
-                storage,
-                &devices,
-                device_id,
-                Uuid::from_str(&db_source.id).unwrap(),
-                req,
-                false,
-            )
-            .await?;
-        }
-
-        for db_sink in db_sinks {
-            let req = CreateUpdateSourceOrSinkReq {
-                base: BaseConf {
-                    name: db_sink.name,
-                    desc: db_sink.desc,
-                },
-                ext: serde_json::to_value(db_sink.conf).unwrap(),
-            };
-            create_sink(
-                storage,
-                &devices,
-                device_id,
-                Uuid::from_str(&db_sink.id).unwrap(),
-                req,
-                false,
-            )
-            .await?;
-        }
     }
 
     Ok(devices)
@@ -368,6 +332,8 @@ pub async fn start_device(
         return Ok(());
     }
 
+    storage::device::create_event(storage, &device_id, EventType::Start.into(), None).await?;
+
     let db_device = storage::device::read_device(storage, &device_id).await?;
     let device_type = DeviceType::try_from(db_device.device_type)?;
 
@@ -381,12 +347,54 @@ pub async fn start_device(
         ext: serde_json::from_str(&db_device.conf).unwrap(),
     };
 
+    debug!("{:?}", device_conf);
+
     let device = match device_type {
         DeviceType::Modbus => modbus::new(device_id, device_conf, storage.clone()),
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
     };
     devices.insert(device_id, device);
+
+    let db_sources = storage::source::read_sources(storage, &device_id).await?;
+    for db_source in db_sources {
+        let req = CreateUpdateSourceOrSinkReq {
+            base: BaseConf {
+                name: db_source.name,
+                desc: db_source.desc,
+            },
+            ext: serde_json::from_str(&db_source.conf).unwrap(),
+        };
+        create_source(
+            storage,
+            &devices,
+            device_id,
+            Uuid::from_str(&db_source.id).unwrap(),
+            req,
+            false,
+        )
+        .await?;
+    }
+
+    let db_sinks = storage::sink::read_sinks(storage, &device_id).await?;
+    for db_sink in db_sinks {
+        let req = CreateUpdateSourceOrSinkReq {
+            base: BaseConf {
+                name: db_sink.name,
+                desc: db_sink.desc,
+            },
+            ext: serde_json::from_str(&db_sink.conf).unwrap(),
+        };
+        create_sink(
+            storage,
+            &devices,
+            device_id,
+            Uuid::from_str(&db_sink.id).unwrap(),
+            req,
+            false,
+        )
+        .await?;
+    }
 
     add_device_on_count();
     storage::device::update_device_status(storage, &device_id, true).await?;
@@ -531,20 +539,9 @@ pub async fn delete_source(
     device_id: Uuid,
     source_id: Uuid,
 ) -> HaliaResult<()> {
-    // devices
-    //     .get_mut(&device_id)
-    //     .ok_or(HaliaError::NotFound)?
-    //     .delete_source(source_id)
-    //     .await?;
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.delete_source(source_id).await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
+    if let Some(mut device) = devices.get_mut(&device_id) {
+        device.delete_source(source_id).await?;
+    }
 
     storage::source::delete_source(persistence, &source_id).await?;
 

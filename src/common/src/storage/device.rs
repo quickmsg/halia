@@ -120,6 +120,14 @@ pub async fn read_on_devices(pool: &AnyPool) -> Result<Vec<Device>> {
     Ok(devices)
 }
 
+pub async fn count_devices(storage: &AnyPool) -> Result<usize> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
+        .fetch_one(storage)
+        .await?;
+
+    Ok(count as usize)
+}
+
 pub async fn update_device_status(pool: &AnyPool, id: &Uuid, status: bool) -> Result<()> {
     sqlx::query("UPDATE devices SET status = ?1 WHERE id = ?2")
         .bind(status as i32)
@@ -172,7 +180,7 @@ pub async fn create_event(
     match info {
         Some(info) => {
             sqlx::query(
-                "INSERT INTO events (id, source_type, event_type, ts, info) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO device_events (id, event_type, ts, info) VALUES (?1, ?2, ?3, ?4)",
             )
             .bind(id.to_string())
             .bind(event_type)
@@ -183,7 +191,7 @@ pub async fn create_event(
         }
         None => {
             sqlx::query(
-                "INSERT INTO events (id, source_type, event_type, ts) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO device_events (id, event_type, ts) VALUES (?1, ?2, ?3)",
             )
             .bind(id.to_string())
             .bind(event_type)

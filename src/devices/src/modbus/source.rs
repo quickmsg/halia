@@ -145,7 +145,7 @@ impl Source {
         todo!()
     }
 
-    async fn event_loop(
+    fn event_loop(
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
         read_tx: mpsc::Sender<Uuid>,
@@ -197,8 +197,7 @@ impl Source {
 
             let (stop_signal_rx, read_tx, device_err_rx) =
                 self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx, read_tx, device_err_rx)
-                .await;
+            self.event_loop(stop_signal_rx, read_tx, device_err_rx);
         }
 
         Ok(())
