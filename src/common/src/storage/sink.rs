@@ -78,6 +78,14 @@ pub async fn read_all_sinks(storage: &AnyPool, parent_id: &Uuid) -> Result<Vec<S
     Ok(sinks)
 }
 
+pub async fn read_conf(pool: &AnyPool, id: &Uuid) -> Result<String> {
+    let conf: String = sqlx::query_scalar("SELECT conf FROM sinks WHERE id = ?1")
+        .bind(id.to_string())
+        .fetch_one(pool)
+        .await?;
+    Ok(conf)
+}
+
 pub async fn read_sink(storage: &AnyPool, id: &Uuid) -> Result<Sink> {
     let sink = sqlx::query_as::<_, Sink>("SELECT * FROM sinks WHERE id = ?1")
         .bind(id.to_string())
@@ -140,9 +148,13 @@ pub async fn count_by_parent_id(storage: &AnyPool, parent_id: &Uuid) -> Result<u
     Ok(count as usize)
 }
 
-pub async fn update_sink(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {
+pub async fn update_sink(
+    pool: &AnyPool,
+    id: &Uuid,
+    req: CreateUpdateSourceOrSinkReq,
+) -> Result<()> {
     sqlx::query("UPDATE sinks SET conf = ?1 WHERE id = ?2")
-        .bind(conf)
+        // .bind(conf)
         .bind(id.to_string())
         .execute(pool)
         .await?;

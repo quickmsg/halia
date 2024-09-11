@@ -82,10 +82,7 @@ impl Coap {
     fn check_on(&self) -> HaliaResult<()> {
         match self.on {
             true => Ok(()),
-            false => Err(HaliaError::Stopped(format!(
-                "coap设备:{}",
-                self.base_conf.name
-            ))),
+            false => Err(HaliaError::Stopped),
         }
     }
 }
@@ -380,20 +377,22 @@ impl Device for Coap {
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        old_conf: String,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        todo!()
+        //     let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
 
-        for sink in self.sinks.iter() {
-            if sink.id != sink_id {
-                sink.check_duplicate(&req.base, &ext_conf)?;
-            }
-        }
+        //     for sink in self.sinks.iter() {
+        //         if sink.id != sink_id {
+        //             sink.check_duplicate(&req.base, &ext_conf)?;
+        //         }
+        //     }
 
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.update(req.base, ext_conf).await,
-            None => Err(HaliaError::NotFound),
-        }
+        //     match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+        //         Some(sink) => sink.update(req.base, ext_conf).await,
+        //         None => Err(HaliaError::NotFound),
+        //     }
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {

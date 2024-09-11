@@ -148,6 +148,16 @@ pub async fn add_rule_ref(storage: &AnyPool, source_id: &Uuid, rule_id: &Uuid) -
     todo!()
 }
 
+// TODO
+pub async fn del_rule_ref(storage: &AnyPool, source_id: &Uuid, rule_id: &Uuid) -> Result<usize> {
+    // let rule_ref: i32 = sqlx::query_scalar("SELECT rule_ref FROM sources WHERE id = ?1")
+    //     .bind(id.to_string())
+    //     .fetch_one(storage)
+    //     .await?;
+    // Ok(rule_ref as usize)
+    todo!()
+}
+
 pub async fn read_rule_ref(storage: &AnyPool, id: &Uuid) -> Result<usize> {
     let rule_ref: i32 = sqlx::query_scalar("SELECT rule_ref FROM sources WHERE id = ?1")
         .bind(id.to_string())
@@ -156,7 +166,7 @@ pub async fn read_rule_ref(storage: &AnyPool, id: &Uuid) -> Result<usize> {
     Ok(rule_ref as usize)
 }
 
-pub async fn read_source_conf(pool: &AnyPool, id: &Uuid) -> Result<String> {
+pub async fn read_conf(pool: &AnyPool, id: &Uuid) -> Result<String> {
     let conf: String = sqlx::query_scalar("SELECT conf FROM sources WHERE id = ?1")
         .bind(id.to_string())
         .fetch_one(pool)

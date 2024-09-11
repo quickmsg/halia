@@ -586,7 +586,7 @@ pub async fn update_sink(
         None => return Err(HaliaError::NotFound),
     }
 
-    storage::sink::update_sink(pool, &sink_id, body).await?;
+    // storage::sink::update_sink(pool, &sink_id, req).await?;
     Ok(())
 }
 

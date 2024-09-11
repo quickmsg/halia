@@ -218,7 +218,7 @@ pub async fn update(
 }
 
 pub async fn delete(
-    pool: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
@@ -228,13 +228,13 @@ pub async fn delete(
     rules
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .delete(devices, apps, databoards)
+        .delete(storage, devices, apps, databoards)
         .await?;
 
     rules.remove(&id);
 
     sub_rule_count();
-    storage::rule::delete_rule(pool, &id).await?;
+    storage::rule::delete_rule(storage, &id).await?;
     Ok(())
 }
 

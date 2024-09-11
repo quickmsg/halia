@@ -67,10 +67,7 @@ impl HttpClient {
     fn check_on(&self) -> HaliaResult<()> {
         match self.on {
             true => Ok(()),
-            false => Err(HaliaError::Stopped(format!(
-                "http客户端应用:{}",
-                self.base_conf.name
-            ))),
+            false => Err(HaliaError::Stopped),
         }
     }
 }

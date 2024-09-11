@@ -54,7 +54,7 @@ struct Modbus {
 
     sources: Arc<DashMap<Uuid, Source>>,
     source_ref_infos: Vec<(Uuid, RefInfo)>,
-    sinks: Vec<Sink>,
+    sinks: DashMap<Uuid, Sink>,
     sink_ref_infos: Vec<(Uuid, RefInfo)>,
 
     stop_signal_tx: mpsc::Sender<()>,
@@ -100,7 +100,7 @@ pub fn new(device_id: Uuid, device_conf: DeviceConf, storage: Arc<AnyPool>) -> B
         rtt: Arc::new(AtomicU16::new(9999)),
         sources: Arc::new(DashMap::new()),
         source_ref_infos: vec![],
-        sinks: vec![],
+        sinks: DashMap::new(),
         sink_ref_infos: vec![],
         storage,
         stop_signal_tx,
@@ -436,7 +436,7 @@ impl Device for Modbus {
             source.stop().await;
         }
 
-        for sink in self.sinks.iter_mut() {
+        for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
 
@@ -473,9 +473,6 @@ impl Device for Modbus {
         // for source in self.sources.read().await.iter() {
         //     source.check_duplicate(&req.base, &ext_conf)?;
         // }
-
-        debug!("{:?}", conf);
-        debug!("here");
 
         let source = Source::new(
             source_id,
@@ -593,8 +590,15 @@ impl Device for Modbus {
         sink_id: Uuid,
         req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext.clone())?;
-        Sink::validate_conf(&ext_conf)?;
+        let conf: SinkConf = serde_json::from_value(req.ext.clone())?;
+        // Sink::validate_conf(&ext_conf)?;
+
+        let sink = Sink::new(
+            sink_id,
+            conf,
+            self.write_tx.clone(),
+            self.device_err_tx.subscribe(),
+        );
 
         // for sink in self.sinks.iter() {
         //     sink.check_duplicate(&req.base, &ext_conf)?;
@@ -614,69 +618,73 @@ impl Device for Modbus {
         pagination: Pagination,
         query: QueryParams,
     ) -> SearchSourcesOrSinksResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for (index, sink) in self.sinks.iter().rev().enumerate() {
-            let sink = sink.search();
+        // let mut total = 0;
+        // let mut data = vec![];
+        // for (index, sink) in self.sinks.iter().rev().enumerate() {
+        //     let sink = sink.search();
 
-            if let Some(name) = &query.name {
-                if !sink.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
+        //     if let Some(name) = &query.name {
+        //         if !sink.conf.base.name.contains(name) {
+        //             continue;
+        //         }
+        //     }
 
-            if pagination.check(total) {
-                unsafe {
-                    data.push(SearchSourcesOrSinksItemResp {
-                        info: sink,
-                        rule_ref: self.sink_ref_infos.get_unchecked(index).1.get_rule_ref(),
-                    })
-                }
-            }
+        //     if pagination.check(total) {
+        //         unsafe {
+        //             data.push(SearchSourcesOrSinksItemResp {
+        //                 info: sink,
+        //                 rule_ref: self.sink_ref_infos.get_unchecked(index).1.get_rule_ref(),
+        //             })
+        //         }
+        //     }
 
-            total += 1;
-        }
+        //     total += 1;
+        // }
 
-        SearchSourcesOrSinksResp { total, data }
+        // SearchSourcesOrSinksResp { total, data }
+        todo!()
     }
 
     async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        match self.sinks.iter().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.search()),
-            None => Err(HaliaError::NotFound),
-        }
+        todo!()
+        // match self.sinks.iter().find(|sink| sink.id == *sink_id) {
+        //     Some(sink) => Ok(sink.search()),
+        //     None => Err(HaliaError::NotFound),
+        // }
     }
 
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        old_conf: String,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
-        Sink::validate_conf(&ext_conf)?;
+        todo!()
+        // let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        // Sink::validate_conf(&ext_conf)?;
 
-        for sink in self.sinks.iter() {
-            if sink.id != sink_id {
-                sink.check_duplicate(&req.base, &ext_conf)?;
-            }
-        }
+        // for sink in self.sinks.iter() {
+        //     if sink.id != sink_id {
+        //         sink.check_duplicate(&req.base, &ext_conf)?;
+        //     }
+        // }
 
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => Ok(sink.update(req.base, ext_conf).await),
-            None => Err(HaliaError::NotFound),
-        }
+        // match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+        //     Some(sink) => Ok(sink.update(req.base, ext_conf).await),
+        //     None => Err(HaliaError::NotFound),
+        // }
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
         check_delete!(self, sink, sink_id);
 
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.stop().await,
-            None => unreachable!(),
-        }
+        self.sinks
+            .get_mut(&sink_id)
+            .ok_or(HaliaError::NotFound)?
+            .stop()
+            .await;
 
-        self.sinks.retain(|sink| sink.id != sink_id);
-        self.sink_ref_infos.retain(|(id, _)| *id != sink_id);
+        self.sinks.remove(&sink_id);
         Ok(())
     }
 
@@ -712,7 +720,7 @@ impl Device for Modbus {
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         active_ref!(self, sink, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
+            Some(sink) => Ok(sink.mb_tx.clone()),
             None => unreachable!(),
         }
     }

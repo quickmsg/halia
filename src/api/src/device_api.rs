@@ -176,9 +176,9 @@ async fn search_sinks(
 async fn update_sink(
     State(state): State<AppState>,
     Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
-    body: String,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_sink(&state.storage, &state.devices, device_id, sink_id, body).await?;
+    devices::update_sink(&state.storage, &state.devices, device_id, sink_id, req).await?;
     Ok(AppSuccess::empty())
 }
 

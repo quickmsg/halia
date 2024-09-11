@@ -54,15 +54,7 @@ impl Rule {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    match devices::add_source_ref(
-                        storage,
-                        devices,
-                        &source_node.device_id,
-                        &source_node.source_id,
-                        &rule_id,
-                    )
-                    .await
-                    {
+                    match devices::add_source_ref(storage, &source_node.source_id, &rule_id).await {
                         Ok(_) => device_source_add_ref_nodes
                             .push((source_node.device_id, source_node.source_id)),
                         Err(_) => {
@@ -144,7 +136,7 @@ impl Rule {
 
         if let Some(e) = error {
             for (device_id, source_id) in device_source_add_ref_nodes {
-                devices::del_source_ref(devices, &device_id, &source_id, &rule_id).await?;
+                devices::del_source_ref(storage, &source_id, &rule_id).await?;
             }
             for (device_id, sink_id) in device_sink_add_ref_nodes {
                 devices::del_sink_ref(devices, &device_id, &sink_id, &rule_id).await?;
@@ -677,6 +669,7 @@ impl Rule {
 
     pub async fn delete(
         &mut self,
+        storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
@@ -689,13 +682,7 @@ impl Rule {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    devices::del_source_ref(
-                        devices,
-                        &source_node.device_id,
-                        &source_node.source_id,
-                        &self.id,
-                    )
-                    .await?;
+                    devices::del_source_ref(storage, &source_node.source_id, &self.id).await?;
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
