@@ -98,8 +98,8 @@ struct AppState {
     storage: Arc<AnyPool>,
     devices: Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: Arc<RwLock<Vec<Databoard>>>,
-    rules: Arc<RwLock<Vec<Rule>>>,
+    databoards: Arc<DashMap<Uuid, Databoard>>,
+    rules: Arc<DashMap<Uuid, Rule>>,
 }
 
 pub async fn start(
@@ -107,8 +107,8 @@ pub async fn start(
     storage: Arc<AnyPool>,
     devices: Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: Arc<RwLock<Vec<Databoard>>>,
-    rules: Arc<RwLock<Vec<Rule>>>,
+    databoards: Arc<DashMap<Uuid, Databoard>>,
+    rules: Arc<DashMap<Uuid, Rule>>,
 ) {
     let state = AppState {
         storage,

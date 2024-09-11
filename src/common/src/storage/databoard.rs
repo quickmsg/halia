@@ -1,6 +1,7 @@
 use anyhow::Result;
 use sqlx::{prelude::FromRow, AnyPool};
 use tracing::debug;
+use types::databoard::{CreateUpdateDataReq, CreateUpdateDataboardReq};
 use uuid::Uuid;
 
 #[derive(FromRow)]
@@ -15,10 +16,15 @@ pub struct DataboardData {
     pub conf: String,
 }
 
-pub async fn create_databoard(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {
+// todo
+pub async fn create_databoard(
+    pool: &AnyPool,
+    id: &Uuid,
+    req: CreateUpdateDataboardReq,
+) -> Result<()> {
     sqlx::query("INSERT INTO databoards (id, conf) VALUES (?1, ?2)")
         .bind(id.to_string())
-        .bind(conf)
+        // .bind(conf)
         .execute(pool)
         .await?;
     Ok(())
@@ -39,10 +45,15 @@ pub async fn read_databoards(pool: &AnyPool) -> Result<Vec<Databoard>> {
     Ok(databoards)
 }
 
-pub async fn update_databoard(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {
+// TODO
+pub async fn update_databoard(
+    pool: &AnyPool,
+    id: &Uuid,
+    req: CreateUpdateDataboardReq,
+) -> Result<()> {
     sqlx::query("UPDATE databoards SET conf = ?1 WHERE id = ?2")
         .bind(id.to_string())
-        .bind(conf)
+        // .bind(conf)
         .execute(pool)
         .await?;
     Ok(())
@@ -101,10 +112,10 @@ pub async fn read_databoard_datas(
 pub async fn update_databoard_data(
     pool: &AnyPool,
     databoard_data_id: &Uuid,
-    conf: String,
+    req: CreateUpdateDataReq,
 ) -> Result<()> {
     sqlx::query("UPDATE databoard_datas SET conf = ?1 WHERE id = ?2")
-        .bind(conf)
+        // .bind(conf)
         .bind(databoard_data_id.to_string())
         .execute(pool)
         .await?;

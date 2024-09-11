@@ -60,30 +60,30 @@ pub fn get_summary() -> Summary {
     }
 }
 
-pub async fn load_from_persistence(
-    pool: &Arc<AnyPool>,
+pub async fn load_from_storage(
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
-) -> HaliaResult<Arc<RwLock<Vec<Rule>>>> {
-    let db_rules = storage::rule::read_rules(pool).await?;
-    let rules: Arc<RwLock<Vec<Rule>>> = Arc::new(RwLock::new(vec![]));
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
+) -> HaliaResult<Arc<DashMap<Uuid, Rule>>> {
+    let db_rules = storage::rule::read_rules(storage).await?;
+    let rules: Arc<DashMap<Uuid, Rule>> = Arc::new(DashMap::new());
     for db_rule in db_rules {
         let rule_id = Uuid::from_str(&db_rule.id).unwrap();
-        create(
-            pool,
-            &rules,
-            devices,
-            apps,
-            databoards,
-            rule_id,
-            db_rule.conf,
-            false,
-        )
-        .await?;
+        // create(
+        //     storage,
+        //     &rules,
+        //     devices,
+        //     apps,
+        //     databoards,
+        //     rule_id,
+        //     db_rule.conf,
+        //     false,
+        // )
+        // .await?;
 
         if db_rule.status == 1 {
-            start(pool, &rules, &devices, &apps, &databoards, rule_id).await?;
+            start(storage, &rules, &devices, &apps, &databoards, rule_id).await?;
         }
     }
 
@@ -91,11 +91,11 @@ pub async fn load_from_persistence(
 }
 
 pub async fn create(
-    pool: &Arc<AnyPool>,
-    rules: &Arc<RwLock<Vec<Rule>>>,
+    storage: &Arc<AnyPool>,
+    rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
     body: String,
     persist: bool,
@@ -104,86 +104,93 @@ pub async fn create(
     let rule = Rule::new(devices, apps, databoards, id, req).await?;
     add_rule_count();
     if persist {
-        storage::rule::create_rule(pool, &id, body).await?;
+        storage::rule::create_rule(storage, &id, body).await?;
     }
-    rules.write().await.push(rule);
+    rules.insert(id, rule);
     Ok(())
 }
 
 pub async fn search(
-    rules: &Arc<RwLock<Vec<Rule>>>,
+    rules: &Arc<DashMap<Uuid, Rule>>,
     pagination: Pagination,
     query_params: QueryParams,
 ) -> SearchRulesResp {
-    let mut total = 0;
-    let mut data = vec![];
+    todo!()
+    // let mut total = 0;
+    // let mut data = vec![];
 
-    for rule in rules.read().await.iter().rev() {
-        let rule = rule.search();
-        if let Some(query_name) = &query_params.name {
-            if !rule.conf.base.name.contains(query_name) {
-                continue;
-            }
-        }
+    // for rule in rules.read().await.iter().rev() {
+    //     let rule = rule.search();
+    //     if let Some(query_name) = &query_params.name {
+    //         if !rule.conf.base.name.contains(query_name) {
+    //             continue;
+    //         }
+    //     }
 
-        if let Some(on) = &query_params.on {
-            if rule.on != *on {
-                continue;
-            }
-        }
+    //     if let Some(on) = &query_params.on {
+    //         if rule.on != *on {
+    //             continue;
+    //         }
+    //     }
 
-        if pagination.check(total) {
-            data.push(rule);
-        }
+    //     if pagination.check(total) {
+    //         data.push(rule);
+    //     }
 
-        total += 1;
-    }
+    //     total += 1;
+    // }
 
-    SearchRulesResp { total, data }
+    // SearchRulesResp { total, data }
 }
 
 pub async fn read(
-    rules: &Arc<RwLock<Vec<Rule>>>,
+    rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<Vec<ReadRuleNodeResp>> {
-    match rules.write().await.iter_mut().find(|rule| rule.id == id) {
-        Some(rule) => rule.read(devices, apps, databoards).await,
-        None => return Err(HaliaError::NotFound),
-    }
+    rules
+        .get_mut(&id)
+        .ok_or(HaliaError::NotFound)?
+        .read(devices, apps, databoards)
+        .await
 }
 
 pub async fn start(
     pool: &Arc<AnyPool>,
-    rules: &Arc<RwLock<Vec<Rule>>>,
+    rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<()> {
-    match rules.write().await.iter_mut().find(|rule| rule.id == id) {
-        Some(rule) => rule.start(devices, apps, databoards).await?,
-        None => return Err(HaliaError::NotFound),
+    if rules.contains_key(&id) {
+        return Ok(());
     }
 
+    rules
+        .get_mut(&id)
+        .ok_or(HaliaError::NotFound)?
+        .start(devices, apps, databoards)
+        .await?;
     storage::rule::update_rule_status(pool, &id, true).await?;
     Ok(())
 }
 
 pub async fn stop(
     pool: &Arc<AnyPool>,
-    rules: &Arc<RwLock<Vec<Rule>>>,
+    rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<()> {
-    match rules.write().await.iter_mut().find(|rule| rule.id == id) {
-        Some(rule) => rule.stop(devices, apps, databoards).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    rules
+        .get_mut(&id)
+        .ok_or(HaliaError::NotFound)?
+        .stop(devices, apps, databoards)
+        .await?;
 
     storage::rule::update_rule_status(pool, &id, false).await?;
     Ok(())
@@ -191,49 +198,51 @@ pub async fn stop(
 
 pub async fn update(
     pool: &Arc<AnyPool>,
-    rules: &Arc<RwLock<Vec<Rule>>>,
+    rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
-    body: String,
+    req: CreateUpdateRuleReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
+    rules
+        .get_mut(&id)
+        .ok_or(HaliaError::NotFound)?
+        .update(devices, apps, databoards, req)
+        .await?;
 
-    match rules.write().await.iter_mut().find(|rule| rule.id == id) {
-        Some(rule) => rule.update(devices, apps, databoards, req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
-
-    storage::rule::update_rule_conf(pool, &id, body).await?;
+    // storage::rule::update_rule_conf(pool, &id, req).await?;
 
     Ok(())
 }
 
 pub async fn delete(
     pool: &Arc<AnyPool>,
-    rules: &Arc<RwLock<Vec<Rule>>>,
+    rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<()> {
-    match rules.write().await.iter_mut().find(|rule| rule.id == id) {
-        Some(rule) => rule.delete(devices, apps, databoards).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    rules
+        .get_mut(&id)
+        .ok_or(HaliaError::NotFound)?
+        .delete(devices, apps, databoards)
+        .await?;
+
+    rules.remove(&id);
 
     sub_rule_count();
-    rules.write().await.retain(|rule| rule.id != id);
     storage::rule::delete_rule(pool, &id).await?;
     Ok(())
 }
 
-pub async fn get_log_filename(rules: &Arc<RwLock<Vec<Rule>>>, id: Uuid) -> HaliaResult<String> {
-    let filename = match rules.read().await.iter().find(|rule| rule.id == id) {
-        Some(rule) => rule.get_log_filename().await,
-        None => return Err(HaliaError::NotFound),
-    };
+pub async fn get_log_filename(rules: &Arc<DashMap<Uuid, Rule>>, id: Uuid) -> HaliaResult<String> {
+    let filename = rules
+        .get(&id)
+        .ok_or(HaliaError::NotFound)?
+        .get_log_filename()
+        .await;
 
     Ok(filename)
 }

@@ -1,14 +1,9 @@
 use axum::{
-    body::Body,
-    extract::{Path, Query, State},
-    http::{header, StatusCode},
-    response::IntoResponse,
-    routing::{self, get, post, put},
-    Router,
+    body::Body, extract::{Path, Query, State}, http::{header, StatusCode}, response::IntoResponse, routing::{self, get, post, put}, Json, Router
 };
 use tokio_util::io::ReaderStream;
 use types::{
-    rules::{QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
+    rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
 };
 use uuid::Uuid;
@@ -126,7 +121,7 @@ async fn download_log(State(state): State<AppState>, Path(id): Path<Uuid>) -> im
 async fn update(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-    body: String,
+    Json(req): Json<CreateUpdateRuleReq>,
 ) -> AppResult<AppSuccess<()>> {
     rule::update(
         &state.storage,
@@ -135,7 +130,7 @@ async fn update(
         &state.apps,
         &state.databoards,
         id,
-        body,
+        req,
     )
     .await?;
     Ok(AppSuccess::empty())

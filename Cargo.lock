@@ -1139,6 +1139,7 @@ name = "databoard"
 version = "0.1.0"
 dependencies = [
  "common",
+ "dashmap",
  "message",
  "paste",
  "serde_json",

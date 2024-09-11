@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sqlx::{prelude::FromRow, AnyPool};
+use types::rules::CreateUpdateRuleReq;
 use uuid::Uuid;
 
 #[derive(FromRow)]
@@ -36,9 +37,9 @@ pub async fn update_rule_status(pool: &AnyPool, id: &Uuid, status: bool) -> Resu
     Ok(())
 }
 
-pub async fn update_rule_conf(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {
+pub async fn update_rule_conf(pool: &AnyPool, id: &Uuid, req: CreateUpdateRuleReq) -> Result<()> {
     sqlx::query("UPDATE rules SET conf = ?1 WHERE id = ?2")
-        .bind(conf)
+        // .bind(conf)
         .bind(id.to_string())
         .execute(pool)
         .await?;

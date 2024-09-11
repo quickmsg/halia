@@ -1,11 +1,12 @@
 use axum::{
     extract::{Path, Query, State},
     routing::{self, get, post, put},
-    Router,
+    Json, Router,
 };
 use types::{
     databoard::{
-        QueryParams, QueryRuleInfo, SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, QueryParams, QueryRuleInfo,
+        SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
     },
     Pagination,
 };
@@ -45,9 +46,9 @@ async fn get_rule_info(
 
 async fn create_databoard(
     State(state): State<AppState>,
-    body: String,
+    Json(req): Json<CreateUpdateDataboardReq>,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::create_databoard(&state.storage, &state.databoards, Uuid::new_v4(), body, true).await?;
+    databoard::create_databoard(&state.storage, &state.databoards, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -64,9 +65,9 @@ async fn search_databoards(
 async fn update_databoard(
     State(state): State<AppState>,
     Path(databoard_id): Path<Uuid>,
-    body: String,
+    Json(req): Json<CreateUpdateDataboardReq>,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::update_databoard(&state.storage, &state.databoards, databoard_id, body).await?;
+    databoard::update_databoard(&state.storage, &state.databoards, databoard_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -81,14 +82,14 @@ async fn delete_databoard(
 async fn create_data(
     State(state): State<AppState>,
     Path(databoard_id): Path<Uuid>,
-    body: String,
+    Json(req): Json<CreateUpdateDataReq>,
 ) -> AppResult<AppSuccess<()>> {
     databoard::create_data(
         &state.storage,
         &state.databoards,
         databoard_id,
         Uuid::new_v4(),
-        body,
+        req,
         true,
     )
     .await?;
@@ -108,14 +109,14 @@ async fn search_datas(
 async fn update_data(
     State(state): State<AppState>,
     Path((databoard_id, databoard_data_id)): Path<(Uuid, Uuid)>,
-    body: String,
+    Json(req): Json<CreateUpdateDataReq>,
 ) -> AppResult<AppSuccess<()>> {
     databoard::update_data(
         &state.storage,
         &state.databoards,
         databoard_id,
         databoard_data_id,
-        body,
+        req,
     )
     .await?;
     Ok(AppSuccess::empty())

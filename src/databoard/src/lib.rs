@@ -10,10 +10,11 @@ use common::{
     error::{HaliaError, HaliaResult},
     storage,
 };
+use dashmap::DashMap;
 use databoard_struct::Databoard;
 use message::MessageBatch;
 use sqlx::AnyPool;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 use tracing::debug;
 use types::{
     databoard::{
@@ -47,302 +48,285 @@ pub fn get_summary() -> Summary {
     }
 }
 
-pub async fn load_from_persistence(
-    pool: &Arc<AnyPool>,
-) -> HaliaResult<Arc<RwLock<Vec<Databoard>>>> {
-    let db_databoards = storage::databoard::read_databoards(pool).await?;
-    let databoards: Arc<RwLock<Vec<Databoard>>> = Arc::new(RwLock::new(vec![]));
+pub async fn load_from_storage(
+    storage: &Arc<AnyPool>,
+) -> HaliaResult<Arc<DashMap<Uuid, Databoard>>> {
+    let db_databoards = storage::databoard::read_databoards(storage).await?;
+    let databoards: Arc<DashMap<Uuid, Databoard>> = Arc::new(DashMap::new());
     for db_databoard in db_databoards {
         let databoard_id = Uuid::from_str(&db_databoard.id).unwrap();
 
-        let db_datas = storage::databoard::read_databoard_datas(pool, &databoard_id).await?;
+        let db_datas = storage::databoard::read_databoard_datas(storage, &databoard_id).await?;
         debug!("{}", db_datas.len());
-        create_databoard(pool, &databoards, databoard_id, db_databoard.conf, false).await?;
+        // create_databoard(storage, &databoards, databoard_id, db_databoard.conf).await?;
 
-        for db_data in db_datas {
-            create_data(
-                pool,
-                &databoards,
-                databoard_id,
-                Uuid::from_str(&db_data.id).unwrap(),
-                db_data.conf,
-                false,
-            )
-            .await?;
-        }
+        // for db_data in db_datas {
+        //     create_data(
+        //         storage,
+        //         &databoards,
+        //         databoard_id,
+        //         Uuid::from_str(&db_data.id).unwrap(),
+        //         db_data.conf,
+        //         false,
+        //     )
+        //     .await?;
+        // }
     }
 
     Ok(databoards)
 }
 
 pub async fn get_rule_info(
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     query: QueryRuleInfo,
 ) -> HaliaResult<SearchRuleInfo> {
-    match databoards
-        .read()
-        .await
-        .iter()
-        .find(|databoard| databoard.id == query.databoard_id)
-    {
-        Some(databoard) => {
-            let databoard_info = databoard.search();
-            let data_info = databoard.search_data(&query.data_id).await?;
-            Ok(SearchRuleInfo {
-                databoard: databoard_info,
-                data: data_info,
-            })
-        }
-        None => Err(HaliaError::NotFound),
-    }
+    todo!()
+    // match databoards
+    //     .read()
+    //     .await
+    //     .iter()
+    //     .find(|databoard| databoard.id == query.databoard_id)
+    // {
+    //     Some(databoard) => {
+    //         let databoard_info = databoard.search();
+    //         let data_info = databoard.search_data(&query.data_id).await?;
+    //         Ok(SearchRuleInfo {
+    //             databoard: databoard_info,
+    //             data: data_info,
+    //         })
+    //     }
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn create_databoard(
-    pool: &Arc<AnyPool>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
-    id: Uuid,
-    body: String,
-    persist: bool,
+    storage: &Arc<AnyPool>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
+    req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateDataboardReq = serde_json::from_str(&body)?;
-    let databoard = Databoard::new(id, req.base, req.ext)?;
-    databoards.write().await.push(databoard);
+    // let databoard = Databoard::new(id, req.base, req.ext)?;
+    // databoards.write().await.push(databoard);
     add_databoard_count();
-    if persist {
-        storage::databoard::create_databoard(pool, &id, body).await?;
-    }
+    let id = Uuid::new_v4();
+    storage::databoard::create_databoard(storage, &id, req).await?;
     Ok(())
 }
 
 pub async fn search_databoards(
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     pagination: Pagination,
     query: QueryParams,
 ) -> SearchDataboardsResp {
-    let mut data = vec![];
-    let mut total = 0;
+    todo!()
+    // let mut data = vec![];
+    // let mut total = 0;
 
-    for databoard in databoards.read().await.iter().rev() {
-        let databoard = databoard.search();
-        if let Some(name) = &query.name {
-            if !databoard.conf.base.name.contains(name) {
-                continue;
-            }
-        }
+    // for databoard in databoards.read().await.iter().rev() {
+    //     let databoard = databoard.search();
+    //     if let Some(name) = &query.name {
+    //         if !databoard.conf.base.name.contains(name) {
+    //             continue;
+    //         }
+    //     }
 
-        if pagination.check(total) {
-            data.push(databoard);
-        }
+    //     if pagination.check(total) {
+    //         data.push(databoard);
+    //     }
 
-        total += 1;
-    }
+    //     total += 1;
+    // }
 
-    SearchDataboardsResp { total, data }
+    // SearchDataboardsResp { total, data }
 }
 
 pub async fn update_databoard(
-    pool: &Arc<AnyPool>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    storage: &Arc<AnyPool>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: Uuid,
-    body: String,
+    req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateDataboardReq = serde_json::from_str(&body)?;
-    match databoards
-        .write()
-        .await
-        .iter_mut()
-        .find(|databoard| databoard.id == databoard_id)
-    {
-        Some(databoard) => databoard.update(req.base)?,
-        None => return Err(HaliaError::NotFound),
-    }
+    // match databoards
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|databoard| databoard.id == databoard_id)
+    // {
+    //     Some(databoard) => databoard.update(req.base)?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
-    storage::databoard::update_databoard(pool, &databoard_id, body).await?;
+    storage::databoard::update_databoard(storage, &databoard_id, req).await?;
 
     Ok(())
 }
 
 pub async fn delete_databoard(
-    pool: &Arc<AnyPool>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    storage: &Arc<AnyPool>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: Uuid,
 ) -> HaliaResult<()> {
-    match databoards
-        .write()
-        .await
-        .iter_mut()
-        .find(|databoard| databoard.id == databoard_id)
-    {
-        Some(databoard) => databoard.delete()?,
-        None => return Err(HaliaError::NotFound),
+    // 运行中，不能被直接删除
+    if let Some(_) = databoards.get(&databoard_id) {
+        return Err(HaliaError::DeleteRunning);
     }
+    // 判断子资源引用情况
+    // 判断是否停止中
+    // match databoards
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|databoard| databoard.id == databoard_id)
+    // {
+    //     Some(databoard) => databoard.delete()?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
-    databoards
-        .write()
-        .await
-        .retain(|databoard| databoard.id != databoard_id);
+    // databoards
+    //     .write()
+    //     .await
+    //     .retain(|databoard| databoard.id != databoard_id);
     sub_databoard_count();
-    storage::databoard::delete_databoard(pool, &databoard_id).await?;
+    storage::databoard::delete_databoard(storage, &databoard_id).await?;
 
     Ok(())
 }
 
 pub async fn create_data(
-    pool: &Arc<AnyPool>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    storage: &Arc<AnyPool>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: Uuid,
     databoard_data_id: Uuid,
-    body: String,
+    req: CreateUpdateDataReq,
     persist: bool,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateDataReq = serde_json::from_str(&body)?;
-    match databoards
-        .write()
-        .await
-        .iter_mut()
-        .find(|databoard| databoard.id == databoard_id)
-    {
-        Some(databoard) => {
-            databoard
-                .create_data(databoard_data_id.clone(), req)
-                .await?
-        }
-        None => return Err(HaliaError::NotFound),
-    }
+    databoards
+        .get_mut(&databoard_id)
+        .ok_or(HaliaError::NotFound)?
+        .create_data(databoard_data_id, req)
+        .await?;
 
-    if persist {
-        storage::databoard::create_databoard_data(pool, &databoard_id, &databoard_data_id, body)
-            .await?;
-    }
+    // if persist {
+    //     storage::databoard::create_databoard_data(storage, &databoard_id, &databoard_data_id, req)
+    //         .await?;
+    // }
 
     Ok(())
 }
 
 pub async fn search_datas(
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: Uuid,
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchDatasResp> {
-    match databoards
-        .read()
-        .await
-        .iter()
-        .find(|databoard| databoard.id == databoard_id)
-    {
-        Some(device) => Ok(device.search_datas(pagination, query).await),
-        None => Err(HaliaError::NotFound),
-    }
+    // match databoards
+    //     .read()
+    //     .await
+    //     .iter()
+    //     .find(|databoard| databoard.id == databoard_id)
+    // {
+    //     Some(device) => Ok(device.search_datas(pagination, query).await),
+    //     None => Err(HaliaError::NotFound),
+    // }
+    todo!()
 }
 
 pub async fn update_data(
-    pool: &Arc<AnyPool>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    storage: &Arc<AnyPool>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: Uuid,
     databoard_data_id: Uuid,
-    body: String,
+    req: CreateUpdateDataReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateDataReq = serde_json::from_str(&body)?;
-    match databoards
-        .write()
-        .await
-        .iter_mut()
-        .find(|databoard| databoard.id == databoard_id)
-    {
-        Some(databoard) => databoard.update_data(databoard_data_id, req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    // match databoards
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|databoard| databoard.id == databoard_id)
+    // {
+    //     Some(databoard) => databoard.update_data(databoard_data_id, req).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
-    storage::databoard::update_databoard_data(pool, &databoard_data_id, body).await?;
+    storage::databoard::update_databoard_data(storage, &databoard_data_id, req).await?;
 
     Ok(())
 }
 
 pub async fn delete_data(
-    pool: &Arc<AnyPool>,
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    storage: &Arc<AnyPool>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: Uuid,
     databoard_data_id: Uuid,
 ) -> HaliaResult<()> {
-    match databoards
-        .write()
-        .await
-        .iter_mut()
-        .find(|databoard| databoard.id == databoard_id)
-    {
-        Some(databoard) => databoard.delete_data(databoard_data_id).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    // match databoards
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|databoard| databoard.id == databoard_id)
+    // {
+    //     Some(databoard) => databoard.delete_data(databoard_data_id).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
-    storage::databoard::delete_databoard_data(pool, &databoard_data_id).await?;
+    storage::databoard::delete_databoard_data(storage, &databoard_data_id).await?;
 
     Ok(())
 }
 
 pub async fn add_data_ref(
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: &Uuid,
     databoard_data_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
-    match databoards
-        .write()
-        .await
-        .iter_mut()
-        .find(|databoard| databoard.id == *databoard_id)
-    {
-        Some(databoard) => databoard.add_data_ref(&databoard_data_id, &rule_id).await,
-        None => return Err(HaliaError::NotFound),
-    }
+    // match databoards
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|databoard| databoard.id == *databoard_id)
+    // {
+    //     Some(databoard) => databoard.add_data_ref(&databoard_data_id, &rule_id).await,
+    //     None => return Err(HaliaError::NotFound),
+    // }
+    todo!()
 }
 
 pub async fn get_data_tx(
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: &Uuid,
     databoard_data_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    match databoards
-        .write()
+    databoards
+        .get_mut(databoard_id)
+        .ok_or(HaliaError::NotFound)?
+        .get_data_tx(databoard_data_id, rule_id)
         .await
-        .iter_mut()
-        .find(|databoard| databoard.id == *databoard_id)
-    {
-        Some(databoard) => databoard.get_data_tx(&databoard_data_id, &rule_id).await,
-        None => return Err(HaliaError::NotFound),
-    }
 }
 
 pub async fn del_data_tx(
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: &Uuid,
     databoard_data_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
-    match databoards
-        .write()
+    databoards
+        .get_mut(databoard_id)
+        .ok_or(HaliaError::NotFound)?
+        .del_data_tx(databoard_data_id, rule_id)
         .await
-        .iter_mut()
-        .find(|databoard| databoard.id == *databoard_id)
-    {
-        Some(databoard) => databoard.del_data_tx(&databoard_data_id, &rule_id).await,
-        None => return Err(HaliaError::NotFound),
-    }
 }
 
 pub async fn del_data_ref(
-    databoards: &Arc<RwLock<Vec<Databoard>>>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: &Uuid,
     databoard_data_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
-    match databoards
-        .write()
+    databoards
+        .get_mut(databoard_id)
+        .ok_or(HaliaError::NotFound)?
+        .del_data_ref(databoard_data_id, rule_id)
         .await
-        .iter_mut()
-        .find(|databoard| databoard.id == *databoard_id)
-    {
-        Some(databoard) => databoard.del_data_ref(&databoard_data_id, &rule_id).await,
-        None => return Err(HaliaError::NotFound),
-    }
 }

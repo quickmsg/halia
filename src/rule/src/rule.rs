@@ -38,7 +38,7 @@ impl Rule {
     pub async fn new(
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-        databoards: &Arc<RwLock<Vec<Databoard>>>,
+        databoards: &Arc<DashMap<Uuid, Databoard>>,
         rule_id: Uuid,
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<Self> {
@@ -180,7 +180,7 @@ impl Rule {
         &self,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-        databoards: &Arc<RwLock<Vec<Databoard>>>,
+        databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<Vec<ReadRuleNodeResp>> {
         let mut read_rule_node_resp = vec![];
         // let mut read_rule_resp = ReadRuleResp { nodes: vec![] };
@@ -281,7 +281,7 @@ impl Rule {
         &mut self,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-        databoards: &Arc<RwLock<Vec<Databoard>>>,
+        databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> Result<()> {
         check_and_set_on_true!(self);
         add_rule_on_count();
@@ -585,7 +585,7 @@ impl Rule {
         &mut self,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-        databoards: &Arc<RwLock<Vec<Databoard>>>,
+        databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<()> {
         check_and_set_on_false!(self);
         sub_rule_on_count();
@@ -652,7 +652,7 @@ impl Rule {
         &mut self,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-        databoards: &Arc<RwLock<Vec<Databoard>>>,
+        databoards: &Arc<DashMap<Uuid, Databoard>>,
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<()> {
         let mut restart = false;
@@ -673,7 +673,7 @@ impl Rule {
         &mut self,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-        databoards: &Arc<RwLock<Vec<Databoard>>>,
+        databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<()> {
         if self.on {
             self.stop(devices, apps, databoards).await?;
