@@ -135,8 +135,14 @@ async fn search_sources(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sources =
-        devices::search_sources(&state.devices, device_id, pagination, query_params).await?;
+    let sources = devices::search_sources(
+        &state.storage,
+        &state.devices,
+        device_id,
+        pagination,
+        query_params,
+    )
+    .await?;
     Ok(AppSuccess::data(sources))
 }
 

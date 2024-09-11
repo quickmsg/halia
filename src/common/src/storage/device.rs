@@ -33,14 +33,15 @@ CREATE TABLE IF NOT EXISTS devices (
     device_type TEXT NOT NULL,
     name TEXT NOT NULL,
     desc TEXT,
-    conf TEXT NOT NULL
+    conf TEXT NOT NULL,
+    ts INT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS device_events (
     id TEXT,
     event_type INTEGER NOT NULL,
-    ts INTEGER NOT NULL,
-    info TEXT
+    info TEXT,
+    ts INTEGER NOT NULL
 );
 "#,
     )
@@ -52,27 +53,30 @@ CREATE TABLE IF NOT EXISTS device_events (
 
 pub async fn create_device(pool: &AnyPool, id: &Uuid, req: CreateUpdateDeviceReq) -> Result<()> {
     let ext_conf = serde_json::to_string(&req.conf.ext)?;
+    let ts = chrono::Utc::now().timestamp();
     match req.conf.base.desc {
         Some(desc) => {
-            sqlx::query("INSERT INTO devices (id, status, device_type, name, desc, conf) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+            sqlx::query("INSERT INTO devices (id, status, device_type, name, desc, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
                 .bind(id.to_string())
                 .bind(false as i32)
                 .bind(req.device_type.to_string())
                 .bind(req.conf.base.name)
                 .bind(desc)
                 .bind(ext_conf)
+                .bind(ts)
                 .execute(pool)
                 .await?;
         }
         None => {
             sqlx::query(
-                "INSERT INTO devices (id, status, device_type, name, conf) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO devices (id, status, device_type, name, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )
             .bind(id.to_string())
             .bind(false as i32)
             .bind(req.device_type.to_string())
             .bind(req.conf.base.name)
             .bind(ext_conf)
+            .bind(ts)
             .execute(pool)
             .await?;
         }

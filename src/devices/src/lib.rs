@@ -21,8 +21,8 @@ use types::{
         SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemFromMemory,
         SearchDevicesItemResp, SearchDevicesResp, SearchRuleInfo, Summary,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
-    SearchSourcesOrSinksResp, Value,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, RuleRef, SearchSourcesOrSinksInfoResp,
+    SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
 };
 
 use uuid::Uuid;
@@ -461,26 +461,36 @@ pub async fn create_source(
 }
 
 pub async fn search_sources(
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    Ok(devices
-        .get(&device_id)
-        .ok_or(HaliaError::NotFound)?
-        .search_sources(pagination, query)
-        .await)
+    let (count, db_sources) =
+        storage::source::search_sources(storage, &device_id, pagination).await?;
+    let mut data = Vec::with_capacity(db_sources.len());
+    for db_source in db_sources {
+        data.push(SearchSourcesOrSinksItemResp {
+            info: SearchSourcesOrSinksInfoResp {
+                id: Uuid::from_str(&db_source.id).unwrap(),
+                conf: CreateUpdateSourceOrSinkReq {
+                    base: BaseConf {
+                        name: db_source.name,
+                        desc: db_source.desc,
+                    },
+                    ext: serde_json::from_str(&db_source.conf).unwrap(),
+                },
+            },
+            // todo 记录在数据库中
+            rule_ref: RuleRef {
+                rule_ref_cnt: 0,
+                rule_active_ref_cnt: 0,
+            },
+        });
+    }
 
-    // match devices
-    //     .read()
-    //     .await
-    //     .iter()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => Ok(device.search_sources(pagination, query).await),
-    //     None => Err(HaliaError::NotFound),
-    // }
+    Ok(SearchSourcesOrSinksResp { total: count, data })
 }
 
 pub async fn update_source(
@@ -513,15 +523,6 @@ pub async fn write_source_value(
         .ok_or(HaliaError::NotFound)?
         .write_source_value(source_id, req)
         .await
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.write_source_value(source_id, req).await,
-    //     None => Err(HaliaError::NotFound),
-    // }
 }
 
 pub async fn delete_source(
@@ -530,11 +531,11 @@ pub async fn delete_source(
     device_id: Uuid,
     source_id: Uuid,
 ) -> HaliaResult<()> {
-    devices
-        .get_mut(&device_id)
-        .ok_or(HaliaError::NotFound)?
-        .delete_source(source_id)
-        .await?;
+    // devices
+    //     .get_mut(&device_id)
+    //     .ok_or(HaliaError::NotFound)?
+    //     .delete_source(source_id)
+    //     .await?;
     // match devices
     //     .write()
     //     .await
@@ -556,23 +557,10 @@ pub async fn add_source_ref(
     source_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
-    match devices
+    devices
         .get_mut(device_id)
-        .expect("device not found")
+        .ok_or(HaliaError::NotFound)?
         .add_source_ref(source_id, rule_id)
-    {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == *device_id)
-    // {
-    //     Some(device) => device.add_source_ref(source_id, rule_id),
-    //     None => Err(HaliaError::NotFound),
-    // }
 }
 
 pub async fn get_source_rx(
@@ -586,16 +574,6 @@ pub async fn get_source_rx(
         .ok_or(HaliaError::NotFound)?
         .get_source_rx(source_id, rule_id)
         .await
-
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == *device_id)
-    // {
-    //     Some(device) => device.get_source_rx(source_id, rule_id).await,
-    //     None => Err(HaliaError::NotFound),
-    // }
 }
 
 pub async fn del_source_rx(
@@ -616,23 +594,10 @@ pub async fn del_source_ref(
     source_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
-    match devices
+    devices
         .get_mut(device_id)
-        .expect("device not found")
+        .ok_or(HaliaError::NotFound)?
         .del_source_ref(source_id, rule_id)
-    {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == *device_id)
-    // {
-    //     Some(device) => device.del_source_ref(source_id, rule_id),
-    //     None => Err(HaliaError::NotFound),
-    // }
 }
 
 pub async fn create_sink(
