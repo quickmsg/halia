@@ -8,6 +8,8 @@ pub mod rule;
 pub mod sink;
 pub mod source;
 pub mod user;
+pub mod source_or_sink;
+pub mod rule_ref;
 
 pub async fn create_tables(storage: &AnyPool) -> Result<()> {
     sqlx::query(
