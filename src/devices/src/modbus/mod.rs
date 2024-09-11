@@ -591,23 +591,22 @@ impl Device for Modbus {
     async fn create_sink(
         &mut self,
         sink_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        let ext_conf: SinkConf = serde_json::from_value(req.ext.clone())?;
         Sink::validate_conf(&ext_conf)?;
 
-        for sink in self.sinks.iter() {
-            sink.check_duplicate(&req.base, &ext_conf)?;
-        }
+        // for sink in self.sinks.iter() {
+        //     sink.check_duplicate(&req.base, &ext_conf)?;
+        // }
 
-        let mut sink = Sink::new(sink_id, req.base, ext_conf);
-        sink.start(self.write_tx.clone(), self.device_err_tx.subscribe())
-            .await;
+        // let mut sink = Sink::new(sink_id, req.base, ext_conf);
+        // sink.start(self.write_tx.clone(), self.device_err_tx.subscribe())
+        //     .await;
 
-        self.sinks.push(sink);
-        self.sink_ref_infos.push((sink_id, RefInfo::new()));
-
-        Ok(())
+        // self.sinks.push(sink);
+        // self.sink_ref_infos.push((sink_id, RefInfo::new()));
+        todo!()
     }
 
     async fn search_sinks(

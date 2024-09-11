@@ -5,7 +5,8 @@ use axum::{
 };
 use types::{
     devices::{CreateUpdateDeviceReq, QueryParams, SearchDevicesResp, Summary},
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
+    CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, SearchSourcesOrSinksResp,
+    Value,
 };
 use uuid::Uuid;
 
@@ -105,15 +106,7 @@ async fn create_source(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_source(
-        &state.storage,
-        &state.devices,
-        device_id,
-        Uuid::new_v4(),
-        req,
-        true,
-    )
-    .await?;
+    devices::create_source(&state.storage, &state.devices, device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -121,7 +114,7 @@ async fn search_sources(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-    Query(query_params): Query<QueryParams>,
+    Query(query_params): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
     let sources = devices::search_sources(
         &state.storage,
@@ -165,15 +158,7 @@ async fn create_sink(
     Path(device_id): Path<Uuid>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_sink(
-        &state.storage,
-        &state.devices,
-        device_id,
-        Uuid::new_v4(),
-        req,
-        true,
-    )
-    .await?;
+    devices::create_sink(&state.storage, &state.devices, device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -181,9 +166,10 @@ async fn search_sinks(
     State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
     Query(pagination): Query<Pagination>,
-    Query(query): Query<QueryParams>,
+    Query(query): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sinks = devices::search_sinks(&state.devices, device_id, pagination, query).await?;
+    let sinks =
+        devices::search_sinks(&state.storage, &state.devices, device_id, pagination, query).await?;
     Ok(AppSuccess::data(sinks))
 }
 

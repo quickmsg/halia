@@ -4,10 +4,10 @@ use uuid::Uuid;
 pub mod apps;
 pub mod databoard;
 pub mod devices;
+pub mod events;
 pub mod mqtt_server;
 pub mod rules;
 pub mod user;
-pub mod events;
 
 #[derive(Serialize)]
 pub struct Dashboard {
@@ -64,6 +64,11 @@ pub struct RuleRef {
 pub struct CreateUpdateSourceOrSinkReq {
     pub base: BaseConf,
     pub ext: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct QuerySourcesOrSinksParams {
+    pub name: Option<String>,
 }
 
 #[derive(Serialize)]

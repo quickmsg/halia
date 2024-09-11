@@ -23,8 +23,8 @@ use types::{
         SearchDevicesItemResp, SearchDevicesResp, SearchRuleInfo, Summary,
     },
     events::EventType,
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, RuleRef, SearchSourcesOrSinksInfoResp,
-    SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
+    SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
 };
 
 use uuid::Uuid;
@@ -104,7 +104,7 @@ pub trait Device: Send + Sync {
     async fn create_sink(
         &mut self,
         sink_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn search_sinks(
         &self,
@@ -265,7 +265,9 @@ pub async fn search_devices(
     pagination: Pagination,
     query_params: QueryParams,
 ) -> HaliaResult<SearchDevicesResp> {
-    let (count, db_devices) = storage::device::search_devices(storage, pagination).await?;
+    // TODO 查询异常设备
+    let (count, db_devices) =
+        storage::device::search_devices(storage, pagination, query_params).await?;
     let mut resp_devices = vec![];
     for db_device in db_devices {
         let device_id = Uuid::from_str(&db_device.id).unwrap();
@@ -275,8 +277,6 @@ pub async fn search_devices(
             1 => Some(devices.get(&device_id).unwrap().read().await),
             _ => unreachable!(),
         };
-
-        // 从内存中获取设备信息
         resp_devices.push(SearchDevicesItemResp {
             common: SearchDevicesItemCommon {
                 id: db_device.id,
@@ -295,38 +295,6 @@ pub async fn search_devices(
             },
         });
     }
-    // for device in devices.read().await.iter().rev() {
-    //     let device = device.read().await;
-    //     if let Some(device_type) = &query_params.device_type {
-    //         if *device_type != device.common.device_type {
-    //             continue;
-    //         }
-    //     }
-
-    //     if let Some(name) = &query_params.name {
-    //         if !device.conf.base.name.contains(name) {
-    //             continue;
-    //         }
-    //     }
-
-    //     if let Some(on) = &query_params.on {
-    //         if device.common.on != *on {
-    //             continue;
-    //         }
-    //     }
-
-    //     if let Some(err) = &query_params.err {
-    //         if device.common.err.is_some() != *err {
-    //             continue;
-    //         }
-    //     }
-
-    //     if pagination.check(total) {
-    //         data.push(device);
-    //     }
-
-    //     total += 1;
-    // }
 
     Ok(SearchDevicesResp {
         total: count,
@@ -384,6 +352,8 @@ pub async fn start_device(
     };
     devices.insert(device_id, device);
 
+    let mut device = devices.get_mut(&device_id).unwrap();
+
     let db_sources = storage::source::read_all_sources(storage, &device_id).await?;
     for db_source in db_sources {
         let req = CreateUpdateSourceOrSinkReq {
@@ -393,15 +363,9 @@ pub async fn start_device(
             },
             ext: serde_json::from_str(&db_source.conf).unwrap(),
         };
-        create_source(
-            storage,
-            &devices,
-            device_id,
-            Uuid::from_str(&db_source.id).unwrap(),
-            req,
-            false,
-        )
-        .await?;
+        device
+            .create_source(Uuid::from_str(&db_source.id).unwrap(), &req)
+            .await?;
     }
 
     let db_sinks = storage::sink::read_all_sinks(storage, &device_id).await?;
@@ -413,15 +377,9 @@ pub async fn start_device(
             },
             ext: serde_json::from_str(&db_sink.conf).unwrap(),
         };
-        create_sink(
-            storage,
-            &devices,
-            device_id,
-            Uuid::from_str(&db_sink.id).unwrap(),
-            req,
-            false,
-        )
-        .await?;
+        device
+            .create_sink(Uuid::from_str(&db_sink.id).unwrap(), &req)
+            .await?;
     }
 
     add_device_on_count();
@@ -472,7 +430,6 @@ pub async fn delete_device(
     }
 
     sub_device_count();
-    devices.remove(&device_id);
     storage::device::delete_device(storage, &device_id).await?;
 
     Ok(())
@@ -482,17 +439,14 @@ pub async fn create_source(
     storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
-    source_id: Uuid,
     req: CreateUpdateSourceOrSinkReq,
-    persist: bool,
 ) -> HaliaResult<()> {
+    let source_id = Uuid::new_v4();
     if let Some(mut device) = devices.get_mut(&device_id) {
         device.create_source(source_id, &req).await?;
     }
 
-    if persist {
-        storage::source::create_source(storage, &device_id, &source_id, req).await?;
-    }
+    storage::source::create_source(storage, &device_id, &source_id, req).await?;
 
     Ok(())
 }
@@ -502,10 +456,10 @@ pub async fn search_sources(
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     pagination: Pagination,
-    query: QueryParams,
+    query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
     let (count, db_sources) =
-        storage::source::search_sources(storage, &device_id, pagination).await?;
+        storage::source::search_sources(storage, &device_id, pagination, query).await?;
     let mut data = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
         data.push(SearchSourcesOrSinksItemResp {
@@ -519,9 +473,9 @@ pub async fn search_sources(
                     ext: serde_json::from_str(&db_source.conf).unwrap(),
                 },
             },
-            // todo 记录在数据库中
             rule_ref: RuleRef {
-                rule_ref_cnt: 0,
+                rule_ref_cnt: db_source.rule_ref_cnt as usize,
+                // TODO 查询
                 rule_active_ref_cnt: 0,
             },
         });
@@ -583,15 +537,14 @@ pub async fn delete_source(
 }
 
 pub async fn add_source_ref(
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     source_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<()> {
-    devices
-        .get_mut(device_id)
-        .ok_or(HaliaError::NotFound)?
-        .add_source_ref(source_id, rule_id)
+    storage::source::add_rule_ref(storage, &source_id, &rule_id).await?;
+    Ok(())
 }
 
 pub async fn get_source_rx(
@@ -635,47 +588,49 @@ pub async fn create_sink(
     persistence: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
-    sink_id: Uuid,
     req: CreateUpdateSourceOrSinkReq,
-    persist: bool,
 ) -> HaliaResult<()> {
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.create_sink(sink_id, req).await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
-
-    if persist {
-        storage::sink::create_sink(persistence, &device_id, &sink_id, req).await?;
+    let sink_id = Uuid::new_v4();
+    if let Some(mut device) = devices.get_mut(&device_id) {
+        device.create_sink(sink_id, &req).await?;
     }
+
+    storage::sink::create_sink(persistence, &device_id, &sink_id, req).await?;
 
     Ok(())
 }
 
 pub async fn search_sinks(
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     pagination: Pagination,
-    query: QueryParams,
+    query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    Ok(devices
-        .get(&device_id)
-        .ok_or(HaliaError::NotFound)?
-        .search_sinks(pagination, query)
-        .await)
-    // match devices
-    //     .read()
-    //     .await
-    //     .iter()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => Ok(device.search_sinks(pagination, query).await),
-    //     None => Err(HaliaError::NotFound),
-    // }
+    let (count, db_sinks) =
+        storage::sink::search_sinks(storage, &device_id, pagination, query).await?;
+    let mut data = Vec::with_capacity(db_sinks.len());
+    for db_sink in db_sinks {
+        data.push(SearchSourcesOrSinksItemResp {
+            info: SearchSourcesOrSinksInfoResp {
+                id: Uuid::from_str(&db_sink.id).unwrap(),
+                conf: CreateUpdateSourceOrSinkReq {
+                    base: BaseConf {
+                        name: db_sink.name,
+                        desc: db_sink.desc,
+                    },
+                    ext: serde_json::from_str(&db_sink.conf).unwrap(),
+                },
+            },
+            rule_ref: RuleRef {
+                rule_ref_cnt: db_sink.rule_ref_cnt as usize,
+                // TODO 查询
+                rule_active_ref_cnt: 0,
+            },
+        });
+    }
+
+    Ok(SearchSourcesOrSinksResp { total: count, data })
 }
 
 pub async fn update_sink(

@@ -3,7 +3,6 @@ use apps::App;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
-    storage,
 };
 use dashmap::DashMap;
 use databoard::databoard_struct::Databoard;
@@ -38,6 +37,7 @@ pub struct Rule {
 
 impl Rule {
     pub async fn new(
+        storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
@@ -55,6 +55,7 @@ impl Rule {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
                     match devices::add_source_ref(
+                        storage,
                         devices,
                         &source_node.device_id,
                         &source_node.source_id,

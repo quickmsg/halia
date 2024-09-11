@@ -329,18 +329,19 @@ impl Device for Opcua {
     async fn create_sink(
         &mut self,
         sink_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        match Sink::new(sink_id, req).await {
-            Ok(sink) => {
-                if self.on {
-                    //
-                }
-                self.sinks.push(sink);
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
+        todo!()
+        // match Sink::new(sink_id, req).await {
+        //     Ok(sink) => {
+        //         if self.on {
+        //             //
+        //         }
+        //         self.sinks.push(sink);
+        //         Ok(())
+        //     }
+        //     Err(e) => Err(e),
+        // }
     }
 
     async fn search_sinks(

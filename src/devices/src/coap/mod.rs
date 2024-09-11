@@ -319,23 +319,24 @@ impl Device for Coap {
     async fn create_sink(
         &mut self,
         sink_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
+        todo!()
+        // let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
 
-        for sink in self.sinks.iter() {
-            sink.check_duplicate(&req.base, &ext_conf)?;
-        }
+        // for sink in self.sinks.iter() {
+        //     sink.check_duplicate(&req.base, &ext_conf)?;
+        // }
 
-        let mut sink = Sink::new(sink_id, req.base, ext_conf, self.token_manager.clone())?;
-        if self.on {
-            _ = sink.start(self.coap_client.as_ref().unwrap().clone()).await;
-        }
+        // let mut sink = Sink::new(sink_id, req.base, ext_conf, self.token_manager.clone())?;
+        // if self.on {
+        //     _ = sink.start(self.coap_client.as_ref().unwrap().clone()).await;
+        // }
 
-        self.sinks.push(sink);
-        self.sink_ref_infos.push((sink_id, RefInfo::new()));
+        // self.sinks.push(sink);
+        // self.sink_ref_infos.push((sink_id, RefInfo::new()));
 
-        Ok(())
+        // Ok(())
     }
 
     async fn search_sinks(
