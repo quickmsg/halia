@@ -4,8 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
-    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete,
-    check_stop_all, deactive_ref, del_ref,
+    check_delete, check_stop_all,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -182,7 +181,6 @@ impl Device for Coap {
         check_stop_all!(self, source);
         check_stop_all!(self, sink);
 
-        check_and_set_on_false!(self);
         sub_device_on_count();
 
         for source in self.sources.iter_mut() {
@@ -227,36 +225,6 @@ impl Device for Coap {
         // self.source_ref_infos.push((source_id, RefInfo::new()));
         // Ok(())
         todo!()
-    }
-
-    async fn search_sources(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchSourcesOrSinksResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for (index, source) in self.sources.iter().rev().enumerate() {
-            let source = source.search();
-            if let Some(name) = &query.name {
-                if !source.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
-
-            if pagination.check(total) {
-                unsafe {
-                    data.push(SearchSourcesOrSinksItemResp {
-                        info: source,
-                        rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
-                    });
-                }
-            }
-
-            total += 1;
-        }
-
-        SearchSourcesOrSinksResp { total, data }
     }
 
     async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
@@ -336,37 +304,6 @@ impl Device for Coap {
         // Ok(())
     }
 
-    async fn search_sinks(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchSourcesOrSinksResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for (index, sink) in self.sinks.iter().rev().enumerate() {
-            let sink = sink.search();
-
-            if let Some(name) = &query.name {
-                if !sink.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
-
-            if pagination.check(total) {
-                unsafe {
-                    data.push(SearchSourcesOrSinksItemResp {
-                        info: sink,
-                        rule_ref: self.sink_ref_infos.get_unchecked(index).1.get_rule_ref(),
-                    })
-                }
-            }
-
-            total += 1;
-        }
-
-        SearchSourcesOrSinksResp { total, data }
-    }
-
     async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
         match self.sinks.iter().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.search()),
@@ -410,17 +347,11 @@ impl Device for Coap {
         Ok(())
     }
 
-    fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_ref!(self, source, source_id, rule_id)
-    }
-
     async fn get_source_rx(
         &mut self,
         source_id: &Uuid,
-        rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         self.check_on()?;
-        active_ref!(self, source, source_id, rule_id);
         match self
             .sources
             .iter_mut()
@@ -431,37 +362,12 @@ impl Device for Coap {
         }
     }
 
-    fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_ref!(self, source, source_id, rule_id)
-    }
-
-    fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_ref!(self, source, source_id, rule_id)
-    }
-
-    fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_ref!(self, sink, sink_id, rule_id)
-    }
-
-    async fn get_sink_tx(
-        &mut self,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         self.check_on()?;
-        active_ref!(self, sink, sink_id, rule_id);
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
         }
-    }
-
-    fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_ref!(self, sink, sink_id, rule_id)
-    }
-
-    fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_ref!(self, sink, sink_id, rule_id)
     }
 }
 

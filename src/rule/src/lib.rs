@@ -159,7 +159,7 @@ pub async fn read(
 }
 
 pub async fn start(
-    pool: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
@@ -173,32 +173,36 @@ pub async fn start(
     rules
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .start(devices, apps, databoards)
+        .start(storage, devices, apps, databoards)
         .await?;
-    storage::rule::update_rule_status(pool, &id, true).await?;
+    storage::rule::update_rule_status(storage, &id, true).await?;
     Ok(())
 }
 
 pub async fn stop(
-    pool: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<()> {
+    if !rules.contains_key(&id) {
+        return Ok(());
+    }
+
     rules
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .stop(devices, apps, databoards)
+        .stop(storage, devices, apps, databoards)
         .await?;
 
-    storage::rule::update_rule_status(pool, &id, false).await?;
+    storage::rule::update_rule_status(storage, &id, false).await?;
     Ok(())
 }
 
 pub async fn update(
-    pool: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
@@ -209,7 +213,7 @@ pub async fn update(
     rules
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .update(devices, apps, databoards, req)
+        .update(storage, devices, apps, databoards, req)
         .await?;
 
     // storage::rule::update_rule_conf(pool, &id, req).await?;

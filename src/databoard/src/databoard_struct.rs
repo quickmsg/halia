@@ -1,5 +1,5 @@
 use common::{
-    active_ref, add_ref, check_delete, check_delete_all, deactive_ref, del_ref,
+    check_delete, check_delete_all,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -149,7 +149,7 @@ impl Databoard {
     }
 
     pub async fn add_data_ref(&mut self, data_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_ref!(self, data, data_id, rule_id)
+        todo!()
     }
 
     pub async fn get_data_tx(
@@ -157,7 +157,6 @@ impl Databoard {
         data_id: &Uuid,
         rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        active_ref!(self, data, data_id, rule_id);
         match self.datas.iter_mut().find(|data| data.id == *data_id) {
             Some(data) => Ok(data.mb_tx.clone()),
             None => unreachable!(),
@@ -165,10 +164,10 @@ impl Databoard {
     }
 
     pub async fn del_data_tx(&mut self, data_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_ref!(self, data, data_id, rule_id)
+        todo!()
     }
 
     pub async fn del_data_ref(&mut self, data_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_ref!(self, data, data_id, rule_id)
+        todo!()
     }
 }

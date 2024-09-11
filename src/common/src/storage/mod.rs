@@ -5,11 +5,9 @@ pub mod app;
 pub mod databoard;
 pub mod device;
 pub mod rule;
-pub mod sink;
-pub mod source;
-pub mod user;
-pub mod source_or_sink;
 pub mod rule_ref;
+pub mod source_or_sink;
+pub mod user;
 
 pub async fn create_tables(storage: &AnyPool) -> Result<()> {
     sqlx::query(
@@ -47,8 +45,7 @@ CREATE TABLE IF NOT EXISTS rules (
     .await?;
 
     device::init_table(storage).await?;
-    source::init_table(storage).await?;
-    sink::init_table(storage).await?;
+    source_or_sink::init_table(storage).await?;
 
     Ok(())
 }

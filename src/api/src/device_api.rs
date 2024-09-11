@@ -116,14 +116,8 @@ async fn search_sources(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sources = devices::search_sources(
-        &state.storage,
-        &state.devices,
-        device_id,
-        pagination,
-        query_params,
-    )
-    .await?;
+    let sources =
+        devices::search_sources(&state.storage, device_id, pagination, query_params).await?;
     Ok(AppSuccess::data(sources))
 }
 
@@ -168,8 +162,7 @@ async fn search_sinks(
     Query(pagination): Query<Pagination>,
     Query(query): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sinks =
-        devices::search_sinks(&state.storage, &state.devices, device_id, pagination, query).await?;
+    let sinks = devices::search_sinks(&state.storage, device_id, pagination, query).await?;
     Ok(AppSuccess::data(sinks))
 }
 

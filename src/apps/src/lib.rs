@@ -141,8 +141,18 @@ pub async fn load_from_persistence(
     for db_app in db_apps {
         let app_id = Uuid::from_str(&db_app.id).unwrap();
 
-        let db_sources = storage::source::read_all_sources(pool, &app_id).await?;
-        let db_sinks = storage::sink::read_all_sinks(pool, &app_id).await?;
+        let db_sources = storage::source_or_sink::read_all_by_parent_id(
+            pool,
+            &app_id,
+            storage::source_or_sink::Type::Source,
+        )
+        .await?;
+        let db_sinks = storage::source_or_sink::read_all_by_parent_id(
+            pool,
+            &app_id,
+            storage::source_or_sink::Type::Sink,
+        )
+        .await?;
         create_app(pool, &apps, app_id, db_app.conf, false).await?;
 
         for db_source in db_sources {
@@ -457,7 +467,7 @@ pub async fn delete_source(
         None => return Err(HaliaError::NotFound),
     }
 
-    storage::source::delete_source(pool, &source_id).await?;
+    storage::source_or_sink::delete_by_id(pool, &source_id).await?;
     Ok(())
 }
 
@@ -606,7 +616,7 @@ pub async fn delete_sink(
         None => return Err(HaliaError::NotFound),
     }
 
-    storage::sink::delete_sink(pool, &sink_id).await?;
+    storage::source_or_sink::delete_by_id(pool, &sink_id).await?;
 
     Ok(())
 }

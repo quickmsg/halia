@@ -2,8 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::{
-    active_ref, add_ref, check_and_set_on_false, check_and_set_on_true, check_delete_all,
-    deactive_ref, del_ref,
+    check_delete_all,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -158,7 +157,6 @@ impl Opcua {
     // }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        check_and_set_on_false!(self);
         sub_device_on_count();
 
         // for group in self.groups.write().await.iter_mut() {
@@ -279,36 +277,6 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn search_sources(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchSourcesOrSinksResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for (index, source) in self.sources.iter().rev().enumerate() {
-            let source = source.search();
-            if let Some(name) = &query.name {
-                if !source.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
-
-            if pagination.check(total) {
-                unsafe {
-                    data.push(SearchSourcesOrSinksItemResp {
-                        info: source,
-                        rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
-                    });
-                }
-            }
-
-            total += 1;
-        }
-
-        SearchSourcesOrSinksResp { total, data }
-    }
-
     async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
         todo!()
     }
@@ -344,14 +312,6 @@ impl Device for Opcua {
         // }
     }
 
-    async fn search_sinks(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchSourcesOrSinksResp {
-        todo!()
-    }
-
     async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
         todo!()
     }
@@ -369,17 +329,10 @@ impl Device for Opcua {
         todo!()
     }
 
-    fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
     async fn get_source_rx(
         &mut self,
         source_id: &Uuid,
-        rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        // self.check_on()?;
-        active_ref!(self, source, source_id, rule_id);
         match self
             .sources
             .iter_mut()
@@ -390,37 +343,11 @@ impl Device for Opcua {
         }
     }
 
-    fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_ref!(self, source, source_id, rule_id)
-    }
-
-    fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_ref!(self, source, source_id, rule_id)
-    }
-
-    fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        add_ref!(self, sink, sink_id, rule_id)
-    }
-
-    async fn get_sink_tx(
-        &mut self,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        // self.check_on()?;
-        active_ref!(self, sink, sink_id, rule_id);
+    async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
         }
-    }
-
-    fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        deactive_ref!(self, sink, sink_id, rule_id)
-    }
-
-    fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        del_ref!(self, sink, sink_id, rule_id)
     }
 
     // async fn start(&mut self) -> HaliaResult<()> {

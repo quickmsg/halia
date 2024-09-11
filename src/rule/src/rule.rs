@@ -1,9 +1,6 @@
 use anyhow::Result;
 use apps::App;
-use common::{
-    check_and_set_on_false, check_and_set_on_true,
-    error::{HaliaError, HaliaResult},
-};
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use databoard::databoard_struct::Databoard;
 use devices::Device;
@@ -83,14 +80,7 @@ impl Rule {
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    match devices::add_sink_ref(
-                        devices,
-                        &sink_node.device_id,
-                        &sink_node.sink_id,
-                        &rule_id,
-                    )
-                    .await
-                    {
+                    match devices::add_sink_ref(storage, &sink_node.sink_id, &rule_id).await {
                         Ok(_) => {
                             device_sink_add_ref_nodes.push((sink_node.device_id, sink_node.sink_id))
                         }
@@ -135,11 +125,11 @@ impl Rule {
         }
 
         if let Some(e) = error {
-            for (device_id, source_id) in device_source_add_ref_nodes {
+            for (_, source_id) in device_source_add_ref_nodes {
                 devices::del_source_ref(storage, &source_id, &rule_id).await?;
             }
-            for (device_id, sink_id) in device_sink_add_ref_nodes {
-                devices::del_sink_ref(devices, &device_id, &sink_id, &rule_id).await?;
+            for (_, sink_id) in device_sink_add_ref_nodes {
+                devices::del_sink_ref(storage, &sink_id, &rule_id).await?;
             }
             for (app_id, source_id) in app_source_add_ref_nodes {
                 apps::del_source_ref(apps, &app_id, &source_id, &rule_id).await?;
@@ -277,11 +267,11 @@ impl Rule {
 
     pub async fn start(
         &mut self,
+        storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> Result<()> {
-        check_and_set_on_true!(self);
         add_rule_on_count();
 
         let (stop_signal_tx, _) = broadcast::channel(1);
@@ -319,6 +309,7 @@ impl Rule {
                     for _ in 0..cnt {
                         rxs.push(
                             match devices::get_source_rx(
+                                storage,
                                 devices,
                                 &source_node.device_id,
                                 &source_node.source_id,
@@ -371,10 +362,10 @@ impl Rule {
 
         if let Some(e) = error {
             for (device_id, source_id) in device_source_active_ref_nodes.iter() {
-                _ = devices::del_source_rx(devices, device_id, source_id, &self.id).await;
+                _ = devices::del_source_rx(storage, source_id, &self.id).await;
             }
             for (device_id, sink_id) in device_sink_active_ref_nodes.iter() {
-                _ = devices::del_sink_tx(devices, device_id, sink_id, &self.id).await;
+                _ = devices::del_sink_tx(storage, sink_id, &self.id).await;
             }
             for (app_id, source_id) in app_source_active_ref_nodes.iter() {
                 _ = apps::del_source_rx(apps, app_id, source_id, &self.id).await;
@@ -458,6 +449,7 @@ impl Rule {
                             let sink_node: DeviceSinkNode =
                                 serde_json::from_value(node.conf.clone())?;
                             let tx = match devices::get_sink_tx(
+                                storage,
                                 devices,
                                 &sink_node.device_id,
                                 &sink_node.sink_id,
@@ -581,11 +573,11 @@ impl Rule {
 
     pub async fn stop(
         &mut self,
+        storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<()> {
-        check_and_set_on_false!(self);
         sub_rule_on_count();
 
         if let Err(e) = self.stop_signal_tx.as_ref().unwrap().send(()) {
@@ -596,13 +588,7 @@ impl Rule {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    devices::del_source_rx(
-                        devices,
-                        &source_node.device_id,
-                        &source_node.source_id,
-                        &self.id,
-                    )
-                    .await?;
+                    devices::del_source_rx(storage, &source_node.source_id, &self.id).await?;
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
@@ -616,13 +602,7 @@ impl Rule {
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    devices::del_sink_tx(
-                        devices,
-                        &sink_node.device_id,
-                        &sink_node.sink_id,
-                        &self.id,
-                    )
-                    .await?;
+                    devices::del_sink_tx(storage, &sink_node.sink_id, &self.id).await?;
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
@@ -648,6 +628,7 @@ impl Rule {
 
     pub async fn update(
         &mut self,
+        storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
@@ -660,8 +641,8 @@ impl Rule {
         self.conf = req;
 
         if self.on && restart {
-            self.stop(devices, apps, databoards).await?;
-            self.start(devices, apps, databoards).await?;
+            self.stop(storage, devices, apps, databoards).await?;
+            self.start(storage, devices, apps, databoards).await?;
         }
 
         Ok(())
@@ -675,7 +656,7 @@ impl Rule {
         databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<()> {
         if self.on {
-            self.stop(devices, apps, databoards).await?;
+            self.stop(storage, devices, apps, databoards).await?;
         }
 
         for node in self.conf.ext.nodes.iter() {
@@ -696,13 +677,7 @@ impl Rule {
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    devices::del_sink_ref(
-                        devices,
-                        &sink_node.device_id,
-                        &sink_node.sink_id,
-                        &self.id,
-                    )
-                    .await?;
+                    devices::del_sink_ref(storage, &sink_node.sink_id, &self.id).await?;
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;

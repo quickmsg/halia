@@ -302,11 +302,8 @@ pub async fn update_device_conf(
 // 考虑，是否删除该设备的事件
 pub async fn delete_device(pool: &AnyPool, id: &Uuid) -> Result<()> {
     sqlx::query(
-        r#"
-DELETE FROM devices WHERE id = ?1;
-DELETE FROM sources WHERE parent_id = ?1;
-DELETE FROM sinks WHERE parent_id = ?1;
-    "#,
+        "DELETE FROM devices WHERE id = ?1
+    ",
     )
     .bind(id.to_string())
     .execute(pool)
