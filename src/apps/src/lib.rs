@@ -141,8 +141,8 @@ pub async fn load_from_persistence(
     for db_app in db_apps {
         let app_id = Uuid::from_str(&db_app.id).unwrap();
 
-        let db_sources = storage::source::read_sources(pool, &app_id).await?;
-        let db_sinks = storage::sink::read_sinks(pool, &app_id).await?;
+        let db_sources = storage::source::read_all_sources(pool, &app_id).await?;
+        let db_sinks = storage::sink::read_all_sinks(pool, &app_id).await?;
         create_app(pool, &apps, app_id, db_app.conf, false).await?;
 
         for db_source in db_sources {

@@ -106,7 +106,7 @@ pub struct SearchDevicesItemResp {
 
 #[derive(Serialize)]
 pub struct SearchDevicesItemCommon {
-    pub id: Uuid,
+    pub id: String,
     pub device_type: DeviceType,
     pub on: bool,
     pub source_cnt: usize,

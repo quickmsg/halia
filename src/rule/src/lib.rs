@@ -144,6 +144,7 @@ pub async fn search(
 }
 
 pub async fn read(
+    storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
@@ -153,7 +154,7 @@ pub async fn read(
     rules
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .read(devices, apps, databoards)
+        .read(storage, devices, apps, databoards)
         .await
 }
 

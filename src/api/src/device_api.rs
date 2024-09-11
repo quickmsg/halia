@@ -4,10 +4,7 @@ use axum::{
     Json, Router,
 };
 use types::{
-    devices::{
-        CreateUpdateDeviceReq, QueryParams, QueryRuleInfo, SearchDevicesResp, SearchRuleInfo,
-        Summary,
-    },
+    devices::{CreateUpdateDeviceReq, QueryParams, SearchDevicesResp, Summary},
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp, Value,
 };
 use uuid::Uuid;
@@ -17,7 +14,6 @@ use crate::{AppResult, AppState, AppSuccess};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/summary", get(get_devices_summary))
-        .route("/rule", get(get_rule_info))
         // 查询事件
         // .route("/event", get(get_rule_info(state, query)))
         .route("/", post(create_device))
@@ -51,14 +47,6 @@ pub fn routes() -> Router<AppState> {
 
 async fn get_devices_summary() -> AppSuccess<Summary> {
     AppSuccess::data(devices::get_summary())
-}
-
-async fn get_rule_info(
-    State(state): State<AppState>,
-    Query(query): Query<QueryRuleInfo>,
-) -> AppResult<AppSuccess<SearchRuleInfo>> {
-    let rule_info = devices::get_rule_info(&state.devices, query).await?;
-    Ok(AppSuccess::data(rule_info))
 }
 
 async fn create_device(

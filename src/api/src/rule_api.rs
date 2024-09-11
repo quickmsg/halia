@@ -1,5 +1,10 @@
 use axum::{
-    body::Body, extract::{Path, Query, State}, http::{header, StatusCode}, response::IntoResponse, routing::{self, get, post, put}, Json, Router
+    body::Body,
+    extract::{Path, Query, State},
+    http::{header, StatusCode},
+    response::IntoResponse,
+    routing::{self, get, post, put},
+    Json, Router,
 };
 use tokio_util::io::ReaderStream;
 use types::{
@@ -57,6 +62,7 @@ async fn read(
     Path(id): Path<Uuid>,
 ) -> AppResult<AppSuccess<Vec<ReadRuleNodeResp>>> {
     let resp = rule::read(
+        &state.storage,
         &state.rules,
         &state.devices,
         &state.apps,

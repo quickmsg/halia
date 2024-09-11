@@ -3,12 +3,14 @@ use apps::App;
 use common::{
     check_and_set_on_false, check_and_set_on_true,
     error::{HaliaError, HaliaResult},
+    storage,
 };
 use dashmap::DashMap;
 use databoard::databoard_struct::Databoard;
 use devices::Device;
 use functions::{computes, filter, merge::merge::Merge, metadata, window};
 use message::{MessageBatch, MessageValue};
+use sqlx::AnyPool;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::error;
@@ -178,6 +180,7 @@ impl Rule {
 
     pub async fn read(
         &self,
+        storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
         apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
@@ -189,6 +192,7 @@ impl Rule {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
                     let rule_info = devices::get_rule_info(
+                        storage,
                         devices,
                         types::devices::QueryRuleInfo {
                             device_id: source_node.device_id,
@@ -221,6 +225,7 @@ impl Rule {
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
                     let rule_info = devices::get_rule_info(
+                        storage,
                         devices,
                         types::devices::QueryRuleInfo {
                             device_id: sink_node.device_id,

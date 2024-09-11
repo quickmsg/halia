@@ -165,45 +165,76 @@ pub fn get_summary() -> Summary {
 }
 
 pub async fn get_rule_info(
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     query: QueryRuleInfo,
 ) -> HaliaResult<SearchRuleInfo> {
-    todo!()
+    let db_device = storage::device::read_device(storage, &query.device_id).await?;
 
-    // match devices
-    //     .read()
-    //     .await
-    //     .iter()
-    //     .find(|device| *device.get_id() == query.device_id)
-    // {
-    //     Some(device) => {
-    //         let device_info = device.read().await;
-    //         match (query.source_id, query.sink_id) {
-    //             (Some(source_id), None) => {
-    //                 let source_info = device.read_source(&source_id).await?;
-    //                 Ok(SearchRuleInfo {
-    //                     device: device_info,
-    //                     source: Some(source_info),
-    //                     sink: None,
-    //                 })
-    //             }
-    //             (None, Some(sink_id)) => {
-    //                 let sink_info = device.read_sink(&sink_id).await?;
-    //                 Ok(SearchRuleInfo {
-    //                     device: device_info,
-    //                     source: None,
-    //                     sink: Some(sink_info),
-    //                 })
-    //             }
-    //             _ => {
-    //                 return Err(HaliaError::Common(
-    //                     "查询source_id或sink_id参数错误！".to_string(),
-    //                 ))
-    //             }
-    //         }
-    //     }
-    //     None => Err(HaliaError::NotFound),
-    // }
+    let device_id = Uuid::from_str(&db_device.id).unwrap();
+    let memory_info = match db_device.status {
+        0 => None,
+        1 => Some(devices.get(&device_id).unwrap().read().await),
+        _ => unreachable!(),
+    };
+    let device_resp = SearchDevicesItemResp {
+        common: SearchDevicesItemCommon {
+            id: db_device.id,
+            device_type: DeviceType::try_from(db_device.device_type).unwrap(),
+            on: db_device.status == 1,
+            source_cnt: storage::source::count_by_parent_id(storage, &query.device_id).await?,
+            sink_cnt: storage::sink::count_by_parent_id(storage, &query.device_id).await?,
+            memory_info,
+        },
+        conf: SearchDevicesItemConf {
+            base: BaseConf {
+                name: db_device.name,
+                desc: db_device.desc,
+            },
+            ext: serde_json::from_str(&db_device.conf).unwrap(),
+        },
+    };
+    match (query.source_id, query.sink_id) {
+        (Some(source_id), None) => {
+            let db_source = storage::source::read_source(storage, &source_id).await?;
+            Ok(SearchRuleInfo {
+                device: device_resp,
+                source: Some(SearchSourcesOrSinksInfoResp {
+                    id: Uuid::from_str(&db_source.id).unwrap(),
+                    conf: CreateUpdateSourceOrSinkReq {
+                        base: BaseConf {
+                            name: db_source.name,
+                            desc: db_source.desc,
+                        },
+                        ext: serde_json::from_str(&db_source.conf).unwrap(),
+                    },
+                }),
+                sink: None,
+            })
+        }
+        (None, Some(sink_id)) => {
+            let db_sink = storage::sink::read_sink(storage, &sink_id).await?;
+            Ok(SearchRuleInfo {
+                device: device_resp,
+                source: None,
+                sink: Some(SearchSourcesOrSinksInfoResp {
+                    id: Uuid::from_str(&db_sink.id).unwrap(),
+                    conf: CreateUpdateSourceOrSinkReq {
+                        base: BaseConf {
+                            name: db_sink.name,
+                            desc: db_sink.desc,
+                        },
+                        ext: serde_json::from_str(&db_sink.conf).unwrap(),
+                    },
+                }),
+            })
+        }
+        _ => {
+            return Err(HaliaError::Common(
+                "查询source_id或sink_id参数错误！".to_string(),
+            ))
+        }
+    }
 }
 
 pub async fn create_device(
@@ -245,17 +276,14 @@ pub async fn search_devices(
             _ => unreachable!(),
         };
 
-        let source_cnt = storage::source::count_sources_by_parent_id(storage, &device_id).await?;
-        let sink_cnt = storage::sink::count_sinks_by_parent_id(storage, &device_id).await?;
-
         // 从内存中获取设备信息
         resp_devices.push(SearchDevicesItemResp {
             common: SearchDevicesItemCommon {
-                id: device_id,
+                id: db_device.id,
                 device_type: DeviceType::try_from(db_device.device_type).unwrap(),
                 on: db_device.status == 1,
-                source_cnt,
-                sink_cnt,
+                source_cnt: storage::source::count_by_parent_id(storage, &device_id).await?,
+                sink_cnt: storage::sink::count_by_parent_id(storage, &device_id).await?,
                 memory_info,
             },
             conf: SearchDevicesItemConf {
@@ -356,7 +384,7 @@ pub async fn start_device(
     };
     devices.insert(device_id, device);
 
-    let db_sources = storage::source::read_sources(storage, &device_id).await?;
+    let db_sources = storage::source::read_all_sources(storage, &device_id).await?;
     for db_source in db_sources {
         let req = CreateUpdateSourceOrSinkReq {
             base: BaseConf {
@@ -376,7 +404,7 @@ pub async fn start_device(
         .await?;
     }
 
-    let db_sinks = storage::sink::read_sinks(storage, &device_id).await?;
+    let db_sinks = storage::sink::read_all_sinks(storage, &device_id).await?;
     for db_sink in db_sinks {
         let req = CreateUpdateSourceOrSinkReq {
             base: BaseConf {
@@ -425,7 +453,7 @@ pub async fn stop_device(
 }
 
 pub async fn delete_device(
-    persistence: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
@@ -433,18 +461,19 @@ pub async fn delete_device(
         return Err(HaliaError::Common("运行中，不能删除".to_string()));
     }
 
-    // todo 判断引用
+    let can_delete = storage::source::check_delete_all(storage, &device_id).await?;
+    if !can_delete {
+        return Err(HaliaError::DeleteRefing);
+    }
 
-    // TODO 停止时
-    // devices
-    //     .get_mut(&device_id)
-    //     .ok_or(HaliaError::NotFound)?
-    //     .delete()
-    //     .await?;
+    let can_delete = storage::sink::check_delete_all(storage, &device_id).await?;
+    if !can_delete {
+        return Err(HaliaError::DeleteRefing);
+    }
 
     sub_device_count();
     devices.remove(&device_id);
-    storage::device::delete_device(persistence, &device_id).await?;
+    storage::device::delete_device(storage, &device_id).await?;
 
     Ok(())
 }
@@ -534,16 +563,21 @@ pub async fn write_source_value(
 }
 
 pub async fn delete_source(
-    persistence: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     source_id: Uuid,
 ) -> HaliaResult<()> {
+    let rule_ref = storage::source::read_rule_ref(storage, &source_id).await?;
+    if rule_ref > 0 {
+        return Err(HaliaError::DeleteRefing);
+    }
+
     if let Some(mut device) = devices.get_mut(&device_id) {
         device.delete_source(source_id).await?;
     }
 
-    storage::source::delete_source(persistence, &source_id).await?;
+    storage::source::delete_source(storage, &source_id).await?;
 
     Ok(())
 }

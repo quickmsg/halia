@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{AnyPool, FromRow};
+use sqlx::{any::AnyArguments, query::Query, Any, AnyPool, FromRow};
 use types::{CreateUpdateSourceOrSinkReq, Pagination};
 use uuid::Uuid;
 
@@ -9,6 +9,8 @@ pub struct Source {
     pub name: String,
     pub desc: Option<String>,
     pub conf: String,
+    pub ts: i64,
+    pub rule_ref: i32,
 }
 
 pub async fn init_table(storage: &AnyPool) -> Result<()> {
@@ -20,7 +22,8 @@ CREATE TABLE IF NOT EXISTS sources (
     name TEXT NOT NULL,
     desc TEXT,
     conf TEXT NOT NULL,
-    ts INT NOT NULL
+    ts INT NOT NULL,
+    rule_ref INT NOT NULL
 );
 "#,
     )
@@ -38,43 +41,47 @@ pub async fn create_source(
 ) -> Result<()> {
     let conf = serde_json::to_string(&req.ext)?;
     let ts = chrono::Utc::now().timestamp();
-    match req.base.desc {
+    let query: Query<'_, Any, AnyArguments> = match req.base.desc {
         Some(desc) => {
             sqlx::query(
-                r#"INSERT INTO sources (id, parent_id, name, desc, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
+                r#"INSERT INTO sources (desc, id, parent_id, name, conf, ts, rule_ref) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
             )
-            .bind(id.to_string())
-            .bind(parent_id.to_string())
-            .bind(req.base.name)
-            .bind(desc)
-            .bind(conf)
-            .bind(ts)
-            .execute(pool)
-            .await?;
+            .bind(desc.to_string())
         }
         None => {
             sqlx::query(
-                r#"INSERT INTO sources (id, parent_id, name, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5)"#,
+                r#"INSERT INTO sources (id, parent_id, name, conf, ts, rule_ref) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
             )
-            .bind(id.to_string())
-            .bind(parent_id.to_string())
-            .bind(req.base.name)
-            .bind(conf)
-            .bind(ts)
-            .execute(pool)
-            .await?;
         }
-    }
+    };
+    query
+        .bind(id.to_string())
+        .bind(parent_id.to_string())
+        .bind(req.base.name)
+        .bind(conf)
+        .bind(ts)
+        .bind(0)
+        .execute(pool)
+        .await?;
+
     Ok(())
 }
 
-pub async fn read_sources(pool: &AnyPool, parent_id: &Uuid) -> Result<Vec<Source>> {
+pub async fn read_all_sources(pool: &AnyPool, parent_id: &Uuid) -> Result<Vec<Source>> {
     Ok(
         sqlx::query_as::<_, Source>("SELECT * FROM sources WHERE parent_id = ?1")
             .bind(parent_id.to_string())
             .fetch_all(pool)
             .await?,
     )
+}
+
+pub async fn read_source(storage: &AnyPool, id: &Uuid) -> Result<Source> {
+    let source = sqlx::query_as::<_, Source>("SELECT * FROM sources WHERE id = ?1")
+        .bind(id.to_string())
+        .fetch_one(storage)
+        .await?;
+    Ok(source)
 }
 
 pub async fn search_sources(
@@ -101,12 +108,20 @@ LIMIT ?2 OFFSET ?3"#,
     Ok((count as usize, sources))
 }
 
-pub async fn count_sources_by_parent_id(pool: &AnyPool, parent_id: &Uuid) -> Result<usize> {
+pub async fn count_by_parent_id(storage: &AnyPool, parent_id: &Uuid) -> Result<usize> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources WHERE parent_id = ?1")
         .bind(parent_id.to_string())
-        .fetch_one(pool)
+        .fetch_one(storage)
         .await?;
     Ok(count as usize)
+}
+
+pub async fn read_rule_ref(storage: &AnyPool, id: &Uuid) -> Result<usize> {
+    let rule_ref: i32 = sqlx::query_scalar("SELECT rule_ref FROM sources WHERE id = ?1")
+        .bind(id.to_string())
+        .fetch_one(storage)
+        .await?;
+    Ok(rule_ref as usize)
 }
 
 pub async fn read_source_conf(pool: &AnyPool, id: &Uuid) -> Result<String> {
@@ -152,4 +167,14 @@ pub async fn delete_source(pool: &AnyPool, id: &Uuid) -> Result<()> {
         .execute(pool)
         .await?;
     Ok(())
+}
+
+pub async fn check_delete_all(storage: &AnyPool, parent_id: &Uuid) -> Result<bool> {
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sources WHERE parent_id = ?1 AND rule_ref = 0")
+            .bind(parent_id.to_string())
+            .fetch_one(storage)
+            .await?;
+
+    Ok(count == 0)
 }

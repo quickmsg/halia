@@ -190,14 +190,12 @@ pub async fn create_event(
             .await?;
         }
         None => {
-            sqlx::query(
-                "INSERT INTO device_events (id, event_type, ts) VALUES (?1, ?2, ?3)",
-            )
-            .bind(id.to_string())
-            .bind(event_type)
-            .bind(ts)
-            .execute(storage)
-            .await?;
+            sqlx::query("INSERT INTO device_events (id, event_type, ts) VALUES (?1, ?2, ?3)")
+                .bind(id.to_string())
+                .bind(event_type)
+                .bind(ts)
+                .execute(storage)
+                .await?;
         }
     }
 
