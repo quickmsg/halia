@@ -316,7 +316,8 @@ impl Device for Opcua {
     async fn update_source(
         &mut self,
         source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        old_conf: String,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         todo!()
     }

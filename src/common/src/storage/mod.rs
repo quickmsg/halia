@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS apps (
-    id TEXT PRIMARY KEY,
-    status INTEGER NOT NULL,
+    id VARCHAR(255) PRIMARY KEY,
+    status INT NOT NULL,
     conf TEXT NOT NULL
 );
 

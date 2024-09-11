@@ -87,6 +87,8 @@ pub enum Encode {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SourceConf {
+    // 字段名称
+    pub field: String,
     #[serde(flatten)]
     pub data_type: DataType,
     pub slave: u8,

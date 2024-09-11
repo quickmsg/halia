@@ -77,6 +77,7 @@ impl Default for Config {
         Self {
             port: 13000,
             log_level: LogLevel::Trace,
+            // storage: Storage::Mysql(Mysql {}),
             storage: Storage::Sqlite(Sqlite {
                 path: "./db".to_string(),
             }),
@@ -98,9 +99,7 @@ pub struct Sqlite {
 }
 
 #[derive(Deserialize)]
-pub struct Mysql {
-
-}
+pub struct Mysql {}
 
 #[derive(Deserialize)]
 pub struct Postgresql {}

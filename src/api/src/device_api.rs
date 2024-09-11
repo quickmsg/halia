@@ -143,9 +143,9 @@ async fn search_sources(
 async fn update_source(
     State(state): State<AppState>,
     Path((device_id, source_id)): Path<(Uuid, Uuid)>,
-    body: String,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_source(&state.storage, &state.devices, device_id, source_id, body).await?;
+    devices::update_source(&state.storage, &state.devices, device_id, source_id, req).await?;
     Ok(AppSuccess::empty())
 }
 

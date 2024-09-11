@@ -81,12 +81,40 @@ pub async fn count_sources_by_parent_id(pool: &AnyPool, parent_id: &Uuid) -> Res
     Ok(count as usize)
 }
 
-pub async fn update_source(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {
-    sqlx::query("UPDATE sources SET conf = ?1 WHERE id = ?2")
-        .bind(conf)
+pub async fn read_source_conf(pool: &AnyPool, id: &Uuid) -> Result<String> {
+    let conf: String = sqlx::query_scalar("SELECT conf FROM sources WHERE id = ?1")
         .bind(id.to_string())
-        .execute(pool)
+        .fetch_one(pool)
         .await?;
+    Ok(conf)
+}
+
+pub async fn update_source(
+    pool: &AnyPool,
+    id: &Uuid,
+    req: CreateUpdateSourceOrSinkReq,
+) -> Result<()> {
+    let conf = serde_json::to_string(&req.ext)?;
+    match req.base.desc {
+        Some(desc) => {
+            sqlx::query("UPDATE sources SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
+                .bind(req.base.name)
+                .bind(desc)
+                .bind(conf)
+                .bind(id.to_string())
+                .execute(pool)
+                .await?;
+        }
+        None => {
+            sqlx::query("UPDATE sources SET name = ?1, conf = ?3 WHERE id = ?4")
+                .bind(req.base.name)
+                .bind(conf)
+                .bind(id.to_string())
+                .execute(pool)
+                .await?;
+        }
+    }
+
     Ok(())
 }
 

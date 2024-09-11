@@ -93,7 +93,8 @@ pub trait Device: Send + Sync {
     async fn update_source(
         &mut self,
         source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        old_conf: String,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
     async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()>;
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()>;
@@ -349,7 +350,6 @@ pub async fn update_device(
 ) -> HaliaResult<()> {
     if let Some(mut device) = devices.get_mut(&device_id) {
         let db_device = storage::device::read_device(storage, &device_id).await?;
-        // TODO 判断是否应该重启
         device.update(db_device.conf, &req.conf.ext).await?;
     }
 
@@ -484,29 +484,20 @@ pub async fn search_sources(
 }
 
 pub async fn update_source(
-    persistence: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
     source_id: Uuid,
-    body: String,
+    req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
+    let old_conf = storage::source::read_source_conf(storage, &source_id).await?;
     devices
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
-        .update_source(source_id, req)
+        .update_source(source_id, old_conf, &req)
         .await?;
-    // match devices
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|device| *device.get_id() == device_id)
-    // {
-    //     Some(device) => device.update_source(source_id, req).await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
 
-    storage::source::update_source(persistence, &source_id, body).await?;
+    storage::source::update_source(storage, &source_id, req).await?;
 
     Ok(())
 }

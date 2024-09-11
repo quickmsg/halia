@@ -34,7 +34,6 @@ use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
         CreateUpdateDeviceReq, DeviceConf, QueryParams, SearchDevicesItemFromMemory,
-        SearchDevicesItemResp,
     },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
@@ -468,25 +467,20 @@ impl Device for Modbus {
         source_id: Uuid,
         req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        let conf: SourceConf = serde_json::from_value(req.ext.clone())?;
         // for source in self.sources.read().await.iter() {
         //     source.check_duplicate(&req.base, &ext_conf)?;
         // }
 
-        // let mut source = Source::new(source_id, req.base, ext_conf)?;
-        // if self.on {
-        //     source
-        //         .start(
-        //             self.read_tx.as_ref().unwrap().clone(),
-        //             self.device_err_tx.as_ref().unwrap().subscribe(),
-        //         )
-        //         .await;
-        // }
-
-        // self.sources.write().await.push(source);
-        // self.source_ref_infos.push((source_id, RefInfo::new()));
-        // Ok(())
-        todo!()
+        let source = Source::new(
+            source_id,
+            conf,
+            self.read_tx.clone(),
+            self.device_err_tx.subscribe(),
+        );
+        self.sources.write().await.push(source);
+        self.source_ref_infos.push((source_id, RefInfo::new()));
+        Ok(())
     }
 
     async fn search_sources(
@@ -535,14 +529,15 @@ impl Device for Modbus {
     async fn update_source(
         &mut self,
         source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        old_conf: String,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
-        for source in self.sources.read().await.iter() {
-            if source.id != source_id {
-                source.check_duplicate(&req.base, &ext_conf)?;
-            }
-        }
+        let conf: SourceConf = serde_json::from_value(req.ext.clone())?;
+        // for source in self.sources.read().await.iter() {
+        // if source.id != source_id {
+        //     source.check_duplicate(&req.base, &ext_conf)?;
+        // }
+        // }
 
         match self
             .sources
@@ -551,7 +546,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == source_id)
         {
-            Some(source) => source.update(req.base, ext_conf).await,
+            Some(source) => source.update(old_conf, conf).await,
             None => Err(HaliaError::NotFound),
         }
     }
@@ -571,10 +566,10 @@ impl Device for Modbus {
         {
             Some(source) => {
                 match WritePointEvent::new(
-                    source.ext_conf.slave,
-                    source.ext_conf.area.clone(),
-                    source.ext_conf.address,
-                    source.ext_conf.data_type.clone(),
+                    source.conf.slave,
+                    source.conf.area.clone(),
+                    source.conf.address,
+                    source.conf.data_type.clone(),
                     req.value,
                 ) {
                     Ok(wpe) => {
@@ -723,7 +718,7 @@ impl Device for Modbus {
             .iter_mut()
             .find(|source| source.id == *source_id)
         {
-            Some(source) => Ok(source.mb_tx.as_ref().unwrap().subscribe()),
+            Some(source) => Ok(source.mb_tx.subscribe()),
             None => unreachable!(),
         }
     }

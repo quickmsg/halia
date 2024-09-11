@@ -98,11 +98,12 @@ pub async fn search_devices(
         .fetch_one(storage)
         .await?;
 
-    let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices LIMIT ?1 OFFSET ?2")
-        .bind(pagination.size as i64)
-        .bind(((pagination.page - 1) * pagination.size) as i64)
-        .fetch_all(storage)
-        .await?;
+    let devices =
+        sqlx::query_as::<_, Device>("SELECT * FROM devices ORDER BY ts DESC LIMIT ?1 OFFSET ?2")
+            .bind(pagination.size as i64)
+            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .fetch_all(storage)
+            .await?;
 
     Ok((count as usize, devices))
 }

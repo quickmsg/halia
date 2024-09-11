@@ -52,7 +52,11 @@ async fn main() -> Result<()> {
                 .unwrap()
                 .disable_statement_logging()
         }
-        config::Storage::Mysql(_) => todo!(),
+        config::Storage::Mysql(_) => {
+            AnyConnectOptions::from_str("mysql://root:my-secret-pw@192.168.124.39:3306/halia")
+                .unwrap()
+                .disable_statement_logging()
+        }
         config::Storage::Postgresql(_) => todo!(),
     };
 

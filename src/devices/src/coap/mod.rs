@@ -272,23 +272,25 @@ impl Device for Coap {
     async fn update_source(
         &mut self,
         source_id: Uuid,
-        req: CreateUpdateSourceOrSinkReq,
+        old_conf: String,
+        req: &CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
-        let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
-        for source in self.sources.iter() {
-            if source.id != source_id {
-                source.check_duplicate(&req.base, &ext_conf)?;
-            }
-        }
+        // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
+        // for source in self.sources.iter() {
+        //     if source.id != source_id {
+        //         source.check_duplicate(&req.base, &ext_conf)?;
+        //     }
+        // }
 
-        match self
-            .sources
-            .iter_mut()
-            .find(|source| source.id == source_id)
-        {
-            Some(source) => source.update_conf(req.base, ext_conf).await,
-            None => Err(HaliaError::NotFound),
-        }
+        // match self
+        //     .sources
+        //     .iter_mut()
+        //     .find(|source| source.id == source_id)
+        // {
+        //     Some(source) => source.update_conf(req.base, ext_conf).await,
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     async fn write_source_value(&mut self, _source_id: Uuid, _req: Value) -> HaliaResult<()> {
