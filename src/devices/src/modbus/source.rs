@@ -10,10 +10,7 @@ use tokio::{
     time,
 };
 use tracing::warn;
-use types::{
-    devices::modbus::{Area, SourceConf},
-    SearchSourcesOrSinksInfoResp,
-};
+use types::devices::modbus::{Area, SourceConf};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -124,27 +121,6 @@ impl Source {
         Ok(())
     }
 
-    // pub fn check_duplicate(&self, base_conf: &BaseConf, ext_conf: &SourceConf) -> HaliaResult<()> {
-    //     if self.base_conf.name == base_conf.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
-
-    //     if self.ext_conf.data_type == ext_conf.data_type
-    //         && self.ext_conf.slave == ext_conf.slave
-    //         && self.ext_conf.area == ext_conf.area
-    //         && self.ext_conf.address == ext_conf.address
-    //     {
-    //         return Err(HaliaError::AddressExists);
-    //     }
-
-    //     Ok(())
-    // }
-
-    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        // get_search_sources_or_sinks_info_resp!(self)
-        todo!()
-    }
-
     fn event_loop(
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
@@ -184,9 +160,7 @@ impl Source {
         self.stop_signal_tx.send(()).await.unwrap();
     }
 
-    pub async fn update(&mut self, old_conf: String, new_conf: SourceConf) -> HaliaResult<()> {
-        // Self::validate_conf(&ext_conf)?;
-
+    pub async fn update(&mut self, old_conf: String, new_conf: SourceConf) {
         let old_conf = serde_json::from_str::<SourceConf>(&old_conf).unwrap();
         if old_conf.data_type != new_conf.data_type {
             self.quantity = new_conf.data_type.get_quantity();
@@ -194,13 +168,10 @@ impl Source {
 
         if old_conf.interval != new_conf.interval {
             self.stop_signal_tx.send(()).await.unwrap();
-
             let (stop_signal_rx, read_tx, device_err_rx) =
                 self.join_handle.take().unwrap().await.unwrap();
             self.event_loop(stop_signal_rx, read_tx, device_err_rx);
         }
-
-        Ok(())
     }
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {

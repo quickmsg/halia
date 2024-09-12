@@ -10,15 +10,12 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, warn};
-use types::{devices::modbus::SinkConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp};
-use uuid::Uuid;
+use types::devices::modbus::SinkConf;
 
 use super::WritePointEvent;
 
 #[derive(Debug)]
 pub struct Sink {
-    pub id: Uuid,
-
     stop_signal_tx: mpsc::Sender<()>,
     join_handle: Option<
         JoinHandle<(
@@ -35,7 +32,6 @@ pub struct Sink {
 
 impl Sink {
     pub fn new(
-        id: Uuid,
         conf: SinkConf,
         write_tx: mpsc::Sender<WritePointEvent>,
         device_err_rx: broadcast::Receiver<bool>,
@@ -44,7 +40,6 @@ impl Sink {
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
         let mut sink = Self {
-            id,
             stop_signal_tx,
             join_handle: None,
             mb_tx,
@@ -68,22 +63,10 @@ impl Sink {
         Ok(())
     }
 
-    // pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SinkConf) -> HaliaResult<()> {
-    //     if self.base_conf.name == base_conf.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
-
-    //     Ok(())
-    // }
-
-    // pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-    //     get_search_sources_or_sinks_info_resp!(self)
-    // }
-
     pub async fn update(&mut self, old_conf: String, new_conf: SinkConf) {
         let old_conf: SinkConf = serde_json::from_str(&old_conf).unwrap();
         if old_conf != new_conf {
-            self.stop();
+            self.stop().await;
 
             let (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer) =
                 self.join_handle.take().unwrap().await.unwrap();
@@ -98,7 +81,7 @@ impl Sink {
         }
     }
 
-    async fn event_loop(
+    fn event_loop(
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,

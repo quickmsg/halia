@@ -11,7 +11,6 @@ use std::{
 use async_trait::async_trait;
 use common::{
     error::{HaliaError, HaliaResult},
-    ref_info::RefInfo,
     storage,
 };
 use dashmap::DashMap;
@@ -28,13 +27,13 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
-        CreateUpdateDeviceReq, DeviceConf, SearchDevicesItemFromMemory,
+        DeviceConf, SearchDevicesItemFromMemory,
     },
-    CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp, Value,
+    Value,
 };
 use uuid::Uuid;
 
@@ -47,12 +46,8 @@ mod source;
 struct Modbus {
     pub id: Uuid,
 
-    storage: Arc<AnyPool>,
-
     sources: Arc<DashMap<Uuid, Source>>,
-    source_ref_infos: Vec<(Uuid, RefInfo)>,
     sinks: DashMap<Uuid, Sink>,
-    sink_ref_infos: Vec<(Uuid, RefInfo)>,
 
     stop_signal_tx: mpsc::Sender<()>,
     device_err_tx: broadcast::Sender<bool>,
@@ -67,6 +62,7 @@ struct Modbus {
             mpsc::Receiver<()>,
             mpsc::Receiver<WritePointEvent>,
             mpsc::Receiver<Uuid>,
+            Arc<AnyPool>,
         )>,
     >,
 }
@@ -94,12 +90,9 @@ pub fn new(device_id: Uuid, device_conf: DeviceConf, storage: Arc<AnyPool>) -> B
     let mut device = Modbus {
         id: device_id,
         err: Arc::new(RwLock::new(None)),
-        rtt: Arc::new(AtomicU16::new(9999)),
+        rtt: Arc::new(AtomicU16::new(0)),
         sources: Arc::new(DashMap::new()),
-        source_ref_infos: vec![],
         sinks: DashMap::new(),
-        sink_ref_infos: vec![],
-        storage,
         stop_signal_tx,
         device_err_tx,
         write_tx,
@@ -107,7 +100,7 @@ pub fn new(device_id: Uuid, device_conf: DeviceConf, storage: Arc<AnyPool>) -> B
         join_handle: None,
     };
 
-    device.event_loop(conf, stop_signal_rx, read_rx, write_rx);
+    device.event_loop(conf, stop_signal_rx, read_rx, write_rx, storage);
 
     Box::new(device)
 }
@@ -119,13 +112,12 @@ impl Modbus {
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut read_rx: mpsc::Receiver<Uuid>,
         mut write_rx: mpsc::Receiver<WritePointEvent>,
+        storage: Arc<AnyPool>,
     ) {
-        let storage = self.storage.clone();
         let device_id = self.id.clone();
         let err = self.err.clone();
         let sources = self.sources.clone();
         let rtt = self.rtt.clone();
-        debug!("here");
         let join_handle = tokio::spawn(async move {
             loop {
                 match Modbus::connect(&modbus_conf).await {
@@ -146,7 +138,7 @@ impl Modbus {
                             select! {
                                 biased;
                                 _ = stop_signal_rx.recv() => {
-                                    return (stop_signal_rx, write_rx, read_rx);
+                                    return (stop_signal_rx, write_rx, read_rx, storage);
                                 }
 
                                 wpe = write_rx.recv() => {
@@ -194,7 +186,7 @@ impl Modbus {
                         tokio::pin!(sleep);
                         select! {
                             _ = stop_signal_rx.recv() => {
-                                return (stop_signal_rx, write_rx, read_rx);
+                                return (stop_signal_rx, write_rx, read_rx, storage);
                             }
 
                             _ = &mut sleep => {}
@@ -358,36 +350,6 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
 
 #[async_trait]
 impl Device for Modbus {
-    fn check_duplicate(&self, _req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
-        // if self.base_conf.name == req.conf.base.name {
-        //     return Err(HaliaError::NameExists);
-        // }
-
-        // if req.device_type == DeviceType::Modbus {
-        //     let conf: ModbusConf = serde_json::from_value(req.conf.ext.clone())?;
-
-        //     match (&self.ext_conf.ethernet, &conf.ethernet) {
-        //         (Some(eth_conf), Some(eth_req)) => {
-        //             if eth_conf.host == eth_req.host && eth_conf.port == eth_req.port {
-        //                 return Err(HaliaError::Common(format!("地址已存在").to_owned()));
-        //             }
-        //         }
-        //         _ => {}
-        //     }
-
-        //     match (&self.ext_conf.serial, &conf.serial) {
-        //         (Some(serial_conf), Some(serial_req)) => {
-        //             if serial_conf == serial_req {
-        //                 return Err(HaliaError::Common(format!("地址已存在")));
-        //             }
-        //         }
-        //         _ => {}
-        //     }
-        // }
-
-        Ok(())
-    }
-
     async fn read(&self) -> SearchDevicesItemFromMemory {
         SearchDevicesItemFromMemory {
             err: self.err.read().await.clone(),
@@ -403,25 +365,14 @@ impl Device for Modbus {
         }
 
         self.stop_signal_tx.send(()).await.unwrap();
-        let (stop_signal_rx, write_rx, read_rx) = self.join_handle.take().unwrap().await.unwrap();
-        self.event_loop(new_conf, stop_signal_rx, read_rx, write_rx);
+        let (stop_signal_rx, write_rx, read_rx, storage) =
+            self.join_handle.take().unwrap().await.unwrap();
+        self.event_loop(new_conf, stop_signal_rx, read_rx, write_rx, storage);
 
         Ok(())
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        trace!("停止");
-        if let Err(e) = storage::device::create_event(
-            &self.storage,
-            &self.id,
-            types::events::EventType::Stop.into(),
-            None,
-        )
-        .await
-        {
-            warn!("create event failed: {}", e);
-        }
-
         for mut source in self.sources.iter_mut() {
             source.stop().await;
         }
@@ -435,35 +386,8 @@ impl Device for Modbus {
         Ok(())
     }
 
-    // async fn delete(&mut self) -> HaliaResult<()> {
-    //     check_delete_all!(self, source);
-    //     check_delete_all!(self, sink);
-
-    //     if self.on {
-    //         for source in self.sources.write().await.iter_mut() {
-    //             source.stop().await;
-    //         }
-
-    //         for sink in self.sinks.iter_mut() {
-    //             sink.stop().await;
-    //         }
-    //     }
-
-    //     trace!("设备删除");
-
-    //     Ok(())
-    // }
-
-    async fn create_source(
-        &mut self,
-        source_id: Uuid,
-        req: &CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
-        let conf: SourceConf = serde_json::from_value(req.ext.clone())?;
-        // for source in self.sources.read().await.iter() {
-        //     source.check_duplicate(&req.base, &ext_conf)?;
-        // }
-
+    async fn create_source(&mut self, source_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
+        let conf: SourceConf = serde_json::from_value(conf)?;
         let source = Source::new(
             source_id,
             conf,
@@ -471,35 +395,23 @@ impl Device for Modbus {
             self.device_err_tx.subscribe(),
         );
         self.sources.insert(source_id, source);
-        self.source_ref_infos.push((source_id, RefInfo::new()));
         Ok(())
-    }
-
-    async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        match self.sources.get(&source_id) {
-            Some(source) => Ok(source.search()),
-            None => Err(HaliaError::NotFound),
-        }
     }
 
     async fn update_source(
         &mut self,
         source_id: Uuid,
         old_conf: String,
-        req: &CreateUpdateSourceOrSinkReq,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf: SourceConf = serde_json::from_value(req.ext.clone())?;
-        // for source in self.sources.read().await.iter() {
-        // if source.id != source_id {
-        //     source.check_duplicate(&req.base, &ext_conf)?;
-        // }
-        // }
-
+        let new_conf: SourceConf = serde_json::from_value(new_conf)?;
         self.sources
             .get_mut(&source_id)
             .ok_or(HaliaError::NotFound)?
-            .update(old_conf, conf)
-            .await
+            .update(old_conf, new_conf)
+            .await;
+
+        Ok(())
     }
 
     async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
@@ -532,72 +444,37 @@ impl Device for Modbus {
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        match self.sources.get_mut(&source_id) {
-            Some(mut source) => source.stop().await,
-            None => unreachable!(),
-        }
-
+        self.sources
+            .get_mut(&source_id)
+            .ok_or(HaliaError::NotFound)?
+            .stop()
+            .await;
         self.sources.remove(&source_id);
-        self.source_ref_infos.retain(|(id, _)| *id != source_id);
         Ok(())
     }
 
-    async fn create_sink(
-        &mut self,
-        sink_id: Uuid,
-        req: &CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
-        let conf: SinkConf = serde_json::from_value(req.ext.clone())?;
-        // Sink::validate_conf(&ext_conf)?;
+    async fn create_sink(&mut self, sink_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
+        let conf: SinkConf = serde_json::from_value(conf)?;
+        let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
 
-        let sink = Sink::new(
-            sink_id,
-            conf,
-            self.write_tx.clone(),
-            self.device_err_tx.subscribe(),
-        );
-
-        // for sink in self.sinks.iter() {
-        //     sink.check_duplicate(&req.base, &ext_conf)?;
-        // }
-
-        // let mut sink = Sink::new(sink_id, req.base, ext_conf);
-        // sink.start(self.write_tx.clone(), self.device_err_tx.subscribe())
-        //     .await;
-
-        // self.sinks.push(sink);
-        // self.sink_ref_infos.push((sink_id, RefInfo::new()));
-        todo!()
-    }
-
-    async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        todo!()
-        // match self.sinks.iter().find(|sink| sink.id == *sink_id) {
-        //     Some(sink) => Ok(sink.search()),
-        //     None => Err(HaliaError::NotFound),
-        // }
+        self.sinks.insert(sink_id, sink);
+        Ok(())
     }
 
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
         old_conf: String,
-        req: &CreateUpdateSourceOrSinkReq,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        todo!()
-        // let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
-        // Sink::validate_conf(&ext_conf)?;
+        let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+        self.sinks
+            .get_mut(&sink_id)
+            .ok_or(HaliaError::NotFound)?
+            .update(old_conf, new_conf)
+            .await;
 
-        // for sink in self.sinks.iter() {
-        //     if sink.id != sink_id {
-        //         sink.check_duplicate(&req.base, &ext_conf)?;
-        //     }
-        // }
-
-        // match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-        //     Some(sink) => Ok(sink.update(req.base, ext_conf).await),
-        //     None => Err(HaliaError::NotFound),
-        // }
+        Ok(())
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
@@ -606,7 +483,6 @@ impl Device for Modbus {
             .ok_or(HaliaError::NotFound)?
             .stop()
             .await;
-
         self.sinks.remove(&sink_id);
         Ok(())
     }
@@ -615,13 +491,20 @@ impl Device for Modbus {
         &mut self,
         source_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        Ok(self.sources.get_mut(source_id).unwrap().mb_tx.subscribe())
+        Ok(self
+            .sources
+            .get_mut(source_id)
+            .ok_or(HaliaError::NotFound)?
+            .mb_tx
+            .subscribe())
     }
 
     async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.mb_tx.clone()),
-            None => unreachable!(),
-        }
+        Ok(self
+            .sinks
+            .get_mut(sink_id)
+            .ok_or(HaliaError::NotFound)?
+            .mb_tx
+            .clone())
     }
 }

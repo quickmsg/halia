@@ -184,14 +184,6 @@ impl Opcua {
 
 #[async_trait]
 impl Device for Opcua {
-    fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
-        if self.base_conf.name == req.conf.base.name {
-            return Err(HaliaError::NameExists);
-        }
-
-        Ok(())
-    }
-
     async fn read(&self) -> SearchDevicesItemFromMemory {
         todo!()
         // let err = self.err.read().await.clone();
@@ -251,11 +243,7 @@ impl Device for Opcua {
     //     Ok(())
     // }
 
-    async fn create_source(
-        &mut self,
-        source_id: Uuid,
-        req: &CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
+    async fn create_source(&mut self, source_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
         // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
         // for source in self.sources.iter() {
         //     source.check_duplicate(&req.base, &ext_conf)?;
@@ -271,15 +259,11 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        todo!()
-    }
-
     async fn update_source(
         &mut self,
         source_id: Uuid,
         old_conf: String,
-        req: &CreateUpdateSourceOrSinkReq,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
     }
@@ -288,11 +272,7 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn create_sink(
-        &mut self,
-        sink_id: Uuid,
-        req: &CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
         todo!()
         // match Sink::new(sink_id, req).await {
         //     Ok(sink) => {
@@ -306,15 +286,11 @@ impl Device for Opcua {
         // }
     }
 
-    async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        todo!()
-    }
-
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
         old_conf: String,
-        req: &CreateUpdateSourceOrSinkReq,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
     }

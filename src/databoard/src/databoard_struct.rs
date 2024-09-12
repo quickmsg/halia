@@ -1,58 +1,48 @@
 use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use tokio::sync::mpsc;
-use types::{
-    databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, DataboardConf, SearchDataboardsItemResp,
-        SearchDatasInfoResp,
-    },
-    BaseConf,
-};
+use types::databoard::{CreateUpdateDataReq, DataboardConf, SearchDatasInfoResp};
 use uuid::Uuid;
 
 use crate::data::Data;
 
 pub struct Databoard {
-    pub id: Uuid,
-    base_conf: BaseConf,
-    ext_conf: DataboardConf,
+    conf: DataboardConf,
     pub datas: Vec<Data>,
 }
 
 impl Databoard {
-    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: DataboardConf) -> HaliaResult<Self> {
-        Ok(Self {
-            id,
-            base_conf,
-            ext_conf,
+    pub fn new(conf: DataboardConf) -> Self {
+        Self {
+            conf,
             datas: vec![],
-        })
-    }
-
-    pub fn check_duplicate(&self, base_conf: &BaseConf) -> HaliaResult<()> {
-        if self.base_conf.name == base_conf.name {
-            return Err(HaliaError::NameExists);
-        }
-
-        Ok(())
-    }
-
-    pub fn search(&self) -> SearchDataboardsItemResp {
-        SearchDataboardsItemResp {
-            id: self.id.clone(),
-            conf: CreateUpdateDataboardReq {
-                base: self.base_conf.clone(),
-                ext: self.ext_conf.clone(),
-            },
         }
     }
 
-    pub fn update(&mut self, base_conf: BaseConf) -> HaliaResult<()> {
-        self.base_conf = base_conf;
-        Ok(())
-    }
+    // pub fn check_duplicate(&self, base_conf: &BaseConf) -> HaliaResult<()> {
+    //     if self.base_conf.name == base_conf.name {
+    //         return Err(HaliaError::NameExists);
+    //     }
 
-    pub fn delete(&mut self) -> HaliaResult<()> {
+    //     Ok(())
+    // }
+
+    // pub fn search(&self) -> SearchDataboardsItemResp {
+    //     SearchDataboardsItemResp {
+    //         id: self.id.clone(),
+    //         conf: CreateUpdateDataboardReq {
+    //             base: self.base_conf.clone(),
+    //             ext: self.ext_conf.clone(),
+    //         },
+    //     }
+    // }
+
+    // pub fn update(&mut self, base_conf: BaseConf) -> HaliaResult<()> {
+    //     self.base_conf = base_conf;
+    //     Ok(())
+    // }
+
+    pub async fn stop(&mut self) -> HaliaResult<()> {
         Ok(())
     }
 

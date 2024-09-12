@@ -1,7 +1,10 @@
 use anyhow::Result;
 use sqlx::{prelude::FromRow, AnyPool};
 use tracing::debug;
-use types::databoard::{CreateUpdateDataReq, CreateUpdateDataboardReq};
+use types::{
+    databoard::{CreateUpdateDataReq, CreateUpdateDataboardReq, QueryParams},
+    Pagination,
+};
 use uuid::Uuid;
 
 #[derive(FromRow)]
@@ -28,6 +31,49 @@ pub async fn create_databoard(
         .execute(pool)
         .await?;
     Ok(())
+}
+
+pub async fn search_databoards(
+    storage: &AnyPool,
+    pagination: Pagination,
+    query_params: QueryParams,
+) -> Result<(usize, Vec<Databoard>)> {
+    let (count, databoards) = match query_params.name {
+        Some(name) => {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM databoards WHERE name = ?1")
+                .bind(format!("%{}%", name))
+                .fetch_one(storage)
+                .await?;
+
+            let databoards = sqlx::query_as::<_, Databoard>(
+                "SELECT * FROM devices WHERE name = ?1 ORDER BY ts DESC LIMIT ?2 OFFSET ?3",
+            )
+            .bind(format!("%{}%", name))
+            .bind(pagination.size as i64)
+            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .fetch_all(storage)
+            .await?;
+
+            (count as usize, databoards)
+        }
+        None => {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM databoards")
+                .fetch_one(storage)
+                .await?;
+
+            let databoards = sqlx::query_as::<_, Databoard>(
+                "SELECT * FROM databoards ORDER BY ts DESC LIMIT ?1 OFFSET ?2",
+            )
+            .bind(pagination.size as i64)
+            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .fetch_all(storage)
+            .await?;
+
+            (count as usize, databoards)
+        }
+    };
+
+    Ok((count, databoards))
 }
 
 pub async fn read_databoards(pool: &AnyPool) -> Result<Vec<Databoard>> {

@@ -8,7 +8,7 @@ use std::{
 
 use common::{
     error::{HaliaError, HaliaResult},
-    storage,
+    storage::{self, rule_ref},
 };
 use dashmap::DashMap;
 use databoard_struct::Databoard;
@@ -18,8 +18,8 @@ use tokio::sync::mpsc;
 use tracing::debug;
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, QueryParams, QueryRuleInfo,
-        SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, DataboardConf, QueryParams, QueryRuleInfo,
+        SearchDataboardsItemResp, SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
     },
     Pagination,
 };
@@ -101,40 +101,41 @@ pub async fn get_rule_info(
 
 pub async fn create_databoard(
     storage: &Arc<AnyPool>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
     req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
-    // todo 配置验证
-    add_databoard_count();
+    let conf = req.ext.clone();
     let id = Uuid::new_v4();
+    databoards.insert(id, Databoard::new(conf));
+    add_databoard_count();
     storage::databoard::create_databoard(storage, &id, req).await?;
     Ok(())
 }
 
 pub async fn search_databoards(
+    storage: &Arc<AnyPool>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     pagination: Pagination,
     query: QueryParams,
-) -> SearchDataboardsResp {
-    todo!()
-    // let mut data = vec![];
-    // let mut total = 0;
+) -> HaliaResult<SearchDataboardsResp> {
+    let (count, db_databoards) =
+        storage::databoard::search_databoards(storage, pagination, query).await?;
 
-    // for databoard in databoards.read().await.iter().rev() {
-    //     let databoard = databoard.search();
-    //     if let Some(name) = &query.name {
-    //         if !databoard.conf.base.name.contains(name) {
-    //             continue;
-    //         }
-    //     }
+    let mut resp_databoards = vec![];
+    for db_databoard in db_databoards {
+        resp_databoards.push(SearchDataboardsItemResp {
+            id: Uuid::from_str(&db_databoard.id).unwrap(),
+            conf: CreateUpdateDataboardReq {
+                base: serde_json::from_str(&db_databoard.conf).unwrap(),
+                ext: DataboardConf {},
+            },
+        });
+    }
 
-    //     if pagination.check(total) {
-    //         data.push(databoard);
-    //     }
-
-    //     total += 1;
-    // }
-
-    // SearchDataboardsResp { total, data }
+    Ok(SearchDataboardsResp {
+        total: count,
+        data: resp_databoards,
+    })
 }
 
 pub async fn update_databoard(
@@ -158,32 +159,32 @@ pub async fn update_databoard(
     Ok(())
 }
 
+pub async fn start_databoard() {
+    todo!()
+}
+
+pub async fn stop_databoard() {
+    todo!()
+}
+
 pub async fn delete_databoard(
     storage: &Arc<AnyPool>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: Uuid,
 ) -> HaliaResult<()> {
-    // 运行中，不能被直接删除
-    if let Some(_) = databoards.get(&databoard_id) {
-        return Err(HaliaError::DeleteRunning);
+    let rule_ref_cnt = rule_ref::count_cnt_by_parent_id(storage, &databoard_id).await?;
+    if rule_ref_cnt > 0 {
+        return Err(HaliaError::DeleteRefing);
     }
-    // 判断子资源引用情况
-    // 判断是否停止中
-    // match databoards
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|databoard| databoard.id == databoard_id)
-    // {
-    //     Some(databoard) => databoard.delete()?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
 
-    // databoards
-    //     .write()
-    //     .await
-    //     .retain(|databoard| databoard.id != databoard_id);
+    databoards
+        .get_mut(&databoard_id)
+        .ok_or(HaliaError::NotFound)?
+        .stop()
+        .await?;
+
     sub_databoard_count();
+    databoards.remove(&databoard_id);
     storage::databoard::delete_databoard(storage, &databoard_id).await?;
 
     Ok(())

@@ -15,7 +15,7 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc};
-use tracing::debug;
+use tracing::{debug, warn};
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
@@ -75,37 +75,26 @@ pub(crate) fn sub_device_running_count() {
 
 #[async_trait]
 pub trait Device: Send + Sync {
-    fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()>;
     async fn read(&self) -> SearchDevicesItemFromMemory;
     async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
 
-    async fn create_source(
-        &mut self,
-        source_id: Uuid,
-        req: &CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()>;
-    async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
+    async fn create_source(&mut self, source_id: Uuid, conf: serde_json::Value) -> HaliaResult<()>;
     async fn update_source(
         &mut self,
         source_id: Uuid,
         old_conf: String,
-        req: &CreateUpdateSourceOrSinkReq,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()>;
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()>;
 
-    async fn create_sink(
-        &mut self,
-        sink_id: Uuid,
-        req: &CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()>;
-    async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
+    async fn create_sink(&mut self, sink_id: Uuid, conf: serde_json::Value) -> HaliaResult<()>;
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
         old_conf: String,
-        req: &CreateUpdateSourceOrSinkReq,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()>;
 
@@ -344,15 +333,9 @@ pub async fn start_device(
     )
     .await?;
     for db_source in db_sources {
-        let req = CreateUpdateSourceOrSinkReq {
-            base: BaseConf {
-                name: db_source.name,
-                desc: db_source.desc,
-            },
-            ext: serde_json::from_str(&db_source.conf).unwrap(),
-        };
+        let conf: serde_json::Value = serde_json::from_str(&db_source.conf).unwrap();
         device
-            .create_source(Uuid::from_str(&db_source.id).unwrap(), &req)
+            .create_source(Uuid::from_str(&db_source.id).unwrap(), conf)
             .await?;
     }
 
@@ -363,15 +346,9 @@ pub async fn start_device(
     )
     .await?;
     for db_sink in db_sinks {
-        let req = CreateUpdateSourceOrSinkReq {
-            base: BaseConf {
-                name: db_sink.name,
-                desc: db_sink.desc,
-            },
-            ext: serde_json::from_str(&db_sink.conf).unwrap(),
-        };
+        let conf: serde_json::Value = serde_json::from_str(&db_sink.conf).unwrap();
         device
-            .create_sink(Uuid::from_str(&db_sink.id).unwrap(), &req)
+            .create_sink(Uuid::from_str(&db_sink.id).unwrap(), conf)
             .await?;
     }
 
@@ -381,7 +358,7 @@ pub async fn start_device(
 }
 
 pub async fn stop_device(
-    persistence: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: Uuid,
 ) -> HaliaResult<()> {
@@ -391,12 +368,23 @@ pub async fn stop_device(
     }
 
     let active_rule_ref_cnt =
-        storage::rule_ref::count_active_cnt_by_parent_id(persistence, &device_id).await?;
+        storage::rule_ref::count_active_cnt_by_parent_id(storage, &device_id).await?;
     if active_rule_ref_cnt > 0 {
         return Err(HaliaError::StopActiveRefing);
     }
 
-    storage::device::update_device_status(persistence, &device_id, false).await?;
+    if let Err(e) = storage::device::create_event(
+        storage,
+        &device_id,
+        types::events::EventType::Stop.into(),
+        None,
+    )
+    .await
+    {
+        warn!("create event failed: {}", e);
+    }
+
+    storage::device::update_device_status(storage, &device_id, false).await?;
     devices.get_mut(&device_id).unwrap().stop().await?;
 
     devices.remove(&device_id);
@@ -434,7 +422,8 @@ pub async fn create_source(
 ) -> HaliaResult<()> {
     let source_id = Uuid::new_v4();
     if let Some(mut device) = devices.get_mut(&device_id) {
-        device.create_source(source_id, &req).await?;
+        let conf = req.ext.clone();
+        device.create_source(source_id, conf).await?;
     }
 
     storage::source_or_sink::create(
@@ -498,10 +487,11 @@ pub async fn update_source(
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
     let old_conf = storage::source_or_sink::read_conf_by_id(storage, &source_id).await?;
+    let new_conf = req.ext.clone();
     devices
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
-        .update_source(source_id, old_conf, &req)
+        .update_source(source_id, old_conf, new_conf)
         .await?;
 
     storage::source_or_sink::update(storage, &source_id, req).await?;
@@ -562,7 +552,8 @@ pub async fn create_sink(
 ) -> HaliaResult<()> {
     let sink_id = Uuid::new_v4();
     if let Some(mut device) = devices.get_mut(&device_id) {
-        device.create_sink(sink_id, &req).await?;
+        let conf: serde_json::Value = req.ext.clone();
+        device.create_sink(sink_id, conf).await?;
     }
 
     storage::source_or_sink::create(
@@ -627,10 +618,11 @@ pub async fn update_sink(
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
     let old_conf = storage::source_or_sink::read_conf_by_id(storage, &sink_id).await?;
+    let new_conf = req.ext.clone();
     devices
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
-        .update_sink(sink_id, old_conf, &req)
+        .update_sink(sink_id, old_conf, new_conf)
         .await?;
 
     storage::source_or_sink::update(storage, &sink_id, req).await?;

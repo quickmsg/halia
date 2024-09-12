@@ -76,14 +76,6 @@ impl Coap {
 
 #[async_trait]
 impl Device for Coap {
-    fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
-        if self.base_conf.name == req.conf.base.name {
-            return Err(HaliaError::NameExists);
-        }
-
-        Ok(())
-    }
-
     async fn read(&self) -> SearchDevicesItemFromMemory {
         todo!()
         // SearchDevicesItemResp {
@@ -183,11 +175,7 @@ impl Device for Coap {
     //     Ok(())
     // }
 
-    async fn create_source(
-        &mut self,
-        source_id: Uuid,
-        req: &CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
+    async fn create_source(&mut self, source_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
         // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
         // for source in self.sources.iter() {
         //     source.check_duplicate(&req.base, &ext_conf)?;
@@ -205,19 +193,11 @@ impl Device for Coap {
         todo!()
     }
 
-    async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        // match self.sources.iter().find(|source| source.id == *source_id) {
-        //     Some(source) => Ok(source.search()),
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
-    }
-
     async fn update_source(
         &mut self,
         source_id: Uuid,
         old_conf: String,
-        req: &CreateUpdateSourceOrSinkReq,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
         // for source in self.sources.iter() {
@@ -256,11 +236,7 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn create_sink(
-        &mut self,
-        sink_id: Uuid,
-        req: &CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
         todo!()
         // let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
 
@@ -279,18 +255,11 @@ impl Device for Coap {
         // Ok(())
     }
 
-    async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        match self.sinks.iter().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.search()),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
         old_conf: String,
-        req: &CreateUpdateSourceOrSinkReq,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
         //     let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
