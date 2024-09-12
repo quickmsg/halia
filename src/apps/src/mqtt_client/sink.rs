@@ -24,6 +24,8 @@ use types::{
 };
 use uuid::Uuid;
 
+use super::HaliaMqttClient;
+
 pub struct Sink {
     pub id: Uuid,
 
@@ -34,7 +36,7 @@ pub struct Sink {
 
     pub publish_properties: Option<PublishProperties>,
 
-    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
+    pub mb_tx: mpsc::Sender<MessageBatch>,
 
     join_handle: Option<
         JoinHandle<(
@@ -132,6 +134,10 @@ impl Sink {
         Ok(())
     }
 
+    pub fn start(&mut self, halia_mqtt_client: HaliaMqttClient, app_err_rx: broadcast::Receiver<bool>) {
+
+    }
+
     pub fn start_v311(&mut self, client: Arc<AsyncClient>, app_err_rx: broadcast::Receiver<bool>) {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         self.stop_signal_tx = Some(stop_signal_tx);
@@ -142,6 +148,10 @@ impl Sink {
         let message_retainer = sink_message_retain::new(&self.ext_conf.message_retain);
 
         self.event_loop_v311(client, stop_signal_rx, mb_rx, app_err_rx, message_retainer);
+    }
+
+    pub async fn restart(&mut self, halia_mqtt_client: HaliaMqttClient) {
+
     }
 
     pub async fn restart_v311(&mut self, client: Arc<AsyncClient>) {

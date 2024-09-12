@@ -2,17 +2,14 @@ use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::valid_filter;
 use tokio::sync::broadcast;
-use types::{
-    apps::mqtt_client::SourceConf, BaseConf, CreateUpdateSourceOrSinkReq,
-    SearchSourcesOrSinksInfoResp,
-};
+use types::{apps::mqtt_client::SourceConf, BaseConf, SearchSourcesOrSinksInfoResp};
 use uuid::Uuid;
 
 pub struct Source {
     pub id: Uuid,
     pub base_conf: BaseConf,
     pub ext_conf: SourceConf,
-    pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
+    pub mb_tx: broadcast::Sender<MessageBatch>,
 }
 
 impl Source {

@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS rules (
 
     device::init_table(storage).await?;
     source_or_sink::init_table(storage).await?;
+    rule_ref::init_table(storage).await?;
 
     Ok(())
 }

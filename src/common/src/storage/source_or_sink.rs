@@ -31,6 +31,7 @@ impl Into<i32> for Type {
 pub struct SourceOrSink {
     pub id: String,
     pub typ: i64,
+    pub parent_id: String,
     pub name: String,
     pub desc: Option<String>,
     pub conf: String,
@@ -48,7 +49,6 @@ CREATE TABLE IF NOT EXISTS sources_or_sinks (
     desc TEXT,
     conf TEXT NOT NULL,
     ts INT NOT NULL,
-    rule_ref_cnt INT NOT NULL
 );
 "#,
     )
@@ -235,18 +235,6 @@ pub async fn delete_by_parent_id(storage: &AnyPool, parent_id: &Uuid) -> Result<
         .execute(storage)
         .await?;
     Ok(())
-}
-
-// TODO
-pub async fn check_delete_all(storage: &AnyPool, parent_id: &Uuid) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND rule_ref_cnt = 0",
-    )
-    .bind(parent_id.to_string())
-    .fetch_one(storage)
-    .await?;
-
-    Ok(count == 0)
 }
 
 pub async fn check_exists(storage: &AnyPool, source_or_sink_id: &Uuid) -> Result<bool> {

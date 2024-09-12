@@ -17,11 +17,10 @@ use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
-        AppConf, AppType, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsItemResp,
-        SearchAppsResp, SearchRuleInfo, Summary,
+        AppConf, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsResp, SearchRuleInfo,
+        Summary,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
-    SearchSourcesOrSinksResp,
+    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -79,12 +78,6 @@ pub trait App: Send + Sync {
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
-    // async fn search_sources(
-    //     &self,
-    //     pagination: Pagination,
-    //     query: QueryParams,
-    // ) -> SearchSourcesOrSinksResp;
-    // async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_source(
         &mut self,
         source_id: Uuid,
@@ -97,12 +90,6 @@ pub trait App: Send + Sync {
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
-    // async fn search_sinks(
-    //     &self,
-    //     pagination: Pagination,
-    //     query: QueryParams,
-    // ) -> SearchSourcesOrSinksResp;
-    // async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
@@ -461,11 +448,10 @@ pub async fn delete_sink(
         return Err(HaliaError::DeleteRefing);
     }
 
+    storage::source_or_sink::delete(storage, &sink_id).await?;
     if let Some(mut app) = apps.get_mut(&app_id) {
         app.delete_sink(sink_id).await?;
     }
-
-    storage::source_or_sink::delete(storage, &sink_id).await?;
 
     Ok(())
 }

@@ -57,14 +57,10 @@ pub async fn update(pool: &AnyPool, id: &Uuid, req: CreateUpdateAppReq) -> Resul
 }
 
 pub async fn delete(pool: &AnyPool, id: &Uuid) -> Result<()> {
-    sqlx::query(
-        r#"
-DELETE FROM apps WHERE id = ?1
-"#,
-    )
-    .bind(id.to_string())
-    .execute(pool)
-    .await?;
+    sqlx::query("DELETE FROM apps WHERE id = ?1")
+        .bind(id.to_string())
+        .execute(pool)
+        .await?;
 
     Ok(())
 }

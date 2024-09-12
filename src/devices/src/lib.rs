@@ -390,15 +390,17 @@ pub async fn stop_device(
         return Ok(());
     }
 
-    devices
-        .get_mut(&device_id)
-        .ok_or(HaliaError::NotFound)?
-        .stop()
-        .await?;
-
-    devices.remove(&device_id);
+    let active_rule_ref_cnt =
+        storage::rule_ref::count_active_cnt_by_parent_id(persistence, &device_id).await?;
+    if active_rule_ref_cnt > 0 {
+        return Err(HaliaError::StopActiveRefing);
+    }
 
     storage::device::update_device_status(persistence, &device_id, false).await?;
+    devices.get_mut(&device_id).unwrap().stop().await?;
+
+    devices.remove(&device_id);
+    sub_device_on_count();
 
     Ok(())
 }
@@ -412,8 +414,8 @@ pub async fn delete_device(
         return Err(HaliaError::Common("运行中，不能删除".to_string()));
     }
 
-    let can_delete = storage::source_or_sink::check_delete_all(storage, &device_id).await?;
-    if !can_delete {
+    let cnt = storage::rule_ref::count_cnt_by_parent_id(storage, &device_id).await?;
+    if cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
 

@@ -45,23 +45,53 @@ impl Rule {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::create(storage, &rule_id, &source_node.source_id).await?;
+                    storage::rule_ref::insert(
+                        storage,
+                        &rule_id,
+                        &source_node.device_id,
+                        &source_node.source_id,
+                    )
+                    .await?;
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::create(storage, &rule_id, &source_node.source_id).await?;
+                    storage::rule_ref::insert(
+                        storage,
+                        &rule_id,
+                        &source_node.app_id,
+                        &source_node.source_id,
+                    )
+                    .await?;
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::create(storage, &rule_id, &sink_node.sink_id).await?;
+                    storage::rule_ref::insert(
+                        storage,
+                        &rule_id,
+                        &sink_node.device_id,
+                        &sink_node.sink_id,
+                    )
+                    .await?;
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::create(storage, &rule_id, &sink_node.sink_id).await?;
+                    storage::rule_ref::insert(
+                        storage,
+                        &rule_id,
+                        &sink_node.app_id,
+                        &sink_node.sink_id,
+                    )
+                    .await?;
                 }
                 NodeType::Databoard => {
                     let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::create(storage, &rule_id, &databoard_node.data_id).await?;
+                    storage::rule_ref::insert(
+                        storage,
+                        &rule_id,
+                        &databoard_node.databoard_id,
+                        &databoard_node.data_id,
+                    )
+                    .await?;
                 }
                 _ => {}
             }
