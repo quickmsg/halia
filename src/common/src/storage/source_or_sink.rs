@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS sources_or_sinks (
 }
 
 pub async fn create(
-    pool: &AnyPool,
+    storage: &AnyPool,
     parent_id: &Uuid,
     id: &Uuid,
     typ: Type,
@@ -89,7 +89,7 @@ pub async fn create(
         .bind(conf)
         .bind(ts)
         .bind(0)
-        .execute(pool)
+        .execute(storage)
         .await?;
 
     Ok(())
@@ -221,7 +221,7 @@ pub async fn update(pool: &AnyPool, id: &Uuid, req: CreateUpdateSourceOrSinkReq)
     Ok(())
 }
 
-pub async fn delete_by_id(storage: &AnyPool, id: &Uuid) -> Result<()> {
+pub async fn delete(storage: &AnyPool, id: &Uuid) -> Result<()> {
     sqlx::query("DELETE FROM sources_or_sinks WHERE id = ?1")
         .bind(id.to_string())
         .execute(storage)

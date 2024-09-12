@@ -15,7 +15,7 @@ use devices::Device;
 use rule::rule::Rule;
 use serde::Serialize;
 use sqlx::AnyPool;
-use tokio::{net::TcpListener, sync::RwLock};
+use tokio::net::TcpListener;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::{ServeDir, ServeFile},
@@ -97,7 +97,7 @@ impl IntoResponse for AppError {
 struct AppState {
     storage: Arc<AnyPool>,
     devices: Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: Arc<DashMap<Uuid, Databoard>>,
     rules: Arc<DashMap<Uuid, Rule>>,
 }
@@ -106,7 +106,7 @@ pub async fn start(
     port: u16,
     storage: Arc<AnyPool>,
     devices: Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: Arc<DashMap<Uuid, Databoard>>,
     rules: Arc<DashMap<Uuid, Rule>>,
 ) {

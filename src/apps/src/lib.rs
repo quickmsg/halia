@@ -4,7 +4,6 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc, LazyLock,
     },
-    vec,
 };
 
 use async_trait::async_trait;
@@ -12,9 +11,10 @@ use common::{
     error::{HaliaError, HaliaResult},
     storage,
 };
+use dashmap::DashMap;
 use message::MessageBatch;
 use sqlx::AnyPool;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
         AppConf, AppType, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsItemResp,
@@ -133,56 +133,17 @@ pub trait App: Send + Sync {
     async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
 }
 
-pub async fn load_from_persistence(
-    pool: &Arc<AnyPool>,
-) -> HaliaResult<Arc<RwLock<Vec<Box<dyn App>>>>> {
-    let db_apps = storage::app::read_apps(pool).await?;
-    let apps: Arc<RwLock<Vec<Box<dyn App>>>> = Arc::new(RwLock::new(vec![]));
+pub async fn load_from_storage(
+    storage: &Arc<AnyPool>,
+) -> HaliaResult<Arc<DashMap<Uuid, Box<dyn App>>>> {
+    let count = storage::app::count_all(storage).await?;
+    APP_COUNT.store(count, Ordering::SeqCst);
+
+    let db_apps = storage::app::read_on(storage).await?;
+    let apps: Arc<DashMap<Uuid, Box<dyn App>>> = Arc::new(DashMap::new());
     for db_app in db_apps {
         let app_id = Uuid::from_str(&db_app.id).unwrap();
-
-        let db_sources = storage::source_or_sink::read_all_by_parent_id(
-            pool,
-            &app_id,
-            storage::source_or_sink::Type::Source,
-        )
-        .await?;
-        let db_sinks = storage::source_or_sink::read_all_by_parent_id(
-            pool,
-            &app_id,
-            storage::source_or_sink::Type::Sink,
-        )
-        .await?;
-        create_app(pool, &apps, app_id, db_app.conf, false).await?;
-
-        for db_source in db_sources {
-            // create_source(
-            //     pool,
-            //     &apps,
-            //     app_id,
-            //     Uuid::from_str(&db_source.id).unwrap(),
-            //     db_source.conf,
-            //     false,
-            // )
-            // .await?;
-            todo!()
-        }
-
-        for db_sink in db_sinks {
-            create_sink(
-                pool,
-                &apps,
-                app_id,
-                Uuid::from_str(&db_sink.id).unwrap(),
-                db_sink.conf,
-                false,
-            )
-            .await?;
-        }
-
-        if db_app.status == 1 {
-            start_app(pool, &apps, app_id).await?;
-        }
+        start_app(storage, &apps, app_id);
     }
 
     Ok(apps)
@@ -197,494 +158,342 @@ pub async fn get_summary() -> Summary {
 }
 
 pub async fn get_rule_info(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     query: QueryRuleInfo,
 ) -> HaliaResult<SearchRuleInfo> {
-    match apps
-        .read()
-        .await
-        .iter()
-        .find(|app| *app.get_id() == query.app_id)
-    {
-        Some(app) => {
-            let app_info = app.search().await;
-            match (query.source_id, query.sink_id) {
-                (Some(source_id), None) => {
-                    let source_info = app.search_source(&source_id).await?;
-                    Ok(SearchRuleInfo {
-                        app: app_info,
-                        source: Some(source_info),
-                        sink: None,
-                    })
-                }
-                (None, Some(sink_id)) => {
-                    let sink_info = app.search_sink(&sink_id).await?;
-                    Ok(SearchRuleInfo {
-                        app: app_info,
-                        source: None,
-                        sink: Some(sink_info),
-                    })
-                }
-                _ => return Err(HaliaError::Common("查询id错误".to_owned())),
-            }
-        }
-        None => Err(HaliaError::NotFound),
-    }
+    todo!()
+    // match apps
+    //     .read()
+    //     .await
+    //     .iter()
+    //     .find(|app| *app.get_id() == query.app_id)
+    // {
+    //     Some(app) => {
+    //         let app_info = app.search().await;
+    //         match (query.source_id, query.sink_id) {
+    //             (Some(source_id), None) => {
+    //                 let source_info = app.search_source(&source_id).await?;
+    //                 Ok(SearchRuleInfo {
+    //                     app: app_info,
+    //                     source: Some(source_info),
+    //                     sink: None,
+    //                 })
+    //             }
+    //             (None, Some(sink_id)) => {
+    //                 let sink_info = app.search_sink(&sink_id).await?;
+    //                 Ok(SearchRuleInfo {
+    //                     app: app_info,
+    //                     source: None,
+    //                     sink: Some(sink_info),
+    //                 })
+    //             }
+    //             _ => return Err(HaliaError::Common("查询id错误".to_owned())),
+    //         }
+    //     }
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn create_app(
-    pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
     app_id: Uuid,
-    body: String,
-    persist: bool,
+    req: CreateUpdateAppReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateAppReq = serde_json::from_str(&body)?;
-    for app in apps.read().await.iter() {
-        app.check_duplicate(&req)?;
-    }
+    // for app in apps.read().await.iter() {
+    //     app.check_duplicate(&req)?;
+    // }
 
-    let app = match req.app_type {
-        AppType::MqttClient => mqtt_client::new(app_id, req.conf)?,
-        AppType::HttpClient => http_client::new(app_id, req.conf)?,
-    };
+    // TODO 验证配置
+    // let app = match req.app_type {
+    //     AppType::MqttClient => mqtt_client::new(app_id, req.conf)?,
+    //     AppType::HttpClient => http_client::new(app_id, req.conf)?,
+    // };
 
     add_app_count();
-    if persist {
-        storage::app::create_app(pool, &app_id, body).await?;
-    }
-    apps.write().await.push(app);
+    storage::app::insert(storage, &app_id, req).await?;
     Ok(())
 }
 
 pub async fn search_apps(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     pagination: Pagination,
     query: QueryParams,
 ) -> SearchAppsResp {
-    let mut data = vec![];
-    let mut total = 0;
+    // let mut data = vec![];
+    // let mut total = 0;
 
-    for app in apps.read().await.iter().rev() {
-        let app = app.search().await;
-        if let Some(app_type) = &query.app_type {
-            if *app_type != app.common.app_type {
-                continue;
-            }
-        }
+    // for app in apps.read().await.iter().rev() {
+    //     let app = app.search().await;
+    //     if let Some(app_type) = &query.app_type {
+    //         if *app_type != app.common.app_type {
+    //             continue;
+    //         }
+    //     }
 
-        if let Some(name) = &query.name {
-            if !app.conf.base.name.contains(name) {
-                continue;
-            }
-        }
-        if let Some(on) = &query.on {
-            if app.common.on != *on {
-                continue;
-            }
-        }
+    //     if let Some(name) = &query.name {
+    //         if !app.conf.base.name.contains(name) {
+    //             continue;
+    //         }
+    //     }
+    //     if let Some(on) = &query.on {
+    //         if app.common.on != *on {
+    //             continue;
+    //         }
+    //     }
 
-        if let Some(err) = &query.err {
-            if app.common.err.is_some() != *err {
-                continue;
-            }
-        }
+    //     if let Some(err) = &query.err {
+    //         if app.common.err.is_some() != *err {
+    //             continue;
+    //         }
+    //     }
 
-        if total >= (pagination.page - 1) * pagination.size
-            && total < pagination.page * pagination.size
-        {
-            data.push(app);
-        }
-        total += 1;
-    }
+    //     if total >= (pagination.page - 1) * pagination.size
+    //         && total < pagination.page * pagination.size
+    //     {
+    //         data.push(app);
+    //     }
+    //     total += 1;
+    // }
 
-    SearchAppsResp { total, data }
+    // SearchAppsResp { total, data }
+    todo!()
 }
 
 pub async fn update_app(
-    pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
-    body: String,
+    req: CreateUpdateAppReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateAppReq = serde_json::from_str(&body)?;
-
-    for app in apps.read().await.iter() {
-        if *app.get_id() != app_id {
-            app.check_duplicate(&req)?;
-        }
+    // for app in apps.read().await.iter() {
+    //     if *app.get_id() != app_id {
+    //         app.check_duplicate(&req)?;
+    //     }
+    // }
+    if let Some(app) = apps.get_mut(&app_id) {
+        // let db_app = storage::app::read_by_id(storage, &app_id).await?;
+        // app.check_duplicate(&req)?;
     }
 
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.update(req.conf).await?,
-        None => return Err(HaliaError::NotFound),
-    }
-
-    storage::app::update_app_conf(pool, &app_id, body).await?;
+    storage::app::update(storage, &app_id, req).await?;
 
     Ok(())
 }
 
 pub async fn start_app(
     pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.start().await?,
-        None => return Err(HaliaError::NotFound),
+    if apps.contains_key(&app_id) {
+        return Ok(());
     }
 
-    storage::app::update_app_status(pool, &app_id, true).await?;
+    // 创建事件
+    // todo 从数据库读取配置
+
+    storage::app::update_status(pool, &app_id, true).await?;
 
     Ok(())
 }
 
 pub async fn stop_app(
-    pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.stop().await?,
-        None => return Err(HaliaError::NotFound),
+    if !apps.contains_key(&app_id) {
+        return Ok(());
     }
 
-    storage::app::update_app_status(pool, &app_id, false).await?;
+    apps.get_mut(&app_id).unwrap().stop().await?;
+
+    apps.remove(&app_id);
+
+    storage::app::update_status(storage, &app_id, false).await?;
     Ok(())
 }
 
 pub async fn delete_app(
     pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.delete().await?,
-        None => return Err(HaliaError::NotFound),
+    if apps.contains_key(&app_id) {
+        return Err(HaliaError::Common("请先停止应用".to_owned()));
     }
 
+    // 删除事件 测试是否可以删除
+
     sub_app_count();
-    apps.write().await.retain(|app| *app.get_id() != app_id);
-    storage::app::delete_app(pool, &app_id).await?;
+    storage::app::delete(pool, &app_id).await?;
     Ok(())
 }
 
 pub async fn create_source(
-    pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
-    source_id: Uuid,
     req: CreateUpdateSourceOrSinkReq,
-    persist: bool,
 ) -> HaliaResult<()> {
-    // let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.create_source(source_id, req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    let source_id = Uuid::new_v4();
 
-    if persist {
-        todo!()
-        // storage::source::create_source(pool, &app_id, &source_id, req).await?;
-    }
+    storage::source_or_sink::create(
+        storage,
+        &app_id,
+        &source_id,
+        storage::source_or_sink::Type::Source,
+        req,
+    )
+    .await?;
+
+    // if let Some(mut app) = apps.get_mut(&app_id) {
+    //     app.create_source(source_id, req).await?;
+    // }
+    // todo
 
     Ok(())
 }
 
 pub async fn search_sources(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    match apps.read().await.iter().find(|app| *app.get_id() == app_id) {
-        Some(app) => Ok(app.search_sources(pagination, query).await),
-        None => Err(HaliaError::NotFound),
-    }
+    todo!()
 }
 
 pub async fn update_source(
     pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
     source_id: Uuid,
     body: String,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.update_source(source_id, req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
-
-    // storage::source::update_source(pool, &source_id, body).await?;
-    Ok(())
+    todo!()
 }
 
 pub async fn delete_source(
-    pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
     source_id: Uuid,
 ) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.delete_source(source_id).await?,
-        None => return Err(HaliaError::NotFound),
+    let rule_ref_cnt =
+        storage::rule_ref::count_active_cnt_by_resource_id(storage, &source_id).await?;
+    if rule_ref_cnt > 0 {
+        return Err(HaliaError::Common("请先删除关联规则".to_owned()));
     }
 
-    storage::source_or_sink::delete_by_id(pool, &source_id).await?;
+    if let Some(mut app) = apps.get_mut(&app_id) {
+        app.delete_source(source_id).await?;
+    }
+
+    storage::source_or_sink::delete(storage, &source_id).await?;
     Ok(())
 }
 
-pub async fn add_source_ref(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    app_id: &Uuid,
-    source_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == *app_id)
-    {
-        Some(app) => app.add_source_ref(source_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
-}
-
 pub async fn get_source_rx(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: &Uuid,
     source_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-    match apps
-        .write()
+    apps.get_mut(&app_id)
+        .ok_or(HaliaError::Stopped)?
+        .get_source_rx(source_id, rule_id)
         .await
-        .iter_mut()
-        .find(|app| *app.get_id() == *app_id)
-    {
-        Some(app) => app.get_source_rx(source_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
-}
-
-pub async fn del_source_rx(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    app_id: &Uuid,
-    source_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == *app_id)
-    {
-        Some(app) => app.del_source_rx(source_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
-}
-
-pub async fn del_source_ref(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    app_id: &Uuid,
-    source_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == *app_id)
-    {
-        Some(app) => app.del_source_ref(source_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
 }
 
 pub async fn create_sink(
-    pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
-    sink_id: Uuid,
-    body: String,
-    persist: bool,
+    req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.create_sink(sink_id, req).await?,
-        None => return Err(HaliaError::NotFound),
+    let sink_id = Uuid::new_v4();
+    if let Some(mut app) = apps.get_mut(&app_id) {
+        app.create_sink(sink_id, req).await?;
     }
 
-    if persist {
-        // storage::sink::create_sink(pool, &app_id, &sink_id, body).await?;
-        todo!()
-    }
+    // storage::source_or_sink::create(
+    //     storage,
+    //     &app_id,
+    //     &sink_id,
+    //     storage::source_or_sink::Type::Sink,
+    //     req,
+    // )
+    // .await?;
 
     Ok(())
 }
 
 pub async fn search_sinks(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    match apps.read().await.iter().find(|app| *app.get_id() == app_id) {
-        Some(device) => Ok(device.search_sinks(pagination, query).await),
-        None => Err(HaliaError::NotFound),
-    }
+    todo!()
+    // match apps.read().await.iter().find(|app| *app.get_id() == app_id) {
+    //     Some(device) => Ok(device.search_sinks(pagination, query).await),
+    //     None => Err(HaliaError::NotFound),
+    // }
 }
 
 pub async fn update_sink(
-    pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
     sink_id: Uuid,
-    body: String,
+    req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.update_sink(sink_id, req).await?,
-        None => return Err(HaliaError::NotFound),
-    }
+    todo!()
+    // let req: CreateUpdateSourceOrSinkReq = serde_json::from_str(&body)?;
+    // match apps
+    //     .write()
+    //     .await
+    //     .iter_mut()
+    //     .find(|app| *app.get_id() == app_id)
+    // {
+    //     Some(app) => app.update_sink(sink_id, req).await?,
+    //     None => return Err(HaliaError::NotFound),
+    // }
 
-    // storage::sink::update_sink(pool, &sink_id, req).await?;
-    Ok(())
+    // // storage::sink::update_sink(pool, &sink_id, req).await?;
+    // Ok(())
 }
 
 pub async fn delete_sink(
-    pool: &Arc<AnyPool>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    storage: &Arc<AnyPool>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
     sink_id: Uuid,
 ) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == app_id)
-    {
-        Some(app) => app.delete_sink(sink_id).await?,
-        None => return Err(HaliaError::NotFound),
+    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(storage, &sink_id).await?;
+    if rule_ref_cnt > 0 {
+        return Err(HaliaError::DeleteRefing);
     }
 
-    storage::source_or_sink::delete_by_id(pool, &sink_id).await?;
+    if let Some(mut app) = apps.get_mut(&app_id) {
+        app.delete_sink(sink_id).await?;
+    }
+
+    storage::source_or_sink::delete(storage, &sink_id).await?;
 
     Ok(())
 }
 
-pub async fn add_sink_ref(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    app_id: &Uuid,
-    sink_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == *app_id)
-    {
-        Some(app) => app.add_sink_ref(sink_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
-}
-
 pub async fn get_sink_tx(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: &Uuid,
     sink_id: &Uuid,
     rule_id: &Uuid,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    match apps
-        .write()
+    apps.get_mut(&app_id)
+        .ok_or(HaliaError::Stopped)?
+        .get_sink_tx(sink_id, rule_id)
         .await
-        .iter_mut()
-        .find(|app| *app.get_id() == *app_id)
-    {
-        Some(app) => app.get_sink_tx(sink_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
-}
-
-pub async fn del_sink_tx(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    app_id: &Uuid,
-    sink_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == *app_id)
-    {
-        Some(app) => app.del_sink_tx(sink_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
-}
-
-pub async fn del_sink_ref(
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
-    app_id: &Uuid,
-    sink_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    match apps
-        .write()
-        .await
-        .iter_mut()
-        .find(|app| *app.get_id() == *app_id)
-    {
-        Some(app) => app.del_sink_ref(sink_id, rule_id).await,
-        None => Err(HaliaError::NotFound),
-    }
 }

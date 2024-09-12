@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
 
     let storage = Arc::new(storage);
     let devices = devices::load_from_storage(&storage).await.unwrap();
-    let apps = apps::load_from_persistence(&storage).await.unwrap();
+    let apps = apps::load_from_storage(&storage).await.unwrap();
     let databoards = databoard::load_from_storage(&storage).await.unwrap();
     let rules = rule::load_from_storage(&storage, &devices, &apps, &databoards)
         .await

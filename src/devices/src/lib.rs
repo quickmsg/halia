@@ -121,10 +121,10 @@ pub trait Device: Send + Sync {
 pub async fn load_from_storage(
     storage: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<DashMap<Uuid, Box<dyn Device>>>> {
-    let count = storage::device::count_devices(storage).await?;
+    let count = storage::device::count_all(storage).await?;
     DEVICE_COUNT.store(count, Ordering::SeqCst);
 
-    let db_devices = storage::device::read_on_devices(storage).await?;
+    let db_devices = storage::device::read_on(storage).await?;
     DEVICE_ON_COUNT.store(db_devices.len(), Ordering::SeqCst);
 
     let devices: Arc<DashMap<Uuid, Box<dyn Device>>> = Arc::new(DashMap::new());
@@ -477,8 +477,11 @@ pub async fn search_sources(
                 },
             },
             rule_ref: RuleRef {
-                rule_ref_cnt: storage::rule_ref::count_cnt(storage, &id).await?,
-                rule_active_ref_cnt: storage::rule_ref::count_active_cnt(storage, &id).await?,
+                rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(storage, &id).await?,
+                rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(
+                    storage, &id,
+                )
+                .await?,
             },
         });
     }
@@ -524,7 +527,7 @@ pub async fn delete_source(
     device_id: Uuid,
     source_id: Uuid,
 ) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_cnt(storage, &source_id).await?;
+    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(storage, &source_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
@@ -533,56 +536,21 @@ pub async fn delete_source(
         device.delete_source(source_id).await?;
     }
 
-    storage::source_or_sink::delete_by_id(storage, &source_id).await?;
+    storage::source_or_sink::delete(storage, &source_id).await?;
 
-    Ok(())
-}
-
-pub async fn add_source_ref(
-    storage: &Arc<AnyPool>,
-    source_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    let exists = storage::source_or_sink::check_exists(storage, source_id).await?;
-    if !exists {
-        return Err(HaliaError::NotFound);
-    }
-    storage::rule_ref::create(storage, &source_id, &rule_id).await?;
     Ok(())
 }
 
 pub async fn get_source_rx(
-    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     source_id: &Uuid,
-    rule_id: &Uuid,
 ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-    storage::rule_ref::active(storage, source_id, rule_id).await?;
-
     devices
         .get_mut(device_id)
         .ok_or(HaliaError::Stopped)?
         .get_source_rx(source_id)
         .await
-}
-
-pub async fn del_source_rx(
-    storage: &Arc<AnyPool>,
-    source_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    storage::rule_ref::deactive(storage, source_id, rule_id).await?;
-    Ok(())
-}
-
-pub async fn del_source_ref(
-    storage: &Arc<AnyPool>,
-    source_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    storage::rule_ref::delete(storage, source_id, rule_id).await?;
-    Ok(())
 }
 
 pub async fn create_sink(
@@ -638,8 +606,11 @@ pub async fn search_sinks(
                 },
             },
             rule_ref: RuleRef {
-                rule_ref_cnt: storage::rule_ref::count_cnt(storage, &id).await?,
-                rule_active_ref_cnt: storage::rule_ref::count_active_cnt(storage, &id).await?,
+                rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(storage, &id).await?,
+                rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(
+                    storage, &id,
+                )
+                .await?,
             },
         });
     }
@@ -672,7 +643,7 @@ pub async fn delete_sink(
     device_id: Uuid,
     sink_id: Uuid,
 ) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_cnt(storage, &sink_id).await?;
+    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(storage, &sink_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
@@ -681,55 +652,19 @@ pub async fn delete_sink(
         device.delete_sink(sink_id).await?;
     }
 
-    storage::source_or_sink::delete_by_id(storage, &sink_id).await?;
+    storage::source_or_sink::delete(storage, &sink_id).await?;
 
-    Ok(())
-}
-
-pub async fn add_sink_ref(
-    storage: &Arc<AnyPool>,
-    sink_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    let exists = storage::source_or_sink::check_exists(storage, sink_id).await?;
-    if !exists {
-        return Err(HaliaError::NotFound);
-    }
-    storage::rule_ref::create(storage, sink_id, rule_id).await?;
     Ok(())
 }
 
 pub async fn get_sink_tx(
-    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
     device_id: &Uuid,
     sink_id: &Uuid,
-    rule_id: &Uuid,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    storage::rule_ref::active(storage, sink_id, rule_id).await?;
-
     devices
         .get_mut(device_id)
         .ok_or(HaliaError::NotFound)?
         .get_sink_tx(sink_id)
         .await
-}
-
-pub async fn del_sink_tx(
-    storage: &Arc<AnyPool>,
-    sink_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    storage::rule_ref::deactive(storage, sink_id, rule_id).await?;
-
-    Ok(())
-}
-
-pub async fn del_sink_ref(
-    storage: &Arc<AnyPool>,
-    sink_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    storage::rule_ref::delete(storage, sink_id, rule_id).await?;
-    Ok(())
 }

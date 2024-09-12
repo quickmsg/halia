@@ -63,7 +63,7 @@ pub fn get_summary() -> Summary {
 pub async fn load_from_storage(
     storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
 ) -> HaliaResult<Arc<DashMap<Uuid, Rule>>> {
     let db_rules = storage::rule::read_rules(storage).await?;
@@ -94,14 +94,14 @@ pub async fn create(
     storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
     body: String,
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
-    let rule = Rule::new(storage, devices, apps, databoards, id, req).await?;
+    let rule = Rule::new(storage, databoards, id, req).await?;
     add_rule_count();
     if persist {
         storage::rule::create_rule(storage, &id, body).await?;
@@ -147,7 +147,7 @@ pub async fn read(
     storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<Vec<ReadRuleNodeResp>> {
@@ -162,7 +162,7 @@ pub async fn start(
     storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<()> {
@@ -183,7 +183,7 @@ pub async fn stop(
     storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<()> {
@@ -194,7 +194,7 @@ pub async fn stop(
     rules
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .stop(storage, devices, apps, databoards)
+        .stop(storage, databoards)
         .await?;
 
     storage::rule::update_rule_status(storage, &id, false).await?;
@@ -205,7 +205,7 @@ pub async fn update(
     storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
     req: CreateUpdateRuleReq,
@@ -225,14 +225,14 @@ pub async fn delete(
     storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
     devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<()> {
     rules
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .delete(storage, devices, apps, databoards)
+        .delete(storage, databoards)
         .await?;
 
     rules.remove(&id);

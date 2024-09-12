@@ -1,6 +1,9 @@
 use anyhow::Result;
 use apps::App;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::HaliaResult,
+    storage::{self, rule_ref},
+};
 use dashmap::DashMap;
 use databoard::databoard_struct::Databoard;
 use devices::Device;
@@ -35,72 +38,29 @@ pub struct Rule {
 impl Rule {
     pub async fn new(
         storage: &Arc<AnyPool>,
-        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
         rule_id: Uuid,
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<Self> {
         let mut error = None;
-        let mut device_source_add_ref_nodes = vec![];
-        let mut device_sink_add_ref_nodes = vec![];
-        let mut app_source_add_ref_nodes = vec![];
-        let mut app_sink_add_ref_nodes = vec![];
         let mut databoard_add_ref_nodes = vec![];
         for node in req.ext.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    match devices::add_source_ref(storage, &source_node.source_id, &rule_id).await {
-                        Ok(_) => device_source_add_ref_nodes
-                            .push((source_node.device_id, source_node.source_id)),
-                        Err(_) => {
-                            error = Some("引用设备错误！".to_owned());
-                            break;
-                        }
-                    }
+                    storage::rule_ref::create(storage, &rule_id, &source_node.source_id).await?;
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    match apps::add_source_ref(
-                        apps,
-                        &source_node.app_id,
-                        &source_node.source_id,
-                        &rule_id,
-                    )
-                    .await
-                    {
-                        Ok(_) => app_source_add_ref_nodes
-                            .push((source_node.app_id, source_node.source_id)),
-                        Err(_) => {
-                            error = Some("引用应用错误！".to_owned());
-                            break;
-                        }
-                    }
+                    storage::rule_ref::create(storage, &rule_id, &source_node.source_id).await?;
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    match devices::add_sink_ref(storage, &sink_node.sink_id, &rule_id).await {
-                        Ok(_) => {
-                            device_sink_add_ref_nodes.push((sink_node.device_id, sink_node.sink_id))
-                        }
-                        Err(_) => {
-                            error = Some("引用设备动作错误！".to_owned());
-                            break;
-                        }
-                    }
+                    storage::rule_ref::create(storage, &rule_id, &sink_node.sink_id).await?;
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    match apps::add_sink_ref(apps, &sink_node.app_id, &sink_node.sink_id, &rule_id)
-                        .await
-                    {
-                        Ok(_) => app_sink_add_ref_nodes.push((sink_node.app_id, sink_node.sink_id)),
-                        Err(_) => {
-                            error = Some("引用应用动作错误！".to_owned());
-                            break;
-                        }
-                    }
+                    storage::rule_ref::create(storage, &rule_id, &sink_node.sink_id).await?;
                 }
                 NodeType::Databoard => {
                     let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
@@ -124,26 +84,6 @@ impl Rule {
             }
         }
 
-        if let Some(e) = error {
-            for (_, source_id) in device_source_add_ref_nodes {
-                devices::del_source_ref(storage, &source_id, &rule_id).await?;
-            }
-            for (_, sink_id) in device_sink_add_ref_nodes {
-                devices::del_sink_ref(storage, &sink_id, &rule_id).await?;
-            }
-            for (app_id, source_id) in app_source_add_ref_nodes {
-                apps::del_source_ref(apps, &app_id, &source_id, &rule_id).await?;
-            }
-            for (app_id, sink_id) in app_sink_add_ref_nodes {
-                apps::del_sink_ref(apps, &app_id, &sink_id, &rule_id).await?;
-            }
-            for (databorad_id, data_id) in databoard_add_ref_nodes {
-                databoard::del_data_ref(databoards, &databorad_id, &data_id, &rule_id).await?;
-            }
-
-            return Err(HaliaError::Common(e));
-        }
-
         Ok(Self {
             on: false,
             id: rule_id,
@@ -165,7 +105,7 @@ impl Rule {
         &self,
         storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<Vec<ReadRuleNodeResp>> {
         let mut read_rule_node_resp = vec![];
@@ -269,7 +209,7 @@ impl Rule {
         &mut self,
         storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> Result<()> {
         add_rule_on_count();
@@ -293,7 +233,6 @@ impl Rule {
             take_source_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
 
         let mut error = None;
-        let mut device_source_active_ref_nodes = vec![];
         let mut device_sink_active_ref_nodes = vec![];
         let mut app_source_active_ref_nodes = vec![];
         let mut app_sink_active_ref_nodes = vec![];
@@ -309,19 +248,13 @@ impl Rule {
                     for _ in 0..cnt {
                         rxs.push(
                             match devices::get_source_rx(
-                                storage,
                                 devices,
                                 &source_node.device_id,
                                 &source_node.source_id,
-                                &self.id,
                             )
                             .await
                             {
-                                Ok(rx) => {
-                                    device_source_active_ref_nodes
-                                        .push((source_node.device_id, source_node.source_id));
-                                    rx
-                                }
+                                Ok(rx) => rx,
                                 Err(e) => {
                                     error = Some(e);
                                     break;
@@ -361,23 +294,13 @@ impl Rule {
         }
 
         if let Some(e) = error {
-            for (device_id, source_id) in device_source_active_ref_nodes.iter() {
-                _ = devices::del_source_rx(storage, source_id, &self.id).await;
-            }
-            for (device_id, sink_id) in device_sink_active_ref_nodes.iter() {
-                _ = devices::del_sink_tx(storage, sink_id, &self.id).await;
-            }
-            for (app_id, source_id) in app_source_active_ref_nodes.iter() {
-                _ = apps::del_source_rx(apps, app_id, source_id, &self.id).await;
-            }
-            for (app_id, sink_id) in app_sink_active_ref_nodes.iter() {
-                _ = apps::del_sink_tx(apps, app_id, sink_id, &self.id).await;
-            }
             for (databoard_id, data_id) in databoard_active_ref_nodes.iter() {
                 _ = databoard::del_data_tx(databoards, databoard_id, data_id, &self.id).await;
             }
             self.on = false;
             return Err(e.into());
+        } else {
+            rule_ref::active(storage, &self.id).await?;
         }
 
         let threed_ids = get_3d_ids(
@@ -449,11 +372,9 @@ impl Rule {
                             let sink_node: DeviceSinkNode =
                                 serde_json::from_value(node.conf.clone())?;
                             let tx = match devices::get_sink_tx(
-                                storage,
                                 devices,
                                 &sink_node.device_id,
                                 &sink_node.sink_id,
-                                &self.id,
                             )
                             .await
                             {
@@ -574,8 +495,6 @@ impl Rule {
     pub async fn stop(
         &mut self,
         storage: &Arc<AnyPool>,
-        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<()> {
         sub_rule_on_count();
@@ -586,29 +505,10 @@ impl Rule {
 
         for node in self.conf.ext.nodes.iter() {
             match node.node_type {
-                NodeType::DeviceSource => {
-                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    devices::del_source_rx(storage, &source_node.source_id, &self.id).await?;
-                }
-                NodeType::AppSource => {
-                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    apps::del_source_rx(
-                        apps,
-                        &source_node.app_id,
-                        &source_node.source_id,
-                        &self.id,
-                    )
-                    .await?;
-                }
-                NodeType::DeviceSink => {
-                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    devices::del_sink_tx(storage, &sink_node.sink_id, &self.id).await?;
-                }
-                NodeType::AppSink => {
-                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    apps::del_sink_tx(apps, &sink_node.app_id, &sink_node.sink_id, &self.id)
-                        .await?;
-                }
+                NodeType::DeviceSource => {}
+                NodeType::AppSource => {}
+                NodeType::DeviceSink => {}
+                NodeType::AppSink => {}
                 NodeType::Databoard => {
                     let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
                     databoard::del_data_tx(
@@ -623,6 +523,8 @@ impl Rule {
             }
         }
 
+        storage::rule_ref::deactive(storage, &self.id).await?;
+
         Ok(())
     }
 
@@ -630,7 +532,7 @@ impl Rule {
         &mut self,
         storage: &Arc<AnyPool>,
         devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
+        apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<()> {
@@ -641,7 +543,7 @@ impl Rule {
         self.conf = req;
 
         if self.on && restart {
-            self.stop(storage, devices, apps, databoards).await?;
+            self.stop(storage, databoards).await?;
             self.start(storage, devices, apps, databoards).await?;
         }
 
@@ -651,39 +553,18 @@ impl Rule {
     pub async fn delete(
         &mut self,
         storage: &Arc<AnyPool>,
-        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<RwLock<Vec<Box<dyn App>>>>,
         databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<()> {
         if self.on {
-            self.stop(storage, devices, apps, databoards).await?;
+            self.stop(storage, databoards).await?;
         }
 
         for node in self.conf.ext.nodes.iter() {
             match node.node_type {
-                NodeType::DeviceSource => {
-                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    devices::del_source_ref(storage, &source_node.source_id, &self.id).await?;
-                }
-                NodeType::AppSource => {
-                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    apps::del_source_ref(
-                        apps,
-                        &source_node.app_id,
-                        &source_node.source_id,
-                        &self.id,
-                    )
-                    .await?;
-                }
-                NodeType::DeviceSink => {
-                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    devices::del_sink_ref(storage, &sink_node.sink_id, &self.id).await?;
-                }
-                NodeType::AppSink => {
-                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    apps::del_sink_ref(apps, &sink_node.app_id, &sink_node.sink_id, &self.id)
-                        .await?;
-                }
+                NodeType::DeviceSource => {}
+                NodeType::AppSource => {}
+                NodeType::DeviceSink => {}
+                NodeType::AppSink => {}
                 NodeType::Databoard => {
                     let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
                     databoard::del_data_ref(
@@ -697,6 +578,8 @@ impl Rule {
                 _ => {}
             }
         }
+
+        storage::rule_ref::delete(storage, &self.id).await?;
 
         Ok(())
     }

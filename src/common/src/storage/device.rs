@@ -257,15 +257,15 @@ pub async fn search_devices(
     Ok((count as usize, devices))
 }
 
-pub async fn read_on_devices(pool: &AnyPool) -> Result<Vec<Device>> {
+pub async fn read_on(storage: &AnyPool) -> Result<Vec<Device>> {
     let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE status = 1")
-        .fetch_all(pool)
+        .fetch_all(storage)
         .await?;
 
     Ok(devices)
 }
 
-pub async fn count_devices(storage: &AnyPool) -> Result<usize> {
+pub async fn count_all(storage: &AnyPool) -> Result<usize> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
         .fetch_one(storage)
         .await?;
