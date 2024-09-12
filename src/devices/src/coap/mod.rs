@@ -4,18 +4,15 @@ use anyhow::Result;
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::{
-    check_delete, check_stop_all,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
 use message::MessageBatch;
-use paste::paste;
 use protocol::coap::{client::UdpCoAPClient, request::CoapOption};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc, Mutex};
-use tracing::debug;
 use types::{
     devices::{
         coap::{CoapConf, SinkConf, SourceConf},
@@ -27,7 +24,7 @@ use types::{
 };
 use uuid::Uuid;
 
-use crate::{add_device_on_count, sub_device_count, sub_device_on_count, Device};
+use crate::Device;
 
 mod sink;
 mod source;
@@ -48,7 +45,6 @@ struct Coap {
     sinks: Vec<Sink>,
     sink_ref_infos: Vec<(Uuid, RefInfo)>,
 
-    on: bool,
     coap_client: Option<Arc<UdpCoAPClient>>,
     err: Option<String>,
     token_manager: Arc<Mutex<TokenManager>>,
@@ -66,7 +62,6 @@ pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devic
         source_ref_infos: vec![],
         sinks: vec![],
         sink_ref_infos: vec![],
-        on: false,
         coap_client: None,
         err: None,
         token_manager: Arc::new(Mutex::new(TokenManager::new())),
@@ -76,13 +71,6 @@ pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Devic
 impl Coap {
     fn validate_conf(_conf: &CoapConf) -> HaliaResult<()> {
         Ok(())
-    }
-
-    fn check_on(&self) -> HaliaResult<()> {
-        match self.on {
-            true => Ok(()),
-            false => Err(HaliaError::Stopped),
-        }
     }
 }
 
@@ -173,11 +161,6 @@ impl Device for Coap {
     // }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        check_stop_all!(self, source);
-        check_stop_all!(self, sink);
-
-        sub_device_on_count();
-
         for source in self.sources.iter_mut() {
             _ = source.stop().await;
         }
@@ -223,10 +206,11 @@ impl Device for Coap {
     }
 
     async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        match self.sources.iter().find(|source| source.id == *source_id) {
-            Some(source) => Ok(source.search()),
-            None => Err(HaliaError::NotFound),
-        }
+        // match self.sources.iter().find(|source| source.id == *source_id) {
+        //     Some(source) => Ok(source.search()),
+        //     None => Err(HaliaError::NotFound),
+        // }
+        todo!()
     }
 
     async fn update_source(
@@ -258,17 +242,13 @@ impl Device for Coap {
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        check_delete!(self, source, source_id);
-
-        if self.on {
-            match self
-                .sources
-                .iter_mut()
-                .find(|source| source.id == source_id)
-            {
-                Some(source) => source.stop().await,
-                None => unreachable!(),
-            }
+        match self
+            .sources
+            .iter_mut()
+            .find(|source| source.id == source_id)
+        {
+            Some(source) => source.stop().await,
+            None => unreachable!(),
         }
 
         self.sources.retain(|source| source.id != source_id);
@@ -328,13 +308,9 @@ impl Device for Coap {
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        check_delete!(self, sink, sink_id);
-
-        if self.on {
-            match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-                Some(sink) => sink.stop().await,
-                None => unreachable!(),
-            }
+        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+            Some(sink) => sink.stop().await,
+            None => unreachable!(),
         }
 
         self.sinks.retain(|sink| sink.id != sink_id);
@@ -346,7 +322,6 @@ impl Device for Coap {
         &mut self,
         source_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        self.check_on()?;
         match self
             .sources
             .iter_mut()
@@ -358,7 +333,6 @@ impl Device for Coap {
     }
 
     async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        self.check_on()?;
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),

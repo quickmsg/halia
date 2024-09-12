@@ -127,7 +127,7 @@ pub async fn load_from_storage(
     let apps: Arc<DashMap<Uuid, Box<dyn App>>> = Arc::new(DashMap::new());
     for db_app in db_apps {
         let app_id = Uuid::from_str(&db_app.id).unwrap();
-        start_app(storage, &apps, app_id);
+        start_app(storage, &apps, app_id).await.unwrap();
     }
 
     Ok(apps)
@@ -265,7 +265,7 @@ pub async fn update_app(
 }
 
 pub async fn start_app(
-    pool: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
@@ -276,7 +276,8 @@ pub async fn start_app(
     // 创建事件
     // todo 从数据库读取配置
 
-    storage::app::update_status(pool, &app_id, true).await?;
+    storage::app::update_status(storage, &app_id, true).await?;
+    add_app_on_count();
 
     Ok(())
 }

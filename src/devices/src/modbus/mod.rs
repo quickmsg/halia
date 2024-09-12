@@ -10,14 +10,12 @@ use std::{
 
 use async_trait::async_trait;
 use common::{
-    check_delete, check_stop_all,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
     storage,
 };
 use dashmap::DashMap;
 use message::MessageBatch;
-use paste::paste;
 use protocol::modbus::{rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
@@ -412,9 +410,6 @@ impl Device for Modbus {
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        check_stop_all!(self, source);
-        check_stop_all!(self, sink);
-
         trace!("停止");
         if let Err(e) = storage::device::create_event(
             &self.storage,
@@ -537,8 +532,6 @@ impl Device for Modbus {
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        check_delete!(self, source, source_id);
-
         match self.sources.get_mut(&source_id) {
             Some(mut source) => source.stop().await,
             None => unreachable!(),
@@ -608,8 +601,6 @@ impl Device for Modbus {
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        check_delete!(self, sink, sink_id);
-
         self.sinks
             .get_mut(&sink_id)
             .ok_or(HaliaError::NotFound)?

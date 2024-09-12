@@ -1,10 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
-use common::{
-    error::{HaliaError, HaliaResult},
-    get_search_sources_or_sinks_info_resp,
-};
+use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch, MessageValue};
 use opcua::{
     client::{DataChangeCallback, MonitoredItem, Session},
@@ -95,10 +92,6 @@ impl Source {
         }
 
         Ok(())
-    }
-
-    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub async fn start(&mut self, opcua_client: Arc<Session>) {

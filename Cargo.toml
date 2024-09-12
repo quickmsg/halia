@@ -64,7 +64,6 @@ sqlx = { version = "0.8.1", features = [
     "runtime-tokio",
     "tls-rustls-aws-lc-rs",
 ] }
-paste = "1.0.15"
 futures-util = "0.3.30"
 jsonwebtoken = "9.3.0"
 sysinfo = "0.31.4"

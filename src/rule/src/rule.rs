@@ -400,7 +400,6 @@ impl Rule {
                                 databoards,
                                 &databoard_node.databoard_id,
                                 &databoard_node.data_id,
-                                &self.id,
                             )
                             .await
                             {
@@ -509,10 +508,7 @@ impl Rule {
         Ok(())
     }
 
-    pub async fn delete(
-        &mut self,
-        storage: &Arc<AnyPool>,
-    ) -> HaliaResult<()> {
+    pub async fn delete(&mut self, storage: &Arc<AnyPool>) -> HaliaResult<()> {
         storage::rule_ref::delete(storage, &self.id).await?;
 
         Ok(())

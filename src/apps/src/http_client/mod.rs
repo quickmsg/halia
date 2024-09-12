@@ -2,27 +2,23 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common::{
-    check_delete, check_delete_all, check_stop_all,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
 use message::MessageBatch;
-use paste::paste;
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
         http_client::{HttpClientConf, SinkConf, SourceConf},
-        AppConf, AppType, CreateUpdateAppReq, QueryParams, SearchAppsItemCommon,
-        SearchAppsItemConf, SearchAppsItemResp,
+        AppConf, AppType, CreateUpdateAppReq,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
-    SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
+    BaseConf, CreateUpdateSourceOrSinkReq,
 };
 use uuid::Uuid;
 
-use crate::{add_app_on_count, sub_app_on_count, App};
+use crate::App;
 
 mod sink;
 mod source;
@@ -106,10 +102,6 @@ impl App for HttpClient {
     }
 
     async fn stop(&mut self) -> HaliaResult<()> {
-        check_stop_all!(self, source);
-        check_stop_all!(self, sink);
-        sub_app_on_count();
-
         for source in self.sources.iter_mut() {
             source.stop().await;
         }
@@ -166,17 +158,13 @@ impl App for HttpClient {
     }
 
     async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        check_delete!(self, source, source_id);
-
-        if self.on {
-            match self
-                .sources
-                .iter_mut()
-                .find(|source| source.id == source_id)
-            {
-                Some(source) => source.stop().await,
-                None => unreachable!(),
-            }
+        match self
+            .sources
+            .iter_mut()
+            .find(|source| source.id == source_id)
+        {
+            Some(source) => source.stop().await,
+            None => unreachable!(),
         }
 
         self.sources.retain(|source| source.id != source_id);
@@ -225,7 +213,6 @@ impl App for HttpClient {
     }
 
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        check_delete!(self, sink, sink_id);
         if self.on {
             match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
                 Some(sink) => sink.stop().await,
@@ -252,10 +239,7 @@ impl App for HttpClient {
         }
     }
 
-    async fn get_sink_tx(
-        &mut self,
-        sink_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),

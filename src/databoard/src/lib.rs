@@ -276,11 +276,10 @@ pub async fn get_data_tx(
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: &Uuid,
     databoard_data_id: &Uuid,
-    rule_id: &Uuid,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
     databoards
         .get_mut(databoard_id)
         .ok_or(HaliaError::NotFound)?
-        .get_data_tx(databoard_data_id, rule_id)
+        .get_data_tx(databoard_data_id)
         .await
 }

@@ -2,7 +2,6 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::{
-    check_delete_all,
     error::{HaliaError, HaliaResult},
     ref_info::RefInfo,
 };
@@ -11,7 +10,6 @@ use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, StatusCode},
 };
-use paste::paste;
 use sink::Sink;
 use source::Source;
 use tokio::{

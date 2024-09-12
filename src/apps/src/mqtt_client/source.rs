@@ -1,7 +1,4 @@
-use common::{
-    error::{HaliaError, HaliaResult},
-    get_search_sources_or_sinks_info_resp,
-};
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::valid_filter;
 use tokio::sync::broadcast;
@@ -49,7 +46,7 @@ impl Source {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        get_search_sources_or_sinks_info_resp!(self)
+        todo!()
     }
 
     pub fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> bool {

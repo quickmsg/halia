@@ -1,17 +1,12 @@
-use common::{
-    check_delete, check_delete_all,
-    error::{HaliaError, HaliaResult},
-    ref_info::RefInfo,
-};
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
-use paste::paste;
 use tokio::sync::mpsc;
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, DataboardConf, QueryParams,
-        SearchDataboardsItemResp, SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, DataboardConf, SearchDataboardsItemResp,
+        SearchDatasInfoResp,
     },
-    BaseConf, Pagination,
+    BaseConf,
 };
 use uuid::Uuid;
 
@@ -22,7 +17,6 @@ pub struct Databoard {
     base_conf: BaseConf,
     ext_conf: DataboardConf,
     pub datas: Vec<Data>,
-    pub data_ref_infos: Vec<(Uuid, RefInfo)>,
 }
 
 impl Databoard {
@@ -32,7 +26,6 @@ impl Databoard {
             base_conf,
             ext_conf,
             datas: vec![],
-            data_ref_infos: vec![],
         })
     }
 
@@ -60,8 +53,6 @@ impl Databoard {
     }
 
     pub fn delete(&mut self) -> HaliaResult<()> {
-        check_delete_all!(self, data);
-
         Ok(())
     }
 
@@ -76,40 +67,39 @@ impl Databoard {
 
         let data = Data::new(data_id, req).await?;
         self.datas.push(data);
-        self.data_ref_infos.push((data_id, RefInfo::new()));
 
         Ok(())
     }
 
-    pub async fn search_datas(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchDatasResp {
-        let mut total = 0;
-        let mut datas = vec![];
-        for (index, data) in self.datas.iter().rev().enumerate() {
-            let data = data.search().await;
-            if let Some(name) = &query.name {
-                if !data.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
+    // pub async fn search_datas(
+    //     &self,
+    //     pagination: Pagination,
+    //     query: QueryParams,
+    // ) -> SearchDatasResp {
+    //     let mut total = 0;
+    //     let mut datas = vec![];
+    //     for (index, data) in self.datas.iter().rev().enumerate() {
+    //         let data = data.search().await;
+    //         if let Some(name) = &query.name {
+    //             if !data.conf.base.name.contains(name) {
+    //                 continue;
+    //             }
+    //         }
 
-            if pagination.check(total) {
-                unsafe {
-                    datas.push(SearchDatasItemResp {
-                        info: data,
-                        rule_ref: self.data_ref_infos.get_unchecked(index).1.get_rule_ref(),
-                    });
-                }
-            }
+    //         if pagination.check(total) {
+    //             unsafe {
+    //                 datas.push(SearchDatasItemResp {
+    //                     info: data,
+    //                     rule_ref: self.data_ref_infos.get_unchecked(index).1.get_rule_ref(),
+    //                 });
+    //             }
+    //         }
 
-            total += 1;
-        }
+    //         total += 1;
+    //     }
 
-        SearchDatasResp { total, data: datas }
-    }
+    //     SearchDatasResp { total, data: datas }
+    // }
 
     pub async fn search_data(&self, data_id: &Uuid) -> HaliaResult<SearchDatasInfoResp> {
         match self.datas.iter().find(|data| data.id == *data_id) {
@@ -136,38 +126,20 @@ impl Databoard {
     }
 
     pub async fn delete_data(&mut self, data_id: Uuid) -> HaliaResult<()> {
-        check_delete!(self, data, data_id);
         match self.datas.iter_mut().find(|data| data.id == data_id) {
             Some(source) => source.stop().await,
             None => unreachable!(),
         }
 
         self.datas.retain(|data| data.id != data_id);
-        self.data_ref_infos.retain(|(id, _)| *id != data_id);
 
         Ok(())
     }
 
-    pub async fn add_data_ref(&mut self, data_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
-    pub async fn get_data_tx(
-        &mut self,
-        data_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    pub async fn get_data_tx(&mut self, data_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.datas.iter_mut().find(|data| data.id == *data_id) {
             Some(data) => Ok(data.mb_tx.clone()),
             None => unreachable!(),
         }
-    }
-
-    pub async fn del_data_tx(&mut self, data_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
-    pub async fn del_data_ref(&mut self, data_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
     }
 }

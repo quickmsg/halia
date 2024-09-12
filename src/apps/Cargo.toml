@@ -25,4 +25,3 @@ rustls = { workspace = true }
 reqwest = { workspace = true }
 base64 = { workspace = true }
 sqlx = { workspace = true }
-paste = { workspace = true }

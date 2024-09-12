@@ -1,9 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use common::{
-    error::{HaliaError, HaliaResult},
-    get_search_sources_or_sinks_info_resp,
-};
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use reqwest::Client;
 use tokio::{
@@ -15,7 +12,7 @@ use tokio::{
 use tracing::{trace, warn};
 use types::{
     apps::http_client::{HttpClientConf, SourceConf},
-    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
+    BaseConf, SearchSourcesOrSinksInfoResp,
 };
 use uuid::Uuid;
 
@@ -62,7 +59,7 @@ impl Source {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        get_search_sources_or_sinks_info_resp!(self)
+        todo!()
     }
 
     pub async fn update_conf(

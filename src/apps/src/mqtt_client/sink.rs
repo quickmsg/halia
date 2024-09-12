@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use common::{
     error::{HaliaError, HaliaResult},
-    get_search_sources_or_sinks_info_resp,
     sink_message_retain::{self, SinkMessageRetain},
 };
 use message::MessageBatch;
@@ -87,7 +86,7 @@ impl Sink {
     }
 
     pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        get_search_sources_or_sinks_info_resp!(self)
+        todo!()
     }
 
     pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<()> {

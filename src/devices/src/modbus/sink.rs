@@ -1,6 +1,6 @@
 use common::{
     error::HaliaResult,
-    get_dynamic_value_from_json, get_search_sources_or_sinks_info_resp,
+    get_dynamic_value_from_json,
     sink_message_retain::{self, SinkMessageRetain},
 };
 use message::MessageBatch;

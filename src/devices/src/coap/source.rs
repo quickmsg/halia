@@ -1,10 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
-use common::{
-    error::{HaliaError, HaliaResult},
-    get_search_sources_or_sinks_info_resp,
-};
+use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use protocol::coap::{
     client::{ObserveMessage, UdpCoAPClient},
@@ -95,10 +92,6 @@ impl Source {
         }
 
         Ok(())
-    }
-
-    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        get_search_sources_or_sinks_info_resp!(self)
     }
 
     pub async fn update_conf(
