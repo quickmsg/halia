@@ -62,21 +62,10 @@ impl HttpClient {
     fn validate_conf(_conf: &HttpClientConf) -> HaliaResult<()> {
         Ok(())
     }
-
-    fn check_on(&self) -> HaliaResult<()> {
-        match self.on {
-            true => Ok(()),
-            false => Err(HaliaError::Stopped),
-        }
-    }
 }
 
 #[async_trait]
 impl App for HttpClient {
-    fn get_id(&self) -> &Uuid {
-        &self.id
-    }
-
     fn check_duplicate(&self, req: &CreateUpdateAppReq) -> HaliaResult<()> {
         if self.base_conf.name == req.conf.base.name {
             return Err(HaliaError::NameExists);
@@ -90,24 +79,6 @@ impl App for HttpClient {
         }
 
         Ok(())
-    }
-
-    async fn search(&self) -> SearchAppsItemResp {
-        SearchAppsItemResp {
-            common: SearchAppsItemCommon {
-                id: self.id.clone(),
-                app_type: AppType::HttpClient,
-                on: self.on,
-                err: None,
-                rtt: 999,
-            },
-            conf: SearchAppsItemConf {
-                base: self.base_conf.clone(),
-                ext: serde_json::to_value(&self.ext_conf).unwrap(),
-            },
-            source_cnt: self.source_ref_infos.len(),
-            sink_cnt: self.sink_ref_infos.len(),
-        }
     }
 
     async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
@@ -134,19 +105,6 @@ impl App for HttpClient {
         Ok(())
     }
 
-    async fn start(&mut self) -> HaliaResult<()> {
-        add_app_on_count();
-        for source in self.sources.iter_mut() {
-            source.start(self.ext_conf.clone()).await;
-        }
-
-        for sink in self.sinks.iter_mut() {
-            sink.start(self.ext_conf.clone()).await;
-        }
-
-        Ok(())
-    }
-
     async fn stop(&mut self) -> HaliaResult<()> {
         check_stop_all!(self, source);
         check_stop_all!(self, sink);
@@ -157,17 +115,6 @@ impl App for HttpClient {
         }
         for sink in self.sinks.iter_mut() {
             sink.stop().await;
-        }
-
-        Ok(())
-    }
-
-    async fn delete(&mut self) -> HaliaResult<()> {
-        check_delete_all!(self, source);
-        check_delete_all!(self, sink);
-
-        if self.on {
-            self.stop().await?;
         }
 
         Ok(())
@@ -193,43 +140,6 @@ impl App for HttpClient {
         self.source_ref_infos.push((source_id, RefInfo::new()));
 
         Ok(())
-    }
-
-    async fn search_sources(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchSourcesOrSinksResp {
-        let mut total = 0;
-        let mut data = vec![];
-        for (index, source) in self.sources.iter().rev().enumerate() {
-            let source = source.search();
-            if let Some(name) = &query.name {
-                if !source.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
-
-            if pagination.check(total) {
-                unsafe {
-                    data.push(SearchSourcesOrSinksItemResp {
-                        info: source,
-                        rule_ref: self.source_ref_infos.get_unchecked(index).1.get_rule_ref(),
-                    })
-                }
-            }
-
-            total += 1;
-        }
-
-        SearchSourcesOrSinksResp { total, data }
-    }
-
-    async fn search_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        match self.sources.iter().find(|source| source.id == *source_id) {
-            Some(source) => Ok(source.search()),
-            None => Err(HaliaError::NotFound),
-        }
     }
 
     async fn update_source(
@@ -296,44 +206,6 @@ impl App for HttpClient {
         Ok(())
     }
 
-    async fn search_sinks(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchSourcesOrSinksResp {
-        let mut data = vec![];
-        let mut total = 0;
-        for (index, sink) in self.sinks.iter().rev().enumerate() {
-            let sink = sink.search();
-            if let Some(name) = &query.name {
-                if !sink.conf.base.name.contains(name) {
-                    continue;
-                }
-            }
-
-            if total >= (pagination.page - 1) * pagination.size
-                && total < pagination.page * pagination.size
-            {
-                unsafe {
-                    data.push(SearchSourcesOrSinksItemResp {
-                        info: sink,
-                        rule_ref: self.sink_ref_infos.get_unchecked(index).1.get_rule_ref(),
-                    })
-                }
-            }
-
-            total += 1;
-        }
-        SearchSourcesOrSinksResp { total, data }
-    }
-
-    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp> {
-        match self.sinks.iter().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.search()),
-            None => Err(HaliaError::NotFound),
-        }
-    }
-
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
@@ -366,17 +238,10 @@ impl App for HttpClient {
         Ok(())
     }
 
-    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
     async fn get_source_rx(
         &mut self,
         source_id: &Uuid,
-        rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        self.check_on()?;
-
         match self
             .sources
             .iter_mut()
@@ -387,35 +252,13 @@ impl App for HttpClient {
         }
     }
 
-    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
-    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
-    async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
     async fn get_sink_tx(
         &mut self,
         sink_id: &Uuid,
-        rule_id: &Uuid,
     ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        self.check_on()?;
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
         }
-    }
-
-    async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
-    }
-
-    async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()> {
-        todo!()
     }
 }

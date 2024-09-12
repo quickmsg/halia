@@ -75,7 +75,6 @@ pub(crate) fn sub_device_running_count() {
 
 #[async_trait]
 pub trait Device: Send + Sync {
-    fn get_id(&self) -> &Uuid;
     fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()>;
     async fn read(&self) -> SearchDevicesItemFromMemory;
     async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()>;

@@ -101,11 +101,9 @@ pub async fn get_rule_info(
 
 pub async fn create_databoard(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
     req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
-    // let databoard = Databoard::new(id, req.base, req.ext)?;
-    // databoards.write().await.push(databoard);
+    // todo 配置验证
     add_databoard_count();
     let id = Uuid::new_v4();
     storage::databoard::create_databoard(storage, &id, req).await?;
@@ -274,24 +272,6 @@ pub async fn delete_data(
     Ok(())
 }
 
-pub async fn add_data_ref(
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: &Uuid,
-    databoard_data_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    // match databoards
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|databoard| databoard.id == *databoard_id)
-    // {
-    //     Some(databoard) => databoard.add_data_ref(&databoard_data_id, &rule_id).await,
-    //     None => return Err(HaliaError::NotFound),
-    // }
-    todo!()
-}
-
 pub async fn get_data_tx(
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: &Uuid,
@@ -302,31 +282,5 @@ pub async fn get_data_tx(
         .get_mut(databoard_id)
         .ok_or(HaliaError::NotFound)?
         .get_data_tx(databoard_data_id, rule_id)
-        .await
-}
-
-pub async fn del_data_tx(
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: &Uuid,
-    databoard_data_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    databoards
-        .get_mut(databoard_id)
-        .ok_or(HaliaError::NotFound)?
-        .del_data_tx(databoard_data_id, rule_id)
-        .await
-}
-
-pub async fn del_data_ref(
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: &Uuid,
-    databoard_data_id: &Uuid,
-    rule_id: &Uuid,
-) -> HaliaResult<()> {
-    databoards
-        .get_mut(databoard_id)
-        .ok_or(HaliaError::NotFound)?
-        .del_data_ref(databoard_data_id, rule_id)
         .await
 }

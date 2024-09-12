@@ -186,10 +186,6 @@ impl Opcua {
 
 #[async_trait]
 impl Device for Opcua {
-    fn get_id(&self) -> &Uuid {
-        &self.id
-    }
-
     fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
         if self.base_conf.name == req.conf.base.name {
             return Err(HaliaError::NameExists);

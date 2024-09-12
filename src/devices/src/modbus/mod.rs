@@ -360,10 +360,6 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
 
 #[async_trait]
 impl Device for Modbus {
-    fn get_id(&self) -> &Uuid {
-        &self.id
-    }
-
     fn check_duplicate(&self, _req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
         // if self.base_conf.name == req.conf.base.name {
         //     return Err(HaliaError::NameExists);

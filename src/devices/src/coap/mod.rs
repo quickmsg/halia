@@ -88,11 +88,6 @@ impl Coap {
 
 #[async_trait]
 impl Device for Coap {
-    fn get_id(&self) -> &Uuid {
-        debug!("{}", self.id);
-        &self.id
-    }
-
     fn check_duplicate(&self, req: &CreateUpdateDeviceReq) -> HaliaResult<()> {
         if self.base_conf.name == req.conf.base.name {
             return Err(HaliaError::NameExists);

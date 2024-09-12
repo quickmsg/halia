@@ -48,7 +48,7 @@ async fn create_databoard(
     State(state): State<AppState>,
     Json(req): Json<CreateUpdateDataboardReq>,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::create_databoard(&state.storage, &state.databoards, req).await?;
+    databoard::create_databoard(&state.storage, req).await?;
     Ok(AppSuccess::empty())
 }
 

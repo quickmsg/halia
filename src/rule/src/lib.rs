@@ -101,7 +101,7 @@ pub async fn create(
     persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
-    let rule = Rule::new(storage, databoards, id, req).await?;
+    let rule = Rule::new(storage, id, req).await?;
     add_rule_count();
     if persist {
         storage::rule::create_rule(storage, &id, body).await?;
@@ -224,15 +224,16 @@ pub async fn update(
 pub async fn delete(
     storage: &Arc<AnyPool>,
     rules: &Arc<DashMap<Uuid, Rule>>,
-    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
     id: Uuid,
 ) -> HaliaResult<()> {
+    if rules.contains_key(&id) {
+        return Err(HaliaError::DeleteRunning);
+    }
+
     rules
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .delete(storage, databoards)
+        .delete(storage)
         .await?;
 
     rules.remove(&id);

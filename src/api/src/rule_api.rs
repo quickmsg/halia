@@ -143,14 +143,6 @@ async fn update(
 }
 
 async fn delete(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
-    rule::delete(
-        &state.storage,
-        &state.rules,
-        &state.devices,
-        &state.apps,
-        &state.databoards,
-        id,
-    )
-    .await?;
+    rule::delete(&state.storage, &state.rules, id).await?;
     Ok(AppSuccess::empty())
 }

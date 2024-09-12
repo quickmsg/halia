@@ -70,25 +70,21 @@ pub(crate) fn sub_app_running_count() {
 
 #[async_trait]
 pub trait App: Send + Sync {
-    fn get_id(&self) -> &Uuid;
     fn check_duplicate(&self, req: &CreateUpdateAppReq) -> HaliaResult<()>;
-    async fn search(&self) -> SearchAppsItemResp;
     async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()>;
-    async fn start(&mut self) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
-    async fn delete(&mut self) -> HaliaResult<()>;
 
     async fn create_source(
         &mut self,
         source_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
-    async fn search_sources(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchSourcesOrSinksResp;
-    async fn search_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
+    // async fn search_sources(
+    //     &self,
+    //     pagination: Pagination,
+    //     query: QueryParams,
+    // ) -> SearchSourcesOrSinksResp;
+    // async fn read_source(&self, source_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_source(
         &mut self,
         source_id: Uuid,
@@ -101,12 +97,12 @@ pub trait App: Send + Sync {
         sink_id: Uuid,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()>;
-    async fn search_sinks(
-        &self,
-        pagination: Pagination,
-        query: QueryParams,
-    ) -> SearchSourcesOrSinksResp;
-    async fn search_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
+    // async fn search_sinks(
+    //     &self,
+    //     pagination: Pagination,
+    //     query: QueryParams,
+    // ) -> SearchSourcesOrSinksResp;
+    // async fn read_sink(&self, sink_id: &Uuid) -> HaliaResult<SearchSourcesOrSinksInfoResp>;
     async fn update_sink(
         &mut self,
         sink_id: Uuid,
@@ -114,23 +110,11 @@ pub trait App: Send + Sync {
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()>;
 
-    async fn add_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
     async fn get_source_rx(
         &mut self,
         source_id: &Uuid,
-        rule_id: &Uuid,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
-    async fn del_source_rx(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
-    async fn del_source_ref(&mut self, source_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
-
-    async fn add_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
-    async fn get_sink_tx(
-        &mut self,
-        sink_id: &Uuid,
-        rule_id: &Uuid,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>>;
-    async fn del_sink_tx(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
-    async fn del_sink_ref(&mut self, sink_id: &Uuid, rule_id: &Uuid) -> HaliaResult<()>;
+    async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }
 
 pub async fn load_from_storage(
@@ -399,11 +383,10 @@ pub async fn get_source_rx(
     apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: &Uuid,
     source_id: &Uuid,
-    rule_id: &Uuid,
 ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
     apps.get_mut(&app_id)
         .ok_or(HaliaError::Stopped)?
-        .get_source_rx(source_id, rule_id)
+        .get_source_rx(source_id)
         .await
 }
 
@@ -490,10 +473,9 @@ pub async fn get_sink_tx(
     apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: &Uuid,
     sink_id: &Uuid,
-    rule_id: &Uuid,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
     apps.get_mut(&app_id)
         .ok_or(HaliaError::Stopped)?
-        .get_sink_tx(sink_id, rule_id)
+        .get_sink_tx(sink_id)
         .await
 }

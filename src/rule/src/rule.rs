@@ -11,7 +11,7 @@ use functions::{computes, filter, merge::merge::Merge, metadata, window};
 use message::{MessageBatch, MessageValue};
 use sqlx::AnyPool;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc};
 use tracing::error;
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
@@ -38,12 +38,9 @@ pub struct Rule {
 impl Rule {
     pub async fn new(
         storage: &Arc<AnyPool>,
-        databoards: &Arc<DashMap<Uuid, Databoard>>,
         rule_id: Uuid,
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<Self> {
-        let mut error = None;
-        let mut databoard_add_ref_nodes = vec![];
         for node in req.ext.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
@@ -64,21 +61,7 @@ impl Rule {
                 }
                 NodeType::Databoard => {
                     let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    match databoard::add_data_ref(
-                        databoards,
-                        &databoard_node.databoard_id,
-                        &databoard_node.data_id,
-                        &rule_id,
-                    )
-                    .await
-                    {
-                        Ok(_) => databoard_add_ref_nodes
-                            .push((databoard_node.databoard_id, databoard_node.data_id)),
-                        Err(_) => {
-                            error = Some("引用数据看板数据错误！".to_owned());
-                            break;
-                        }
-                    }
+                    storage::rule_ref::create(storage, &rule_id, &databoard_node.data_id).await?;
                 }
                 _ => {}
             }
@@ -274,7 +257,6 @@ impl Rule {
                                 apps,
                                 &source_node.app_id,
                                 &source_node.source_id,
-                                &self.id,
                             )
                             .await
                             {
@@ -294,10 +276,8 @@ impl Rule {
         }
 
         if let Some(e) = error {
-            for (databoard_id, data_id) in databoard_active_ref_nodes.iter() {
-                _ = databoard::del_data_tx(databoards, databoard_id, data_id, &self.id).await;
-            }
             self.on = false;
+            rule_ref::deactive(storage, &self.id).await?;
             return Err(e.into());
         } else {
             rule_ref::active(storage, &self.id).await?;
@@ -397,7 +377,6 @@ impl Rule {
                                 apps,
                                 &sink_node.app_id,
                                 &sink_node.sink_id,
-                                &self.id,
                             )
                             .await
                             {
@@ -503,26 +482,6 @@ impl Rule {
             error!("rule stop send signal err:{}", e);
         }
 
-        for node in self.conf.ext.nodes.iter() {
-            match node.node_type {
-                NodeType::DeviceSource => {}
-                NodeType::AppSource => {}
-                NodeType::DeviceSink => {}
-                NodeType::AppSink => {}
-                NodeType::Databoard => {
-                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    databoard::del_data_tx(
-                        databoards,
-                        &databoard_node.databoard_id,
-                        &databoard_node.data_id,
-                        &self.id,
-                    )
-                    .await?;
-                }
-                _ => {}
-            }
-        }
-
         storage::rule_ref::deactive(storage, &self.id).await?;
 
         Ok(())
@@ -553,32 +512,7 @@ impl Rule {
     pub async fn delete(
         &mut self,
         storage: &Arc<AnyPool>,
-        databoards: &Arc<DashMap<Uuid, Databoard>>,
     ) -> HaliaResult<()> {
-        if self.on {
-            self.stop(storage, databoards).await?;
-        }
-
-        for node in self.conf.ext.nodes.iter() {
-            match node.node_type {
-                NodeType::DeviceSource => {}
-                NodeType::AppSource => {}
-                NodeType::DeviceSink => {}
-                NodeType::AppSink => {}
-                NodeType::Databoard => {
-                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    databoard::del_data_ref(
-                        databoards,
-                        &databoard_node.databoard_id,
-                        &databoard_node.data_id,
-                        &self.id,
-                    )
-                    .await?;
-                }
-                _ => {}
-            }
-        }
-
         storage::rule_ref::delete(storage, &self.id).await?;
 
         Ok(())
