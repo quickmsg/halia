@@ -100,23 +100,23 @@ pub struct SearchDevicesResp {
 #[derive(Serialize)]
 pub struct SearchDevicesItemResp {
     pub common: SearchDevicesItemCommon,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub running_info: Option<SearchDevicesItemRunningInfo>,
     pub conf: SearchDevicesItemConf,
 }
 
 #[derive(Serialize)]
 pub struct SearchDevicesItemCommon {
     pub id: String,
-    pub device_type: DeviceType,
+    #[serde(rename = "type")]
+    pub typ: String,
     pub on: bool,
     pub source_cnt: usize,
     pub sink_cnt: usize,
-    #[serde(flatten)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub memory_info: Option<SearchDevicesItemFromMemory>,
 }
 
 #[derive(Serialize)]
-pub struct SearchDevicesItemFromMemory {
+pub struct SearchDevicesItemRunningInfo {
     pub err: Option<String>,
     pub rtt: u16,
 }

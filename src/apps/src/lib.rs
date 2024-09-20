@@ -66,7 +66,6 @@ pub(crate) fn sub_app_running_count() {
 
 #[async_trait]
 pub trait App: Send + Sync {
-    fn check_duplicate(&self, req: &CreateUpdateAppReq) -> HaliaResult<()>;
     async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
 
@@ -180,6 +179,9 @@ pub async fn create_app(
     app_id: String,
     req: CreateUpdateAppReq,
 ) -> HaliaResult<()> {
+    if storage::app::insert_name_exists(storage, &req.conf.base.name).await? {
+        return Err(HaliaError::NameExists);
+    }
     // for app in apps.read().await.iter() {
     //     app.check_duplicate(&req)?;
     // }
@@ -220,6 +222,10 @@ pub async fn update_app(
     app_id: String,
     req: CreateUpdateAppReq,
 ) -> HaliaResult<()> {
+    if storage::app::update_name_exists(storage, &app_id, &req.conf.base.name).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     // for app in apps.read().await.iter() {
     //     if *app.get_id() != app_id {
     //         app.check_duplicate(&req)?;
@@ -341,6 +347,17 @@ pub async fn create_source(
     app_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
+    if storage::source_or_sink::insert_name_exists(
+        storage,
+        &app_id,
+        storage::source_or_sink::Type::Source,
+        &req.base.name,
+    )
+    .await?
+    {
+        return Err(HaliaError::NameExists);
+    }
+
     let source_id = common::get_id();
 
     if let Some(mut app) = apps.get_mut(&app_id) {
@@ -348,7 +365,7 @@ pub async fn create_source(
         app.create_source(source_id.clone(), conf).await?;
     }
 
-    storage::source_or_sink::create(
+    storage::source_or_sink::insert(
         storage,
         &app_id,
         &source_id,
@@ -367,7 +384,7 @@ pub async fn search_sources(
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    let (count, db_sources) = storage::source_or_sink::search(
+    let (count, db_sources) = storage::source_or_sink::query_by_parent_id(
         storage,
         &app_id,
         storage::source_or_sink::Type::Source,
@@ -411,6 +428,18 @@ pub async fn update_source(
     source_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
+    if storage::source_or_sink::update_name_exists(
+        storage,
+        &app_id,
+        storage::source_or_sink::Type::Source,
+        &req.base.name,
+        &source_id,
+    )
+    .await?
+    {
+        return Err(HaliaError::NameExists);
+    }
+
     if let Some(mut app) = apps.get_mut(&app_id) {
         let old_conf = storage::source_or_sink::read_conf(storage, &source_id).await?;
         let new_conf = req.ext.clone();
@@ -460,10 +489,19 @@ pub async fn create_sink(
     app_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    // todo validate
+    if storage::source_or_sink::insert_name_exists(
+        storage,
+        &app_id,
+        storage::source_or_sink::Type::Sink,
+        &req.base.name,
+    )
+    .await?
+    {
+        return Err(HaliaError::NameExists);
+    }
 
     let sink_id = common::get_id();
-    storage::source_or_sink::create(
+    storage::source_or_sink::insert(
         storage,
         &app_id,
         &sink_id,
@@ -487,7 +525,7 @@ pub async fn search_sinks(
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    let (count, db_sinks) = storage::source_or_sink::search(
+    let (count, db_sinks) = storage::source_or_sink::query_by_parent_id(
         storage,
         &app_id,
         storage::source_or_sink::Type::Sink,
@@ -530,6 +568,18 @@ pub async fn update_sink(
     sink_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
+    if storage::source_or_sink::update_name_exists(
+        storage,
+        &app_id,
+        storage::source_or_sink::Type::Sink,
+        &req.base.name,
+        &sink_id,
+    )
+    .await?
+    {
+        return Err(HaliaError::NameExists);
+    }
+
     if let Some(mut app) = apps.get_mut(&app_id) {
         let old_conf = storage::source_or_sink::read_conf(storage, &sink_id).await?;
         let new_conf = req.ext.clone();

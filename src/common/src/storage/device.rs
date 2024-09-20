@@ -9,7 +9,7 @@ use types::{
 pub struct Device {
     pub id: String,
     pub status: i32,
-    pub device_type: String,
+    pub typ: String,
     pub name: String,
     pub desc: Option<String>,
     pub conf: String,
@@ -35,14 +35,7 @@ CREATE TABLE IF NOT EXISTS devices (
     desc TEXT,
     conf TEXT NOT NULL,
     ts INT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS device_events (
-    id TEXT,
-    event_type INTEGER NOT NULL,
-    info TEXT,
-    ts INTEGER NOT NULL
-);
+)
 "#,
     )
     .execute(storage)
@@ -51,7 +44,27 @@ CREATE TABLE IF NOT EXISTS device_events (
     Ok(())
 }
 
-pub async fn create_device(pool: &AnyPool, id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
+pub async fn insert_name_exists(storage: &AnyPool, name: &String) -> Result<bool> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ?1")
+        .bind(name)
+        .fetch_one(storage)
+        .await?;
+
+    Ok(count > 0)
+}
+
+pub async fn update_name_exists(storage: &AnyPool, id: &String, name: &String) -> Result<bool> {
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ?1 AND id != ?2")
+            .bind(name)
+            .bind(id)
+            .fetch_one(storage)
+            .await?;
+
+    Ok(count > 0)
+}
+
+pub async fn insert(storage: &AnyPool, id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     let ext_conf = serde_json::to_string(&req.conf.ext)?;
     let ts = chrono::Utc::now().timestamp();
     match req.conf.base.desc {
@@ -64,7 +77,7 @@ pub async fn create_device(pool: &AnyPool, id: &String, req: CreateUpdateDeviceR
                 .bind(desc)
                 .bind(ext_conf)
                 .bind(ts)
-                .execute(pool)
+                .execute(storage)
                 .await?;
         }
         None => {
@@ -77,7 +90,7 @@ pub async fn create_device(pool: &AnyPool, id: &String, req: CreateUpdateDeviceR
             .bind(req.conf.base.name)
             .bind(ext_conf)
             .bind(ts)
-            .execute(pool)
+            .execute(storage)
             .await?;
         }
     }
@@ -305,65 +318,4 @@ pub async fn delete(storage: &AnyPool, id: &String) -> Result<()> {
     .await?;
 
     Ok(())
-}
-
-pub async fn create_event(
-    storage: &AnyPool,
-    id: &String,
-    event_type: i32,
-    info: Option<String>,
-) -> Result<()> {
-    let ts = chrono::Utc::now().timestamp();
-    match info {
-        Some(info) => {
-            sqlx::query(
-                "INSERT INTO device_events (id, event_type, ts, info) VALUES (?1, ?2, ?3, ?4)",
-            )
-            .bind(id)
-            .bind(event_type)
-            .bind(ts)
-            .bind(info)
-            .execute(storage)
-            .await?;
-        }
-        None => {
-            sqlx::query("INSERT INTO device_events (id, event_type, ts) VALUES (?1, ?2, ?3)")
-                .bind(id.to_string())
-                .bind(event_type)
-                .bind(ts)
-                .execute(storage)
-                .await?;
-        }
-    }
-
-    Ok(())
-}
-
-pub async fn search_events(
-    storage: &AnyPool,
-    query_params: QueryParams,
-    pagination: Pagination,
-) -> Result<(Vec<Event>, i64)> {
-    // match query_params.event_type {
-    //     Some(_) => todo!(),
-    //     None => todo!(),
-    // }
-    let offset = (pagination.page - 1) * pagination.size;
-    // 设备源
-    let events = sqlx::query_as::<_, Event>(
-        r#"
-SELECT events.* FROM events 
-INNERT JOIN devices ON events.id == devices.id
-ORDER BY evetns.ts DESC LIMIT ? OFFSET ?"#,
-    )
-    .bind(pagination.size as i64)
-    .bind(offset as i64)
-    .fetch_all(storage)
-    .await?;
-
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events")
-        .fetch_one(storage)
-        .await?;
-
-    Ok((events, count))
 }

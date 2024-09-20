@@ -14,10 +14,7 @@ use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use types::{
-    devices::{
-        coap::{CoapConf, SinkConf, SourceConf},
-        DeviceConf, SearchDevicesItemFromMemory,
-    },
+    devices::{coap::CoapConf, DeviceConf, SearchDevicesItemRunningInfo},
     BaseConf, Value,
 };
 
@@ -73,7 +70,7 @@ impl Coap {
 
 #[async_trait]
 impl Device for Coap {
-    async fn read(&self) -> SearchDevicesItemFromMemory {
+    async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
         todo!()
         // SearchDevicesItemResp {
         //     common: SearchDevicesItemCommon {

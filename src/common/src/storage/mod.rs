@@ -9,6 +9,7 @@ pub mod rule;
 pub mod rule_ref;
 pub mod source_or_sink;
 pub mod user;
+pub mod event;
 
 pub async fn create_tables(storage: &AnyPool) -> Result<()> {
     device::init_table(storage).await?;
@@ -18,6 +19,7 @@ pub async fn create_tables(storage: &AnyPool) -> Result<()> {
     databoard_data::init_table(storage).await?;
     rule_ref::init_table(storage).await?;
     rule::init_table(storage).await?;
+    event::init_table(storage).await?;
 
     Ok(())
 }

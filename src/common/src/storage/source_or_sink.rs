@@ -57,7 +57,47 @@ CREATE TABLE IF NOT EXISTS sources_or_sinks (
     Ok(())
 }
 
-pub async fn create(
+pub async fn insert_name_exists(
+    storage: &AnyPool,
+    parent_id: &String,
+    typ: Type,
+    name: &String,
+) -> Result<bool> {
+    let typ: i32 = typ.into();
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND name = ?2 AND typ = ?3",
+    )
+    .bind(parent_id)
+    .bind(name)
+    .bind(typ)
+    .fetch_one(storage)
+    .await?;
+
+    Ok(count > 0)
+}
+
+pub async fn update_name_exists(
+    storage: &AnyPool,
+    parent_id: &String,
+    typ: Type,
+    id: &String,
+    name: &String,
+) -> Result<bool> {
+    let typ: i32 = typ.into();
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND name = ?2 AND typ = ?3 AND id != ?4",
+    )
+    .bind(parent_id)
+    .bind(name)
+    .bind(typ)
+    .bind(id)
+    .fetch_one(storage)
+    .await?;
+
+    Ok(count > 0)
+}
+
+pub async fn insert(
     storage: &AnyPool,
     parent_id: &String,
     id: &String,
@@ -119,7 +159,7 @@ pub async fn read_one(storage: &AnyPool, id: &String) -> Result<SourceOrSink> {
     Ok(source_or_sink)
 }
 
-pub async fn search(
+pub async fn query_by_parent_id(
     storage: &AnyPool,
     parent_id: &String,
     typ: Type,

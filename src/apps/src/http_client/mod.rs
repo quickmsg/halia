@@ -9,7 +9,7 @@ use source::Source;
 use tokio::sync::{broadcast, mpsc};
 use types::apps::{
     http_client::{HttpClientConf, SourceConf},
-    AppConf, CreateUpdateAppReq,
+    AppConf,
 };
 
 use crate::App;
@@ -48,21 +48,6 @@ impl HttpClient {
 
 #[async_trait]
 impl App for HttpClient {
-    fn check_duplicate(&self, req: &CreateUpdateAppReq) -> HaliaResult<()> {
-        // if self.base_conf.name == req.conf.base.name {
-        //     return Err(HaliaError::NameExists);
-        // }
-
-        // if req.typ == AppType::HttpClient {
-        //     let ext_conf: HttpClientConf = serde_json::from_value(req.conf.ext.clone())?;
-        //     if self.ext_conf.host == ext_conf.host && self.ext_conf.port == ext_conf.port {
-        //         return Err(HaliaError::AddressExists);
-        //     }
-        // }
-
-        Ok(())
-    }
-
     async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
         let ext_conf: HttpClientConf = serde_json::from_value(app_conf.ext)?;
         HttpClient::validate_conf(&ext_conf)?;

@@ -353,18 +353,6 @@ pub(crate) fn qos_to_v50(qos: &Qos) -> v5::mqttbytes::QoS {
 
 #[async_trait]
 impl App for MqttClient {
-    fn check_duplicate(&self, req: &CreateUpdateAppReq) -> HaliaResult<()> {
-        // if self.base_conf.name == req.conf.base.name {
-        //     return Err(HaliaError::NameExists);
-        // }
-
-        // if req.app_type == AppType::MqttClient {
-        //     // TODO
-        // }
-
-        Ok(())
-    }
-
     async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
         // let ext_conf = serde_json::from_value(app_conf.ext)?;
 

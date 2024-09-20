@@ -36,6 +36,25 @@ CREATE TABLE IF NOT EXISTS apps (
     Ok(())
 }
 
+pub async fn insert_name_exists(storage: &AnyPool, name: &String) -> Result<bool> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name = ?1")
+        .bind(name)
+        .fetch_one(storage)
+        .await?;
+
+    Ok(count > 0)
+}
+
+pub async fn update_name_exists(storage: &AnyPool, id: &String, name: &String) -> Result<bool> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name = ?1 AND id != ?2")
+        .bind(name)
+        .bind(id)
+        .fetch_one(storage)
+        .await?;
+
+    Ok(count > 0)
+}
+
 pub async fn insert(storage: &AnyPool, id: String, req: CreateUpdateAppReq) -> Result<()> {
     let ts = chrono::Utc::now().timestamp();
     let conf = serde_json::to_string(&req.conf.ext)?;

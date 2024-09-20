@@ -21,7 +21,7 @@ use types::{
     devices::{
         opcua::{OpcuaConf, SourceConf},
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemCommon,
-        SearchDevicesItemConf, SearchDevicesItemFromMemory, SearchDevicesItemResp,
+        SearchDevicesItemConf, SearchDevicesItemResp, SearchDevicesItemRunningInfo,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
@@ -181,7 +181,7 @@ impl Opcua {
 
 #[async_trait]
 impl Device for Opcua {
-    async fn read(&self) -> SearchDevicesItemFromMemory {
+    async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
         todo!()
         // let err = self.err.read().await.clone();
         // let rtt = match (self.on, &self.err) {

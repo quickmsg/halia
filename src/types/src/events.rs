@@ -1,9 +1,45 @@
+use std::convert::Infallible;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct QueryParams {
-    pub name: Option<String>,
-    pub event_type: Option<EventType>,
+    pub typ: Option<EventType>,
+    pub resource_type: Option<ResourceType>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceType {
+    Device,
+    App,
+    Databoard,
+    Rule,
+}
+
+impl Into<String> for ResourceType {
+    fn into(self) -> String {
+        match self {
+            ResourceType::Device => "device".to_owned(),
+            ResourceType::App => "app".to_owned(),
+            ResourceType::Databoard => "databoard".to_owned(),
+            ResourceType::Rule => "rule".to_owned(),
+        }
+    }
+}
+
+impl TryFrom<&str> for ResourceType {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "device" => Ok(ResourceType::Device),
+            "app" => Ok(ResourceType::App),
+            "databoard" => Ok(ResourceType::Databoard),
+            "rule" => Ok(ResourceType::Rule),
+            _ => Err(value.to_owned()),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -15,26 +51,26 @@ pub enum EventType {
     DisConnect,
 }
 
-impl Into<i32> for EventType {
-    fn into(self) -> i32 {
+impl Into<String> for EventType {
+    fn into(self) -> String {
         match self {
-            EventType::Start => 1,
-            EventType::Stop => 2,
-            EventType::Connect => 3,
-            EventType::DisConnect => 4,
+            EventType::Start => "start".to_owned(),
+            EventType::Stop => "stop".to_owned(),
+            EventType::Connect => "connect".to_owned(),
+            EventType::DisConnect => "disconnect".to_owned(),
         }
     }
 }
 
-impl TryFrom<i32> for EventType {
+impl TryFrom<String> for EventType {
     type Error = ();
 
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            1 => Ok(EventType::Start),
-            2 => Ok(EventType::Stop),
-            3 => Ok(EventType::Connect),
-            4 => Ok(EventType::DisConnect),
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "start" => Ok(EventType::Start),
+            "stop" => Ok(EventType::Stop),
+            "connect" => Ok(EventType::Connect),
+            "disconnect" => Ok(EventType::DisConnect),
             _ => Err(()),
         }
     }

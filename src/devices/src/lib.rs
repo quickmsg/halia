@@ -16,8 +16,8 @@ use tracing::warn;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
-        SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemFromMemory,
-        SearchDevicesItemResp, SearchDevicesResp, SearchRuleInfo, Summary,
+        SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemResp,
+        SearchDevicesItemRunningInfo, SearchDevicesResp, SearchRuleInfo, Summary,
     },
     events::EventType,
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
@@ -70,7 +70,7 @@ pub(crate) fn sub_device_running_count() {
 
 #[async_trait]
 pub trait Device: Send + Sync {
-    async fn read(&self) -> SearchDevicesItemFromMemory;
+    async fn read_running_info(&self) -> SearchDevicesItemRunningInfo;
     async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
 
@@ -111,10 +111,8 @@ pub async fn load_from_storage(
     let count = storage::device::count_all(storage).await?;
     DEVICE_COUNT.store(count, Ordering::SeqCst);
 
-    let db_devices = storage::device::read_on(storage).await?;
-    DEVICE_ON_COUNT.store(db_devices.len(), Ordering::SeqCst);
-
     let devices: Arc<DashMap<String, Box<dyn Device>>> = Arc::new(DashMap::new());
+    let db_devices = storage::device::read_on(storage).await?;
     for db_device in db_devices {
         start_device(storage, &devices, db_device.id).await?;
     }
@@ -137,38 +135,7 @@ pub async fn get_rule_info(
 ) -> HaliaResult<SearchRuleInfo> {
     let db_device = storage::device::read_device(storage, &query.device_id).await?;
 
-    let memory_info = match db_device.status {
-        0 => None,
-        1 => Some(devices.get(&db_device.id).unwrap().read().await),
-        _ => unreachable!(),
-    };
-    let device_resp = SearchDevicesItemResp {
-        common: SearchDevicesItemCommon {
-            id: db_device.id,
-            device_type: DeviceType::try_from(db_device.device_type).unwrap(),
-            on: db_device.status == 1,
-            source_cnt: storage::source_or_sink::count_by_parent_id(
-                storage,
-                &query.device_id,
-                storage::source_or_sink::Type::Source,
-            )
-            .await?,
-            sink_cnt: storage::source_or_sink::count_by_parent_id(
-                storage,
-                &query.device_id,
-                storage::source_or_sink::Type::Sink,
-            )
-            .await?,
-            memory_info,
-        },
-        conf: SearchDevicesItemConf {
-            base: BaseConf {
-                name: db_device.name,
-                desc: db_device.desc,
-            },
-            ext: serde_json::from_str(&db_device.conf).unwrap(),
-        },
-    };
+    let device_resp = transer_db_device_to_resp(storage, devices, db_device).await?;
     let id = match (query.source_id, query.sink_id) {
         (Some(source_id), None) => source_id,
         (None, Some(sink_id)) => sink_id,
@@ -201,20 +168,18 @@ pub async fn create_device(
     device_id: String,
     req: CreateUpdateDeviceReq,
 ) -> HaliaResult<()> {
-    // let db_req = req.clone();
-    // for device in devices.read().await.iter() {
-    //     device.check_duplicate(&req)?;
-    // }
+    if storage::device::insert_name_exists(storage, &req.conf.base.name).await? {
+        return Err(HaliaError::NameExists);
+    }
 
     match &req.device_type {
         DeviceType::Modbus => modbus::validate_conf(&req.conf.ext)?,
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
-        // DeviceType::Opcua => opcua::new(device_id, req.conf).await?,
-        // DeviceType::Coap => coap::new(device_id, req.conf).await?,
     }
+
     add_device_count();
-    storage::device::create_device(&storage, &device_id, req).await?;
+    storage::device::insert(&storage, &device_id, req).await?;
     Ok(())
 }
 
@@ -229,40 +194,7 @@ pub async fn search_devices(
         storage::device::search_devices(storage, pagination, query_params).await?;
     let mut resp_devices = vec![];
     for db_device in db_devices {
-        let memory_info = match db_device.status {
-            0 => None,
-            1 => Some(devices.get(&db_device.id).unwrap().read().await),
-            _ => unreachable!(),
-        };
-        let source_cnt = storage::source_or_sink::count_by_parent_id(
-            storage,
-            &db_device.id,
-            storage::source_or_sink::Type::Source,
-        )
-        .await?;
-        let sink_cnt = storage::source_or_sink::count_by_parent_id(
-            storage,
-            &db_device.id,
-            storage::source_or_sink::Type::Sink,
-        )
-        .await?;
-        resp_devices.push(SearchDevicesItemResp {
-            common: SearchDevicesItemCommon {
-                id: db_device.id,
-                device_type: DeviceType::try_from(db_device.device_type).unwrap(),
-                on: db_device.status == 1,
-                source_cnt,
-                sink_cnt,
-                memory_info,
-            },
-            conf: SearchDevicesItemConf {
-                base: BaseConf {
-                    name: db_device.name,
-                    desc: db_device.desc,
-                },
-                ext: serde_json::from_str(&db_device.conf).unwrap(),
-            },
-        });
+        resp_devices.push(transer_db_device_to_resp(storage, devices, db_device).await?);
     }
 
     Ok(SearchDevicesResp {
@@ -277,6 +209,10 @@ pub async fn update_device(
     device_id: String,
     req: CreateUpdateDeviceReq,
 ) -> HaliaResult<()> {
+    if storage::device::update_name_exists(storage, &req.conf.base.name, &device_id).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     if let Some(mut device) = devices.get_mut(&device_id) {
         let db_device = storage::device::read_device(storage, &device_id).await?;
         device.update(db_device.conf, &req.conf.ext).await?;
@@ -292,26 +228,31 @@ pub async fn start_device(
     devices: &Arc<DashMap<String, Box<dyn Device>>>,
     device_id: String,
 ) -> HaliaResult<()> {
-    // 设备已启动
     if devices.contains_key(&device_id) {
         return Ok(());
     }
 
-    storage::device::create_event(storage, &device_id, EventType::Start.into(), None).await?;
+    storage::event::insert(
+        storage,
+        types::events::ResourceType::Device,
+        &device_id,
+        EventType::Start,
+        None,
+    )
+    .await?;
 
     let db_device = storage::device::read_device(storage, &device_id).await?;
-    let device_type = DeviceType::try_from(db_device.device_type)?;
+    let typ = DeviceType::try_from(db_device.typ)?;
 
-    // TODO 取消unwrap
     let device_conf: DeviceConf = DeviceConf {
         base: BaseConf {
             name: db_device.name,
             desc: db_device.desc,
         },
-        ext: serde_json::from_str(&db_device.conf).unwrap(),
+        ext: serde_json::from_str(&db_device.conf)?,
     };
 
-    let mut device = match device_type {
+    let mut device = match typ {
         DeviceType::Modbus => modbus::new(device_id.clone(), device_conf, storage.clone()),
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
@@ -362,10 +303,11 @@ pub async fn stop_device(
         return Err(HaliaError::StopActiveRefing);
     }
 
-    if let Err(e) = storage::device::create_event(
+    if let Err(e) = storage::event::insert(
         storage,
+        types::events::ResourceType::Device,
         &device_id,
-        types::events::EventType::Stop.into(),
+        types::events::EventType::Stop,
         None,
     )
     .await
@@ -409,13 +351,24 @@ pub async fn create_source(
     device_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
+    if storage::source_or_sink::insert_name_exists(
+        storage,
+        &device_id,
+        storage::source_or_sink::Type::Source,
+        &req.base.name,
+    )
+    .await?
+    {
+        return Err(HaliaError::NameExists);
+    }
+
     let source_id = common::get_id();
     if let Some(mut device) = devices.get_mut(&device_id) {
         let conf = req.ext.clone();
         device.create_source(source_id.clone(), conf).await?;
     }
 
-    storage::source_or_sink::create(
+    storage::source_or_sink::insert(
         storage,
         &device_id,
         &source_id,
@@ -433,7 +386,7 @@ pub async fn search_sources(
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    let (count, db_sources) = storage::source_or_sink::search(
+    let (count, db_sources) = storage::source_or_sink::query_by_parent_id(
         storage,
         &device_id,
         storage::source_or_sink::Type::Source,
@@ -477,6 +430,18 @@ pub async fn update_source(
     source_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
+    if storage::source_or_sink::update_name_exists(
+        storage,
+        &device_id,
+        storage::source_or_sink::Type::Source,
+        &req.base.name,
+        &source_id,
+    )
+    .await?
+    {
+        return Err(HaliaError::NameExists);
+    }
+
     let old_conf = storage::source_or_sink::read_conf(storage, &source_id).await?;
     let new_conf = req.ext.clone();
     devices
@@ -536,19 +501,30 @@ pub async fn get_source_rx(
 }
 
 pub async fn create_sink(
-    persistence: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     devices: &Arc<DashMap<String, Box<dyn Device>>>,
     device_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
+    if storage::source_or_sink::insert_name_exists(
+        storage,
+        &device_id,
+        storage::source_or_sink::Type::Source,
+        &req.base.name,
+    )
+    .await?
+    {
+        return Err(HaliaError::NameExists);
+    }
+
     let sink_id = common::get_id();
     if let Some(mut device) = devices.get_mut(&device_id) {
         let conf: serde_json::Value = req.ext.clone();
         device.create_sink(sink_id.clone(), conf).await?;
     }
 
-    storage::source_or_sink::create(
-        persistence,
+    storage::source_or_sink::insert(
+        storage,
         &device_id,
         &sink_id,
         storage::source_or_sink::Type::Sink,
@@ -565,7 +541,7 @@ pub async fn search_sinks(
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    let (count, db_sinks) = storage::source_or_sink::search(
+    let (count, db_sinks) = storage::source_or_sink::query_by_parent_id(
         storage,
         &device_id,
         storage::source_or_sink::Type::Sink,
@@ -608,6 +584,18 @@ pub async fn update_sink(
     sink_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
+    if storage::source_or_sink::update_name_exists(
+        storage,
+        &device_id,
+        storage::source_or_sink::Type::Sink,
+        &req.base.name,
+        &sink_id,
+    )
+    .await?
+    {
+        return Err(HaliaError::NameExists);
+    }
+
     let old_conf = storage::source_or_sink::read_conf(storage, &sink_id).await?;
     let new_conf = req.ext.clone();
     devices
@@ -651,4 +639,54 @@ pub async fn get_sink_tx(
         .ok_or(HaliaError::NotFound)?
         .get_sink_tx(sink_id)
         .await
+}
+
+async fn transer_db_device_to_resp(
+    storage: &Arc<AnyPool>,
+    devices: &Arc<DashMap<String, Box<dyn Device>>>,
+    db_device: storage::device::Device,
+) -> HaliaResult<SearchDevicesItemResp> {
+    let source_cnt = storage::source_or_sink::count_by_parent_id(
+        storage,
+        &db_device.id,
+        storage::source_or_sink::Type::Source,
+    )
+    .await?;
+
+    let sink_cnt = storage::source_or_sink::count_by_parent_id(
+        storage,
+        &db_device.id,
+        storage::source_or_sink::Type::Sink,
+    )
+    .await?;
+
+    let running_info = match db_device.status {
+        0 => None,
+        1 => Some(
+            devices
+                .get(&db_device.id)
+                .unwrap()
+                .read_running_info()
+                .await,
+        ),
+        _ => unreachable!(),
+    };
+
+    Ok(SearchDevicesItemResp {
+        common: SearchDevicesItemCommon {
+            id: db_device.id,
+            typ: db_device.typ,
+            on: db_device.status == 1,
+            source_cnt,
+            sink_cnt,
+        },
+        conf: SearchDevicesItemConf {
+            base: BaseConf {
+                name: db_device.name,
+                desc: db_device.desc,
+            },
+            ext: serde_json::from_str(&db_device.conf)?,
+        },
+        running_info,
+    })
 }

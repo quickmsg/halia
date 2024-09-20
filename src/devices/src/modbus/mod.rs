@@ -31,7 +31,7 @@ use tracing::{trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
-        DeviceConf, SearchDevicesItemFromMemory,
+        DeviceConf, SearchDevicesItemRunningInfo,
     },
     Value,
 };
@@ -122,8 +122,9 @@ impl Modbus {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
                         add_device_running_count();
-                        if let Err(e) = storage::device::create_event(
+                        if let Err(e) = storage::event::insert(
                             &storage,
+                            types::events::ResourceType::Device,
                             &device_id,
                             types::events::EventType::Connect.into(),
                             None,
@@ -169,10 +170,11 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
-                        if let Err(e) = storage::device::create_event(
+                        if let Err(e) = storage::event::insert(
                             &storage,
+                            types::events::ResourceType::Device,
                             &device_id,
-                            types::events::EventType::DisConnect.into(),
+                            types::events::EventType::DisConnect,
                             Some(e.to_string()),
                         )
                         .await
@@ -349,8 +351,8 @@ async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaR
 
 #[async_trait]
 impl Device for Modbus {
-    async fn read(&self) -> SearchDevicesItemFromMemory {
-        SearchDevicesItemFromMemory {
+    async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
+        SearchDevicesItemRunningInfo {
             err: self.err.read().await.clone(),
             rtt: self.rtt.load(Ordering::SeqCst),
         }
