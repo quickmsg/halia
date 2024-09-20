@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Source {
-    pub app_id: Uuid,
-    pub source_id: Uuid,
+    pub app_id: String,
+    pub source_id: String,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct Sink {
-    pub app_id: Uuid,
-    pub sink_id: Uuid,
+    pub app_id: String,
+    pub sink_id: String,
 }

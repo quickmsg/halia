@@ -35,7 +35,6 @@ use types::{
     },
     Value,
 };
-use uuid::Uuid;
 
 use crate::{add_device_running_count, sub_device_running_count, Device};
 
@@ -44,10 +43,10 @@ mod source;
 
 #[derive(Debug)]
 struct Modbus {
-    pub id: Uuid,
+    pub id: String,
 
-    sources: Arc<DashMap<Uuid, Source>>,
-    sinks: DashMap<Uuid, Sink>,
+    sources: Arc<DashMap<String, Source>>,
+    sinks: DashMap<String, Sink>,
 
     stop_signal_tx: mpsc::Sender<()>,
     device_err_tx: broadcast::Sender<bool>,
@@ -55,13 +54,13 @@ struct Modbus {
     rtt: Arc<AtomicU16>,
 
     write_tx: mpsc::Sender<WritePointEvent>,
-    read_tx: mpsc::Sender<Uuid>,
+    read_tx: mpsc::Sender<String>,
 
     join_handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
             mpsc::Receiver<WritePointEvent>,
-            mpsc::Receiver<Uuid>,
+            mpsc::Receiver<String>,
             Arc<AnyPool>,
         )>,
     >,
@@ -79,11 +78,11 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn new(device_id: Uuid, device_conf: DeviceConf, storage: Arc<AnyPool>) -> Box<dyn Device> {
+pub fn new(device_id: String, device_conf: DeviceConf, storage: Arc<AnyPool>) -> Box<dyn Device> {
     let conf: ModbusConf = serde_json::from_value(device_conf.ext).unwrap();
 
     let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-    let (read_tx, read_rx) = mpsc::channel::<Uuid>(16);
+    let (read_tx, read_rx) = mpsc::channel::<String>(16);
     let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
     let (device_err_tx, _) = broadcast::channel(16);
 
@@ -110,7 +109,7 @@ impl Modbus {
         &mut self,
         modbus_conf: ModbusConf,
         mut stop_signal_rx: mpsc::Receiver<()>,
-        mut read_rx: mpsc::Receiver<Uuid>,
+        mut read_rx: mpsc::Receiver<String>,
         mut write_rx: mpsc::Receiver<WritePointEvent>,
         storage: Arc<AnyPool>,
     ) {
@@ -386,10 +385,10 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn create_source(&mut self, source_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn create_source(&mut self, source_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
         let source = Source::new(
-            source_id,
+            source_id.clone(),
             conf,
             self.read_tx.clone(),
             self.device_err_tx.subscribe(),
@@ -400,7 +399,7 @@ impl Device for Modbus {
 
     async fn update_source(
         &mut self,
-        source_id: Uuid,
+        source_id: String,
         old_conf: String,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
@@ -414,7 +413,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
+    async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()> {
         match self.err.read().await.as_ref() {
             Some(err) => return Err(HaliaError::Common(err.to_string())),
             None => {}
@@ -443,7 +442,7 @@ impl Device for Modbus {
         }
     }
 
-    async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
+    async fn delete_source(&mut self, source_id: String) -> HaliaResult<()> {
         self.sources
             .get_mut(&source_id)
             .ok_or(HaliaError::NotFound)?
@@ -453,7 +452,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn create_sink(&mut self, sink_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
         let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
 
@@ -463,7 +462,7 @@ impl Device for Modbus {
 
     async fn update_sink(
         &mut self,
-        sink_id: Uuid,
+        sink_id: String,
         old_conf: String,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
@@ -477,7 +476,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+    async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
         self.sinks
             .get_mut(&sink_id)
             .ok_or(HaliaError::NotFound)?
@@ -489,7 +488,7 @@ impl Device for Modbus {
 
     async fn get_source_rx(
         &mut self,
-        source_id: &Uuid,
+        source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         Ok(self
             .sources
@@ -499,7 +498,7 @@ impl Device for Modbus {
             .subscribe())
     }
 
-    async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    async fn get_sink_tx(&mut self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         Ok(self
             .sinks
             .get_mut(sink_id)

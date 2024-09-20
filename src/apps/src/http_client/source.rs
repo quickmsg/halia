@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use common::error::{HaliaError, HaliaResult};
+use common::error::HaliaResult;
 use message::MessageBatch;
 use reqwest::Client;
 use tokio::{
@@ -14,29 +14,24 @@ use types::{
     apps::http_client::{HttpClientConf, SourceConf},
     BaseConf, SearchSourcesOrSinksInfoResp,
 };
-use uuid::Uuid;
 
 pub struct Source {
-    pub id: Uuid,
-    base_conf: BaseConf,
     ext_conf: Arc<SourceConf>,
 
-    pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
+    pub mb_tx: broadcast::Sender<MessageBatch>,
 
     stop_signal_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<HttpClientConf>, Client)>>,
 }
 
 impl Source {
-    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
+    pub fn new(ext_conf: SourceConf) -> HaliaResult<Self> {
         Self::validate_conf(&ext_conf)?;
         Ok(Self {
-            id,
-            base_conf,
             ext_conf: Arc::new(ext_conf),
             stop_signal_tx: None,
             join_handle: None,
-            mb_tx: None,
+            mb_tx: todo!(),
         })
     }
 
@@ -45,15 +40,15 @@ impl Source {
     }
 
     pub fn check_duplicate(&self, base_conf: &BaseConf, ext_conf: &SourceConf) -> HaliaResult<()> {
-        if self.base_conf.name == base_conf.name {
-            return Err(HaliaError::NameExists);
-        }
+        // if self.base_conf.name == base_conf.name {
+        //     return Err(HaliaError::NameExists);
+        // }
 
-        if self.ext_conf.path == ext_conf.path
-            && self.ext_conf.query_params == ext_conf.query_params
-        {
-            return Err(HaliaError::AddressExists);
-        }
+        // if self.ext_conf.path == ext_conf.path
+        //     && self.ext_conf.query_params == ext_conf.query_params
+        // {
+        //     return Err(HaliaError::AddressExists);
+        // }
 
         Ok(())
     }
@@ -69,7 +64,6 @@ impl Source {
     ) -> HaliaResult<()> {
         Self::validate_conf(&ext_conf)?;
 
-        self.base_conf = base_conf;
         if *self.ext_conf == ext_conf {
             return Ok(());
         }
@@ -100,7 +94,7 @@ impl Source {
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (mb_tx, _) = broadcast::channel(16);
-        self.mb_tx = Some(mb_tx);
+        self.mb_tx = mb_tx;
 
         self.event_loop(http_client_conf, stop_signal_rx, reqwest::Client::new())
             .await;

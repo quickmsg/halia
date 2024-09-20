@@ -26,7 +26,6 @@ use types::{
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
 };
-use uuid::Uuid;
 
 use crate::{add_device_on_count, sub_device_on_count, Device};
 
@@ -34,7 +33,7 @@ mod sink;
 mod source;
 
 struct Opcua {
-    id: Uuid,
+    id: String,
     base_conf: BaseConf,
     ext_conf: OpcuaConf,
 
@@ -44,12 +43,12 @@ struct Opcua {
     opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
 
     sources: Vec<Source>,
-    source_ref_infos: Vec<(Uuid, RefInfo)>,
+    source_ref_infos: Vec<(String, RefInfo)>,
     sinks: Vec<Sink>,
-    sink_ref_infos: Vec<(Uuid, RefInfo)>,
+    sink_ref_infos: Vec<(String, RefInfo)>,
 }
 
-pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
     Opcua::validate_conf(&ext_conf)?;
 
@@ -243,7 +242,7 @@ impl Device for Opcua {
     //     Ok(())
     // }
 
-    async fn create_source(&mut self, source_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn create_source(&mut self, source_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
         // for source in self.sources.iter() {
         //     source.check_duplicate(&req.base, &ext_conf)?;
@@ -261,18 +260,18 @@ impl Device for Opcua {
 
     async fn update_source(
         &mut self,
-        source_id: Uuid,
+        source_id: String,
         old_conf: String,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
     }
 
-    async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
+    async fn delete_source(&mut self, source_id: String) -> HaliaResult<()> {
         todo!()
     }
 
-    async fn create_sink(&mut self, sink_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         todo!()
         // match Sink::new(sink_id, req).await {
         //     Ok(sink) => {
@@ -288,20 +287,20 @@ impl Device for Opcua {
 
     async fn update_sink(
         &mut self,
-        sink_id: Uuid,
+        sink_id: String,
         old_conf: String,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
     }
 
-    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
+    async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
         todo!()
     }
 
     async fn get_source_rx(
         &mut self,
-        source_id: &Uuid,
+        source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         match self
             .sources
@@ -313,7 +312,7 @@ impl Device for Opcua {
         }
     }
 
-    async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    async fn get_sink_tx(&mut self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
             Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
             None => unreachable!(),
@@ -334,7 +333,7 @@ impl Device for Opcua {
     async fn stop(&mut self) -> HaliaResult<()> {
         todo!()
     }
-    async fn write_source_value(&mut self, source_id: Uuid, req: Value) -> HaliaResult<()> {
+    async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()> {
         todo!()
     }
 }

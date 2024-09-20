@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 use crate::BaseConf;
 
@@ -68,32 +67,32 @@ pub enum NodeType {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceSourceNode {
-    pub device_id: Uuid,
-    pub source_id: Uuid,
+    pub device_id: String,
+    pub source_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppSourceNode {
-    pub app_id: Uuid,
-    pub source_id: Uuid,
+    pub app_id: String,
+    pub source_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeviceSinkNode {
-    pub device_id: Uuid,
-    pub sink_id: Uuid,
+    pub device_id: String,
+    pub sink_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppSinkNode {
-    pub app_id: Uuid,
-    pub sink_id: Uuid,
+    pub app_id: String,
+    pub sink_id: String,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct DataboardNode {
-    pub databoard_id: Uuid,
-    pub data_id: Uuid,
+    pub databoard_id: String,
+    pub data_id: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -104,8 +103,8 @@ pub struct LogNode {
 #[derive(Serialize, Deserialize)]
 pub struct CreateUpdateRuleSink {
     pub r#type: CreateRuleSinkType,
-    pub id: Uuid,
-    pub sink_id: Option<Uuid>,
+    pub id: String,
+    pub sink_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -117,7 +116,7 @@ pub enum CreateRuleSinkType {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ListRuleResp {
-    pub id: Uuid,
+    pub id: String,
     pub name: String,
 }
 
@@ -163,7 +162,7 @@ pub struct SearchRulesResp {
 
 #[derive(Serialize)]
 pub struct SearchRulesItemResp {
-    pub id: Uuid,
+    pub id: String,
     pub on: bool,
     pub conf: CreateUpdateRuleReq,
 }

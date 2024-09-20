@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct QueryParams {
@@ -49,7 +48,7 @@ pub struct SearchEventsResp {
 
 #[derive(Serialize)]
 pub struct SearchEventsItemResp {
-    pub id: Uuid,
+    pub id: String,
     pub name: String,
     pub event_type: EventType,
     #[serde(skip_serializing_if = "Option::is_none")]

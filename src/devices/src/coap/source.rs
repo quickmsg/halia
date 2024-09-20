@@ -19,12 +19,10 @@ use types::{
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
 use url::form_urlencoded;
-use uuid::Uuid;
 
 use super::{transform_options, TokenManager};
 
 pub struct Source {
-    pub id: Uuid,
     base_conf: BaseConf,
     ext_conf: SourceConf,
 
@@ -46,7 +44,6 @@ pub struct Source {
 
 impl Source {
     pub fn new(
-        id: Uuid,
         base_conf: BaseConf,
         ext_conf: SourceConf,
         token_manager: Arc<Mutex<TokenManager>>,
@@ -54,7 +51,6 @@ impl Source {
         Self::validate_conf(&ext_conf)?;
 
         Ok(Self {
-            id,
             base_conf,
             ext_conf,
             on: false,

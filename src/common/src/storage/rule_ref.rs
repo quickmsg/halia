@@ -73,9 +73,9 @@ pub async fn delete(storage: &AnyPool, rule_id: &Uuid) -> Result<()> {
     Ok(())
 }
 
-pub async fn count_cnt_by_parent_id(storage: &AnyPool, parent_id: &Uuid) -> Result<usize> {
+pub async fn count_cnt_by_parent_id(storage: &AnyPool, parent_id: &String) -> Result<usize> {
     let cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE parent_id = ?1")
-        .bind(parent_id.to_string())
+        .bind(parent_id)
         .fetch_one(storage)
         .await?;
 
@@ -92,9 +92,9 @@ pub async fn count_active_cnt_by_parent_id(storage: &AnyPool, parent_id: &Uuid) 
     Ok(active_cnt as usize)
 }
 
-pub async fn count_cnt_by_resource_id(storage: &AnyPool, resource_id: &Uuid) -> Result<usize> {
+pub async fn count_cnt_by_resource_id(storage: &AnyPool, resource_id: &String) -> Result<usize> {
     let cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE resource_id = ?1")
-        .bind(resource_id.to_string())
+        .bind(resource_id)
         .fetch_one(storage)
         .await?;
 
@@ -103,11 +103,11 @@ pub async fn count_cnt_by_resource_id(storage: &AnyPool, resource_id: &Uuid) -> 
 
 pub async fn count_active_cnt_by_resource_id(
     storage: &AnyPool,
-    resource_id: &Uuid,
+    resource_id: &String,
 ) -> Result<usize> {
     let active_cnt: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = 2 AND resource_id = ?1")
-            .bind(resource_id.to_string())
+            .bind(resource_id)
             .fetch_one(storage)
             .await?;
 

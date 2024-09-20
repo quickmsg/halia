@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{BaseConf, RuleRef};
 
@@ -62,7 +61,7 @@ pub struct SearchDatasItemResp {
 
 #[derive(Serialize)]
 pub struct SearchDatasInfoResp {
-    pub id: Uuid,
+    pub id: String,
     pub conf: CreateUpdateDataReq,
     pub value: serde_json::Value,
     pub ts: u64,
@@ -75,8 +74,8 @@ pub struct SearchDatasRuntimeResp {
 
 #[derive(Deserialize)]
 pub struct QueryRuleInfo {
-    pub databoard_id: Uuid,
-    pub data_id: Uuid,
+    pub databoard_id: String,
+    pub data_id: String,
 }
 
 #[derive(Serialize)]

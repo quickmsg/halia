@@ -1,11 +1,13 @@
 #![feature(concat_idents)]
+
+use uuid::Uuid;
+pub mod config;
 pub mod error;
 pub mod json;
-pub mod storage;
 pub mod ref_info;
-pub mod sys;
 pub mod sink_message_retain;
-pub mod config;
+pub mod storage;
+pub mod sys;
 
 pub fn check_page_size(i: usize, page: usize, size: usize) -> bool {
     i >= (page - 1) * size && i < page * size
@@ -31,4 +33,8 @@ pub fn get_dynamic_value_from_json(value: serde_json::Value) -> DynamicValue {
             }
         }
     }
+}
+
+pub fn get_id() -> String {
+    Uuid::new_v4().simple().to_string()
 }

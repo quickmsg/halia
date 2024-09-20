@@ -22,7 +22,6 @@ use types::{
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
     SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
 };
-use uuid::Uuid;
 
 use crate::Device;
 
@@ -36,21 +35,21 @@ macro_rules! coap_not_support_write_source_value {
 }
 
 struct Coap {
-    id: Uuid,
+    id: String,
     base_conf: BaseConf,
     ext_conf: CoapConf,
 
     sources: Vec<Source>,
-    source_ref_infos: Vec<(Uuid, RefInfo)>,
+    source_ref_infos: Vec<(String, RefInfo)>,
     sinks: Vec<Sink>,
-    sink_ref_infos: Vec<(Uuid, RefInfo)>,
+    sink_ref_infos: Vec<(String, RefInfo)>,
 
     coap_client: Option<Arc<UdpCoAPClient>>,
     err: Option<String>,
     token_manager: Arc<Mutex<TokenManager>>,
 }
 
-pub async fn new(id: Uuid, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     let ext_conf: CoapConf = serde_json::from_value(device_conf.ext)?;
     Coap::validate_conf(&ext_conf)?;
 
@@ -175,7 +174,11 @@ impl Device for Coap {
     //     Ok(())
     // }
 
-    async fn create_source(&mut self, source_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn create_source(
+        &mut self,
+        source_id: String,
+        conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
         // for source in self.sources.iter() {
         //     source.check_duplicate(&req.base, &ext_conf)?;
@@ -195,7 +198,7 @@ impl Device for Coap {
 
     async fn update_source(
         &mut self,
-        source_id: Uuid,
+        source_id: String,
         old_conf: String,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
@@ -217,26 +220,27 @@ impl Device for Coap {
         todo!()
     }
 
-    async fn write_source_value(&mut self, _source_id: Uuid, _req: Value) -> HaliaResult<()> {
+    async fn write_source_value(&mut self, _source_id: String, _req: Value) -> HaliaResult<()> {
         coap_not_support_write_source_value!()
     }
 
-    async fn delete_source(&mut self, source_id: Uuid) -> HaliaResult<()> {
-        match self
-            .sources
-            .iter_mut()
-            .find(|source| source.id == source_id)
-        {
-            Some(source) => source.stop().await,
-            None => unreachable!(),
-        }
+    async fn delete_source(&mut self, source_id: String) -> HaliaResult<()> {
+        // match self
+        //     .sources
+        //     .iter_mut()
+        //     .find(|source| source.id == source_id)
+        // {
+        //     Some(source) => source.stop().await,
+        //     None => unreachable!(),
+        // }
 
-        self.sources.retain(|source| source.id != source_id);
-        self.source_ref_infos.retain(|(id, _)| *id != source_id);
-        Ok(())
+        // self.sources.retain(|source| source.id != source_id);
+        // self.source_ref_infos.retain(|(id, _)| *id != source_id);
+        // Ok(())
+        todo!()
     }
 
-    async fn create_sink(&mut self, sink_id: Uuid, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         todo!()
         // let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
 
@@ -257,7 +261,7 @@ impl Device for Coap {
 
     async fn update_sink(
         &mut self,
-        sink_id: Uuid,
+        sink_id: String,
         old_conf: String,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
@@ -276,36 +280,38 @@ impl Device for Coap {
         //     }
     }
 
-    async fn delete_sink(&mut self, sink_id: Uuid) -> HaliaResult<()> {
-        match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-            Some(sink) => sink.stop().await,
-            None => unreachable!(),
-        }
+    async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
+        // match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
+        //     Some(sink) => sink.stop().await,
+        //     None => unreachable!(),
+        // }
 
-        self.sinks.retain(|sink| sink.id != sink_id);
-        self.sink_ref_infos.retain(|(id, _)| *id != sink_id);
+        // self.sinks.retain(|sink| sink.id != sink_id);
+        // self.sink_ref_infos.retain(|(id, _)| *id != sink_id);
         Ok(())
     }
 
     async fn get_source_rx(
         &mut self,
-        source_id: &Uuid,
+        source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self
-            .sources
-            .iter_mut()
-            .find(|source| source.id == *source_id)
-        {
-            Some(source) => Ok(source.mb_tx.as_ref().unwrap().subscribe()),
-            None => unreachable!(),
-        }
+        // match self
+        //     .sources
+        //     .iter_mut()
+        //     .find(|source| source.id == *source_id)
+        // {
+        //     Some(source) => Ok(source.mb_tx.as_ref().unwrap().subscribe()),
+        //     None => unreachable!(),
+        // }
+        todo!()
     }
 
-    async fn get_sink_tx(&mut self, sink_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
-            None => unreachable!(),
-        }
+    async fn get_sink_tx(&mut self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        // match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
+        //     Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
+        //     None => unreachable!(),
+        // }
+        todo!()
     }
 }
 

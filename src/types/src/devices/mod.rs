@@ -2,7 +2,6 @@ use std::fmt;
 
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{BaseConf, SearchSourcesOrSinksInfoResp};
 
@@ -130,9 +129,9 @@ pub struct SearchDevicesItemConf {
 
 #[derive(Deserialize)]
 pub struct QueryRuleInfo {
-    pub device_id: Uuid,
-    pub source_id: Option<Uuid>,
-    pub sink_id: Option<Uuid>,
+    pub device_id: String,
+    pub source_id: Option<String>,
+    pub sink_id: Option<String>,
 }
 
 #[derive(Serialize)]

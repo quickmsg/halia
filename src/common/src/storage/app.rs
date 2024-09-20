@@ -37,11 +37,11 @@ CREATE TABLE IF NOT EXISTS apps (
     Ok(())
 }
 
-pub async fn insert(storage: &AnyPool, id: &Uuid, req: CreateUpdateAppReq) -> Result<()> {
+pub async fn insert(storage: &AnyPool, id: String, req: CreateUpdateAppReq) -> Result<()> {
     let ts = chrono::Utc::now().timestamp();
     let conf = serde_json::to_string(&req.conf.ext)?;
     sqlx::query("INSERT INTO apps (id, status, typ, name, desc, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
-        .bind(id.to_string())
+        .bind(id)
         .bind(false as i32)
         .bind(req.typ.to_string())
         .bind(req.conf.base.name)
@@ -62,9 +62,9 @@ pub async fn count(storage: &AnyPool) -> Result<usize> {
     Ok(count as usize)
 }
 
-pub async fn read_one(storage: &AnyPool, id: &Uuid) -> Result<App> {
+pub async fn read_one(storage: &AnyPool, id: &String) -> Result<App> {
     let app = sqlx::query_as::<_, App>("SELECT * FROM apps WHERE id = ?1")
-        .bind(id.to_string())
+        .bind(id)
         .fetch_one(storage)
         .await?;
 
@@ -191,13 +191,12 @@ pub async fn query(
             (count as usize, apps)
         }
         (Some(name), Some(typ), None) => {
-            let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM apps WHERE name = ?1 AND typ = ?2",
-            )
-            .bind(format!("%{}%", name))
-            .bind(typ.to_string())
-            .fetch_one(storage)
-            .await?;
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name = ?1 AND typ = ?2")
+                    .bind(format!("%{}%", name))
+                    .bind(typ.to_string())
+                    .fetch_one(storage)
+                    .await?;
 
             let apps = sqlx::query_as::<_, App>(
                 "SELECT * FROM apps WHERE name = ?1 AND typ = ?2 ORDER BY ts DESC LIMIT ?3 OFFSET ?4",
@@ -239,31 +238,31 @@ pub async fn query(
     Ok((count as usize, apps))
 }
 
-pub async fn update_status(storage: &AnyPool, id: &Uuid, status: bool) -> Result<()> {
+pub async fn update_status(storage: &AnyPool, id: &String, status: bool) -> Result<()> {
     sqlx::query("UPDATE apps SET status = ?1 WHERE id = ?2")
         .bind(status as i32)
-        .bind(id.to_string())
+        .bind(id)
         .execute(storage)
         .await?;
 
     Ok(())
 }
 
-pub async fn update(storage: &AnyPool, id: &Uuid, req: CreateUpdateAppReq) -> Result<()> {
+pub async fn update(storage: &AnyPool, id: String, req: CreateUpdateAppReq) -> Result<()> {
     let conf = serde_json::to_string(&req.conf.ext)?;
     sqlx::query("UPDATE apps SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
         .bind(req.conf.base.name)
         .bind(req.conf.base.desc)
         .bind(conf)
-        .bind(id.to_string())
+        .bind(id)
         .execute(storage)
         .await?;
     Ok(())
 }
 
-pub async fn delete(storage: &AnyPool, id: &Uuid) -> Result<()> {
+pub async fn delete(storage: &AnyPool, id: &String) -> Result<()> {
     sqlx::query("DELETE FROM apps WHERE id = ?1")
-        .bind(id.to_string())
+        .bind(id)
         .execute(storage)
         .await?;
 

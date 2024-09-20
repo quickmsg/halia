@@ -21,10 +21,9 @@ use types::{
     devices::opcua::{GroupConf, SourceConf, VariableConf},
     BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
 };
-use uuid::Uuid;
 
 pub struct Source {
-    pub id: Uuid,
+    pub id: String,
 
     pub base_conf: BaseConf,
     pub ext_conf: SourceConf,
@@ -38,7 +37,7 @@ pub struct Source {
     join_handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
-            mpsc::Sender<Uuid>,
+            mpsc::Sender<String>,
             Arc<RwLock<Option<String>>>,
         )>,
     >,
@@ -48,7 +47,7 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn new(source_id: Uuid, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
+    pub fn new(source_id: String, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
         Self::validate_conf(&ext_conf)?;
 
         Ok(Self {

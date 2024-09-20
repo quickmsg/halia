@@ -36,13 +36,13 @@ CREATE TABLE IF NOT EXISTS databoards (
     Ok(())
 }
 
-pub async fn insert(storage: &AnyPool, id: &Uuid, req: CreateUpdateDataboardReq) -> Result<()> {
+pub async fn insert(storage: &AnyPool, id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
     let conf = serde_json::to_string(&req.ext)?;
     let ts = chrono::Utc::now().timestamp();
     sqlx::query(
         "INSERT INTO databoards (id, status, name, desc, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     )
-    .bind(id.to_string())
+    .bind(id)
     .bind(false as i32)
     .bind(req.base.name)
     .bind(req.base.desc)
@@ -135,9 +135,9 @@ pub async fn query(
     Ok((count, databoards))
 }
 
-pub async fn read_one(storage: &AnyPool, id: &Uuid) -> Result<Databoard> {
+pub async fn read_one(storage: &AnyPool, id: &String) -> Result<Databoard> {
     let databoard = sqlx::query_as::<_, Databoard>("SELECT * FROM databoards WHERE id = ?1")
-        .bind(id.to_string())
+        .bind(id)
         .fetch_one(storage)
         .await?;
 
@@ -161,7 +161,7 @@ pub async fn count(storage: &AnyPool) -> Result<usize> {
 
 pub async fn update_conf(
     storage: &AnyPool,
-    id: &Uuid,
+    id: &String,
     req: CreateUpdateDataboardReq,
 ) -> Result<()> {
     let conf = serde_json::to_string(&req.ext)?;
@@ -169,24 +169,24 @@ pub async fn update_conf(
         .bind(req.base.name)
         .bind(req.base.desc)
         .bind(conf)
-        .bind(id.to_string())
+        .bind(id)
         .execute(storage)
         .await?;
     Ok(())
 }
 
-pub async fn update_status(storage: &AnyPool, id: &Uuid, status: bool) -> Result<()> {
+pub async fn update_status(storage: &AnyPool, id: &String, status: bool) -> Result<()> {
     sqlx::query("UPDATE databoards SET status = ?1 WHERE id = ?2")
         .bind(status as i32)
-        .bind(id.to_string())
+        .bind(id)
         .execute(storage)
         .await?;
     Ok(())
 }
 
-pub async fn delete(storage: &AnyPool, id: &Uuid) -> Result<()> {
+pub async fn delete(storage: &AnyPool, id: &String) -> Result<()> {
     sqlx::query("DELETE FROM databoards WHERE id = ?1")
-        .bind(id.to_string())
+        .bind(id)
         .execute(storage)
         .await?;
 

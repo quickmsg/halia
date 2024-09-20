@@ -32,15 +32,15 @@ CREATE TABLE IF NOT EXISTS databoard_datas (
 
 pub async fn insert(
     storage: &AnyPool,
-    databoard_id: &Uuid,
-    databoard_data_id: &Uuid,
+    databoard_id: &String,
+    databoard_data_id: &String,
     req: CreateUpdateDataReq,
 ) -> Result<()> {
     let conf = serde_json::to_string(&req.ext)?;
     let ts = chrono::Utc::now().timestamp();
     sqlx::query("INSERT INTO databoard_datas (id, parent_id, name, desc, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
-        .bind(databoard_data_id.to_string())
-        .bind(databoard_id.to_string())
+        .bind(databoard_data_id)
+        .bind(databoard_id)
         .bind(req.base.name)
         .bind(req.base.desc)
         .bind(conf)
@@ -50,30 +50,30 @@ pub async fn insert(
     Ok(())
 }
 
-pub async fn read_many(storage: &AnyPool, databoard_id: &Uuid) -> Result<Vec<DataboardData>> {
+pub async fn read_many(storage: &AnyPool, databoard_id: &String) -> Result<Vec<DataboardData>> {
     let databoard_datas = sqlx::query_as::<_, DataboardData>(
         "SELECT * FROM databoard_datas WHERE parent_id = ?1 ORDER BY ts DESC",
     )
-    .bind(databoard_id.to_string())
+    .bind(databoard_id)
     .fetch_all(storage)
     .await?;
 
     Ok(databoard_datas)
 }
 
-pub async fn update(pool: &AnyPool, id: &Uuid, req: CreateUpdateDataReq) -> Result<()> {
+pub async fn update(pool: &AnyPool, id: &String, req: CreateUpdateDataReq) -> Result<()> {
     let conf = serde_json::to_string(&req.ext)?;
     sqlx::query("UPDATE databoard_datas SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
         .bind(req.base.name)
         .bind(req.base.desc)
         .bind(conf)
-        .bind(id.to_string())
+        .bind(id)
         .execute(pool)
         .await?;
     Ok(())
 }
 
-pub async fn delete_one(pool: &AnyPool, databoard_data_id: &Uuid) -> Result<()> {
+pub async fn delete_one(pool: &AnyPool, databoard_data_id: &String) -> Result<()> {
     sqlx::query("DELETE FROM databoard_datas WHERE id = ?1")
         .bind(databoard_data_id.to_string())
         .execute(pool)
@@ -81,9 +81,9 @@ pub async fn delete_one(pool: &AnyPool, databoard_data_id: &Uuid) -> Result<()> 
     Ok(())
 }
 
-pub(crate) async fn delete_many(storage: &AnyPool, databoard_id: &Uuid) -> Result<()> {
+pub(crate) async fn delete_many(storage: &AnyPool, databoard_id: &String) -> Result<()> {
     sqlx::query("DELETE FROM databoard_datas WHERE parent_id = ?1")
-        .bind(databoard_id.to_string())
+        .bind(databoard_id)
         .execute(storage)
         .await?;
     Ok(())

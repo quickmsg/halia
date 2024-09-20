@@ -13,13 +13,10 @@ use tokio::{
     task::JoinHandle,
 };
 use types::{devices::coap::SinkConf, BaseConf, SearchSourcesOrSinksInfoResp};
-use uuid::Uuid;
 
 use super::{transform_options, TokenManager};
 
 pub struct Sink {
-    pub id: Uuid,
-
     base_conf: BaseConf,
     ext_conf: SinkConf,
 
@@ -39,7 +36,6 @@ pub struct Sink {
 
 impl Sink {
     pub fn new(
-        id: Uuid,
         base_conf: BaseConf,
         ext_conf: SinkConf,
         token_manager: Arc<Mutex<TokenManager>>,
@@ -47,7 +43,6 @@ impl Sink {
         Self::validate_conf(&ext_conf)?;
 
         Ok(Self {
-            id,
             base_conf,
             ext_conf,
             stop_signal_tx: None,

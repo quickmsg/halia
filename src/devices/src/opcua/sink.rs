@@ -2,16 +2,15 @@ use common::error::HaliaResult;
 use message::MessageBatch;
 use tokio::sync::mpsc;
 use types::{CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp};
-use uuid::Uuid;
 
 pub struct Sink {
-    pub id: Uuid,
+    pub id: String,
     conf: CreateUpdateSourceOrSinkReq,
     pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
 }
 
 impl Sink {
-    pub async fn new(sink_id: Uuid, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
+    pub async fn new(sink_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
         todo!()
     }
 
@@ -24,7 +23,7 @@ impl Sink {
 
     pub async fn update(
         &mut self,
-        device_id: &Uuid,
+        device_id: &String,
         req: CreateUpdateSourceOrSinkReq,
     ) -> HaliaResult<()> {
         todo!()

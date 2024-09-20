@@ -9,10 +9,8 @@ use types::{
     apps::http_client::{HttpClientConf, SinkConf},
     BaseConf, SearchSourcesOrSinksInfoResp,
 };
-use uuid::Uuid;
 
 pub struct Sink {
-    pub id: Uuid,
     base_conf: BaseConf,
     ext_conf: Arc<SinkConf>,
 
@@ -25,19 +23,21 @@ pub struct Sink {
             mpsc::Receiver<MessageBatch>,
         )>,
     >,
-    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
+    pub mb_tx: mpsc::Sender<MessageBatch>,
 }
 
 impl Sink {
-    pub fn new(id: Uuid, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<Sink> {
+    pub fn new(base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<Sink> {
         Self::validate_conf(&ext_conf)?;
+
+        let (mb_tx, mb_rx) = mpsc::channel(16);
+
         Ok(Sink {
-            id,
             base_conf,
             ext_conf: Arc::new(ext_conf),
             stop_signal_tx: None,
             join_handle: None,
-            mb_tx: None,
+            mb_tx,
         })
     }
 
@@ -78,7 +78,7 @@ impl Sink {
         self.stop_signal_tx = Some(stop_signal_tx);
 
         let (mb_tx, mb_rx) = mpsc::channel(16);
-        self.mb_tx = Some(mb_tx);
+        self.mb_tx = mb_tx;
         self.event_loop(
             http_client_conf,
             stop_signal_rx,

@@ -1,9 +1,6 @@
-use std::{
-    str::FromStr,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, LazyLock,
-    },
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, LazyLock,
 };
 
 use common::{
@@ -23,7 +20,6 @@ use types::{
     },
     Pagination,
 };
-use uuid::Uuid;
 
 pub mod data;
 pub mod databoard_struct;
@@ -64,8 +60,8 @@ pub fn get_summary() -> Summary {
 
 pub async fn load_from_storage(
     storage: &Arc<AnyPool>,
-) -> HaliaResult<Arc<DashMap<Uuid, Databoard>>> {
-    let databoards: Arc<DashMap<Uuid, Databoard>> = Arc::new(DashMap::new());
+) -> HaliaResult<Arc<DashMap<String, Databoard>>> {
+    let databoards: Arc<DashMap<String, Databoard>> = Arc::new(DashMap::new());
 
     let count = storage::databoard::count(storage).await?;
     DATABOARD_COUNT.store(count, Ordering::SeqCst);
@@ -78,23 +74,20 @@ pub async fn load_from_storage(
         let conf: DataboardConf = serde_json::from_str(&db_on_databoard.conf)?;
         let mut databoard = Databoard::new(conf);
 
-        let databoard_id = Uuid::from_str(&db_on_databoard.id).unwrap();
-        let db_datas = storage::databoard_data::read_many(storage, &databoard_id).await?;
+        let db_datas = storage::databoard_data::read_many(storage, &db_on_databoard.id).await?;
         for db_data in db_datas {
             let data_conf: DataConf = serde_json::from_str(&db_data.conf)?;
-            databoard
-                .create_data(Uuid::from_str(&db_data.id).unwrap(), data_conf)
-                .await?;
+            databoard.create_data(db_data.id, data_conf).await?;
         }
 
-        databoards.insert(databoard_id, databoard);
+        databoards.insert(db_on_databoard.id, databoard);
     }
 
     Ok(databoards)
 }
 
 pub async fn get_rule_info(
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
+    databoards: &Arc<DashMap<String, Databoard>>,
     query: QueryRuleInfo,
 ) -> HaliaResult<SearchRuleInfo> {
     todo!()
@@ -120,7 +113,7 @@ pub async fn create_databoard(
     storage: &Arc<AnyPool>,
     req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
-    let id = Uuid::new_v4();
+    let id = common::get_id();
     add_databoard_count();
     storage::databoard::insert(storage, &id, req).await?;
     Ok(())
@@ -152,8 +145,8 @@ pub async fn search_databoards(
 
 pub async fn update_databoard(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: Uuid,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    databoard_id: String,
     req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
     // if let Some(mut databoard) = databoards.get_mut(&databoard_id) {
@@ -167,8 +160,8 @@ pub async fn update_databoard(
 
 pub async fn start_databoard(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: Uuid,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    databoard_id: String,
 ) -> HaliaResult<()> {
     if databoards.contains_key(&databoard_id) {
         return Ok(());
@@ -178,15 +171,13 @@ pub async fn start_databoard(
 
     let databoard_conf: DataboardConf = serde_json::from_str(&db_databoard.conf)?;
     let databoard = Databoard::new(databoard_conf);
-    databoards.insert(databoard_id, databoard);
+    databoards.insert(databoard_id.clone(), databoard);
 
     let mut databoard = databoards.get_mut(&databoard_id).unwrap();
     let db_datas = storage::databoard_data::read_many(storage, &databoard_id).await?;
     for db_data in db_datas {
         let data_conf: DataConf = serde_json::from_str(&db_data.conf)?;
-        databoard
-            .create_data(Uuid::from_str(&db_data.id).unwrap(), data_conf)
-            .await?;
+        databoard.create_data(db_data.id, data_conf).await?;
     }
 
     add_databoard_on_count();
@@ -202,8 +193,8 @@ pub async fn stop_databoard() {
 
 pub async fn delete_databoard(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: Uuid,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    databoard_id: String,
 ) -> HaliaResult<()> {
     let rule_ref_cnt = rule_ref::count_cnt_by_parent_id(storage, &databoard_id).await?;
     if rule_ref_cnt > 0 {
@@ -225,15 +216,17 @@ pub async fn delete_databoard(
 
 pub async fn create_data(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: Uuid,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    databoard_id: String,
     req: CreateUpdateDataReq,
     persist: bool,
 ) -> HaliaResult<()> {
-    let data_id = Uuid::new_v4();
+    let data_id = common::get_id();
+
+
     if let Some(mut databoard) = databoards.get_mut(&databoard_id) {
         let conf = req.ext.clone();
-        databoard.create_data(data_id, conf).await?;
+        databoard.create_data(data_id.clone(), conf).await?;
     }
 
     storage::databoard_data::insert(storage, &databoard_id, &data_id, req).await?;
@@ -242,8 +235,8 @@ pub async fn create_data(
 }
 
 pub async fn search_datas(
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: Uuid,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    databoard_id: String,
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchDatasResp> {
@@ -261,9 +254,9 @@ pub async fn search_datas(
 
 pub async fn update_data(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: Uuid,
-    databoard_data_id: Uuid,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    databoard_id: String,
+    databoard_data_id: String,
     req: CreateUpdateDataReq,
 ) -> HaliaResult<()> {
     // match databoards
@@ -283,9 +276,9 @@ pub async fn update_data(
 
 pub async fn delete_data(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: Uuid,
-    databoard_data_id: Uuid,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    databoard_id: String,
+    databoard_data_id: String,
 ) -> HaliaResult<()> {
     // match databoards
     //     .write()
@@ -303,9 +296,9 @@ pub async fn delete_data(
 }
 
 pub async fn get_data_tx(
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    databoard_id: &Uuid,
-    databoard_data_id: &Uuid,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    databoard_id: &String,
+    databoard_data_id: &String,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
     databoards
         .get_mut(databoard_id)

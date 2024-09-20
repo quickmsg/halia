@@ -261,7 +261,6 @@ dependencies = [
  "tokio",
  "tracing",
  "types",
- "uuid",
 ]
 
 [[package]]
@@ -1144,7 +1143,6 @@ dependencies = [
  "tokio",
  "tracing",
  "types",
- "uuid",
 ]
 
 [[package]]
@@ -1233,7 +1231,6 @@ dependencies = [
  "tracing",
  "types",
  "url 2.5.2",
- "uuid",
 ]
 
 [[package]]
@@ -4742,7 +4739,6 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "tracing",
- "uuid",
 ]
 
 [[package]]

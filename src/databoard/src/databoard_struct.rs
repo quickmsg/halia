@@ -3,13 +3,12 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::mpsc;
 use types::databoard::{DataConf, DataboardConf, SearchDatasRuntimeResp};
-use uuid::Uuid;
 
 use crate::data::Data;
 
 pub struct Databoard {
     conf: DataboardConf,
-    datas: DashMap<Uuid, Data>,
+    datas: DashMap<String, Data>,
 }
 
 impl Databoard {
@@ -49,7 +48,7 @@ impl Databoard {
         }
     }
 
-    pub async fn create_data(&mut self, data_id: Uuid, conf: DataConf) -> HaliaResult<()> {
+    pub async fn create_data(&mut self, data_id: String, conf: DataConf) -> HaliaResult<()> {
         let data = Data::new(conf).await?;
         self.datas.insert(data_id, data);
 
@@ -86,7 +85,7 @@ impl Databoard {
     //     SearchDatasResp { total, data: datas }
     // }
 
-    pub async fn read_data_runtime(&self, data_id: &Uuid) -> HaliaResult<SearchDatasRuntimeResp> {
+    pub async fn read_data_runtime(&self, data_id: &String) -> HaliaResult<SearchDatasRuntimeResp> {
         Ok(self
             .datas
             .get(data_id)
@@ -97,7 +96,7 @@ impl Databoard {
 
     pub async fn update_data(
         &mut self,
-        data_id: Uuid,
+        data_id: String,
         old_conf: DataConf,
         new_conf: DataConf,
     ) -> HaliaResult<()> {
@@ -114,7 +113,7 @@ impl Databoard {
             .await)
     }
 
-    pub async fn delete_data(&mut self, data_id: Uuid) -> HaliaResult<()> {
+    pub async fn delete_data(&mut self, data_id: String) -> HaliaResult<()> {
         self.datas
             .get_mut(&data_id)
             .ok_or(HaliaError::NotFound)?
@@ -124,10 +123,13 @@ impl Databoard {
         Ok(())
     }
 
-    pub async fn get_data_tx(&mut self, data_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    pub async fn get_data_tx(
+        &mut self,
+        data_id: &String,
+    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         Ok(self
             .datas
-            .get(&data_id)
+            .get(data_id)
             .ok_or(HaliaError::NotFound)?
             .mb_tx
             .clone())

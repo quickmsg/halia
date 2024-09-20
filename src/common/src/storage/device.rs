@@ -86,9 +86,9 @@ pub async fn create_device(pool: &AnyPool, id: &Uuid, req: CreateUpdateDeviceReq
     Ok(())
 }
 
-pub async fn read_device(storage: &AnyPool, id: &Uuid) -> Result<Device> {
+pub async fn read_device(storage: &AnyPool, id: &String) -> Result<Device> {
     let device = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE id = ?1")
-        .bind(id.to_string())
+        .bind(id)
         .fetch_one(storage)
         .await?;
 
@@ -315,7 +315,7 @@ pub async fn delete_device(pool: &AnyPool, id: &Uuid) -> Result<()> {
 
 pub async fn create_event(
     storage: &AnyPool,
-    id: &Uuid,
+    id: &String,
     event_type: i32,
     info: Option<String>,
 ) -> Result<()> {
@@ -325,7 +325,7 @@ pub async fn create_event(
             sqlx::query(
                 "INSERT INTO device_events (id, event_type, ts, info) VALUES (?1, ?2, ?3, ?4)",
             )
-            .bind(id.to_string())
+            .bind(id)
             .bind(event_type)
             .bind(ts)
             .bind(info)

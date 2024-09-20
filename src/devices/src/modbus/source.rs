@@ -11,11 +11,10 @@ use tokio::{
 };
 use tracing::warn;
 use types::devices::modbus::{Area, SourceConf};
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct Source {
-    pub id: Uuid,
+    pub id: String,
 
     pub conf: SourceConf,
     quantity: u16,
@@ -24,7 +23,7 @@ pub struct Source {
     join_handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
-            mpsc::Sender<Uuid>,
+            mpsc::Sender<String>,
             broadcast::Receiver<bool>,
         )>,
     >,
@@ -35,9 +34,9 @@ pub struct Source {
 
 impl Source {
     pub fn new(
-        id: Uuid,
+        id: String,
         conf: SourceConf,
-        read_tx: mpsc::Sender<Uuid>,
+        read_tx: mpsc::Sender<String>,
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         // Self::validate_conf(&ext_conf)?;
@@ -124,7 +123,7 @@ impl Source {
     fn event_loop(
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
-        read_tx: mpsc::Sender<Uuid>,
+        read_tx: mpsc::Sender<String>,
         mut device_err_rx: broadcast::Receiver<bool>,
     ) {
         let interval = self.conf.interval;
@@ -140,7 +139,7 @@ impl Source {
 
                     _ = interval.tick() => {
                         if !device_err {
-                            _ = read_tx.send(point_id).await;
+                            _ = read_tx.send(point_id.clone()).await;
                         }
                     }
 

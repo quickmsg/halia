@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{BaseConf, RuleRef};
 
@@ -72,7 +71,7 @@ pub struct SearchAPIsResp {
 
 #[derive(Serialize)]
 pub struct SearchAPIsItemResp {
-    pub id: Uuid,
+    pub id: String,
     pub conf: CreateUpdateAPIReq,
     #[serde(flatten)]
     pub rule_ref: RuleRef,
@@ -145,7 +144,7 @@ pub struct SearchObservesResp {
 
 #[derive(Serialize)]
 pub struct SearchObservesItemResp {
-    pub id: Uuid,
+    pub id: String,
     pub conf: CreateUpdateObserveReq,
     pub rule_ref: RuleRef,
 }
@@ -184,7 +183,7 @@ pub struct SearchSinksResp {
 
 #[derive(Serialize)]
 pub struct SearchSinksItemResp {
-    pub id: Uuid,
+    pub id: String,
     pub conf: CreateUpdateSinkReq,
     pub rule_ref: RuleRef,
 }
