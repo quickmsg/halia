@@ -53,7 +53,7 @@ async fn get_rule_info(
     State(state): State<AppState>,
     Query(query): Query<QueryRuleInfo>,
 ) -> AppResult<AppSuccess<SearchRuleInfo>> {
-    let rule_info = apps::get_rule_info(&state.apps, query).await?;
+    let rule_info = apps::get_rule_info(&state.storage, &state.apps, query).await?;
     Ok(AppSuccess::data(rule_info))
 }
 

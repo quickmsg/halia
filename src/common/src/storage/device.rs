@@ -14,6 +14,7 @@ pub struct Device {
     pub name: String,
     pub desc: Option<String>,
     pub conf: String,
+    pub ts: i64,
 }
 
 #[derive(FromRow)]

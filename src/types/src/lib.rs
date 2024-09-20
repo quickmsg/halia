@@ -86,7 +86,7 @@ pub struct SearchSourcesOrSinksItemResp {
 
 #[derive(Serialize)]
 pub struct SearchSourcesOrSinksInfoResp {
-    pub id: Uuid,
+    pub id: String,
     pub conf: CreateUpdateSourceOrSinkReq,
 }
 

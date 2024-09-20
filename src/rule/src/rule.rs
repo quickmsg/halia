@@ -145,6 +145,7 @@ impl Rule {
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
                     let rule_info = apps::get_rule_info(
+                        storage,
                         apps,
                         types::apps::QueryRuleInfo {
                             app_id: source_node.app_id,
@@ -178,6 +179,7 @@ impl Rule {
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
                     let rule_info = apps::get_rule_info(
+                        storage,
                         apps,
                         types::apps::QueryRuleInfo {
                             app_id: sink_node.app_id,

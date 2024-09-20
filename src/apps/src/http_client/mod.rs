@@ -67,7 +67,7 @@ impl App for HttpClient {
             return Err(HaliaError::NameExists);
         }
 
-        if req.app_type == AppType::HttpClient {
+        if req.typ == AppType::HttpClient {
             let ext_conf: HttpClientConf = serde_json::from_value(req.conf.ext.clone())?;
             if self.ext_conf.host == ext_conf.host && self.ext_conf.port == ext_conf.port {
                 return Err(HaliaError::AddressExists);

@@ -111,7 +111,7 @@ pub async fn read_all_by_parent_id(
     Ok(sources_or_sinks)
 }
 
-pub async fn read(storage: &AnyPool, id: &Uuid) -> Result<SourceOrSink> {
+pub async fn read_one(storage: &AnyPool, id: &Uuid) -> Result<SourceOrSink> {
     let source_or_sink =
         sqlx::query_as::<_, SourceOrSink>("SELECT * FROM sources_or_sinks WHERE id = ?1")
             .bind(id.to_string())

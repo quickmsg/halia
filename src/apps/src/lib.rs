@@ -17,10 +17,11 @@ use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
-        AppConf, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsResp, SearchRuleInfo,
-        Summary,
+        AppConf, AppType, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsItemCommon,
+        SearchAppsItemConf, SearchAppsItemResp, SearchAppsResp, SearchRuleInfo, Summary,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
+    SearchSourcesOrSinksResp,
 };
 use uuid::Uuid;
 
@@ -107,11 +108,13 @@ pub trait App: Send + Sync {
 pub async fn load_from_storage(
     storage: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<DashMap<Uuid, Box<dyn App>>>> {
-    let count = storage::app::count_all(storage).await?;
+    let apps: Arc<DashMap<Uuid, Box<dyn App>>> = Arc::new(DashMap::new());
+
+    let count = storage::app::count(storage).await?;
     APP_COUNT.store(count, Ordering::SeqCst);
 
-    let db_apps = storage::app::read_on(storage).await?;
-    let apps: Arc<DashMap<Uuid, Box<dyn App>>> = Arc::new(DashMap::new());
+    let db_apps = storage::app::read_on_all(storage).await?;
+
     for db_app in db_apps {
         let app_id = Uuid::from_str(&db_app.id).unwrap();
         start_app(storage, &apps, app_id).await.unwrap();
@@ -129,40 +132,54 @@ pub async fn get_summary() -> Summary {
 }
 
 pub async fn get_rule_info(
+    storage: &Arc<AnyPool>,
     apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     query: QueryRuleInfo,
 ) -> HaliaResult<SearchRuleInfo> {
-    todo!()
-    // match apps
-    //     .read()
-    //     .await
-    //     .iter()
-    //     .find(|app| *app.get_id() == query.app_id)
-    // {
-    //     Some(app) => {
-    //         let app_info = app.search().await;
-    //         match (query.source_id, query.sink_id) {
-    //             (Some(source_id), None) => {
-    //                 let source_info = app.search_source(&source_id).await?;
-    //                 Ok(SearchRuleInfo {
-    //                     app: app_info,
-    //                     source: Some(source_info),
-    //                     sink: None,
-    //                 })
-    //             }
-    //             (None, Some(sink_id)) => {
-    //                 let sink_info = app.search_sink(&sink_id).await?;
-    //                 Ok(SearchRuleInfo {
-    //                     app: app_info,
-    //                     source: None,
-    //                     sink: Some(sink_info),
-    //                 })
-    //             }
-    //             _ => return Err(HaliaError::Common("查询id错误".to_owned())),
-    //         }
-    //     }
-    //     None => Err(HaliaError::NotFound),
-    // }
+    let db_app = storage::app::read_one(storage, &query.app_id).await?;
+
+    let app_resp = transer_db_app_to_resp(storage, db_app, &query.app_id).await?;
+    match (query.source_id, query.sink_id) {
+        (Some(source_id), None) => {
+            let db_source = storage::source_or_sink::read_one(storage, &source_id).await?;
+            Ok(SearchRuleInfo {
+                app: app_resp,
+                source: Some(SearchSourcesOrSinksInfoResp {
+                    id: db_source.id,
+                    conf: CreateUpdateSourceOrSinkReq {
+                        base: BaseConf {
+                            name: db_source.name,
+                            desc: db_source.desc,
+                        },
+                        ext: serde_json::from_str(&db_source.conf)?,
+                    },
+                }),
+                sink: None,
+            })
+        }
+        (None, Some(sink_id)) => {
+            let db_sink = storage::source_or_sink::read_one(storage, &sink_id).await?;
+            Ok(SearchRuleInfo {
+                app: app_resp,
+                source: Some(SearchSourcesOrSinksInfoResp {
+                    id: db_sink.id,
+                    conf: CreateUpdateSourceOrSinkReq {
+                        base: BaseConf {
+                            name: db_sink.name,
+                            desc: db_sink.desc,
+                        },
+                        ext: serde_json::from_str(&db_sink.conf)?,
+                    },
+                }),
+                sink: None,
+            })
+        }
+        _ => {
+            return Err(HaliaError::Common(
+                "查询source_id或sink_id参数错误！".to_string(),
+            ))
+        }
+    }
 }
 
 pub async fn create_app(
@@ -186,48 +203,23 @@ pub async fn create_app(
 }
 
 pub async fn search_apps(
+    storage: &Arc<AnyPool>,
     apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     pagination: Pagination,
     query: QueryParams,
-) -> SearchAppsResp {
-    // let mut data = vec![];
-    // let mut total = 0;
+) -> HaliaResult<SearchAppsResp> {
+    let (count, db_apps) = storage::app::query(storage, pagination, query).await?;
 
-    // for app in apps.read().await.iter().rev() {
-    //     let app = app.search().await;
-    //     if let Some(app_type) = &query.app_type {
-    //         if *app_type != app.common.app_type {
-    //             continue;
-    //         }
-    //     }
+    let mut apps_resp = Vec::with_capacity(db_apps.len());
+    for db_app in db_apps {
+        let id = Uuid::from_str(&db_app.id).unwrap();
+        apps_resp.push(transer_db_app_to_resp(storage, db_app, &id).await?);
+    }
 
-    //     if let Some(name) = &query.name {
-    //         if !app.conf.base.name.contains(name) {
-    //             continue;
-    //         }
-    //     }
-    //     if let Some(on) = &query.on {
-    //         if app.common.on != *on {
-    //             continue;
-    //         }
-    //     }
-
-    //     if let Some(err) = &query.err {
-    //         if app.common.err.is_some() != *err {
-    //             continue;
-    //         }
-    //     }
-
-    //     if total >= (pagination.page - 1) * pagination.size
-    //         && total < pagination.page * pagination.size
-    //     {
-    //         data.push(app);
-    //     }
-    //     total += 1;
-    // }
-
-    // SearchAppsResp { total, data }
-    todo!()
+    Ok(SearchAppsResp {
+        total: count,
+        data: apps_resp,
+    })
 }
 
 pub async fn update_app(
@@ -260,8 +252,47 @@ pub async fn start_app(
         return Ok(());
     }
 
-    // 创建事件
-    // todo 从数据库读取配置
+    let db_app = storage::app::read_one(storage, &app_id).await?;
+    let app_type = AppType::try_from(db_app.typ)?;
+    let app_id = Uuid::from_str(&db_app.id).unwrap();
+    let app_conf = AppConf {
+        base: BaseConf {
+            name: db_app.name,
+            desc: db_app.desc,
+        },
+        ext: serde_json::from_str(&db_app.conf)?,
+    };
+
+    let app = match app_type {
+        AppType::MqttClient => mqtt_client::new(app_id, app_conf)?,
+        AppType::HttpClient => http_client::new(app_id, app_conf)?,
+    };
+    apps.insert(app_id, app);
+
+    let mut app = apps.get_mut(&app_id).unwrap();
+    let db_sources = storage::source_or_sink::read_all_by_parent_id(
+        storage,
+        &app_id,
+        storage::source_or_sink::Type::Source,
+    )
+    .await?;
+    for db_source in db_sources {
+        let conf: serde_json::Value = serde_json::from_str(&db_source.conf).unwrap();
+        app.create_source(Uuid::from_str(&db_source.id).unwrap(), conf)
+            .await?;
+    }
+
+    let db_sinks = storage::source_or_sink::read_all_by_parent_id(
+        storage,
+        &app_id,
+        storage::source_or_sink::Type::Sink,
+    )
+    .await?;
+    for db_sink in db_sinks {
+        let conf: serde_json::Value = serde_json::from_str(&db_sink.conf).unwrap();
+        app.create_sink(Uuid::from_str(&db_sink.id).unwrap(), conf)
+            .await?;
+    }
 
     storage::app::update_status(storage, &app_id, true).await?;
     add_app_on_count();
@@ -278,16 +309,22 @@ pub async fn stop_app(
         return Ok(());
     }
 
+    let active_rule_ref_cnt =
+        storage::rule_ref::count_active_cnt_by_resource_id(storage, &app_id).await?;
+    if active_rule_ref_cnt > 0 {
+        return Err(HaliaError::StopActiveRefing);
+    }
+
     apps.get_mut(&app_id).unwrap().stop().await?;
 
     apps.remove(&app_id);
-
     storage::app::update_status(storage, &app_id, false).await?;
+    sub_app_on_count();
     Ok(())
 }
 
 pub async fn delete_app(
-    pool: &Arc<AnyPool>,
+    storage: &Arc<AnyPool>,
     apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
     app_id: Uuid,
 ) -> HaliaResult<()> {
@@ -295,10 +332,15 @@ pub async fn delete_app(
         return Err(HaliaError::Common("请先停止应用".to_owned()));
     }
 
+    let cnt = storage::rule_ref::count_cnt_by_parent_id(storage, &app_id).await?;
+    if cnt > 0 {
+        return Err(HaliaError::DeleteRefing);
+    }
+
     // 删除事件 测试是否可以删除
 
     sub_app_count();
-    storage::app::delete(pool, &app_id).await?;
+    storage::app::delete(storage, &app_id).await?;
     Ok(())
 }
 
@@ -465,4 +507,39 @@ pub async fn get_sink_tx(
         .ok_or(HaliaError::Stopped)?
         .get_sink_tx(sink_id)
         .await
+}
+
+async fn transer_db_app_to_resp(
+    storage: &Arc<AnyPool>,
+    db_app: storage::app::App,
+    id: &Uuid,
+) -> HaliaResult<SearchAppsItemResp> {
+    Ok(SearchAppsItemResp {
+        common: SearchAppsItemCommon {
+            id: db_app.id,
+            typ: db_app.typ,
+            on: db_app.status == 1,
+            source_cnt: storage::source_or_sink::count_by_parent_id(
+                storage,
+                id,
+                storage::source_or_sink::Type::Source,
+            )
+            .await?,
+            sink_cnt: storage::source_or_sink::count_by_parent_id(
+                storage,
+                id,
+                storage::source_or_sink::Type::Sink,
+            )
+            .await?,
+            // TODO
+            memory_info: None,
+        },
+        conf: SearchAppsItemConf {
+            base: BaseConf {
+                name: db_app.name,
+                desc: db_app.desc,
+            },
+            ext: serde_json::from_str(&db_app.conf)?,
+        },
+    })
 }

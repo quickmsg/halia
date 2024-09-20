@@ -12,7 +12,8 @@ pub mod mqtt_client;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateAppReq {
-    pub app_type: AppType,
+    #[serde(rename = "type")]
+    pub typ: AppType,
     #[serde(flatten)]
     pub conf: AppConf,
 }
@@ -39,11 +40,11 @@ impl fmt::Display for AppType {
     }
 }
 
-impl TryFrom<&str> for AppType {
+impl TryFrom<String> for AppType {
     type Error = Error;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
             "mqtt_client" => Ok(AppType::MqttClient),
             "http_client" => Ok(AppType::HttpClient),
             _ => bail!("未知应用类型: {}", value),
@@ -61,7 +62,8 @@ pub struct Summary {
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    pub app_type: Option<AppType>,
+    #[serde(rename = "type")]
+    pub typ: Option<AppType>,
     pub on: Option<bool>,
     pub err: Option<bool>,
 }
@@ -76,15 +78,21 @@ pub struct SearchAppsResp {
 pub struct SearchAppsItemResp {
     pub common: SearchAppsItemCommon,
     pub conf: SearchAppsItemConf,
-    pub source_cnt: usize,
-    pub sink_cnt: usize,
 }
 
 #[derive(Serialize)]
 pub struct SearchAppsItemCommon {
-    pub id: Uuid,
-    pub app_type: AppType,
+    pub id: String,
+    #[serde(rename = "type")]
+    pub typ: String,
     pub on: bool,
+    pub source_cnt: usize,
+    pub sink_cnt: usize,
+    pub memory_info: Option<SearchAppsItemCommonMemory>,
+}
+
+#[derive(Serialize)]
+pub struct SearchAppsItemCommonMemory {
     pub err: Option<String>,
     pub rtt: u16,
 }
