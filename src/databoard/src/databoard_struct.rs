@@ -1,21 +1,22 @@
 use common::error::{HaliaError, HaliaResult};
+use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::mpsc;
-use types::databoard::{CreateUpdateDataReq, DataboardConf, SearchDatasInfoResp};
+use types::databoard::{DataConf, DataboardConf, SearchDatasRuntimeResp};
 use uuid::Uuid;
 
 use crate::data::Data;
 
 pub struct Databoard {
     conf: DataboardConf,
-    pub datas: Vec<Data>,
+    datas: DashMap<Uuid, Data>,
 }
 
 impl Databoard {
     pub fn new(conf: DataboardConf) -> Self {
         Self {
             conf,
-            datas: vec![],
+            datas: DashMap::new(),
         }
     }
 
@@ -42,21 +43,15 @@ impl Databoard {
     //     Ok(())
     // }
 
-    pub async fn stop(&mut self) -> HaliaResult<()> {
-        Ok(())
+    pub async fn stop(&mut self) {
+        for mut data in self.datas.iter_mut() {
+            data.stop().await;
+        }
     }
 
-    pub async fn create_data(
-        &mut self,
-        data_id: Uuid,
-        req: CreateUpdateDataReq,
-    ) -> HaliaResult<()> {
-        for data in self.datas.iter() {
-            data.check_duplicate(&req)?;
-        }
-
-        let data = Data::new(data_id, req).await?;
-        self.datas.push(data);
+    pub async fn create_data(&mut self, data_id: Uuid, conf: DataConf) -> HaliaResult<()> {
+        let data = Data::new(conf).await?;
+        self.datas.insert(data_id, data);
 
         Ok(())
     }
@@ -91,45 +86,50 @@ impl Databoard {
     //     SearchDatasResp { total, data: datas }
     // }
 
-    pub async fn search_data(&self, data_id: &Uuid) -> HaliaResult<SearchDatasInfoResp> {
-        match self.datas.iter().find(|data| data.id == *data_id) {
-            Some(data) => Ok(data.search().await),
-            None => return Err(HaliaError::NotFound),
-        }
+    pub async fn read_data_runtime(&self, data_id: &Uuid) -> HaliaResult<SearchDatasRuntimeResp> {
+        Ok(self
+            .datas
+            .get(data_id)
+            .ok_or(HaliaError::NotFound)?
+            .read()
+            .await)
     }
 
     pub async fn update_data(
         &mut self,
         data_id: Uuid,
-        req: CreateUpdateDataReq,
+        old_conf: DataConf,
+        new_conf: DataConf,
     ) -> HaliaResult<()> {
-        for data in self.datas.iter() {
-            if data.id != data_id {
-                data.check_duplicate(&req)?;
-            }
-        }
-
-        match self.datas.iter_mut().find(|data| data.id == data_id) {
-            Some(data) => data.update(req).await,
-            None => return Err(HaliaError::NotFound),
-        }
+        // for data in self.datas.iter() {
+        //     if data.id != data_id {
+        //         data.check_duplicate(&req)?;
+        //     }
+        // }
+        Ok(self
+            .datas
+            .get_mut(&data_id)
+            .ok_or(HaliaError::NotFound)?
+            .update(old_conf, new_conf)
+            .await)
     }
 
     pub async fn delete_data(&mut self, data_id: Uuid) -> HaliaResult<()> {
-        match self.datas.iter_mut().find(|data| data.id == data_id) {
-            Some(source) => source.stop().await,
-            None => unreachable!(),
-        }
-
-        self.datas.retain(|data| data.id != data_id);
-
+        self.datas
+            .get_mut(&data_id)
+            .ok_or(HaliaError::NotFound)?
+            .stop()
+            .await;
+        self.datas.remove(&data_id);
         Ok(())
     }
 
     pub async fn get_data_tx(&mut self, data_id: &Uuid) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.datas.iter_mut().find(|data| data.id == *data_id) {
-            Some(data) => Ok(data.mb_tx.clone()),
-            None => unreachable!(),
-        }
+        Ok(self
+            .datas
+            .get(&data_id)
+            .ok_or(HaliaError::NotFound)?
+            .mb_tx
+            .clone())
     }
 }

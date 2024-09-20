@@ -7,7 +7,25 @@ use uuid::Uuid;
 pub struct Rule {
     pub id: String,
     pub status: i32,
+    pub name: String,
+    pub desc: Option<String>,
     pub conf: String,
+}
+
+pub async fn init_table(storage: &AnyPool) -> Result<()> {
+    sqlx::query(
+        r#"  
+CREATE TABLE IF NOT EXISTS rules (
+    id TEXT PRIMARY KEY,
+    status INTEGER NOT NULL,
+    conf TEXT NOT NULL
+);
+"#,
+    )
+    .execute(storage)
+    .await?;
+
+    Ok(())
 }
 
 pub async fn create_rule(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {

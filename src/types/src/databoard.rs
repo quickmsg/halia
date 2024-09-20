@@ -6,11 +6,13 @@ use crate::{BaseConf, RuleRef};
 #[derive(Serialize)]
 pub struct Summary {
     pub total: usize,
+    pub on: usize,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
+    pub on: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
@@ -30,7 +32,7 @@ pub struct SearchDataboardsResp {
 
 #[derive(Serialize)]
 pub struct SearchDataboardsItemResp {
-    pub id: Uuid,
+    pub id: String,
     pub conf: CreateUpdateDataboardReq,
 }
 
@@ -62,6 +64,11 @@ pub struct SearchDatasItemResp {
 pub struct SearchDatasInfoResp {
     pub id: Uuid,
     pub conf: CreateUpdateDataReq,
+    pub value: serde_json::Value,
+    pub ts: u64,
+}
+
+pub struct SearchDatasRuntimeResp {
     pub value: serde_json::Value,
     pub ts: u64,
 }

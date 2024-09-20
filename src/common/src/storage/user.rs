@@ -7,6 +7,21 @@ pub struct User {
     pub password: String,
 }
 
+pub async fn init_table(storage: &AnyPool) -> Result<()> {
+    sqlx::query(
+        r#"  
+CREATE TABLE IF NOT EXISTS users (
+    username TEXT NOT NULL,
+    password TEXT NOT NULL
+)
+"#,
+    )
+    .execute(storage)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn create_user(pool: &AnyPool, username: String, password: String) -> Result<()> {
     sqlx::query("INSERT INTO users (username, password) VALUES (?1, ?2)")
         .bind(username)

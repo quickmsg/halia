@@ -48,7 +48,7 @@ async fn create_databoard(
     State(state): State<AppState>,
     Json(req): Json<CreateUpdateDataboardReq>,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::create_databoard(&state.storage, &state.databoards, req).await?;
+    databoard::create_databoard(&state.storage, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -57,9 +57,7 @@ async fn search_databoards(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchDataboardsResp>> {
-    let resp =
-        databoard::search_databoards(&state.storage, &state.databoards, pagination, query_params)
-            .await?;
+    let resp = databoard::search_databoards(&state.storage, pagination, query_params).await?;
     Ok(AppSuccess::data(resp))
 }
 
@@ -85,15 +83,7 @@ async fn create_data(
     Path(databoard_id): Path<Uuid>,
     Json(req): Json<CreateUpdateDataReq>,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::create_data(
-        &state.storage,
-        &state.databoards,
-        databoard_id,
-        Uuid::new_v4(),
-        req,
-        true,
-    )
-    .await?;
+    databoard::create_data(&state.storage, &state.databoards, databoard_id, req, true).await?;
     Ok(AppSuccess::empty())
 }
 

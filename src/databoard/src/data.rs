@@ -6,7 +6,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use common::error::{HaliaError, HaliaResult};
+use common::error::HaliaResult;
 use message::MessageBatch;
 use tokio::{
     select,
@@ -14,16 +14,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::error;
-use types::{
-    databoard::{CreateUpdateDataReq, DataConf, SearchDatasInfoResp},
-    BaseConf,
-};
-use uuid::Uuid;
+use types::databoard::{DataConf, SearchDatasRuntimeResp};
 
 pub struct Data {
-    pub id: Uuid,
-    base_conf: BaseConf,
-    ext_conf: DataConf,
+    conf: DataConf,
 
     stop_signal_tx: mpsc::Sender<()>,
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
@@ -33,16 +27,12 @@ pub struct Data {
 }
 
 impl Data {
-    pub async fn new(id: Uuid, req: CreateUpdateDataReq) -> HaliaResult<Self> {
-        Self::validate_conf(&req.ext)?;
-
+    pub async fn new(conf: DataConf) -> HaliaResult<Self> {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
         let mut data = Data {
-            id,
-            base_conf: req.base,
-            ext_conf: req.ext,
+            conf,
             mb_tx,
             stop_signal_tx,
             value: Arc::new(RwLock::new(serde_json::Value::Null)),
@@ -59,20 +49,20 @@ impl Data {
         Ok(())
     }
 
-    pub fn check_duplicate(&self, req: &CreateUpdateDataReq) -> HaliaResult<()> {
-        if self.base_conf.name == req.base.name {
-            return Err(HaliaError::NameExists);
-        }
+    // pub fn check_duplicate(&self, req: &CreateUpdateDataReq) -> HaliaResult<()> {
+    //     if self.base_conf.name == req.base.name {
+    //         return Err(HaliaError::NameExists);
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     async fn event_loop(
         &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
     ) {
-        let field = self.ext_conf.field.clone();
+        let field = self.conf.field.clone();
         let value = self.value.clone();
         let ts = self.ts.clone();
         let join_handle = tokio::spawn(async move {
@@ -113,36 +103,20 @@ impl Data {
         }
     }
 
-    pub async fn search(&self) -> SearchDatasInfoResp {
-        SearchDatasInfoResp {
-            id: self.id.clone(),
-            conf: CreateUpdateDataReq {
-                base: self.base_conf.clone(),
-                ext: self.ext_conf.clone(),
-            },
+    pub async fn read(&self) -> SearchDatasRuntimeResp {
+        SearchDatasRuntimeResp {
             value: self.value.read().await.clone(),
             ts: self.ts.load(Ordering::SeqCst),
         }
     }
 
-    pub async fn update(&mut self, req: CreateUpdateDataReq) -> HaliaResult<()> {
-        Self::validate_conf(&req.ext)?;
-
-        let mut restart = false;
-        if self.ext_conf != req.ext {
-            restart = true;
-        }
-        self.base_conf = req.base;
-        self.ext_conf = req.ext;
-
-        if restart {
+    pub async fn update(&mut self, old_conf: DataConf, new_conf: DataConf) {
+        if new_conf != old_conf {
+            self.conf = new_conf;
             self.stop_signal_tx.send(()).await.unwrap();
-
             let (stop_signal_rx, mb_rx) = self.join_handle.take().unwrap().await.unwrap();
             self.event_loop(stop_signal_rx, mb_rx).await;
         }
-
-        Ok(())
     }
 
     pub async fn stop(&mut self) {

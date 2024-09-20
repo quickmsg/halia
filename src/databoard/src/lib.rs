@@ -15,11 +15,11 @@ use databoard_struct::Databoard;
 use message::MessageBatch;
 use sqlx::AnyPool;
 use tokio::sync::mpsc;
-use tracing::debug;
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, DataboardConf, QueryParams, QueryRuleInfo,
-        SearchDataboardsItemResp, SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, DataboardConf, QueryParams,
+        QueryRuleInfo, SearchDataboardsItemResp, SearchDataboardsResp, SearchDatasResp,
+        SearchRuleInfo, Summary,
     },
     Pagination,
 };
@@ -29,6 +29,7 @@ pub mod data;
 pub mod databoard_struct;
 
 static DATABOARD_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
+static DATABOARD_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 
 fn get_databoard_count() -> usize {
     DATABOARD_COUNT.load(Ordering::SeqCst)
@@ -42,35 +43,51 @@ fn sub_databoard_count() {
     DATABOARD_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
+fn get_databoard_on_count() -> usize {
+    DATABOARD_ON_COUNT.load(Ordering::SeqCst)
+}
+
+fn add_databoard_on_count() {
+    DATABOARD_ON_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
+fn sub_databoard_on_count() {
+    DATABOARD_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
 pub fn get_summary() -> Summary {
     Summary {
         total: get_databoard_count(),
+        on: get_databoard_on_count(),
     }
 }
 
 pub async fn load_from_storage(
     storage: &Arc<AnyPool>,
 ) -> HaliaResult<Arc<DashMap<Uuid, Databoard>>> {
-    let db_databoards = storage::databoard::read_databoards(storage).await?;
     let databoards: Arc<DashMap<Uuid, Databoard>> = Arc::new(DashMap::new());
-    for db_databoard in db_databoards {
-        let databoard_id = Uuid::from_str(&db_databoard.id).unwrap();
 
-        let db_datas = storage::databoard::read_databoard_datas(storage, &databoard_id).await?;
-        debug!("{}", db_datas.len());
-        // create_databoard(storage, &databoards, databoard_id, db_databoard.conf).await?;
+    let count = storage::databoard::count(storage).await?;
+    DATABOARD_COUNT.store(count, Ordering::SeqCst);
 
-        // for db_data in db_datas {
-        //     create_data(
-        //         storage,
-        //         &databoards,
-        //         databoard_id,
-        //         Uuid::from_str(&db_data.id).unwrap(),
-        //         db_data.conf,
-        //         false,
-        //     )
-        //     .await?;
-        // }
+    let db_on_databoards = storage::databoard::read_many_on(storage).await?;
+    let on_count = db_on_databoards.len();
+    DATABOARD_ON_COUNT.store(on_count, Ordering::SeqCst);
+
+    for db_on_databoard in db_on_databoards {
+        let conf: DataboardConf = serde_json::from_str(&db_on_databoard.conf)?;
+        let mut databoard = Databoard::new(conf);
+
+        let databoard_id = Uuid::from_str(&db_on_databoard.id).unwrap();
+        let db_datas = storage::databoard_data::read_many(storage, &databoard_id).await?;
+        for db_data in db_datas {
+            let data_conf: DataConf = serde_json::from_str(&db_data.conf)?;
+            databoard
+                .create_data(Uuid::from_str(&db_data.id).unwrap(), data_conf)
+                .await?;
+        }
+
+        databoards.insert(databoard_id, databoard);
     }
 
     Ok(databoards)
@@ -101,30 +118,25 @@ pub async fn get_rule_info(
 
 pub async fn create_databoard(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
     req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
-    let conf = req.ext.clone();
     let id = Uuid::new_v4();
-    databoards.insert(id, Databoard::new(conf));
     add_databoard_count();
-    storage::databoard::create_databoard(storage, &id, req).await?;
+    storage::databoard::insert(storage, &id, req).await?;
     Ok(())
 }
 
 pub async fn search_databoards(
     storage: &Arc<AnyPool>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchDataboardsResp> {
-    let (count, db_databoards) =
-        storage::databoard::search_databoards(storage, pagination, query).await?;
+    let (count, db_databoards) = storage::databoard::query(storage, pagination, query).await?;
 
     let mut resp_databoards = vec![];
     for db_databoard in db_databoards {
         resp_databoards.push(SearchDataboardsItemResp {
-            id: Uuid::from_str(&db_databoard.id).unwrap(),
+            id: db_databoard.id,
             conf: CreateUpdateDataboardReq {
                 base: serde_json::from_str(&db_databoard.conf).unwrap(),
                 ext: DataboardConf {},
@@ -144,23 +156,44 @@ pub async fn update_databoard(
     databoard_id: Uuid,
     req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
-    // match databoards
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|databoard| databoard.id == databoard_id)
-    // {
-    //     Some(databoard) => databoard.update(req.base)?,
-    //     None => return Err(HaliaError::NotFound),
+    // if let Some(mut databoard) = databoards.get_mut(&databoard_id) {
+    //     databoard.update(req).await?;
     // }
 
-    storage::databoard::update_databoard(storage, &databoard_id, req).await?;
+    storage::databoard::update_conf(storage, &databoard_id, req).await?;
 
     Ok(())
 }
 
-pub async fn start_databoard() {
-    todo!()
+pub async fn start_databoard(
+    storage: &Arc<AnyPool>,
+    databoards: &Arc<DashMap<Uuid, Databoard>>,
+    databoard_id: Uuid,
+) -> HaliaResult<()> {
+    if databoards.contains_key(&databoard_id) {
+        return Ok(());
+    }
+
+    let db_databoard = storage::databoard::read_one(storage, &databoard_id).await?;
+
+    let databoard_conf: DataboardConf = serde_json::from_str(&db_databoard.conf)?;
+    let databoard = Databoard::new(databoard_conf);
+    databoards.insert(databoard_id, databoard);
+
+    let mut databoard = databoards.get_mut(&databoard_id).unwrap();
+    let db_datas = storage::databoard_data::read_many(storage, &databoard_id).await?;
+    for db_data in db_datas {
+        let data_conf: DataConf = serde_json::from_str(&db_data.conf)?;
+        databoard
+            .create_data(Uuid::from_str(&db_data.id).unwrap(), data_conf)
+            .await?;
+    }
+
+    add_databoard_on_count();
+
+    storage::databoard::update_status(storage, &databoard_id, true).await?;
+
+    Ok(())
 }
 
 pub async fn stop_databoard() {
@@ -181,11 +214,11 @@ pub async fn delete_databoard(
         .get_mut(&databoard_id)
         .ok_or(HaliaError::NotFound)?
         .stop()
-        .await?;
+        .await;
 
     sub_databoard_count();
     databoards.remove(&databoard_id);
-    storage::databoard::delete_databoard(storage, &databoard_id).await?;
+    storage::databoard::delete(storage, &databoard_id).await?;
 
     Ok(())
 }
@@ -194,20 +227,16 @@ pub async fn create_data(
     storage: &Arc<AnyPool>,
     databoards: &Arc<DashMap<Uuid, Databoard>>,
     databoard_id: Uuid,
-    databoard_data_id: Uuid,
     req: CreateUpdateDataReq,
     persist: bool,
 ) -> HaliaResult<()> {
-    databoards
-        .get_mut(&databoard_id)
-        .ok_or(HaliaError::NotFound)?
-        .create_data(databoard_data_id, req)
-        .await?;
+    let data_id = Uuid::new_v4();
+    if let Some(mut databoard) = databoards.get_mut(&databoard_id) {
+        let conf = req.ext.clone();
+        databoard.create_data(data_id, conf).await?;
+    }
 
-    // if persist {
-    //     storage::databoard::create_databoard_data(storage, &databoard_id, &databoard_data_id, req)
-    //         .await?;
-    // }
+    storage::databoard_data::insert(storage, &databoard_id, &data_id, req).await?;
 
     Ok(())
 }
@@ -247,7 +276,7 @@ pub async fn update_data(
     //     None => return Err(HaliaError::NotFound),
     // }
 
-    storage::databoard::update_databoard_data(storage, &databoard_data_id, req).await?;
+    storage::databoard_data::update(storage, &databoard_data_id, req).await?;
 
     Ok(())
 }
@@ -268,7 +297,7 @@ pub async fn delete_data(
     //     None => return Err(HaliaError::NotFound),
     // }
 
-    storage::databoard::delete_databoard_data(storage, &databoard_data_id).await?;
+    storage::databoard_data::delete_one(storage, &databoard_data_id).await?;
 
     Ok(())
 }
