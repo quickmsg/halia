@@ -7,7 +7,7 @@ use types::{
     apps::{
         CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsResp, SearchRuleInfo, Summary,
     },
-    CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
+    CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, SearchSourcesOrSinksResp,
 };
 
 use crate::{AppResult, AppState, AppSuccess};
@@ -119,7 +119,7 @@ async fn search_sources(
     State(state): State<AppState>,
     Path(app_id): Path<String>,
     Query(pagination): Query<Pagination>,
-    Query(query): Query<QueryParams>,
+    Query(query): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
     let sources =
         apps::search_sources(&state.storage, &state.apps, app_id, pagination, query).await?;
@@ -129,9 +129,9 @@ async fn search_sources(
 async fn update_source(
     State(state): State<AppState>,
     Path((app_id, source_id)): Path<(String, String)>,
-    body: String,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    apps::update_source(&state.storage, &state.apps, app_id, source_id, body).await?;
+    apps::update_source(&state.storage, &state.apps, app_id, source_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -156,9 +156,9 @@ async fn search_sinks(
     State(state): State<AppState>,
     Path(app_id): Path<String>,
     Query(pagination): Query<Pagination>,
-    Query(query): Query<QueryParams>,
+    Query(query): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sinks = apps::search_sinks(&state.apps, app_id, pagination, query).await?;
+    let sinks = apps::search_sinks(&state.storage, &state.apps, app_id, pagination, query).await?;
     Ok(AppSuccess::data(sinks))
 }
 
