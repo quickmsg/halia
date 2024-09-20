@@ -10,7 +10,6 @@ use tokio::{
     sync::{broadcast, mpsc},
 };
 use tracing::{debug, warn};
-use uuid::Uuid;
 
 pub struct Logger {
     mb_tx: mpsc::Sender<MessageBatch>,
@@ -18,7 +17,7 @@ pub struct Logger {
 
 impl Logger {
     // 新建即启动
-    pub async fn new(rule_id: &Uuid, stop_signal_rx: broadcast::Receiver<()>) -> Result<Self> {
+    pub async fn new(rule_id: &String, stop_signal_rx: broadcast::Receiver<()>) -> Result<Self> {
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
         Self::handle_message(rule_id, mb_rx, stop_signal_rx).await?;
@@ -27,7 +26,7 @@ impl Logger {
     }
 
     pub async fn handle_message(
-        rule_id: &Uuid,
+        rule_id: &String,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
         mut stop_signal_rx: broadcast::Receiver<()>,
     ) -> Result<()> {

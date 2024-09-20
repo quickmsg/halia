@@ -1,7 +1,6 @@
 use anyhow::Result;
 use sqlx::{prelude::FromRow, AnyPool};
 use types::rules::CreateUpdateRuleReq;
-use uuid::Uuid;
 
 #[derive(FromRow)]
 pub struct Rule {
@@ -10,6 +9,7 @@ pub struct Rule {
     pub name: String,
     pub desc: Option<String>,
     pub conf: String,
+    pub ts: i64,
 }
 
 pub async fn init_table(storage: &AnyPool) -> Result<()> {
@@ -18,6 +18,8 @@ pub async fn init_table(storage: &AnyPool) -> Result<()> {
 CREATE TABLE IF NOT EXISTS rules (
     id TEXT PRIMARY KEY,
     status INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    desc TEXT,
     conf TEXT NOT NULL
 );
 "#,
@@ -28,46 +30,51 @@ CREATE TABLE IF NOT EXISTS rules (
     Ok(())
 }
 
-pub async fn create_rule(pool: &AnyPool, id: &Uuid, conf: String) -> Result<()> {
-    sqlx::query("INSERT INTO rules (id, status, conf) VALUES (?1, ?2, ?3)")
-        .bind(id.to_string())
+pub async fn insert(storage: &AnyPool, id: &String, conf: String) -> Result<()> {
+    let ts = chrono::Utc::now().timestamp();
+    sqlx::query("INSERT INTO rules (id, status, conf, ts) VALUES (?1, ?2, ?3)")
+        .bind(id)
         .bind(false as i32)
         .bind(conf)
-        .execute(pool)
+        .bind(ts)
+        .execute(storage)
         .await?;
     Ok(())
 }
 
-pub async fn read_rules(pool: &AnyPool) -> Result<Vec<Rule>> {
-    let rules = sqlx::query_as::<_, Rule>("SELECT id, status, conf FROM rules")
-        .fetch_all(pool)
+pub async fn read_all(storage: &AnyPool) -> Result<Vec<Rule>> {
+    let rules = sqlx::query_as::<_, Rule>("SELECT * FROM rules")
+        .fetch_all(storage)
         .await?;
 
     Ok(rules)
 }
 
-pub async fn update_rule_status(pool: &AnyPool, id: &Uuid, status: bool) -> Result<()> {
+pub async fn update_status(storage: &AnyPool, id: &String, status: bool) -> Result<()> {
     sqlx::query("UPDATE rules SET status = ?1 WHERE id = ?2")
         .bind(status as i32)
-        .bind(id.to_string())
-        .execute(pool)
+        .bind(id)
+        .execute(storage)
         .await?;
     Ok(())
 }
 
-pub async fn update_rule_conf(pool: &AnyPool, id: &Uuid, req: CreateUpdateRuleReq) -> Result<()> {
-    sqlx::query("UPDATE rules SET conf = ?1 WHERE id = ?2")
-        // .bind(conf)
-        .bind(id.to_string())
-        .execute(pool)
+pub async fn update(storage: &AnyPool, id: &String, req: CreateUpdateRuleReq) -> Result<()> {
+    let conf = serde_json::to_string(&req.ext)?;
+    sqlx::query("UPDATE rules SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
+        .bind(req.base.name)
+        .bind(req.base.desc)
+        .bind(conf)
+        .bind(id)
+        .execute(storage)
         .await?;
     Ok(())
 }
 
-pub async fn delete_rule(pool: &AnyPool, id: &Uuid) -> Result<()> {
+pub async fn delete(storage: &AnyPool, id: &String) -> Result<()> {
     sqlx::query("DELETE FROM rules WHERE id = ?1")
-        .bind(id.to_string())
-        .execute(pool)
+        .bind(id)
+        .execute(storage)
         .await?;
     Ok(())
 }

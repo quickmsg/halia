@@ -13,7 +13,6 @@ databoard = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 types = { workspace = true }
-uuid = { workspace = true }
 functions = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

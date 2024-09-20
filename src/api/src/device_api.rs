@@ -8,7 +8,6 @@ use types::{
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, SearchSourcesOrSinksResp,
     Value,
 };
-use uuid::Uuid;
 
 use crate::{AppResult, AppState, AppSuccess};
 
@@ -54,7 +53,7 @@ async fn create_device(
     State(state): State<AppState>,
     Json(req): Json<CreateUpdateDeviceReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_device(&state.storage, Uuid::new_v4(), req).await?;
+    devices::create_device(&state.storage, common::get_id(), req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -70,7 +69,7 @@ async fn search_devices(
 
 async fn update_device(
     State(state): State<AppState>,
-    Path(device_id): Path<Uuid>,
+    Path(device_id): Path<String>,
     Json(req): Json<CreateUpdateDeviceReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::update_device(&state.storage, &state.devices, device_id, req).await?;
@@ -79,7 +78,7 @@ async fn update_device(
 
 async fn start_device(
     State(state): State<AppState>,
-    Path(device_id): Path<Uuid>,
+    Path(device_id): Path<String>,
 ) -> AppResult<AppSuccess<()>> {
     devices::start_device(&state.storage, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
@@ -87,7 +86,7 @@ async fn start_device(
 
 async fn stop_device(
     State(state): State<AppState>,
-    Path(device_id): Path<Uuid>,
+    Path(device_id): Path<String>,
 ) -> AppResult<AppSuccess<()>> {
     devices::stop_device(&state.storage, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
@@ -95,7 +94,7 @@ async fn stop_device(
 
 async fn delete_device(
     State(state): State<AppState>,
-    Path(device_id): Path<Uuid>,
+    Path(device_id): Path<String>,
 ) -> AppResult<AppSuccess<()>> {
     devices::delete_device(&state.storage, &state.devices, device_id).await?;
     Ok(AppSuccess::empty())
@@ -103,7 +102,7 @@ async fn delete_device(
 
 async fn create_source(
     State(state): State<AppState>,
-    Path(device_id): Path<Uuid>,
+    Path(device_id): Path<String>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_source(&state.storage, &state.devices, device_id, req).await?;
@@ -112,7 +111,7 @@ async fn create_source(
 
 async fn search_sources(
     State(state): State<AppState>,
-    Path(device_id): Path<Uuid>,
+    Path(device_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
@@ -123,7 +122,7 @@ async fn search_sources(
 
 async fn update_source(
     State(state): State<AppState>,
-    Path((device_id, source_id)): Path<(Uuid, Uuid)>,
+    Path((device_id, source_id)): Path<(String, String)>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::update_source(&state.storage, &state.devices, device_id, source_id, req).await?;
@@ -132,7 +131,7 @@ async fn update_source(
 
 async fn write_source_value(
     State(state): State<AppState>,
-    Path((device_id, source_id)): Path<(Uuid, Uuid)>,
+    Path((device_id, source_id)): Path<(String, String)>,
     Json(req): Json<Value>,
 ) -> AppResult<AppSuccess<()>> {
     devices::write_source_value(&state.devices, device_id, source_id, req).await?;
@@ -141,7 +140,7 @@ async fn write_source_value(
 
 async fn delete_source(
     State(state): State<AppState>,
-    Path((device_id, source_id)): Path<(Uuid, Uuid)>,
+    Path((device_id, source_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
     devices::delete_source(&state.storage, &state.devices, device_id, source_id).await?;
     Ok(AppSuccess::empty())
@@ -149,7 +148,7 @@ async fn delete_source(
 
 async fn create_sink(
     State(state): State<AppState>,
-    Path(device_id): Path<Uuid>,
+    Path(device_id): Path<String>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_sink(&state.storage, &state.devices, device_id, req).await?;
@@ -158,7 +157,7 @@ async fn create_sink(
 
 async fn search_sinks(
     State(state): State<AppState>,
-    Path(device_id): Path<Uuid>,
+    Path(device_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
@@ -168,7 +167,7 @@ async fn search_sinks(
 
 async fn update_sink(
     State(state): State<AppState>,
-    Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
+    Path((device_id, sink_id)): Path<(String, String)>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::update_sink(&state.storage, &state.devices, device_id, sink_id, req).await?;
@@ -177,7 +176,7 @@ async fn update_sink(
 
 async fn delete_sink(
     State(state): State<AppState>,
-    Path((device_id, sink_id)): Path<(Uuid, Uuid)>,
+    Path((device_id, sink_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
     devices::delete_sink(&state.storage, &state.devices, device_id, sink_id).await?;
     Ok(AppSuccess::empty())

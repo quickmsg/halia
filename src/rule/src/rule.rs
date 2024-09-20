@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::Arc};
+
 use anyhow::Result;
 use apps::App;
 use common::{
@@ -10,7 +12,6 @@ use devices::Device;
 use functions::{computes, filter, merge::merge::Merge, metadata, window};
 use message::{MessageBatch, MessageValue};
 use sqlx::AnyPool;
-use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{broadcast, mpsc};
 use tracing::error;
 use types::rules::{
@@ -18,7 +19,6 @@ use types::rules::{
     AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
     DeviceSourceNode, LogNode, Node, NodeType, ReadRuleNodeResp, SearchRulesItemResp,
 };
-use uuid::Uuid;
 
 use crate::{
     add_rule_on_count,
@@ -28,7 +28,7 @@ use crate::{
 };
 
 pub struct Rule {
-    pub id: Uuid,
+    pub id: String,
     conf: CreateUpdateRuleReq,
     pub on: bool,
     pub stop_signal_tx: Option<broadcast::Sender<()>>,
@@ -38,7 +38,7 @@ pub struct Rule {
 impl Rule {
     pub async fn new(
         storage: &Arc<AnyPool>,
-        rule_id: Uuid,
+        rule_id: String,
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<Self> {
         for node in req.ext.nodes.iter() {
@@ -117,9 +117,9 @@ impl Rule {
     pub async fn read(
         &self,
         storage: &Arc<AnyPool>,
-        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-        databoards: &Arc<DashMap<Uuid, Databoard>>,
+        devices: &Arc<DashMap<String, Box<dyn Device>>>,
+        apps: &Arc<DashMap<String, Box<dyn App>>>,
+        databoards: &Arc<DashMap<String, Databoard>>,
     ) -> HaliaResult<Vec<ReadRuleNodeResp>> {
         let mut read_rule_node_resp = vec![];
         // let mut read_rule_resp = ReadRuleResp { nodes: vec![] };
@@ -223,9 +223,9 @@ impl Rule {
     pub async fn start(
         &mut self,
         storage: &Arc<AnyPool>,
-        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-        databoards: &Arc<DashMap<Uuid, Databoard>>,
+        devices: &Arc<DashMap<String, Box<dyn Device>>>,
+        apps: &Arc<DashMap<String, Box<dyn App>>>,
+        databoards: &Arc<DashMap<String, Databoard>>,
     ) -> Result<()> {
         add_rule_on_count();
 
@@ -249,7 +249,6 @@ impl Rule {
 
         let mut error = None;
         let mut device_sink_active_ref_nodes = vec![];
-        let mut app_source_active_ref_nodes = vec![];
         let mut app_sink_active_ref_nodes = vec![];
         let mut databoard_active_ref_nodes = vec![];
 
@@ -293,8 +292,8 @@ impl Rule {
                             .await
                             {
                                 Ok(rx) => {
-                                    app_source_active_ref_nodes
-                                        .push((source_node.app_id, source_node.source_id));
+                                    // app_source_active_ref_nodes
+                                    //     .push((source_node.app_id, source_node.source_id));
                                     rx
                                 }
                                 Err(e) => return Err(e.into()),
@@ -505,7 +504,7 @@ impl Rule {
     pub async fn stop(
         &mut self,
         storage: &Arc<AnyPool>,
-        databoards: &Arc<DashMap<Uuid, Databoard>>,
+        databoards: &Arc<DashMap<String, Databoard>>,
     ) -> HaliaResult<()> {
         sub_rule_on_count();
 
@@ -521,9 +520,9 @@ impl Rule {
     pub async fn update(
         &mut self,
         storage: &Arc<AnyPool>,
-        devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-        apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-        databoards: &Arc<DashMap<Uuid, Databoard>>,
+        devices: &Arc<DashMap<String, Box<dyn Device>>>,
+        apps: &Arc<DashMap<String, Box<dyn App>>>,
+        databoards: &Arc<DashMap<String, Databoard>>,
         req: CreateUpdateRuleReq,
     ) -> HaliaResult<()> {
         let mut restart = false;
@@ -541,7 +540,7 @@ impl Rule {
     }
 
     pub async fn delete(&mut self, storage: &Arc<AnyPool>) -> HaliaResult<()> {
-        storage::rule_ref::delete(storage, &self.id).await?;
+        storage::rule_ref::delete_many_by_rule_id(storage, &self.id).await?;
 
         Ok(())
     }

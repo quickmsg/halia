@@ -11,7 +11,6 @@ use types::{
     rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
 };
-use uuid::Uuid;
 
 use crate::{AppResult, AppState, AppSuccess};
 
@@ -39,9 +38,8 @@ async fn create(State(state): State<AppState>, body: String) -> AppResult<AppSuc
         &state.devices,
         &state.apps,
         &state.databoards,
-        Uuid::new_v4(),
+        common::get_id(),
         body,
-        true,
     )
     .await?;
     Ok(AppSuccess::empty())
@@ -59,7 +57,7 @@ async fn search(
 // TODO
 async fn read(
     State(state): State<AppState>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> AppResult<AppSuccess<Vec<ReadRuleNodeResp>>> {
     let resp = rule::read(
         &state.storage,
@@ -73,7 +71,7 @@ async fn read(
     Ok(AppSuccess::data(resp))
 }
 
-async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+async fn start(State(state): State<AppState>, Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
     rule::start(
         &state.storage,
         &state.rules,
@@ -86,7 +84,7 @@ async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult
     Ok(AppSuccess::empty())
 }
 
-async fn stop(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+async fn stop(State(state): State<AppState>, Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
     rule::stop(
         &state.storage,
         &state.rules,
@@ -99,7 +97,7 @@ async fn stop(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<
     Ok(AppSuccess::empty())
 }
 
-async fn download_log(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
+async fn download_log(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     let filename = match rule::get_log_filename(&state.rules, id).await {
         Ok(filename) => filename,
         Err(_) => return Err((StatusCode::NOT_FOUND, format!("规则 not found"))),
@@ -126,7 +124,7 @@ async fn download_log(State(state): State<AppState>, Path(id): Path<Uuid>) -> im
 
 async fn update(
     State(state): State<AppState>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
     Json(req): Json<CreateUpdateRuleReq>,
 ) -> AppResult<AppSuccess<()>> {
     rule::update(
@@ -142,7 +140,10 @@ async fn update(
     Ok(AppSuccess::empty())
 }
 
-async fn delete(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<AppSuccess<()>> {
+async fn delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> AppResult<AppSuccess<()>> {
     rule::delete(&state.storage, &state.rules, id).await?;
     Ok(AppSuccess::empty())
 }

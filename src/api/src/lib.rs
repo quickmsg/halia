@@ -22,7 +22,6 @@ use tower_http::{
 };
 use types::Dashboard;
 use user_api::auth;
-use uuid::Uuid;
 
 mod app_api;
 mod databoard_api;
@@ -96,19 +95,19 @@ impl IntoResponse for AppError {
 #[derive(Clone)]
 struct AppState {
     storage: Arc<AnyPool>,
-    devices: Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: Arc<DashMap<Uuid, Databoard>>,
-    rules: Arc<DashMap<Uuid, Rule>>,
+    devices: Arc<DashMap<String, Box<dyn Device>>>,
+    apps: Arc<DashMap<String, Box<dyn App>>>,
+    databoards: Arc<DashMap<String, Databoard>>,
+    rules: Arc<DashMap<String, Rule>>,
 }
 
 pub async fn start(
     port: u16,
     storage: Arc<AnyPool>,
-    devices: Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: Arc<DashMap<Uuid, Databoard>>,
-    rules: Arc<DashMap<Uuid, Rule>>,
+    devices: Arc<DashMap<String, Box<dyn Device>>>,
+    apps: Arc<DashMap<String, Box<dyn App>>>,
+    databoards: Arc<DashMap<String, Databoard>>,
+    rules: Arc<DashMap<String, Rule>>,
 ) {
     let state = AppState {
         storage,

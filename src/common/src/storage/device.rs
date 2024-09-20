@@ -4,7 +4,6 @@ use types::{
     devices::{CreateUpdateDeviceReq, QueryParams},
     Pagination,
 };
-use uuid::Uuid;
 
 #[derive(FromRow, Debug)]
 pub struct Device {
@@ -52,13 +51,13 @@ CREATE TABLE IF NOT EXISTS device_events (
     Ok(())
 }
 
-pub async fn create_device(pool: &AnyPool, id: &Uuid, req: CreateUpdateDeviceReq) -> Result<()> {
+pub async fn create_device(pool: &AnyPool, id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     let ext_conf = serde_json::to_string(&req.conf.ext)?;
     let ts = chrono::Utc::now().timestamp();
     match req.conf.base.desc {
         Some(desc) => {
             sqlx::query("INSERT INTO devices (id, status, device_type, name, desc, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
-                .bind(id.to_string())
+                .bind(id)
                 .bind(false as i32)
                 .bind(req.device_type.to_string())
                 .bind(req.conf.base.name)
@@ -72,7 +71,7 @@ pub async fn create_device(pool: &AnyPool, id: &Uuid, req: CreateUpdateDeviceReq
             sqlx::query(
                 "INSERT INTO devices (id, status, device_type, name, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             )
-            .bind(id.to_string())
+            .bind(id)
             .bind(false as i32)
             .bind(req.device_type.to_string())
             .bind(req.conf.base.name)
@@ -274,40 +273,35 @@ pub async fn count_all(storage: &AnyPool) -> Result<usize> {
     Ok(count as usize)
 }
 
-pub async fn update_device_status(pool: &AnyPool, id: &Uuid, status: bool) -> Result<()> {
+pub async fn update_status(pool: &AnyPool, id: &String, status: bool) -> Result<()> {
     sqlx::query("UPDATE devices SET status = ?1 WHERE id = ?2")
         .bind(status as i32)
-        .bind(id.to_string())
+        .bind(id)
         .execute(pool)
         .await?;
 
     Ok(())
 }
 
-pub async fn update_device_conf(
-    pool: &AnyPool,
-    id: &Uuid,
-    req: CreateUpdateDeviceReq,
-) -> Result<()> {
+pub async fn update(pool: &AnyPool, id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     let ext_conf = serde_json::to_string(&req.conf.ext)?;
     sqlx::query("UPDATE devices SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
         .bind(req.conf.base.name)
         .bind(req.conf.base.desc)
         .bind(ext_conf)
-        .bind(id.to_string())
+        .bind(id)
         .execute(pool)
         .await?;
     Ok(())
 }
 
-// 考虑，是否删除该设备的事件
-pub async fn delete_device(pool: &AnyPool, id: &Uuid) -> Result<()> {
+pub async fn delete(storage: &AnyPool, id: &String) -> Result<()> {
     sqlx::query(
         "DELETE FROM devices WHERE id = ?1
     ",
     )
-    .bind(id.to_string())
-    .execute(pool)
+    .bind(id)
+    .execute(storage)
     .await?;
 
     Ok(())

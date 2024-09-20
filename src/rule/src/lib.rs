@@ -1,3 +1,8 @@
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, LazyLock,
+};
+
 use apps::App;
 use common::{
     error::{HaliaError, HaliaResult},
@@ -8,19 +13,10 @@ use databoard::databoard_struct::Databoard;
 use devices::Device;
 use rule::Rule;
 use sqlx::AnyPool;
-use std::{
-    str::FromStr,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, LazyLock,
-    },
-};
-use tokio::sync::RwLock;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
 };
-use uuid::Uuid;
 
 mod log;
 pub mod rule;
@@ -60,30 +56,18 @@ pub fn get_summary() -> Summary {
     }
 }
 
+// TODO
 pub async fn load_from_storage(
     storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-) -> HaliaResult<Arc<DashMap<Uuid, Rule>>> {
-    let db_rules = storage::rule::read_rules(storage).await?;
-    let rules: Arc<DashMap<Uuid, Rule>> = Arc::new(DashMap::new());
+    devices: &Arc<DashMap<String, Box<dyn Device>>>,
+    apps: &Arc<DashMap<String, Box<dyn App>>>,
+    databoards: &Arc<DashMap<String, Databoard>>,
+) -> HaliaResult<Arc<DashMap<String, Rule>>> {
+    let db_rules = storage::rule::read_all(storage).await?;
+    let rules: Arc<DashMap<String, Rule>> = Arc::new(DashMap::new());
     for db_rule in db_rules {
-        let rule_id = Uuid::from_str(&db_rule.id).unwrap();
-        // create(
-        //     storage,
-        //     &rules,
-        //     devices,
-        //     apps,
-        //     databoards,
-        //     rule_id,
-        //     db_rule.conf,
-        //     false,
-        // )
-        // .await?;
-
         if db_rule.status == 1 {
-            start(storage, &rules, &devices, &apps, &databoards, rule_id).await?;
+            start(storage, &rules, &devices, &apps, &databoards, db_rule.id).await?;
         }
     }
 
@@ -92,26 +76,23 @@ pub async fn load_from_storage(
 
 pub async fn create(
     storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<Uuid, Rule>>,
-    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    id: Uuid,
+    rules: &Arc<DashMap<String, Rule>>,
+    devices: &Arc<DashMap<String, Box<dyn Device>>>,
+    apps: &Arc<DashMap<String, Box<dyn App>>>,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    id: String,
     body: String,
-    persist: bool,
 ) -> HaliaResult<()> {
     let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
-    let rule = Rule::new(storage, id, req).await?;
+    storage::rule::insert(storage, &id, body).await?;
+    let rule = Rule::new(storage, id.clone(), req).await?;
     add_rule_count();
-    if persist {
-        storage::rule::create_rule(storage, &id, body).await?;
-    }
     rules.insert(id, rule);
     Ok(())
 }
 
 pub async fn search(
-    rules: &Arc<DashMap<Uuid, Rule>>,
+    rules: &Arc<DashMap<String, Rule>>,
     pagination: Pagination,
     query_params: QueryParams,
 ) -> SearchRulesResp {
@@ -145,11 +126,11 @@ pub async fn search(
 
 pub async fn read(
     storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<Uuid, Rule>>,
-    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    id: Uuid,
+    rules: &Arc<DashMap<String, Rule>>,
+    devices: &Arc<DashMap<String, Box<dyn Device>>>,
+    apps: &Arc<DashMap<String, Box<dyn App>>>,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    id: String,
 ) -> HaliaResult<Vec<ReadRuleNodeResp>> {
     rules
         .get_mut(&id)
@@ -160,11 +141,11 @@ pub async fn read(
 
 pub async fn start(
     storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<Uuid, Rule>>,
-    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    id: Uuid,
+    rules: &Arc<DashMap<String, Rule>>,
+    devices: &Arc<DashMap<String, Box<dyn Device>>>,
+    apps: &Arc<DashMap<String, Box<dyn App>>>,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    id: String,
 ) -> HaliaResult<()> {
     if rules.contains_key(&id) {
         return Ok(());
@@ -175,17 +156,17 @@ pub async fn start(
         .ok_or(HaliaError::NotFound)?
         .start(storage, devices, apps, databoards)
         .await?;
-    storage::rule::update_rule_status(storage, &id, true).await?;
+    storage::rule::update_status(storage, &id, true).await?;
     Ok(())
 }
 
 pub async fn stop(
     storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<Uuid, Rule>>,
-    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    id: Uuid,
+    rules: &Arc<DashMap<String, Rule>>,
+    devices: &Arc<DashMap<String, Box<dyn Device>>>,
+    apps: &Arc<DashMap<String, Box<dyn App>>>,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    id: String,
 ) -> HaliaResult<()> {
     if !rules.contains_key(&id) {
         return Ok(());
@@ -197,17 +178,17 @@ pub async fn stop(
         .stop(storage, databoards)
         .await?;
 
-    storage::rule::update_rule_status(storage, &id, false).await?;
+    storage::rule::update_status(storage, &id, false).await?;
     Ok(())
 }
 
 pub async fn update(
     storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<Uuid, Rule>>,
-    devices: &Arc<DashMap<Uuid, Box<dyn Device>>>,
-    apps: &Arc<DashMap<Uuid, Box<dyn App>>>,
-    databoards: &Arc<DashMap<Uuid, Databoard>>,
-    id: Uuid,
+    rules: &Arc<DashMap<String, Rule>>,
+    devices: &Arc<DashMap<String, Box<dyn Device>>>,
+    apps: &Arc<DashMap<String, Box<dyn App>>>,
+    databoards: &Arc<DashMap<String, Databoard>>,
+    id: String,
     req: CreateUpdateRuleReq,
 ) -> HaliaResult<()> {
     rules
@@ -223,8 +204,8 @@ pub async fn update(
 
 pub async fn delete(
     storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<Uuid, Rule>>,
-    id: Uuid,
+    rules: &Arc<DashMap<String, Rule>>,
+    id: String,
 ) -> HaliaResult<()> {
     if rules.contains_key(&id) {
         return Err(HaliaError::DeleteRunning);
@@ -239,11 +220,14 @@ pub async fn delete(
     rules.remove(&id);
 
     sub_rule_count();
-    storage::rule::delete_rule(storage, &id).await?;
+    storage::rule::delete(storage, &id).await?;
     Ok(())
 }
 
-pub async fn get_log_filename(rules: &Arc<DashMap<Uuid, Rule>>, id: Uuid) -> HaliaResult<String> {
+pub async fn get_log_filename(
+    rules: &Arc<DashMap<String, Rule>>,
+    id: String,
+) -> HaliaResult<String> {
     let filename = rules
         .get(&id)
         .ok_or(HaliaError::NotFound)?

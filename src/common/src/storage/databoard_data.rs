@@ -1,7 +1,6 @@
 use anyhow::Result;
 use sqlx::{AnyPool, FromRow};
 use types::databoard::CreateUpdateDataReq;
-use uuid::Uuid;
 
 #[derive(FromRow)]
 pub struct DataboardData {

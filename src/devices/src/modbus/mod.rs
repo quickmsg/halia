@@ -385,7 +385,11 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn create_source(&mut self, source_id: String, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn create_source(
+        &mut self,
+        source_id: String,
+        conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
         let source = Source::new(
             source_id.clone(),
@@ -399,13 +403,14 @@ impl Device for Modbus {
 
     async fn update_source(
         &mut self,
-        source_id: String,
-        old_conf: String,
+        source_id: &String,
+        old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        let old_conf: SourceConf = serde_json::from_value(old_conf)?;
         let new_conf: SourceConf = serde_json::from_value(new_conf)?;
         self.sources
-            .get_mut(&source_id)
+            .get_mut(source_id)
             .ok_or(HaliaError::NotFound)?
             .update(old_conf, new_conf)
             .await;
@@ -442,13 +447,13 @@ impl Device for Modbus {
         }
     }
 
-    async fn delete_source(&mut self, source_id: String) -> HaliaResult<()> {
+    async fn delete_source(&mut self, source_id: &String) -> HaliaResult<()> {
         self.sources
-            .get_mut(&source_id)
+            .get_mut(source_id)
             .ok_or(HaliaError::NotFound)?
             .stop()
             .await;
-        self.sources.remove(&source_id);
+        self.sources.remove(source_id);
         Ok(())
     }
 
@@ -462,13 +467,14 @@ impl Device for Modbus {
 
     async fn update_sink(
         &mut self,
-        sink_id: String,
-        old_conf: String,
+        sink_id: &String,
+        old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        let old_conf: SinkConf = serde_json::from_value(old_conf)?;
         let new_conf: SinkConf = serde_json::from_value(new_conf)?;
         self.sinks
-            .get_mut(&sink_id)
+            .get_mut(sink_id)
             .ok_or(HaliaError::NotFound)?
             .update(old_conf, new_conf)
             .await;
@@ -476,13 +482,13 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
+    async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()> {
         self.sinks
-            .get_mut(&sink_id)
+            .get_mut(sink_id)
             .ok_or(HaliaError::NotFound)?
             .stop()
             .await;
-        self.sinks.remove(&sink_id);
+        self.sinks.remove(sink_id);
         Ok(())
     }
 

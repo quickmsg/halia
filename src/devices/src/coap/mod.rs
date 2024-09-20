@@ -16,11 +16,9 @@ use tokio::sync::{broadcast, mpsc, Mutex};
 use types::{
     devices::{
         coap::{CoapConf, SinkConf, SourceConf},
-        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, SearchDevicesItemCommon,
-        SearchDevicesItemConf, SearchDevicesItemFromMemory, SearchDevicesItemResp,
+        DeviceConf, SearchDevicesItemFromMemory,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksInfoResp,
-    SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
+    BaseConf, Value,
 };
 
 use crate::Device;
@@ -198,8 +196,8 @@ impl Device for Coap {
 
     async fn update_source(
         &mut self,
-        source_id: String,
-        old_conf: String,
+        source_id: &String,
+        old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
@@ -224,7 +222,7 @@ impl Device for Coap {
         coap_not_support_write_source_value!()
     }
 
-    async fn delete_source(&mut self, source_id: String) -> HaliaResult<()> {
+    async fn delete_source(&mut self, source_id: &String) -> HaliaResult<()> {
         // match self
         //     .sources
         //     .iter_mut()
@@ -261,8 +259,8 @@ impl Device for Coap {
 
     async fn update_sink(
         &mut self,
-        sink_id: String,
-        old_conf: String,
+        sink_id: &String,
+        old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
@@ -280,7 +278,7 @@ impl Device for Coap {
         //     }
     }
 
-    async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
+    async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()> {
         // match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
         //     Some(sink) => sink.stop().await,
         //     None => unreachable!(),

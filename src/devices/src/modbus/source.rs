@@ -159,8 +159,7 @@ impl Source {
         self.stop_signal_tx.send(()).await.unwrap();
     }
 
-    pub async fn update(&mut self, old_conf: String, new_conf: SourceConf) {
-        let old_conf = serde_json::from_str::<SourceConf>(&old_conf).unwrap();
+    pub async fn update(&mut self, old_conf: SourceConf, new_conf: SourceConf) {
         if old_conf.data_type != new_conf.data_type {
             self.quantity = new_conf.data_type.get_quantity();
         }

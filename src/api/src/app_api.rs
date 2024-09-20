@@ -9,7 +9,6 @@ use types::{
     },
     CreateUpdateSourceOrSinkReq, Pagination, SearchSourcesOrSinksResp,
 };
-use uuid::Uuid;
 
 use crate::{AppResult, AppState, AppSuccess};
 
@@ -61,7 +60,7 @@ async fn create_app(
     State(state): State<AppState>,
     Json(req): Json<CreateUpdateAppReq>,
 ) -> AppResult<AppSuccess<()>> {
-    apps::create_app(&state.storage, Uuid::new_v4(), req).await?;
+    apps::create_app(&state.storage, common::get_id(), req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -69,14 +68,14 @@ async fn search_apps(
     State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
-) -> AppSuccess<SearchAppsResp> {
-    let apps = apps::search_apps(&state.apps, pagination, query).await;
-    AppSuccess::data(apps)
+) -> AppResult<AppSuccess<SearchAppsResp>> {
+    let apps = apps::search_apps(&state.storage, &state.apps, pagination, query).await?;
+    Ok(AppSuccess::data(apps))
 }
 
 async fn update_app(
     State(state): State<AppState>,
-    Path(app_id): Path<Uuid>,
+    Path(app_id): Path<String>,
     Json(req): Json<CreateUpdateAppReq>,
 ) -> AppResult<AppSuccess<()>> {
     apps::update_app(&state.storage, &state.apps, app_id, req).await?;
@@ -85,7 +84,7 @@ async fn update_app(
 
 async fn start_app(
     State(state): State<AppState>,
-    Path(app_id): Path<Uuid>,
+    Path(app_id): Path<String>,
 ) -> AppResult<AppSuccess<()>> {
     apps::start_app(&state.storage, &state.apps, app_id).await?;
     Ok(AppSuccess::empty())
@@ -93,7 +92,7 @@ async fn start_app(
 
 async fn stop_app(
     State(state): State<AppState>,
-    Path(app_id): Path<Uuid>,
+    Path(app_id): Path<String>,
 ) -> AppResult<AppSuccess<()>> {
     apps::stop_app(&state.storage, &state.apps, app_id).await?;
     Ok(AppSuccess::empty())
@@ -101,7 +100,7 @@ async fn stop_app(
 
 async fn delete_app(
     State(state): State<AppState>,
-    Path(app_id): Path<Uuid>,
+    Path(app_id): Path<String>,
 ) -> AppResult<AppSuccess<()>> {
     apps::delete_app(&state.storage, &state.apps, app_id).await?;
     Ok(AppSuccess::empty())
@@ -109,7 +108,7 @@ async fn delete_app(
 
 async fn create_source(
     State(state): State<AppState>,
-    Path(app_id): Path<Uuid>,
+    Path(app_id): Path<String>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     apps::create_source(&state.storage, &state.apps, app_id, req).await?;
@@ -118,7 +117,7 @@ async fn create_source(
 
 async fn search_sources(
     State(state): State<AppState>,
-    Path(app_id): Path<Uuid>,
+    Path(app_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
@@ -129,7 +128,7 @@ async fn search_sources(
 
 async fn update_source(
     State(state): State<AppState>,
-    Path((app_id, source_id)): Path<(Uuid, Uuid)>,
+    Path((app_id, source_id)): Path<(String, String)>,
     body: String,
 ) -> AppResult<AppSuccess<()>> {
     apps::update_source(&state.storage, &state.apps, app_id, source_id, body).await?;
@@ -138,7 +137,7 @@ async fn update_source(
 
 async fn delete_source(
     State(state): State<AppState>,
-    Path((app_id, source_id)): Path<(Uuid, Uuid)>,
+    Path((app_id, source_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
     apps::delete_source(&state.storage, &state.apps, app_id, source_id).await?;
     Ok(AppSuccess::empty())
@@ -146,7 +145,7 @@ async fn delete_source(
 
 async fn create_sink(
     State(state): State<AppState>,
-    Path(app_id): Path<Uuid>,
+    Path(app_id): Path<String>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     apps::create_sink(&state.storage, &state.apps, app_id, req).await?;
@@ -155,7 +154,7 @@ async fn create_sink(
 
 async fn search_sinks(
     State(state): State<AppState>,
-    Path(app_id): Path<Uuid>,
+    Path(app_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
@@ -165,7 +164,7 @@ async fn search_sinks(
 
 async fn update_sink(
     State(state): State<AppState>,
-    Path((app_id, sink_id)): Path<(Uuid, Uuid)>,
+    Path((app_id, sink_id)): Path<(String, String)>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
     apps::update_sink(&state.storage, &state.apps, app_id, sink_id, req).await?;
@@ -174,7 +173,7 @@ async fn update_sink(
 
 async fn delete_sink(
     State(state): State<AppState>,
-    Path((app_id, sink_id)): Path<(Uuid, Uuid)>,
+    Path((app_id, sink_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
     apps::delete_sink(&state.storage, &state.apps, app_id, sink_id).await?;
     Ok(AppSuccess::empty())

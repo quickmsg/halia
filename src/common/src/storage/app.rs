@@ -4,7 +4,6 @@ use types::{
     apps::{CreateUpdateAppReq, QueryParams},
     Pagination,
 };
-use uuid::Uuid;
 
 #[derive(FromRow)]
 pub struct App {

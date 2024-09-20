@@ -4,7 +4,6 @@ use types::{
     databoard::{CreateUpdateDataboardReq, QueryParams},
     Pagination,
 };
-use uuid::Uuid;
 
 use super::databoard_data;
 

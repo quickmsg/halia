@@ -63,8 +63,7 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn update(&mut self, old_conf: String, new_conf: SinkConf) {
-        let old_conf: SinkConf = serde_json::from_str(&old_conf).unwrap();
+    pub async fn update(&mut self, old_conf: SinkConf, new_conf: SinkConf) {
         if old_conf != new_conf {
             self.stop().await;
 

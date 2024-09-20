@@ -1,7 +1,6 @@
 use anyhow::Result;
 use sqlx::{any::AnyArguments, query::Query, Any, AnyPool, FromRow};
 use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
-use uuid::Uuid;
 
 pub enum Type {
     Source,
@@ -122,7 +121,7 @@ pub async fn read_one(storage: &AnyPool, id: &String) -> Result<SourceOrSink> {
 
 pub async fn search(
     storage: &AnyPool,
-    parent_id: &Uuid,
+    parent_id: &String,
     typ: Type,
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
@@ -133,7 +132,7 @@ pub async fn search(
             let count: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2 AND name LIKE ?3",
             )
-            .bind(parent_id.to_string())
+            .bind(parent_id)
             .bind(typ)
             .bind(format!("%{}%", name))
             .fetch_one(storage)
@@ -141,7 +140,7 @@ pub async fn search(
 
             let sources_or_sinks = sqlx::query_as::<_, SourceOrSink>(
                 "SELECT * FROM sources_or_sinks WHERE parent_id = ?1 AND AND typ = ?2 AND name LIKE ?3 ORDER BY ts DESC LIMIT ?4 OFFSET ?5",
-            ).bind(parent_id.to_string())
+            ).bind(parent_id)
             .bind(typ)
             .bind(format!("%{}%", name))
             .bind(pagination.size as i64)
@@ -154,7 +153,7 @@ pub async fn search(
             let count: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2",
             )
-            .bind(parent_id.to_string())
+            .bind(parent_id)
             .bind(typ)
             .fetch_one(storage)
             .await?;
@@ -162,7 +161,7 @@ pub async fn search(
             let sources_or_sinks = sqlx::query_as::<_, SourceOrSink>(
                 "SELECT * FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2 ORDER BY ts DESC LIMIT ?3 OFFSET ?4",
             )
-            .bind(parent_id.to_string())
+            .bind(parent_id)
             .bind(typ)
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
@@ -188,15 +187,15 @@ pub async fn count_by_parent_id(storage: &AnyPool, parent_id: &String, typ: Type
     Ok(count as usize)
 }
 
-pub async fn read_conf_by_id(storage: &AnyPool, id: &Uuid) -> Result<String> {
+pub async fn read_conf(storage: &AnyPool, id: &String) -> Result<serde_json::Value> {
     let conf: String = sqlx::query_scalar("SELECT conf FROM sources_or_sinks WHERE id = ?1")
-        .bind(id.to_string())
+        .bind(id)
         .fetch_one(storage)
         .await?;
-    Ok(conf)
+    Ok(serde_json::to_value(conf)?)
 }
 
-pub async fn update(pool: &AnyPool, id: &Uuid, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
+pub async fn update(pool: &AnyPool, id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
     let conf = serde_json::to_string(&req.ext)?;
     match req.base.desc {
         Some(desc) => {
@@ -204,7 +203,7 @@ pub async fn update(pool: &AnyPool, id: &Uuid, req: CreateUpdateSourceOrSinkReq)
                 .bind(req.base.name)
                 .bind(desc)
                 .bind(conf)
-                .bind(id.to_string())
+                .bind(id)
                 .execute(pool)
                 .await?;
         }
@@ -212,7 +211,7 @@ pub async fn update(pool: &AnyPool, id: &Uuid, req: CreateUpdateSourceOrSinkReq)
             sqlx::query("UPDATE sources SET name = ?1, conf = ?3 WHERE id = ?4")
                 .bind(req.base.name)
                 .bind(conf)
-                .bind(id.to_string())
+                .bind(id)
                 .execute(pool)
                 .await?;
         }
@@ -229,17 +228,17 @@ pub async fn delete(storage: &AnyPool, id: &String) -> Result<()> {
     Ok(())
 }
 
-pub async fn delete_by_parent_id(storage: &AnyPool, parent_id: &Uuid) -> Result<()> {
+pub async fn delete_by_parent_id(storage: &AnyPool, parent_id: &String) -> Result<()> {
     sqlx::query("DELETE FROM sources_or_sinks WHERE parent_id = ?1")
-        .bind(parent_id.to_string())
+        .bind(parent_id)
         .execute(storage)
         .await?;
     Ok(())
 }
 
-pub async fn check_exists(storage: &AnyPool, source_or_sink_id: &Uuid) -> Result<bool> {
+pub async fn check_exists(storage: &AnyPool, source_or_sink_id: &String) -> Result<bool> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources_or_sinks WHERE id = ?1")
-        .bind(source_or_sink_id.to_string())
+        .bind(source_or_sink_id)
         .fetch_one(storage)
         .await?;
 

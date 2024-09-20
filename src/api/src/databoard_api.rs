@@ -10,7 +10,6 @@ use types::{
     },
     Pagination,
 };
-use uuid::Uuid;
 
 use crate::{AppResult, AppState, AppSuccess};
 
@@ -63,7 +62,7 @@ async fn search_databoards(
 
 async fn update_databoard(
     State(state): State<AppState>,
-    Path(databoard_id): Path<Uuid>,
+    Path(databoard_id): Path<String>,
     Json(req): Json<CreateUpdateDataboardReq>,
 ) -> AppResult<AppSuccess<()>> {
     databoard::update_databoard(&state.storage, &state.databoards, databoard_id, req).await?;
@@ -72,7 +71,7 @@ async fn update_databoard(
 
 async fn delete_databoard(
     State(state): State<AppState>,
-    Path(databoard_id): Path<Uuid>,
+    Path(databoard_id): Path<String>,
 ) -> AppResult<AppSuccess<()>> {
     databoard::delete_databoard(&state.storage, &state.databoards, databoard_id).await?;
     Ok(AppSuccess::empty())
@@ -80,7 +79,7 @@ async fn delete_databoard(
 
 async fn create_data(
     State(state): State<AppState>,
-    Path(databoard_id): Path<Uuid>,
+    Path(databoard_id): Path<String>,
     Json(req): Json<CreateUpdateDataReq>,
 ) -> AppResult<AppSuccess<()>> {
     databoard::create_data(&state.storage, &state.databoards, databoard_id, req, true).await?;
@@ -89,7 +88,7 @@ async fn create_data(
 
 async fn search_datas(
     State(state): State<AppState>,
-    Path(databoard_id): Path<Uuid>,
+    Path(databoard_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchDatasResp>> {
@@ -99,7 +98,7 @@ async fn search_datas(
 
 async fn update_data(
     State(state): State<AppState>,
-    Path((databoard_id, databoard_data_id)): Path<(Uuid, Uuid)>,
+    Path((databoard_id, databoard_data_id)): Path<(String, String)>,
     Json(req): Json<CreateUpdateDataReq>,
 ) -> AppResult<AppSuccess<()>> {
     databoard::update_data(
@@ -115,7 +114,7 @@ async fn update_data(
 
 async fn delete_data(
     State(state): State<AppState>,
-    Path((databoard_id, databoard_data_id)): Path<(Uuid, Uuid)>,
+    Path((databoard_id, databoard_data_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
     databoard::delete_data(
         &state.storage,

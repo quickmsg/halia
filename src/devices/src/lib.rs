@@ -12,7 +12,7 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, warn};
+use tracing::warn;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
@@ -81,21 +81,21 @@ pub trait Device: Send + Sync {
     ) -> HaliaResult<()>;
     async fn update_source(
         &mut self,
-        source_id: String,
-        old_conf: String,
+        source_id: &String,
+        old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()>;
-    async fn delete_source(&mut self, source_id: String) -> HaliaResult<()>;
+    async fn delete_source(&mut self, source_id: &String) -> HaliaResult<()>;
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()>;
     async fn update_sink(
         &mut self,
-        sink_id: String,
-        old_conf: String,
+        sink_id: &String,
+        old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()>;
-    async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()>;
+    async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()>;
 
     async fn get_source_rx(
         &mut self,
@@ -137,10 +137,9 @@ pub async fn get_rule_info(
 ) -> HaliaResult<SearchRuleInfo> {
     let db_device = storage::device::read_device(storage, &query.device_id).await?;
 
-    let device_id = String::from_str(&db_device.id).unwrap();
     let memory_info = match db_device.status {
         0 => None,
-        1 => Some(devices.get(&device_id).unwrap().read().await),
+        1 => Some(devices.get(&db_device.id).unwrap().read().await),
         _ => unreachable!(),
     };
     let device_resp = SearchDevicesItemResp {
@@ -180,11 +179,11 @@ pub async fn get_rule_info(
         }
     };
 
-    let db_source_or_sink = storage::source_or_sink::read(storage, &id).await?;
+    let db_source_or_sink = storage::source_or_sink::read_one(storage, &id).await?;
     Ok(SearchRuleInfo {
         device: device_resp,
         source: Some(SearchSourcesOrSinksInfoResp {
-            id: String::from_str(&db_source_or_sink.id).unwrap(),
+            id: db_source_or_sink.id,
             conf: CreateUpdateSourceOrSinkReq {
                 base: BaseConf {
                     name: db_source_or_sink.name,
@@ -230,30 +229,30 @@ pub async fn search_devices(
         storage::device::search_devices(storage, pagination, query_params).await?;
     let mut resp_devices = vec![];
     for db_device in db_devices {
-        let device_id = String::from_str(&db_device.id).unwrap();
-
         let memory_info = match db_device.status {
             0 => None,
-            1 => Some(devices.get(&device_id).unwrap().read().await),
+            1 => Some(devices.get(&db_device.id).unwrap().read().await),
             _ => unreachable!(),
         };
+        let source_cnt = storage::source_or_sink::count_by_parent_id(
+            storage,
+            &db_device.id,
+            storage::source_or_sink::Type::Source,
+        )
+        .await?;
+        let sink_cnt = storage::source_or_sink::count_by_parent_id(
+            storage,
+            &db_device.id,
+            storage::source_or_sink::Type::Sink,
+        )
+        .await?;
         resp_devices.push(SearchDevicesItemResp {
             common: SearchDevicesItemCommon {
                 id: db_device.id,
                 device_type: DeviceType::try_from(db_device.device_type).unwrap(),
                 on: db_device.status == 1,
-                source_cnt: storage::source_or_sink::count_by_parent_id(
-                    storage,
-                    &device_id,
-                    storage::source_or_sink::Type::Source,
-                )
-                .await?,
-                sink_cnt: storage::source_or_sink::count_by_parent_id(
-                    storage,
-                    &device_id,
-                    storage::source_or_sink::Type::Sink,
-                )
-                .await?,
+                source_cnt,
+                sink_cnt,
                 memory_info,
             },
             conf: SearchDevicesItemConf {
@@ -283,7 +282,7 @@ pub async fn update_device(
         device.update(db_device.conf, &req.conf.ext).await?;
     }
 
-    storage::device::update_device_conf(storage, &device_id, req).await?;
+    storage::device::update(storage, &device_id, req).await?;
 
     Ok(())
 }
@@ -304,7 +303,6 @@ pub async fn start_device(
     let device_type = DeviceType::try_from(db_device.device_type)?;
 
     // TODO 取消unwrap
-    let device_id = String::from_str(&db_device.id).unwrap();
     let device_conf: DeviceConf = DeviceConf {
         base: BaseConf {
             name: db_device.name,
@@ -313,16 +311,11 @@ pub async fn start_device(
         ext: serde_json::from_str(&db_device.conf).unwrap(),
     };
 
-    debug!("{:?}", device_conf);
-
-    let device = match device_type {
-        DeviceType::Modbus => modbus::new(device_id, device_conf, storage.clone()),
+    let mut device = match device_type {
+        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf, storage.clone()),
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
     };
-    devices.insert(device_id, device);
-
-    let mut device = devices.get_mut(&device_id).unwrap();
 
     let db_sources = storage::source_or_sink::read_all_by_parent_id(
         storage,
@@ -332,9 +325,7 @@ pub async fn start_device(
     .await?;
     for db_source in db_sources {
         let conf: serde_json::Value = serde_json::from_str(&db_source.conf).unwrap();
-        device
-            .create_source(String::from_str(&db_source.id).unwrap(), conf)
-            .await?;
+        device.create_source(db_source.id, conf).await?;
     }
 
     let db_sinks = storage::source_or_sink::read_all_by_parent_id(
@@ -345,13 +336,13 @@ pub async fn start_device(
     .await?;
     for db_sink in db_sinks {
         let conf: serde_json::Value = serde_json::from_str(&db_sink.conf).unwrap();
-        device
-            .create_sink(String::from_str(&db_sink.id).unwrap(), conf)
-            .await?;
+        device.create_sink(db_sink.id, conf).await?;
     }
 
+    devices.insert(device_id.clone(), device);
+
     add_device_on_count();
-    storage::device::update_device_status(storage, &device_id, true).await?;
+    storage::device::update_status(storage, &device_id, true).await?;
     Ok(())
 }
 
@@ -382,7 +373,7 @@ pub async fn stop_device(
         warn!("create event failed: {}", e);
     }
 
-    storage::device::update_device_status(storage, &device_id, false).await?;
+    storage::device::update_status(storage, &device_id, false).await?;
     devices.get_mut(&device_id).unwrap().stop().await?;
 
     devices.remove(&device_id);
@@ -406,7 +397,7 @@ pub async fn delete_device(
     }
 
     sub_device_count();
-    storage::device::delete_device(storage, &device_id).await?;
+    storage::device::delete(storage, &device_id).await?;
     storage::source_or_sink::delete_by_parent_id(storage, &device_id).await?;
 
     Ok(())
@@ -418,10 +409,10 @@ pub async fn create_source(
     device_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    let source_id = String::new_v4();
+    let source_id = common::get_id();
     if let Some(mut device) = devices.get_mut(&device_id) {
         let conf = req.ext.clone();
-        device.create_source(source_id, conf).await?;
+        device.create_source(source_id.clone(), conf).await?;
     }
 
     storage::source_or_sink::create(
@@ -452,10 +443,18 @@ pub async fn search_sources(
     .await?;
     let mut data = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
-        let id = String::from_str(&db_source.id).unwrap();
+        let rule_ref = RuleRef {
+            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(storage, &db_source.id)
+                .await?,
+            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(
+                storage,
+                &db_source.id,
+            )
+            .await?,
+        };
         data.push(SearchSourcesOrSinksItemResp {
             info: SearchSourcesOrSinksInfoResp {
-                id: String::from_str(&db_source.id).unwrap(),
+                id: db_source.id,
                 conf: CreateUpdateSourceOrSinkReq {
                     base: BaseConf {
                         name: db_source.name,
@@ -464,13 +463,7 @@ pub async fn search_sources(
                     ext: serde_json::from_str(&db_source.conf).unwrap(),
                 },
             },
-            rule_ref: RuleRef {
-                rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(storage, &id).await?,
-                rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(
-                    storage, &id,
-                )
-                .await?,
-            },
+            rule_ref,
         });
     }
 
@@ -484,12 +477,12 @@ pub async fn update_source(
     source_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    let old_conf = storage::source_or_sink::read_conf_by_id(storage, &source_id).await?;
+    let old_conf = storage::source_or_sink::read_conf(storage, &source_id).await?;
     let new_conf = req.ext.clone();
     devices
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
-        .update_source(source_id, old_conf, new_conf)
+        .update_source(&source_id, old_conf, new_conf)
         .await?;
 
     storage::source_or_sink::update(storage, &source_id, req).await?;
@@ -521,11 +514,11 @@ pub async fn delete_source(
         return Err(HaliaError::DeleteRefing);
     }
 
-    if let Some(mut device) = devices.get_mut(&device_id) {
-        device.delete_source(source_id).await?;
-    }
-
     storage::source_or_sink::delete(storage, &source_id).await?;
+
+    if let Some(mut device) = devices.get_mut(&device_id) {
+        device.delete_source(&source_id).await?;
+    }
 
     Ok(())
 }
@@ -548,10 +541,10 @@ pub async fn create_sink(
     device_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    let sink_id = String::new_v4();
+    let sink_id = common::get_id();
     if let Some(mut device) = devices.get_mut(&device_id) {
         let conf: serde_json::Value = req.ext.clone();
-        device.create_sink(sink_id, conf).await?;
+        device.create_sink(sink_id.clone(), conf).await?;
     }
 
     storage::source_or_sink::create(
@@ -582,11 +575,17 @@ pub async fn search_sinks(
     .await?;
     let mut data = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
-        let id = String::from_str(&db_sink.id).unwrap();
-
+        let rule_ref = RuleRef {
+            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(storage, &db_sink.id).await?,
+            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(
+                storage,
+                &db_sink.id,
+            )
+            .await?,
+        };
         data.push(SearchSourcesOrSinksItemResp {
             info: SearchSourcesOrSinksInfoResp {
-                id,
+                id: db_sink.id,
                 conf: CreateUpdateSourceOrSinkReq {
                     base: BaseConf {
                         name: db_sink.name,
@@ -595,13 +594,7 @@ pub async fn search_sinks(
                     ext: serde_json::from_str(&db_sink.conf).unwrap(),
                 },
             },
-            rule_ref: RuleRef {
-                rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(storage, &id).await?,
-                rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(
-                    storage, &id,
-                )
-                .await?,
-            },
+            rule_ref,
         });
     }
 
@@ -615,12 +608,12 @@ pub async fn update_sink(
     sink_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    let old_conf = storage::source_or_sink::read_conf_by_id(storage, &sink_id).await?;
+    let old_conf = storage::source_or_sink::read_conf(storage, &sink_id).await?;
     let new_conf = req.ext.clone();
     devices
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
-        .update_sink(sink_id, old_conf, new_conf)
+        .update_sink(&sink_id, old_conf, new_conf)
         .await?;
 
     storage::source_or_sink::update(storage, &sink_id, req).await?;
@@ -640,7 +633,7 @@ pub async fn delete_sink(
     }
 
     if let Some(mut device) = devices.get_mut(&device_id) {
-        device.delete_sink(sink_id).await?;
+        device.delete_sink(&sink_id).await?;
     }
 
     storage::source_or_sink::delete(storage, &sink_id).await?;
