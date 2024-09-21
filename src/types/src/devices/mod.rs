@@ -11,7 +11,8 @@ pub mod opcua;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateUpdateDeviceReq {
-    pub device_type: DeviceType,
+    #[serde(rename = "type")]
+    pub typ: DeviceType,
     #[serde(flatten)]
     pub conf: DeviceConf,
 }
@@ -24,24 +25,24 @@ pub enum DeviceType {
     Coap,
 }
 
-impl Into<String> for DeviceType {
-    fn into(self) -> String {
+impl Into<i32> for DeviceType {
+    fn into(self) -> i32 {
         match self {
-            DeviceType::Modbus => "modbus".to_owned(),
-            DeviceType::Opcua => "opcua".to_owned(),
-            DeviceType::Coap => "coap".to_owned(),
+            DeviceType::Modbus => 1,
+            DeviceType::Opcua => 2,
+            DeviceType::Coap => 3,
         }
     }
 }
 
-impl TryFrom<String> for DeviceType {
+impl TryFrom<i32> for DeviceType {
     type Error = Error;
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        match value.as_str() {
-            "modbus" => Ok(DeviceType::Modbus),
-            "opcua" => Ok(DeviceType::Opcua),
-            "coap" => Ok(DeviceType::Coap),
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(DeviceType::Modbus),
+            2 => Ok(DeviceType::Opcua),
+            3 => Ok(DeviceType::Coap),
             _ => bail!("未知协议类型: {}", value),
         }
     }
@@ -109,7 +110,7 @@ pub struct SearchDevicesItemResp {
 pub struct SearchDevicesItemCommon {
     pub id: String,
     #[serde(rename = "type")]
-    pub typ: String,
+    pub typ: DeviceType,
     pub on: bool,
     pub source_cnt: usize,
     pub sink_cnt: usize,

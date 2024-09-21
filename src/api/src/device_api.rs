@@ -14,8 +14,6 @@ use crate::{AppResult, AppSuccess};
 pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_devices_summary))
-        // 查询事件
-        // .route("/event", get(get_rule_info(state, query)))
         .route("/", post(create_device))
         .route("/", get(search_devices))
         .route("/:device_id", put(update_device))

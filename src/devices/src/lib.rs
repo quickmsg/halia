@@ -149,9 +149,11 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
             conf: CreateUpdateSourceOrSinkReq {
                 base: BaseConf {
                     name: db_source_or_sink.name,
-                    desc: db_source_or_sink.desc,
+                    desc: db_source_or_sink
+                        .des
+                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                 },
-                ext: serde_json::from_str(&db_source_or_sink.conf).unwrap(),
+                ext: serde_json::from_slice(&db_source_or_sink.conf).unwrap(),
             },
         }),
         sink: None,
@@ -163,7 +165,7 @@ pub async fn create_device(device_id: String, req: CreateUpdateDeviceReq) -> Hal
         return Err(HaliaError::NameExists);
     }
 
-    match &req.device_type {
+    match &req.typ {
         DeviceType::Modbus => modbus::validate_conf(&req.conf.ext)?,
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
@@ -198,7 +200,12 @@ pub async fn update_device(device_id: String, req: CreateUpdateDeviceReq) -> Hal
 
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let db_device = storage::device::read_device(&device_id).await?;
-        device.update(db_device.conf, &req.conf.ext).await?;
+        device
+            .update(
+                unsafe { String::from_utf8_unchecked(db_device.conf) },
+                &req.conf.ext,
+            )
+            .await?;
     }
 
     storage::device::update(&device_id, req).await?;
@@ -225,9 +232,11 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     let device_conf: DeviceConf = DeviceConf {
         base: BaseConf {
             name: db_device.name,
-            desc: db_device.desc,
+            desc: db_device
+                .des
+                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
         },
-        ext: serde_json::from_str(&db_device.conf)?,
+        ext: serde_json::from_slice(&db_device.conf)?,
     };
 
     let mut device = match typ {
@@ -242,7 +251,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     )
     .await?;
     for db_source in db_sources {
-        let conf: serde_json::Value = serde_json::from_str(&db_source.conf).unwrap();
+        let conf: serde_json::Value = serde_json::from_slice(&db_source.conf).unwrap();
         device.create_source(db_source.id, conf).await?;
     }
 
@@ -252,7 +261,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     )
     .await?;
     for db_sink in db_sinks {
-        let conf: serde_json::Value = serde_json::from_str(&db_sink.conf).unwrap();
+        let conf: serde_json::Value = serde_json::from_slice(&db_sink.conf).unwrap();
         device.create_sink(db_sink.id, conf).await?;
     }
 
@@ -368,9 +377,11 @@ pub async fn search_sources(
                 conf: CreateUpdateSourceOrSinkReq {
                     base: BaseConf {
                         name: db_source.name,
-                        desc: db_source.desc,
+                        desc: db_source
+                            .des
+                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                     },
-                    ext: serde_json::from_str(&db_source.conf).unwrap(),
+                    ext: serde_json::from_slice(&db_source.conf).unwrap(),
                 },
             },
             rule_ref,
@@ -500,9 +511,11 @@ pub async fn search_sinks(
                 conf: CreateUpdateSourceOrSinkReq {
                     base: BaseConf {
                         name: db_sink.name,
-                        desc: db_sink.desc,
+                        desc: db_sink
+                            .des
+                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                     },
-                    ext: serde_json::from_str(&db_sink.conf).unwrap(),
+                    ext: serde_json::from_slice(&db_sink.conf).unwrap(),
                 },
             },
             rule_ref,
@@ -597,7 +610,7 @@ async fn transer_db_device_to_resp(
     Ok(SearchDevicesItemResp {
         common: SearchDevicesItemCommon {
             id: db_device.id,
-            typ: db_device.typ,
+            typ: DeviceType::try_from(db_device.typ)?,
             on: db_device.status == 1,
             source_cnt,
             sink_cnt,
@@ -605,9 +618,11 @@ async fn transer_db_device_to_resp(
         conf: SearchDevicesItemConf {
             base: BaseConf {
                 name: db_device.name,
-                desc: db_device.desc,
+                desc: db_device
+                    .des
+                    .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
             },
-            ext: serde_json::from_str(&db_device.conf)?,
+            ext: serde_json::from_slice(&db_device.conf)?,
         },
         running_info,
     })

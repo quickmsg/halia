@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, LazyLock,
+    LazyLock,
 };
 
 use async_trait::async_trait;
@@ -58,11 +58,11 @@ pub(crate) fn get_app_running_count() -> usize {
     APP_RUNNING_COUNT.load(Ordering::SeqCst)
 }
 
-pub(crate) fn add_app_running_count() {
+pub(crate) fn _add_app_running_count() {
     APP_RUNNING_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
-pub(crate) fn sub_app_running_count() {
+pub(crate) fn _sub_app_running_count() {
     APP_RUNNING_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
@@ -135,9 +135,11 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
                     conf: CreateUpdateSourceOrSinkReq {
                         base: BaseConf {
                             name: db_source.name,
-                            desc: db_source.desc,
+                            desc: db_source
+                                .des
+                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                         },
-                        ext: serde_json::from_str(&db_source.conf)?,
+                        ext: serde_json::from_slice(&db_source.conf)?,
                     },
                 }),
                 sink: None,
@@ -152,9 +154,11 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
                     conf: CreateUpdateSourceOrSinkReq {
                         base: BaseConf {
                             name: db_sink.name,
-                            desc: db_sink.desc,
+                            desc: db_sink
+                                .des
+                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                         },
-                        ext: serde_json::from_str(&db_sink.conf)?,
+                        ext: serde_json::from_slice(&db_sink.conf)?,
                     },
                 }),
                 sink: None,
@@ -256,7 +260,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     )
     .await?;
     for db_source in db_sources {
-        let conf: serde_json::Value = serde_json::from_str(&db_source.conf).unwrap();
+        let conf: serde_json::Value = serde_json::from_slice(&db_source.conf).unwrap();
         app.create_source(db_source.id, conf).await?;
     }
 
@@ -266,7 +270,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     )
     .await?;
     for db_sink in db_sinks {
-        let conf: serde_json::Value = serde_json::from_str(&db_sink.conf).unwrap();
+        let conf: serde_json::Value = serde_json::from_slice(&db_sink.conf).unwrap();
         app.create_sink(db_sink.id, conf).await?;
     }
 
@@ -364,9 +368,11 @@ pub async fn search_sources(
                 conf: CreateUpdateSourceOrSinkReq {
                     base: BaseConf {
                         name: db_source.name,
-                        desc: db_source.desc,
+                        desc: db_source
+                            .des
+                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                     },
-                    ext: serde_json::from_str(&db_source.conf).unwrap(),
+                    ext: serde_json::from_slice(&db_source.conf).unwrap(),
                 },
             },
             rule_ref,
@@ -482,9 +488,11 @@ pub async fn search_sinks(
                 conf: CreateUpdateSourceOrSinkReq {
                     base: BaseConf {
                         name: db_sink.name,
-                        desc: db_sink.desc,
+                        desc: db_sink
+                            .des
+                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                     },
-                    ext: serde_json::from_str(&db_sink.conf).unwrap(),
+                    ext: serde_json::from_slice(&db_sink.conf).unwrap(),
                 },
             },
             rule_ref,

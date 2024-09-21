@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{any::AnyArguments, query::Query, Any, FromRow};
+use sqlx::FromRow;
 use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
 
 use super::POOL;
@@ -31,11 +31,11 @@ impl Into<i32> for Type {
 #[derive(FromRow)]
 pub struct SourceOrSink {
     pub id: String,
-    pub typ: i64,
+    pub typ: i32,
     pub parent_id: String,
     pub name: String,
-    pub desc: Option<String>,
-    pub conf: String,
+    pub des: Option<Vec<u8>>,
+    pub conf: Vec<u8>,
     pub ts: i64,
 }
 
@@ -43,13 +43,13 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS sources_or_sinks (
-    id VARCHAR(255) PRIMARY KEY,     -- VARCHAR(255) 在 MySQL 和 SQLite 中都能兼容
-    typ INT NOT NULL,                -- INT 是两者都支持的整数类型
-    parent_id VARCHAR(255) NOT NULL, -- parent_id 可以使用 VARCHAR 以兼容 MySQL
-    name TEXT NOT NULL,              -- 名称可以使用 TEXT 类型
-    `desc` TEXT,                     -- `desc` 是保留字，使用反引号以避免冲突
-    conf TEXT NOT NULL,              -- 配置字段可以使用 TEXT
-    ts BIGINT NOT NULL               -- 使用 BIGINT 来存储时间戳
+    id CHAR(32) PRIMARY KEY,
+    typ SMALLINT UNSIGNED NOT NULL,
+    parent_id CHAR(32) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    des BLOB,
+    conf BLOB NOT NULL,
+    ts BIGINT UNSIGNED NOT NULL
 );
 "#,
     )
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS sources_or_sinks (
 pub async fn insert_name_exists(parent_id: &String, typ: Type, name: &String) -> Result<bool> {
     let typ: i32 = typ.into();
     let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND name = ?2 AND typ = ?3",
+        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ? AND name = ? AND typ = ?",
     )
     .bind(parent_id)
     .bind(name)
@@ -81,7 +81,7 @@ pub async fn update_name_exists(
 ) -> Result<bool> {
     let typ: i32 = typ.into();
     let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND name = ?2 AND typ = ?3 AND id != ?4",
+        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ? AND name = ? AND typ = ? AND id != ?",
     )
     .bind(parent_id)
     .bind(name)
@@ -100,29 +100,23 @@ pub async fn insert(
     req: CreateUpdateSourceOrSinkReq,
 ) -> Result<()> {
     let typ: i32 = typ.into();
-    let conf = serde_json::to_string(&req.ext)?;
+    let conf = serde_json::to_vec(&req.ext)?;
     let ts = chrono::Utc::now().timestamp();
-    let query: Query<'_, Any, AnyArguments> = match req.base.desc {
-        Some(desc) => {
-            sqlx::query(
-                r#"INSERT INTO sources_or_sinks (desc, id, typ, parent_id, name, conf, ts, rule_ref) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
-            )
-            .bind(desc.to_string())
-        }
-        None => {
-            sqlx::query(
-                r#"INSERT INTO sources_or_sinks (id, typ, parent_id, name, conf, ts, rule_ref) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
-            )
-        }
+    let desc = match req.base.desc {
+        Some(desc) => Some(desc.as_bytes().to_vec()),
+        None => None,
     };
-    query
+
+    sqlx::query(
+                r#"INSERT INTO sources_or_sinks (id, typ, parent_id, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)"#,
+            )
         .bind(id)
         .bind(typ)
         .bind(parent_id)
         .bind(req.base.name)
+        .bind(desc)
         .bind(conf)
         .bind(ts)
-        .bind(0)
         .execute(POOL.get().unwrap())
         .await?;
 
@@ -207,13 +201,12 @@ pub async fn query_by_parent_id(
 
 pub async fn count_by_parent_id(parent_id: &String, typ: Type) -> Result<usize> {
     let typ: i32 = typ.into();
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2",
-    )
-    .bind(parent_id)
-    .bind(typ)
-    .fetch_one(POOL.get().unwrap())
-    .await?;
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ? AND typ = ?")
+            .bind(parent_id)
+            .bind(typ)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
     Ok(count as usize)
 }
 
