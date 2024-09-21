@@ -16,10 +16,10 @@ pub(crate) async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS rule_refs (
-    rule_id TEXT NOT NULL,
-    parent_id TEXT NOT NULL,
-    resource_id TEXT NOT NULL,
-    active INT NOT NULL,
+    rule_id VARCHAR(255) NOT NULL,     -- 使用 VARCHAR(255) 来适配 MySQL 和 SQLite
+    parent_id VARCHAR(255) NOT NULL,   -- 父 ID 使用 VARCHAR(255)
+    resource_id VARCHAR(255) NOT NULL, -- 资源 ID 使用 VARCHAR(255)
+    active INT NOT NULL                -- 使用 INT 来表示布尔状态
 );
 "#,
     )

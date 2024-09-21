@@ -13,9 +13,9 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS users (
-    username TEXT NOT NULL,
-    password TEXT NOT NULL
-)
+    username VARCHAR(255) NOT NULL,  -- 使用 VARCHAR(255) 代替 TEXT
+    password VARCHAR(255) NOT NULL   -- 使用 VARCHAR(255) 代替 TEXT
+);
 "#,
     )
     .execute(POOL.get().unwrap())

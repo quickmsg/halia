@@ -16,12 +16,12 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS databoard_datas (
-    id TEXT PRIMARY KEY,
-    parent_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    desc TEXT,
-    conf TEXT NOT NULL,
-    ts INT NOT NULL
+    id VARCHAR(255) PRIMARY KEY,      -- 使用 VARCHAR(255) 代替 TEXT 以适配 MySQL
+    parent_id VARCHAR(255) NOT NULL,  -- 父 ID 也使用 VARCHAR(255)
+    name TEXT NOT NULL,               -- 名称字段使用 TEXT 类型
+    `desc` TEXT,                      -- `desc` 是保留字，用反引号括起来避免冲突
+    conf TEXT NOT NULL,               -- 配置字段使用 TEXT 类型
+    ts BIGINT NOT NULL                -- 时间戳字段使用 BIGINT 来确保兼容性
 );
 "#,
     )

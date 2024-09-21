@@ -87,6 +87,7 @@ impl Default for Config {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum StorageConfig {
     Sqlite(Sqlite),
     Mysql(Mysql),
@@ -99,7 +100,13 @@ pub struct Sqlite {
 }
 
 #[derive(Deserialize)]
-pub struct Mysql {}
+pub struct Mysql {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub db_name: String,
+}
 
 #[derive(Deserialize)]
 pub struct Postgresql {}

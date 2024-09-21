@@ -43,13 +43,13 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS sources_or_sinks (
-    id TEXT PRIMARY KEY,
-    typ INT NOT NULL,
-    parent_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    desc TEXT,
-    conf TEXT NOT NULL,
-    ts INT NOT NULL,
+    id VARCHAR(255) PRIMARY KEY,     -- VARCHAR(255) 在 MySQL 和 SQLite 中都能兼容
+    typ INT NOT NULL,                -- INT 是两者都支持的整数类型
+    parent_id VARCHAR(255) NOT NULL, -- parent_id 可以使用 VARCHAR 以兼容 MySQL
+    name TEXT NOT NULL,              -- 名称可以使用 TEXT 类型
+    `desc` TEXT,                     -- `desc` 是保留字，使用反引号以避免冲突
+    conf TEXT NOT NULL,              -- 配置字段可以使用 TEXT
+    ts BIGINT NOT NULL               -- 使用 BIGINT 来存储时间戳
 );
 "#,
     )

@@ -18,26 +18,18 @@ pub struct Device {
     pub ts: i64,
 }
 
-#[derive(FromRow)]
-pub struct Event {
-    pub id: String,
-    pub event_type: i32,
-    pub ts: i64,
-    pub info: Option<String>,
-}
-
 pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS devices (
-    id TEXT PRIMARY KEY,
-    status INTEGER NOT NULL,
-    device_type TEXT NOT NULL,
-    name TEXT NOT NULL,
-    desc TEXT,
+    id VARCHAR(255) PRIMARY KEY,     -- 对于 MySQL, VARCHAR 是推荐的字符串类型
+    status INTEGER NOT NULL,         -- INTEGER 适用于两者
+    device_type VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    `desc` TEXT,                     -- `desc` 是保留字，使用反引号避免冲突
     conf TEXT NOT NULL,
-    ts INT NOT NULL
-)
+    ts BIGINT NOT NULL               -- 时间戳使用 BIGINT 以保证两者兼容
+);
 "#,
     )
     .execute(POOL.get().unwrap())

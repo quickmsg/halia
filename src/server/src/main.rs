@@ -1,14 +1,7 @@
-use std::{
-    env::{self},
-    fs::File,
-    path::Path,
-    str::FromStr,
-    sync::Arc,
-};
+use std::env;
 
 use anyhow::Result;
 use common::{config, storage, sys};
-use sqlx::{any::AnyConnectOptions, AnyPool, ConnectOptions};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 

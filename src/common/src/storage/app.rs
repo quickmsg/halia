@@ -22,14 +22,14 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS apps (
-    id TEXT PRIMARY KEY,
-    status INTEGER NOT NULL,
-    typ TEXT NOT NULL,
-    name TEXT NOT NULL,
-    desc TEXT,
-    conf TEXT NOT NULL,
-    ts INT NOT NULL
-);
+    id VARCHAR(255) PRIMARY KEY,      -- 使用 VARCHAR 来兼容 MySQL 和 SQLite
+    status INTEGER NOT NULL,          -- 两者都支持 INTEGER
+    typ TEXT NOT NULL,                -- TEXT 类型可以兼容两者
+    name VARCHAR(255) NOT NULL,
+    `desc` TEXT,                      -- `desc` 是 SQL 保留字，使用反引号避免冲突
+    conf TEXT NOT NULL,               -- TEXT 类型可以兼容两者
+    ts BIGINT NOT NULL                -- 时间戳使用 BIGINT 以确保兼容性
+)
 "#,
     )
     .execute(POOL.get().unwrap())

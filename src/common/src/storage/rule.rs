@@ -18,11 +18,11 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS rules (
-    id TEXT PRIMARY KEY,
-    status INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    desc TEXT,
-    conf TEXT NOT NULL
+    id VARCHAR(255) PRIMARY KEY,      -- 使用 VARCHAR(255) 来适配 MySQL 和 SQLite
+    status INTEGER NOT NULL,          -- 状态字段使用 INTEGER
+    name TEXT NOT NULL,               -- 名称字段使用 TEXT
+    `desc` TEXT,                      -- `desc` 是保留字，使用反引号括起来
+    conf TEXT NOT NULL                -- 配置字段使用 TEXT
 );
 "#,
     )

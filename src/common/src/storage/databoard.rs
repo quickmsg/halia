@@ -20,12 +20,12 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS databoards (
-    id TEXT PRIMARY KEY,
+    id VARCHAR(255) PRIMARY KEY,
     status INTEGER NOT NULL,
     name TEXT NOT NULL,
-    desc TEXT,
+    `desc` TEXT,
     conf TEXT NOT NULL,
-    ts INT NOT NULL
+    ts BIGINT NOT NULL
 );
 "#,
     )

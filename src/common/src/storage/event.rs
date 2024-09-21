@@ -26,12 +26,12 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS events (
-    resource_type TEXT NOT NULL,
-    resource_id TEXT NOT NULL,
-    typ TEXT NOT NULL,
-    info TEXT,
-    ts INTEGER NOT NULL
-)
+    resource_type VARCHAR(255) NOT NULL, -- 使用 VARCHAR(255) 代替 TEXT
+    resource_id VARCHAR(255) NOT NULL,   -- 资源 ID 使用 VARCHAR(255)
+    typ VARCHAR(255) NOT NULL,           -- 类型字段使用 VARCHAR(255)
+    info TEXT,                           -- 信息字段使用 TEXT 类型
+    ts INTEGER NOT NULL                  -- 时间戳字段使用 INTEGER
+);
 "#,
     )
     .execute(POOL.get().unwrap())
