@@ -1,6 +1,8 @@
 use anyhow::Result;
-use sqlx::{any::AnyArguments, query::Query, Any, AnyPool, FromRow};
+use sqlx::{any::AnyArguments, query::Query, Any, FromRow};
 use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
+
+use super::POOL;
 
 pub enum Type {
     Source,
@@ -37,7 +39,7 @@ pub struct SourceOrSink {
     pub ts: i64,
 }
 
-pub async fn init_table(storage: &AnyPool) -> Result<()> {
+pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS sources_or_sinks (
@@ -51,18 +53,13 @@ CREATE TABLE IF NOT EXISTS sources_or_sinks (
 );
 "#,
     )
-    .execute(storage)
+    .execute(POOL.get().unwrap())
     .await?;
 
     Ok(())
 }
 
-pub async fn insert_name_exists(
-    storage: &AnyPool,
-    parent_id: &String,
-    typ: Type,
-    name: &String,
-) -> Result<bool> {
+pub async fn insert_name_exists(parent_id: &String, typ: Type, name: &String) -> Result<bool> {
     let typ: i32 = typ.into();
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND name = ?2 AND typ = ?3",
@@ -70,14 +67,13 @@ pub async fn insert_name_exists(
     .bind(parent_id)
     .bind(name)
     .bind(typ)
-    .fetch_one(storage)
+    .fetch_one(POOL.get().unwrap())
     .await?;
 
     Ok(count > 0)
 }
 
 pub async fn update_name_exists(
-    storage: &AnyPool,
     parent_id: &String,
     typ: Type,
     id: &String,
@@ -91,14 +87,13 @@ pub async fn update_name_exists(
     .bind(name)
     .bind(typ)
     .bind(id)
-    .fetch_one(storage)
+    .fetch_one(POOL.get().unwrap())
     .await?;
 
     Ok(count > 0)
 }
 
 pub async fn insert(
-    storage: &AnyPool,
     parent_id: &String,
     id: &String,
     typ: Type,
@@ -128,39 +123,34 @@ pub async fn insert(
         .bind(conf)
         .bind(ts)
         .bind(0)
-        .execute(storage)
+        .execute(POOL.get().unwrap())
         .await?;
 
     Ok(())
 }
 
-pub async fn read_all_by_parent_id(
-    storage: &AnyPool,
-    parent_id: &String,
-    typ: Type,
-) -> Result<Vec<SourceOrSink>> {
+pub async fn read_all_by_parent_id(parent_id: &String, typ: Type) -> Result<Vec<SourceOrSink>> {
     let typ: i32 = typ.into();
     let sources_or_sinks = sqlx::query_as::<_, SourceOrSink>(
         "SELECT * FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2",
     )
     .bind(parent_id)
     .bind(typ)
-    .fetch_all(storage)
+    .fetch_all(POOL.get().unwrap())
     .await?;
     Ok(sources_or_sinks)
 }
 
-pub async fn read_one(storage: &AnyPool, id: &String) -> Result<SourceOrSink> {
+pub async fn read_one(id: &String) -> Result<SourceOrSink> {
     let source_or_sink =
         sqlx::query_as::<_, SourceOrSink>("SELECT * FROM sources_or_sinks WHERE id = ?1")
             .bind(id)
-            .fetch_one(storage)
+            .fetch_one(POOL.get().unwrap())
             .await?;
     Ok(source_or_sink)
 }
 
 pub async fn query_by_parent_id(
-    storage: &AnyPool,
     parent_id: &String,
     typ: Type,
     pagination: Pagination,
@@ -175,7 +165,7 @@ pub async fn query_by_parent_id(
             .bind(parent_id)
             .bind(typ)
             .bind(format!("%{}%", name))
-            .fetch_one(storage)
+            .fetch_one(POOL.get().unwrap())
             .await?;
 
             let sources_or_sinks = sqlx::query_as::<_, SourceOrSink>(
@@ -185,7 +175,7 @@ pub async fn query_by_parent_id(
             .bind(format!("%{}%", name))
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage).await?;
+            .fetch_all(POOL.get().unwrap()).await?;
 
             (count, sources_or_sinks)
         }
@@ -195,7 +185,7 @@ pub async fn query_by_parent_id(
             )
             .bind(parent_id)
             .bind(typ)
-            .fetch_one(storage)
+            .fetch_one(POOL.get().unwrap())
             .await?;
 
             let sources_or_sinks = sqlx::query_as::<_, SourceOrSink>(
@@ -205,7 +195,7 @@ pub async fn query_by_parent_id(
             .bind(typ)
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count, sources_or_sinks)
@@ -215,27 +205,27 @@ pub async fn query_by_parent_id(
     Ok((count as usize, sources_or_sinks))
 }
 
-pub async fn count_by_parent_id(storage: &AnyPool, parent_id: &String, typ: Type) -> Result<usize> {
+pub async fn count_by_parent_id(parent_id: &String, typ: Type) -> Result<usize> {
     let typ: i32 = typ.into();
     let count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2",
     )
     .bind(parent_id)
     .bind(typ)
-    .fetch_one(storage)
+    .fetch_one(POOL.get().unwrap())
     .await?;
     Ok(count as usize)
 }
 
-pub async fn read_conf(storage: &AnyPool, id: &String) -> Result<serde_json::Value> {
+pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     let conf: String = sqlx::query_scalar("SELECT conf FROM sources_or_sinks WHERE id = ?1")
         .bind(id)
-        .fetch_one(storage)
+        .fetch_one(POOL.get().unwrap())
         .await?;
     Ok(serde_json::to_value(conf)?)
 }
 
-pub async fn update(pool: &AnyPool, id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
+pub async fn update(id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
     let conf = serde_json::to_string(&req.ext)?;
     match req.base.desc {
         Some(desc) => {
@@ -244,7 +234,7 @@ pub async fn update(pool: &AnyPool, id: &String, req: CreateUpdateSourceOrSinkRe
                 .bind(desc)
                 .bind(conf)
                 .bind(id)
-                .execute(pool)
+                .execute(POOL.get().unwrap())
                 .await?;
         }
         None => {
@@ -252,7 +242,7 @@ pub async fn update(pool: &AnyPool, id: &String, req: CreateUpdateSourceOrSinkRe
                 .bind(req.base.name)
                 .bind(conf)
                 .bind(id)
-                .execute(pool)
+                .execute(POOL.get().unwrap())
                 .await?;
         }
     }
@@ -260,26 +250,26 @@ pub async fn update(pool: &AnyPool, id: &String, req: CreateUpdateSourceOrSinkRe
     Ok(())
 }
 
-pub async fn delete(storage: &AnyPool, id: &String) -> Result<()> {
+pub async fn delete(id: &String) -> Result<()> {
     sqlx::query("DELETE FROM sources_or_sinks WHERE id = ?1")
         .bind(id)
-        .execute(storage)
+        .execute(POOL.get().unwrap())
         .await?;
     Ok(())
 }
 
-pub async fn delete_by_parent_id(storage: &AnyPool, parent_id: &String) -> Result<()> {
+pub async fn delete_by_parent_id(parent_id: &String) -> Result<()> {
     sqlx::query("DELETE FROM sources_or_sinks WHERE parent_id = ?1")
         .bind(parent_id)
-        .execute(storage)
+        .execute(POOL.get().unwrap())
         .await?;
     Ok(())
 }
 
-pub async fn check_exists(storage: &AnyPool, source_or_sink_id: &String) -> Result<bool> {
+pub async fn check_exists(source_or_sink_id: &String) -> Result<bool> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources_or_sinks WHERE id = ?1")
         .bind(source_or_sink_id)
-        .fetch_one(storage)
+        .fetch_one(POOL.get().unwrap())
         .await?;
 
     Ok(count == 1)

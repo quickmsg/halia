@@ -5,6 +5,8 @@ use types::{
     Pagination,
 };
 
+use super::POOL;
+
 #[derive(FromRow, Debug)]
 pub struct Device {
     pub id: String,
@@ -24,7 +26,7 @@ pub struct Event {
     pub info: Option<String>,
 }
 
-pub async fn init_table(storage: &AnyPool) -> Result<()> {
+pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS devices (
@@ -38,33 +40,33 @@ CREATE TABLE IF NOT EXISTS devices (
 )
 "#,
     )
-    .execute(storage)
+    .execute(POOL.get().unwrap())
     .await?;
 
     Ok(())
 }
 
-pub async fn insert_name_exists(storage: &AnyPool, name: &String) -> Result<bool> {
+pub async fn insert_name_exists(name: &String) -> Result<bool> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ?1")
         .bind(name)
-        .fetch_one(storage)
+        .fetch_one(POOL.get().unwrap())
         .await?;
 
     Ok(count > 0)
 }
 
-pub async fn update_name_exists(storage: &AnyPool, id: &String, name: &String) -> Result<bool> {
+pub async fn update_name_exists(id: &String, name: &String) -> Result<bool> {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ?1 AND id != ?2")
             .bind(name)
             .bind(id)
-            .fetch_one(storage)
+            .fetch_one(POOL.get().unwrap())
             .await?;
 
     Ok(count > 0)
 }
 
-pub async fn insert(storage: &AnyPool, id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
+pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     let ext_conf = serde_json::to_string(&req.conf.ext)?;
     let ts = chrono::Utc::now().timestamp();
     match req.conf.base.desc {
@@ -77,7 +79,7 @@ pub async fn insert(storage: &AnyPool, id: &String, req: CreateUpdateDeviceReq) 
                 .bind(desc)
                 .bind(ext_conf)
                 .bind(ts)
-                .execute(storage)
+                .execute(POOL.get().unwrap())
                 .await?;
         }
         None => {
@@ -90,7 +92,7 @@ pub async fn insert(storage: &AnyPool, id: &String, req: CreateUpdateDeviceReq) 
             .bind(req.conf.base.name)
             .bind(ext_conf)
             .bind(ts)
-            .execute(storage)
+            .execute(POOL.get().unwrap())
             .await?;
         }
     }
@@ -98,24 +100,23 @@ pub async fn insert(storage: &AnyPool, id: &String, req: CreateUpdateDeviceReq) 
     Ok(())
 }
 
-pub async fn read_device(storage: &AnyPool, id: &String) -> Result<Device> {
+pub async fn read_device(id: &String) -> Result<Device> {
     let device = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE id = ?1")
         .bind(id)
-        .fetch_one(storage)
+        .fetch_one(POOL.get().unwrap())
         .await?;
 
     Ok(device)
 }
 
 pub async fn search_devices(
-    storage: &AnyPool,
     pagination: Pagination,
     query_params: QueryParams,
 ) -> Result<(usize, Vec<Device>)> {
     let (count, devices) = match (query_params.name, query_params.device_type, query_params.on) {
         (None, None, None) => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
-                .fetch_one(storage)
+                .fetch_one(POOL.get().unwrap())
                 .await?;
 
             let devices = sqlx::query_as::<_, Device>(
@@ -123,7 +124,7 @@ pub async fn search_devices(
             )
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
@@ -131,7 +132,7 @@ pub async fn search_devices(
         (None, None, Some(on)) => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE status = ?1")
                 .bind(on as i32)
-                .fetch_one(storage)
+                .fetch_one(POOL.get().unwrap())
                 .await?;
 
             let devices = sqlx::query_as::<_, Device>(
@@ -140,7 +141,7 @@ pub async fn search_devices(
             .bind(on as i32)
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
@@ -149,7 +150,7 @@ pub async fn search_devices(
             let count: i64 =
                 sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE device_type = ?1")
                     .bind(device_type.to_string())
-                    .fetch_one(storage)
+                    .fetch_one(POOL.get().unwrap())
                     .await?;
 
             let devices = sqlx::query_as::<_, Device>(
@@ -158,7 +159,7 @@ pub async fn search_devices(
             .bind(device_type.to_string())
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
@@ -169,7 +170,7 @@ pub async fn search_devices(
             )
             .bind(device_type.to_string())
             .bind(on as i32)
-            .fetch_one(storage)
+            .fetch_one(POOL.get().unwrap())
             .await?;
 
             let devices = sqlx::query_as::<_, Device>(
@@ -179,7 +180,7 @@ pub async fn search_devices(
             .bind(on as i32)
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
@@ -187,7 +188,7 @@ pub async fn search_devices(
         (Some(name), None, None) => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ?1")
                 .bind(format!("%{}%", name))
-                .fetch_one(storage)
+                .fetch_one(POOL.get().unwrap())
                 .await?;
 
             let devices = sqlx::query_as::<_, Device>(
@@ -196,7 +197,7 @@ pub async fn search_devices(
             .bind(format!("%{}%", name))
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
@@ -206,7 +207,7 @@ pub async fn search_devices(
                 sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ?1 AND status = ?2")
                     .bind(format!("%{}%", name))
                     .bind(on as i32)
-                    .fetch_one(storage)
+                    .fetch_one(POOL.get().unwrap())
                     .await?;
 
             let devices = sqlx::query_as::<_, Device>(
@@ -216,7 +217,7 @@ pub async fn search_devices(
             .bind(on as i32)
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
@@ -227,7 +228,7 @@ pub async fn search_devices(
             )
             .bind(format!("%{}%", name))
             .bind(device_type.to_string())
-            .fetch_one(storage)
+            .fetch_one(POOL.get().unwrap())
             .await?;
 
             let devices = sqlx::query_as::<_, Device>(
@@ -237,7 +238,7 @@ pub async fn search_devices(
             .bind(device_type.to_string())
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
@@ -249,7 +250,7 @@ pub async fn search_devices(
             .bind(format!("%{}%", name))
             .bind(device_type.to_string())
             .bind(on as i32)
-            .fetch_one(storage)
+            .fetch_one(POOL.get().unwrap())
             .await?;
 
             let devices = sqlx::query_as::<_, Device>(
@@ -260,7 +261,7 @@ pub async fn search_devices(
             .bind(on as i32)
             .bind(pagination.size as i64)
             .bind(((pagination.page - 1) * pagination.size) as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
@@ -270,51 +271,51 @@ pub async fn search_devices(
     Ok((count as usize, devices))
 }
 
-pub async fn read_on(storage: &AnyPool) -> Result<Vec<Device>> {
+pub async fn read_on() -> Result<Vec<Device>> {
     let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE status = 1")
-        .fetch_all(storage)
+        .fetch_all(POOL.get().unwrap())
         .await?;
 
     Ok(devices)
 }
 
-pub async fn count_all(storage: &AnyPool) -> Result<usize> {
+pub async fn count_all() -> Result<usize> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
-        .fetch_one(storage)
+        .fetch_one(POOL.get().unwrap())
         .await?;
 
     Ok(count as usize)
 }
 
-pub async fn update_status(pool: &AnyPool, id: &String, status: bool) -> Result<()> {
+pub async fn update_status(id: &String, status: bool) -> Result<()> {
     sqlx::query("UPDATE devices SET status = ?1 WHERE id = ?2")
         .bind(status as i32)
         .bind(id)
-        .execute(pool)
+        .execute(POOL.get().unwrap())
         .await?;
 
     Ok(())
 }
 
-pub async fn update(pool: &AnyPool, id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
+pub async fn update(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     let ext_conf = serde_json::to_string(&req.conf.ext)?;
     sqlx::query("UPDATE devices SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
         .bind(req.conf.base.name)
         .bind(req.conf.base.desc)
         .bind(ext_conf)
         .bind(id)
-        .execute(pool)
+        .execute(POOL.get().unwrap())
         .await?;
     Ok(())
 }
 
-pub async fn delete(storage: &AnyPool, id: &String) -> Result<()> {
+pub async fn delete(id: &String) -> Result<()> {
     sqlx::query(
         "DELETE FROM devices WHERE id = ?1
     ",
     )
     .bind(id)
-    .execute(storage)
+    .execute(POOL.get().unwrap())
     .await?;
 
     Ok(())

@@ -18,7 +18,6 @@ use message::MessageBatch;
 use protocol::modbus::{rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
-use sqlx::AnyPool;
 use tokio::{
     net::TcpStream,
     select,
@@ -61,7 +60,6 @@ struct Modbus {
             mpsc::Receiver<()>,
             mpsc::Receiver<WritePointEvent>,
             mpsc::Receiver<String>,
-            Arc<AnyPool>,
         )>,
     >,
 }
@@ -78,7 +76,7 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn new(device_id: String, device_conf: DeviceConf, storage: Arc<AnyPool>) -> Box<dyn Device> {
+pub fn new(device_id: String, device_conf: DeviceConf) -> Box<dyn Device> {
     let conf: ModbusConf = serde_json::from_value(device_conf.ext).unwrap();
 
     let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
@@ -99,7 +97,7 @@ pub fn new(device_id: String, device_conf: DeviceConf, storage: Arc<AnyPool>) ->
         join_handle: None,
     };
 
-    device.event_loop(conf, stop_signal_rx, read_rx, write_rx, storage);
+    device.event_loop(conf, stop_signal_rx, read_rx, write_rx);
 
     Box::new(device)
 }
@@ -111,7 +109,6 @@ impl Modbus {
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut read_rx: mpsc::Receiver<String>,
         mut write_rx: mpsc::Receiver<WritePointEvent>,
-        storage: Arc<AnyPool>,
     ) {
         let device_id = self.id.clone();
         let err = self.err.clone();
@@ -123,7 +120,6 @@ impl Modbus {
                     Ok(mut ctx) => {
                         add_device_running_count();
                         if let Err(e) = storage::event::insert(
-                            &storage,
                             types::events::ResourceType::Device,
                             &device_id,
                             types::events::EventType::Connect.into(),
@@ -138,7 +134,7 @@ impl Modbus {
                             select! {
                                 biased;
                                 _ = stop_signal_rx.recv() => {
-                                    return (stop_signal_rx, write_rx, read_rx, storage);
+                                    return (stop_signal_rx, write_rx, read_rx);
                                 }
 
                                 wpe = write_rx.recv() => {
@@ -171,7 +167,6 @@ impl Modbus {
                     }
                     Err(e) => {
                         if let Err(e) = storage::event::insert(
-                            &storage,
                             types::events::ResourceType::Device,
                             &device_id,
                             types::events::EventType::DisConnect,
@@ -187,7 +182,7 @@ impl Modbus {
                         tokio::pin!(sleep);
                         select! {
                             _ = stop_signal_rx.recv() => {
-                                return (stop_signal_rx, write_rx, read_rx, storage);
+                                return (stop_signal_rx, write_rx, read_rx);
                             }
 
                             _ = &mut sleep => {}
@@ -366,9 +361,8 @@ impl Device for Modbus {
         }
 
         self.stop_signal_tx.send(()).await.unwrap();
-        let (stop_signal_rx, write_rx, read_rx, storage) =
-            self.join_handle.take().unwrap().await.unwrap();
-        self.event_loop(new_conf, stop_signal_rx, read_rx, write_rx, storage);
+        let (stop_signal_rx, write_rx, read_rx) = self.join_handle.take().unwrap().await.unwrap();
+        self.event_loop(new_conf, stop_signal_rx, read_rx, write_rx);
 
         Ok(())
     }

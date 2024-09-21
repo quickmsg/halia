@@ -3,16 +3,12 @@ use std::sync::{
     Arc, LazyLock,
 };
 
-use apps::App;
 use common::{
     error::{HaliaError, HaliaResult},
     storage,
 };
 use dashmap::DashMap;
-use databoard::databoard_struct::Databoard;
-use devices::Device;
 use rule::Rule;
-use sqlx::AnyPool;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
@@ -21,6 +17,8 @@ use types::{
 mod log;
 pub mod rule;
 mod segment;
+
+static GLOBAL_RULE_MANAGER: LazyLock<DashMap<String, Rule>> = LazyLock::new(|| DashMap::new());
 
 static RULE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 static RULE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
@@ -57,45 +55,27 @@ pub fn get_summary() -> Summary {
 }
 
 // TODO
-pub async fn load_from_storage(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    apps: &Arc<DashMap<String, Box<dyn App>>>,
-    databoards: &Arc<DashMap<String, Databoard>>,
-) -> HaliaResult<Arc<DashMap<String, Rule>>> {
-    let db_rules = storage::rule::read_all(storage).await?;
-    let rules: Arc<DashMap<String, Rule>> = Arc::new(DashMap::new());
+pub async fn load_from_storage() -> HaliaResult<()> {
+    let db_rules = storage::rule::read_all().await?;
     for db_rule in db_rules {
         if db_rule.status == 1 {
-            start(storage, &rules, &devices, &apps, &databoards, db_rule.id).await?;
+            start(db_rule.id).await?;
         }
     }
 
-    Ok(rules)
-}
-
-pub async fn create(
-    storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<String, Rule>>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    apps: &Arc<DashMap<String, Box<dyn App>>>,
-    databoards: &Arc<DashMap<String, Databoard>>,
-    id: String,
-    body: String,
-) -> HaliaResult<()> {
-    let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
-    storage::rule::insert(storage, &id, body).await?;
-    let rule = Rule::new(storage, id.clone(), req).await?;
-    add_rule_count();
-    rules.insert(id, rule);
     Ok(())
 }
 
-pub async fn search(
-    rules: &Arc<DashMap<String, Rule>>,
-    pagination: Pagination,
-    query_params: QueryParams,
-) -> SearchRulesResp {
+pub async fn create(id: String, body: String) -> HaliaResult<()> {
+    let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
+    storage::rule::insert(&id, body).await?;
+    let rule = Rule::new(id.clone(), req).await?;
+    add_rule_count();
+    GLOBAL_RULE_MANAGER.insert(id, rule);
+    Ok(())
+}
+
+pub async fn search(pagination: Pagination, query_params: QueryParams) -> SearchRulesResp {
     todo!()
     // let mut total = 0;
     // let mut data = vec![];
@@ -124,77 +104,48 @@ pub async fn search(
     // SearchRulesResp { total, data }
 }
 
-pub async fn read(
-    storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<String, Rule>>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    apps: &Arc<DashMap<String, Box<dyn App>>>,
-    databoards: &Arc<DashMap<String, Databoard>>,
-    id: String,
-) -> HaliaResult<Vec<ReadRuleNodeResp>> {
-    rules
+pub async fn read(id: String) -> HaliaResult<Vec<ReadRuleNodeResp>> {
+    GLOBAL_RULE_MANAGER
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .read(storage, devices, apps, databoards)
+        .read()
         .await
 }
 
-pub async fn start(
-    storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<String, Rule>>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    apps: &Arc<DashMap<String, Box<dyn App>>>,
-    databoards: &Arc<DashMap<String, Databoard>>,
-    id: String,
-) -> HaliaResult<()> {
-    if rules.contains_key(&id) {
+pub async fn start(id: String) -> HaliaResult<()> {
+    if GLOBAL_RULE_MANAGER.contains_key(&id) {
         return Ok(());
     }
 
-    rules
+    GLOBAL_RULE_MANAGER
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .start(storage, devices, apps, databoards)
+        .start()
         .await?;
-    storage::rule::update_status(storage, &id, true).await?;
+    storage::rule::update_status(&id, true).await?;
     Ok(())
 }
 
-pub async fn stop(
-    storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<String, Rule>>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    apps: &Arc<DashMap<String, Box<dyn App>>>,
-    databoards: &Arc<DashMap<String, Databoard>>,
-    id: String,
-) -> HaliaResult<()> {
-    if !rules.contains_key(&id) {
+pub async fn stop(id: String) -> HaliaResult<()> {
+    if !GLOBAL_RULE_MANAGER.contains_key(&id) {
         return Ok(());
     }
 
-    rules
+    GLOBAL_RULE_MANAGER
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .stop(storage, databoards)
+        .stop()
         .await?;
 
-    storage::rule::update_status(storage, &id, false).await?;
+    storage::rule::update_status(&id, false).await?;
     Ok(())
 }
 
-pub async fn update(
-    storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<String, Rule>>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    apps: &Arc<DashMap<String, Box<dyn App>>>,
-    databoards: &Arc<DashMap<String, Databoard>>,
-    id: String,
-    req: CreateUpdateRuleReq,
-) -> HaliaResult<()> {
-    rules
+pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
+    GLOBAL_RULE_MANAGER
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .update(storage, devices, apps, databoards, req)
+        .update(req)
         .await?;
 
     // storage::rule::update_rule_conf(pool, &id, req).await?;
@@ -202,33 +153,26 @@ pub async fn update(
     Ok(())
 }
 
-pub async fn delete(
-    storage: &Arc<AnyPool>,
-    rules: &Arc<DashMap<String, Rule>>,
-    id: String,
-) -> HaliaResult<()> {
-    if rules.contains_key(&id) {
+pub async fn delete(id: String) -> HaliaResult<()> {
+    if GLOBAL_RULE_MANAGER.contains_key(&id) {
         return Err(HaliaError::DeleteRunning);
     }
 
-    rules
+    GLOBAL_RULE_MANAGER
         .get_mut(&id)
         .ok_or(HaliaError::NotFound)?
-        .delete(storage)
+        .delete()
         .await?;
 
-    rules.remove(&id);
+    GLOBAL_RULE_MANAGER.remove(&id);
 
     sub_rule_count();
-    storage::rule::delete(storage, &id).await?;
+    storage::rule::delete(&id).await?;
     Ok(())
 }
 
-pub async fn get_log_filename(
-    rules: &Arc<DashMap<String, Rule>>,
-    id: String,
-) -> HaliaResult<String> {
-    let filename = rules
+pub async fn get_log_filename(id: String) -> HaliaResult<String> {
+    let filename = GLOBAL_RULE_MANAGER
         .get(&id)
         .ok_or(HaliaError::NotFound)?
         .get_log_filename()

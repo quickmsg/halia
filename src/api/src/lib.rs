@@ -14,7 +14,6 @@ use databoard::databoard_struct::Databoard;
 use devices::Device;
 use rule::rule::Rule;
 use serde::Serialize;
-use sqlx::AnyPool;
 use tokio::net::TcpListener;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -92,32 +91,8 @@ impl IntoResponse for AppError {
     }
 }
 
-#[derive(Clone)]
-struct AppState {
-    storage: Arc<AnyPool>,
-    devices: Arc<DashMap<String, Box<dyn Device>>>,
-    apps: Arc<DashMap<String, Box<dyn App>>>,
-    databoards: Arc<DashMap<String, Databoard>>,
-    rules: Arc<DashMap<String, Rule>>,
-}
-
-pub async fn start(
-    port: u16,
-    storage: Arc<AnyPool>,
-    devices: Arc<DashMap<String, Box<dyn Device>>>,
-    apps: Arc<DashMap<String, Box<dyn App>>>,
-    databoards: Arc<DashMap<String, Databoard>>,
-    rules: Arc<DashMap<String, Rule>>,
-) {
-    let state = AppState {
-        storage,
-        devices,
-        apps,
-        databoards,
-        rules,
-    };
+pub async fn start(port: u16) {
     let app = Router::new()
-        .with_state(state.clone())
         .nest("/api", user_api::routes())
         .nest(
             "/api",
@@ -143,7 +118,7 @@ pub async fn start(
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
         .unwrap();
-    axum::serve(listener, app.with_state(state)).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
 async fn get_dashboard() -> AppSuccess<Dashboard> {

@@ -40,39 +40,15 @@ async fn main() -> Result<()> {
 
     sys::init();
 
-    // todo 按需引入driver
-    sqlx::any::install_default_drivers();
-    let opt = match config.storage {
-        config::Storage::Sqlite(sqlite) => {
-            let path = Path::new(&sqlite.path);
-            if !path.exists() {
-                File::create(&sqlite.path)?;
-            }
-            AnyConnectOptions::from_str("sqlite://db")
-                .unwrap()
-                .disable_statement_logging()
-        }
-        config::Storage::Mysql(_) => {
-            AnyConnectOptions::from_str("mysql://root:my-secret-pw@192.168.124.39:3306/halia")
-                .unwrap()
-                .disable_statement_logging()
-        }
-        config::Storage::Postgresql(_) => todo!(),
-    };
+    storage::init(&config.storage).await?;
 
-    let storage = AnyPool::connect_with(opt).await?;
-    storage::create_tables(&storage).await?;
-
-    let storage = Arc::new(storage);
-    let devices = devices::load_from_storage(&storage).await.unwrap();
-    let apps = apps::load_from_storage(&storage).await.unwrap();
-    let databoards = databoard::load_from_storage(&storage).await.unwrap();
-    let rules = rule::load_from_storage(&storage, &devices, &apps, &databoards)
-        .await
-        .unwrap();
+    devices::load_from_storage().await.unwrap();
+    apps::load_from_storage().await.unwrap();
+    databoard::load_from_storage().await.unwrap();
+    rule::load_from_storage().await.unwrap();
 
     info!("server starting...");
-    api::start(config.port, storage, devices, apps, databoards, rules).await;
+    api::start(config.port).await;
 
     Ok(())
 }

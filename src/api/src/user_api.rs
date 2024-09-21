@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Request, State},
+    extract::Request,
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
@@ -13,7 +13,7 @@ use time::{Duration, OffsetDateTime};
 use tracing::warn;
 use types::user::{AdminExists, AuthInfo, Password, UpdatePassword, User};
 
-use crate::{AppError, AppResult, AppState, AppSuccess, EMPTY_USER_CODE, WRONG_PASSWORD_CODE};
+use crate::{AppError, AppResult, AppSuccess, EMPTY_USER_CODE, WRONG_PASSWORD_CODE};
 
 const SECRET: &str = "must be random,todo";
 
@@ -68,7 +68,7 @@ mod jwt_numeric_date {
     }
 }
 
-pub fn routes() -> Router<AppState> {
+pub fn routes() -> Router {
     Router::new()
         .route("/emptyuser", get(check_empty_user))
         .route("/registration", post(registration))
@@ -76,19 +76,16 @@ pub fn routes() -> Router<AppState> {
         .route("/password", put(password))
 }
 
-async fn check_empty_user(State(state): State<AppState>) -> AppResult<AppSuccess<AdminExists>> {
-    let exists = storage::user::check_admin_exists(&state.storage)
+async fn check_empty_user() -> AppResult<AppSuccess<AdminExists>> {
+    let exists = storage::user::check_admin_exists()
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
     Ok(AppSuccess::data(AdminExists { exists }))
 }
 
-async fn registration(
-    State(state): State<AppState>,
-    Json(password): Json<Password>,
-) -> AppResult<AppSuccess<()>> {
-    let exists = storage::user::check_admin_exists(&state.storage)
+async fn registration(Json(password): Json<Password>) -> AppResult<AppSuccess<()>> {
+    let exists = storage::user::check_admin_exists()
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
@@ -96,18 +93,15 @@ async fn registration(
         return Err(AppError::new(1, "管理员账户已存在！".to_string()));
     }
 
-    storage::user::create_user(&state.storage, "admin".to_string(), password.password)
+    storage::user::create_user("admin".to_string(), password.password)
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
     Ok(AppSuccess::empty())
 }
 
-async fn login(
-    State(state): State<AppState>,
-    Json(user): Json<User>,
-) -> AppResult<AppSuccess<AuthInfo>> {
-    let db_user = match storage::user::read_user(&state.storage).await {
+async fn login(Json(user): Json<User>) -> AppResult<AppSuccess<AuthInfo>> {
+    let db_user = match storage::user::read_user().await {
         Ok(user) => match user {
             Some(user) => user,
             None => {
@@ -144,14 +138,10 @@ async fn login(
     Ok(AppSuccess::data(AuthInfo { token }))
 }
 
-async fn password(
-    State(state): State<AppState>,
-    Json(update_password): Json<UpdatePassword>,
-) -> AppResult<AppSuccess<()>> {
+async fn password(Json(update_password): Json<UpdatePassword>) -> AppResult<AppSuccess<()>> {
     // 从token中读取
     let username = "xxs".to_owned();
     match storage::user::update_user_password(
-        &state.storage,
         username,
         update_password.password,
         update_password.new_password,

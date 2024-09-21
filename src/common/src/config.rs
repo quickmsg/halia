@@ -19,7 +19,7 @@ pub fn init(config_path: &str) -> Config {
 
             let storage = match config_raw.storage.take() {
                 Some(storage) => storage,
-                None => Storage::Sqlite(Sqlite {
+                None => StorageConfig::Sqlite(Sqlite {
                     path: "./db".to_string(),
                 }),
             };
@@ -50,7 +50,7 @@ struct ConfigRaw {
     // 日志等级
     pub log_level: Option<LogLevel>,
     // 存储类型：目前支持sqlite，mysql，postgresql。默认为sqlite
-    pub storage: Option<Storage>,
+    pub storage: Option<StorageConfig>,
     // 事件保留时间，默认为7天
     pub event_retain_days: Option<u8>,
 }
@@ -68,7 +68,7 @@ pub enum LogLevel {
 pub struct Config {
     pub port: u16,
     pub log_level: LogLevel,
-    pub storage: Storage,
+    pub storage: StorageConfig,
     pub event_retain_days: u8,
 }
 
@@ -78,7 +78,7 @@ impl Default for Config {
             port: 13000,
             log_level: LogLevel::Trace,
             // storage: Storage::Mysql(Mysql {}),
-            storage: Storage::Sqlite(Sqlite {
+            storage: StorageConfig::Sqlite(Sqlite {
                 path: "./db".to_string(),
             }),
             event_retain_days: 7,
@@ -87,7 +87,7 @@ impl Default for Config {
 }
 
 #[derive(Deserialize)]
-pub enum Storage {
+pub enum StorageConfig {
     Sqlite(Sqlite),
     Mysql(Mysql),
     Postgresql(Postgresql),

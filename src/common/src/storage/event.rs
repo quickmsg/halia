@@ -1,9 +1,11 @@
 use anyhow::Result;
-use sqlx::{AnyPool, FromRow};
+use sqlx::FromRow;
 use types::{
     events::{EventType, QueryParams, ResourceType},
     Pagination,
 };
+
+use super::POOL;
 
 pub struct Event {
     pub db_event: DbEvent,
@@ -20,7 +22,7 @@ pub struct DbEvent {
 }
 
 // 考虑在更新设备名称的时候，更新此表
-pub async fn init_table(storage: &AnyPool) -> Result<()> {
+pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS events (
@@ -32,14 +34,13 @@ CREATE TABLE IF NOT EXISTS events (
 )
 "#,
     )
-    .execute(storage)
+    .execute(POOL.get().unwrap())
     .await?;
 
     Ok(())
 }
 
 pub async fn insert(
-    storage: &AnyPool,
     resource_type: ResourceType,
     resource_id: &String,
     typ: EventType,
@@ -58,7 +59,7 @@ pub async fn insert(
             .bind(typ)
             .bind(info)
             .bind(ts)
-            .execute(storage)
+            .execute(POOL.get().unwrap())
             .await?;
         }
         None => {
@@ -67,7 +68,7 @@ pub async fn insert(
             .bind(resource_id)
             .bind(typ)
             .bind(ts)
-            .execute(storage)
+            .execute(POOL.get().unwrap())
                 .await?;
         }
     }
@@ -75,11 +76,7 @@ pub async fn insert(
     Ok(())
 }
 
-pub async fn query(
-    storage: &AnyPool,
-    pagination: Pagination,
-    query: QueryParams,
-) -> Result<(Vec<Event>, usize)> {
+pub async fn query(pagination: Pagination, query: QueryParams) -> Result<(Vec<Event>, usize)> {
     let offset = (pagination.page - 1) * pagination.size;
     let (mut db_events, count) = match (query.typ, query.resource_type) {
         (None, None) => {
@@ -88,11 +85,11 @@ pub async fn query(
             )
             .bind(pagination.size as i64)
             .bind(offset as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events")
-                .fetch_one(storage)
+                .fetch_one(POOL.get().unwrap())
                 .await?;
 
             (events, count)
@@ -105,13 +102,13 @@ pub async fn query(
             .bind(&resource_type)
             .bind(pagination.size as i64)
             .bind(offset as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             let count: i64 =
                 sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE resource_type = ?1")
                     .bind(&resource_type)
-                    .fetch_one(storage)
+                    .fetch_one(POOL.get().unwrap())
                     .await?;
 
             (events, count)
@@ -124,12 +121,12 @@ pub async fn query(
             .bind(&typ)
             .bind(pagination.size as i64)
             .bind(offset as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE typ = ?1")
                 .bind(&typ)
-                .fetch_one(storage)
+                .fetch_one(POOL.get().unwrap())
                 .await?;
 
             (events, count)
@@ -144,7 +141,7 @@ pub async fn query(
             .bind(&resource_type)
             .bind(pagination.size as i64)
             .bind(offset as i64)
-            .fetch_all(storage)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
             let count: i64 = sqlx::query_scalar(
@@ -152,7 +149,7 @@ pub async fn query(
             )
             .bind(&typ)
             .bind(&resource_type)
-            .fetch_one(storage)
+            .fetch_one(POOL.get().unwrap())
             .await?;
 
             (events, count)
@@ -168,7 +165,7 @@ pub async fn query(
             ResourceType::Device => {
                 let name: String = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?1")
                     .bind(&db_event.resource_id)
-                    .fetch_one(storage)
+                    .fetch_one(POOL.get().unwrap())
                     .await?;
 
                 events.push(Event { db_event, name });
@@ -176,7 +173,7 @@ pub async fn query(
             ResourceType::App => {
                 let name: String = sqlx::query_scalar("SELECT name FROM apps WHERE id = ?1")
                     .bind(&db_event.resource_id)
-                    .fetch_one(storage)
+                    .fetch_one(POOL.get().unwrap())
                     .await?;
 
                 events.push(Event { db_event, name });
@@ -184,7 +181,7 @@ pub async fn query(
             ResourceType::Databoard => {
                 let name: String = sqlx::query_scalar("SELECT name FROM databoards WHERE id = ?1")
                     .bind(&db_event.resource_id)
-                    .fetch_one(storage)
+                    .fetch_one(POOL.get().unwrap())
                     .await?;
 
                 events.push(Event { db_event, name });
@@ -192,7 +189,7 @@ pub async fn query(
             ResourceType::Rule => {
                 let name: String = sqlx::query_scalar("SELECT name FROM rules WHERE id = ?1")
                     .bind(&db_event.resource_id)
-                    .fetch_one(storage)
+                    .fetch_one(POOL.get().unwrap())
                     .await?;
 
                 events.push(Event { db_event, name });

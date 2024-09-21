@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query},
     routing::{delete, get, post, put},
     Json, Router,
 };
@@ -9,9 +9,9 @@ use types::{
     Value,
 };
 
-use crate::{AppResult, AppState, AppSuccess};
+use crate::{AppResult, AppSuccess};
 
-pub fn routes() -> Router<AppState> {
+pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_devices_summary))
         // 查询事件
@@ -49,135 +49,110 @@ async fn get_devices_summary() -> AppSuccess<Summary> {
     AppSuccess::data(devices::get_summary())
 }
 
-async fn create_device(
-    State(state): State<AppState>,
-    Json(req): Json<CreateUpdateDeviceReq>,
-) -> AppResult<AppSuccess<()>> {
-    devices::create_device(&state.storage, common::get_id(), req).await?;
+async fn create_device(Json(req): Json<CreateUpdateDeviceReq>) -> AppResult<AppSuccess<()>> {
+    devices::create_device(common::get_id(), req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_devices(
-    State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchDevicesResp>> {
-    let resp =
-        devices::search_devices(&state.storage, &state.devices, pagination, query_params).await?;
+    let resp = devices::search_devices(pagination, query_params).await?;
     Ok(AppSuccess::data(resp))
 }
 
 async fn update_device(
-    State(state): State<AppState>,
     Path(device_id): Path<String>,
     Json(req): Json<CreateUpdateDeviceReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_device(&state.storage, &state.devices, device_id, req).await?;
+    devices::update_device(device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn start_device(
-    State(state): State<AppState>,
-    Path(device_id): Path<String>,
-) -> AppResult<AppSuccess<()>> {
-    devices::start_device(&state.storage, &state.devices, device_id).await?;
+async fn start_device(Path(device_id): Path<String>) -> AppResult<AppSuccess<()>> {
+    devices::start_device(device_id).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn stop_device(
-    State(state): State<AppState>,
-    Path(device_id): Path<String>,
-) -> AppResult<AppSuccess<()>> {
-    devices::stop_device(&state.storage, &state.devices, device_id).await?;
+async fn stop_device(Path(device_id): Path<String>) -> AppResult<AppSuccess<()>> {
+    devices::stop_device(device_id).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete_device(
-    State(state): State<AppState>,
-    Path(device_id): Path<String>,
-) -> AppResult<AppSuccess<()>> {
-    devices::delete_device(&state.storage, &state.devices, device_id).await?;
+async fn delete_device(Path(device_id): Path<String>) -> AppResult<AppSuccess<()>> {
+    devices::delete_device(device_id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn create_source(
-    State(state): State<AppState>,
     Path(device_id): Path<String>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_source(&state.storage, &state.devices, device_id, req).await?;
+    devices::create_source(device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_sources(
-    State(state): State<AppState>,
     Path(device_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sources =
-        devices::search_sources(&state.storage, device_id, pagination, query_params).await?;
+    let sources = devices::search_sources(device_id, pagination, query_params).await?;
     Ok(AppSuccess::data(sources))
 }
 
 async fn update_source(
-    State(state): State<AppState>,
     Path((device_id, source_id)): Path<(String, String)>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_source(&state.storage, &state.devices, device_id, source_id, req).await?;
+    devices::update_source(device_id, source_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn write_source_value(
-    State(state): State<AppState>,
     Path((device_id, source_id)): Path<(String, String)>,
     Json(req): Json<Value>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::write_source_value(&state.devices, device_id, source_id, req).await?;
+    devices::write_source_value(device_id, source_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn delete_source(
-    State(state): State<AppState>,
     Path((device_id, source_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_source(&state.storage, &state.devices, device_id, source_id).await?;
+    devices::delete_source(device_id, source_id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn create_sink(
-    State(state): State<AppState>,
     Path(device_id): Path<String>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_sink(&state.storage, &state.devices, device_id, req).await?;
+    devices::create_sink(device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search_sinks(
-    State(state): State<AppState>,
     Path(device_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QuerySourcesOrSinksParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinksResp>> {
-    let sinks = devices::search_sinks(&state.storage, device_id, pagination, query).await?;
+    let sinks = devices::search_sinks(device_id, pagination, query).await?;
     Ok(AppSuccess::data(sinks))
 }
 
 async fn update_sink(
-    State(state): State<AppState>,
     Path((device_id, sink_id)): Path<(String, String)>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_sink(&state.storage, &state.devices, device_id, sink_id, req).await?;
+    devices::update_sink(device_id, sink_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn delete_sink(
-    State(state): State<AppState>,
     Path((device_id, sink_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_sink(&state.storage, &state.devices, device_id, sink_id).await?;
+    devices::delete_sink(device_id, sink_id).await?;
     Ok(AppSuccess::empty())
 }

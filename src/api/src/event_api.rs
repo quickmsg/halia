@@ -1,21 +1,16 @@
-use axum::{
-    extract::{Query, State},
-    routing::get,
-    Router,
-};
+use axum::{extract::Query, routing::get, Router};
 use types::{
     events::{QueryParams, SearchEventsResp},
     Pagination,
 };
 
-use crate::{AppState, AppSuccess};
+use crate::AppSuccess;
 
-pub fn routes() -> Router<AppState> {
+pub fn routes() -> Router {
     Router::new().route("/", get(search_events))
 }
 
 async fn search_events(
-    State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppSuccess<SearchEventsResp> {

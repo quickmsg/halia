@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::{Path, Query, State},
+    extract::{Path, Query},
     http::{header, StatusCode},
     response::IntoResponse,
     routing::{self, get, post, put},
@@ -12,9 +12,9 @@ use types::{
     Pagination,
 };
 
-use crate::{AppResult, AppState, AppSuccess};
+use crate::{AppResult, AppSuccess};
 
-pub fn routes() -> Router<AppState> {
+pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_rules_summary))
         .route("/", post(create))
@@ -31,74 +31,37 @@ async fn get_rules_summary() -> AppSuccess<Summary> {
     AppSuccess::data(rule::get_summary())
 }
 
-async fn create(State(state): State<AppState>, body: String) -> AppResult<AppSuccess<()>> {
-    rule::create(
-        &state.storage,
-        &state.rules,
-        &state.devices,
-        &state.apps,
-        &state.databoards,
-        common::get_id(),
-        body,
-    )
-    .await?;
+async fn create(body: String) -> AppResult<AppSuccess<()>> {
+    rule::create(common::get_id(), body).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn search(
-    State(state): State<AppState>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppSuccess<SearchRulesResp> {
-    let rules = rule::search(&state.rules, pagination, query_params).await;
+    let rules = rule::search(pagination, query_params).await;
     AppSuccess::data(rules)
 }
 
 // TODO
-async fn read(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> AppResult<AppSuccess<Vec<ReadRuleNodeResp>>> {
-    let resp = rule::read(
-        &state.storage,
-        &state.rules,
-        &state.devices,
-        &state.apps,
-        &state.databoards,
-        id,
-    )
-    .await?;
+async fn read(Path(id): Path<String>) -> AppResult<AppSuccess<Vec<ReadRuleNodeResp>>> {
+    let resp = rule::read(id).await?;
     Ok(AppSuccess::data(resp))
 }
 
-async fn start(State(state): State<AppState>, Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    rule::start(
-        &state.storage,
-        &state.rules,
-        &state.devices,
-        &state.apps,
-        &state.databoards,
-        id,
-    )
-    .await?;
+async fn start(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    rule::start(id).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn stop(State(state): State<AppState>, Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    rule::stop(
-        &state.storage,
-        &state.rules,
-        &state.devices,
-        &state.apps,
-        &state.databoards,
-        id,
-    )
-    .await?;
+async fn stop(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    rule::stop(id).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn download_log(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    let filename = match rule::get_log_filename(&state.rules, id).await {
+async fn download_log(Path(id): Path<String>) -> impl IntoResponse {
+    let filename = match rule::get_log_filename(id).await {
         Ok(filename) => filename,
         Err(_) => return Err((StatusCode::NOT_FOUND, format!("规则 not found"))),
     };
@@ -123,27 +86,14 @@ async fn download_log(State(state): State<AppState>, Path(id): Path<String>) -> 
 }
 
 async fn update(
-    State(state): State<AppState>,
     Path(id): Path<String>,
     Json(req): Json<CreateUpdateRuleReq>,
 ) -> AppResult<AppSuccess<()>> {
-    rule::update(
-        &state.storage,
-        &state.rules,
-        &state.devices,
-        &state.apps,
-        &state.databoards,
-        id,
-        req,
-    )
-    .await?;
+    rule::update(id, req).await?;
     Ok(AppSuccess::empty())
 }
 
-async fn delete(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> AppResult<AppSuccess<()>> {
-    rule::delete(&state.storage, &state.rules, id).await?;
+async fn delete(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    rule::delete(id).await?;
     Ok(AppSuccess::empty())
 }

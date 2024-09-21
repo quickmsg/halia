@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, LazyLock,
+    LazyLock,
 };
 
 use async_trait::async_trait;
@@ -10,7 +10,6 @@ use common::{
 };
 use dashmap::DashMap;
 use message::MessageBatch;
-use sqlx::AnyPool;
 use tokio::sync::{broadcast, mpsc};
 use tracing::warn;
 use types::{
@@ -27,6 +26,9 @@ use types::{
 pub mod coap;
 pub mod modbus;
 pub mod opcua;
+
+static GLOBAL_DEVICE_MANAGER: LazyLock<DashMap<String, Box<dyn Device>>> =
+    LazyLock::new(|| DashMap::new());
 
 static DEVICE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 static DEVICE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
@@ -105,19 +107,16 @@ pub trait Device: Send + Sync {
     async fn get_sink_tx(&mut self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }
 
-pub async fn load_from_storage(
-    storage: &Arc<AnyPool>,
-) -> HaliaResult<Arc<DashMap<String, Box<dyn Device>>>> {
-    let count = storage::device::count_all(storage).await?;
+pub async fn load_from_storage() -> HaliaResult<()> {
+    let count = storage::device::count_all().await?;
     DEVICE_COUNT.store(count, Ordering::SeqCst);
 
-    let devices: Arc<DashMap<String, Box<dyn Device>>> = Arc::new(DashMap::new());
-    let db_devices = storage::device::read_on(storage).await?;
+    let db_devices = storage::device::read_on().await?;
     for db_device in db_devices {
-        start_device(storage, &devices, db_device.id).await?;
+        start_device(db_device.id).await?;
     }
 
-    Ok(devices)
+    Ok(())
 }
 
 pub fn get_summary() -> Summary {
@@ -128,14 +127,10 @@ pub fn get_summary() -> Summary {
     Summary { total, on, running }
 }
 
-pub async fn get_rule_info(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    query: QueryRuleInfo,
-) -> HaliaResult<SearchRuleInfo> {
-    let db_device = storage::device::read_device(storage, &query.device_id).await?;
+pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
+    let db_device = storage::device::read_device(&query.device_id).await?;
 
-    let device_resp = transer_db_device_to_resp(storage, devices, db_device).await?;
+    let device_resp = transer_db_device_to_resp(db_device).await?;
     let id = match (query.source_id, query.sink_id) {
         (Some(source_id), None) => source_id,
         (None, Some(sink_id)) => sink_id,
@@ -146,7 +141,7 @@ pub async fn get_rule_info(
         }
     };
 
-    let db_source_or_sink = storage::source_or_sink::read_one(storage, &id).await?;
+    let db_source_or_sink = storage::source_or_sink::read_one(&id).await?;
     Ok(SearchRuleInfo {
         device: device_resp,
         source: Some(SearchSourcesOrSinksInfoResp {
@@ -163,12 +158,8 @@ pub async fn get_rule_info(
     })
 }
 
-pub async fn create_device(
-    storage: &Arc<AnyPool>,
-    device_id: String,
-    req: CreateUpdateDeviceReq,
-) -> HaliaResult<()> {
-    if storage::device::insert_name_exists(storage, &req.conf.base.name).await? {
+pub async fn create_device(device_id: String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
+    if storage::device::insert_name_exists(&req.conf.base.name).await? {
         return Err(HaliaError::NameExists);
     }
 
@@ -179,22 +170,19 @@ pub async fn create_device(
     }
 
     add_device_count();
-    storage::device::insert(&storage, &device_id, req).await?;
+    storage::device::insert(&device_id, req).await?;
     Ok(())
 }
 
 pub async fn search_devices(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
     pagination: Pagination,
     query_params: QueryParams,
 ) -> HaliaResult<SearchDevicesResp> {
     // TODO 查询异常设备
-    let (count, db_devices) =
-        storage::device::search_devices(storage, pagination, query_params).await?;
+    let (count, db_devices) = storage::device::search_devices(pagination, query_params).await?;
     let mut resp_devices = vec![];
     for db_device in db_devices {
-        resp_devices.push(transer_db_device_to_resp(storage, devices, db_device).await?);
+        resp_devices.push(transer_db_device_to_resp(db_device).await?);
     }
 
     Ok(SearchDevicesResp {
@@ -203,37 +191,27 @@ pub async fn search_devices(
     })
 }
 
-pub async fn update_device(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    device_id: String,
-    req: CreateUpdateDeviceReq,
-) -> HaliaResult<()> {
-    if storage::device::update_name_exists(storage, &req.conf.base.name, &device_id).await? {
+pub async fn update_device(device_id: String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
+    if storage::device::update_name_exists(&req.conf.base.name, &device_id).await? {
         return Err(HaliaError::NameExists);
     }
 
-    if let Some(mut device) = devices.get_mut(&device_id) {
-        let db_device = storage::device::read_device(storage, &device_id).await?;
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+        let db_device = storage::device::read_device(&device_id).await?;
         device.update(db_device.conf, &req.conf.ext).await?;
     }
 
-    storage::device::update(storage, &device_id, req).await?;
+    storage::device::update(&device_id, req).await?;
 
     Ok(())
 }
 
-pub async fn start_device(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    device_id: String,
-) -> HaliaResult<()> {
-    if devices.contains_key(&device_id) {
+pub async fn start_device(device_id: String) -> HaliaResult<()> {
+    if GLOBAL_DEVICE_MANAGER.contains_key(&device_id) {
         return Ok(());
     }
 
     storage::event::insert(
-        storage,
         types::events::ResourceType::Device,
         &device_id,
         EventType::Start,
@@ -241,7 +219,7 @@ pub async fn start_device(
     )
     .await?;
 
-    let db_device = storage::device::read_device(storage, &device_id).await?;
+    let db_device = storage::device::read_device(&device_id).await?;
     let typ = DeviceType::try_from(db_device.typ)?;
 
     let device_conf: DeviceConf = DeviceConf {
@@ -253,13 +231,12 @@ pub async fn start_device(
     };
 
     let mut device = match typ {
-        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf, storage.clone()),
+        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf),
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
     };
 
     let db_sources = storage::source_or_sink::read_all_by_parent_id(
-        storage,
         &device_id,
         storage::source_or_sink::Type::Source,
     )
@@ -270,7 +247,6 @@ pub async fn start_device(
     }
 
     let db_sinks = storage::source_or_sink::read_all_by_parent_id(
-        storage,
         &device_id,
         storage::source_or_sink::Type::Sink,
     )
@@ -280,31 +256,25 @@ pub async fn start_device(
         device.create_sink(db_sink.id, conf).await?;
     }
 
-    devices.insert(device_id.clone(), device);
+    GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);
 
     add_device_on_count();
-    storage::device::update_status(storage, &device_id, true).await?;
+    storage::device::update_status(&device_id, true).await?;
     Ok(())
 }
 
-pub async fn stop_device(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    device_id: String,
-) -> HaliaResult<()> {
+pub async fn stop_device(device_id: String) -> HaliaResult<()> {
     // 设备已停止
-    if !devices.contains_key(&device_id) {
+    if !GLOBAL_DEVICE_MANAGER.contains_key(&device_id) {
         return Ok(());
     }
 
-    let active_rule_ref_cnt =
-        storage::rule_ref::count_active_cnt_by_parent_id(storage, &device_id).await?;
+    let active_rule_ref_cnt = storage::rule_ref::count_active_cnt_by_parent_id(&device_id).await?;
     if active_rule_ref_cnt > 0 {
         return Err(HaliaError::StopActiveRefing);
     }
 
     if let Err(e) = storage::event::insert(
-        storage,
         types::events::ResourceType::Device,
         &device_id,
         types::events::EventType::Stop,
@@ -315,44 +285,38 @@ pub async fn stop_device(
         warn!("create event failed: {}", e);
     }
 
-    storage::device::update_status(storage, &device_id, false).await?;
-    devices.get_mut(&device_id).unwrap().stop().await?;
+    storage::device::update_status(&device_id, false).await?;
+    GLOBAL_DEVICE_MANAGER
+        .get_mut(&device_id)
+        .unwrap()
+        .stop()
+        .await?;
 
-    devices.remove(&device_id);
+    GLOBAL_DEVICE_MANAGER.remove(&device_id);
     sub_device_on_count();
 
     Ok(())
 }
 
-pub async fn delete_device(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    device_id: String,
-) -> HaliaResult<()> {
-    if devices.contains_key(&device_id) {
+pub async fn delete_device(device_id: String) -> HaliaResult<()> {
+    if GLOBAL_DEVICE_MANAGER.contains_key(&device_id) {
         return Err(HaliaError::Common("运行中，不能删除".to_string()));
     }
 
-    let cnt = storage::rule_ref::count_cnt_by_parent_id(storage, &device_id).await?;
+    let cnt = storage::rule_ref::count_cnt_by_parent_id(&device_id).await?;
     if cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
 
     sub_device_count();
-    storage::device::delete(storage, &device_id).await?;
-    storage::source_or_sink::delete_by_parent_id(storage, &device_id).await?;
+    storage::device::delete(&device_id).await?;
+    storage::source_or_sink::delete_by_parent_id(&device_id).await?;
 
     Ok(())
 }
 
-pub async fn create_source(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    device_id: String,
-    req: CreateUpdateSourceOrSinkReq,
-) -> HaliaResult<()> {
+pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
     if storage::source_or_sink::insert_name_exists(
-        storage,
         &device_id,
         storage::source_or_sink::Type::Source,
         &req.base.name,
@@ -363,13 +327,12 @@ pub async fn create_source(
     }
 
     let source_id = common::get_id();
-    if let Some(mut device) = devices.get_mut(&device_id) {
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let conf = req.ext.clone();
         device.create_source(source_id.clone(), conf).await?;
     }
 
     storage::source_or_sink::insert(
-        storage,
         &device_id,
         &source_id,
         storage::source_or_sink::Type::Source,
@@ -381,13 +344,11 @@ pub async fn create_source(
 }
 
 pub async fn search_sources(
-    storage: &Arc<AnyPool>,
     device_id: String,
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
     let (count, db_sources) = storage::source_or_sink::query_by_parent_id(
-        storage,
         &device_id,
         storage::source_or_sink::Type::Source,
         pagination,
@@ -397,13 +358,9 @@ pub async fn search_sources(
     let mut data = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
         let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(storage, &db_source.id)
+            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(&db_source.id).await?,
+            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(&db_source.id)
                 .await?,
-            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(
-                storage,
-                &db_source.id,
-            )
-            .await?,
         };
         data.push(SearchSourcesOrSinksItemResp {
             info: SearchSourcesOrSinksInfoResp {
@@ -424,14 +381,11 @@ pub async fn search_sources(
 }
 
 pub async fn update_source(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
     device_id: String,
     source_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
     if storage::source_or_sink::update_name_exists(
-        storage,
         &device_id,
         storage::source_or_sink::Type::Source,
         &req.base.name,
@@ -442,46 +396,40 @@ pub async fn update_source(
         return Err(HaliaError::NameExists);
     }
 
-    let old_conf = storage::source_or_sink::read_conf(storage, &source_id).await?;
+    let old_conf = storage::source_or_sink::read_conf(&source_id).await?;
     let new_conf = req.ext.clone();
-    devices
+    GLOBAL_DEVICE_MANAGER
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
         .update_source(&source_id, old_conf, new_conf)
         .await?;
 
-    storage::source_or_sink::update(storage, &source_id, req).await?;
+    storage::source_or_sink::update(&source_id, req).await?;
 
     Ok(())
 }
 
 pub async fn write_source_value(
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
     device_id: String,
     source_id: String,
     req: Value,
 ) -> HaliaResult<()> {
-    devices
+    GLOBAL_DEVICE_MANAGER
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
         .write_source_value(source_id, req)
         .await
 }
 
-pub async fn delete_source(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    device_id: String,
-    source_id: String,
-) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(storage, &source_id).await?;
+pub async fn delete_source(device_id: String, source_id: String) -> HaliaResult<()> {
+    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(&source_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
 
-    storage::source_or_sink::delete(storage, &source_id).await?;
+    storage::source_or_sink::delete(&source_id).await?;
 
-    if let Some(mut device) = devices.get_mut(&device_id) {
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         device.delete_source(&source_id).await?;
     }
 
@@ -489,25 +437,18 @@ pub async fn delete_source(
 }
 
 pub async fn get_source_rx(
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
     device_id: &String,
     source_id: &String,
 ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-    devices
+    GLOBAL_DEVICE_MANAGER
         .get_mut(device_id)
         .ok_or(HaliaError::Stopped)?
         .get_source_rx(source_id)
         .await
 }
 
-pub async fn create_sink(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    device_id: String,
-    req: CreateUpdateSourceOrSinkReq,
-) -> HaliaResult<()> {
+pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
     if storage::source_or_sink::insert_name_exists(
-        storage,
         &device_id,
         storage::source_or_sink::Type::Source,
         &req.base.name,
@@ -518,13 +459,12 @@ pub async fn create_sink(
     }
 
     let sink_id = common::get_id();
-    if let Some(mut device) = devices.get_mut(&device_id) {
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let conf: serde_json::Value = req.ext.clone();
         device.create_sink(sink_id.clone(), conf).await?;
     }
 
     storage::source_or_sink::insert(
-        storage,
         &device_id,
         &sink_id,
         storage::source_or_sink::Type::Sink,
@@ -536,13 +476,11 @@ pub async fn create_sink(
 }
 
 pub async fn search_sinks(
-    storage: &Arc<AnyPool>,
     device_id: String,
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
     let (count, db_sinks) = storage::source_or_sink::query_by_parent_id(
-        storage,
         &device_id,
         storage::source_or_sink::Type::Sink,
         pagination,
@@ -552,12 +490,9 @@ pub async fn search_sinks(
     let mut data = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
         let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(storage, &db_sink.id).await?,
-            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(
-                storage,
-                &db_sink.id,
-            )
-            .await?,
+            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(&db_sink.id).await?,
+            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(&db_sink.id)
+                .await?,
         };
         data.push(SearchSourcesOrSinksItemResp {
             info: SearchSourcesOrSinksInfoResp {
@@ -578,14 +513,11 @@ pub async fn search_sinks(
 }
 
 pub async fn update_sink(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
     device_id: String,
     sink_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
     if storage::source_or_sink::update_name_exists(
-        storage,
         &device_id,
         storage::source_or_sink::Type::Sink,
         &req.base.name,
@@ -596,45 +528,39 @@ pub async fn update_sink(
         return Err(HaliaError::NameExists);
     }
 
-    let old_conf = storage::source_or_sink::read_conf(storage, &sink_id).await?;
+    let old_conf = storage::source_or_sink::read_conf(&sink_id).await?;
     let new_conf = req.ext.clone();
-    devices
+    GLOBAL_DEVICE_MANAGER
         .get_mut(&device_id)
         .ok_or(HaliaError::NotFound)?
         .update_sink(&sink_id, old_conf, new_conf)
         .await?;
 
-    storage::source_or_sink::update(storage, &sink_id, req).await?;
+    storage::source_or_sink::update(&sink_id, req).await?;
 
     Ok(())
 }
 
-pub async fn delete_sink(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
-    device_id: String,
-    sink_id: String,
-) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(storage, &sink_id).await?;
+pub async fn delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> {
+    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(&sink_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
 
-    if let Some(mut device) = devices.get_mut(&device_id) {
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         device.delete_sink(&sink_id).await?;
     }
 
-    storage::source_or_sink::delete(storage, &sink_id).await?;
+    storage::source_or_sink::delete(&sink_id).await?;
 
     Ok(())
 }
 
 pub async fn get_sink_tx(
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
     device_id: &String,
     sink_id: &String,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    devices
+    GLOBAL_DEVICE_MANAGER
         .get_mut(device_id)
         .ok_or(HaliaError::NotFound)?
         .get_sink_tx(sink_id)
@@ -642,19 +568,15 @@ pub async fn get_sink_tx(
 }
 
 async fn transer_db_device_to_resp(
-    storage: &Arc<AnyPool>,
-    devices: &Arc<DashMap<String, Box<dyn Device>>>,
     db_device: storage::device::Device,
 ) -> HaliaResult<SearchDevicesItemResp> {
     let source_cnt = storage::source_or_sink::count_by_parent_id(
-        storage,
         &db_device.id,
         storage::source_or_sink::Type::Source,
     )
     .await?;
 
     let sink_cnt = storage::source_or_sink::count_by_parent_id(
-        storage,
         &db_device.id,
         storage::source_or_sink::Type::Sink,
     )
@@ -663,7 +585,7 @@ async fn transer_db_device_to_resp(
     let running_info = match db_device.status {
         0 => None,
         1 => Some(
-            devices
+            GLOBAL_DEVICE_MANAGER
                 .get(&db_device.id)
                 .unwrap()
                 .read_running_info()

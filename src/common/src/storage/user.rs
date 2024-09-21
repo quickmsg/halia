@@ -1,5 +1,7 @@
 use anyhow::Result;
-use sqlx::{prelude::FromRow, AnyPool};
+use sqlx::prelude::FromRow;
+
+use super::POOL;
 
 #[derive(FromRow)]
 pub struct User {
@@ -7,7 +9,7 @@ pub struct User {
     pub password: String,
 }
 
-pub async fn init_table(storage: &AnyPool) -> Result<()> {
+pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS users (
@@ -16,25 +18,25 @@ CREATE TABLE IF NOT EXISTS users (
 )
 "#,
     )
-    .execute(storage)
+    .execute(POOL.get().unwrap())
     .await?;
 
     Ok(())
 }
 
-pub async fn create_user(pool: &AnyPool, username: String, password: String) -> Result<()> {
+pub async fn create_user(username: String, password: String) -> Result<()> {
     sqlx::query("INSERT INTO users (username, password) VALUES (?1, ?2)")
         .bind(username)
         .bind(password)
-        .execute(pool)
+        .execute(POOL.get().unwrap())
         .await?;
 
     Ok(())
 }
 
-pub async fn read_user(pool: &AnyPool) -> Result<Option<User>> {
+pub async fn read_user() -> Result<Option<User>> {
     let mut users = sqlx::query_as::<_, User>("SELECT username, password FROM users")
-        .fetch_all(pool)
+        .fetch_all(POOL.get().unwrap())
         .await?;
 
     if users.len() == 0 {
@@ -44,10 +46,10 @@ pub async fn read_user(pool: &AnyPool) -> Result<Option<User>> {
     }
 }
 
-pub async fn check_admin_exists(pool: &AnyPool) -> Result<bool> {
+pub async fn check_admin_exists() -> Result<bool> {
     let users =
         sqlx::query_as::<_, User>("SELECT username, password FROM users WHERE username = 'admin'")
-            .fetch_all(pool)
+            .fetch_all(POOL.get().unwrap())
             .await?;
 
     if users.len() == 0 {
@@ -59,7 +61,6 @@ pub async fn check_admin_exists(pool: &AnyPool) -> Result<bool> {
 
 // todo
 pub async fn update_user_password(
-    pool: &AnyPool,
     username: String,
     password: String,
     new_password: String,
@@ -68,7 +69,7 @@ pub async fn update_user_password(
         .bind(new_password)
         .bind(username)
         .bind(password)
-        .execute(pool)
+        .execute(POOL.get().unwrap())
         .await?;
 
     Ok(())
