@@ -1,9 +1,8 @@
-use std::convert::Infallible;
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct QueryParams {
+    pub name: Option<String>,
     pub typ: Option<EventType>,
     pub resource_type: Option<ResourceType>,
 }

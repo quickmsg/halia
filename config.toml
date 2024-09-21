@@ -1,5 +1,5 @@
 # 服务的端口，默认为 13000
-port = 14000
+port = 13000
 
 # 日志等级，支持：error, warn, info, debug, trace
 log_level = "info"

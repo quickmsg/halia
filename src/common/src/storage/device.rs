@@ -24,7 +24,7 @@ pub async fn init_table() -> Result<()> {
 CREATE TABLE IF NOT EXISTS devices (
     id VARCHAR(255) PRIMARY KEY,     -- 对于 MySQL, VARCHAR 是推荐的字符串类型
     status INTEGER NOT NULL,         -- INTEGER 适用于两者
-    device_type VARCHAR(255) NOT NULL,
+    typ VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     `desc` TEXT,                     -- `desc` 是保留字，使用反引号避免冲突
     conf TEXT NOT NULL,
@@ -63,7 +63,7 @@ pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     let ts = chrono::Utc::now().timestamp();
     match req.conf.base.desc {
         Some(desc) => {
-            sqlx::query("INSERT INTO devices (id, status, device_type, name, desc, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            sqlx::query("INSERT INTO devices (id, status, typ, name, desc, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)")
                 .bind(id)
                 .bind(false as i32)
                 .bind(req.device_type.to_string())
@@ -76,7 +76,7 @@ pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
         }
         None => {
             sqlx::query(
-                "INSERT INTO devices (id, status, device_type, name, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO devices (id, status, typ, name, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
             )
             .bind(id)
             .bind(false as i32)
