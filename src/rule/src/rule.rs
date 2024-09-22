@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use common::{
@@ -11,28 +11,24 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::error;
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
-    AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
-    DeviceSourceNode, LogNode, Node, NodeType, ReadRuleNodeResp, SearchRulesItemResp,
+    AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, LogNode, Node,
+    NodeType, ReadRuleNodeResp, RuleConf,
 };
 
 use crate::{
-    add_rule_on_count,
     log::Logger,
     segment::{get_3d_ids, start_segment, take_source_ids},
-    sub_rule_on_count,
 };
 
 pub struct Rule {
-    pub id: String,
-    conf: CreateUpdateRuleReq,
-    pub on: bool,
-    pub stop_signal_tx: Option<broadcast::Sender<()>>,
+    id: String,
+    stop_signal_tx: broadcast::Sender<()>,
     logger: Option<Logger>,
 }
 
 impl Rule {
-    pub async fn new(rule_id: String, req: CreateUpdateRuleReq) -> HaliaResult<Self> {
-        for node in req.ext.nodes.iter() {
+    pub async fn new(rule_id: String, conf: RuleConf) -> HaliaResult<Self> {
+        for node in conf.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
@@ -75,119 +71,23 @@ impl Rule {
             }
         }
 
-        Ok(Self {
-            on: false,
-            id: rule_id,
-            conf: req,
-            stop_signal_tx: None,
-            logger: None,
-        })
-    }
-
-    pub fn search(&self) -> SearchRulesItemResp {
-        SearchRulesItemResp {
-            id: self.id.clone(),
-            conf: self.conf.clone(),
-            on: self.on,
-        }
-    }
-
-    pub async fn read(&self) -> HaliaResult<Vec<ReadRuleNodeResp>> {
-        let mut read_rule_node_resp = vec![];
-        // let mut read_rule_resp = ReadRuleResp { nodes: vec![] };
-        for node in self.conf.ext.nodes.iter() {
-            match node.node_type {
-                NodeType::DeviceSource => {
-                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rule_info = devices::get_rule_info(types::devices::QueryRuleInfo {
-                        device_id: source_node.device_id,
-                        source_id: Some(source_node.source_id),
-                        sink_id: None,
-                    })
-                    .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
-                        index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
-                    });
-                }
-                NodeType::AppSource => {
-                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rule_info = apps::get_rule_info(types::apps::QueryRuleInfo {
-                        app_id: source_node.app_id,
-                        source_id: Some(source_node.source_id),
-                        sink_id: None,
-                    })
-                    .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
-                        index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
-                    });
-                }
-                NodeType::DeviceSink => {
-                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    let rule_info = devices::get_rule_info(types::devices::QueryRuleInfo {
-                        device_id: sink_node.device_id,
-                        source_id: None,
-                        sink_id: Some(sink_node.sink_id),
-                    })
-                    .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
-                        index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
-                    });
-                }
-                NodeType::AppSink => {
-                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    let rule_info = apps::get_rule_info(types::apps::QueryRuleInfo {
-                        app_id: sink_node.app_id,
-                        source_id: None,
-                        sink_id: Some(sink_node.sink_id),
-                    })
-                    .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
-                        index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
-                    });
-                }
-                NodeType::Databoard => {
-                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    let rule_info = databoard::get_rule_info(types::databoard::QueryRuleInfo {
-                        databoard_id: databoard_node.databoard_id,
-                        data_id: databoard_node.data_id,
-                    })
-                    .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
-                        index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
-                    });
-                }
-                NodeType::Merge
-                | NodeType::Window
-                | NodeType::Filter
-                | NodeType::Operator
-                | NodeType::Computer
-                | NodeType::Log => {}
-            }
-        }
-
-        Ok(read_rule_node_resp)
-    }
-
-    pub async fn start(&mut self) -> Result<()> {
-        add_rule_on_count();
-
         let (stop_signal_tx, _) = broadcast::channel(1);
+        let mut rule = Self {
+            id: rule_id.clone(),
+            stop_signal_tx: stop_signal_tx.clone(),
+            logger: None,
+        };
 
-        let (incoming_edges, outgoing_edges) = self.conf.get_edges();
+        let (incoming_edges, outgoing_edges) = conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
         let mut node_map = HashMap::<usize, Node>::new();
-        for node in self.conf.ext.nodes.iter() {
+        for node in conf.nodes.iter() {
             node_map.insert(node.index, node.clone());
         }
 
-        let mut ids: Vec<usize> = self.conf.ext.nodes.iter().map(|node| node.index).collect();
+        let mut ids: Vec<usize> = conf.nodes.iter().map(|node| node.index).collect();
 
         let mut receivers = HashMap::new();
 
@@ -249,11 +149,10 @@ impl Rule {
         }
 
         if let Some(e) = error {
-            self.on = false;
-            rule_ref::deactive(&self.id).await?;
+            rule_ref::deactive(&rule_id).await?;
             return Err(e.into());
         } else {
-            rule_ref::active(&self.id).await?;
+            rule_ref::active(&rule_id).await?;
         }
 
         let threed_ids = get_3d_ids(
@@ -388,13 +287,13 @@ impl Rule {
                         NodeType::Log => {
                             ids.push(id);
                             let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match &self.logger {
+                            let tx = match &rule.logger {
                                 Some(logger) => logger.get_mb_tx(),
                                 None => {
                                     let logger =
-                                        Logger::new(&self.id, stop_signal_tx.subscribe()).await?;
+                                        Logger::new(&rule_id, stop_signal_tx.subscribe()).await?;
                                     let tx = logger.get_mb_tx();
-                                    self.logger = Some(logger);
+                                    rule.logger = Some(logger);
                                     tx
                                 }
                             };
@@ -433,14 +332,100 @@ impl Rule {
             }
         }
 
-        self.stop_signal_tx = Some(stop_signal_tx);
-        Ok(())
+        match error {
+            Some(error) => {
+                rule_ref::deactive(&rule_id).await?;
+                return Err(error);
+            }
+            None => {}
+        }
+
+        Ok(rule)
+    }
+
+    pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
+        let mut read_rule_node_resp = vec![];
+        // let mut read_rule_resp = ReadRuleResp { nodes: vec![] };
+        for node in conf.nodes.iter() {
+            match node.node_type {
+                NodeType::DeviceSource => {
+                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = devices::get_rule_info(types::devices::QueryRuleInfo {
+                        device_id: source_node.device_id,
+                        source_id: Some(source_node.source_id),
+                        sink_id: None,
+                    })
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::AppSource => {
+                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = apps::get_rule_info(types::apps::QueryRuleInfo {
+                        app_id: source_node.app_id,
+                        source_id: Some(source_node.source_id),
+                        sink_id: None,
+                    })
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::DeviceSink => {
+                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = devices::get_rule_info(types::devices::QueryRuleInfo {
+                        device_id: sink_node.device_id,
+                        source_id: None,
+                        sink_id: Some(sink_node.sink_id),
+                    })
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::AppSink => {
+                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = apps::get_rule_info(types::apps::QueryRuleInfo {
+                        app_id: sink_node.app_id,
+                        source_id: None,
+                        sink_id: Some(sink_node.sink_id),
+                    })
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::Databoard => {
+                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
+                    let rule_info = databoard::get_rule_info(types::databoard::QueryRuleInfo {
+                        databoard_id: databoard_node.databoard_id,
+                        data_id: databoard_node.data_id,
+                    })
+                    .await?;
+                    read_rule_node_resp.push(ReadRuleNodeResp {
+                        index: node.index,
+                        data: serde_json::to_value(rule_info).unwrap(),
+                    });
+                }
+                NodeType::Merge
+                | NodeType::Window
+                | NodeType::Filter
+                | NodeType::Operator
+                | NodeType::Computer
+                | NodeType::Log => {}
+            }
+        }
+
+        Ok(read_rule_node_resp)
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {
-        sub_rule_on_count();
-
-        if let Err(e) = self.stop_signal_tx.as_ref().unwrap().send(()) {
+        if let Err(e) = self.stop_signal_tx.send(()) {
             error!("rule stop send signal err:{}", e);
         }
 
@@ -449,19 +434,17 @@ impl Rule {
         Ok(())
     }
 
-    pub async fn update(&mut self, req: CreateUpdateRuleReq) -> HaliaResult<()> {
-        let mut restart = false;
-        if self.conf.ext != req.ext {
-            restart = true;
-        }
-        self.conf = req;
-
-        if self.on && restart {
-            self.stop().await?;
-            self.start().await?;
+    pub async fn update(&mut self, old_conf: RuleConf, new_conf: RuleConf) -> HaliaResult<()> {
+        if old_conf == new_conf {
+            return Ok(());
+        } else {
+            Ok(())
         }
 
-        Ok(())
+        // if self.on && restart {
+        //     self.stop().await?;
+        //     self.start().await?;
+        // }
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {

@@ -48,24 +48,28 @@ impl HttpClient {
 
 #[async_trait]
 impl App for HttpClient {
-    async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
-        let ext_conf: HttpClientConf = serde_json::from_value(app_conf.ext)?;
-        HttpClient::validate_conf(&ext_conf)?;
+    async fn update(
+        &mut self,
+        old_conf: serde_json::Value,
+        new_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        let old_conf: HttpClientConf = serde_json::from_value(old_conf)?;
+        let new_conf: HttpClientConf = serde_json::from_value(new_conf)?;
 
-        let mut restart = false;
-        if *self.conf != ext_conf {
-            restart = true;
+        HttpClient::validate_conf(&new_conf)?;
+
+        if old_conf == new_conf {
+            return Ok(());
         }
-        self.conf = Arc::new(ext_conf);
 
-        if restart {
-            for mut source in self.sources.iter_mut() {
-                source.update_http_client(self.conf.clone()).await;
-            }
+        self.conf = Arc::new(new_conf);
 
-            for mut sink in self.sinks.iter_mut() {
-                sink.update_http_client(self.conf.clone()).await;
-            }
+        for mut source in self.sources.iter_mut() {
+            source.update_http_client(self.conf.clone()).await;
+        }
+
+        for mut sink in self.sinks.iter_mut() {
+            sink.update_http_client(self.conf.clone()).await;
         }
 
         Ok(())

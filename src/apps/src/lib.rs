@@ -68,7 +68,11 @@ pub(crate) fn _sub_app_running_count() {
 
 #[async_trait]
 pub trait App: Send + Sync {
-    async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()>;
+    async fn update(
+        &mut self,
+        old_conf: serde_json::Value,
+        new_conf: serde_json::Value,
+    ) -> HaliaResult<()>;
     async fn stop(&mut self) -> HaliaResult<()>;
 
     async fn create_source(
@@ -178,18 +182,8 @@ pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
     }
 
     let app_id = common::get_id();
-    // for app in apps.read().await.iter() {
-    //     app.check_duplicate(&req)?;
-    // }
-
-    // TODO 验证配置
-    // let app = match req.app_type {
-    //     AppType::MqttClient => mqtt_client::new(app_id, req.conf)?,
-    //     AppType::HttpClient => http_client::new(app_id, req.conf)?,
-    // };
-
-    add_app_count();
     storage::app::insert(app_id, req).await?;
+    add_app_count();
     Ok(())
 }
 
@@ -215,16 +209,10 @@ pub async fn update_app(app_id: String, req: CreateUpdateAppReq) -> HaliaResult<
         return Err(HaliaError::NameExists);
     }
 
-    // for app in apps.read().await.iter() {
-    //     if *app.get_id() != app_id {
-    //         app.check_duplicate(&req)?;
-    //     }
-    // }
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
-        let conf: AppConf = serde_json::from_value(req.conf.ext.clone())?;
-        app.update(conf).await?;
-        // let db_app = storage::app::read_by_id(storage, &app_id).await?;
-        // app.check_duplicate(&req)?;
+        let db_conf = storage::app::read_conf(&app_id).await?;
+        let old_conf: serde_json::Value = serde_json::from_slice(&db_conf)?;
+        app.update(old_conf, req.conf.ext.clone()).await?;
     }
 
     storage::app::update(app_id, req).await?;

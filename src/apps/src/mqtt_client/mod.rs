@@ -18,7 +18,7 @@ use tokio::{
 use tracing::{error, warn};
 use types::apps::{
     mqtt_client::{MqttClientConf, Qos},
-    AppConf, CreateUpdateAppReq,
+    AppConf,
 };
 
 use crate::App;
@@ -353,7 +353,11 @@ pub(crate) fn qos_to_v50(qos: &Qos) -> v5::mqttbytes::QoS {
 
 #[async_trait]
 impl App for MqttClient {
-    async fn update(&mut self, app_conf: AppConf) -> HaliaResult<()> {
+    async fn update(
+        &mut self,
+        old_conf: serde_json::Value,
+        new_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         // let ext_conf = serde_json::from_value(app_conf.ext)?;
 
         // let mut restart = false;

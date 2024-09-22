@@ -39,9 +39,9 @@ async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()
 async fn search(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppSuccess<SearchRulesResp> {
-    let rules = rule::search(pagination, query_params).await;
-    AppSuccess::data(rules)
+) -> AppResult<AppSuccess<SearchRulesResp>> {
+    let resp = rule::search(pagination, query_params).await?;
+    Ok(AppSuccess::data(resp))
 }
 
 // TODO

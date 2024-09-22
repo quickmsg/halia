@@ -10,8 +10,11 @@ use common::{
 use dashmap::DashMap;
 use rule::Rule;
 use types::{
-    rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
-    Pagination,
+    rules::{
+        CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp,
+        SearchRulesResp, Summary,
+    },
+    BaseConf, Pagination,
 };
 
 mod log;
@@ -71,41 +74,39 @@ pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn search(pagination: Pagination, query_params: QueryParams) -> SearchRulesResp {
-    todo!()
-    // let mut total = 0;
-    // let mut data = vec![];
+pub async fn search(
+    pagination: Pagination,
+    query_params: QueryParams,
+) -> HaliaResult<SearchRulesResp> {
+    let (count, db_rules) = storage::rule::query(pagination, query_params).await?;
+    let rules = db_rules
+        .into_iter()
+        .map(|db_rule| SearchRulesItemResp {
+            id: db_rule.id,
+            on: db_rule.status == 1,
+            conf: CreateUpdateRuleReq {
+                base: BaseConf {
+                    name: db_rule.name,
+                    desc: db_rule
+                        .des
+                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                },
+                ext: serde_json::from_slice(&db_rule.conf).unwrap(),
+            },
+        })
+        .collect::<Vec<_>>();
 
-    // for rule in rules.read().await.iter().rev() {
-    //     let rule = rule.search();
-    //     if let Some(query_name) = &query_params.name {
-    //         if !rule.conf.base.name.contains(query_name) {
-    //             continue;
-    //         }
-    //     }
-
-    //     if let Some(on) = &query_params.on {
-    //         if rule.on != *on {
-    //             continue;
-    //         }
-    //     }
-
-    //     if pagination.check(total) {
-    //         data.push(rule);
-    //     }
-
-    //     total += 1;
-    // }
-
-    // SearchRulesResp { total, data }
+    Ok(SearchRulesResp {
+        total: count,
+        data: rules,
+    })
 }
 
 pub async fn read(id: String) -> HaliaResult<Vec<ReadRuleNodeResp>> {
-    GLOBAL_RULE_MANAGER
-        .get_mut(&id)
-        .ok_or(HaliaError::NotFound)?
-        .read()
-        .await
+    let db_rule = storage::rule::read_one(&id).await?;
+    let conf = serde_json::from_slice(&db_rule.conf)?;
+    let detail = Rule::read(conf).await?;
+    Ok(detail)
 }
 
 pub async fn start(id: String) -> HaliaResult<()> {
@@ -113,11 +114,21 @@ pub async fn start(id: String) -> HaliaResult<()> {
         return Ok(());
     }
 
-    GLOBAL_RULE_MANAGER
-        .get_mut(&id)
-        .ok_or(HaliaError::NotFound)?
-        .start()
-        .await?;
+    add_rule_on_count();
+
+    storage::event::insert(
+        types::events::ResourceType::Rule,
+        &id,
+        types::events::EventType::Start,
+        None,
+    )
+    .await?;
+
+    let db_conf = storage::rule::read_conf(&id).await?;
+    let conf: RuleConf = serde_json::from_slice(&db_conf)?;
+
+    let rule = Rule::new(id.clone(), conf).await?;
+    GLOBAL_RULE_MANAGER.insert(id.clone(), rule);
     storage::rule::update_status(&id, true).await?;
     Ok(())
 }
@@ -126,6 +137,8 @@ pub async fn stop(id: String) -> HaliaResult<()> {
     if !GLOBAL_RULE_MANAGER.contains_key(&id) {
         return Ok(());
     }
+
+    sub_rule_on_count();
 
     GLOBAL_RULE_MANAGER
         .get_mut(&id)
@@ -139,7 +152,9 @@ pub async fn stop(id: String) -> HaliaResult<()> {
 
 pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
     if let Some(mut rule) = GLOBAL_RULE_MANAGER.get_mut(&id) {
-        rule.update(req.clone()).await?;
+        let old_conf: RuleConf = serde_json::from_slice(&storage::rule::read_conf(&id).await?)?;
+        let new_conf = req.ext.clone();
+        rule.update(old_conf, new_conf).await?;
     }
 
     storage::rule::update(&id, req).await?;
@@ -152,16 +167,8 @@ pub async fn delete(id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRunning);
     }
 
-    GLOBAL_RULE_MANAGER
-        .get_mut(&id)
-        .ok_or(HaliaError::NotFound)?
-        .delete()
-        .await?;
-
-    GLOBAL_RULE_MANAGER.remove(&id);
-
-    sub_rule_count();
     storage::rule::delete(&id).await?;
+    sub_rule_count();
     Ok(())
 }
 

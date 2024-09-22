@@ -120,12 +120,12 @@ pub struct ListRuleResp {
     pub name: String,
 }
 
-impl CreateUpdateRuleReq {
+impl RuleConf {
     pub fn get_edges(&self) -> (HashMap<usize, Vec<usize>>, HashMap<usize, Vec<usize>>) {
         let mut incoming_edges = HashMap::new();
         let mut outgoing_edges = HashMap::new();
 
-        for edge in self.ext.edges.iter() {
+        for edge in self.edges.iter() {
             incoming_edges
                 .entry(edge.target)
                 .or_insert_with(Vec::new)

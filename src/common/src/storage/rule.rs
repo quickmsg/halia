@@ -52,6 +52,24 @@ pub async fn insert(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
     Ok(())
 }
 
+pub async fn read_one(id: &String) -> Result<Rule> {
+    let rule = sqlx::query_as::<_, Rule>("SELECT * FROM rules WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(rule)
+}
+
+pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
+    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM rules WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(conf)
+}
+
 pub async fn read_all_on() -> Result<Vec<Rule>> {
     let rules = sqlx::query_as::<_, Rule>("SELECT * FROM rules HWERE status = 1")
         .fetch_all(POOL.get().unwrap())

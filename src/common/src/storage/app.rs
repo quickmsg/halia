@@ -86,6 +86,15 @@ pub async fn count() -> Result<usize> {
     Ok(count as usize)
 }
 
+pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
+    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM apps WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(conf)
+}
+
 pub async fn read_one(id: &String) -> Result<App> {
     let app = sqlx::query_as::<_, App>("SELECT * FROM apps WHERE id = ?")
         .bind(id)
