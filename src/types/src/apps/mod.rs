@@ -24,6 +24,27 @@ pub enum AppType {
     HttpClient,
 }
 
+impl Into<i32> for AppType {
+    fn into(self) -> i32 {
+        match self {
+            AppType::MqttClient => 1,
+            AppType::HttpClient => 2,
+        }
+    }
+}
+
+impl TryFrom<i32> for AppType {
+    type Error = Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(AppType::MqttClient),
+            2 => Ok(AppType::HttpClient),
+            _ => bail!("未知应用类型: {}", value),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct AppConf {
     pub base: BaseConf,
@@ -83,7 +104,7 @@ pub struct SearchAppsItemResp {
 pub struct SearchAppsItemCommon {
     pub id: String,
     #[serde(rename = "type")]
-    pub typ: String,
+    pub typ: AppType,
     pub on: bool,
     pub source_cnt: usize,
     pub sink_cnt: usize,

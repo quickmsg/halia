@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, LazyLock,
+    LazyLock,
 };
 
 use common::{
@@ -56,22 +56,18 @@ pub fn get_summary() -> Summary {
 
 // TODO
 pub async fn load_from_storage() -> HaliaResult<()> {
-    let db_rules = storage::rule::read_all().await?;
-    for db_rule in db_rules {
-        if db_rule.status == 1 {
-            start(db_rule.id).await?;
-        }
+    let db_on_rules = storage::rule::read_all_on().await?;
+    for db_rule in db_on_rules {
+        start(db_rule.id).await?;
     }
 
     Ok(())
 }
 
-pub async fn create(id: String, body: String) -> HaliaResult<()> {
-    let req: CreateUpdateRuleReq = serde_json::from_str(&body)?;
-    storage::rule::insert(&id, body).await?;
-    let rule = Rule::new(id.clone(), req).await?;
+pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
+    let id = common::get_id();
+    storage::rule::insert(&id, req).await?;
     add_rule_count();
-    GLOBAL_RULE_MANAGER.insert(id, rule);
     Ok(())
 }
 
@@ -142,13 +138,11 @@ pub async fn stop(id: String) -> HaliaResult<()> {
 }
 
 pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
-    GLOBAL_RULE_MANAGER
-        .get_mut(&id)
-        .ok_or(HaliaError::NotFound)?
-        .update(req)
-        .await?;
+    if let Some(mut rule) = GLOBAL_RULE_MANAGER.get_mut(&id) {
+        rule.update(req.clone()).await?;
+    }
 
-    // storage::rule::update_rule_conf(pool, &id, req).await?;
+    storage::rule::update(&id, req).await?;
 
     Ok(())
 }

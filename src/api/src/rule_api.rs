@@ -31,8 +31,8 @@ async fn get_rules_summary() -> AppSuccess<Summary> {
     AppSuccess::data(rule::get_summary())
 }
 
-async fn create(body: String) -> AppResult<AppSuccess<()>> {
-    rule::create(common::get_id(), body).await?;
+async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()>> {
+    rule::create(req).await?;
     Ok(AppSuccess::empty())
 }
 

@@ -24,7 +24,7 @@ pub async fn init_table() -> Result<()> {
         r#"  
 CREATE TABLE IF NOT EXISTS devices (
     id CHAR(32) PRIMARY KEY,
-    status SMALLINT UNSIGNED  NOT NULL,
+    status SMALLINT UNSIGNED NOT NULL,
     typ SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     des BLOB,
@@ -62,10 +62,7 @@ pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let ts = chrono::Utc::now().timestamp();
     let typ: i32 = req.typ.into();
-    let desc = match req.conf.base.desc {
-        Some(desc) => Some(desc.as_bytes().to_vec()),
-        None => None,
-    };
+    let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
         "INSERT INTO devices (id, status, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
@@ -281,10 +278,7 @@ pub async fn update_status(id: &String, status: bool) -> Result<()> {
 
 pub async fn update(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     let conf = serde_json::to_vec(&req.conf.ext)?;
-    let desc = match req.conf.base.desc {
-        Some(desc) => Some(desc.as_bytes().to_vec()),
-        None => None,
-    };
+    let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
     sqlx::query("UPDATE devices SET name = ?, des = ?, conf = ? WHERE id = ?")
         .bind(req.conf.base.name)
         .bind(desc)

@@ -242,9 +242,11 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     let app_conf = AppConf {
         base: BaseConf {
             name: db_app.name,
-            desc: db_app.desc,
+            desc: db_app
+                .des
+                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
         },
-        ext: serde_json::from_str(&db_app.conf)?,
+        ext: serde_json::from_slice(&db_app.conf)?,
     };
 
     let app = match app_type {
@@ -568,10 +570,11 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<Search
     )
     .await?;
 
+    let typ = AppType::try_from(db_app.typ)?;
     Ok(SearchAppsItemResp {
         common: SearchAppsItemCommon {
             id: db_app.id,
-            typ: db_app.typ,
+            typ,
             on: db_app.status == 1,
             source_cnt,
             sink_cnt,
@@ -581,9 +584,11 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<Search
         conf: SearchAppsItemConf {
             base: BaseConf {
                 name: db_app.name,
-                desc: db_app.desc,
+                desc: db_app
+                    .des
+                    .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
             },
-            ext: serde_json::from_str(&db_app.conf)?,
+            ext: serde_json::from_slice(&db_app.conf)?,
         },
     })
 }

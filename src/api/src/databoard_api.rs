@@ -72,7 +72,7 @@ async fn create_data(
     Path(databoard_id): Path<String>,
     Json(req): Json<CreateUpdateDataReq>,
 ) -> AppResult<AppSuccess<()>> {
-    databoard::create_data(databoard_id, req, true).await?;
+    databoard::create_data(databoard_id, req).await?;
     Ok(AppSuccess::empty())
 }
 

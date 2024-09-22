@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sqlx::FromRow;
+use tracing::debug;
 use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
 
 use super::POOL;
@@ -126,7 +127,7 @@ pub async fn insert(
 pub async fn read_all_by_parent_id(parent_id: &String, typ: Type) -> Result<Vec<SourceOrSink>> {
     let typ: i32 = typ.into();
     let sources_or_sinks = sqlx::query_as::<_, SourceOrSink>(
-        "SELECT * FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2",
+        "SELECT * FROM sources_or_sinks WHERE parent_id = ? AND typ = ? ORDER BY ts DESC",
     )
     .bind(parent_id)
     .bind(typ)
@@ -137,7 +138,7 @@ pub async fn read_all_by_parent_id(parent_id: &String, typ: Type) -> Result<Vec<
 
 pub async fn read_one(id: &String) -> Result<SourceOrSink> {
     let source_or_sink =
-        sqlx::query_as::<_, SourceOrSink>("SELECT * FROM sources_or_sinks WHERE id = ?1")
+        sqlx::query_as::<_, SourceOrSink>("SELECT * FROM sources_or_sinks WHERE id = ?")
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;
@@ -154,7 +155,7 @@ pub async fn query_by_parent_id(
     let (count, sources_or_sinks) = match query.name {
         Some(name) => {
             let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2 AND name LIKE ?3",
+                "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ? AND typ = ? AND name LIKE ?",
             )
             .bind(parent_id)
             .bind(typ)
@@ -163,7 +164,7 @@ pub async fn query_by_parent_id(
             .await?;
 
             let sources_or_sinks = sqlx::query_as::<_, SourceOrSink>(
-                "SELECT * FROM sources_or_sinks WHERE parent_id = ?1 AND AND typ = ?2 AND name LIKE ?3 ORDER BY ts DESC LIMIT ?4 OFFSET ?5",
+                "SELECT * FROM sources_or_sinks WHERE parent_id = ? AND typ = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             ).bind(parent_id)
             .bind(typ)
             .bind(format!("%{}%", name))
@@ -175,7 +176,7 @@ pub async fn query_by_parent_id(
         }
         None => {
             let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2",
+                "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ? AND typ = ?",
             )
             .bind(parent_id)
             .bind(typ)
@@ -183,7 +184,7 @@ pub async fn query_by_parent_id(
             .await?;
 
             let sources_or_sinks = sqlx::query_as::<_, SourceOrSink>(
-                "SELECT * FROM sources_or_sinks WHERE parent_id = ?1 AND typ = ?2 ORDER BY ts DESC LIMIT ?3 OFFSET ?4",
+                "SELECT * FROM sources_or_sinks WHERE parent_id = ? AND typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
             .bind(parent_id)
             .bind(typ)
@@ -211,7 +212,7 @@ pub async fn count_by_parent_id(parent_id: &String, typ: Type) -> Result<usize> 
 }
 
 pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
-    let conf: String = sqlx::query_scalar("SELECT conf FROM sources_or_sinks WHERE id = ?1")
+    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM sources_or_sinks WHERE id = ?1")
         .bind(id)
         .fetch_one(POOL.get().unwrap())
         .await?;
@@ -219,32 +220,25 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
 }
 
 pub async fn update(id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
-    let conf = serde_json::to_string(&req.ext)?;
-    match req.base.desc {
-        Some(desc) => {
-            sqlx::query("UPDATE sources SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
-                .bind(req.base.name)
-                .bind(desc)
-                .bind(conf)
-                .bind(id)
-                .execute(POOL.get().unwrap())
-                .await?;
-        }
-        None => {
-            sqlx::query("UPDATE sources SET name = ?1, conf = ?3 WHERE id = ?4")
-                .bind(req.base.name)
-                .bind(conf)
-                .bind(id)
-                .execute(POOL.get().unwrap())
-                .await?;
-        }
-    }
+    debug!("update source_or_sink: {}", id);
+    let conf = serde_json::to_vec(&req.ext)?;
+    let desc = match req.base.desc {
+        Some(desc) => Some(desc.as_bytes().to_vec()),
+        None => None,
+    };
+    sqlx::query("UPDATE sources_or_sinks SET name = ?, des = ?, conf = ? WHERE id = ?")
+        .bind(req.base.name)
+        .bind(desc)
+        .bind(conf)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
 
     Ok(())
 }
 
 pub async fn delete(id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM sources_or_sinks WHERE id = ?1")
+    sqlx::query("DELETE FROM sources_or_sinks WHERE id = ?")
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -252,16 +246,16 @@ pub async fn delete(id: &String) -> Result<()> {
 }
 
 pub async fn delete_by_parent_id(parent_id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM sources_or_sinks WHERE parent_id = ?1")
+    sqlx::query("DELETE FROM sources_or_sinks WHERE parent_id = ?")
         .bind(parent_id)
         .execute(POOL.get().unwrap())
         .await?;
     Ok(())
 }
 
-pub async fn check_exists(source_or_sink_id: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources_or_sinks WHERE id = ?1")
-        .bind(source_or_sink_id)
+pub async fn check_exists(id: &String) -> Result<bool> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources_or_sinks WHERE id = ?")
+        .bind(id)
         .fetch_one(POOL.get().unwrap())
         .await?;
 

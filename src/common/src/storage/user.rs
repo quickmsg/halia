@@ -13,8 +13,8 @@ pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS users (
-    username VARCHAR(255) NOT NULL,  -- 使用 VARCHAR(255) 代替 TEXT
-    password VARCHAR(255) NOT NULL   -- 使用 VARCHAR(255) 代替 TEXT
+    username VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL
 );
 "#,
     )
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
 }
 
 pub async fn create_user(username: String, password: String) -> Result<()> {
-    sqlx::query("INSERT INTO users (username, password) VALUES (?1, ?2)")
+    sqlx::query("INSERT INTO users (username, password) VALUES (?, ?)")
         .bind(username)
         .bind(password)
         .execute(POOL.get().unwrap())
@@ -35,7 +35,7 @@ pub async fn create_user(username: String, password: String) -> Result<()> {
 }
 
 pub async fn read_user() -> Result<Option<User>> {
-    let mut users = sqlx::query_as::<_, User>("SELECT username, password FROM users")
+    let mut users = sqlx::query_as::<_, User>("SELECT * FROM users")
         .fetch_all(POOL.get().unwrap())
         .await?;
 
@@ -65,7 +65,7 @@ pub async fn update_user_password(
     password: String,
     new_password: String,
 ) -> Result<()> {
-    sqlx::query("UPDATE users SET password = ?1 WHERE username = ?2 AND passwowrd = ?3")
+    sqlx::query("UPDATE users SET password = ? WHERE username = ? AND passwowrd = ?")
         .bind(new_password)
         .bind(username)
         .bind(password)

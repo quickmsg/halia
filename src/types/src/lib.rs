@@ -46,6 +46,10 @@ impl Pagination {
     pub fn check(&self, index: usize) -> bool {
         index >= (self.page - 1) * self.size && index < self.page * self.size
     }
+
+    pub fn to_sql(&self) -> (i64, i64) {
+        ((self.size as i64), ((self.page - 1) * self.size) as i64)
+    }
 }
 
 #[derive(Deserialize)]

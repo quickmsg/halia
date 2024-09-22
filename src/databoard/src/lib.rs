@@ -17,7 +17,7 @@ use types::{
         QueryRuleInfo, SearchDataboardsItemResp, SearchDataboardsResp, SearchDatasResp,
         SearchRuleInfo, Summary,
     },
-    Pagination,
+    BaseConf, Pagination,
 };
 
 pub mod data;
@@ -69,12 +69,13 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     DATABOARD_ON_COUNT.store(on_count, Ordering::SeqCst);
 
     for db_on_databoard in db_on_databoards {
-        let conf: DataboardConf = serde_json::from_str(&db_on_databoard.conf)?;
+        let conf: DataboardConf = serde_json::from_slice(&db_on_databoard.conf)?;
         let mut databoard = Databoard::new(conf);
 
-        let db_datas = storage::databoard_data::read_many(&db_on_databoard.id).await?;
+        // todo start
+        let db_datas = storage::databoard_data::read_all_by_parent_id(&db_on_databoard.id).await?;
         for db_data in db_datas {
-            let data_conf: DataConf = serde_json::from_str(&db_data.conf)?;
+            let data_conf: DataConf = serde_json::from_slice(&db_data.conf)?;
             databoard.create_data(db_data.id, data_conf).await?;
         }
 
@@ -122,8 +123,13 @@ pub async fn search_databoards(
         resp_databoards.push(SearchDataboardsItemResp {
             id: db_databoard.id,
             conf: CreateUpdateDataboardReq {
-                base: serde_json::from_str(&db_databoard.conf).unwrap(),
-                ext: DataboardConf {},
+                base: BaseConf {
+                    name: db_databoard.name,
+                    desc: db_databoard
+                        .des
+                        .map(|des| unsafe { String::from_utf8_unchecked(des) }),
+                },
+                ext: serde_json::from_slice(&db_databoard.conf)?,
             },
         });
     }
@@ -154,14 +160,14 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
 
     let db_databoard = storage::databoard::read_one(&databoard_id).await?;
 
-    let databoard_conf: DataboardConf = serde_json::from_str(&db_databoard.conf)?;
+    let databoard_conf: DataboardConf = serde_json::from_slice(&db_databoard.conf)?;
     let databoard = Databoard::new(databoard_conf);
     GLOBAL_DATABOARD_MANAGER.insert(databoard_id.clone(), databoard);
 
     let mut databoard = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id).unwrap();
-    let db_datas = storage::databoard_data::read_many(&databoard_id).await?;
+    let db_datas = storage::databoard_data::read_all_by_parent_id(&databoard_id).await?;
     for db_data in db_datas {
-        let data_conf: DataConf = serde_json::from_str(&db_data.conf)?;
+        let data_conf: DataConf = serde_json::from_slice(&db_data.conf)?;
         databoard.create_data(db_data.id, data_conf).await?;
     }
 
@@ -195,11 +201,7 @@ pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn create_data(
-    databoard_id: String,
-    req: CreateUpdateDataReq,
-    persist: bool,
-) -> HaliaResult<()> {
+pub async fn create_data(databoard_id: String, req: CreateUpdateDataReq) -> HaliaResult<()> {
     let data_id = common::get_id();
 
     if let Some(mut databoard) = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id) {

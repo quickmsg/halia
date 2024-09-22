@@ -16,10 +16,10 @@ pub(crate) async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS rule_refs (
-    rule_id VARCHAR(255) NOT NULL,     -- 使用 VARCHAR(255) 来适配 MySQL 和 SQLite
-    parent_id VARCHAR(255) NOT NULL,   -- 父 ID 使用 VARCHAR(255)
-    resource_id VARCHAR(255) NOT NULL, -- 资源 ID 使用 VARCHAR(255)
-    active INT NOT NULL                -- 使用 INT 来表示布尔状态
+    rule_id CHAR(32) NOT NULL,
+    parent_id CHAR(32) NOT NULL,
+    resource_id CHAR(32) NOT NULL,
+    active SMALLINT NOT NULL
 );
 "#,
     )
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS rule_refs (
 
 pub async fn insert(rule_id: &String, parent_id: &String, resource_id: &String) -> Result<()> {
     sqlx::query(
-        "INSERT INTO rule_refs (rule_id, parent_id, resource_id, active) VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO rule_refs (rule_id, parent_id, resource_id, active) VALUES (?, ?, ?, ?)",
     )
     .bind(rule_id)
     .bind(parent_id)
@@ -43,7 +43,7 @@ pub async fn insert(rule_id: &String, parent_id: &String, resource_id: &String) 
 }
 
 pub async fn active(rule_id: &String) -> Result<()> {
-    sqlx::query("UPDATE rule_refs SET active = 2 WHERE rule_id = ?1")
+    sqlx::query("UPDATE rule_refs SET active = 2 WHERE rule_id = ?")
         .bind(rule_id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -52,7 +52,7 @@ pub async fn active(rule_id: &String) -> Result<()> {
 }
 
 pub async fn deactive(rule_id: &String) -> Result<()> {
-    sqlx::query("UPDATE rule_refs SET active = 1 WHERE rule_id = ?1")
+    sqlx::query("UPDATE rule_refs SET active = 1 WHERE rule_id = ?")
         .bind(rule_id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -61,7 +61,7 @@ pub async fn deactive(rule_id: &String) -> Result<()> {
 }
 
 pub async fn delete_many_by_rule_id(rule_id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM rule_refs WHERE rule_id = ?1")
+    sqlx::query("DELETE FROM rule_refs WHERE rule_id = ?")
         .bind(rule_id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -70,7 +70,7 @@ pub async fn delete_many_by_rule_id(rule_id: &String) -> Result<()> {
 }
 
 pub async fn count_cnt_by_parent_id(parent_id: &String) -> Result<usize> {
-    let cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE parent_id = ?1")
+    let cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE parent_id = ?")
         .bind(parent_id)
         .fetch_one(POOL.get().unwrap())
         .await?;
@@ -89,7 +89,7 @@ pub async fn count_active_cnt_by_parent_id(parent_id: &String) -> Result<usize> 
 }
 
 pub async fn count_cnt_by_resource_id(resource_id: &String) -> Result<usize> {
-    let cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE resource_id = ?1")
+    let cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE resource_id = ?")
         .bind(resource_id)
         .fetch_one(POOL.get().unwrap())
         .await?;
@@ -99,7 +99,7 @@ pub async fn count_cnt_by_resource_id(resource_id: &String) -> Result<usize> {
 
 pub async fn count_active_cnt_by_resource_id(resource_id: &String) -> Result<usize> {
     let active_cnt: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = 2 AND resource_id = ?1")
+        sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = 2 AND resource_id = ?")
             .bind(resource_id)
             .fetch_one(POOL.get().unwrap())
             .await?;

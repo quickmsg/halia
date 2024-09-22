@@ -407,13 +407,11 @@ pub async fn update_source(
         return Err(HaliaError::NameExists);
     }
 
-    let old_conf = storage::source_or_sink::read_conf(&source_id).await?;
-    let new_conf = req.ext.clone();
-    GLOBAL_DEVICE_MANAGER
-        .get_mut(&device_id)
-        .ok_or(HaliaError::NotFound)?
-        .update_source(&source_id, old_conf, new_conf)
-        .await?;
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+        let old_conf = storage::source_or_sink::read_conf(&source_id).await?;
+        let new_conf = req.ext.clone();
+        device.update_source(&source_id, old_conf, new_conf).await?;
+    }
 
     storage::source_or_sink::update(&source_id, req).await?;
 

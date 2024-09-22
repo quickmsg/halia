@@ -1,27 +1,29 @@
 use anyhow::Result;
 use sqlx::FromRow;
-use types::databoard::CreateUpdateDataReq;
+use types::{databoard::CreateUpdateDataReq, Pagination};
 
 use super::POOL;
 
 #[derive(FromRow)]
 pub struct DataboardData {
     pub id: String,
+    pub parent_id: String,
     pub name: String,
-    pub desc: Option<String>,
-    pub conf: String,
+    pub des: Option<Vec<u8>>,
+    pub conf: Vec<u8>,
+    pub ts: i64,
 }
 
 pub async fn init_table() -> Result<()> {
     sqlx::query(
         r#"  
 CREATE TABLE IF NOT EXISTS databoard_datas (
-    id VARCHAR(255) PRIMARY KEY,      -- 使用 VARCHAR(255) 代替 TEXT 以适配 MySQL
-    parent_id VARCHAR(255) NOT NULL,  -- 父 ID 也使用 VARCHAR(255)
-    name TEXT NOT NULL,               -- 名称字段使用 TEXT 类型
-    `desc` TEXT,                      -- `desc` 是保留字，用反引号括起来避免冲突
-    conf TEXT NOT NULL,               -- 配置字段使用 TEXT 类型
-    ts BIGINT NOT NULL                -- 时间戳字段使用 BIGINT 来确保兼容性
+    id CHAR(32) PRIMARY KEY,
+    parent_id CHAR(32) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    des BLOB,
+    conf BLOB NOT NULL,
+    ts BIGINT UNSIGNED NOT NULL                -- 时间戳字段使用 BIGINT 来确保兼容性
 );
 "#,
     )
@@ -36,13 +38,14 @@ pub async fn insert(
     databoard_data_id: &String,
     req: CreateUpdateDataReq,
 ) -> Result<()> {
-    let conf = serde_json::to_string(&req.ext)?;
+    let desc = req.base.desc.map(|desc| desc.into_bytes());
+    let conf = serde_json::to_vec(&req.ext)?;
     let ts = chrono::Utc::now().timestamp();
-    sqlx::query("INSERT INTO databoard_datas (id, parent_id, name, desc, conf, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+    sqlx::query("INSERT INTO databoard_datas (id, parent_id, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(databoard_data_id)
         .bind(databoard_id)
         .bind(req.base.name)
-        .bind(req.base.desc)
+        .bind(desc)
         .bind(conf)
         .bind(ts)
         .execute(POOL.get().unwrap())
@@ -50,22 +53,36 @@ pub async fn insert(
     Ok(())
 }
 
-pub async fn read_many(databoard_id: &String) -> Result<Vec<DataboardData>> {
+pub async fn query(databoard_id: &String, pagination: Pagination) -> Result<Vec<DataboardData>> {
+    let (limit, offset) = pagination.to_sql();
     let databoard_datas = sqlx::query_as::<_, DataboardData>(
-        "SELECT * FROM databoard_datas WHERE parent_id = ?1 ORDER BY ts DESC",
+        "SELECT * FROM databoard_datas WHERE parent_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
     )
     .bind(databoard_id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(POOL.get().unwrap())
     .await?;
 
     Ok(databoard_datas)
 }
 
+pub async fn read_all_by_parent_id(databoard_id: &String) -> Result<Vec<DataboardData>> {
+    let databoard_datas =
+        sqlx::query_as::<_, DataboardData>("SELECT * FROM databoard_datas WHERE parent_id = ?")
+            .bind(databoard_id)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+    Ok(databoard_datas)
+}
+
 pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {
-    let conf = serde_json::to_string(&req.ext)?;
-    sqlx::query("UPDATE databoard_datas SET name = ?1, desc = ?2, conf = ?3 WHERE id = ?4")
+    let desc = req.base.desc.map(|desc| desc.into_bytes());
+    let conf = serde_json::to_vec(&req.ext)?;
+    sqlx::query("UPDATE databoard_datas SET name = ?, des = ?, conf = ? WHERE id = ?")
         .bind(req.base.name)
-        .bind(req.base.desc)
+        .bind(desc)
         .bind(conf)
         .bind(id)
         .execute(POOL.get().unwrap())
@@ -74,8 +91,8 @@ pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {
 }
 
 pub async fn delete_one(databoard_data_id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM databoard_datas WHERE id = ?1")
-        .bind(databoard_data_id.to_string())
+    sqlx::query("DELETE FROM databoard_datas WHERE id = ?")
+        .bind(databoard_data_id)
         .execute(POOL.get().unwrap())
         .await?;
     Ok(())
