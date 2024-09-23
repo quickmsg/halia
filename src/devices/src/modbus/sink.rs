@@ -64,20 +64,15 @@ impl Sink {
     }
 
     pub async fn update(&mut self, old_conf: SinkConf, new_conf: SinkConf) {
-        if old_conf != new_conf {
-            self.stop().await;
-
-            let (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer) =
-                self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(
-                stop_signal_rx,
-                mb_rx,
-                write_tx,
-                new_conf,
-                device_err_rx,
-                message_retainer,
-            );
-        }
+        let (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer) = self.stop().await;
+        self.event_loop(
+            stop_signal_rx,
+            mb_rx,
+            write_tx,
+            new_conf,
+            device_err_rx,
+            message_retainer,
+        );
     }
 
     fn event_loop(
@@ -97,7 +92,6 @@ impl Sink {
                         return (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer);
                     }
 
-                    // todo 恢复时消息发送
                     mb = mb_rx.recv() => {
                         if let Some(mb) = mb {
                             if !device_err {
@@ -130,8 +124,17 @@ impl Sink {
         self.join_handle = Some(join_handle);
     }
 
-    pub async fn stop(&mut self) {
+    pub async fn stop(
+        &mut self,
+    ) -> (
+        mpsc::Receiver<()>,
+        mpsc::Receiver<MessageBatch>,
+        mpsc::Sender<WritePointEvent>,
+        broadcast::Receiver<bool>,
+        Box<dyn SinkMessageRetain>,
+    ) {
         self.stop_signal_tx.send(()).await.unwrap();
+        self.join_handle.take().unwrap().await.unwrap()
     }
 
     async fn send_write_point_event(

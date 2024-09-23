@@ -39,8 +39,6 @@ impl Source {
         read_tx: mpsc::Sender<String>,
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
-        // Self::validate_conf(&ext_conf)?;
-
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         let (mb_tx, _) = broadcast::channel(16);
 
@@ -155,21 +153,21 @@ impl Source {
         self.join_handle = Some(join_handle);
     }
 
-    pub async fn stop(&mut self) {
+    pub async fn stop(
+        &mut self,
+    ) -> (
+        mpsc::Receiver<()>,
+        mpsc::Sender<String>,
+        broadcast::Receiver<bool>,
+    ) {
         self.stop_signal_tx.send(()).await.unwrap();
+        self.join_handle.take().unwrap().await.unwrap()
     }
 
     pub async fn update(&mut self, old_conf: SourceConf, new_conf: SourceConf) {
-        if old_conf.data_type != new_conf.data_type {
-            self.quantity = new_conf.data_type.get_quantity();
-        }
-
-        if old_conf.interval != new_conf.interval {
-            self.stop_signal_tx.send(()).await.unwrap();
-            let (stop_signal_rx, read_tx, device_err_rx) =
-                self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx, read_tx, device_err_rx);
-        }
+        self.conf = new_conf;
+        let (stop_signal_rx, read_tx, device_err_rx) = self.stop().await;
+        self.event_loop(stop_signal_rx, read_tx, device_err_rx);
     }
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {

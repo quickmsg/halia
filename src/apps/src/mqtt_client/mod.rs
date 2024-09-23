@@ -450,6 +450,7 @@ impl App for MqttClient {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        let old_conf: SourceConf = serde_json::from_value(old_conf)?;
         let new_conf: SourceConf = serde_json::from_value(new_conf)?;
 
         let mut source = self
@@ -457,32 +458,32 @@ impl App for MqttClient {
             .get_mut(&source_id)
             .ok_or(HaliaError::NotFound)?;
 
-        source.conf = new_conf;
-
         match &self.halia_mqtt_client {
             HaliaMqttClient::V311(client_v311) => {
-                if let Err(e) = client_v311.unsubscribe(&source.conf.topic).await {
+                if let Err(e) = client_v311.unsubscribe(old_conf.topic).await {
                     error!("unsubscribe err:{e}");
                 }
                 if let Err(e) = client_v311
-                    .subscribe(&source.conf.topic, qos_to_v311(&source.conf.qos))
+                    .subscribe(&new_conf.topic, qos_to_v311(&new_conf.qos))
                     .await
                 {
                     error!("subscribe err:{e}");
                 }
             }
             HaliaMqttClient::V50(client_v50) => {
-                if let Err(e) = client_v50.unsubscribe(&source.conf.topic).await {
+                if let Err(e) = client_v50.unsubscribe(old_conf.topic).await {
                     error!("unsubscribe err:{e}");
                 }
                 if let Err(e) = client_v50
-                    .subscribe(&source.conf.topic, qos_to_v50(&source.conf.qos))
+                    .subscribe(&new_conf.topic, qos_to_v50(&new_conf.qos))
                     .await
                 {
                     error!("subscribe err:{e}");
                 }
             }
         }
+
+        source.conf = new_conf;
 
         Ok(())
     }
@@ -531,11 +532,14 @@ impl App for MqttClient {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        let old_conf: SinkConf = serde_json::from_value(old_conf)?;
         let new_conf: SinkConf = serde_json::from_value(new_conf)?;
 
-        let mut sink = self.sinks.get_mut(&sink_id).ok_or(HaliaError::NotFound)?;
-
-        sink.update(new_conf).await?;
+        self.sinks
+            .get_mut(&sink_id)
+            .ok_or(HaliaError::NotFound)?
+            .update(old_conf, new_conf)
+            .await?;
 
         Ok(())
     }

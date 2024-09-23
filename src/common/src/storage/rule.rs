@@ -71,7 +71,7 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
 }
 
 pub async fn read_all_on() -> Result<Vec<Rule>> {
-    let rules = sqlx::query_as::<_, Rule>("SELECT * FROM rules HWERE status = 1")
+    let rules = sqlx::query_as::<_, Rule>("SELECT * FROM rules WHERE status = 1")
         .fetch_all(POOL.get().unwrap())
         .await?;
 
