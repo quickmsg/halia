@@ -160,7 +160,7 @@ impl Sink {
         todo!()
     }
 
-    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<()> {
+    pub async fn update(&mut self, conf: SinkConf) -> HaliaResult<()> {
         // Self::validate_conf(&ext_conf)?;
 
         // let mut restart = false;

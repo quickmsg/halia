@@ -16,27 +16,27 @@ pub enum ResourceType {
     Rule,
 }
 
-impl Into<String> for ResourceType {
-    fn into(self) -> String {
+impl Into<i32> for ResourceType {
+    fn into(self) -> i32 {
         match self {
-            ResourceType::Device => "device".to_owned(),
-            ResourceType::App => "app".to_owned(),
-            ResourceType::Databoard => "databoard".to_owned(),
-            ResourceType::Rule => "rule".to_owned(),
+            ResourceType::Device => 1,
+            ResourceType::App => 2,
+            ResourceType::Databoard => 3,
+            ResourceType::Rule => 4,
         }
     }
 }
 
-impl TryFrom<&str> for ResourceType {
-    type Error = String;
+impl TryFrom<i32> for ResourceType {
+    type Error = ();
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            "device" => Ok(ResourceType::Device),
-            "app" => Ok(ResourceType::App),
-            "databoard" => Ok(ResourceType::Databoard),
-            "rule" => Ok(ResourceType::Rule),
-            _ => Err(value.to_owned()),
+            1 => Ok(ResourceType::Device),
+            2 => Ok(ResourceType::App),
+            3 => Ok(ResourceType::Databoard),
+            4 => Ok(ResourceType::Rule),
+            _ => Err(()),
         }
     }
 }
@@ -44,32 +44,38 @@ impl TryFrom<&str> for ResourceType {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
+    Create,
+    Delete,
     Start,
     Stop,
     Connect,
     DisConnect,
 }
 
-impl Into<String> for EventType {
-    fn into(self) -> String {
+impl Into<i32> for EventType {
+    fn into(self) -> i32 {
         match self {
-            EventType::Start => "start".to_owned(),
-            EventType::Stop => "stop".to_owned(),
-            EventType::Connect => "connect".to_owned(),
-            EventType::DisConnect => "disconnect".to_owned(),
+            EventType::Create => 1,
+            EventType::Delete => 2,
+            EventType::Start => 3,
+            EventType::Stop => 4,
+            EventType::Connect => 5,
+            EventType::DisConnect => 6,
         }
     }
 }
 
-impl TryFrom<String> for EventType {
+impl TryFrom<i32> for EventType {
     type Error = ();
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        match value.as_str() {
-            "start" => Ok(EventType::Start),
-            "stop" => Ok(EventType::Stop),
-            "connect" => Ok(EventType::Connect),
-            "disconnect" => Ok(EventType::DisConnect),
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(EventType::Create),
+            2 => Ok(EventType::Delete),
+            3 => Ok(EventType::Start),
+            4 => Ok(EventType::Stop),
+            5 => Ok(EventType::Connect),
+            6 => Ok(EventType::DisConnect),
             _ => Err(()),
         }
     }

@@ -238,7 +238,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     };
 
     let app = match app_type {
-        AppType::MqttClient => mqtt_client::new(app_id.clone(), app_conf)?,
+        AppType::MqttClient => mqtt_client::new(app_id.clone(), app_conf.ext)?,
         AppType::HttpClient => http_client::new(app_id.clone(), app_conf)?,
     };
     GLOBAL_APP_MANAGER.insert(app_id.clone(), app);
@@ -289,7 +289,7 @@ pub async fn stop_app(app_id: String) -> HaliaResult<()> {
 
 pub async fn delete_app(app_id: String) -> HaliaResult<()> {
     if GLOBAL_APP_MANAGER.contains_key(&app_id) {
-        return Err(HaliaError::DeleteRefing);
+        return Err(HaliaError::DeleteRunning);
     }
 
     let cnt = storage::rule_ref::count_cnt_by_parent_id(&app_id).await?;
@@ -297,7 +297,13 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRefing);
     }
 
-    // 删除事件
+    storage::event::insert(
+        types::events::ResourceType::App,
+        &app_id,
+        types::events::EventType::Delete,
+        None,
+    )
+    .await?;
 
     sub_app_count();
     storage::app::delete(&app_id).await?;
@@ -400,9 +406,9 @@ pub async fn update_source(
 }
 
 pub async fn delete_source(app_id: String, source_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_active_cnt_by_resource_id(&source_id).await?;
+    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(&source_id).await?;
     if rule_ref_cnt > 0 {
-        return Err(HaliaError::Common("请先删除关联规则".to_owned()));
+        return Err(HaliaError::DeleteRefing);
     }
 
     storage::source_or_sink::delete(&source_id).await?;
@@ -566,7 +572,6 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<Search
             on: db_app.status == 1,
             source_cnt,
             sink_cnt,
-            // TODO
             memory_info: None,
         },
         conf: SearchAppsItemConf {
