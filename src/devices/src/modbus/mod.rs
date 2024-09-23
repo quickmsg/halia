@@ -176,7 +176,11 @@ impl Modbus {
                         {
                             warn!("create event failed: {}", e);
                         };
-                        sub_device_running_count();
+
+                        if err.read().await.is_none() {
+                            sub_device_running_count();
+                        }
+
                         *err.write().await = Some(e.to_string());
                         let sleep = time::sleep(Duration::from_secs(modbus_conf.reconnect));
                         tokio::pin!(sleep);

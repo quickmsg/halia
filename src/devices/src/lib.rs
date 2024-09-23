@@ -11,7 +11,7 @@ use common::{
 use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
-use tracing::warn;
+use tracing::{debug, warn};
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
@@ -63,10 +63,12 @@ pub(crate) fn get_device_running_count() -> usize {
 }
 
 pub(crate) fn add_device_running_count() {
+    debug!(" add device running ");
     DEVICE_RUNNING_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
 pub(crate) fn sub_device_running_count() {
+    debug!("sub device running ");
     DEVICE_RUNNING_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
@@ -268,6 +270,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);
 
     add_device_on_count();
+    add_device_running_count();
     storage::device::update_status(&device_id, true).await?;
     Ok(())
 }
