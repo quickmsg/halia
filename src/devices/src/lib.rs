@@ -410,6 +410,9 @@ pub async fn update_source(
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let old_conf = storage::source_or_sink::read_conf(&source_id).await?;
         let new_conf = req.ext.clone();
+        if old_conf == new_conf {
+            return Ok(());
+        }
         device.update_source(&source_id, old_conf, new_conf).await?;
     }
 

@@ -286,7 +286,7 @@ pub async fn update_status(id: &String, status: bool) -> Result<()> {
 pub async fn update(id: String, req: CreateUpdateAppReq) -> Result<()> {
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
-    sqlx::query("UPDATE apps SET name = ?, desc = ?, conf = ? WHERE id = ?")
+    sqlx::query("UPDATE apps SET name = ?, des = ?, conf = ? WHERE id = ?")
         .bind(req.conf.base.name)
         .bind(desc)
         .bind(conf)

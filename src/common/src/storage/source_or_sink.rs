@@ -1,6 +1,5 @@
 use anyhow::Result;
 use sqlx::FromRow;
-use tracing::debug;
 use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
 
 use super::POOL;
@@ -216,11 +215,10 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
         .bind(id)
         .fetch_one(POOL.get().unwrap())
         .await?;
-    Ok(serde_json::to_value(conf)?)
+    Ok(serde_json::from_slice(&conf)?)
 }
 
 pub async fn update(id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
-    debug!("update source_or_sink: {}", id);
     let conf = serde_json::to_vec(&req.ext)?;
     let desc = match req.base.desc {
         Some(desc) => Some(desc.as_bytes().to_vec()),

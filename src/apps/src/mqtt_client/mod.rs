@@ -6,8 +6,8 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rumqttc::{
-    mqttbytes, v5, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS, TlsConfiguration,
-    Transport,
+    mqttbytes, tokio_rustls::client, v5, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS,
+    TlsConfiguration, Transport,
 };
 use sink::Sink;
 use source::Source;
@@ -407,6 +407,16 @@ impl App for MqttClient {
     async fn stop(&mut self) -> HaliaResult<()> {
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
+        }
+        match &self.halia_mqtt_client {
+            HaliaMqttClient::V311(client_v311) => {
+                if let Err(e) = client_v311.disconnect().await {
+                    warn!("client disconnect err:{e}");
+                }
+            }
+            HaliaMqttClient::V50(client_v50) => {
+                let _ = client_v50.disconnect().await;
+            }
         }
         self.stop_signal_tx.send(()).await.unwrap();
 
