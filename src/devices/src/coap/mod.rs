@@ -287,7 +287,7 @@ impl Device for Coap {
     }
 
     async fn get_source_rx(
-        &mut self,
+        &self,
         source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
         // match self
@@ -301,7 +301,7 @@ impl Device for Coap {
         todo!()
     }
 
-    async fn get_sink_tx(&mut self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         // match self.sinks.iter_mut().find(|sink| sink.id == *sink_id) {
         //     Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
         //     None => unreachable!(),

@@ -89,7 +89,7 @@ impl Databoard {
         Ok(self
             .datas
             .get(data_id)
-            .ok_or(HaliaError::NotFound)?
+            .ok_or(HaliaError::NotFound(data_id.to_string()))?
             .read()
             .await)
     }
@@ -108,7 +108,7 @@ impl Databoard {
         Ok(self
             .datas
             .get_mut(&data_id)
-            .ok_or(HaliaError::NotFound)?
+            .ok_or(HaliaError::NotFound(data_id))?
             .update(old_conf, new_conf)
             .await)
     }
@@ -116,7 +116,7 @@ impl Databoard {
     pub async fn delete_data(&mut self, data_id: String) -> HaliaResult<()> {
         self.datas
             .get_mut(&data_id)
-            .ok_or(HaliaError::NotFound)?
+            .ok_or(HaliaError::NotFound(data_id.clone()))?
             .stop()
             .await;
         self.datas.remove(&data_id);
@@ -130,7 +130,7 @@ impl Databoard {
         Ok(self
             .datas
             .get(data_id)
-            .ok_or(HaliaError::NotFound)?
+            .ok_or(HaliaError::NotFound(data_id.to_owned()))?
             .mb_tx
             .clone())
     }

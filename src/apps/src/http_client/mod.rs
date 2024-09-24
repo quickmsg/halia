@@ -134,11 +134,10 @@ impl App for HttpClient {
     }
 
     async fn delete_source(&mut self, source_id: String) -> HaliaResult<()> {
-        self.sources
-            .get_mut(&source_id)
-            .ok_or(HaliaError::NotFound)?
-            .stop()
-            .await;
+        match self.sources.get_mut(&source_id) {
+            Some(mut source) => source.stop().await,
+            None => return Err(HaliaError::NotFound(source_id)),
+        }
 
         self.sources.remove(&source_id);
 
@@ -183,11 +182,10 @@ impl App for HttpClient {
     }
 
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
-        self.sinks
-            .get_mut(&sink_id)
-            .ok_or(HaliaError::NotFound)?
-            .stop()
-            .await;
+        match self.sinks.get_mut(&sink_id) {
+            Some(mut sink) => sink.stop().await,
+            None => return Err(HaliaError::NotFound(sink_id)),
+        }
 
         self.sinks.remove(&sink_id);
 
@@ -198,20 +196,16 @@ impl App for HttpClient {
         &self,
         source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        Ok(self
-            .sources
-            .get(source_id)
-            .ok_or(HaliaError::NotFound)?
-            .mb_tx
-            .subscribe())
+        match self.sources.get(source_id) {
+            Some(source) => Ok(source.mb_tx.subscribe()),
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
     }
 
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        Ok(self
-            .sinks
-            .get_mut(sink_id)
-            .ok_or(HaliaError::NotFound)?
-            .mb_tx
-            .clone())
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }

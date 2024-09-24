@@ -4,8 +4,8 @@ pub type HaliaResult<T, E = HaliaError> = result::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum HaliaError {
-    #[error("未找到！")]
-    NotFound,
+    #[error("ID{0} 未找到！")]
+    NotFound(String),
     #[error("{0}")]
     JsonErr(#[from] serde_json::Error),
     #[error("{0}")]
@@ -14,8 +14,8 @@ pub enum HaliaError {
     Io(#[from] io::Error),
     #[error("运行中")]
     Running,
-    #[error("已停止")]
-    Stopped,
+    #[error("{0} 停止!")]
+    Stopped(String),
     #[error("引用中，无法删除！")]
     DeleteRefing,
     #[error("运行中，无法删除，请先停止！")]

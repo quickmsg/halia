@@ -424,11 +424,12 @@ pub async fn get_source_rx(
     app_id: &String,
     source_id: &String,
 ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-    GLOBAL_APP_MANAGER
-        .get_mut(app_id)
-        .ok_or(HaliaError::Stopped)?
-        .get_source_rx(source_id)
-        .await
+    if let Some(app) = GLOBAL_APP_MANAGER.get(app_id) {
+        app.get_source_rx(source_id).await
+    } else {
+        let name = storage::app::read_name(app_id).await?;
+        Err(HaliaError::Stopped(name))
+    }
 }
 
 pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
@@ -544,11 +545,12 @@ pub async fn get_sink_tx(
     app_id: &String,
     sink_id: &String,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    GLOBAL_APP_MANAGER
-        .get_mut(app_id)
-        .ok_or(HaliaError::Stopped)?
-        .get_sink_tx(sink_id)
-        .await
+    if let Some(app) = GLOBAL_APP_MANAGER.get(app_id) {
+        app.get_sink_tx(sink_id).await
+    } else {
+        let name = storage::app::read_name(app_id).await?;
+        Err(HaliaError::Stopped(name))
+    }
 }
 
 async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<SearchAppsItemResp> {

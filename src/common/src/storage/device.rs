@@ -137,8 +137,8 @@ pub async fn search_devices(
                 "SELECT * FROM devices WHERE typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
             .bind(typ)
-            .bind(pagination.size as i64)
-            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(POOL.get().unwrap())
             .await?;
 
@@ -158,25 +158,25 @@ pub async fn search_devices(
             )
             .bind(typ)
             .bind(on as i32)
-            .bind(pagination.size as i64)
-            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(POOL.get().unwrap())
             .await?;
 
             (count as usize, devices)
         }
         (Some(name), None, None) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ?")
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name LIKE ?")
                 .bind(format!("%{}%", name))
                 .fetch_one(POOL.get().unwrap())
                 .await?;
 
             let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE name = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM devices WHERE name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
             .bind(format!("%{}%", name))
-            .bind(pagination.size as i64)
-            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(POOL.get().unwrap())
             .await?;
 
@@ -195,8 +195,8 @@ pub async fn search_devices(
             )
             .bind(format!("%{}%", name))
             .bind(on as i32)
-            .bind(pagination.size as i64)
-            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(POOL.get().unwrap())
             .await?;
 
@@ -213,12 +213,12 @@ pub async fn search_devices(
             .await?;
 
             let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE name = ? AND device_type = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM devices WHERE name LIKE ? AND device_type = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
             .bind(format!("%{}%", name))
             .bind(typ)
-            .bind(pagination.size as i64)
-            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(POOL.get().unwrap())
             .await?;
 
@@ -241,8 +241,8 @@ pub async fn search_devices(
             .bind(format!("%{}%", name))
             .bind(typ)
             .bind(on as i32)
-            .bind(pagination.size as i64)
-            .bind(((pagination.page - 1) * pagination.size) as i64)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(POOL.get().unwrap())
             .await?;
 
@@ -259,6 +259,15 @@ pub async fn read_on() -> Result<Vec<Device>> {
         .await?;
 
     Ok(devices)
+}
+
+pub async fn read_name(id: &String) -> Result<String> {
+    let name: String = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(name)
 }
 
 pub async fn count_all() -> Result<usize> {

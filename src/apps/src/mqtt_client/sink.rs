@@ -9,7 +9,7 @@ use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 use types::apps::mqtt_client::SinkConf;
 
 use super::{qos_to_v311, qos_to_v50, HaliaMqttClient};
@@ -73,7 +73,7 @@ impl Sink {
     ) {
         let topic = self.conf.topic.clone();
         let retain = self.conf.retain;
-        let mut app_err = false;
+        let mut err = false;
         match halia_mqtt_client {
             HaliaMqttClient::V311(mqtt_client_v311) => {
                 let qos = qos_to_v311(&self.conf.qos);
@@ -84,9 +84,9 @@ impl Sink {
                                 return (stop_signal_rx, mb_rx, HaliaMqttClient::V311(mqtt_client_v311), app_err_rx, message_retainer);
                             }
 
-                            err = app_err_rx.recv() => {
-                                match err {
-                                    Ok(err) => app_err = err,
+                            chan_err = app_err_rx.recv() => {
+                                match chan_err {
+                                    Ok(chan_err) => err = chan_err,
                                     Err(e) => warn!("{:?}", e),
                                 }
                             }
@@ -94,7 +94,7 @@ impl Sink {
                             mb = mb_rx.recv() => {
                                 match mb {
                                     Some(mb) => {
-                                        if !app_err {
+                                        if !err {
                                             if let Err(e) = mqtt_client_v311.publish(&topic, qos, retain, mb.to_json()).await {
                                                 warn!("{:?}", e);
                                             }
@@ -123,7 +123,7 @@ impl Sink {
                             mb = mb_rx.recv() => {
                                 match mb {
                                     Some(mb) => {
-                                        if !app_err {
+                                        if !err {
                                             if let Err(e) = mqtt_client_v5.publish(&topic, qos, retain, mb.to_json()).await {
                                                 warn!("{:?}", e);
                                             }

@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    LazyLock,
+use std::{
+    fmt::format,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        LazyLock,
+    },
 };
 
 use async_trait::async_trait;
@@ -102,11 +105,11 @@ pub trait Device: Send + Sync {
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()>;
 
     async fn get_source_rx(
-        &mut self,
+        &self,
         source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
 
-    async fn get_sink_tx(&mut self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>>;
+    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
@@ -431,7 +434,7 @@ pub async fn write_source_value(
 ) -> HaliaResult<()> {
     GLOBAL_DEVICE_MANAGER
         .get_mut(&device_id)
-        .ok_or(HaliaError::NotFound)?
+        .ok_or(HaliaError::NotFound(device_id))?
         .write_source_value(source_id, req)
         .await
 }
@@ -455,11 +458,12 @@ pub async fn get_source_rx(
     device_id: &String,
     source_id: &String,
 ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-    GLOBAL_DEVICE_MANAGER
-        .get_mut(device_id)
-        .ok_or(HaliaError::Stopped)?
-        .get_source_rx(source_id)
-        .await
+    if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
+        device.get_source_rx(source_id).await
+    } else {
+        let device_name = storage::device::read_name(&device_id).await?;
+        Err(HaliaError::Stopped(format!("设备：{}", device_name)))
+    }
 }
 
 pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
@@ -549,7 +553,7 @@ pub async fn update_sink(
     let new_conf = req.ext.clone();
     GLOBAL_DEVICE_MANAGER
         .get_mut(&device_id)
-        .ok_or(HaliaError::NotFound)?
+        .ok_or(HaliaError::NotFound(device_id.to_owned()))?
         .update_sink(&sink_id, old_conf, new_conf)
         .await?;
 
@@ -577,11 +581,12 @@ pub async fn get_sink_tx(
     device_id: &String,
     sink_id: &String,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    GLOBAL_DEVICE_MANAGER
-        .get_mut(device_id)
-        .ok_or(HaliaError::NotFound)?
-        .get_sink_tx(sink_id)
-        .await
+    if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
+        device.get_sink_tx(sink_id).await
+    } else {
+        let device_name = storage::device::read_name(&device_id).await?;
+        Err(HaliaError::Stopped(format!("设备：{}", device_name)))
+    }
 }
 
 async fn transer_db_device_to_resp(

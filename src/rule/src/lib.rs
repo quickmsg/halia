@@ -141,11 +141,10 @@ pub async fn stop(id: String) -> HaliaResult<()> {
 
     sub_rule_on_count();
 
-    GLOBAL_RULE_MANAGER
-        .get_mut(&id)
-        .ok_or(HaliaError::NotFound)?
-        .stop()
-        .await?;
+    match GLOBAL_RULE_MANAGER.remove(&id) {
+        Some((_, mut rule)) => rule.stop().await?,
+        None => return Err(HaliaError::NotFound(id)),
+    }
 
     storage::rule::update_status(&id, false).await?;
     Ok(())
@@ -174,11 +173,11 @@ pub async fn delete(id: String) -> HaliaResult<()> {
 }
 
 pub async fn get_log_filename(id: String) -> HaliaResult<String> {
-    let filename = GLOBAL_RULE_MANAGER
-        .get(&id)
-        .ok_or(HaliaError::NotFound)?
-        .get_log_filename()
-        .await;
-
-    Ok(filename)
+    match GLOBAL_RULE_MANAGER.get(&id) {
+        Some(rule) => {
+            let filename = rule.get_log_filename().await;
+            Ok(filename)
+        }
+        None => Err(HaliaError::NotFound(id)),
+    }
 }

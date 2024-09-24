@@ -190,7 +190,7 @@ pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
 
     GLOBAL_DATABOARD_MANAGER
         .get_mut(&databoard_id)
-        .ok_or(HaliaError::NotFound)?
+        .ok_or(HaliaError::NotFound(databoard_id.clone()))?
         .stop()
         .await;
 
@@ -273,7 +273,7 @@ pub async fn get_data_tx(
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
     GLOBAL_DATABOARD_MANAGER
         .get_mut(databoard_id)
-        .ok_or(HaliaError::NotFound)?
+        .ok_or(HaliaError::NotFound(databoard_id.to_owned()))?
         .get_data_tx(databoard_data_id)
         .await
 }

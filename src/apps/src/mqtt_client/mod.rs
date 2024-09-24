@@ -6,8 +6,8 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rumqttc::{
-    mqttbytes, tokio_rustls::client, v5, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS,
-    TlsConfiguration, Transport,
+    mqttbytes, v5, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS, TlsConfiguration,
+    Transport,
 };
 use sink::Sink;
 use source::Source;
@@ -165,6 +165,7 @@ impl MqttClient {
         let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
 
         let join_handle = tokio::spawn(async move {
+            let mut err = false;
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
@@ -172,7 +173,7 @@ impl MqttClient {
                     }
 
                     event = event_loop.poll() => {
-                        Self::handle_v311_event(event, &sources, &device_err, &app_err_tx).await;
+                        Self::handle_v311_event(event, &sources, &device_err, &mut err, &app_err_tx).await;
                     }
                 }
             }
@@ -184,31 +185,45 @@ impl MqttClient {
     async fn handle_v311_event(
         event: Result<Event, rumqttc::ConnectionError>,
         sources: &Arc<DashMap<String, Source>>,
-        err: &Arc<RwLock<Option<String>>>,
+        device_err: &Arc<RwLock<Option<String>>>,
+        err: &mut bool,
         app_err_tx: &broadcast::Sender<bool>,
     ) {
         match event {
-            Ok(Event::Incoming(Incoming::Publish(p))) => match MessageBatch::from_json(p.payload) {
-                Ok(msg) => {
-                    for source in sources.iter_mut() {
-                        if matches(&source.conf.topic, &p.topic) {
-                            if source.mb_tx.receiver_count() > 0 {
-                                if let Err(e) = source.mb_tx.send(msg.clone()) {
-                                    warn!("{}", e);
+            Ok(Event::Incoming(Incoming::Publish(p))) => {
+                if *err {
+                    *err = false;
+                    _ = app_err_tx.send(false);
+                    *device_err.write().await = None;
+                }
+                match MessageBatch::from_json(p.payload) {
+                    Ok(msg) => {
+                        for source in sources.iter_mut() {
+                            if matches(&source.conf.topic, &p.topic) {
+                                if source.mb_tx.receiver_count() > 0 {
+                                    if let Err(e) = source.mb_tx.send(msg.clone()) {
+                                        warn!("{}", e);
+                                    }
                                 }
                             }
                         }
                     }
+                    Err(e) => error!("Failed to decode msg:{}", e),
                 }
-                Err(e) => error!("Failed to decode msg:{}", e),
-            },
+            }
             Ok(_) => {
-                _ = app_err_tx.send(true);
-                *err.write().await = None;
+                if *err {
+                    *err = false;
+                    _ = app_err_tx.send(false);
+                    *device_err.write().await = None;
+                }
             }
             Err(e) => {
-                _ = app_err_tx.send(false);
-                *err.write().await = Some(e.to_string());
+                if !*err {
+                    *err = true;
+                    _ = app_err_tx.send(true);
+                    *device_err.write().await = Some(e.to_string());
+                }
             }
         }
     }
@@ -466,7 +481,7 @@ impl App for MqttClient {
         let mut source = self
             .sources
             .get_mut(&source_id)
-            .ok_or(HaliaError::NotFound)?;
+            .ok_or(HaliaError::NotFound(source_id.to_owned()))?;
 
         match &self.halia_mqtt_client {
             HaliaMqttClient::V311(client_v311) => {
@@ -502,7 +517,7 @@ impl App for MqttClient {
         let (_, source) = self
             .sources
             .remove(&source_id)
-            .ok_or(HaliaError::NotFound)?;
+            .ok_or(HaliaError::NotFound(source_id))?;
 
         match &self.halia_mqtt_client {
             HaliaMqttClient::V311(client_v311) => {
@@ -545,41 +560,36 @@ impl App for MqttClient {
         let old_conf: SinkConf = serde_json::from_value(old_conf)?;
         let new_conf: SinkConf = serde_json::from_value(new_conf)?;
 
-        self.sinks
-            .get_mut(&sink_id)
-            .ok_or(HaliaError::NotFound)?
-            .update(old_conf, new_conf)
-            .await?;
-
-        Ok(())
+        match self.sinks.get_mut(&sink_id) {
+            Some(mut sink) => sink.update(old_conf, new_conf).await,
+            None => return Err(HaliaError::NotFound(sink_id)),
+        }
     }
 
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
-        let (_, mut sink) = self.sinks.remove(&sink_id).ok_or(HaliaError::NotFound)?;
-
-        sink.stop().await;
-
-        Ok(())
+        match self.sinks.remove(&sink_id) {
+            Some((_, mut sink)) => {
+                sink.stop().await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id)),
+        }
     }
 
     async fn get_source_rx(
         &self,
         source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        Ok(self
-            .sources
-            .get(source_id)
-            .ok_or(HaliaError::NotFound)?
-            .mb_tx
-            .subscribe())
+        match self.sources.get(source_id) {
+            Some(source) => Ok(source.mb_tx.subscribe()),
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
     }
 
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        Ok(self
-            .sinks
-            .get(sink_id)
-            .ok_or(HaliaError::NotFound)?
-            .mb_tx
-            .clone())
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }
