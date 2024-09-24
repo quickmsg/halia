@@ -87,7 +87,8 @@ pub struct Summary {
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    pub device_type: Option<DeviceType>,
+    #[serde(rename = "type")]
+    pub typ: Option<DeviceType>,
     pub on: Option<bool>,
     pub err: Option<bool>,
 }

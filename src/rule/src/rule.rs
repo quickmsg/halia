@@ -27,41 +27,32 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub async fn new(rule_id: String, conf: RuleConf) -> HaliaResult<Self> {
+    pub async fn db_new(id: &String, conf: &RuleConf) -> HaliaResult<()> {
         for node in conf.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(
-                        &rule_id,
-                        &source_node.device_id,
-                        &source_node.source_id,
-                    )
-                    .await?;
+                    storage::rule_ref::insert(id, &source_node.device_id, &source_node.source_id)
+                        .await?;
                 }
                 NodeType::AppSource => {
                     let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(
-                        &rule_id,
-                        &source_node.app_id,
-                        &source_node.source_id,
-                    )
-                    .await?;
+                    storage::rule_ref::insert(&id, &source_node.app_id, &source_node.source_id)
+                        .await?;
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(&rule_id, &sink_node.device_id, &sink_node.sink_id)
+                    storage::rule_ref::insert(&id, &sink_node.device_id, &sink_node.sink_id)
                         .await?;
                 }
                 NodeType::AppSink => {
                     let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(&rule_id, &sink_node.app_id, &sink_node.sink_id)
-                        .await?;
+                    storage::rule_ref::insert(&id, &sink_node.app_id, &sink_node.sink_id).await?;
                 }
                 NodeType::Databoard => {
                     let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
                     storage::rule_ref::insert(
-                        &rule_id,
+                        &id,
                         &databoard_node.databoard_id,
                         &databoard_node.data_id,
                     )
@@ -71,13 +62,22 @@ impl Rule {
             }
         }
 
+        Ok(())
+    }
+
+    pub async fn new(id: String, conf: &RuleConf) -> HaliaResult<Self> {
         let (stop_signal_tx, _) = broadcast::channel(1);
         let mut rule = Self {
-            id: rule_id.clone(),
+            id: id,
             stop_signal_tx: stop_signal_tx.clone(),
             logger: None,
         };
+        rule.start(conf).await?;
 
+        Ok(rule)
+    }
+
+    async fn start(&mut self, conf: &RuleConf) -> HaliaResult<()> {
         let (incoming_edges, outgoing_edges) = conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
@@ -98,7 +98,6 @@ impl Rule {
         let mut device_sink_active_ref_nodes = vec![];
         let mut app_sink_active_ref_nodes = vec![];
         let mut databoard_active_ref_nodes = vec![];
-
         for source_id in source_ids {
             let node = node_map.get(&source_id).unwrap();
             match node.node_type {
@@ -149,10 +148,10 @@ impl Rule {
         }
 
         if let Some(e) = error {
-            rule_ref::deactive(&rule_id).await?;
+            rule_ref::deactive(&self.id).await?;
             return Err(e.into());
         } else {
-            rule_ref::active(&rule_id).await?;
+            rule_ref::active(&self.id).await?;
         }
 
         let threed_ids = get_3d_ids(
@@ -207,7 +206,8 @@ impl Rule {
                             receivers.insert(id, rxs);
                             let window_conf: WindowConf =
                                 serde_json::from_value(node.conf.clone())?;
-                            window::run(window_conf, rx, tx, stop_signal_tx.subscribe()).unwrap();
+                            window::run(window_conf, rx, tx, self.stop_signal_tx.subscribe())
+                                .unwrap();
                         }
                         NodeType::Filter => {
                             let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
@@ -287,13 +287,14 @@ impl Rule {
                         NodeType::Log => {
                             ids.push(id);
                             let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match &rule.logger {
+                            let tx = match &self.logger {
                                 Some(logger) => logger.get_mb_tx(),
                                 None => {
                                     let logger =
-                                        Logger::new(&rule_id, stop_signal_tx.subscribe()).await?;
+                                        Logger::new(&self.id, self.stop_signal_tx.subscribe())
+                                            .await?;
                                     let tx = logger.get_mb_tx();
-                                    rule.logger = Some(logger);
+                                    self.logger = Some(logger);
                                     tx
                                 }
                             };
@@ -326,7 +327,7 @@ impl Rule {
                         functions,
                         mpsc_tx,
                         broadcast_tx,
-                        stop_signal_tx.subscribe(),
+                        self.stop_signal_tx.subscribe(),
                     );
                 }
             }
@@ -334,13 +335,13 @@ impl Rule {
 
         match error {
             Some(error) => {
-                rule_ref::deactive(&rule_id).await?;
+                rule_ref::deactive(&self.id).await?;
                 return Err(error);
             }
             None => {}
         }
 
-        Ok(rule)
+        Ok(())
     }
 
     pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {

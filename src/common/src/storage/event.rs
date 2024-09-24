@@ -42,28 +42,28 @@ pub async fn insert(
 ) -> Result<()> {
     let resource_name = match resource_type {
         ResourceType::Device => {
-            let name: String = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?1")
+            let name: String = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?")
                 .bind(resource_id)
                 .fetch_one(POOL.get().unwrap())
                 .await?;
             name
         }
         ResourceType::App => {
-            let name: String = sqlx::query_scalar("SELECT name FROM apps WHERE id = ?1")
+            let name: String = sqlx::query_scalar("SELECT name FROM apps WHERE id = ?")
                 .bind(resource_id)
                 .fetch_one(POOL.get().unwrap())
                 .await?;
             name
         }
         ResourceType::Databoard => {
-            let name: String = sqlx::query_scalar("SELECT name FROM databoards WHERE id = ?1")
+            let name: String = sqlx::query_scalar("SELECT name FROM databoards WHERE id = ?")
                 .bind(resource_id)
                 .fetch_one(POOL.get().unwrap())
                 .await?;
             name
         }
         ResourceType::Rule => {
-            let name: String = sqlx::query_scalar("SELECT name FROM rules WHERE id = ?1")
+            let name: String = sqlx::query_scalar("SELECT name FROM rules WHERE id = ?")
                 .bind(resource_id)
                 .fetch_one(POOL.get().unwrap())
                 .await?;
@@ -76,7 +76,7 @@ pub async fn insert(
     let info = info.map(|info| info.into_bytes());
     let ts = chrono::Utc::now().timestamp();
     sqlx::query(
-                "INSERT INTO events (resource_type, resource_name, typ, info, ts) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO events (resource_type, resource_name, typ, info, ts) VALUES (?, ?, ?, ?, ?)",
             )
             .bind(resource_type)
             .bind(resource_name)

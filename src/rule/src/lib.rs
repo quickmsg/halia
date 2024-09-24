@@ -69,6 +69,7 @@ pub async fn load_from_storage() -> HaliaResult<()> {
 
 pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
     let id = common::get_id();
+    Rule::db_new(&id, &req.ext).await?;
     storage::rule::insert(&id, req).await?;
     add_rule_count();
     Ok(())
@@ -127,7 +128,7 @@ pub async fn start(id: String) -> HaliaResult<()> {
     let db_conf = storage::rule::read_conf(&id).await?;
     let conf: RuleConf = serde_json::from_slice(&db_conf)?;
 
-    let rule = Rule::new(id.clone(), conf).await?;
+    let rule = Rule::new(id.clone(), &conf).await?;
     GLOBAL_RULE_MANAGER.insert(id.clone(), rule);
     storage::rule::update_status(&id, true).await?;
     Ok(())

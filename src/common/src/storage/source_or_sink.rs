@@ -211,7 +211,7 @@ pub async fn count_by_parent_id(parent_id: &String, typ: Type) -> Result<usize> 
 }
 
 pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
-    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM sources_or_sinks WHERE id = ?1")
+    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM sources_or_sinks WHERE id = ?")
         .bind(id)
         .fetch_one(POOL.get().unwrap())
         .await?;

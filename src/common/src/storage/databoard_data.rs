@@ -99,7 +99,7 @@ pub async fn delete_one(databoard_data_id: &String) -> Result<()> {
 }
 
 pub(crate) async fn delete_many(databoard_id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM databoard_datas WHERE parent_id = ?1")
+    sqlx::query("DELETE FROM databoard_datas WHERE parent_id = ?")
         .bind(databoard_id)
         .execute(POOL.get().unwrap())
         .await?;
