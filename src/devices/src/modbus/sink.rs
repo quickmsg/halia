@@ -31,6 +31,10 @@ pub struct Sink {
 }
 
 impl Sink {
+    pub fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
+        Ok(())
+    }
+
     pub fn new(
         conf: SinkConf,
         write_tx: mpsc::Sender<WritePointEvent>,
@@ -56,11 +60,7 @@ impl Sink {
         }
     }
 
-    pub fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
-        Ok(())
-    }
-
-    pub async fn update(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
+    pub async fn update(&mut self, old_conf: SinkConf, new_conf: SinkConf) {
         let (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer) = self.stop().await;
         let join_handle = Self::event_loop(
             stop_signal_rx,

@@ -102,10 +102,15 @@ pub fn new(device_id: String, device_conf: DeviceConf) -> Box<dyn Device> {
     Box::new(device)
 }
 
-pub fn validate_source_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+pub fn validate_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: SourceConf = serde_json::from_value(conf.clone())?;
+    Source::validate_conf(&conf)?;
     Ok(())
 }
-pub fn validate_sink_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+
+pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: SinkConf = serde_json::from_value(conf.clone())?;
+    Sink::validate_conf(&conf)?;
     Ok(())
 }
 
