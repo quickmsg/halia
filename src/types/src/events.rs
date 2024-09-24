@@ -89,9 +89,10 @@ pub struct SearchEventsResp {
 
 #[derive(Serialize)]
 pub struct SearchEventsItemResp {
-    pub id: String,
     pub name: String,
-    pub event_type: EventType,
+    pub resource_type: ResourceType,
+    #[serde(rename = "type")]
+    pub typ: EventType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub info: Option<String>,
 }

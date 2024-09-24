@@ -5,7 +5,7 @@ use std::sync::{
 
 use common::{
     error::{HaliaError, HaliaResult},
-    storage::{self, rule_ref},
+    storage,
 };
 use dashmap::DashMap;
 use databoard_struct::Databoard;
@@ -233,7 +233,7 @@ pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
 }
 
 pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = rule_ref::count_cnt_by_parent_id(&databoard_id).await?;
+    let rule_ref_cnt = storage::rule_ref::count_cnt_by_parent_id(&databoard_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
@@ -316,15 +316,9 @@ pub async fn update_data(
     databoard_data_id: String,
     req: CreateUpdateDataReq,
 ) -> HaliaResult<()> {
-    // match databoards
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|databoard| databoard.id == databoard_id)
-    // {
-    //     Some(databoard) => databoard.update_data(databoard_data_id, req).await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
+    if let Some(databoard) = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id) {
+        // databoard.update_data(&databoard_data_id, req).await?;
+    }
 
     storage::databoard_data::update(&databoard_data_id, req).await?;
 

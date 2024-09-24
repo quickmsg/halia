@@ -45,17 +45,9 @@ impl Data {
         Ok(data)
     }
 
-    fn validate_conf(_conf: &DataConf) -> HaliaResult<()> {
+    pub fn validate_conf(_conf: &DataConf) -> HaliaResult<()> {
         Ok(())
     }
-
-    // pub fn check_duplicate(&self, req: &CreateUpdateDataReq) -> HaliaResult<()> {
-    //     if self.base_conf.name == req.base.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
-
-    //     Ok(())
-    // }
 
     async fn event_loop(
         &mut self,

@@ -7,40 +7,17 @@ use types::databoard::{DataConf, DataboardConf, SearchDatasRuntimeResp};
 use crate::data::Data;
 
 pub struct Databoard {
-    conf: DataboardConf,
+    _conf: DataboardConf,
     datas: DashMap<String, Data>,
 }
 
 impl Databoard {
     pub fn new(conf: DataboardConf) -> Self {
         Self {
-            conf,
+            _conf: conf,
             datas: DashMap::new(),
         }
     }
-
-    // pub fn check_duplicate(&self, base_conf: &BaseConf) -> HaliaResult<()> {
-    //     if self.base_conf.name == base_conf.name {
-    //         return Err(HaliaError::NameExists);
-    //     }
-
-    //     Ok(())
-    // }
-
-    // pub fn search(&self) -> SearchDataboardsItemResp {
-    //     SearchDataboardsItemResp {
-    //         id: self.id.clone(),
-    //         conf: CreateUpdateDataboardReq {
-    //             base: self.base_conf.clone(),
-    //             ext: self.ext_conf.clone(),
-    //         },
-    //     }
-    // }
-
-    // pub fn update(&mut self, base_conf: BaseConf) -> HaliaResult<()> {
-    //     self.base_conf = base_conf;
-    //     Ok(())
-    // }
 
     pub async fn stop(&mut self) {
         for mut data in self.datas.iter_mut() {
@@ -62,36 +39,6 @@ impl Databoard {
         }
     }
 
-    // pub async fn search_datas(
-    //     &self,
-    //     pagination: Pagination,
-    //     query: QueryParams,
-    // ) -> SearchDatasResp {
-    //     let mut total = 0;
-    //     let mut datas = vec![];
-    //     for (index, data) in self.datas.iter().rev().enumerate() {
-    //         let data = data.search().await;
-    //         if let Some(name) = &query.name {
-    //             if !data.conf.base.name.contains(name) {
-    //                 continue;
-    //             }
-    //         }
-
-    //         if pagination.check(total) {
-    //             unsafe {
-    //                 datas.push(SearchDatasItemResp {
-    //                     info: data,
-    //                     rule_ref: self.data_ref_infos.get_unchecked(index).1.get_rule_ref(),
-    //                 });
-    //             }
-    //         }
-
-    //         total += 1;
-    //     }
-
-    //     SearchDatasResp { total, data: datas }
-    // }
-
     pub async fn read_data_runtime(&self, data_id: &String) -> HaliaResult<SearchDatasRuntimeResp> {
         Ok(self
             .datas
@@ -107,17 +54,13 @@ impl Databoard {
         old_conf: DataConf,
         new_conf: DataConf,
     ) -> HaliaResult<()> {
-        // for data in self.datas.iter() {
-        //     if data.id != data_id {
-        //         data.check_duplicate(&req)?;
-        //     }
-        // }
-        Ok(self
-            .datas
-            .get_mut(&data_id)
-            .ok_or(HaliaError::NotFound(data_id))?
-            .update(old_conf, new_conf)
-            .await)
+        match self.datas.get_mut(&data_id) {
+            Some(mut data) => {
+                data.update(old_conf, new_conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(data_id)),
+        }
     }
 
     pub async fn delete_data(&self, data_id: &String) -> HaliaResult<()> {
@@ -132,11 +75,9 @@ impl Databoard {
     }
 
     pub async fn get_data_tx(&self, data_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        Ok(self
-            .datas
-            .get(data_id)
-            .ok_or(HaliaError::NotFound(data_id.to_owned()))?
-            .mb_tx
-            .clone())
+        match self.datas.get(data_id) {
+            Some(data) => Ok(data.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(data_id.to_string())),
+        }
     }
 }

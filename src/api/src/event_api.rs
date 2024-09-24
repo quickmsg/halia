@@ -4,7 +4,7 @@ use types::{
     Pagination,
 };
 
-use crate::AppSuccess;
+use crate::{AppResult, AppSuccess};
 
 pub fn routes() -> Router {
     Router::new().route("/", get(search_events))
@@ -13,7 +13,7 @@ pub fn routes() -> Router {
 async fn search_events(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppSuccess<SearchEventsResp> {
-    // AppSuccess::data(events::search_events(&state.pool, query_params, pagination).await)
-    todo!()
+) -> AppResult<AppSuccess<SearchEventsResp>> {
+    let data = events::search_events(query_params, pagination).await?;
+    Ok(AppSuccess::data(data))
 }
