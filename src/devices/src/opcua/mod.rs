@@ -1,10 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use common::{
-    error::{HaliaError, HaliaResult},
-    ref_info::RefInfo,
-};
+use common::error::{HaliaError, HaliaResult};
+use dashmap::DashMap;
 use message::MessageBatch;
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
@@ -42,15 +40,12 @@ struct Opcua {
     stop_signal_tx: Option<mpsc::Sender<()>>,
     opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
 
-    sources: Vec<Source>,
-    source_ref_infos: Vec<(String, RefInfo)>,
-    sinks: Vec<Sink>,
-    sink_ref_infos: Vec<(String, RefInfo)>,
+    sources: DashMap<String, Source>,
+    sinks: DashMap<String, Sink>,
 }
 
 pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
-    Opcua::validate_conf(&ext_conf)?;
 
     Ok(Box::new(Opcua {
         id: id,
@@ -60,15 +55,20 @@ pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Dev
         err: None,
         opcua_client: Arc::new(RwLock::new(None)),
         stop_signal_tx: None,
-        sources: vec![],
-        source_ref_infos: vec![],
-        sinks: vec![],
-        sink_ref_infos: vec![],
+        sources: DashMap::new(),
+        sinks: DashMap::new(),
     }))
 }
 
+pub fn validate_source_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+    Ok(())
+}
+pub fn validate_sink_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+    Ok(())
+}
+
 impl Opcua {
-    fn validate_conf(_conf: &OpcuaConf) -> HaliaResult<()> {
+    pub fn validate_conf(_conf: &OpcuaConf) -> HaliaResult<()> {
         Ok(())
     }
 
@@ -304,44 +304,23 @@ impl Device for Opcua {
         &self,
         source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        // self.sources
-        //     .get(source_id)
-        //     .ok_or(HaliaError::NotFound)?
-        //     .mb_tx
-        //     .as_ref()
-        //     .subscribe()
-        // match self
-        //     .sources
-        //     .iter_mut()
-        //     .find(|source| source.id == *source_id)
-        // {
-        //     Some(source) => Ok(source.mb_tx.as_ref().unwrap().subscribe()),
-        //     None => unreachable!(),
-        // }
-        todo!()
-    }
-
-    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.iter().find(|sink| sink.id == *sink_id) {
-            Some(sink) => Ok(sink.mb_tx.as_ref().unwrap().clone()),
-            None => unreachable!(),
+        match self.sources.get(source_id) {
+            Some(source) => Ok(source.mb_tx.subscribe()),
+            None => Err(HaliaError::NotFound(source_id.to_string())),
         }
     }
 
-    // async fn start(&mut self) -> HaliaResult<()> {
-    //     check_and_set_on_true!(self);
-    //     add_device_on_count();
-
-    //     let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-    //     self.stop_signal_tx = Some(stop_signal_tx);
-
-    //     // self.event_loop(stop_signal_rx).await;
-    //     Ok(())
-    // }
+    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_string())),
+        }
+    }
 
     async fn stop(&mut self) -> HaliaResult<()> {
         todo!()
     }
+
     async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()> {
         todo!()
     }

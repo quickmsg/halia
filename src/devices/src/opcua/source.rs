@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
-use common::error::{HaliaError, HaliaResult};
+use common::error::HaliaResult;
 use message::{Message, MessageBatch, MessageValue};
 use opcua::{
     client::{DataChangeCallback, MonitoredItem, Session},
@@ -19,17 +19,13 @@ use tokio::{
 use tracing::debug;
 use types::{
     devices::opcua::{GroupConf, SourceConf, VariableConf},
-    BaseConf, CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp,
+    BaseConf,
 };
 
 pub struct Source {
-    pub id: String,
+    conf: SourceConf,
 
-    pub base_conf: BaseConf,
-    pub ext_conf: SourceConf,
-
-    on: bool,
-    stop_signal_tx: Option<mpsc::Sender<()>>,
+    stop_signal_tx: mpsc::Sender<()>,
 
     // variables: Option<Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>>,
     group: Option<Group>,
@@ -43,27 +39,31 @@ pub struct Source {
     >,
     err: Option<String>,
 
-    pub mb_tx: Option<broadcast::Sender<MessageBatch>>,
+    pub mb_tx: broadcast::Sender<MessageBatch>,
 }
 
 impl Source {
-    pub fn new(source_id: String, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<Self> {
-        Self::validate_conf(&ext_conf)?;
-
+    pub async fn new(conf: SourceConf, opcua_client: Arc<Session>) -> HaliaResult<Self> {
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        let (mb_tx, _) = broadcast::channel(16);
+        match conf.typ {
+            types::devices::opcua::SourceType::Group => {
+                Self::start_group(stop_signal_rx, &conf, opcua_client, mb_tx.clone()).await;
+            }
+            types::devices::opcua::SourceType::Subscription => todo!(),
+            types::devices::opcua::SourceType::MonitoredItem => todo!(),
+        }
         Ok(Self {
-            id: source_id,
-            base_conf,
-            ext_conf,
-            on: false,
-            stop_signal_tx: None,
+            conf,
+            stop_signal_tx,
             group: None,
-            mb_tx: None,
+            mb_tx,
             join_handle: None,
             err: None,
         })
     }
 
-    fn validate_conf(ext_conf: &SourceConf) -> Result<()> {
+    pub fn validate_conf(ext_conf: &SourceConf) -> Result<()> {
         match ext_conf.typ {
             types::devices::opcua::SourceType::Group => match &ext_conf.group {
                 Some(_group) => Ok(()),
@@ -85,38 +85,25 @@ impl Source {
         }
     }
 
-    pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SourceConf) -> HaliaResult<()> {
-        if self.base_conf.name == base_conf.name {
-            return Err(HaliaError::NameExists);
-        }
-
-        Ok(())
-    }
-
-    pub async fn start(&mut self, opcua_client: Arc<Session>) {
-        self.on = true;
-
-        let (mb_tx, _) = broadcast::channel(16);
-
-        match &self.ext_conf.typ {
-            types::devices::opcua::SourceType::Group => {
-                self.start_group(opcua_client, mb_tx.clone()).await
-            }
-            types::devices::opcua::SourceType::Subscription => {
-                self.start_subscription(opcua_client, mb_tx.clone()).await
-            }
-            types::devices::opcua::SourceType::MonitoredItem => self.start_monitored_item().await,
-        }
-
-        self.mb_tx = Some(mb_tx);
-    }
+    // pub async fn start(&mut self, opcua_client: Arc<Session>) {
+    //     match &self.ext_conf.typ {
+    //         types::devices::opcua::SourceType::Group => {
+    //             self.start_group(opcua_client, mb_tx.clone()).await
+    //         }
+    //         types::devices::opcua::SourceType::Subscription => {
+    //             self.start_subscription(opcua_client, mb_tx.clone()).await
+    //         }
+    //         types::devices::opcua::SourceType::MonitoredItem => self.start_monitored_item().await,
+    //     }
+    // }
 
     async fn start_group(
-        &mut self,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        conf: &SourceConf,
         opcua_client: Arc<Session>,
         mb_tx: broadcast::Sender<MessageBatch>,
-    ) {
-        let group_conf = self.ext_conf.group.as_ref().unwrap();
+    ) -> JoinHandle<()> {
+        let group_conf = conf.group.as_ref().unwrap();
         let interval = group_conf.interval;
         let mut need_read_variable_names = vec![];
         let mut need_read_variable_ids = vec![];
@@ -135,10 +122,7 @@ impl Source {
 
         let max_age = group_conf.max_age as f64;
 
-        let (stop_signal_tx, mut stop_signal_rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(stop_signal_tx);
-
-        let handle = tokio::spawn(async move {
+        let join_handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
 
             loop {
@@ -152,14 +136,16 @@ impl Source {
                 }
             }
         });
+
+        join_handle
     }
 
     async fn start_subscription(
-        &mut self,
+        conf: &SourceConf,
         opcua_client: Arc<Session>,
         mb_tx: broadcast::Sender<MessageBatch>,
     ) {
-        let subscription_conf = self.ext_conf.subscription.as_ref().unwrap();
+        let subscription_conf = conf.subscription.as_ref().unwrap();
         let opcua_subscription_id = opcua_client
             .create_subscription(
                 Duration::from_secs(subscription_conf.publishing_interval),
@@ -218,16 +204,7 @@ impl Source {
         // self.stop_signal_tx = None;
     }
 
-    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SourceConf) -> HaliaResult<()> {
-        Self::validate_conf(&ext_conf)?;
-
-        self.base_conf = base_conf;
-
-        if self.ext_conf == ext_conf {
-            return Ok(());
-        }
-        self.ext_conf = ext_conf;
-
+    pub async fn update(&mut self, old_conf: SourceConf, new_conf: SourceConf) -> HaliaResult<()> {
         // if self.stop_signal_tx.is_some() && restart {
         //     self.stop_signal_tx
         //         .as_ref()

@@ -39,15 +39,8 @@ impl Sink {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
-        let mut sink = Self {
-            stop_signal_tx,
-            join_handle: None,
-            mb_tx,
-        };
-
         let message_retainer = sink_message_retain::new(&conf.message_retain);
-
-        sink.event_loop(
+        let join_handle = Self::event_loop(
             stop_signal_rx,
             mb_rx,
             write_tx,
@@ -56,16 +49,20 @@ impl Sink {
             message_retainer,
         );
 
-        sink
+        Self {
+            stop_signal_tx,
+            join_handle: Some(join_handle),
+            mb_tx,
+        }
     }
 
     pub fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
         Ok(())
     }
 
-    pub async fn update(&mut self, old_conf: SinkConf, new_conf: SinkConf) {
+    pub async fn update(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
         let (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer) = self.stop().await;
-        self.event_loop(
+        let join_handle = Self::event_loop(
             stop_signal_rx,
             mb_rx,
             write_tx,
@@ -73,17 +70,23 @@ impl Sink {
             device_err_rx,
             message_retainer,
         );
+        self.join_handle = Some(join_handle);
     }
 
     fn event_loop(
-        &mut self,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
         write_tx: mpsc::Sender<WritePointEvent>,
         conf: SinkConf,
         mut device_err_rx: broadcast::Receiver<bool>,
         mut message_retainer: Box<dyn SinkMessageRetain>,
-    ) {
+    ) -> JoinHandle<(
+        mpsc::Receiver<()>,
+        mpsc::Receiver<MessageBatch>,
+        mpsc::Sender<WritePointEvent>,
+        broadcast::Receiver<bool>,
+        Box<dyn SinkMessageRetain>,
+    )> {
         let join_handle = tokio::spawn(async move {
             let mut device_err = false;
             loop {
@@ -121,7 +124,7 @@ impl Sink {
                 }
             }
         });
-        self.join_handle = Some(join_handle);
+        join_handle
     }
 
     pub async fn stop(

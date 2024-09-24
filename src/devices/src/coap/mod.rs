@@ -62,6 +62,13 @@ pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Dev
     }))
 }
 
+pub fn validate_source_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+    Ok(())
+}
+pub fn validate_sink_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+    Ok(())
+}
+
 impl Coap {
     fn validate_conf(_conf: &CoapConf) -> HaliaResult<()> {
         Ok(())

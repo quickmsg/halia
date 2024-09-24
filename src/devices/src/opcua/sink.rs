@@ -6,7 +6,7 @@ use types::{CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp};
 pub struct Sink {
     pub id: String,
     conf: CreateUpdateSourceOrSinkReq,
-    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
+    pub mb_tx: mpsc::Sender<MessageBatch>,
 }
 
 impl Sink {

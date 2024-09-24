@@ -338,6 +338,14 @@ pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) 
         return Err(HaliaError::NameExists);
     }
 
+    let typ = storage::device::read_type(&device_id).await?;
+    let typ: DeviceType = typ.try_into()?;
+    match typ {
+        DeviceType::Modbus => modbus::validate_source_conf(&req.ext)?,
+        DeviceType::Opcua => opcua::validate_source_conf(&req.ext)?,
+        DeviceType::Coap => coap::validate_source_conf(&req.ext)?,
+    }
+
     let source_id = common::get_id();
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let conf = req.ext.clone();
@@ -472,6 +480,14 @@ pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) ->
     .await?
     {
         return Err(HaliaError::NameExists);
+    }
+
+    let typ = storage::device::read_type(&device_id).await?;
+    let typ: DeviceType = typ.try_into()?;
+    match typ {
+        DeviceType::Modbus => modbus::validate_sink_conf(&req.ext)?,
+        DeviceType::Opcua => opcua::validate_sink_conf(&req.ext)?,
+        DeviceType::Coap => coap::validate_sink_conf(&req.ext)?,
     }
 
     let sink_id = common::get_id();

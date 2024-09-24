@@ -102,6 +102,13 @@ pub fn new(device_id: String, device_conf: DeviceConf) -> Box<dyn Device> {
     Box::new(device)
 }
 
+pub fn validate_source_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+    Ok(())
+}
+pub fn validate_sink_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+    Ok(())
+}
+
 impl Modbus {
     fn event_loop(
         &mut self,

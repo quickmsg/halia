@@ -270,6 +270,15 @@ pub async fn read_name(id: &String) -> Result<String> {
     Ok(name)
 }
 
+pub async fn read_type(id: &String) -> Result<i32> {
+    let typ: i32 = sqlx::query_scalar("SELECT typ FROM devices WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(typ)
+}
+
 pub async fn count_all() -> Result<usize> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
         .fetch_one(POOL.get().unwrap())
