@@ -55,6 +55,13 @@ impl Databoard {
         Ok(())
     }
 
+    pub async fn get_data_value(&self, data_id: &String) -> HaliaResult<serde_json::Value> {
+        match self.datas.get(data_id) {
+            Some(data) => Ok(data.value.read().await.clone()),
+            None => Err(HaliaError::NotFound(data_id.to_string())),
+        }
+    }
+
     // pub async fn search_datas(
     //     &self,
     //     pagination: Pagination,
@@ -113,20 +120,18 @@ impl Databoard {
             .await)
     }
 
-    pub async fn delete_data(&mut self, data_id: String) -> HaliaResult<()> {
-        self.datas
-            .get_mut(&data_id)
-            .ok_or(HaliaError::NotFound(data_id.clone()))?
-            .stop()
-            .await;
-        self.datas.remove(&data_id);
-        Ok(())
+    pub async fn delete_data(&self, data_id: &String) -> HaliaResult<()> {
+        match self.datas.get_mut(data_id) {
+            Some(mut data) => {
+                data.stop().await;
+                self.datas.remove(data_id);
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(data_id.to_string())),
+        }
     }
 
-    pub async fn get_data_tx(
-        &mut self,
-        data_id: &String,
-    ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    pub async fn get_data_tx(&self, data_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
         Ok(self
             .datas
             .get(data_id)

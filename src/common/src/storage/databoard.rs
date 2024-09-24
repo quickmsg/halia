@@ -145,6 +145,15 @@ pub async fn read_one(id: &String) -> Result<Databoard> {
     Ok(databoard)
 }
 
+pub async fn read_name(id: &String) -> Result<String> {
+    let name: String = sqlx::query_scalar("SELECT name FROM databoards WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(name)
+}
+
 pub async fn read_many_on() -> Result<Vec<Databoard>> {
     let databoards = sqlx::query_as::<_, Databoard>("SELECT * FROM databoards WHERE status = 1")
         .fetch_all(POOL.get().unwrap())

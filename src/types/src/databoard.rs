@@ -32,6 +32,7 @@ pub struct SearchDataboardsResp {
 #[derive(Serialize)]
 pub struct SearchDataboardsItemResp {
     pub id: String,
+    pub on: bool,
     pub conf: CreateUpdateDataboardReq,
 }
 
@@ -44,6 +45,11 @@ pub struct CreateUpdateDataReq {
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct DataConf {
     pub field: String,
+}
+
+#[derive(Deserialize)]
+pub struct QueryDatasParams {
+    pub name: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -63,7 +69,7 @@ pub struct SearchDatasItemResp {
 pub struct SearchDatasInfoResp {
     pub id: String,
     pub conf: CreateUpdateDataReq,
-    pub value: serde_json::Value,
+    pub value: Option<serde_json::Value>,
     pub ts: u64,
 }
 

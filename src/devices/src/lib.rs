@@ -1,9 +1,6 @@
-use std::{
-    fmt::format,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        LazyLock,
-    },
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    LazyLock,
 };
 
 use async_trait::async_trait;

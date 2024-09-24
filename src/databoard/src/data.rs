@@ -21,7 +21,7 @@ pub struct Data {
 
     stop_signal_tx: mpsc::Sender<()>,
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
-    value: Arc<RwLock<serde_json::Value>>,
+    pub value: Arc<RwLock<serde_json::Value>>,
     ts: Arc<AtomicU64>,
     pub mb_tx: mpsc::Sender<MessageBatch>,
 }

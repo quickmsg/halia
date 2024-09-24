@@ -13,11 +13,11 @@ use message::MessageBatch;
 use tokio::sync::mpsc;
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, DataboardConf, QueryParams,
-        QueryRuleInfo, SearchDataboardsItemResp, SearchDataboardsResp, SearchDatasResp,
-        SearchRuleInfo, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, DataboardConf, QueryDatasParams,
+        QueryParams, QueryRuleInfo, SearchDataboardsItemResp, SearchDataboardsResp,
+        SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp, SearchRuleInfo, Summary,
     },
-    BaseConf, Pagination,
+    BaseConf, Pagination, RuleRef,
 };
 
 pub mod data;
@@ -86,7 +86,38 @@ pub async fn load_from_storage() -> HaliaResult<()> {
 }
 
 pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
-    todo!()
+    let db_databoard = storage::databoard::read_one(&query.databoard_id).await?;
+    let db_databoard_data = storage::databoard_data::read_one(&query.data_id).await?;
+
+    Ok(SearchRuleInfo {
+        databoard: SearchDataboardsItemResp {
+            id: db_databoard.id,
+            on: db_databoard.status == 1,
+            conf: CreateUpdateDataboardReq {
+                base: BaseConf {
+                    name: db_databoard.name,
+                    desc: db_databoard
+                        .des
+                        .map(|des| unsafe { String::from_utf8_unchecked(des) }),
+                },
+                ext: serde_json::from_slice(&db_databoard.conf)?,
+            },
+        },
+        data: SearchDatasInfoResp {
+            id: db_databoard_data.id,
+            conf: CreateUpdateDataReq {
+                base: BaseConf {
+                    name: db_databoard_data.name,
+                    desc: db_databoard_data
+                        .des
+                        .map(|des| unsafe { String::from_utf8_unchecked(des) }),
+                },
+                ext: serde_json::from_slice(&db_databoard_data.conf)?,
+            },
+            value: None,
+            ts: 0,
+        },
+    })
     // match databoards
     //     .read()
     //     .await
@@ -122,6 +153,7 @@ pub async fn search_databoards(
     for db_databoard in db_databoards {
         resp_databoards.push(SearchDataboardsItemResp {
             id: db_databoard.id,
+            on: db_databoard.status == 1,
             conf: CreateUpdateDataboardReq {
                 base: BaseConf {
                     name: db_databoard.name,
@@ -178,8 +210,26 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn stop_databoard() {
-    todo!()
+pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
+    if !GLOBAL_DATABOARD_MANAGER.contains_key(&databoard_id) {
+        return Ok(());
+    }
+
+    let active_rule_ref_cnt =
+        storage::rule_ref::count_active_cnt_by_parent_id(&databoard_id).await?;
+    if active_rule_ref_cnt > 0 {
+        return Err(HaliaError::StopActiveRefing);
+    }
+
+    match GLOBAL_DATABOARD_MANAGER.remove(&databoard_id) {
+        Some((_, mut databoard)) => {
+            databoard.stop().await;
+            sub_databoard_on_count();
+            storage::databoard::update_status(&databoard_id, false).await?;
+            Ok(())
+        }
+        None => Err(HaliaError::NotFound(databoard_id)),
+    }
 }
 
 pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
@@ -217,18 +267,48 @@ pub async fn create_data(databoard_id: String, req: CreateUpdateDataReq) -> Hali
 pub async fn search_datas(
     databoard_id: String,
     pagination: Pagination,
-    query: QueryParams,
+    query: QueryDatasParams,
 ) -> HaliaResult<SearchDatasResp> {
-    // match databoards
-    //     .read()
-    //     .await
-    //     .iter()
-    //     .find(|databoard| databoard.id == databoard_id)
-    // {
-    //     Some(device) => Ok(device.search_datas(pagination, query).await),
-    //     None => Err(HaliaError::NotFound),
-    // }
-    todo!()
+    let (count, db_datas) =
+        storage::databoard_data::search(&databoard_id, pagination, query).await?;
+
+    let mut datas = Vec::with_capacity(db_datas.len());
+
+    let databoard = GLOBAL_DATABOARD_MANAGER.get(&databoard_id);
+
+    for db_data in db_datas {
+        let value = match &databoard {
+            Some(databoard) => databoard.get_data_value(&db_data.id).await.ok(),
+            None => None,
+        };
+        let rule_ref = RuleRef {
+            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(&db_data.id).await?,
+            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(&db_data.id)
+                .await?,
+        };
+        datas.push(SearchDatasItemResp {
+            info: SearchDatasInfoResp {
+                id: db_data.id,
+                conf: CreateUpdateDataReq {
+                    base: BaseConf {
+                        name: db_data.name,
+                        desc: db_data
+                            .des
+                            .map(|des| unsafe { String::from_utf8_unchecked(des) }),
+                    },
+                    ext: serde_json::from_slice(&db_data.conf)?,
+                },
+                value,
+                ts: db_data.ts as u64,
+            },
+            rule_ref,
+        });
+    }
+
+    Ok(SearchDatasResp {
+        total: count,
+        data: datas,
+    })
 }
 
 pub async fn update_data(
@@ -252,15 +332,14 @@ pub async fn update_data(
 }
 
 pub async fn delete_data(databoard_id: String, databoard_data_id: String) -> HaliaResult<()> {
-    // match databoards
-    //     .write()
-    //     .await
-    //     .iter_mut()
-    //     .find(|databoard| databoard.id == databoard_id)
-    // {
-    //     Some(databoard) => databoard.delete_data(databoard_data_id).await?,
-    //     None => return Err(HaliaError::NotFound),
-    // }
+    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(&databoard_data_id).await?;
+    if rule_ref_cnt > 0 {
+        return Err(HaliaError::DeleteRefing);
+    }
+
+    if let Some(databoard) = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id) {
+        databoard.delete_data(&databoard_data_id).await?;
+    }
 
     storage::databoard_data::delete_one(&databoard_data_id).await?;
 
@@ -271,9 +350,11 @@ pub async fn get_data_tx(
     databoard_id: &String,
     databoard_data_id: &String,
 ) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    GLOBAL_DATABOARD_MANAGER
-        .get_mut(databoard_id)
-        .ok_or(HaliaError::NotFound(databoard_id.to_owned()))?
-        .get_data_tx(databoard_data_id)
-        .await
+    match GLOBAL_DATABOARD_MANAGER.get(databoard_id) {
+        Some(databoard) => databoard.get_data_tx(databoard_data_id).await,
+        None => {
+            let name = storage::databoard::read_name(databoard_id).await?;
+            Err(HaliaError::Stopped(format!("看板：{}", name)))
+        }
+    }
 }

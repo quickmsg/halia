@@ -5,8 +5,8 @@ use axum::{
 };
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, QueryParams, QueryRuleInfo,
-        SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, QueryDatasParams, QueryParams,
+        QueryRuleInfo, SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
     },
     Pagination,
 };
@@ -20,6 +20,8 @@ pub fn routes() -> Router {
         .route("/", post(create_databoard))
         .route("/", get(search_databoards))
         .route("/:databoard_id", put(update_databoard))
+        .route("/:databoard_id/start", put(start_databoard))
+        .route("/:databoard_id/stop", put(stop_databoard))
         .route("/:databoard_id", routing::delete(delete_databoard))
         .nest(
             "/:databoard_id/data",
@@ -63,6 +65,16 @@ async fn update_databoard(
     Ok(AppSuccess::empty())
 }
 
+async fn start_databoard(Path(databoard_id): Path<String>) -> AppResult<AppSuccess<()>> {
+    databoard::start_databoard(databoard_id).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn stop_databoard(Path(databoard_id): Path<String>) -> AppResult<AppSuccess<()>> {
+    databoard::stop_databoard(databoard_id).await?;
+    Ok(AppSuccess::empty())
+}
+
 async fn delete_databoard(Path(databoard_id): Path<String>) -> AppResult<AppSuccess<()>> {
     databoard::delete_databoard(databoard_id).await?;
     Ok(AppSuccess::empty())
@@ -79,9 +91,9 @@ async fn create_data(
 async fn search_datas(
     Path(databoard_id): Path<String>,
     Query(pagination): Query<Pagination>,
-    Query(query): Query<QueryParams>,
+    Query(query_params): Query<QueryDatasParams>,
 ) -> AppResult<AppSuccess<SearchDatasResp>> {
-    let data = databoard::search_datas(databoard_id, pagination, query).await?;
+    let data = databoard::search_datas(databoard_id, pagination, query_params).await?;
     Ok(AppSuccess::data(data))
 }
 

@@ -1,6 +1,9 @@
 use anyhow::Result;
 use sqlx::FromRow;
-use types::{databoard::CreateUpdateDataReq, Pagination};
+use types::{
+    databoard::{CreateUpdateDataReq, QueryDatasParams},
+    Pagination,
+};
 
 use super::POOL;
 
@@ -23,7 +26,7 @@ CREATE TABLE IF NOT EXISTS databoard_datas (
     name VARCHAR(255) NOT NULL,
     des BLOB,
     conf BLOB NOT NULL,
-    ts BIGINT UNSIGNED NOT NULL                -- 时间戳字段使用 BIGINT 来确保兼容性
+    ts BIGINT UNSIGNED NOT NULL
 );
 "#,
     )
@@ -53,18 +56,51 @@ pub async fn insert(
     Ok(())
 }
 
-pub async fn query(databoard_id: &String, pagination: Pagination) -> Result<Vec<DataboardData>> {
+pub async fn search(
+    databoard_id: &String,
+    pagination: Pagination,
+    query_params: QueryDatasParams,
+) -> Result<(usize, Vec<DataboardData>)> {
     let (limit, offset) = pagination.to_sql();
-    let databoard_datas = sqlx::query_as::<_, DataboardData>(
-        "SELECT * FROM databoard_datas WHERE parent_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-    )
-    .bind(databoard_id)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(POOL.get().unwrap())
-    .await?;
+    let (count, databoard_datas) = match query_params.name {
+        Some(name) => {
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM databoard_datas WHERE parent_id = ? AND name LIKE ?",
+            )
+            .bind(databoard_id)
+            .bind(format!("%{}%", name))
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
-    Ok(databoard_datas)
+            let databoard_datas = sqlx::query_as::<_, DataboardData>(
+                "SELECT * FROM databoard_datas WHERE parent_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(databoard_id)
+            .bind(format!("%{}%", name))
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+            (count, databoard_datas)
+        }
+        None => {
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM databoard_datas WHERE parent_id = ?")
+                    .bind(databoard_id)
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
+            let databoard_datas = sqlx::query_as::<_, DataboardData>(
+                "SELECT * FROM databoard_datas WHERE parent_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(databoard_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+            (count, databoard_datas)
+        }
+    };
+    Ok((count as usize, databoard_datas))
 }
 
 pub async fn read_all_by_parent_id(databoard_id: &String) -> Result<Vec<DataboardData>> {
@@ -75,6 +111,16 @@ pub async fn read_all_by_parent_id(databoard_id: &String) -> Result<Vec<Databoar
             .await?;
 
     Ok(databoard_datas)
+}
+
+pub async fn read_one(databoard_data_id: &String) -> Result<DataboardData> {
+    let databoard_data =
+        sqlx::query_as::<_, DataboardData>("SELECT * FROM databoard_datas WHERE id = ?")
+            .bind(databoard_data_id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+    Ok(databoard_data)
 }
 
 pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {

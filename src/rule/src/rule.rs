@@ -307,6 +307,10 @@ impl Rule {
                     }
                 }
 
+                if let Some(err) = error {
+                    return Err(err);
+                }
+
                 if ids.len() > 0 {
                     let source_ids = incoming_edges.get(&ids[0]).unwrap();
                     let source_id = source_ids[0];
