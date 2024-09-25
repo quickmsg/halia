@@ -76,7 +76,7 @@ pub(crate) fn sub_device_running_count() {
 pub trait Device: Send + Sync {
     async fn read_running_info(&self) -> SearchDevicesItemRunningInfo;
     async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()>;
-    async fn stop(&mut self) -> HaliaResult<()>;
+    async fn stop(&mut self);
 
     async fn create_source(
         &mut self,
@@ -313,11 +313,10 @@ pub async fn stop_device(device_id: String) -> HaliaResult<()> {
     }
 
     storage::device::update_status(&device_id, false).await?;
-    GLOBAL_DEVICE_MANAGER
-        .get_mut(&device_id)
-        .unwrap()
-        .stop()
-        .await?;
+    match GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+        Some(mut device) => device.stop().await,
+        None => {}
+    }
 
     GLOBAL_DEVICE_MANAGER.remove(&device_id);
     sub_device_on_count();

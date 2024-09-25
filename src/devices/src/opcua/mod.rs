@@ -153,7 +153,7 @@ impl Opcua {
     //     });
     // }
 
-    async fn stop(&mut self) -> HaliaResult<()> {
+    async fn stop(&mut self) {
         // for group in self.groups.write().await.iter_mut() {
         //     group.stop().await?;
         // }
@@ -174,8 +174,6 @@ impl Opcua {
                 debug!("err code is :{}", e);
             }
         }
-
-        Ok(())
     }
 }
 
@@ -317,7 +315,7 @@ impl Device for Opcua {
         }
     }
 
-    async fn stop(&mut self) -> HaliaResult<()> {
+    async fn stop(&mut self) {
         todo!()
     }
 

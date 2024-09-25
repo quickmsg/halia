@@ -383,7 +383,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn stop(&mut self) -> HaliaResult<()> {
+    async fn stop(&mut self) {
         for mut source in self.sources.iter_mut() {
             source.stop().await;
         }
@@ -393,8 +393,6 @@ impl Device for Modbus {
         }
 
         self.stop_signal_tx.send(()).await.unwrap();
-
-        Ok(())
     }
 
     async fn create_source(
@@ -421,19 +419,18 @@ impl Device for Modbus {
     ) -> HaliaResult<()> {
         let old_conf: SourceConf = serde_json::from_value(old_conf)?;
         let new_conf: SourceConf = serde_json::from_value(new_conf)?;
-        self.sources
-            .get_mut(source_id)
-            .ok_or(HaliaError::NotFound(source_id.to_owned()))?
-            .update(old_conf, new_conf)
-            .await;
-
-        Ok(())
+        match self.sources.get_mut(source_id) {
+            Some(mut source) => {
+                source.update(old_conf, new_conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
     }
 
     async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()> {
-        match self.err.read().await.as_ref() {
-            Some(err) => return Err(HaliaError::Common(err.to_string())),
-            None => {}
+        if let Some(err) = self.err.read().await.as_ref() {
+            return Err(HaliaError::Common(err.to_string()));
         }
 
         match self.sources.get(&source_id) {
@@ -460,19 +457,18 @@ impl Device for Modbus {
     }
 
     async fn delete_source(&mut self, source_id: &String) -> HaliaResult<()> {
-        self.sources
-            .get_mut(source_id)
-            .ok_or(HaliaError::NotFound(source_id.to_owned()))?
-            .stop()
-            .await;
-        self.sources.remove(source_id);
-        Ok(())
+        match self.sources.remove(source_id) {
+            Some((_, mut source)) => {
+                source.stop().await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
         let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
-
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
@@ -485,43 +481,39 @@ impl Device for Modbus {
     ) -> HaliaResult<()> {
         let old_conf: SinkConf = serde_json::from_value(old_conf)?;
         let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-        self.sinks
-            .get_mut(sink_id)
-            .ok_or(HaliaError::NotFound(sink_id.to_owned()))?
-            .update(old_conf, new_conf)
-            .await;
-
-        Ok(())
+        match self.sinks.get_mut(sink_id) {
+            Some(mut sink) => {
+                sink.update(old_conf, new_conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()> {
-        self.sinks
-            .get_mut(sink_id)
-            .ok_or(HaliaError::NotFound(sink_id.to_owned()))?
-            .stop()
-            .await;
-        self.sinks.remove(sink_id);
-        Ok(())
+        match self.sinks.remove(sink_id) {
+            Some((_, mut sink)) => {
+                sink.stop().await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 
     async fn get_source_rx(
         &self,
         source_id: &String,
     ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        Ok(self
-            .sources
-            .get(source_id)
-            .ok_or(HaliaError::NotFound(source_id.to_owned()))?
-            .mb_tx
-            .subscribe())
+        match self.sources.get(source_id) {
+            Some(source) => Ok(source.mb_tx.subscribe()),
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
     }
 
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        Ok(self
-            .sinks
-            .get(sink_id)
-            .ok_or(HaliaError::NotFound(sink_id.to_owned()))?
-            .mb_tx
-            .clone())
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
-use common::error::{HaliaError, HaliaResult};
+use common::error::HaliaResult;
 use message::MessageBatch;
 use protocol::coap::{
     client::UdpCoAPClient,
@@ -12,22 +11,20 @@ use tokio::{
     sync::{mpsc, Mutex},
     task::JoinHandle,
 };
-use types::{devices::coap::SinkConf, BaseConf, SearchSourcesOrSinksInfoResp};
+use types::{devices::coap::SinkConf, SearchSourcesOrSinksInfoResp};
 
 use super::{transform_options, TokenManager};
 
 pub struct Sink {
-    base_conf: BaseConf,
-    ext_conf: SinkConf,
-
-    stop_signal_tx: Option<mpsc::Sender<()>>,
-    pub mb_tx: Option<mpsc::Sender<MessageBatch>>,
+    stop_signal_tx: mpsc::Sender<()>,
+    pub mb_tx: mpsc::Sender<MessageBatch>,
 
     join_handle: Option<
         JoinHandle<(
             Arc<UdpCoAPClient>,
             mpsc::Receiver<MessageBatch>,
             mpsc::Receiver<()>,
+            SinkConf,
         )>,
     >,
 
@@ -35,32 +32,25 @@ pub struct Sink {
 }
 
 impl Sink {
-    pub fn new(
-        base_conf: BaseConf,
-        ext_conf: SinkConf,
+    pub async fn new(
+        coap_client: Arc<UdpCoAPClient>,
+        conf: SinkConf,
         token_manager: Arc<Mutex<TokenManager>>,
-    ) -> HaliaResult<Self> {
-        Self::validate_conf(&ext_conf)?;
+    ) -> Self {
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        let (mb_tx, mb_rx) = mpsc::channel(16);
 
-        Ok(Self {
-            base_conf,
-            ext_conf,
-            stop_signal_tx: None,
-            mb_tx: None,
-            join_handle: None,
+        let join_handle = Self::event_loop(coap_client, conf, stop_signal_rx, mb_rx).await;
+
+        Self {
+            stop_signal_tx,
+            mb_tx,
+            join_handle: Some(join_handle),
             token_manager,
-        })
-    }
-
-    fn validate_conf(_ext_conf: &SinkConf) -> HaliaResult<()> {
-        Ok(())
-    }
-
-    pub fn check_duplicate(&self, base_conf: &BaseConf, _ext_conf: &SinkConf) -> HaliaResult<()> {
-        if self.base_conf.name == base_conf.name {
-            return Err(HaliaError::NameExists);
         }
+    }
 
+    pub fn validate_conf(_ext_conf: &SinkConf) -> HaliaResult<()> {
         Ok(())
     }
 
@@ -73,87 +63,52 @@ impl Sink {
         // }
     }
 
-    pub async fn update(&mut self, base_conf: BaseConf, ext_conf: SinkConf) -> HaliaResult<()> {
-        Self::validate_conf(&ext_conf)?;
-
-        let mut restart = false;
-        if self.ext_conf != ext_conf {
-            restart = true;
-        }
-        self.base_conf = base_conf;
-        self.ext_conf = ext_conf;
-
-        if restart {
-            self.stop_signal_tx
-                .as_ref()
-                .unwrap()
-                .send(())
-                .await
-                .unwrap();
-
-            let (coap_client, mb_rx, stop_signal_rx) =
-                self.join_handle.take().unwrap().await.unwrap();
-            _ = self.event_loop(stop_signal_rx, mb_rx, coap_client).await;
-        }
-
-        Ok(())
+    pub async fn update_conf(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
+        let (coap_client, mb_rx, stop_signal_rx, _) = self.stop().await;
+        let join_handle = Self::event_loop(coap_client, new_conf, stop_signal_rx, mb_rx).await;
+        self.join_handle = Some(join_handle);
     }
 
-    pub async fn start(&mut self, client: Arc<UdpCoAPClient>) -> HaliaResult<()> {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(stop_signal_tx);
-
-        let (mb_tx, mb_rx) = mpsc::channel(16);
-        self.mb_tx = Some(mb_tx);
-
-        _ = self.event_loop(stop_signal_rx, mb_rx, client).await;
-
-        Ok(())
-    }
-
-    pub async fn restart(&mut self) -> HaliaResult<()> {
-        self.stop_signal_tx
-            .as_ref()
-            .unwrap()
-            .send(())
-            .await
-            .unwrap();
-
-        let (coap_client, mb_rx, stop_signal_rx) = self.join_handle.take().unwrap().await.unwrap();
-        _ = self.event_loop(stop_signal_rx, mb_rx, coap_client).await;
-
-        Ok(())
+    pub async fn update_coap_client(&mut self, coap_client: Arc<UdpCoAPClient>) {
+        let (_, mb_rx, stop_signal_rx, conf) = self.stop().await;
+        let join_handle = Self::event_loop(coap_client, conf, stop_signal_rx, mb_rx).await;
+        self.join_handle = Some(join_handle);
     }
 
     async fn event_loop(
-        &mut self,
+        coap_client: Arc<UdpCoAPClient>,
+        conf: SinkConf,
         mut stop_signal_rx: mpsc::Receiver<()>,
-        mut publish_rx: mpsc::Receiver<MessageBatch>,
-        client: Arc<UdpCoAPClient>,
-    ) -> Result<()> {
-        let method = match &self.ext_conf.method {
+        mut mb_rx: mpsc::Receiver<MessageBatch>,
+    ) -> JoinHandle<(
+        Arc<UdpCoAPClient>,
+        mpsc::Receiver<MessageBatch>,
+        mpsc::Receiver<()>,
+        SinkConf,
+    )> {
+        let method = match &conf.method {
             types::devices::coap::SinkMethod::Post => Method::Post,
             types::devices::coap::SinkMethod::Put => Method::Put,
             types::devices::coap::SinkMethod::Delete => Method::Delete,
         };
 
         // 在check conf中进行options校验
-        let options = transform_options(&self.ext_conf.options).unwrap();
-        let request = RequestBuilder::new(&self.ext_conf.path, method)
+        let options = transform_options(&conf.options).unwrap();
+        let request = RequestBuilder::new(&conf.path, method)
             .options(options)
             // .domain(coap_conf.domain.clone())
             .build();
 
-        let join_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (client, publish_rx, stop_signal_rx)
+                        return (coap_client, mb_rx, stop_signal_rx, conf)
                     }
 
-                    mb = publish_rx.recv() => {
+                    mb = mb_rx.recv() => {
                         if let Some(_mb) = mb {
-                            match client.send(request.clone()).await {
+                            match coap_client.send(request.clone()).await {
                                 Ok(_) => {}
                                 Err(_) => {}
                             }
@@ -161,18 +116,18 @@ impl Sink {
                     }
                 }
             }
-        });
-        self.join_handle = Some(join_handle);
-        Ok(())
+        })
     }
 
-    pub async fn stop(&mut self) {
-        self.stop_signal_tx
-            .as_ref()
-            .unwrap()
-            .send(())
-            .await
-            .unwrap();
-        self.stop_signal_tx = None;
+    pub async fn stop(
+        &mut self,
+    ) -> (
+        Arc<UdpCoAPClient>,
+        mpsc::Receiver<MessageBatch>,
+        mpsc::Receiver<()>,
+        SinkConf,
+    ) {
+        self.stop_signal_tx.send(()).await.unwrap();
+        self.join_handle.take().unwrap().await.unwrap()
     }
 }
