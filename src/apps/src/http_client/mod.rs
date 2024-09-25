@@ -8,7 +8,7 @@ use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
 use types::apps::{
-    http_client::{HttpClientConf, SourceConf},
+    http_client::{HttpClientConf, SinkConf, SourceConf},
     AppConf,
 };
 
@@ -18,32 +18,27 @@ mod sink;
 mod source;
 
 pub struct HttpClient {
-    pub id: String,
-
+    id: String,
     conf: Arc<HttpClientConf>,
-
-    // err: Option<String>,
+    err: Option<String>,
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
 }
 
 pub fn new(app_id: String, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
     let ext_conf: HttpClientConf = serde_json::from_value(app_conf.ext)?;
-    HttpClient::validate_conf(&ext_conf)?;
 
     Ok(Box::new(HttpClient {
         id: app_id,
         conf: Arc::new(ext_conf),
-        // err: None,
+        err: None,
         sources: DashMap::new(),
         sinks: DashMap::new(),
     }))
 }
 
-impl HttpClient {
-    fn validate_conf(_conf: &HttpClientConf) -> HaliaResult<()> {
-        Ok(())
-    }
+pub fn validate_conf(_conf: &HttpClientConf) -> HaliaResult<()> {
+    Ok(())
 }
 
 #[async_trait]
@@ -55,8 +50,6 @@ impl App for HttpClient {
     ) -> HaliaResult<()> {
         let old_conf: HttpClientConf = serde_json::from_value(old_conf)?;
         let new_conf: HttpClientConf = serde_json::from_value(new_conf)?;
-
-        HttpClient::validate_conf(&new_conf)?;
 
         if old_conf == new_conf {
             return Ok(());
@@ -75,15 +68,13 @@ impl App for HttpClient {
         Ok(())
     }
 
-    async fn stop(&mut self) -> HaliaResult<()> {
+    async fn stop(&mut self) {
         for mut source in self.sources.iter_mut() {
             source.stop().await;
         }
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
-
-        Ok(())
     }
 
     async fn create_source(
@@ -92,19 +83,8 @@ impl App for HttpClient {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
-
-        // for source in self.sources.iter() {
-        //     source.check_duplicate(&req.base, &ext_conf)?;
-        // }
-
-        // let mut source = Source::new(source_id, req.base, ext_conf)?;
-        // if self.on {
-        //     source.start(self.ext_conf.clone()).await;
-        // }
-
-        // self.sources.push(source);
-        // self.source_ref_infos.push((source_id, RefInfo::new()));
-
+        let source = Source::new(self.conf.clone(), conf).await;
+        self.sources.insert(source_id, source);
         Ok(())
     }
 
@@ -114,50 +94,31 @@ impl App for HttpClient {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        // let ext_conf: SourceConf = serde_json::from_value(req.ext)?;
-
-        // for source in self.sources.iter() {
-        //     if source.id != source_id {
-        //         source.check_duplicate(&req.base, &ext_conf)?;
-        //     }
-        // }
-
-        // match self
-        //     .sources
-        //     .iter_mut()
-        //     .find(|source| source.id == source_id)
-        // {
-        //     Some(source) => source.update_conf(req.base, ext_conf).await,
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
+        match self.sources.get_mut(&source_id) {
+            Some(mut source) => {
+                let old_conf: SourceConf = serde_json::from_value(old_conf)?;
+                let new_conf: SourceConf = serde_json::from_value(new_conf)?;
+                source.update_conf(old_conf, new_conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(source_id)),
+        }
     }
 
     async fn delete_source(&mut self, source_id: String) -> HaliaResult<()> {
-        match self.sources.get_mut(&source_id) {
-            Some(mut source) => source.stop().await,
-            None => return Err(HaliaError::NotFound(source_id)),
+        match self.sources.remove(&source_id) {
+            Some((_, mut source)) => {
+                source.stop().await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(source_id)),
         }
-
-        self.sources.remove(&source_id);
-
-        Ok(())
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
-        // let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
-        // for sink in self.sinks.iter() {
-        //     sink.check_duplicate(&req.base, &ext_conf)?;
-        // }
-
-        // let mut sink = Sink::new(sink_id, req.base, ext_conf)?;
-        // if self.on {
-        //     sink.start(self.ext_conf.clone()).await;
-        // }
-
-        // self.sinks.push(sink);
-        // self.sink_ref_infos.push((sink_id, RefInfo::new()));
-
+        let conf: SinkConf = serde_json::from_value(conf)?;
+        let sink = Sink::new(self.conf.clone(), conf);
+        self.sinks.insert(sink_id, sink);
         Ok(())
     }
 
@@ -167,29 +128,25 @@ impl App for HttpClient {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        // let ext_conf: SinkConf = serde_json::from_value(req.ext)?;
-        // for sink in self.sinks.iter() {
-        //     if sink.id != sink_id {
-        //         sink.check_duplicate(&req.base, &ext_conf)?;
-        //     }
-        // }
-
-        // match self.sinks.iter_mut().find(|sink| sink.id == sink_id) {
-        //     Some(sink) => sink.update_conf(req.base, ext_conf).await,
-        //     None => Err(HaliaError::NotFound),
-        // }
-        todo!()
+        match self.sinks.get_mut(&sink_id) {
+            Some(mut sink) => {
+                let old_conf: SinkConf = serde_json::from_value(old_conf)?;
+                let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+                sink.update_conf(old_conf, new_conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id)),
+        }
     }
 
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
-        match self.sinks.get_mut(&sink_id) {
-            Some(mut sink) => sink.stop().await,
-            None => return Err(HaliaError::NotFound(sink_id)),
+        match self.sinks.remove(&sink_id) {
+            Some((_, mut sink)) => {
+                sink.stop().await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id)),
         }
-
-        self.sinks.remove(&sink_id);
-
-        Ok(())
     }
 
     async fn get_source_rx(

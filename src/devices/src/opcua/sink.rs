@@ -1,31 +1,24 @@
+use std::sync::Arc;
+
 use common::error::HaliaResult;
 use message::MessageBatch;
+use opcua::client::Session;
 use tokio::sync::mpsc;
-use types::{CreateUpdateSourceOrSinkReq, SearchSourcesOrSinksInfoResp};
+use types::{apps::http_client::SinkConf, CreateUpdateSourceOrSinkReq};
 
 pub struct Sink {
-    pub id: String,
     conf: CreateUpdateSourceOrSinkReq,
     pub mb_tx: mpsc::Sender<MessageBatch>,
 }
 
 impl Sink {
-    pub async fn new(sink_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<Self> {
+    pub async fn new(opcua_client: Arc<Session>, conf: SinkConf) -> HaliaResult<Self> {
         todo!()
     }
 
-    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        SearchSourcesOrSinksInfoResp {
-            id: self.id.clone(),
-            conf: self.conf.clone(),
-        }
-    }
-
-    pub async fn update(
-        &mut self,
-        device_id: &String,
-        req: CreateUpdateSourceOrSinkReq,
-    ) -> HaliaResult<()> {
+    pub async fn update_conf(&mut self, old_conf: SinkConf, new_conf: SinkConf) {
         todo!()
     }
+
+    pub async fn stop(&mut self) {}
 }

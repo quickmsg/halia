@@ -84,7 +84,7 @@ pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     Ok(())
 }
 
-pub async fn read_device(id: &String) -> Result<Device> {
+pub async fn read_one(id: &String) -> Result<Device> {
     let device = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE id = ?")
         .bind(id)
         .fetch_one(POOL.get().unwrap())
@@ -102,7 +102,7 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
     Ok(conf)
 }
 
-pub async fn search_devices(
+pub async fn search(
     pagination: Pagination,
     query_params: QueryParams,
 ) -> Result<(usize, Vec<Device>)> {
@@ -491,6 +491,16 @@ pub async fn count_all() -> Result<usize> {
 pub async fn update_status(id: &String, status: bool) -> Result<()> {
     sqlx::query("UPDATE devices SET status = ? WHERE id = ?")
         .bind(status as i32)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
+
+    Ok(())
+}
+
+pub async fn update_err(id: &String, err: bool) -> Result<()> {
+    sqlx::query("UPDATE devices SET err = ? WHERE id = ?")
+        .bind(err as i32)
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;

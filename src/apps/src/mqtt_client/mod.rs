@@ -17,7 +17,9 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{error, warn};
-use types::apps::mqtt_client::{MqttClientConf, MqttClientV311Conf, Qos, SinkConf, SourceConf};
+use types::apps::mqtt_client::{
+    MqttClientConf, MqttClientV311Conf, MqttClientV50Conf, Qos, SinkConf, SourceConf,
+};
 
 use crate::App;
 
@@ -229,55 +231,55 @@ impl MqttClient {
         }
     }
 
-    // async fn start_v50(
-    //     &mut self,
-    //     sources: Arc<DashMap<String, Source>>,
-    //     mut stop_signal_rx: mpsc::Receiver<()>,
-    //     app_err_tx: broadcast::Sender<bool>,
-    // ) {
-    //     let conf = self.conf.v50.as_ref().unwrap();
-    //     let mut mqtt_options = v5::MqttOptions::new(&conf.client_id, &conf.host, conf.port);
-    //     mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
+    async fn start_v50(
+        conf: MqttClientV50Conf,
+        sources: Arc<DashMap<String, Source>>,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+        app_err_tx: broadcast::Sender<bool>,
+        device_err: Arc<RwLock<Option<String>>>,
+    ) {
+        let mut mqtt_options = v5::MqttOptions::new(&conf.client_id, &conf.host, conf.port);
+        mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
 
-    //     if let Some(auth) = &conf.auth {
-    //         mqtt_options.set_credentials(&auth.username, &auth.password);
-    //     }
+        if let Some(auth) = &conf.auth {
+            mqtt_options.set_credentials(&auth.username, &auth.password);
+        }
 
-    //     if let Some(cert_info) = &conf.cert_info {
-    //         let transport = Transport::Tls(TlsConfiguration::Simple {
-    //             ca: cert_info.ca_cert.clone().into_bytes(),
-    //             alpn: None,
-    //             client_auth: Some((
-    //                 cert_info.client_cert.clone().into_bytes(),
-    //                 cert_info.client_key.clone().into_bytes(),
-    //             )),
-    //         });
-    //         mqtt_options.set_transport(transport);
-    //     }
+        if let Some(cert_info) = &conf.cert_info {
+            let transport = Transport::Tls(TlsConfiguration::Simple {
+                ca: cert_info.ca_cert.clone().into_bytes(),
+                alpn: None,
+                client_auth: Some((
+                    cert_info.client_cert.clone().into_bytes(),
+                    cert_info.client_key.clone().into_bytes(),
+                )),
+            });
+            mqtt_options.set_transport(transport);
+        }
 
-    //     let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
-    //     let sources = self.sources.clone();
+        let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
 
-    //     let arc_client = Arc::new(client);
-    //     self.halia_mqtt_client = HaliaMqttClient::V50(arc_client);
+        let arc_client = Arc::new(client);
 
-    //     // let (tx, mut rx) = mpsc::channel(1);
-    //     // self.stop_signal_tx = Some(tx);
+        // let (tx, mut rx) = mpsc::channel(1);
+        // self.stop_signal_tx = Some(tx);
 
-    //     tokio::spawn(async move {
-    //         loop {
-    //             select! {
-    //                 _ = stop_signal_rx.recv() => {
-    //                     return
-    //                 }
+        let join_handle = tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
 
-    //                 event = event_loop.poll() => {
-    //                     Self::handle_v50_event(event, &sources).await;
-    //                 }
-    //             }
-    //         }
-    //     });
-    // }
+                    event = event_loop.poll() => {
+                        Self::handle_v50_event(event, &sources).await;
+                    }
+                }
+            }
+        });
+
+        // (HaliaMqttClient::V50(arc_client), None)
+    }
 
     async fn handle_v50_event(
         event: Result<v5::Event, rumqttc::v5::ConnectionError>,
@@ -420,7 +422,7 @@ impl App for MqttClient {
         Ok(())
     }
 
-    async fn stop(&mut self) -> HaliaResult<()> {
+    async fn stop(&mut self) {
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
@@ -435,8 +437,6 @@ impl App for MqttClient {
             }
         }
         self.stop_signal_tx.send(()).await.unwrap();
-
-        Ok(())
     }
 
     async fn create_source(

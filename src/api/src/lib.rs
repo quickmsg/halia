@@ -1,6 +1,5 @@
-use std::{result, sync::Arc};
+use std::result;
 
-use apps::App;
 use axum::{
     http::StatusCode,
     middleware,
@@ -9,10 +8,6 @@ use axum::{
     Json, Router,
 };
 use common::{error::HaliaError, sys::get_machine_info};
-use dashmap::DashMap;
-use databoard::databoard_struct::Databoard;
-use devices::Device;
-use rule::rule::Rule;
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tower_http::{

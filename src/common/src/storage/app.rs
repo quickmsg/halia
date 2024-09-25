@@ -484,6 +484,16 @@ pub async fn update_status(id: &String, status: bool) -> Result<()> {
     Ok(())
 }
 
+pub async fn update_err(id: &String, err: bool) -> Result<()> {
+    sqlx::query("UPDATE apps SET err = ? WHERE id = ?")
+        .bind(err as i32)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
+
+    Ok(())
+}
+
 pub async fn update(id: String, req: CreateUpdateAppReq) -> Result<()> {
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let desc = req.conf.base.desc.map(|desc| desc.into_bytes());

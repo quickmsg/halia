@@ -10,127 +10,73 @@ use tokio::{
     time,
 };
 use tracing::{trace, warn};
-use types::{
-    apps::http_client::{HttpClientConf, SourceConf},
-    BaseConf, SearchSourcesOrSinksInfoResp,
-};
+use types::apps::http_client::{HttpClientConf, SourceConf};
 
 pub struct Source {
-    ext_conf: Arc<SourceConf>,
-
+    stop_signal_tx: mpsc::Sender<()>,
+    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<HttpClientConf>, SourceConf, Client)>>,
     pub mb_tx: broadcast::Sender<MessageBatch>,
-
-    stop_signal_tx: Option<mpsc::Sender<()>>,
-    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<HttpClientConf>, Client)>>,
 }
 
 impl Source {
-    pub fn new(ext_conf: SourceConf) -> HaliaResult<Self> {
-        Self::validate_conf(&ext_conf)?;
-        Ok(Self {
-            ext_conf: Arc::new(ext_conf),
-            stop_signal_tx: None,
-            join_handle: None,
-            mb_tx: todo!(),
-        })
+    pub async fn new(http_client_conf: Arc<HttpClientConf>, conf: SourceConf) -> Self {
+        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        let (mb_tx, _) = broadcast::channel(16);
+        let http_client = Client::new();
+        let join_handle =
+            Self::event_loop(http_client_conf, conf, stop_signal_rx, http_client).await;
+        Self {
+            stop_signal_tx,
+            join_handle: Some(join_handle),
+            mb_tx,
+        }
     }
 
-    fn validate_conf(_conf: &SourceConf) -> HaliaResult<()> {
+    pub fn validate_conf(_conf: &SourceConf) -> HaliaResult<()> {
         Ok(())
     }
 
-    pub fn check_duplicate(&self, base_conf: &BaseConf, ext_conf: &SourceConf) -> HaliaResult<()> {
-        // if self.base_conf.name == base_conf.name {
-        //     return Err(HaliaError::NameExists);
-        // }
-
-        // if self.ext_conf.path == ext_conf.path
-        //     && self.ext_conf.query_params == ext_conf.query_params
-        // {
-        //     return Err(HaliaError::AddressExists);
-        // }
-
-        Ok(())
-    }
-
-    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        todo!()
-    }
-
-    pub async fn update_conf(
-        &mut self,
-        base_conf: BaseConf,
-        ext_conf: SourceConf,
-    ) -> HaliaResult<()> {
-        Self::validate_conf(&ext_conf)?;
-
-        if *self.ext_conf == ext_conf {
-            return Ok(());
-        }
-        self.ext_conf = Arc::new(ext_conf);
-
-        match &self.stop_signal_tx {
-            Some(stop_signal_tx) => {
-                _ = stop_signal_tx.send(()).await;
-                let (stop_signal_rx, http_client_conf, client) =
-                    self.join_handle.take().unwrap().await.unwrap();
-                self.event_loop(http_client_conf, stop_signal_rx, client)
-                    .await;
-                Ok(())
-            }
-            None => Ok(()),
-        }
+    pub async fn update_conf(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
+        let (stop_signal_rx, http_client_conf, _, client) = self.stop().await;
+        let join_handle =
+            Self::event_loop(http_client_conf, new_conf, stop_signal_rx, client).await;
+        self.join_handle = Some(join_handle);
     }
 
     pub async fn update_http_client(&mut self, http_client_conf: Arc<HttpClientConf>) {
-        self.stop().await;
-        let (stop_signal_rx, _, client) = self.join_handle.take().unwrap().await.unwrap();
-        self.event_loop(http_client_conf, stop_signal_rx, client)
-            .await;
-    }
-
-    pub async fn start(&mut self, http_client_conf: Arc<HttpClientConf>) {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-        self.stop_signal_tx = Some(stop_signal_tx);
-
-        let (mb_tx, _) = broadcast::channel(16);
-        self.mb_tx = mb_tx;
-
-        self.event_loop(http_client_conf, stop_signal_rx, reqwest::Client::new())
-            .await;
+        let (stop_signal_rx, _, conf, client) = self.stop().await;
+        let join_hdnale = Self::event_loop(http_client_conf, conf, stop_signal_rx, client).await;
+        self.join_handle = Some(join_hdnale);
     }
 
     async fn event_loop(
-        &mut self,
         http_client_conf: Arc<HttpClientConf>,
+        conf: SourceConf,
         mut stop_signal_rx: mpsc::Receiver<()>,
         client: Client,
-    ) {
-        let interval = self.ext_conf.interval;
-        let ext_conf = self.ext_conf.clone();
-
-        let join_handle = tokio::spawn(async move {
+    ) -> JoinHandle<(mpsc::Receiver<()>, Arc<HttpClientConf>, SourceConf, Client)> {
+        let interval = conf.interval;
+        tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
 
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return(stop_signal_rx, http_client_conf, client);
+                        return(stop_signal_rx, http_client_conf, conf, client);
                     }
 
                     _ = interval.tick() => {
-                        Self::send_request(&client, &http_client_conf, &ext_conf).await;
+                        Self::send_request(&client, &http_client_conf, &conf).await;
                     }
                 }
             }
-        });
-        self.join_handle = Some(join_handle);
+        })
     }
 
     async fn send_request(
         client: &Client,
         http_client_conf: &Arc<HttpClientConf>,
-        ext_conf: &Arc<SourceConf>,
+        ext_conf: &SourceConf,
     ) {
         let mut builder = client.get(format!("{}{}", &http_client_conf.host, ext_conf.path));
         if let Some(basic_auth) = &ext_conf.basic_auth {
@@ -152,12 +98,8 @@ impl Source {
         }
     }
 
-    pub async fn stop(&mut self) {
-        self.stop_signal_tx
-            .as_ref()
-            .unwrap()
-            .send(())
-            .await
-            .unwrap();
+    pub async fn stop(&mut self) -> (mpsc::Receiver<()>, Arc<HttpClientConf>, SourceConf, Client) {
+        self.stop_signal_tx.send(()).await.unwrap();
+        self.join_handle.take().unwrap().await.unwrap()
     }
 }

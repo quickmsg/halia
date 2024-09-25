@@ -134,7 +134,7 @@ pub fn get_summary() -> Summary {
 }
 
 pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
-    let db_device = storage::device::read_device(&query.device_id).await?;
+    let db_device = storage::device::read_one(&query.device_id).await?;
 
     let device_resp = transer_db_device_to_resp(db_device).await?;
     match (query.source_id, query.sink_id) {
@@ -202,8 +202,7 @@ pub async fn search_devices(
     pagination: Pagination,
     query_params: QueryParams,
 ) -> HaliaResult<SearchDevicesResp> {
-    // TODO 查询异常设备
-    let (count, db_devices) = storage::device::search_devices(pagination, query_params).await?;
+    let (count, db_devices) = storage::device::search(pagination, query_params).await?;
     let mut resp_devices = vec![];
     for db_device in db_devices {
         resp_devices.push(transer_db_device_to_resp(db_device).await?);
@@ -248,7 +247,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     )
     .await?;
 
-    let db_device = storage::device::read_device(&device_id).await?;
+    let db_device = storage::device::read_one(&device_id).await?;
     let typ = DeviceType::try_from(db_device.typ)?;
 
     let device_conf: DeviceConf = DeviceConf {

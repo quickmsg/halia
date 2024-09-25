@@ -33,7 +33,7 @@ impl Logger {
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(rule_id.to_string())?;
+            .open(format!("logs/{}", rule_id.to_string()))?;
         tokio::spawn(async move {
             loop {
                 select! {

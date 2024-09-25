@@ -127,6 +127,7 @@ impl Modbus {
         let sources = self.sources.clone();
         let rtt = self.rtt.clone();
         let join_handle = tokio::spawn(async move {
+            let task_err: Option<io::Error> = None;
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
@@ -189,11 +190,22 @@ impl Modbus {
                             warn!("create event failed: {}", e);
                         };
 
-                        if err.read().await.is_none() {
-                            sub_device_running_count();
+                        match &task_err {
+                            Some(task_err) => {
+                                if task_err.to_string() != e.to_string() {
+                                    *err.write().await = Some(e.to_string());
+                                }
+                            }
+                            None => {
+                                sub_device_running_count();
+                                if let Err(storage_err) =
+                                    storage::device::update_err(&device_id, true).await
+                                {
+                                    warn!("update device err failed: {}", storage_err);
+                                }
+                            }
                         }
 
-                        *err.write().await = Some(e.to_string());
                         let sleep = time::sleep(Duration::from_secs(modbus_conf.reconnect));
                         tokio::pin!(sleep);
                         select! {

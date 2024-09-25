@@ -73,7 +73,7 @@ pub trait App: Send + Sync {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()>;
-    async fn stop(&mut self) -> HaliaResult<()>;
+    async fn stop(&mut self);
 
     async fn create_source(
         &mut self,
@@ -285,7 +285,7 @@ pub async fn stop_app(app_id: String) -> HaliaResult<()> {
         return Err(HaliaError::StopActiveRefing);
     }
 
-    GLOBAL_APP_MANAGER.get_mut(&app_id).unwrap().stop().await?;
+    GLOBAL_APP_MANAGER.get_mut(&app_id).unwrap().stop().await;
     GLOBAL_APP_MANAGER.remove(&app_id);
     storage::app::update_status(&app_id, false).await?;
     sub_app_on_count();

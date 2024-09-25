@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
-use common::error::HaliaResult;
 use message::{Message, MessageBatch, MessageValue};
 use opcua::{
     client::{DataChangeCallback, MonitoredItem, Session},
@@ -17,14 +16,9 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::{
-    devices::opcua::{GroupConf, SourceConf, VariableConf},
-    BaseConf,
-};
+use types::devices::opcua::{GroupConf, SourceConf, VariableConf};
 
 pub struct Source {
-    conf: SourceConf,
-
     stop_signal_tx: mpsc::Sender<()>,
 
     // variables: Option<Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>>,
@@ -43,7 +37,7 @@ pub struct Source {
 }
 
 impl Source {
-    pub async fn new(conf: SourceConf, opcua_client: Arc<Session>) -> HaliaResult<Self> {
+    pub async fn new(opcua_client: Arc<Session>, conf: SourceConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         let (mb_tx, _) = broadcast::channel(16);
         match conf.typ {
@@ -53,14 +47,13 @@ impl Source {
             types::devices::opcua::SourceType::Subscription => todo!(),
             types::devices::opcua::SourceType::MonitoredItem => todo!(),
         }
-        Ok(Self {
-            conf,
+        Self {
             stop_signal_tx,
             group: None,
             mb_tx,
             join_handle: None,
             err: None,
-        })
+        }
     }
 
     pub fn validate_conf(ext_conf: &SourceConf) -> Result<()> {
@@ -204,7 +197,7 @@ impl Source {
         // self.stop_signal_tx = None;
     }
 
-    pub async fn update(&mut self, old_conf: SourceConf, new_conf: SourceConf) -> HaliaResult<()> {
+    pub async fn update_conf(&mut self, old_conf: SourceConf, new_conf: SourceConf) {
         // if self.stop_signal_tx.is_some() && restart {
         //     self.stop_signal_tx
         //         .as_ref()
@@ -218,8 +211,6 @@ impl Source {
         //     // self.event_loop(self.ext_conf.interval, stop_signal_rx, read_tx, device_err)
         //     //     .await;
         // }
-
-        Ok(())
     }
 }
 
