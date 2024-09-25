@@ -26,26 +26,17 @@ impl Databoard {
     }
 
     pub async fn create_data(&mut self, data_id: String, conf: DataConf) -> HaliaResult<()> {
-        let data = Data::new(conf).await?;
+        let data = Data::new(conf);
         self.datas.insert(data_id, data);
 
         Ok(())
     }
 
-    pub async fn get_data_value(&self, data_id: &String) -> HaliaResult<serde_json::Value> {
+    pub async fn read_data_runtime(&self, data_id: &String) -> HaliaResult<SearchDatasRuntimeResp> {
         match self.datas.get(data_id) {
-            Some(data) => Ok(data.value.read().await.clone()),
+            Some(data) => Ok(data.read().await),
             None => Err(HaliaError::NotFound(data_id.to_string())),
         }
-    }
-
-    pub async fn read_data_runtime(&self, data_id: &String) -> HaliaResult<SearchDatasRuntimeResp> {
-        Ok(self
-            .datas
-            .get(data_id)
-            .ok_or(HaliaError::NotFound(data_id.to_string()))?
-            .read()
-            .await)
     }
 
     pub async fn update_data(
@@ -64,10 +55,9 @@ impl Databoard {
     }
 
     pub async fn delete_data(&self, data_id: &String) -> HaliaResult<()> {
-        match self.datas.get_mut(data_id) {
-            Some(mut data) => {
+        match self.datas.remove(data_id) {
+            Some((_, mut data)) => {
                 data.stop().await;
-                self.datas.remove(data_id);
                 Ok(())
             }
             None => Err(HaliaError::NotFound(data_id.to_string())),

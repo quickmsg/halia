@@ -115,25 +115,9 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
                 ext: serde_json::from_slice(&db_databoard_data.conf)?,
             },
             value: None,
-            ts: 0,
+            ts: Some(0),
         },
     })
-    // match databoards
-    //     .read()
-    //     .await
-    //     .iter()
-    //     .find(|databoard| databoard.id == query.databoard_id)
-    // {
-    //     Some(databoard) => {
-    //         let databoard_info = databoard.search();
-    //         let data_info = databoard.search_data(&query.data_id).await?;
-    //         Ok(SearchRuleInfo {
-    //             databoard: databoard_info,
-    //             data: data_info,
-    //         })
-    //     }
-    //     None => Err(HaliaError::NotFound),
-    // }
 }
 
 pub async fn create_databoard(req: CreateUpdateDataboardReq) -> HaliaResult<()> {
@@ -277,9 +261,12 @@ pub async fn search_datas(
     let databoard = GLOBAL_DATABOARD_MANAGER.get(&databoard_id);
 
     for db_data in db_datas {
-        let value = match &databoard {
-            Some(databoard) => databoard.get_data_value(&db_data.id).await.ok(),
-            None => None,
+        let (value, ts) = match &databoard {
+            Some(databoard) => {
+                let runtime = databoard.read_data_runtime(&db_data.id).await?;
+                (Some(runtime.value), Some(runtime.ts))
+            }
+            None => (None, None),
         };
         let rule_ref = RuleRef {
             rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(&db_data.id).await?,
@@ -299,7 +286,7 @@ pub async fn search_datas(
                     ext: serde_json::from_slice(&db_data.conf)?,
                 },
                 value,
-                ts: db_data.ts as u64,
+                ts,
             },
             rule_ref,
         });

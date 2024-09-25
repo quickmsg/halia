@@ -17,72 +17,67 @@ use tracing::error;
 use types::databoard::{DataConf, SearchDatasRuntimeResp};
 
 pub struct Data {
-    conf: DataConf,
-
     stop_signal_tx: mpsc::Sender<()>,
-    join_handle: Option<JoinHandle<(mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
+    join_handle: Option<JoinHandle<(DataConf, mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
     pub value: Arc<RwLock<serde_json::Value>>,
     ts: Arc<AtomicU64>,
     pub mb_tx: mpsc::Sender<MessageBatch>,
 }
 
 impl Data {
-    pub async fn new(conf: DataConf) -> HaliaResult<Self> {
+    pub fn new(conf: DataConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
-        let mut data = Data {
-            conf,
-            mb_tx,
+        let value = Arc::new(RwLock::new(serde_json::Value::Null));
+        let ts = Arc::new(AtomicU64::new(0));
+        let join_handle = Self::event_loop(conf, value.clone(), ts.clone(), stop_signal_rx, mb_rx);
+
+        Self {
             stop_signal_tx,
-            value: Arc::new(RwLock::new(serde_json::Value::Null)),
-            ts: Arc::new(AtomicU64::new(0)),
-            join_handle: None,
-        };
-
-        data.event_loop(stop_signal_rx, mb_rx).await;
-
-        Ok(data)
+            value,
+            ts,
+            join_handle: Some(join_handle),
+            mb_tx,
+        }
     }
 
     pub fn validate_conf(_conf: &DataConf) -> HaliaResult<()> {
         Ok(())
     }
 
-    async fn event_loop(
-        &mut self,
+    fn event_loop(
+        conf: DataConf,
+        value: Arc<RwLock<serde_json::Value>>,
+        ts: Arc<AtomicU64>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
-    ) {
-        let field = self.conf.field.clone();
-        let value = self.value.clone();
-        let ts = self.ts.clone();
-        let join_handle = tokio::spawn(async move {
+    ) -> JoinHandle<(DataConf, mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)> {
+        tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, mb_rx);
+                        return (conf, stop_signal_rx, mb_rx);
                     }
 
                     mb = mb_rx.recv() => {
                         if let Some(mb) = mb {
-                            Self::handle_messsage_batch(mb, &field, &value, &ts).await;
+                            Self::handle_messsage_batch(mb, &conf, &value, &ts).await;
                         }
                     }
                 }
             }
-        });
-        self.join_handle = Some(join_handle);
+        })
     }
 
     async fn handle_messsage_batch(
         mut mb: MessageBatch,
-        field: &String,
+        conf: &DataConf,
         value: &Arc<RwLock<serde_json::Value>>,
         ts: &Arc<AtomicU64>,
     ) {
         if let Some(msg) = mb.take_one_message() {
-            match msg.get(field) {
+            match msg.get(&conf.field) {
                 Some(v) => {
                     *value.write().await = v.clone().into();
                     match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -102,17 +97,20 @@ impl Data {
         }
     }
 
-    pub async fn update(&mut self, old_conf: DataConf, new_conf: DataConf) {
-        if new_conf != old_conf {
-            self.conf = new_conf;
-            self.stop_signal_tx.send(()).await.unwrap();
-            let (stop_signal_rx, mb_rx) = self.join_handle.take().unwrap().await.unwrap();
-            self.event_loop(stop_signal_rx, mb_rx).await;
-        }
+    pub async fn update(&mut self, _old_conf: DataConf, new_conf: DataConf) {
+        let (_, stop_signal_rx, mb_rx) = self.stop().await;
+        let join_handle = Self::event_loop(
+            new_conf,
+            self.value.clone(),
+            self.ts.clone(),
+            stop_signal_rx,
+            mb_rx,
+        );
+        self.join_handle = Some(join_handle);
     }
 
-    pub async fn stop(&mut self) {
+    pub async fn stop(&mut self) -> (DataConf, mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>) {
         self.stop_signal_tx.send(()).await.unwrap();
-        self.join_handle = None;
+        self.join_handle.take().unwrap().await.unwrap()
     }
 }

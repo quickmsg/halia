@@ -70,7 +70,7 @@ pub struct SearchDatasInfoResp {
     pub id: String,
     pub conf: CreateUpdateDataReq,
     pub value: Option<serde_json::Value>,
-    pub ts: u64,
+    pub ts: Option<u64>,
 }
 
 pub struct SearchDatasRuntimeResp {
