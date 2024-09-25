@@ -369,9 +369,13 @@ impl Device for Modbus {
         }
     }
 
-    async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()> {
-        let old_conf: ModbusConf = serde_json::from_str(&old_conf)?;
-        let new_conf: ModbusConf = serde_json::from_value(new_conf.clone())?;
+    async fn update(
+        &mut self,
+        old_conf: serde_json::Value,
+        new_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        let old_conf: ModbusConf = serde_json::from_value(old_conf)?;
+        let new_conf: ModbusConf = serde_json::from_value(new_conf)?;
         if old_conf == new_conf {
             return Ok(());
         }

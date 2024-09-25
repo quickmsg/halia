@@ -93,6 +93,15 @@ pub async fn read_device(id: &String) -> Result<Device> {
     Ok(device)
 }
 
+pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
+    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM devices WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(conf)
+}
+
 pub async fn search_devices(
     pagination: Pagination,
     query_params: QueryParams,
@@ -344,13 +353,12 @@ pub async fn search_devices(
         (Some(name), Some(typ), None, None) => {
             let name = format!("%{}%", name);
             let typ: i32 = typ.into();
-            let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM devices WHERE name LIKE ? AND typ = ?",
-            )
-            .bind(&name)
-            .bind(typ)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name LIKE ? AND typ = ?")
+                    .bind(&name)
+                    .bind(typ)
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
 
             let devices = sqlx::query_as::<_, Device>(
                     "SELECT * FROM devices WHERE name LIKE ? AND typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",

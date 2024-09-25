@@ -203,7 +203,11 @@ impl Device for Opcua {
         // }
     }
 
-    async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()> {
+    async fn update(
+        &mut self,
+        old_conf: serde_json::Value,
+        new_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         // let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
         // Self::validate_conf(&ext_conf)?;
 

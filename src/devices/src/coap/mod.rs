@@ -32,8 +32,6 @@ macro_rules! coap_not_support_write_source_value {
 
 struct Coap {
     id: String,
-    conf: CoapConf,
-
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
 
@@ -44,13 +42,13 @@ struct Coap {
 
 pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     let conf: CoapConf = serde_json::from_value(device_conf.ext)?;
+    let coap_client = Arc::new(UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?);
 
     Ok(Box::new(Coap {
         id,
-        conf,
         sources: DashMap::new(),
         sinks: DashMap::new(),
-        coap_client: todo!(),
+        coap_client,
         err: None,
         token_manager: Arc::new(Mutex::new(TokenManager::new())),
     }))
@@ -70,25 +68,17 @@ pub fn validate_conf(_conf: &CoapConf) -> HaliaResult<()> {
 #[async_trait]
 impl Device for Coap {
     async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
-        todo!()
-        // SearchDevicesItemResp {
-        //     common: SearchDevicesItemCommon {
-        //         id: self.id.clone(),
-        //         device_type: DeviceType::Coap,
-        //         rtt: None,
-        //         on: self.on,
-        //         err: self.err.clone(),
-        //     },
-        //     conf: SearchDevicesItemConf {
-        //         base: self.base_conf.clone(),
-        //         ext: serde_json::json!(self.ext_conf),
-        //     },
-        //     source_cnt: self.source_ref_infos.len(),
-        //     sink_cnt: self.sink_ref_infos.len(),
-        // }
+        SearchDevicesItemRunningInfo {
+            err: todo!(),
+            rtt: todo!(),
+        }
     }
 
-    async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()> {
+    async fn update(
+        &mut self,
+        old_conf: serde_json::Value,
+        new_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         todo!()
         // let ext_conf: CoapConf = serde_json::from_value(device_conf.ext)?;
         // Self::validate_conf(&ext_conf)?;
@@ -125,25 +115,6 @@ impl Device for Coap {
 
         // Ok(())
     }
-
-    // async fn start(&mut self) -> HaliaResult<()> {
-    //     check_and_set_on_true!(self);
-    //     add_device_on_count();
-
-    //     let client = Arc::new(
-    //         UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
-    //     );
-
-    //     for source in self.sources.iter_mut() {
-    //         _ = source.start(client.clone()).await;
-    //     }
-
-    //     for sink in self.sinks.iter_mut() {
-    //         _ = sink.start(client.clone()).await;
-    //     }
-
-    //     Ok(())
-    // }
 
     async fn stop(&mut self) {
         for mut source in self.sources.iter_mut() {

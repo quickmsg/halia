@@ -75,7 +75,11 @@ pub(crate) fn sub_device_running_count() {
 #[async_trait]
 pub trait Device: Send + Sync {
     async fn read_running_info(&self) -> SearchDevicesItemRunningInfo;
-    async fn update(&mut self, old_conf: String, new_conf: &serde_json::Value) -> HaliaResult<()>;
+    async fn update(
+        &mut self,
+        old_conf: serde_json::Value,
+        new_conf: serde_json::Value,
+    ) -> HaliaResult<()>;
     async fn stop(&mut self);
 
     async fn create_source(
@@ -217,13 +221,13 @@ pub async fn update_device(device_id: String, req: CreateUpdateDeviceReq) -> Hal
     }
 
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-        let db_device = storage::device::read_device(&device_id).await?;
-        device
-            .update(
-                unsafe { String::from_utf8_unchecked(db_device.conf) },
-                &req.conf.ext,
-            )
-            .await?;
+        let old_conf = storage::device::read_conf(&device_id).await?;
+        let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
+        if old_conf == req.conf.ext {
+            return Ok(());
+        }
+
+        device.update(old_conf, req.conf.ext.clone()).await?;
     }
 
     storage::device::update(&device_id, req).await?;
