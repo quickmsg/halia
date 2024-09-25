@@ -181,6 +181,11 @@ pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
         return Err(HaliaError::NameExists);
     }
 
+    match req.typ {
+        AppType::MqttClient => mqtt_client::validate_conf(&req.conf.ext)?,
+        AppType::HttpClient => todo!(),
+    }
+
     let app_id = common::get_id();
     storage::app::insert(app_id, req).await?;
     add_app_count();

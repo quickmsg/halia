@@ -170,6 +170,5 @@ pub struct SearchRulesItemResp {
 #[derive(Serialize)]
 pub struct ReadRuleNodeResp {
     pub index: usize,
-    #[serde(flatten)]
     pub data: serde_json::Value,
 }

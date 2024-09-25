@@ -83,7 +83,8 @@ pub fn new(app_id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>>
     Ok(Box::new(mqtt_client))
 }
 
-pub fn validate_conf(conf: &MqttClientConf) -> HaliaResult<()> {
+pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: MqttClientConf = serde_json::from_value(conf.clone())?;
     match conf.version {
         types::apps::mqtt_client::Version::V311 => match &conf.v311 {
             Some(conf) => {

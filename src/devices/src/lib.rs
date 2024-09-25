@@ -133,33 +133,49 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
     let db_device = storage::device::read_device(&query.device_id).await?;
 
     let device_resp = transer_db_device_to_resp(db_device).await?;
-    let id = match (query.source_id, query.sink_id) {
-        (Some(source_id), None) => source_id,
-        (None, Some(sink_id)) => sink_id,
-        _ => {
-            return Err(HaliaError::Common(
-                "查询source_id或sink_id参数错误！".to_string(),
-            ))
+    match (query.source_id, query.sink_id) {
+        (Some(source_id), None) => {
+            let db_source = storage::source_or_sink::read_one(&source_id).await?;
+            Ok(SearchRuleInfo {
+                device: device_resp,
+                source: Some(SearchSourcesOrSinksInfoResp {
+                    id: db_source.id,
+                    conf: CreateUpdateSourceOrSinkReq {
+                        base: BaseConf {
+                            name: db_source.name,
+                            desc: db_source
+                                .des
+                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                        },
+                        ext: serde_json::from_slice(&db_source.conf).unwrap(),
+                    },
+                }),
+                sink: None,
+            })
         }
-    };
-
-    let db_source_or_sink = storage::source_or_sink::read_one(&id).await?;
-    Ok(SearchRuleInfo {
-        device: device_resp,
-        source: Some(SearchSourcesOrSinksInfoResp {
-            id: db_source_or_sink.id,
-            conf: CreateUpdateSourceOrSinkReq {
-                base: BaseConf {
-                    name: db_source_or_sink.name,
-                    desc: db_source_or_sink
-                        .des
-                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                },
-                ext: serde_json::from_slice(&db_source_or_sink.conf).unwrap(),
-            },
-        }),
-        sink: None,
-    })
+        (None, Some(sink_id)) => {
+            let db_sink = storage::source_or_sink::read_one(&sink_id).await?;
+            Ok(SearchRuleInfo {
+                device: device_resp,
+                source: None,
+                sink: Some(SearchSourcesOrSinksInfoResp {
+                    id: db_sink.id,
+                    conf: CreateUpdateSourceOrSinkReq {
+                        base: BaseConf {
+                            name: db_sink.name,
+                            desc: db_sink
+                                .des
+                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                        },
+                        ext: serde_json::from_slice(&db_sink.conf).unwrap(),
+                    },
+                }),
+            })
+        }
+        _ => Err(HaliaError::Common(
+            "查询source_id或sink_id参数错误！".to_string(),
+        )),
+    }
 }
 
 pub async fn create_device(device_id: String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
