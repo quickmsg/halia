@@ -127,22 +127,28 @@ impl Modbus {
         let sources = self.sources.clone();
         let rtt = self.rtt.clone();
         let join_handle = tokio::spawn(async move {
-            let task_err: Option<io::Error> = None;
+            let mut task_err: Option<io::Error> = None;
+            let mut init = false;
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
                         add_device_running_count();
+                        task_err = None;
+                        *err.write().await = None;
+                        if let Err(e) = storage::device::update_err(&device_id, false).await {
+                            warn!("update device err failed: {}", e);
+                        }
+
                         if let Err(e) = storage::event::insert(
                             types::events::ResourceType::Device,
                             &device_id,
-                            types::events::EventType::Connect.into(),
+                            types::events::EventType::Connect,
                             None,
                         )
                         .await
                         {
                             warn!("create event failed: {}", e);
                         }
-                        *err.write().await = None;
                         loop {
                             select! {
                                 biased;
@@ -182,7 +188,7 @@ impl Modbus {
                         if let Err(e) = storage::event::insert(
                             types::events::ResourceType::Device,
                             &device_id,
-                            types::events::EventType::DisConnect,
+                            types::events::EventType::Disconnect,
                             Some(e.to_string()),
                         )
                         .await
@@ -191,13 +197,18 @@ impl Modbus {
                         };
 
                         match &task_err {
-                            Some(task_err) => {
-                                if task_err.to_string() != e.to_string() {
+                            Some(te) => {
+                                if te.to_string() != e.to_string() {
                                     *err.write().await = Some(e.to_string());
                                 }
                             }
                             None => {
-                                sub_device_running_count();
+                                if !init {
+                                    init = true;
+                                } else {
+                                    sub_device_running_count();
+                                }
+
                                 if let Err(storage_err) =
                                     storage::device::update_err(&device_id, true).await
                                 {
@@ -205,6 +216,8 @@ impl Modbus {
                                 }
                             }
                         }
+
+                        task_err = Some(e);
 
                         let sleep = time::sleep(Duration::from_secs(modbus_conf.reconnect));
                         tokio::pin!(sleep);

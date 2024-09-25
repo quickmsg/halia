@@ -59,7 +59,7 @@ pub async fn update_name_exists(id: &String, name: &String) -> Result<bool> {
     Ok(count > 0)
 }
 
-pub async fn insert(id: String, req: CreateUpdateAppReq) -> Result<()> {
+pub async fn insert(id: &String, req: CreateUpdateAppReq) -> Result<()> {
     let typ: i32 = req.typ.into();
     let ts = chrono::Utc::now().timestamp();
     let conf = serde_json::to_vec(&req.conf.ext)?;

@@ -40,7 +40,7 @@ struct Opcua {
     sinks: DashMap<String, Sink>,
 }
 
-pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
+pub fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     let conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
     let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
 
@@ -56,7 +56,7 @@ pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Dev
     todo!()
 }
 
-pub fn validate_conf(_conf: &OpcuaConf) -> HaliaResult<()> {
+pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
@@ -286,8 +286,8 @@ impl Device for Opcua {
     }
 
     async fn stop(&mut self) {
-          // todo 判断当前是否错误
-          match self.opcua_client.disconnect().await {
+        // todo 判断当前是否错误
+        match self.opcua_client.disconnect().await {
             Ok(_) => {
                 debug!("session disconnect success");
             }

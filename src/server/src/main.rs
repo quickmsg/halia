@@ -2,6 +2,7 @@ use std::env;
 
 use anyhow::Result;
 use common::{config, storage, sys};
+use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -32,6 +33,22 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     sys::init();
+
+    let sched = JobScheduler::new().await?;
+    let event_retain_days = config.event_retain_days;
+    sched
+        .add(Job::new_async("0 3 * * * *", {
+            let event_retain_days = event_retain_days.clone();
+            move |_uuid, _l| {
+                Box::pin(async move {
+                    storage::event::delete_expired(event_retain_days)
+                        .await
+                        .unwrap();
+                })
+            }
+        })?)
+        .await?;
+    sched.start().await?;
 
     storage::init(&config.storage).await?;
 

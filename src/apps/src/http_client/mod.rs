@@ -37,7 +37,7 @@ pub fn new(app_id: String, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
     }))
 }
 
-pub fn validate_conf(_conf: &HttpClientConf) -> HaliaResult<()> {
+pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 

@@ -189,12 +189,19 @@ pub async fn create_device(device_id: String, req: CreateUpdateDeviceReq) -> Hal
 
     match &req.typ {
         DeviceType::Modbus => modbus::validate_conf(&req.conf.ext)?,
-        DeviceType::Opcua => todo!(),
-        DeviceType::Coap => todo!(),
+        DeviceType::Opcua => opcua::validate_conf(&req.conf.ext)?,
+        DeviceType::Coap => coap::validate_conf(&req.conf.ext)?,
     }
 
     add_device_count();
     storage::device::insert(&device_id, req).await?;
+    storage::event::insert(
+        types::events::ResourceType::Device,
+        &device_id,
+        EventType::Create,
+        None,
+    )
+    .await?;
     Ok(())
 }
 
@@ -262,8 +269,8 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     let mut device = match typ {
         DeviceType::Modbus => modbus::new(device_id.clone(), device_conf),
-        DeviceType::Opcua => todo!(),
-        DeviceType::Coap => todo!(),
+        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf)?,
+        DeviceType::Coap => coap::new(device_id.clone(), device_conf).await?,
     };
 
     let db_sources = storage::source_or_sink::read_all_by_parent_id(
@@ -338,6 +345,13 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
     }
 
     sub_device_count();
+    storage::event::insert(
+        types::events::ResourceType::Device,
+        &device_id,
+        EventType::Delete,
+        None,
+    )
+    .await?;
     storage::device::delete(&device_id).await?;
     storage::source_or_sink::delete_by_parent_id(&device_id).await?;
 

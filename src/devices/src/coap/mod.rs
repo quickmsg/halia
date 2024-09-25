@@ -61,7 +61,7 @@ pub fn validate_sink_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn validate_conf(_conf: &CoapConf) -> HaliaResult<()> {
+pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 

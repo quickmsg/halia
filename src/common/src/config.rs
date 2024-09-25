@@ -52,7 +52,7 @@ struct ConfigRaw {
     // 存储类型：目前支持sqlite，mysql，postgresql。默认为sqlite
     pub storage: Option<StorageConfig>,
     // 事件保留时间，默认为7天
-    pub event_retain_days: Option<u8>,
+    pub event_retain_days: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -69,7 +69,7 @@ pub struct Config {
     pub port: u16,
     pub log_level: LogLevel,
     pub storage: StorageConfig,
-    pub event_retain_days: u8,
+    pub event_retain_days: usize,
 }
 
 impl Default for Config {

@@ -276,3 +276,13 @@ pub async fn search(
 
     Ok((count as usize, events))
 }
+
+pub async fn delete_expired(day: usize) -> Result<()> {
+    let ts = chrono::Utc::now().timestamp();
+    sqlx::query("DELETE FROM events WHERE ts < ?")
+        .bind(ts - (day as i64) * 24 * 60 * 60)
+        .execute(POOL.get().unwrap())
+        .await?;
+
+    Ok(())
+}
