@@ -196,7 +196,7 @@ pub async fn search_apps(
     pagination: Pagination,
     query: QueryParams,
 ) -> HaliaResult<SearchAppsResp> {
-    let (count, db_apps) = storage::app::query(pagination, query).await?;
+    let (count, db_apps) = storage::app::search(pagination, query).await?;
 
     let mut apps_resp = Vec::with_capacity(db_apps.len());
     for db_app in db_apps {

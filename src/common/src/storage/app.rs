@@ -11,6 +11,7 @@ use super::POOL;
 pub struct App {
     pub id: String,
     pub status: i32,
+    pub err: i32,
     pub typ: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
@@ -24,6 +25,7 @@ pub async fn init_table() -> Result<()> {
 CREATE TABLE IF NOT EXISTS apps (
     id CHAR(32) PRIMARY KEY,
     status SMALLINT UNSIGNED NOT NULL,
+    err SMALLINT UNSIGNED NOT NULL,
     typ SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     des BLOB,
@@ -63,9 +65,10 @@ pub async fn insert(id: String, req: CreateUpdateAppReq) -> Result<()> {
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
-        "INSERT INTO apps (id, status, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO apps (id, status, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id)
+    .bind(false as i32)
     .bind(false as i32)
     .bind(typ)
     .bind(req.conf.base.name)
@@ -121,11 +124,19 @@ pub async fn read_on_all() -> Result<Vec<App>> {
     Ok(apps)
 }
 
-pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<(usize, Vec<App>)> {
+pub async fn search(
+    pagination: Pagination,
+    query_params: QueryParams,
+) -> Result<(usize, Vec<App>)> {
     let limit = pagination.size as i64;
     let offset = ((pagination.page - 1) * pagination.size) as i64;
-    let (count, apps) = match (query_params.name, query_params.typ, query_params.on) {
-        (None, None, None) => {
+    let (count, apps) = match (
+        query_params.name,
+        query_params.typ,
+        query_params.on,
+        query_params.err,
+    ) {
+        (None, None, None, None) => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps")
                 .fetch_one(POOL.get().unwrap())
                 .await?;
@@ -139,7 +150,24 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
 
             (count as usize, apps)
         }
-        (None, None, Some(on)) => {
+        (None, None, None, Some(err)) => {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE err = ?")
+                .bind(err as i32)
+                .fetch_one(POOL.get().unwrap())
+                .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                "SELECT * FROM apps WHERE err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(err as i32)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count as usize, apps)
+        }
+        (None, None, Some(on), None) => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE status = ?")
                 .bind(on as i32)
                 .fetch_one(POOL.get().unwrap())
@@ -156,7 +184,27 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
 
             (count as usize, apps)
         }
-        (None, Some(typ), None) => {
+        (None, None, Some(on), Some(err)) => {
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE status = ? AND err = ?")
+                    .bind(on as i32)
+                    .bind(err as i32)
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                "SELECT * FROM apps WHERE status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(on as i32)
+            .bind(err as i32)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count as usize, apps)
+        }
+        (None, Some(typ), None, None) => {
             let typ: i32 = typ.into();
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE typ = ?")
                 .bind(typ.to_string())
@@ -174,7 +222,28 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
 
             (count as usize, apps)
         }
-        (None, Some(typ), Some(on)) => {
+        (None, Some(typ), None, Some(err)) => {
+            let typ: i32 = typ.into();
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE typ = ? AND err = ?")
+                    .bind(typ)
+                    .bind(err as i32)
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                "SELECT * FROM apps WHERE typ = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(typ)
+            .bind(err as i32)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count as usize, apps)
+        }
+        (None, Some(typ), Some(on), None) => {
             let typ: i32 = typ.into();
             let count: i64 =
                 sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE typ = ? AND status = ?")
@@ -195,7 +264,31 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
 
             (count as usize, apps)
         }
-        (Some(name), None, None) => {
+        (None, Some(typ), Some(on), Some(err)) => {
+            let typ: i32 = typ.into();
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM apps WHERE typ = ? AND status = ? AND err = ?",
+            )
+            .bind(typ)
+            .bind(on as i32)
+            .bind(err as i32)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                "SELECT * FROM apps WHERE typ = ? AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(typ)
+            .bind(on as i32)
+            .bind(err as i32)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count as usize, apps)
+        }
+        (Some(name), None, None, None) => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name LIKE ?")
                 .bind(format!("%{}%", name))
                 .fetch_one(POOL.get().unwrap())
@@ -212,19 +305,19 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
 
             (count as usize, apps)
         }
-        (Some(name), None, Some(on)) => {
+        (Some(name), None, None, Some(err)) => {
             let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name LIKE ? AND status = ?")
+                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name LIKE ? AND err = ?")
                     .bind(format!("%{}%", name))
-                    .bind(on as i32)
+                    .bind(err as i32)
                     .fetch_one(POOL.get().unwrap())
                     .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE name LIKE ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM apps WHERE name LIKE ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
             .bind(format!("%{}%", name))
-            .bind(on as i32)
+            .bind(err as i32)
             .bind(limit)
             .bind(offset)
             .fetch_all(POOL.get().unwrap())
@@ -232,11 +325,57 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
 
             (count as usize, apps)
         }
-        (Some(name), Some(typ), None) => {
+        (Some(name), None, Some(on), None) => {
+            let name = format!("%{}%", name);
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name LIKE ? AND status = ?")
+                    .bind(&name)
+                    .bind(on as i32)
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                    "SELECT * FROM apps WHERE name LIKE ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                )
+                .bind(&name)
+                .bind(on as i32)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(POOL.get().unwrap())
+                .await?;
+
+            (count as usize, apps)
+        }
+        (Some(name), None, Some(on), Some(err)) => {
+            let name = format!("%{}%", name);
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND status = ? AND err = ?",
+            )
+            .bind(&name)
+            .bind(on as i32)
+            .bind(err as i32)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                "SELECT * FROM apps WHERE name LIKE ? AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(on as i32)
+            .bind(err as i32)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count as usize, apps)
+        }
+        (Some(name), Some(typ), None, None) => {
+            let name = format!("%{}%", name);
             let typ: i32 = typ.into();
             let count: i64 =
                 sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name LIKE ? AND typ = ?")
-                    .bind(format!("%{}%", name))
+                    .bind(&name)
                     .bind(typ)
                     .fetch_one(POOL.get().unwrap())
                     .await?;
@@ -244,7 +383,7 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
             let apps = sqlx::query_as::<_, App>(
                 "SELECT * FROM apps WHERE name LIKE ? AND typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
-            .bind(format!("%{}%", name))
+            .bind(&name)
             .bind(typ)
             .bind(limit)
             .bind(offset)
@@ -253,23 +392,76 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
 
             (count as usize, apps)
         }
-        (Some(name), Some(typ), Some(on)) => {
+        (Some(name), Some(typ), None, Some(err)) => {
+            let name = format!("%{}%", name);
+            let typ: i32 = typ.into();
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND typ = ? AND err = ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(err as i32)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                "SELECT * FROM apps WHERE name LIKE ? AND typ = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(err as i32)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count as usize, apps)
+        }
+        (Some(name), Some(typ), Some(on), None) => {
+            let name = format!("%{}%", name);
             let typ: i32 = typ.into();
             let count: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND typ = ? AND status = ?",
             )
-            .bind(format!("%{}%", name))
+            .bind(&name)
             .bind(typ)
             .bind(on as i32)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE name = ? AND typ = ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                "SELECT * FROM apps WHERE name LIKE ? AND typ = ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
-            .bind(format!("%{}%", name))
+            .bind(&name)
             .bind(typ)
             .bind(on as i32)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count as usize, apps)
+        }
+        (Some(name), Some(typ), Some(on), Some(err)) => {
+            let name = format!("%{}%", name);
+            let typ: i32 = typ.into();
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND typ = ? AND status = ? AND err = ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(on as i32)
+            .bind(err as i32)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                "SELECT * FROM apps WHERE name LIKE ? AND typ = ? AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(on as i32)
+            .bind(err as i32)
             .bind(limit)
             .bind(offset)
             .fetch_all(POOL.get().unwrap())
@@ -279,7 +471,7 @@ pub async fn query(pagination: Pagination, query_params: QueryParams) -> Result<
         }
     };
 
-    Ok((count as usize, apps))
+    Ok((count, apps))
 }
 
 pub async fn update_status(id: &String, status: bool) -> Result<()> {

@@ -286,7 +286,6 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);
 
     add_device_on_count();
-    add_device_running_count();
     storage::device::update_status(&device_id, true).await?;
     Ok(())
 }
