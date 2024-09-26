@@ -71,6 +71,13 @@ pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
     let id = common::get_id();
     Rule::db_new(&id, &req.ext).await?;
     storage::rule::insert(&id, req).await?;
+    storage::event::insert(
+        types::events::ResourceType::Rule,
+        &id,
+        types::events::EventType::Create,
+        None,
+    )
+    .await?;
     add_rule_count();
     Ok(())
 }
@@ -139,14 +146,22 @@ pub async fn stop(id: String) -> HaliaResult<()> {
         return Ok(());
     }
 
-    sub_rule_on_count();
-
     match GLOBAL_RULE_MANAGER.remove(&id) {
-        Some((_, mut rule)) => rule.stop().await?,
+        Some((_, mut rule)) => {
+            rule.stop().await?;
+            storage::rule::update_status(&id, false).await?;
+            storage::event::insert(
+                types::events::ResourceType::Rule,
+                &id,
+                types::events::EventType::Stop,
+                None,
+            )
+            .await?;
+            sub_rule_on_count();
+        }
         None => return Err(HaliaError::NotFound(id)),
     }
 
-    storage::rule::update_status(&id, false).await?;
     Ok(())
 }
 
@@ -158,6 +173,13 @@ pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
     }
 
     storage::rule::update(&id, req).await?;
+    storage::event::insert(
+        types::events::ResourceType::Rule,
+        &id,
+        types::events::EventType::Update,
+        None,
+    )
+    .await?;
 
     Ok(())
 }
@@ -168,6 +190,15 @@ pub async fn delete(id: String) -> HaliaResult<()> {
     }
 
     storage::rule::delete(&id).await?;
+    storage::event::insert(
+        types::events::ResourceType::Rule,
+        &id,
+        types::events::EventType::Delete,
+        None,
+    )
+    .await?;
+    storage::rule_ref::delete_many_by_rule_id(&id).await?;
+
     sub_rule_count();
     Ok(())
 }

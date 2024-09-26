@@ -11,8 +11,10 @@ use opcua::{
 use sink::Sink;
 use source::Source;
 use tokio::{
-    sync::{broadcast, mpsc, RwLock},
+    select,
+    sync::{broadcast, mpsc},
     task::JoinHandle,
+    time,
 };
 use tracing::debug;
 use types::{
@@ -43,6 +45,8 @@ struct Opcua {
 pub fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
     let conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
     let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+
+    let _ = Opcua::event_loop(conf, stop_signal_rx);
 
     let opcua = Opcua {
         id: id,
@@ -99,43 +103,36 @@ impl Opcua {
         Ok((session, handle))
     }
 
-    // async fn event_loop(&mut self, mut stop_signal_rx: mpsc::Receiver<()>) {
-    //     let opcua_conf = self.conf.ext.clone();
-    //     let global_session = self.session.clone();
-    //     let reconnect = self.conf.ext.reconnect;
-    //     let groups = self.groups.clone();
-    //     tokio::spawn(async move {
-    //         loop {
-    //             match Opcua::connect(&opcua_conf).await {
-    //                 Ok((session, join_handle)) => {
-    //                     for group in groups.write().await.iter_mut() {
-    //                         group.start(session.clone()).await;
-    //                     }
+    fn event_loop(conf: OpcuaConf, mut stop_signal_rx: mpsc::Receiver<()>) {
+        tokio::spawn(async move {
+            loop {
+                match Opcua::connect(&conf).await {
+                    Ok((session, join_handle)) => {
+                        // TODO
+                        // *(global_session.write().await) = Some(session);
+                        match join_handle.await {
+                            Ok(s) => {
+                                debug!("{}", s);
+                            }
+                            Err(e) => debug!("{}", e),
+                        }
+                    }
+                    Err(e) => {
+                        let sleep = time::sleep(Duration::from_secs(conf.reconnect));
+                        tokio::pin!(sleep);
+                        select! {
+                            _ = stop_signal_rx.recv() => {
+                                return
+                            }
 
-    //                     *(global_session.write().await) = Some(session);
-    //                     match join_handle.await {
-    //                         Ok(s) => {
-    //                             debug!("{}", s);
-    //                         }
-    //                         Err(e) => debug!("{}", e),
-    //                     }
-    //                 }
-    //                 Err(e) => {
-    //                     let sleep = time::sleep(Duration::from_secs(reconnect));
-    //                     tokio::pin!(sleep);
-    //                     select! {
-    //                         _ = stop_signal_rx.recv() => {
-    //                             return
-    //                         }
-
-    //                         _ = &mut sleep => {}
-    //                     }
-    //                     debug!("{e}");
-    //                 }
-    //             }
-    //         }
-    //     });
-    // }
+                            _ = &mut sleep => {}
+                        }
+                        debug!("{e}");
+                    }
+                }
+            }
+        });
+    }
 }
 
 #[async_trait]

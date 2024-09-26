@@ -330,8 +330,13 @@ pub async fn stop_device(device_id: String) -> HaliaResult<()> {
     }
 
     storage::device::update_status(&device_id, false).await?;
-    match GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-        Some(mut device) => device.stop().await,
+    match GLOBAL_DEVICE_MANAGER.remove(&device_id) {
+        Some((_, mut device)) => {
+            device.stop().await;
+            GLOBAL_DEVICE_MANAGER.remove(&device_id);
+            sub_device_on_count();
+        }
+
         None => {}
     }
 

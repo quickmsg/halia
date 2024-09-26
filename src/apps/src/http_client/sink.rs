@@ -39,17 +39,15 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn update_conf(&mut self, old_conf: SinkConf, new_conf: SinkConf) -> HaliaResult<()> {
+    pub async fn update_conf(&mut self, old_conf: SinkConf, new_conf: SinkConf) {
         if old_conf == new_conf {
-            return Ok(());
+            return;
         }
 
         let (stop_signal_rx, http_client_conf, _, client, mb_rx) = self.stop().await;
         let join_handle =
             Self::event_loop(http_client_conf, new_conf, stop_signal_rx, mb_rx, client);
         self.join_handle = Some(join_handle);
-
-        Ok(())
     }
 
     fn event_loop(
