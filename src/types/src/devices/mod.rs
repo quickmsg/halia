@@ -119,6 +119,7 @@ pub struct SearchDevicesItemCommon {
 
 #[derive(Serialize)]
 pub struct SearchDevicesItemRunningInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     pub rtt: u16,
 }

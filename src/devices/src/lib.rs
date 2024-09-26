@@ -236,6 +236,13 @@ pub async fn update_device(device_id: String, req: CreateUpdateDeviceReq) -> Hal
         device.update(old_conf, req.conf.ext.clone()).await?;
     }
 
+    storage::event::insert(
+        types::events::ResourceType::Device,
+        &device_id,
+        types::events::EventType::Update,
+        None,
+    )
+    .await?;
     storage::device::update(&device_id, req).await?;
 
     Ok(())

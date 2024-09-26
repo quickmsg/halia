@@ -12,6 +12,7 @@ pub struct CreateUpdateOpcuaReq {
 pub struct OpcuaConf {
     pub host: String,
     pub port: u16,
+    // 秒数
     pub reconnect: u64,
 }
 
@@ -25,6 +26,7 @@ pub struct CreaetUpdateSourceReq {
 pub struct SourceConf {
     #[serde(rename = "type")]
     pub typ: SourceType,
+    #[serde(flatten)]
     pub group: Option<GroupConf>,
     pub subscription: Option<Subscriptionconf>,
     pub monitored_item: Option<MonitoredItemconf>,
@@ -39,11 +41,12 @@ pub enum SourceType {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct GroupConf {
+    // 毫秒
     pub interval: u64,
     pub timestamps_to_return: TimestampsToReturn,
     // pub max_age: f64,
     // serde_json bug,无法在flatten模式下解析f64
-    pub max_age: i64,
+    pub max_age: f64,
     pub variables: Vec<VariableConf>,
 }
 

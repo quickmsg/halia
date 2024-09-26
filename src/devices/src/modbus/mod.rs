@@ -203,12 +203,7 @@ impl Modbus {
                                 }
                             }
                             None => {
-                                if !init {
-                                    init = true;
-                                } else {
-                                    sub_device_running_count();
-                                }
-
+                                *err.write().await = Some(e.to_string());
                                 if let Err(storage_err) =
                                     storage::device::update_err(&device_id, true).await
                                 {

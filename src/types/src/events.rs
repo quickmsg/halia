@@ -46,6 +46,7 @@ impl TryFrom<i32> for ResourceType {
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
     Create,
+    Update,
     Delete,
     Start,
     Stop,
@@ -57,11 +58,12 @@ impl Into<i32> for EventType {
     fn into(self) -> i32 {
         match self {
             EventType::Create => 1,
-            EventType::Delete => 2,
-            EventType::Start => 3,
-            EventType::Stop => 4,
-            EventType::Connect => 5,
-            EventType::Disconnect => 6,
+            EventType::Update => 2,
+            EventType::Delete => 3,
+            EventType::Start => 4,
+            EventType::Stop => 5,
+            EventType::Connect => 6,
+            EventType::Disconnect => 7,
         }
     }
 }
@@ -72,11 +74,12 @@ impl TryFrom<i32> for EventType {
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
             1 => Ok(EventType::Create),
-            2 => Ok(EventType::Delete),
-            3 => Ok(EventType::Start),
-            4 => Ok(EventType::Stop),
-            5 => Ok(EventType::Connect),
-            6 => Ok(EventType::Disconnect),
+            2 => Ok(EventType::Update),
+            3 => Ok(EventType::Delete),
+            4 => Ok(EventType::Start),
+            5 => Ok(EventType::Stop),
+            6 => Ok(EventType::Connect),
+            7 => Ok(EventType::Disconnect),
             _ => Err(()),
         }
     }
