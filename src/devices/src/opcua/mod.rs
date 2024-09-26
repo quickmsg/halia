@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
@@ -12,11 +13,11 @@ use sink::Sink;
 use source::Source;
 use tokio::{
     select,
-    sync::{broadcast, mpsc},
+    sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
     time,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 use types::{
     apps::http_client::SinkConf,
     devices::{
@@ -36,28 +37,28 @@ struct Opcua {
 
     err: Option<String>,
     stop_signal_tx: mpsc::Sender<()>,
-    opcua_client: Arc<Session>,
+    opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
 
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
 }
 
-pub fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
-    let conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
+pub fn new(id: String, device_conf: DeviceConf) -> Box<dyn Device> {
+    let conf: OpcuaConf = serde_json::from_value(device_conf.ext).unwrap();
     let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
 
-    let _ = Opcua::event_loop(conf, stop_signal_rx);
+    let opcua_client: Arc<RwLock<Option<Arc<Session>>>> = Arc::new(RwLock::new(None));
 
-    let opcua = Opcua {
+    Opcua::event_loop(opcua_client.clone(), conf, stop_signal_rx);
+
+    Box::new(Opcua {
         id: id,
         err: None,
-        opcua_client: todo!(),
+        opcua_client,
         stop_signal_tx,
         sources: DashMap::new(),
         sinks: DashMap::new(),
-    };
-
-    todo!()
+    })
 }
 
 pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
@@ -77,9 +78,7 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl Opcua {
-    async fn connect(
-        opcua_conf: &OpcuaConf,
-    ) -> HaliaResult<(Arc<Session>, JoinHandle<StatusCode>)> {
+    async fn connect(opcua_conf: &OpcuaConf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
         let mut client = ClientBuilder::new()
             .application_name("test")
             .application_uri("aasda")
@@ -97,10 +96,7 @@ impl Opcua {
             .await
         {
             Ok((session, event_loop)) => (session, event_loop),
-            Err(e) => {
-                debug!("{:?}", e);
-                return Err(HaliaError::Common(e.to_string()));
-            }
+            Err(e) => bail!(e.to_string()),
         };
 
         let handle = event_loop.spawn();
@@ -108,13 +104,17 @@ impl Opcua {
         Ok((session, handle))
     }
 
-    fn event_loop(conf: OpcuaConf, mut stop_signal_rx: mpsc::Receiver<()>) {
+    fn event_loop(
+        opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
+        conf: OpcuaConf,
+        mut stop_signal_rx: mpsc::Receiver<()>,
+    ) {
         tokio::spawn(async move {
             loop {
                 match Opcua::connect(&conf).await {
                     Ok((session, join_handle)) => {
-                        // TODO
-                        // *(global_session.write().await) = Some(session);
+                        debug!("connect success");
+                        opcua_client.write().await.replace(session);
                         match join_handle.await {
                             Ok(s) => {
                                 debug!("{}", s);
@@ -123,6 +123,7 @@ impl Opcua {
                         }
                     }
                     Err(e) => {
+                        warn!("connect error: {}", e);
                         let sleep = time::sleep(Duration::from_secs(conf.reconnect));
                         tokio::pin!(sleep);
                         select! {
@@ -143,27 +144,11 @@ impl Opcua {
 #[async_trait]
 impl Device for Opcua {
     async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
-        todo!()
-        // let err = self.err.read().await.clone();
-        // let rtt = match (self.on, &self.err) {
-        //     (true, None) => Some(999),
-        //     _ => None,
-        // };
-        // SearchDevicesItemResp {
-        //     common: SearchDevicesItemCommon {
-        //         id: self.id.clone(),
-        //         device_type: DeviceType::Opcua,
-        //         on: self.on,
-        //         err: self.err.clone(),
-        //         rtt,
-        //     },
-        //     conf: SearchDevicesItemConf {
-        //         base: self.base_conf.clone(),
-        //         ext: serde_json::json!(self.ext_conf),
-        //     },
-        //     source_cnt: self.source_ref_infos.len(),
-        //     sink_cnt: self.sink_ref_infos.len(),
-        // }
+        // TODO
+        SearchDevicesItemRunningInfo {
+            err: self.err.clone(),
+            rtt: 0,
+        }
     }
 
     async fn update(
@@ -238,7 +223,7 @@ impl Device for Opcua {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(self.opcua_client.clone(), conf).await?;
+        let sink = Sink::new(self.opcua_client.clone(), conf);
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
@@ -288,15 +273,25 @@ impl Device for Opcua {
     }
 
     async fn stop(&mut self) {
-        self.stop_signal_tx.send(()).await.unwrap();
-        // todo 判断当前是否错误
-        match self.opcua_client.disconnect().await {
-            Ok(_) => {
-                debug!("session disconnect success");
-            }
-            Err(e) => {
-                debug!("err code is :{}", e);
-            }
+        for mut source in self.sources.iter_mut() {
+            source.stop().await;
         }
+
+        for mut sink in self.sinks.iter_mut() {
+            sink.stop().await;
+        }
+
+        self.stop_signal_tx.send(()).await.unwrap();
+        // match self.opcua_client.read().await {
+        //     Some(session) => match session.disconnect().await {
+        //         Ok(_) => {
+        //             debug!("session disconnect success");
+        //         }
+        //         Err(e) => {
+        //             debug!("err code is :{}", e);
+        //         }
+        //     },
+        //     None => {}
+        // }
     }
 }

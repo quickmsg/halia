@@ -33,6 +33,7 @@ pub struct SourceConf {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum SourceType {
     Group,
     Subscription,
@@ -62,7 +63,7 @@ pub enum TimestampsToReturn {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct VariableConf {
-    pub name: String,
+    pub field: String,
     pub namespace: u16,
     pub identifier_type: IdentifierType,
     pub identifier: serde_json::Value,

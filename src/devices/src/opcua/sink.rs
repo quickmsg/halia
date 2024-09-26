@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common::error::HaliaResult;
 use message::MessageBatch;
 use opcua::client::Session;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use types::apps::http_client::SinkConf;
 
 pub struct Sink {
@@ -12,7 +11,7 @@ pub struct Sink {
 }
 
 impl Sink {
-    pub async fn new(opcua_client: Arc<Session>, conf: SinkConf) -> HaliaResult<Self> {
+    pub fn new(opcua_client: Arc<RwLock<Option<Arc<Session>>>>, conf: SinkConf) -> Self {
         todo!()
     }
 

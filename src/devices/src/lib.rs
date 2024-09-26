@@ -276,7 +276,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     let mut device = match typ {
         DeviceType::Modbus => modbus::new(device_id.clone(), device_conf),
-        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf)?,
+        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf),
         DeviceType::Coap => coap::new(device_id.clone(), device_conf).await?,
     };
 

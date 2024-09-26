@@ -37,12 +37,18 @@ pub struct Source {
 }
 
 impl Source {
-    pub async fn new(opcua_client: Arc<Session>, conf: SourceConf) -> Self {
+    pub async fn new(opcua_client: Arc<RwLock<Option<Arc<Session>>>>, conf: SourceConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         let (mb_tx, _) = broadcast::channel(16);
         match conf.typ {
             types::devices::opcua::SourceType::Group => {
-                Self::start_group(stop_signal_rx, &conf, opcua_client, mb_tx.clone()).await;
+                Self::start_group(
+                    stop_signal_rx,
+                    conf.group.unwrap(),
+                    opcua_client,
+                    mb_tx.clone(),
+                )
+                .await;
             }
             types::devices::opcua::SourceType::Subscription => todo!(),
             types::devices::opcua::SourceType::MonitoredItem => todo!(),
@@ -80,20 +86,19 @@ impl Source {
 
     async fn start_group(
         mut stop_signal_rx: mpsc::Receiver<()>,
-        conf: &SourceConf,
-        opcua_client: Arc<Session>,
+        conf: GroupConf,
+        opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
         mb_tx: broadcast::Sender<MessageBatch>,
-    ) -> JoinHandle<()> {
-        let group_conf = conf.group.as_ref().unwrap();
-        let interval = group_conf.interval;
-        let mut need_read_variable_names = vec![];
+    ) -> JoinHandle<(Arc<RwLock<Option<Arc<Session>>>>, GroupConf)> {
+        let interval = conf.interval;
+        let mut need_read_variable_fields = vec![];
         let mut need_read_variable_ids = vec![];
-        for variable_conf in group_conf.variables.iter() {
-            need_read_variable_names.push(variable_conf.name.clone());
+        for variable_conf in conf.variables.iter() {
+            need_read_variable_fields.push(variable_conf.field.clone());
             need_read_variable_ids.push(Group::get_read_value_id(variable_conf));
         }
 
-        let timestamp_to_return = match group_conf.timestamps_to_return {
+        let timestamp_to_return = match conf.timestamps_to_return {
             types::devices::opcua::TimestampsToReturn::Source => TimestampsToReturn::Source,
             types::devices::opcua::TimestampsToReturn::Server => TimestampsToReturn::Server,
             types::devices::opcua::TimestampsToReturn::Both => TimestampsToReturn::Both,
@@ -101,7 +106,7 @@ impl Source {
             types::devices::opcua::TimestampsToReturn::Invalid => TimestampsToReturn::Invalid,
         };
 
-        let max_age = group_conf.max_age as f64;
+        let max_age = conf.max_age as f64;
 
         let join_handle = tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
@@ -109,10 +114,10 @@ impl Source {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return;
+                        return (opcua_client, conf);
                     }
                     _ = interval.tick() => {
-                        Group::read_variables_from_remote(&opcua_client, &need_read_variable_names, &need_read_variable_ids, &timestamp_to_return, max_age, &mb_tx).await;
+                        Group::read_variables_from_remote(&opcua_client, &need_read_variable_fields, &need_read_variable_ids, &timestamp_to_return, max_age, &mb_tx).await;
                     }
                 }
             }
@@ -208,18 +213,17 @@ pub struct Group {
 }
 
 impl Group {
-    pub fn new(conf: &GroupConf) -> Self {
-        let mut variables = vec![];
-        for variable_conf in conf.variables.iter() {
-            let read_value_id = Self::get_read_value_id(variable_conf);
-            variables.push((variable_conf.name.clone(), read_value_id));
-        }
-        Self {
-            variables: Arc::new(RwLock::new(variables)),
-            stop_signal_tx: None,
-        }
-    }
-
+    // pub fn new(conf: &GroupConf) -> Self {
+    //     let mut variables = vec![];
+    //     for variable_conf in conf.variables.iter() {
+    //         let read_value_id = Self::get_read_value_id(variable_conf);
+    //         variables.push((variable_conf.field.clone(), read_value_id));
+    //     }
+    //     Self {
+    //         variables: Arc::new(RwLock::new(variables)),
+    //         stop_signal_tx: None,
+    //     }
+    // }
     pub fn get_read_value_id(variable_conf: &VariableConf) -> ReadValueId {
         let namespace = variable_conf.namespace;
         let identifier = match variable_conf.identifier_type {
@@ -255,68 +259,78 @@ impl Group {
     }
 
     async fn read_variables_from_remote(
-        opcua_client: &Arc<Session>,
+        opcua_client: &Arc<RwLock<Option<Arc<Session>>>>,
         need_read_variable_names: &Vec<String>,
         need_read_variable_ids: &Vec<ReadValueId>,
         timestamp_to_return: &TimestampsToReturn,
         max_age: f64,
         mb_tx: &broadcast::Sender<MessageBatch>,
     ) {
-        match opcua_client
-            .read(
-                &need_read_variable_ids,
-                timestamp_to_return.clone(),
-                max_age,
-            )
-            .await
-        {
-            Ok(data_values) => {
-                let mut message = Message::default();
-                // todo
-                for (index, value) in data_values.into_iter().enumerate() {
-                    let name = unsafe { need_read_variable_names.get_unchecked(index) };
-                    let value = match value.value {
-                        Some(variant) => match variant {
-                            opcua::types::Variant::Empty => MessageValue::Null,
-                            opcua::types::Variant::Boolean(bool) => MessageValue::Boolean(bool),
-                            opcua::types::Variant::SByte(i) => MessageValue::Int64(i as i64),
-                            opcua::types::Variant::Byte(u) => MessageValue::Int64(u as i64),
-                            opcua::types::Variant::Int16(i) => MessageValue::Int64(i as i64),
-                            opcua::types::Variant::UInt16(u) => MessageValue::Int64(u as i64),
-                            opcua::types::Variant::Int32(i) => MessageValue::Int64(i as i64),
-                            opcua::types::Variant::UInt32(u) => MessageValue::Int64(u as i64),
-                            opcua::types::Variant::Int64(i) => MessageValue::Int64(i as i64),
-                            opcua::types::Variant::UInt64(u) => MessageValue::Int64(u as i64),
-                            opcua::types::Variant::Float(f) => MessageValue::Float64(f as f64),
-                            opcua::types::Variant::Double(f) => MessageValue::Float64(f),
-                            // opcua::types::Variant::String(s) => MessageValue::String(s as String),
-                            opcua::types::Variant::String(s) => todo!(),
-                            opcua::types::Variant::DateTime(_) => todo!(),
-                            opcua::types::Variant::Guid(_) => todo!(),
-                            opcua::types::Variant::StatusCode(s) => todo!(),
-                            opcua::types::Variant::ByteString(_) => todo!(),
-                            opcua::types::Variant::XmlElement(_) => todo!(),
-                            opcua::types::Variant::QualifiedName(_) => todo!(),
-                            opcua::types::Variant::LocalizedText(_) => todo!(),
-                            opcua::types::Variant::NodeId(_) => todo!(),
-                            opcua::types::Variant::ExpandedNodeId(_) => todo!(),
-                            opcua::types::Variant::ExtensionObject(_) => todo!(),
-                            opcua::types::Variant::Variant(_) => todo!(),
-                            opcua::types::Variant::DataValue(_) => todo!(),
-                            opcua::types::Variant::DiagnosticInfo(_) => todo!(),
-                            opcua::types::Variant::Array(_) => todo!(),
-                        },
-                        None => MessageValue::Null,
-                    };
+        debug!("{:?}", need_read_variable_ids);
+        match opcua_client.read().await.as_ref() {
+            Some(client) => match client
+                .read(
+                    &need_read_variable_ids,
+                    timestamp_to_return.clone(),
+                    max_age,
+                )
+                .await
+            {
+                Ok(data_values) => {
+                    let mut message = Message::default();
+                    // todo
+                    for (index, value) in data_values.into_iter().enumerate() {
+                        debug!("{:?}", value);
+                        let name = unsafe { need_read_variable_names.get_unchecked(index) };
+                        let value = match value.value {
+                            Some(variant) => match variant {
+                                opcua::types::Variant::Empty => MessageValue::Null,
+                                opcua::types::Variant::Boolean(bool) => MessageValue::Boolean(bool),
+                                opcua::types::Variant::SByte(i) => MessageValue::Int64(i as i64),
+                                opcua::types::Variant::Byte(u) => MessageValue::Int64(u as i64),
+                                opcua::types::Variant::Int16(i) => MessageValue::Int64(i as i64),
+                                opcua::types::Variant::UInt16(u) => MessageValue::Int64(u as i64),
+                                opcua::types::Variant::Int32(i) => MessageValue::Int64(i as i64),
+                                opcua::types::Variant::UInt32(u) => MessageValue::Int64(u as i64),
+                                opcua::types::Variant::Int64(i) => MessageValue::Int64(i as i64),
+                                opcua::types::Variant::UInt64(u) => MessageValue::Int64(u as i64),
+                                opcua::types::Variant::Float(f) => MessageValue::Float64(f as f64),
+                                opcua::types::Variant::Double(f) => MessageValue::Float64(f),
+                                // opcua::types::Variant::String(s) => MessageValue::String(s as String),
+                                opcua::types::Variant::String(s) => todo!(),
+                                opcua::types::Variant::DateTime(_) => todo!(),
+                                opcua::types::Variant::Guid(_) => todo!(),
+                                opcua::types::Variant::StatusCode(s) => todo!(),
+                                opcua::types::Variant::ByteString(_) => todo!(),
+                                opcua::types::Variant::XmlElement(_) => todo!(),
+                                opcua::types::Variant::QualifiedName(_) => todo!(),
+                                opcua::types::Variant::LocalizedText(_) => todo!(),
+                                opcua::types::Variant::NodeId(_) => todo!(),
+                                opcua::types::Variant::ExpandedNodeId(_) => todo!(),
+                                opcua::types::Variant::ExtensionObject(_) => todo!(),
+                                opcua::types::Variant::Variant(_) => todo!(),
+                                opcua::types::Variant::DataValue(_) => todo!(),
+                                opcua::types::Variant::DiagnosticInfo(_) => todo!(),
+                                opcua::types::Variant::Array(_) => todo!(),
+                            },
+                            None => MessageValue::Null,
+                        };
+                        debug!("{} {:?}", name, value);
 
-                    message.add(name.clone(), value);
+                        message.add(name.clone(), value);
+                    }
+                    let mut mb = MessageBatch::default();
+                    mb.push_message(message);
+                    _ = mb_tx.send(mb);
                 }
-                let mut mb = MessageBatch::default();
-                mb.push_message(message);
-                _ = mb_tx.send(mb);
-            }
-            Err(e) => {
-                debug!("err code :{:?}", e);
+                Err(e) => {
+                    debug!("err code :{:?}", e);
+                    return;
+                }
+            },
+            None => {
+                debug!("opcua client is none");
+                return;
             }
         }
     }
