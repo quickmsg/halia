@@ -56,13 +56,13 @@ impl Source {
         }
     }
 
-    pub fn validate_conf(ext_conf: &SourceConf) -> Result<()> {
-        match ext_conf.typ {
-            types::devices::opcua::SourceType::Group => match &ext_conf.group {
+    pub fn validate_conf(conf: SourceConf) -> Result<()> {
+        match conf.typ {
+            types::devices::opcua::SourceType::Group => match conf.group {
                 Some(_group) => Ok(()),
                 None => bail!("类型为组类型，配置为空"),
             },
-            types::devices::opcua::SourceType::Subscription => match &ext_conf.subscription {
+            types::devices::opcua::SourceType::Subscription => match conf.subscription {
                 Some(subscription) => {
                     if subscription.publishing_interval == 0 {
                         bail!("发布间隔必须大于0");
@@ -71,24 +71,12 @@ impl Source {
                 }
                 None => bail!("类型为订阅类型，配置为空"),
             },
-            types::devices::opcua::SourceType::MonitoredItem => match &ext_conf.monitored_item {
+            types::devices::opcua::SourceType::MonitoredItem => match conf.monitored_item {
                 Some(_monitored_item) => Ok(()),
                 None => bail!("类型为监控类型，配置为空"),
             },
         }
     }
-
-    // pub async fn start(&mut self, opcua_client: Arc<Session>) {
-    //     match &self.ext_conf.typ {
-    //         types::devices::opcua::SourceType::Group => {
-    //             self.start_group(opcua_client, mb_tx.clone()).await
-    //         }
-    //         types::devices::opcua::SourceType::Subscription => {
-    //             self.start_subscription(opcua_client, mb_tx.clone()).await
-    //         }
-    //         types::devices::opcua::SourceType::MonitoredItem => self.start_monitored_item().await,
-    //     }
-    // }
 
     async fn start_group(
         mut stop_signal_rx: mpsc::Receiver<()>,

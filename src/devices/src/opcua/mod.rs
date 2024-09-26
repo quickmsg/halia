@@ -64,10 +64,15 @@ pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn validate_source_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+pub fn validate_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: SourceConf = serde_json::from_value(conf.clone())?;
+    Source::validate_conf(conf)?;
     Ok(())
 }
-pub fn validate_sink_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+
+pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: SinkConf = serde_json::from_value(conf.clone())?;
+    Sink::validate_conf(conf)?;
     Ok(())
 }
 
@@ -283,6 +288,7 @@ impl Device for Opcua {
     }
 
     async fn stop(&mut self) {
+        self.stop_signal_tx.send(()).await.unwrap();
         // todo 判断当前是否错误
         match self.opcua_client.disconnect().await {
             Ok(_) => {

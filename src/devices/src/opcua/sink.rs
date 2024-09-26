@@ -1,18 +1,22 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use common::error::HaliaResult;
 use message::MessageBatch;
 use opcua::client::Session;
 use tokio::sync::mpsc;
-use types::{apps::http_client::SinkConf, CreateUpdateSourceOrSinkReq};
+use types::apps::http_client::SinkConf;
 
 pub struct Sink {
-    conf: CreateUpdateSourceOrSinkReq,
     pub mb_tx: mpsc::Sender<MessageBatch>,
 }
 
 impl Sink {
     pub async fn new(opcua_client: Arc<Session>, conf: SinkConf) -> HaliaResult<Self> {
+        todo!()
+    }
+
+    pub fn validate_conf(conf: SinkConf) -> Result<()> {
         todo!()
     }
 
