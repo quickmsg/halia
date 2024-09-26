@@ -282,16 +282,16 @@ impl Device for Opcua {
         }
 
         self.stop_signal_tx.send(()).await.unwrap();
-        // match self.opcua_client.read().await {
-        //     Some(session) => match session.disconnect().await {
-        //         Ok(_) => {
-        //             debug!("session disconnect success");
-        //         }
-        //         Err(e) => {
-        //             debug!("err code is :{}", e);
-        //         }
-        //     },
-        //     None => {}
-        // }
+        match self.opcua_client.read().await.as_ref() {
+            Some(session) => match session.disconnect().await {
+                Ok(_) => {
+                    debug!("session disconnect success");
+                }
+                Err(e) => {
+                    debug!("err code is :{}", e);
+                }
+            },
+            None => {}
+        }
     }
 }

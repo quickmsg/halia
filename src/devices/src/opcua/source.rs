@@ -22,13 +22,11 @@ pub struct Source {
     stop_signal_tx: mpsc::Sender<()>,
 
     // variables: Option<Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>>,
-    group: Option<Group>,
-
     join_handle: Option<
         JoinHandle<(
+            Arc<RwLock<Option<Arc<Session>>>>,
+            GroupConf,
             mpsc::Receiver<()>,
-            mpsc::Sender<String>,
-            Arc<RwLock<Option<String>>>,
         )>,
     >,
     err: Option<String>,
@@ -40,26 +38,28 @@ impl Source {
     pub async fn new(opcua_client: Arc<RwLock<Option<Arc<Session>>>>, conf: SourceConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
         let (mb_tx, _) = broadcast::channel(16);
+        let mut source = Self {
+            stop_signal_tx,
+            mb_tx: mb_tx.clone(),
+            join_handle: None,
+            err: None,
+        };
         match conf.typ {
             types::devices::opcua::SourceType::Group => {
-                Self::start_group(
+                let join_handle = Self::start_group(
                     stop_signal_rx,
                     conf.group.unwrap(),
                     opcua_client,
                     mb_tx.clone(),
                 )
                 .await;
+                source.join_handle = Some(join_handle);
             }
             types::devices::opcua::SourceType::Subscription => todo!(),
             types::devices::opcua::SourceType::MonitoredItem => todo!(),
         }
-        Self {
-            stop_signal_tx,
-            group: None,
-            mb_tx,
-            join_handle: None,
-            err: None,
-        }
+
+        source
     }
 
     pub fn validate_conf(conf: SourceConf) -> Result<()> {
@@ -89,7 +89,11 @@ impl Source {
         conf: GroupConf,
         opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
         mb_tx: broadcast::Sender<MessageBatch>,
-    ) -> JoinHandle<(Arc<RwLock<Option<Arc<Session>>>>, GroupConf)> {
+    ) -> JoinHandle<(
+        Arc<RwLock<Option<Arc<Session>>>>,
+        GroupConf,
+        mpsc::Receiver<()>,
+    )> {
         let interval = conf.interval;
         let mut need_read_variable_fields = vec![];
         let mut need_read_variable_ids = vec![];
@@ -108,22 +112,20 @@ impl Source {
 
         let max_age = conf.max_age as f64;
 
-        let join_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
 
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return (opcua_client, conf);
+                        return (opcua_client, conf, stop_signal_rx);
                     }
                     _ = interval.tick() => {
                         Group::read_variables_from_remote(&opcua_client, &need_read_variable_fields, &need_read_variable_ids, &timestamp_to_return, max_age, &mb_tx).await;
                     }
                 }
             }
-        });
-
-        join_handle
+        })
     }
 
     async fn start_subscription(
@@ -279,10 +281,10 @@ impl Group {
                 Ok(data_values) => {
                     let mut message = Message::default();
                     // todo
-                    for (index, value) in data_values.into_iter().enumerate() {
-                        debug!("{:?}", value);
+                    for (index, data_value) in data_values.into_iter().enumerate() {
+                        debug!("{:?}", data_value);
                         let name = unsafe { need_read_variable_names.get_unchecked(index) };
-                        let value = match value.value {
+                        let value = match data_value.value {
                             Some(variant) => match variant {
                                 opcua::types::Variant::Empty => MessageValue::Null,
                                 opcua::types::Variant::Boolean(bool) => MessageValue::Boolean(bool),
