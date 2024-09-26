@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
+    #[serde(rename = "type")]
     pub typ: Option<EventType>,
     pub resource_type: Option<ResourceType>,
 }
@@ -95,4 +96,5 @@ pub struct SearchEventsItemResp {
     pub typ: EventType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub info: Option<String>,
+    pub ts: i64,
 }

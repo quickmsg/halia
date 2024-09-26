@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sqlx::FromRow;
+use tracing::debug;
 use types::{
     events::{EventType, QueryParams, ResourceType},
     Pagination,
@@ -136,6 +137,7 @@ pub async fn search(
         }
         (None, Some(typ), None) => {
             let typ: i32 = typ.into();
+            debug!("{}", typ);
 
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE typ = ?")
                 .bind(typ)
