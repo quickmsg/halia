@@ -6,7 +6,7 @@ use common::{
 use message::MessageBatch;
 use tokio::{
     select,
-    sync::{broadcast, mpsc},
+    sync::{broadcast, mpsc, watch},
     task::JoinHandle,
 };
 use tracing::{debug, warn};
@@ -16,10 +16,10 @@ use super::WritePointEvent;
 
 #[derive(Debug)]
 pub struct Sink {
-    stop_signal_tx: mpsc::Sender<()>,
+    stop_signal_tx: watch::Sender<()>,
     join_handle: Option<
         JoinHandle<(
-            mpsc::Receiver<()>,
+            watch::Receiver<()>,
             mpsc::Receiver<MessageBatch>,
             mpsc::Sender<WritePointEvent>,
             broadcast::Receiver<bool>,
@@ -40,7 +40,7 @@ impl Sink {
         write_tx: mpsc::Sender<WritePointEvent>,
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
@@ -60,7 +60,7 @@ impl Sink {
         }
     }
 
-    pub async fn update(&mut self, old_conf: SinkConf, new_conf: SinkConf) {
+    pub async fn update(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
         let (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer) = self.stop().await;
         let join_handle = Self::event_loop(
             stop_signal_rx,
@@ -74,24 +74,24 @@ impl Sink {
     }
 
     fn event_loop(
-        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut stop_signal_rx: watch::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
         write_tx: mpsc::Sender<WritePointEvent>,
         conf: SinkConf,
         mut device_err_rx: broadcast::Receiver<bool>,
         mut message_retainer: Box<dyn SinkMessageRetain>,
     ) -> JoinHandle<(
-        mpsc::Receiver<()>,
+        watch::Receiver<()>,
         mpsc::Receiver<MessageBatch>,
         mpsc::Sender<WritePointEvent>,
         broadcast::Receiver<bool>,
         Box<dyn SinkMessageRetain>,
     )> {
-        let join_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut device_err = false;
             loop {
                 select! {
-                    _ = stop_signal_rx.recv() => {
+                    _ = stop_signal_rx.changed() => {
                         return (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer);
                     }
 
@@ -123,20 +123,19 @@ impl Sink {
                     }
                 }
             }
-        });
-        join_handle
+        })
     }
 
     pub async fn stop(
         &mut self,
     ) -> (
-        mpsc::Receiver<()>,
+        watch::Receiver<()>,
         mpsc::Receiver<MessageBatch>,
         mpsc::Sender<WritePointEvent>,
         broadcast::Receiver<bool>,
         Box<dyn SinkMessageRetain>,
     ) {
-        self.stop_signal_tx.send(()).await.unwrap();
+        self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
 

@@ -5,7 +5,7 @@ use message::{Message, MessageBatch};
 use protocol::modbus::Context;
 use tokio::{
     select,
-    sync::{broadcast, mpsc},
+    sync::{broadcast, mpsc, watch},
     task::JoinHandle,
     time,
 };
@@ -19,10 +19,10 @@ pub struct Source {
     pub conf: SourceConf,
     quantity: u16,
 
-    stop_signal_tx: mpsc::Sender<()>,
+    stop_signal_tx: watch::Sender<()>,
     join_handle: Option<
         JoinHandle<(
-            mpsc::Receiver<()>,
+            watch::Receiver<()>,
             mpsc::Sender<String>,
             broadcast::Receiver<bool>,
         )>,
@@ -39,7 +39,7 @@ impl Source {
         read_tx: mpsc::Sender<String>,
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, _) = broadcast::channel(16);
 
         let quantity = conf.data_type.get_quantity();
@@ -120,7 +120,7 @@ impl Source {
 
     fn event_loop(
         &mut self,
-        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut stop_signal_rx: watch::Receiver<()>,
         read_tx: mpsc::Sender<String>,
         mut device_err_rx: broadcast::Receiver<bool>,
     ) {
@@ -131,7 +131,7 @@ impl Source {
             let mut device_err = false;
             loop {
                 select! {
-                    _ = stop_signal_rx.recv() => {
+                    _ = stop_signal_rx.changed() => {
                         return (stop_signal_rx, read_tx, device_err_rx);
                     }
 
@@ -156,15 +156,15 @@ impl Source {
     pub async fn stop(
         &mut self,
     ) -> (
-        mpsc::Receiver<()>,
+        watch::Receiver<()>,
         mpsc::Sender<String>,
         broadcast::Receiver<bool>,
     ) {
-        self.stop_signal_tx.send(()).await.unwrap();
+        self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn update(&mut self, old_conf: SourceConf, new_conf: SourceConf) {
+    pub async fn update(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
         self.conf = new_conf;
         let (stop_signal_rx, read_tx, device_err_rx) = self.stop().await;
         self.event_loop(stop_signal_rx, read_tx, device_err_rx);

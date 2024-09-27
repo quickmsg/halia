@@ -21,7 +21,7 @@ use source::Source;
 use tokio::{
     net::TcpStream,
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, mpsc, watch, RwLock},
     task::JoinHandle,
     time,
 };
@@ -35,7 +35,7 @@ use types::{
     Value,
 };
 
-use crate::{add_device_running_count, sub_device_running_count, Device};
+use crate::{add_device_running_count, Device};
 
 mod sink;
 mod source;
@@ -47,7 +47,7 @@ struct Modbus {
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
 
-    stop_signal_tx: mpsc::Sender<()>,
+    stop_signal_tx: watch::Sender<()>,
     device_err_tx: broadcast::Sender<bool>,
     err: Arc<RwLock<Option<String>>>,
     rtt: Arc<AtomicU16>,
@@ -57,7 +57,7 @@ struct Modbus {
 
     join_handle: Option<
         JoinHandle<(
-            mpsc::Receiver<()>,
+            watch::Receiver<()>,
             mpsc::Receiver<WritePointEvent>,
             mpsc::Receiver<String>,
         )>,
@@ -79,7 +79,7 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 pub fn new(device_id: String, device_conf: DeviceConf) -> Box<dyn Device> {
     let conf: ModbusConf = serde_json::from_value(device_conf.ext).unwrap();
 
-    let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     let (read_tx, read_rx) = mpsc::channel::<String>(16);
     let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
     let (device_err_tx, _) = broadcast::channel(16);
@@ -118,7 +118,7 @@ impl Modbus {
     fn event_loop(
         &mut self,
         modbus_conf: ModbusConf,
-        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut stop_signal_rx: watch::Receiver<()>,
         mut read_rx: mpsc::Receiver<String>,
         mut write_rx: mpsc::Receiver<WritePointEvent>,
     ) {
@@ -128,7 +128,6 @@ impl Modbus {
         let rtt = self.rtt.clone();
         let join_handle = tokio::spawn(async move {
             let mut task_err: Option<io::Error> = None;
-            let mut init = false;
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
@@ -152,7 +151,7 @@ impl Modbus {
                         loop {
                             select! {
                                 biased;
-                                _ = stop_signal_rx.recv() => {
+                                _ = stop_signal_rx.changed() => {
                                     return (stop_signal_rx, write_rx, read_rx);
                                 }
 
@@ -217,7 +216,7 @@ impl Modbus {
                         let sleep = time::sleep(Duration::from_secs(modbus_conf.reconnect));
                         tokio::pin!(sleep);
                         select! {
-                            _ = stop_signal_rx.recv() => {
+                            _ = stop_signal_rx.changed() => {
                                 return (stop_signal_rx, write_rx, read_rx);
                             }
 
@@ -400,7 +399,7 @@ impl Device for Modbus {
             return Ok(());
         }
 
-        self.stop_signal_tx.send(()).await.unwrap();
+        self.stop_signal_tx.send(()).unwrap();
         let (stop_signal_rx, write_rx, read_rx) = self.join_handle.take().unwrap().await.unwrap();
         self.event_loop(new_conf, stop_signal_rx, read_rx, write_rx);
 
@@ -416,7 +415,7 @@ impl Device for Modbus {
             sink.stop().await;
         }
 
-        self.stop_signal_tx.send(()).await.unwrap();
+        self.stop_signal_tx.send(()).unwrap();
     }
 
     async fn create_source(
