@@ -104,12 +104,19 @@ pub fn get_3d_ids(
     outgoing_edges: &mut HashMap<usize, Vec<usize>>,
 ) -> Result<Vec<Vec<Vec<usize>>>> {
     let mut threed_ids = Vec::new();
+    let mut i = 0;
     while ids.len() > 0 {
+        i += 1;
+        if i == 3 {
+            return Ok(threed_ids);
+        }
         let source_ids = ids
             .iter()
             .filter(|node_id| !incoming_edges.contains_key(*node_id))
             .copied()
             .collect::<Vec<usize>>();
+
+        debug!("{:?}", source_ids);
 
         let mut twod_ids = vec![];
         for source_id in source_ids.iter() {
@@ -134,7 +141,9 @@ fn remove_incoming_edge(
     outgoing_edges: &HashMap<usize, Vec<usize>>,
 ) {
     if let Some(target_ids) = outgoing_edges.get(&last_id) {
-        incoming_edges.remove(&target_ids[0]);
+        for target_id in target_ids {
+            incoming_edges.remove(target_id);
+        }
     }
 }
 
@@ -144,6 +153,7 @@ pub fn get_ids(
     incoming_edges: &HashMap<usize, Vec<usize>>,
     outgoing_edges: &HashMap<usize, Vec<usize>>,
 ) -> Result<Vec<usize>> {
+    debug!("{}", id);
     let mut ids = vec![id];
 
     let node = node_map.get(&id).unwrap();

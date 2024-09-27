@@ -41,6 +41,7 @@ impl Rule {
 
     async fn start(&mut self, conf: &RuleConf) -> HaliaResult<()> {
         let (incoming_edges, outgoing_edges) = conf.get_edges();
+        debug!("{:?}", incoming_edges);
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
