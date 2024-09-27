@@ -6,6 +6,8 @@ pub struct QueryParams {
     #[serde(rename = "type")]
     pub typ: Option<EventType>,
     pub resource_type: Option<ResourceType>,
+    pub begin_ts: Option<i64>,
+    pub end_ts: Option<i64>,
 }
 
 #[derive(Deserialize, Serialize)]

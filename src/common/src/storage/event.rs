@@ -1,6 +1,5 @@
 use anyhow::Result;
 use sqlx::FromRow;
-use tracing::debug;
 use types::{
     events::{EventType, QueryParams, ResourceType},
     Pagination,
@@ -95,12 +94,15 @@ pub async fn search(
     query_params: QueryParams,
 ) -> Result<(usize, Vec<Event>)> {
     let (limit, offset) = pagination.to_sql();
+
     let (count, events) = match (
         query_params.name,
         query_params.typ,
         query_params.resource_type,
+        query_params.begin_ts,
+        query_params.end_ts,
     ) {
-        (None, None, None) => {
+        (None, None, None, None, None) => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events")
                 .fetch_one(POOL.get().unwrap())
                 .await?;
@@ -115,7 +117,61 @@ pub async fn search(
 
             (count, events)
         }
-        (None, None, Some(resource_type)) => {
+        (None, None, None, None, Some(end_ts)) => {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE ts <= ?")
+                .bind(end_ts)
+                .fetch_one(POOL.get().unwrap())
+                .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, None, None, Some(begin_ts), None) => {
+            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE ts >= ?")
+                .bind(begin_ts)
+                .fetch_one(POOL.get().unwrap())
+                .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE ts >= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(begin_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, None, None, Some(begin_ts), Some(end_ts)) => {
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE ts >= ? AND ts <= ?")
+                    .bind(begin_ts)
+                    .bind(end_ts)
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(begin_ts)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, None, Some(resource_type), None, None) => {
             let resource_type: i32 = resource_type.into();
 
             let count: i64 =
@@ -135,9 +191,79 @@ pub async fn search(
 
             (count, events)
         }
-        (None, Some(typ), None) => {
+        (None, None, Some(resource_type), None, Some(end_ts)) => {
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_type = ? AND ts <= ?",
+            )
+            .bind(resource_type)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_type = ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(resource_type)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, None, Some(resource_type), Some(begin_ts), None) => {
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_type = ? AND ts >= ?",
+            )
+            .bind(resource_type)
+            .bind(begin_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_type = ? AND ts >= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, None, Some(resource_type), Some(begin_ts), Some(end_ts)) => {
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_type = ? AND ts >= ? AND ts <= ?",
+            )
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_type = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, Some(typ), None, None, None) => {
             let typ: i32 = typ.into();
-            debug!("{}", typ);
 
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE typ = ?")
                 .bind(typ)
@@ -155,7 +281,76 @@ pub async fn search(
 
             (count, events)
         }
-        (None, Some(typ), Some(resource_type)) => {
+        (None, Some(typ), None, None, Some(end_ts)) => {
+            let typ: i32 = typ.into();
+
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE typ = ? AND ts <= ?")
+                    .bind(typ)
+                    .bind(end_ts)
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE typ = ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(typ)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, Some(typ), None, Some(begin_ts), None) => {
+            let typ: i32 = typ.into();
+
+            let count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE typ = ? AND ts >= ?")
+                    .bind(typ)
+                    .bind(begin_ts)
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE typ = ? AND ts >= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(typ)
+            .bind(begin_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, Some(typ), None, Some(begin_ts), Some(end_ts)) => {
+            let typ: i32 = typ.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE typ = ? AND ts >= ? AND ts <= ?",
+            )
+            .bind(typ)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE typ = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(typ)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, Some(typ), Some(resource_type), None, None) => {
             let typ: i32 = typ.into();
             let resource_type: i32 = resource_type.into();
 
@@ -179,7 +374,87 @@ pub async fn search(
 
             (count, events)
         }
-        (Some(name), None, None) => {
+        (None, Some(typ), Some(resource_type), None, Some(end_ts)) => {
+            let typ: i32 = typ.into();
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE typ = ? AND resource_type = ? AND ts <= ?",
+            )
+            .bind(typ)
+            .bind(resource_type)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE typ = ? AND resource_type = ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(typ)
+            .bind(resource_type)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, Some(typ), Some(resoruce_type), Some(begin_ts), None) => {
+            let typ: i32 = typ.into();
+            let resource_type: i32 = resoruce_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE typ = ? AND resource_type = ? AND ts >= ?",
+            )
+            .bind(typ)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE typ = ? AND resource_type = ? AND ts >= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(typ)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (None, Some(typ), Some(resource_type), Some(begin_ts), Some(end_ts)) => {
+            let typ: i32 = typ.into();
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE typ = ? AND resource_type = ? AND ts >= ? AND ts <= ?",
+            )
+            .bind(typ)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE typ = ? AND resource_type = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(typ)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), None, None, None, None) => {
             let name = format!("%{}%", name);
 
             let count: i64 =
@@ -199,7 +474,78 @@ pub async fn search(
 
             (count, events)
         }
-        (Some(name), None, Some(resource_type)) => {
+        (Some(name), None, None, None, Some(end_ts)) => {
+            let name = format!("%{}%", name);
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND ts <= ?",
+            )
+            .bind(&name)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), None, None, Some(begin_ts), None) => {
+            let name = format!("%{}%", name);
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND ts >= ?",
+            )
+            .bind(&name)
+            .bind(begin_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND ts >= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(begin_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), None, None, Some(begin_ts), Some(end_ts)) => {
+            let name = format!("%{}%", name);
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND ts >= ? AND ts <= ?",
+            )
+            .bind(&name)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), None, Some(resource_type), None, None) => {
             let name = format!("%{}%", name);
             let resource_type: i32 = resource_type.into();
 
@@ -223,7 +569,87 @@ pub async fn search(
 
             (count, events)
         }
-        (Some(name), Some(typ), None) => {
+        (Some(name), None, Some(resource_type), None, Some(end_ts)) => {
+            let name = format!("%{}%", name);
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND resource_type = ? AND ts <= ?",
+            )
+            .bind(&name)
+            .bind(resource_type)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND resource_type = ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(resource_type)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), None, Some(resource_type), Some(begin_ts), None) => {
+            let name = format!("%{}%", name);
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND resource_type = ? AND ts >= ?",
+            )
+            .bind(&name)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND resource_type = ? AND ts >= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), None, Some(resource_type), Some(begin_ts), Some(end_ts)) => {
+            let name = format!("%{}%", name);
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND resource_type = ? AND ts >= ? AND ts <= ?",
+            )
+            .bind(&name)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND resource_type = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), Some(typ), None, None, None) => {
             let name = format!("%{}%", name);
             let typ: i32 = typ.into();
 
@@ -247,7 +673,87 @@ pub async fn search(
 
             (count, events)
         }
-        (Some(name), Some(typ), Some(resource_type)) => {
+        (Some(name), Some(typ), None, None, Some(end_ts)) => {
+            let name = format!("%{}%", name);
+            let typ: i32 = typ.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND typ = ? AND ts <= ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND typ = ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), Some(typ), None, Some(begin_ts), None) => {
+            let name = format!("%{}%", name);
+            let typ: i32 = typ.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND typ = ? AND ts >= ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(begin_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND typ = ? AND ts >= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(begin_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), Some(typ), None, Some(begin_ts), Some(end_ts)) => {
+            let name = format!("%{}%", name);
+            let typ: i32 = typ.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND typ = ? AND ts >= ? AND ts <= ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND typ = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), Some(typ), Some(resource_type), None, None) => {
             let name = format!("%{}%", name);
             let typ: i32 = typ.into();
             let resource_type: i32 = resource_type.into();
@@ -267,6 +773,95 @@ pub async fn search(
             .bind(&name)
             .bind(typ)
             .bind(resource_type)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), Some(typ), Some(resource_type), None, Some(end_ts)) => {
+            let name = format!("%{}%", name);
+            let typ: i32 = typ.into();
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND typ = ? AND resource_type = ? AND ts <= ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(resource_type)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND typ = ? AND resource_type = ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(resource_type)
+            .bind(end_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), Some(typ), Some(resource_type), Some(begin_ts), None) => {
+            let name = format!("%{}%", name);
+            let typ: i32 = typ.into();
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND typ = ? AND resource_type = ? AND ts >= ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND typ = ? AND resource_type = ? AND ts >= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+            (count, events)
+        }
+        (Some(name), Some(typ), Some(resource_type), Some(begin_ts), Some(end_ts)) => {
+            let name = format!("%{}%", name);
+            let typ: i32 = typ.into();
+            let resource_type: i32 = resource_type.into();
+
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM events WHERE resource_name LIKE ? AND typ = ? AND resource_type = ? AND ts >= ? AND ts <= ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(end_ts)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let events = sqlx::query_as::<_, Event>(
+                "SELECT * FROM events WHERE resource_name LIKE ? AND typ = ? AND resource_type = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            )
+            .bind(&name)
+            .bind(typ)
+            .bind(resource_type)
+            .bind(begin_ts)
+            .bind(end_ts)
             .bind(limit)
             .bind(offset)
             .fetch_all(POOL.get().unwrap())

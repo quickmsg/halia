@@ -89,7 +89,7 @@ impl Opcua {
             .client()
             .unwrap();
 
-        let endpoint: EndpointDescription = EndpointDescription::from(opcua_conf.host.as_ref());
+        let endpoint: EndpointDescription = EndpointDescription::from(opcua_conf.addr.as_ref());
 
         let (session, event_loop) = match client
             .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)

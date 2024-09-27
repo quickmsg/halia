@@ -10,8 +10,9 @@ pub struct CreateUpdateOpcuaReq {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct OpcuaConf {
-    pub host: String,
-    pub port: u16,
+    pub addr: String,
+    // pub host: String,
+    // pub port: u16,
     // 秒数
     pub reconnect: u64,
 }
