@@ -381,8 +381,7 @@ pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) 
         return Err(HaliaError::NameExists);
     }
 
-    let typ = storage::device::read_type(&device_id).await?;
-    let typ: DeviceType = typ.try_into()?;
+    let typ: DeviceType = storage::device::read_type(&device_id).await?.try_into()?;
     match typ {
         DeviceType::Modbus => modbus::validate_source_conf(&req.ext)?,
         DeviceType::Opcua => opcua::validate_source_conf(&req.ext)?,

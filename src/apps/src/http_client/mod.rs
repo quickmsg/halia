@@ -41,6 +41,18 @@ pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
+pub fn validate_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: SourceConf = serde_json::from_value(conf.clone())?;
+    Source::validate_conf(&conf)?;
+    Ok(())
+}
+
+pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: SinkConf = serde_json::from_value(conf.clone())?;
+    Sink::validate_conf(&conf)?;
+    Ok(())
+}
+
 #[async_trait]
 impl App for HttpClient {
     async fn update(

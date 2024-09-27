@@ -287,8 +287,7 @@ pub async fn stop_app(app_id: String) -> HaliaResult<()> {
         return Ok(());
     }
 
-    let active_rule_ref_cnt = storage::rule_ref::count_active_cnt_by_resource_id(&app_id).await?;
-    if active_rule_ref_cnt > 0 {
+    if storage::rule_ref::count_active_cnt_by_parent_id(&app_id).await? > 0 {
         return Err(HaliaError::StopActiveRefing);
     }
 
@@ -331,6 +330,12 @@ pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> 
     .await?
     {
         return Err(HaliaError::NameExists);
+    }
+
+    let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
+    match typ {
+        AppType::MqttClient => mqtt_client::validate_source_conf(&req.ext)?,
+        AppType::HttpClient => http_client::validate_source_conf(&req.ext)?,
     }
 
     let source_id = common::get_id();
@@ -453,6 +458,12 @@ pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> Ha
     .await?
     {
         return Err(HaliaError::NameExists);
+    }
+
+    let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
+    match typ {
+        AppType::MqttClient => mqtt_client::validate_sink_conf(&req.ext)?,
+        AppType::HttpClient => http_client::validate_sink_conf(&req.ext)?,
     }
 
     let sink_id = common::get_id();

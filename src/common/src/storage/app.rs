@@ -107,6 +107,15 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
     Ok(conf)
 }
 
+pub async fn read_type(id: &String) -> Result<i32> {
+    let typ: i32 = sqlx::query_scalar("SELECT typ FROM apps WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(typ)
+}
+
 pub async fn read_one(id: &String) -> Result<App> {
     let app = sqlx::query_as::<_, App>("SELECT * FROM apps WHERE id = ?")
         .bind(id)

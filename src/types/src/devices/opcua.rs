@@ -11,8 +11,6 @@ pub struct CreateUpdateOpcuaReq {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct OpcuaConf {
     pub addr: String,
-    // pub host: String,
-    // pub port: u16,
     // 秒数
     pub reconnect: u64,
 }
@@ -29,7 +27,9 @@ pub struct SourceConf {
     pub typ: SourceType,
     #[serde(flatten)]
     pub group: Option<GroupConf>,
+    #[serde(flatten)]
     pub subscription: Option<Subscriptionconf>,
+    #[serde(flatten)]
     pub monitored_item: Option<MonitoredItemconf>,
 }
 
