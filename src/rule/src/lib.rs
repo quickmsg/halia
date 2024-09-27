@@ -11,8 +11,8 @@ use dashmap::DashMap;
 use rule::Rule;
 use types::{
     rules::{
-        CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp,
-        SearchRulesResp, Summary,
+        AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node,
+        QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp, SearchRulesResp, Summary,
     },
     BaseConf, Pagination,
 };
@@ -72,7 +72,8 @@ pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
     }
 
     let id = common::get_id();
-    Rule::db_new(&id, &req.ext).await?;
+    create_rule_refs(&id, &req.ext.nodes).await?;
+
     storage::rule::insert(&id, req).await?;
     storage::event::insert(
         types::events::ResourceType::Rule,
@@ -173,10 +174,15 @@ pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
         return Err(HaliaError::NameExists);
     }
 
+    storage::rule_ref::delete_many_by_rule_id(&id).await?;
+    create_rule_refs(&id, &req.ext.nodes).await?;
+
     if let Some(mut rule) = GLOBAL_RULE_MANAGER.get_mut(&id) {
         let old_conf: RuleConf = serde_json::from_slice(&storage::rule::read_conf(&id).await?)?;
         let new_conf = req.ext.clone();
-        rule.update(old_conf, new_conf).await?;
+        if old_conf != new_conf {
+            rule.update(old_conf, new_conf).await?;
+        }
     }
 
     storage::rule::update(&id, req).await?;
@@ -218,5 +224,68 @@ pub async fn get_log_filename(id: String) -> HaliaResult<String> {
             Ok(filename)
         }
         None => Err(HaliaError::NotFound(id)),
+    }
+}
+
+async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
+    let mut err = None;
+    for node in nodes {
+        match node.node_type {
+            types::rules::NodeType::DeviceSource => {
+                let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                if !storage::source_or_sink::check_exists(&source_node.source_id).await? {
+                    err = Some(format!("设备源 {} 不存在！", source_node.source_id));
+                    break;
+                }
+                storage::rule_ref::insert(&id, &source_node.device_id, &source_node.source_id)
+                    .await?;
+            }
+            types::rules::NodeType::AppSource => {
+                let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                if !storage::source_or_sink::check_exists(&source_node.source_id).await? {
+                    err = Some(format!("应用源 {} 不存在！", source_node.source_id));
+                    break;
+                }
+                storage::rule_ref::insert(&id, &source_node.app_id, &source_node.source_id).await?;
+            }
+            types::rules::NodeType::DeviceSink => {
+                let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                if !storage::source_or_sink::check_exists(&sink_node.sink_id).await? {
+                    err = Some(format!("设备动作 {} 不存在！", sink_node.sink_id));
+                    break;
+                }
+                storage::rule_ref::insert(&id, &sink_node.device_id, &sink_node.sink_id).await?;
+            }
+            types::rules::NodeType::AppSink => {
+                let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                if !storage::source_or_sink::check_exists(&sink_node.sink_id).await? {
+                    err = Some(format!("应用动作 {} 不存在！", sink_node.sink_id));
+                    break;
+                }
+                storage::rule_ref::insert(&id, &sink_node.device_id, &sink_node.sink_id).await?;
+            }
+            types::rules::NodeType::Databoard => {
+                let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
+                if !storage::databoard_data::check_exists(&databoard_node.data_id).await? {
+                    err = Some(format!("数据看板数据 {} 不存在！", databoard_node.data_id));
+                    break;
+                }
+                storage::rule_ref::insert(
+                    &id,
+                    &databoard_node.databoard_id,
+                    &databoard_node.data_id,
+                )
+                .await?;
+            }
+            _ => {}
+        }
+    }
+
+    match err {
+        Some(e) => {
+            storage::rule_ref::delete_many_by_rule_id(&id).await?;
+            return Err(HaliaError::NotFound(e));
+        }
+        None => Ok(()),
     }
 }

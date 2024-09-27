@@ -27,44 +27,6 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub async fn db_new(id: &String, conf: &RuleConf) -> HaliaResult<()> {
-        for node in conf.nodes.iter() {
-            match node.node_type {
-                NodeType::DeviceSource => {
-                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(id, &source_node.device_id, &source_node.source_id)
-                        .await?;
-                }
-                NodeType::AppSource => {
-                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(&id, &source_node.app_id, &source_node.source_id)
-                        .await?;
-                }
-                NodeType::DeviceSink => {
-                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(&id, &sink_node.device_id, &sink_node.sink_id)
-                        .await?;
-                }
-                NodeType::AppSink => {
-                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(&id, &sink_node.app_id, &sink_node.sink_id).await?;
-                }
-                NodeType::Databoard => {
-                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    storage::rule_ref::insert(
-                        &id,
-                        &databoard_node.databoard_id,
-                        &databoard_node.data_id,
-                    )
-                    .await?;
-                }
-                _ => {}
-            }
-        }
-
-        Ok(())
-    }
-
     pub async fn new(id: String, conf: &RuleConf) -> HaliaResult<Self> {
         let (stop_signal_tx, _) = broadcast::channel(1);
         let mut rule = Self {
@@ -439,17 +401,10 @@ impl Rule {
         Ok(())
     }
 
-    pub async fn update(&mut self, old_conf: RuleConf, new_conf: RuleConf) -> HaliaResult<()> {
-        if old_conf == new_conf {
-            return Ok(());
-        } else {
-            Ok(())
-        }
-
-        // if self.on && restart {
-        //     self.stop().await?;
-        //     self.start().await?;
-        // }
+    pub async fn update(&mut self, _old_conf: RuleConf, new_conf: RuleConf) -> HaliaResult<()> {
+        self.stop().await?;
+        self.start(&new_conf).await?;
+        Ok(())
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {

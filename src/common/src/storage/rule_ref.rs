@@ -3,7 +3,6 @@ use sqlx::prelude::FromRow;
 
 use super::POOL;
 
-// active 1为引用，2为激活
 #[derive(FromRow)]
 pub struct RuleRef {
     pub rule_id: String,
@@ -36,14 +35,15 @@ pub async fn insert(rule_id: &String, parent_id: &String, resource_id: &String) 
     .bind(rule_id)
     .bind(parent_id)
     .bind(resource_id)
-    .bind(1)
+    .bind(false as i32)
     .execute(POOL.get().unwrap())
     .await?;
     Ok(())
 }
 
 pub async fn active(rule_id: &String) -> Result<()> {
-    sqlx::query("UPDATE rule_refs SET active = 2 WHERE rule_id = ?")
+    sqlx::query("UPDATE rule_refs SET active = ? WHERE rule_id = ?")
+        .bind(true as i32)
         .bind(rule_id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -52,7 +52,8 @@ pub async fn active(rule_id: &String) -> Result<()> {
 }
 
 pub async fn deactive(rule_id: &String) -> Result<()> {
-    sqlx::query("UPDATE rule_refs SET active = 1 WHERE rule_id = ?")
+    sqlx::query("UPDATE rule_refs SET active = ? WHERE rule_id = ?")
+        .bind(false as i32)
         .bind(rule_id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -80,8 +81,9 @@ pub async fn count_cnt_by_parent_id(parent_id: &String) -> Result<usize> {
 
 pub async fn count_active_cnt_by_parent_id(parent_id: &String) -> Result<usize> {
     let active_cnt: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = 2 AND parent_id = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = ? AND parent_id = ?")
             .bind(parent_id)
+            .bind(true as i32)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
@@ -99,7 +101,8 @@ pub async fn count_cnt_by_resource_id(resource_id: &String) -> Result<usize> {
 
 pub async fn count_active_cnt_by_resource_id(resource_id: &String) -> Result<usize> {
     let active_cnt: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = 2 AND resource_id = ?")
+        sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = ? AND resource_id = ?")
+            .bind(true as i32)
             .bind(resource_id)
             .fetch_one(POOL.get().unwrap())
             .await?;

@@ -153,7 +153,8 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
             let db_sink = storage::source_or_sink::read_one(&sink_id).await?;
             Ok(SearchRuleInfo {
                 app: app_resp,
-                source: Some(SearchSourcesOrSinksInfoResp {
+                source: None,
+                sink: Some(SearchSourcesOrSinksInfoResp {
                     id: db_sink.id,
                     conf: CreateUpdateSourceOrSinkReq {
                         base: BaseConf {
@@ -165,7 +166,6 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
                         ext: serde_json::from_slice(&db_sink.conf)?,
                     },
                 }),
-                sink: None,
             })
         }
         _ => {

@@ -151,3 +151,13 @@ pub(crate) async fn delete_many(databoard_id: &String) -> Result<()> {
         .await?;
     Ok(())
 }
+
+
+pub async fn check_exists(id: &String) -> Result<bool> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM databoard_datas WHERE id = ?")
+        .bind(id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(count == 1)
+}
