@@ -8,7 +8,7 @@ use common::{
 use functions::{computes, filter, merge::merge::Merge, metadata, window};
 use message::{MessageBatch, MessageValue};
 use tokio::sync::{broadcast, mpsc};
-use tracing::error;
+use tracing::{debug, error};
 use types::rules::{
     functions::{ComputerConf, FilterConf, WindowConf},
     AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, LogNode, Node,
@@ -116,6 +116,8 @@ impl Rule {
             rule_ref::active(&self.id).await?;
         }
 
+        debug!("here");
+
         let threed_ids = get_3d_ids(
             &mut ids,
             &node_map,
@@ -123,6 +125,7 @@ impl Rule {
             &mut tmp_outgoing_edges,
         )?;
 
+        debug!("here");
         for twod_ids in threed_ids {
             for oned_ids in twod_ids {
                 let mut functions = vec![];
@@ -299,6 +302,7 @@ impl Rule {
             }
         }
 
+        debug!("here");
         match error {
             Some(error) => {
                 rule_ref::deactive(&self.id).await?;
@@ -396,14 +400,19 @@ impl Rule {
             error!("rule stop send signal err:{}", e);
         }
 
+        self.logger = None;
+
         storage::rule_ref::deactive(&self.id).await?;
 
         Ok(())
     }
 
     pub async fn update(&mut self, _old_conf: RuleConf, new_conf: RuleConf) -> HaliaResult<()> {
+        debug!("here");
         self.stop().await?;
+        debug!("here");
         self.start(&new_conf).await?;
+        debug!("here");
         Ok(())
     }
 

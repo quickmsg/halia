@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
     databoard::load_from_storage().await.unwrap();
     rule::load_from_storage().await.unwrap();
 
-    info!("server starting...");
+    info!("server starting on {}...", config.port);
     api::start(config.port).await;
 
     Ok(())

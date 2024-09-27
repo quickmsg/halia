@@ -113,7 +113,12 @@ pub fn get_3d_ids(
 
         let mut twod_ids = vec![];
         for source_id in source_ids.iter() {
+            debug!(
+                "{:?}, {:?} {:?} {:?}",
+                source_id, node_map, incoming_edges, outgoing_edges
+            );
             let oned_ids = get_ids(*source_id, node_map, &incoming_edges, &outgoing_edges)?;
+            debug!("{:?}", oned_ids);
             ids.retain(|id| !oned_ids.contains(id));
             remove_incoming_edge(&oned_ids.last().unwrap(), incoming_edges, outgoing_edges);
             twod_ids.push(oned_ids);
@@ -196,6 +201,7 @@ pub fn get_ids(
                                 break;
                             }
                         }
+                        // TODO fix this
                         (None, None) => break,
                     }
                 } else {

@@ -9,10 +9,10 @@ use common::{
 };
 use dashmap::DashMap;
 use rule::Rule;
+use tracing::debug;
 use types::{
     rules::{
-        AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node,
-        QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp, SearchRulesResp, Summary,
+        AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node, QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp, SearchRulesResp, Summary
     },
     BaseConf, Pagination,
 };
@@ -174,6 +174,8 @@ pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
         return Err(HaliaError::NameExists);
     }
 
+    debug!("here");
+
     storage::rule_ref::delete_many_by_rule_id(&id).await?;
     create_rule_refs(&id, &req.ext.nodes).await?;
 
@@ -257,12 +259,12 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
                 storage::rule_ref::insert(&id, &sink_node.device_id, &sink_node.sink_id).await?;
             }
             types::rules::NodeType::AppSink => {
-                let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
                 if !storage::source_or_sink::check_exists(&sink_node.sink_id).await? {
                     err = Some(format!("应用动作 {} 不存在！", sink_node.sink_id));
                     break;
                 }
-                storage::rule_ref::insert(&id, &sink_node.device_id, &sink_node.sink_id).await?;
+                storage::rule_ref::insert(&id, &sink_node.app_id, &sink_node.sink_id).await?;
             }
             types::rules::NodeType::Databoard => {
                 let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
