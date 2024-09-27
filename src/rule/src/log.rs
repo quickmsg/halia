@@ -9,7 +9,7 @@ use tokio::{
     select,
     sync::{broadcast, mpsc},
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 pub struct Logger {
     mb_tx: mpsc::Sender<MessageBatch>,
@@ -56,10 +56,10 @@ impl Logger {
     }
 
     fn log(file: &mut File, mb: MessageBatch) {
-        info!("{:?}", &mb);
-        if let Err(e) = file.write_all(format!("{:?}\n", &mb.to_json()).as_bytes()) {
+        if let Err(e) = file.write_all(format!("{:?}, \n", mb).as_bytes()) {
             warn!("write log to file err {}", e);
         }
+
         if let Err(e) = file.flush() {
             warn!("flush log err {}", e);
         }

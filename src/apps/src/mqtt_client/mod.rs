@@ -16,7 +16,7 @@ use tokio::{
     sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
 };
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use types::apps::mqtt_client::{
     MqttClientConf, MqttClientV311Conf, MqttClientV50Conf, Qos, SinkConf, SourceConf,
 };
@@ -194,6 +194,7 @@ impl MqttClient {
     ) {
         match event {
             Ok(Event::Incoming(Incoming::Publish(p))) => {
+                debug!("topic:{}, payload:{:?}", p.topic, p.payload);
                 if *err {
                     *err = false;
                     _ = app_err_tx.send(false);

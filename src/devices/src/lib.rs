@@ -517,7 +517,7 @@ pub async fn get_source_rx(
 pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
     if storage::source_or_sink::insert_name_exists(
         &device_id,
-        storage::source_or_sink::Type::Source,
+        storage::source_or_sink::Type::Sink,
         &req.base.name,
     )
     .await?

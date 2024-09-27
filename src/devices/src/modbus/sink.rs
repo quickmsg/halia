@@ -96,6 +96,7 @@ impl Sink {
                     }
 
                     mb = mb_rx.recv() => {
+                        debug!("{:?}", mb);
                         if let Some(mb) = mb {
                             if !device_err {
                                 Self::send_write_point_event(mb, &conf, &write_tx).await;

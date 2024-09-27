@@ -57,7 +57,6 @@ pub fn get_summary() -> Summary {
     }
 }
 
-// TODO
 pub async fn load_from_storage() -> HaliaResult<()> {
     let db_on_rules = storage::rule::read_all_on().await?;
     for db_rule in db_on_rules {
@@ -68,6 +67,10 @@ pub async fn load_from_storage() -> HaliaResult<()> {
 }
 
 pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
+    if storage::rule::insert_name_exists(&req.base.name).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     let id = common::get_id();
     Rule::db_new(&id, &req.ext).await?;
     storage::rule::insert(&id, req).await?;
@@ -166,6 +169,10 @@ pub async fn stop(id: String) -> HaliaResult<()> {
 }
 
 pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
+    if storage::rule::update_name_exists(&id, &req.base.name).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     if let Some(mut rule) = GLOBAL_RULE_MANAGER.get_mut(&id) {
         let old_conf: RuleConf = serde_json::from_slice(&storage::rule::read_conf(&id).await?)?;
         let new_conf = req.ext.clone();
@@ -189,7 +196,6 @@ pub async fn delete(id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRunning);
     }
 
-    storage::rule::delete(&id).await?;
     storage::event::insert(
         types::events::ResourceType::Rule,
         &id,
@@ -197,6 +203,8 @@ pub async fn delete(id: String) -> HaliaResult<()> {
         None,
     )
     .await?;
+
+    storage::rule::delete(&id).await?;
     storage::rule_ref::delete_many_by_rule_id(&id).await?;
 
     sub_rule_count();
