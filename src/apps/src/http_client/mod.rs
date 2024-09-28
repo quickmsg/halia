@@ -25,11 +25,11 @@ pub struct HttpClient {
     sinks: DashMap<String, Sink>,
 }
 
-pub fn new(app_id: String, app_conf: AppConf) -> HaliaResult<Box<dyn App>> {
-    let ext_conf: HttpClientConf = serde_json::from_value(app_conf.ext)?;
+pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
+    let ext_conf: HttpClientConf = serde_json::from_value(conf)?;
 
     Ok(Box::new(HttpClient {
-        id: app_id,
+        id,
         conf: Arc::new(ext_conf),
         err: None,
         sources: DashMap::new(),

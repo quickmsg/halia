@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::{BaseConf, SearchSourcesOrSinksInfoResp};
 
 pub mod http_client;
-pub mod log;
+pub mod influxdb;
+pub mod kafka;
 pub mod mqtt_client;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -22,6 +23,8 @@ pub struct CreateUpdateAppReq {
 pub enum AppType {
     MqttClient,
     HttpClient,
+    Kafka,
+    Influxdb,
 }
 
 impl Into<i32> for AppType {
@@ -29,6 +32,8 @@ impl Into<i32> for AppType {
         match self {
             AppType::MqttClient => 1,
             AppType::HttpClient => 2,
+            AppType::Kafka => 3,
+            AppType::Influxdb => 4,
         }
     }
 }
@@ -40,6 +45,8 @@ impl TryFrom<i32> for AppType {
         match value {
             1 => Ok(AppType::MqttClient),
             2 => Ok(AppType::HttpClient),
+            3 => Ok(AppType::Kafka),
+            4 => Ok(AppType::Influxdb),
             _ => bail!("未知应用类型: {}", value),
         }
     }
@@ -56,6 +63,8 @@ impl fmt::Display for AppType {
         match self {
             AppType::MqttClient => write!(f, "mqtt_client"),
             AppType::HttpClient => write!(f, "http_client"),
+            AppType::Kafka => write!(f, "kafka"),
+            AppType::Influxdb => write!(f, "influxdb"),
         }
     }
 }
@@ -67,6 +76,8 @@ impl TryFrom<String> for AppType {
         match value.as_str() {
             "mqtt_client" => Ok(AppType::MqttClient),
             "http_client" => Ok(AppType::HttpClient),
+            "kafka" => Ok(AppType::Kafka),
+            "influxdb" => Ok(AppType::Influxdb),
             _ => bail!("未知应用类型: {}", value),
         }
     }

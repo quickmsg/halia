@@ -30,4 +30,6 @@ pub enum HaliaError {
     Disconnect,
     #[error("{0}")]
     Error(#[from] anyhow::Error),
+    #[error("不支持的资源！")]
+    NotSupportResource,
 }

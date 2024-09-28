@@ -21,6 +21,8 @@ use types::{
 };
 
 mod http_client;
+mod influxdb;
+mod kafka;
 mod mqtt_client;
 
 static GLOBAL_APP_MANAGER: LazyLock<DashMap<String, Box<dyn App>>> =
@@ -77,16 +79,22 @@ pub trait App: Send + Sync {
 
     async fn create_source(
         &mut self,
-        source_id: String,
-        conf: serde_json::Value,
-    ) -> HaliaResult<()>;
+        _source_id: String,
+        _conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        Err(HaliaError::NotSupportResource)
+    }
     async fn update_source(
         &mut self,
-        source_id: String,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
-    ) -> HaliaResult<()>;
-    async fn delete_source(&mut self, source_id: String) -> HaliaResult<()>;
+        _source_id: String,
+        _old_conf: serde_json::Value,
+        _new_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        Err(HaliaError::NotSupportResource)
+    }
+    async fn delete_source(&mut self, _source_id: String) -> HaliaResult<()> {
+        Err(HaliaError::NotSupportResource)
+    }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()>;
     async fn update_sink(
@@ -99,8 +107,10 @@ pub trait App: Send + Sync {
 
     async fn get_source_rx(
         &self,
-        source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+        _source_id: &String,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        Err(HaliaError::NotSupportResource)
+    }
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }
 
@@ -184,6 +194,8 @@ pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
     match req.typ {
         AppType::MqttClient => mqtt_client::validate_conf(&req.conf.ext)?,
         AppType::HttpClient => http_client::validate_conf(&req.conf.ext)?,
+        AppType::Kafka => kafka::validate_conf(&req.conf.ext)?,
+        AppType::Influxdb => influxdb::validate_conf(&req.conf.ext)?,
     }
 
     let app_id = common::get_id();
@@ -251,7 +263,9 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
 
     let app = match app_type {
         AppType::MqttClient => mqtt_client::new(app_id.clone(), app_conf.ext)?,
-        AppType::HttpClient => http_client::new(app_id.clone(), app_conf)?,
+        AppType::HttpClient => http_client::new(app_id.clone(), app_conf.ext)?,
+        AppType::Kafka => kafka::new(app_id.clone(), app_conf.ext),
+        AppType::Influxdb => influxdb::new(app_id.clone(), app_conf.ext),
     };
     GLOBAL_APP_MANAGER.insert(app_id.clone(), app);
 
@@ -336,6 +350,7 @@ pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> 
     match typ {
         AppType::MqttClient => mqtt_client::validate_source_conf(&req.ext)?,
         AppType::HttpClient => http_client::validate_source_conf(&req.ext)?,
+        AppType::Kafka | AppType::Influxdb => return Err(HaliaError::NotSupportResource),
     }
 
     let source_id = common::get_id();
@@ -464,6 +479,8 @@ pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> Ha
     match typ {
         AppType::MqttClient => mqtt_client::validate_sink_conf(&req.ext)?,
         AppType::HttpClient => http_client::validate_sink_conf(&req.ext)?,
+        AppType::Kafka => kafka::validate_sink_conf(&req.ext)?,
+        AppType::Influxdb => influxdb::validate_sink_conf(&req.ext)?,
     }
 
     let sink_id = common::get_id();

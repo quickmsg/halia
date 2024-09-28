@@ -51,7 +51,7 @@ pub(crate) enum HaliaMqttClient {
     V50(Arc<v5::AsyncClient>),
 }
 
-pub fn new(app_id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
+pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
     let conf: MqttClientConf = serde_json::from_value(conf)?;
 
     let (app_err_tx, _) = broadcast::channel(16);
@@ -72,7 +72,7 @@ pub fn new(app_id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>>
     };
 
     let mqtt_client = MqttClient {
-        id: app_id,
+        id,
         err: app_err,
         sources,
         sinks: DashMap::new(),

@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{ops::Sub, sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
 use message::{Message, MessageBatch, MessageValue};
@@ -11,22 +11,22 @@ use opcua::{
 };
 use tokio::{
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, mpsc, watch, RwLock},
     task::JoinHandle,
     time,
 };
 use tracing::debug;
-use types::devices::opcua::{GroupConf, SourceConf, VariableConf};
+use types::devices::opcua::{GroupConf, SourceConf, Subscriptionconf, VariableConf};
 
 pub struct Source {
-    stop_signal_tx: mpsc::Sender<()>,
+    group_stop_signal_tx: watch::Sender<()>,
 
     // variables: Option<Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>>,
-    join_handle: Option<
+    group_join_handle: Option<
         JoinHandle<(
             Arc<RwLock<Option<Arc<Session>>>>,
             GroupConf,
-            mpsc::Receiver<()>,
+            watch::Receiver<()>,
         )>,
     >,
     err: Option<String>,
@@ -36,24 +36,24 @@ pub struct Source {
 
 impl Source {
     pub async fn new(opcua_client: Arc<RwLock<Option<Arc<Session>>>>, conf: SourceConf) -> Self {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        let (group_stop_signal_tx, group_stop_signal_rx) = watch::channel(());
         let (mb_tx, _) = broadcast::channel(16);
         let mut source = Self {
-            stop_signal_tx,
+            group_stop_signal_tx,
             mb_tx: mb_tx.clone(),
-            join_handle: None,
+            group_join_handle: None,
             err: None,
         };
         match conf.typ {
             types::devices::opcua::SourceType::Group => {
                 let join_handle = Self::start_group(
-                    stop_signal_rx,
+                    group_stop_signal_rx,
                     conf.group.unwrap(),
                     opcua_client,
                     mb_tx.clone(),
                 )
                 .await;
-                source.join_handle = Some(join_handle);
+                source.group_join_handle = Some(join_handle);
             }
             types::devices::opcua::SourceType::Subscription => todo!(),
             types::devices::opcua::SourceType::MonitoredItem => todo!(),
@@ -85,43 +85,35 @@ impl Source {
     }
 
     async fn start_group(
-        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut stop_signal_rx: watch::Receiver<()>,
         conf: GroupConf,
         opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
         mb_tx: broadcast::Sender<MessageBatch>,
     ) -> JoinHandle<(
         Arc<RwLock<Option<Arc<Session>>>>,
         GroupConf,
-        mpsc::Receiver<()>,
+        watch::Receiver<()>,
     )> {
         let interval = conf.interval;
         let mut need_read_variable_fields = vec![];
         let mut need_read_variable_ids = vec![];
         for variable_conf in conf.variables.iter() {
             need_read_variable_fields.push(variable_conf.field.clone());
-            need_read_variable_ids.push(Group::get_read_value_id(variable_conf));
+            need_read_variable_ids.push(Self::group_get_read_value_id(variable_conf));
         }
 
-        let timestamp_to_return = match conf.timestamps_to_return {
-            types::devices::opcua::TimestampsToReturn::Source => TimestampsToReturn::Source,
-            types::devices::opcua::TimestampsToReturn::Server => TimestampsToReturn::Server,
-            types::devices::opcua::TimestampsToReturn::Both => TimestampsToReturn::Both,
-            types::devices::opcua::TimestampsToReturn::Neither => TimestampsToReturn::Neither,
-            types::devices::opcua::TimestampsToReturn::Invalid => TimestampsToReturn::Invalid,
-        };
-
-        let max_age = conf.max_age as f64;
+        let max_age = conf.max_age;
 
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(interval));
 
             loop {
                 select! {
-                    _ = stop_signal_rx.recv() => {
+                    _ = stop_signal_rx.changed() => {
                         return (opcua_client, conf, stop_signal_rx);
                     }
                     _ = interval.tick() => {
-                        Group::read_variables_from_remote(&opcua_client, &need_read_variable_fields, &need_read_variable_ids, &timestamp_to_return, max_age, &mb_tx).await;
+                        Self::group_read_variables_from_remote(&opcua_client, &need_read_variable_fields, &need_read_variable_ids, max_age, &mb_tx).await;
                     }
                 }
             }
@@ -129,19 +121,18 @@ impl Source {
     }
 
     async fn start_subscription(
-        conf: &SourceConf,
+        conf: Subscriptionconf,
         opcua_client: Arc<Session>,
         mb_tx: broadcast::Sender<MessageBatch>,
     ) {
-        let subscription_conf = conf.subscription.as_ref().unwrap();
         let opcua_subscription_id = opcua_client
             .create_subscription(
-                Duration::from_secs(subscription_conf.publishing_interval),
-                subscription_conf.lifetime_count,
-                subscription_conf.max_keep_alive_count,
-                subscription_conf.max_notifications_per_publish,
-                subscription_conf.priority,
-                subscription_conf.publishing_enalbed,
+                Duration::from_secs(conf.publishing_interval),
+                conf.lifetime_count,
+                conf.max_keep_alive_count,
+                conf.max_notifications_per_publish,
+                conf.priority,
+                conf.publishing_enalbed,
                 DataChangeCallback::new(|dv, item| {
                     println!("Data change from server:");
                     Self::print_value(&dv, item);
@@ -183,13 +174,7 @@ impl Source {
     async fn start_monitored_item(&mut self) {}
 
     pub async fn stop(&mut self) {
-        // self.stop_signal_tx
-        //     .as_ref()
-        //     .unwrap()
-        //     .send(())
-        //     .await
-        //     .unwrap();
-        // self.stop_signal_tx = None;
+        self.group_stop_signal_tx.send(()).unwrap();
     }
 
     pub async fn update_conf(&mut self, old_conf: SourceConf, new_conf: SourceConf) {
@@ -207,26 +192,8 @@ impl Source {
         //     //     .await;
         // }
     }
-}
 
-pub struct Group {
-    variables: Arc<RwLock<Vec<(String, ReadValueId)>>>,
-    stop_signal_tx: Option<mpsc::Sender<()>>,
-}
-
-impl Group {
-    // pub fn new(conf: &GroupConf) -> Self {
-    //     let mut variables = vec![];
-    //     for variable_conf in conf.variables.iter() {
-    //         let read_value_id = Self::get_read_value_id(variable_conf);
-    //         variables.push((variable_conf.field.clone(), read_value_id));
-    //     }
-    //     Self {
-    //         variables: Arc::new(RwLock::new(variables)),
-    //         stop_signal_tx: None,
-    //     }
-    // }
-    pub fn get_read_value_id(variable_conf: &VariableConf) -> ReadValueId {
+    pub fn group_get_read_value_id(variable_conf: &VariableConf) -> ReadValueId {
         let namespace = variable_conf.namespace;
         let identifier = match variable_conf.identifier_type {
             types::devices::opcua::IdentifierType::Numeric => {
@@ -260,11 +227,10 @@ impl Group {
         }
     }
 
-    async fn read_variables_from_remote(
+    async fn group_read_variables_from_remote(
         opcua_client: &Arc<RwLock<Option<Arc<Session>>>>,
         need_read_variable_names: &Vec<String>,
         need_read_variable_ids: &Vec<ReadValueId>,
-        timestamp_to_return: &TimestampsToReturn,
         max_age: f64,
         mb_tx: &broadcast::Sender<MessageBatch>,
     ) {
@@ -272,7 +238,7 @@ impl Group {
             Some(client) => match client
                 .read(
                     &need_read_variable_ids,
-                    timestamp_to_return.clone(),
+                    TimestampsToReturn::Neither,
                     max_age,
                 )
                 .await

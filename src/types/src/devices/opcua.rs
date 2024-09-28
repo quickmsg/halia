@@ -45,7 +45,6 @@ pub enum SourceType {
 pub struct GroupConf {
     // 毫秒
     pub interval: u64,
-    pub timestamps_to_return: TimestampsToReturn,
     // pub max_age: f64,
     // serde_json bug,无法在flatten模式下解析f64
     pub max_age: f64,
