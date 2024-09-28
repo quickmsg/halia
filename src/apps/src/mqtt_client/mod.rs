@@ -153,20 +153,29 @@ impl MqttClient {
         let mut mqtt_options = MqttOptions::new(&conf.client_id, &conf.host, conf.port);
         mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
         mqtt_options.set_clean_session(conf.clean_session);
-        if let Some(auth) = &conf.auth {
-            mqtt_options.set_credentials(auth.username.clone(), auth.password.clone());
-        }
-        if let Some(cert_info) = &conf.cert_info {
-            let transport = Transport::Tls(TlsConfiguration::Simple {
-                ca: cert_info.ca_cert.clone().into_bytes(),
-                alpn: None,
-                client_auth: Some((
-                    cert_info.client_cert.clone().into_bytes(),
-                    cert_info.client_key.clone().into_bytes(),
-                )),
-            });
-            mqtt_options.set_transport(transport);
-        }
+        match (&conf.auth.username, &conf.auth.password) {
+            (None, None) => {}
+            (None, Some(password)) => {
+                mqtt_options.set_credentials("", password);
+            }
+            (Some(username), None) => {
+                mqtt_options.set_credentials(username, "");
+            }
+            (Some(username), Some(password)) => {
+                mqtt_options.set_credentials(username, password);
+            }
+        };
+        // if let Some(cert_info) = &conf.cert_info {
+        //     let transport = Transport::Tls(TlsConfiguration::Simple {
+        //         ca: cert_info.ca_cert.clone().into_bytes(),
+        //         alpn: None,
+        //         client_auth: Some((
+        //             cert_info.client_cert.clone().into_bytes(),
+        //             cert_info.client_key.clone().into_bytes(),
+        //         )),
+        //     });
+        //     mqtt_options.set_transport(transport);
+        // }
         if let Some(last_will) = &conf.last_will {
             let message = BASE64_STANDARD.decode(&last_will.message).unwrap();
             mqtt_options.set_last_will(LastWill {
@@ -254,21 +263,30 @@ impl MqttClient {
         let mut mqtt_options = v5::MqttOptions::new(&conf.client_id, &conf.host, conf.port);
         mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
 
-        if let Some(auth) = &conf.auth {
-            mqtt_options.set_credentials(&auth.username, &auth.password);
-        }
+        match (&conf.auth.username, &conf.auth.password) {
+            (None, None) => {}
+            (None, Some(password)) => {
+                mqtt_options.set_credentials("", password);
+            }
+            (Some(username), None) => {
+                mqtt_options.set_credentials(username, "");
+            }
+            (Some(username), Some(password)) => {
+                mqtt_options.set_credentials(username, password);
+            }
+        };
 
-        if let Some(cert_info) = &conf.cert_info {
-            let transport = Transport::Tls(TlsConfiguration::Simple {
-                ca: cert_info.ca_cert.clone().into_bytes(),
-                alpn: None,
-                client_auth: Some((
-                    cert_info.client_cert.clone().into_bytes(),
-                    cert_info.client_key.clone().into_bytes(),
-                )),
-            });
-            mqtt_options.set_transport(transport);
-        }
+        // if let Some(cert_info) = &conf.cert_info {
+        //     let transport = Transport::Tls(TlsConfiguration::Simple {
+        //         ca: cert_info.ca_cert.clone().into_bytes(),
+        //         alpn: None,
+        //         client_auth: Some((
+        //             cert_info.client_cert.clone().into_bytes(),
+        //             cert_info.client_key.clone().into_bytes(),
+        //         )),
+        //     });
+        //     mqtt_options.set_transport(transport);
+        // }
 
         let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
 

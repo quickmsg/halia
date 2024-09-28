@@ -25,8 +25,8 @@ pub struct MqttClientV311Conf {
     pub host: String,
     pub port: u16,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth: Option<MqttClientAuth>,
+    #[serde(flatten)]
+    pub auth: MqttClientAuth,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cert_info: Option<CertInfo>,
@@ -47,8 +47,8 @@ pub struct MqttClientV50Conf {
     pub timeout: usize,
     pub keep_alive: u64,
     pub clean_session: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth: Option<MqttClientAuth>,
+    #[serde(flatten)]
+    pub auth: MqttClientAuth,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cert_info: Option<CertInfo>,
     pub last_will: Option<LastWillV50>,
@@ -56,8 +56,10 @@ pub struct MqttClientV50Conf {
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientAuth {
-    pub username: String,
-    pub password: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]

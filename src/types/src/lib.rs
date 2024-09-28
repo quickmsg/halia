@@ -93,12 +93,13 @@ pub struct SearchSourcesOrSinksInfoResp {
     pub conf: CreateUpdateSourceOrSinkReq,
 }
 
+// security为true时，必须填写ca_cert
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct CertInfo {
-    pub ca_cert: String,
-    pub client_cert: String,
-    pub client_key: String,
-    pub verify_server_cert: bool,
+    pub security: bool,
+    pub ca_cert: Option<String>,
+    pub client_cert: Option<String>,
+    pub client_key: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
