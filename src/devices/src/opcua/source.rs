@@ -268,7 +268,6 @@ impl Group {
         max_age: f64,
         mb_tx: &broadcast::Sender<MessageBatch>,
     ) {
-        debug!("{:?}", need_read_variable_ids);
         match opcua_client.read().await.as_ref() {
             Some(client) => match client
                 .read(
@@ -330,10 +329,7 @@ impl Group {
                     return;
                 }
             },
-            None => {
-                debug!("opcua client is none");
-                return;
-            }
+            None => return,
         }
     }
 }

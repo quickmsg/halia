@@ -13,7 +13,7 @@ use sink::Sink;
 use source::Source;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, mpsc, watch, RwLock},
     task::JoinHandle,
     time,
 };
@@ -36,7 +36,7 @@ struct Opcua {
     id: String,
 
     err: Option<String>,
-    stop_signal_tx: mpsc::Sender<()>,
+    stop_signal_tx: watch::Sender<()>,
     opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
 
     sources: DashMap<String, Source>,
@@ -45,7 +45,7 @@ struct Opcua {
 
 pub fn new(id: String, device_conf: DeviceConf) -> Box<dyn Device> {
     let conf: OpcuaConf = serde_json::from_value(device_conf.ext).unwrap();
-    let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
     let opcua_client: Arc<RwLock<Option<Arc<Session>>>> = Arc::new(RwLock::new(None));
 
@@ -78,7 +78,8 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl Opcua {
-    async fn connect(opcua_conf: &OpcuaConf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
+    async fn connect(conf: &OpcuaConf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
+        debug!("{}", conf.addr);
         let mut client = ClientBuilder::new()
             .application_name("test")
             .application_uri("aasda")
@@ -89,8 +90,9 @@ impl Opcua {
             .client()
             .unwrap();
 
-        let endpoint: EndpointDescription = EndpointDescription::from(opcua_conf.addr.as_ref());
+        let endpoint: EndpointDescription = EndpointDescription::from(conf.addr.as_ref());
 
+        debug!("here");
         let (session, event_loop) = match client
             .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
             .await
@@ -99,15 +101,18 @@ impl Opcua {
             Err(e) => bail!(e.to_string()),
         };
 
+        debug!("here");
+
         let handle = event_loop.spawn();
-        session.wait_for_connection().await;
+        // session.wait_for_connection().await;
+        debug!("opcua connect success");
         Ok((session, handle))
     }
 
     fn event_loop(
         opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
         conf: OpcuaConf,
-        mut stop_signal_rx: mpsc::Receiver<()>,
+        mut stop_signal_rx: watch::Receiver<()>,
     ) {
         tokio::spawn(async move {
             loop {
@@ -127,7 +132,7 @@ impl Opcua {
                         let sleep = time::sleep(Duration::from_secs(conf.reconnect));
                         tokio::pin!(sleep);
                         select! {
-                            _ = stop_signal_rx.recv() => {
+                            _ = stop_signal_rx.changed() => {
                                 return
                             }
 
@@ -156,6 +161,7 @@ impl Device for Opcua {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        self.stop_signal_tx.send(()).unwrap();
         // let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
         // Self::validate_conf(&ext_conf)?;
 
@@ -281,7 +287,7 @@ impl Device for Opcua {
             sink.stop().await;
         }
 
-        self.stop_signal_tx.send(()).await.unwrap();
+        self.stop_signal_tx.send(()).unwrap();
         match self.opcua_client.read().await.as_ref() {
             Some(session) => match session.disconnect().await {
                 Ok(_) => {

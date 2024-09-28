@@ -1,5 +1,3 @@
-#![feature(concat_idents)]
-
 use uuid::Uuid;
 pub mod config;
 pub mod error;
@@ -37,4 +35,11 @@ pub fn get_dynamic_value_from_json(value: serde_json::Value) -> DynamicValue {
 
 pub fn get_id() -> String {
     Uuid::new_v4().simple().to_string()
+}
+
+pub fn timestamp_millis() -> i64 {
+    let now = std::time::SystemTime::now();
+    now.duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
 }

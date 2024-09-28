@@ -883,7 +883,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
- "chrono",
  "message",
  "serde",
  "serde_json",

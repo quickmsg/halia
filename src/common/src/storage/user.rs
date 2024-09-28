@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
     Ok(())
 }
 
-pub async fn create_user(username: String, password: String) -> Result<()> {
+pub async fn create_user(username: String, password: &String) -> Result<()> {
     sqlx::query("INSERT INTO users (username, password) VALUES (?, ?)")
         .bind(username)
         .bind(password)

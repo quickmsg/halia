@@ -84,7 +84,7 @@ async fn check_empty_user() -> AppResult<AppSuccess<AdminExists>> {
     Ok(AppSuccess::data(AdminExists { exists }))
 }
 
-async fn registration(Json(password): Json<Password>) -> AppResult<AppSuccess<()>> {
+async fn registration(Json(password): Json<Password>) -> AppResult<AppSuccess<String>> {
     let exists = storage::user::check_admin_exists()
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
@@ -93,11 +93,16 @@ async fn registration(Json(password): Json<Password>) -> AppResult<AppSuccess<()
         return Err(AppError::new(1, "管理员账户已存在！".to_string()));
     }
 
-    storage::user::create_user("admin".to_string(), password.password)
+    storage::user::create_user("admin".to_string(), &password.password)
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
-    Ok(AppSuccess::empty())
+    let token = sign_jwt(User {
+        username: "admin".to_string(),
+        password: password.password,
+    });
+
+    Ok(AppSuccess::data(token))
 }
 
 async fn login(Json(user): Json<User>) -> AppResult<AppSuccess<AuthInfo>> {
@@ -121,6 +126,12 @@ async fn login(Json(user): Json<User>) -> AppResult<AppSuccess<AuthInfo>> {
         ));
     }
 
+    let token = sign_jwt(user);
+
+    Ok(AppSuccess::data(AuthInfo { token }))
+}
+
+fn sign_jwt(user: User) -> String {
     let iat = OffsetDateTime::now_utc();
     let exp = iat + Duration::hours(2);
     let claims = Claims::new(user.username, iat, exp);
@@ -130,12 +141,7 @@ async fn login(Json(user): Json<User>) -> AppResult<AppSuccess<AuthInfo>> {
         alg: Algorithm::HS512,
         ..Default::default()
     };
-    let token = match encode(&header, &claims, &EncodingKey::from_secret(SECRET.as_ref())) {
-        Ok(t) => t,
-        Err(_) => panic!(), // in practice you would return the error
-    };
-
-    Ok(AppSuccess::data(AuthInfo { token }))
+    encode(&header, &claims, &EncodingKey::from_secret(SECRET.as_ref())).unwrap()
 }
 
 async fn password(Json(update_password): Json<UpdatePassword>) -> AppResult<AppSuccess<()>> {

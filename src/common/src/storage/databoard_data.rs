@@ -5,6 +5,8 @@ use types::{
     Pagination,
 };
 
+use crate::timestamp_millis;
+
 use super::POOL;
 
 #[derive(FromRow)]
@@ -43,7 +45,7 @@ pub async fn insert(
 ) -> Result<()> {
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;
-    let ts = chrono::Utc::now().timestamp();
+    let ts = timestamp_millis();
     sqlx::query("INSERT INTO databoard_datas (id, parent_id, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(databoard_data_id)
         .bind(databoard_id)
@@ -151,7 +153,6 @@ pub(crate) async fn delete_many(databoard_id: &String) -> Result<()> {
         .await?;
     Ok(())
 }
-
 
 pub async fn check_exists(id: &String) -> Result<bool> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM databoard_datas WHERE id = ?")

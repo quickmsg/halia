@@ -5,6 +5,8 @@ use types::{
     Pagination,
 };
 
+use crate::timestamp_millis;
+
 use super::POOL;
 
 #[derive(FromRow)]
@@ -74,7 +76,7 @@ pub async fn insert(
     let resource_type: i32 = resource_type.into();
     let typ: i32 = typ.into();
     let info = info.map(|info| info.into_bytes());
-    let ts = chrono::Utc::now().timestamp();
+    let ts = timestamp_millis();
     sqlx::query(
         "INSERT INTO events (resource_type, resource_name, typ, info, ts) VALUES (?, ?, ?, ?, ?)",
     )
@@ -875,9 +877,9 @@ pub async fn search(
 }
 
 pub async fn delete_expired(day: usize) -> Result<()> {
-    let ts = chrono::Utc::now().timestamp();
+    let ts = timestamp_millis();
     sqlx::query("DELETE FROM events WHERE ts < ?")
-        .bind(ts - (day as i64) * 24 * 60 * 60)
+        .bind(ts - (day as i64) * 24 * 60 * 60 * 1000)
         .execute(POOL.get().unwrap())
         .await?;
 
