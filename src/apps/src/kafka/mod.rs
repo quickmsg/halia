@@ -1,16 +1,12 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
-use rskafka::client::{Client, ClientBuilder};
+use rdkafka::client::Client;
 use sink::Sink;
-use tokio::{
-    select,
-    sync::{mpsc, watch, RwLock},
-    time,
-};
+use tokio::sync::{mpsc, watch, RwLock};
 use types::apps::kafka::{KafkaConf, SinkConf};
 
 use crate::App;
@@ -40,7 +36,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: KafkaConf = serde_json::from_value(conf).unwrap();
     let kafka_client = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-    Kafka::connect(id.clone(), kafka_client.clone(), conf, stop_signal_rx);
+    // Kafka::connect(id.clone(), kafka_client.clone(), conf, stop_signal_rx);
     Box::new(Kafka {
         id,
         err: None,
@@ -51,46 +47,48 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 }
 
 impl Kafka {
-    fn connect(
-        app_id: String,
-        kafka_client: Arc<RwLock<Option<Arc<Client>>>>,
-        conf: KafkaConf,
-        mut stop_signal_rx: watch::Receiver<()>,
-    ) {
-        tokio::spawn(async move {
-            loop {
-                match ClientBuilder::new(conf.bootstrap_brokers.clone())
-                    .build()
-                    .await
-                {
-                    Ok(client) => {
-                        events::insert_connect(types::events::ResourceType::App, &app_id).await;
-                        kafka_client.write().await.replace(Arc::new(client));
-                    }
-                    Err(e) => {
-                        events::insert_disconnect(
-                            types::events::ResourceType::App,
-                            &app_id,
-                            e.to_string(),
-                        )
-                        .await;
+    // fn connect(
+    //     app_id: String,
+    //     kafka_client: Arc<RwLock<Option<Arc<Client>>>>,
+    //     conf: KafkaConf,
+    //     mut stop_signal_rx: watch::Receiver<()>,
+    // ) {
+    //     tokio::spawn(async move {
+    //         loop {
+    //             let brokers = conf.bootstrap_brokers.join(",");
+    //             match ClientConfig::new()
+    //                 .set("bootstrap.servers", brokers)
+    //                 .set("message.timeout.ms", "5000")
+    //                 .create::<FutureProducer>()
+    //             {
+    //                 Ok(client) => {
+    //                     events::insert_connect(types::events::ResourceType::App, &app_id).await;
+    //                     kafka_client.write().await.replace(Arc::new(client));
+    //                 }
+    //                 Err(e) => {
+    //                     events::insert_disconnect(
+    //                         types::events::ResourceType::App,
+    //                         &app_id,
+    //                         e.to_string(),
+    //                     )
+    //                     .await;
 
-                        let sleep = time::sleep(Duration::from_secs(conf.reconnect));
-                        tokio::pin!(sleep);
-                        select! {
-                            _ = stop_signal_rx.changed() => {
-                                return stop_signal_rx;
-                            }
+    //                     let sleep = time::sleep(Duration::from_secs(conf.reconnect));
+    //                     tokio::pin!(sleep);
+    //                     select! {
+    //                         _ = stop_signal_rx.changed() => {
+    //                             return stop_signal_rx;
+    //                         }
 
-                            _ = &mut sleep => {}
-                        }
-                    }
-                }
-            }
-        });
+    //                         _ = &mut sleep => {}
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     });
 
-        todo!()
-    }
+    //     todo!()
+    // }
 }
 
 #[async_trait]
@@ -109,7 +107,7 @@ impl App for Kafka {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf.clone())?;
-        let sink = Sink::new(conf, self.kafka_client.clone()).await?;
+        let sink = Sink::new("servers".to_owned(), conf).await?;
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
