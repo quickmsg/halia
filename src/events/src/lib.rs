@@ -3,6 +3,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     storage,
 };
+use tracing::warn;
 use types::{
     events::{EventType, QueryParams, ResourceType, SearchEventsItemResp, SearchEventsResp},
     Pagination,
@@ -37,5 +38,59 @@ pub async fn search_events(
             total: count,
             data: events,
         })
+    }
+}
+
+pub async fn insert_create(resource_type: ResourceType, resource_id: &String) {
+    if let Err(e) =
+        storage::event::insert(resource_type, resource_id, EventType::Create, None).await
+    {
+        warn!("failed to insert create event: {}", e);
+    }
+}
+
+pub async fn insert_update(resource_type: ResourceType, resource_id: &String) {
+    if let Err(e) =
+        storage::event::insert(resource_type, resource_id, EventType::Update, None).await
+    {
+        warn!("failed to insert update event: {}", e);
+    }
+}
+
+pub async fn insert_delete(resource_type: ResourceType, resource_id: &String) {
+    if let Err(e) =
+        storage::event::insert(resource_type, resource_id, EventType::Delete, None).await
+    {
+        warn!("failed to insert delete event: {}", e);
+    }
+}
+
+pub async fn insert_start(resource_type: ResourceType, resource_id: &String) {
+    if let Err(e) = storage::event::insert(resource_type, resource_id, EventType::Start, None).await
+    {
+        warn!("failed to insert start event: {}", e);
+    }
+}
+
+pub async fn insert_stop(resource_type: ResourceType, resource_id: &String) {
+    if let Err(e) = storage::event::insert(resource_type, resource_id, EventType::Stop, None).await
+    {
+        warn!("failed to insert stop event: {}", e);
+    }
+}
+
+pub async fn insert_connect(resource_type: ResourceType, resource_id: &String) {
+    if let Err(e) =
+        storage::event::insert(resource_type, resource_id, EventType::Connect, None).await
+    {
+        warn!("failed to insert connect event: {}", e);
+    }
+}
+
+pub async fn insert_disconnect(resource_type: ResourceType, resource_id: &String, e: String) {
+    if let Err(e) =
+        storage::event::insert(resource_type, resource_id, EventType::Disconnect, Some(e)).await
+    {
+        warn!("failed to insert disconnect event: {}", e);
     }
 }

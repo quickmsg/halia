@@ -42,7 +42,7 @@ mod source;
 
 #[derive(Debug)]
 struct Modbus {
-    pub id: String,
+    id: String,
 
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
@@ -138,16 +138,9 @@ impl Modbus {
                             warn!("update device err failed: {}", e);
                         }
 
-                        if let Err(e) = storage::event::insert(
-                            types::events::ResourceType::Device,
-                            &device_id,
-                            types::events::EventType::Connect,
-                            None,
-                        )
-                        .await
-                        {
-                            warn!("create event failed: {}", e);
-                        }
+                        events::insert_connect(types::events::ResourceType::Device, &device_id)
+                            .await;
+
                         loop {
                             select! {
                                 biased;
@@ -184,16 +177,12 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
-                        if let Err(e) = storage::event::insert(
+                        events::insert_disconnect(
                             types::events::ResourceType::Device,
                             &device_id,
-                            types::events::EventType::Disconnect,
-                            Some(e.to_string()),
+                            e.to_string(),
                         )
-                        .await
-                        {
-                            warn!("create event failed: {}", e);
-                        };
+                        .await;
 
                         match &task_err {
                             Some(te) => {

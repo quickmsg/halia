@@ -87,7 +87,7 @@ pub struct Subscriptionconf {
     pub max_keep_alive_count: u32,
     pub max_notifications_per_publish: u32,
     pub priority: u8,
-    pub publishing_enalbed: bool,
+    pub publishing_enabled: bool,
 
     pub monitored_items: Vec<VariableConf>,
 }

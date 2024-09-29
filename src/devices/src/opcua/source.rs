@@ -1,4 +1,4 @@
-use std::{ops::Sub, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
 use message::{Message, MessageBatch, MessageValue};
@@ -11,7 +11,7 @@ use opcua::{
 };
 use tokio::{
     select,
-    sync::{broadcast, mpsc, watch, RwLock},
+    sync::{broadcast, watch, RwLock},
     task::JoinHandle,
     time,
 };
@@ -55,7 +55,7 @@ impl Source {
                 .await;
                 source.group_join_handle = Some(join_handle);
             }
-            types::devices::opcua::SourceType::Subscription => todo!(),
+            types::devices::opcua::SourceType::Subscription => {}
             types::devices::opcua::SourceType::MonitoredItem => todo!(),
         }
 
@@ -63,6 +63,7 @@ impl Source {
     }
 
     pub fn validate_conf(conf: SourceConf) -> Result<()> {
+        debug!("validate conf: {:?}", conf);
         match conf.typ {
             types::devices::opcua::SourceType::Group => match conf.group {
                 Some(_group) => Ok(()),
@@ -132,7 +133,7 @@ impl Source {
                 conf.max_keep_alive_count,
                 conf.max_notifications_per_publish,
                 conf.priority,
-                conf.publishing_enalbed,
+                conf.publishing_enabled,
                 DataChangeCallback::new(|dv, item| {
                     println!("Data change from server:");
                     Self::print_value(&dv, item);
@@ -247,7 +248,6 @@ impl Source {
                     let mut message = Message::default();
                     // todo
                     for (index, data_value) in data_values.into_iter().enumerate() {
-                        debug!("{:?}", data_value);
                         let name = unsafe { need_read_variable_names.get_unchecked(index) };
                         let value = match data_value.value {
                             Some(variant) => match variant {
@@ -264,10 +264,10 @@ impl Source {
                                 opcua::types::Variant::Float(f) => MessageValue::Float64(f as f64),
                                 opcua::types::Variant::Double(f) => MessageValue::Float64(f),
                                 // opcua::types::Variant::String(s) => MessageValue::String(s as String),
-                                opcua::types::Variant::String(s) => todo!(),
+                                opcua::types::Variant::String(_s) => todo!(),
                                 opcua::types::Variant::DateTime(_) => todo!(),
                                 opcua::types::Variant::Guid(_) => todo!(),
-                                opcua::types::Variant::StatusCode(s) => todo!(),
+                                opcua::types::Variant::StatusCode(_) => todo!(),
                                 opcua::types::Variant::ByteString(_) => todo!(),
                                 opcua::types::Variant::XmlElement(_) => todo!(),
                                 opcua::types::Variant::QualifiedName(_) => todo!(),
@@ -282,7 +282,6 @@ impl Source {
                             },
                             None => MessageValue::Null,
                         };
-                        debug!("{} {:?}", name, value);
 
                         message.add(name.clone(), value);
                     }

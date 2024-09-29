@@ -2,13 +2,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct KafkaConf {
-    pub host: String,
-    pub port: u16,
+    pub bootstrap_brokers: Vec<String>,
 
     // pub ssl: bool,
     // pub certifacte_verfication: bool,
-    pub headers: Option<Vec<(String, String)>>,
-    pub query_params: Option<Vec<(String, String)>>,
+    pub reconnect: u64,
     // 超时时间，单位为s
     // pub timeout: usize,
 }

@@ -11,14 +11,13 @@ use common::{
 use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, warn};
+use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
         SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemResp,
         SearchDevicesItemRunningInfo, SearchDevicesResp, SearchRuleInfo, Summary,
     },
-    events::EventType,
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
     SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
 };
@@ -195,13 +194,8 @@ pub async fn create_device(device_id: String, req: CreateUpdateDeviceReq) -> Hal
 
     add_device_count();
     storage::device::insert(&device_id, req).await?;
-    storage::event::insert(
-        types::events::ResourceType::Device,
-        &device_id,
-        EventType::Create,
-        None,
-    )
-    .await?;
+    events::insert_create(types::events::ResourceType::Device, &device_id).await;
+
     Ok(())
 }
 
@@ -236,13 +230,7 @@ pub async fn update_device(device_id: String, req: CreateUpdateDeviceReq) -> Hal
         device.update(old_conf, req.conf.ext.clone()).await?;
     }
 
-    storage::event::insert(
-        types::events::ResourceType::Device,
-        &device_id,
-        types::events::EventType::Update,
-        None,
-    )
-    .await?;
+    events::insert_update(types::events::ResourceType::Device, &device_id).await;
     storage::device::update(&device_id, req).await?;
 
     Ok(())
@@ -253,13 +241,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
         return Ok(());
     }
 
-    storage::event::insert(
-        types::events::ResourceType::Device,
-        &device_id,
-        EventType::Start,
-        None,
-    )
-    .await?;
+    events::insert_start(types::events::ResourceType::Device, &device_id).await;
 
     let db_device = storage::device::read_one(&device_id).await?;
     let typ = DeviceType::try_from(db_device.typ)?;
@@ -318,16 +300,7 @@ pub async fn stop_device(device_id: String) -> HaliaResult<()> {
         return Err(HaliaError::StopActiveRefing);
     }
 
-    if let Err(e) = storage::event::insert(
-        types::events::ResourceType::Device,
-        &device_id,
-        types::events::EventType::Stop,
-        None,
-    )
-    .await
-    {
-        warn!("create event failed: {}", e);
-    }
+    events::insert_stop(types::events::ResourceType::Device, &device_id).await;
 
     storage::device::update_status(&device_id, false).await?;
     match GLOBAL_DEVICE_MANAGER.remove(&device_id) {
@@ -357,13 +330,7 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
     }
 
     sub_device_count();
-    storage::event::insert(
-        types::events::ResourceType::Device,
-        &device_id,
-        EventType::Delete,
-        None,
-    )
-    .await?;
+    events::insert_delete(types::events::ResourceType::Device, &device_id).await;
     storage::device::delete(&device_id).await?;
     storage::source_or_sink::delete_by_parent_id(&device_id).await?;
 

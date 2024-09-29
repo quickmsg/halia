@@ -248,6 +248,7 @@ dependencies = [
  "chrono",
  "common",
  "dashmap",
+ "events",
  "message",
  "reqwest",
  "rskafka",

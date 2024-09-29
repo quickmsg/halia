@@ -200,13 +200,8 @@ pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
 
     let app_id = common::get_id();
     storage::app::insert(&app_id, req).await?;
-    storage::event::insert(
-        types::events::ResourceType::App,
-        &app_id,
-        types::events::EventType::Create,
-        None,
-    )
-    .await?;
+    events::insert_create(types::events::ResourceType::App, &app_id).await;
+
     add_app_count();
     Ok(())
 }
@@ -322,13 +317,7 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRefing);
     }
 
-    storage::event::insert(
-        types::events::ResourceType::App,
-        &app_id,
-        types::events::EventType::Delete,
-        None,
-    )
-    .await?;
+    events::insert_delete(types::events::ResourceType::App, &app_id).await;
 
     sub_app_count();
     storage::app::delete(&app_id).await?;
