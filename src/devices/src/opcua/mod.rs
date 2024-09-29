@@ -7,7 +7,7 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
-    types::{EndpointDescription, StatusCode},
+    types::{EndpointDescription, Identifier, StatusCode},
 };
 use sink::Sink;
 use source::Source;
@@ -19,9 +19,8 @@ use tokio::{
 };
 use tracing::{debug, warn};
 use types::{
-    apps::http_client::SinkConf,
     devices::{
-        opcua::{OpcuaConf, SourceConf},
+        opcua::{OpcuaConf, SinkConf, SourceConf},
         DeviceConf, SearchDevicesItemRunningInfo,
     },
     Value,
@@ -298,6 +297,28 @@ impl Device for Opcua {
                 }
             },
             None => {}
+        }
+    }
+}
+
+fn transfer_identifier(identifier: &types::devices::opcua::Identifer) -> Identifier {
+    let value = identifier.value.clone();
+    match identifier.typ {
+        types::devices::opcua::IdentifierType::Numeric => {
+            let num: u32 = serde_json::from_value(value).unwrap();
+            Identifier::Numeric(num)
+        }
+        types::devices::opcua::IdentifierType::String => {
+            let s: opcua::types::UAString = serde_json::from_value(value).unwrap();
+            Identifier::String(s)
+        }
+        types::devices::opcua::IdentifierType::Guid => {
+            let guid: opcua::types::Guid = serde_json::from_value(value).unwrap();
+            Identifier::Guid(guid)
+        }
+        types::devices::opcua::IdentifierType::ByteString => {
+            let bs: opcua::types::ByteString = serde_json::from_value(value).unwrap();
+            Identifier::ByteString(bs)
         }
     }
 }

@@ -18,6 +18,8 @@ use tokio::{
 use tracing::debug;
 use types::devices::opcua::{GroupConf, SourceConf, Subscriptionconf, VariableConf};
 
+use super::transfer_identifier;
+
 pub struct Source {
     group_stop_signal_tx: watch::Sender<()>,
 
@@ -194,32 +196,12 @@ impl Source {
         // }
     }
 
-    pub fn group_get_read_value_id(variable_conf: &VariableConf) -> ReadValueId {
-        let namespace = variable_conf.namespace;
-        let identifier = match variable_conf.identifier_type {
-            types::devices::opcua::IdentifierType::Numeric => {
-                let num: u32 =
-                    serde_json::from_value::<u32>(variable_conf.identifier.clone()).unwrap();
-                Identifier::Numeric(num)
-            }
-            types::devices::opcua::IdentifierType::String => {
-                let s: UAString = serde_json::from_value(variable_conf.identifier.clone()).unwrap();
-                Identifier::String(s)
-            }
-            types::devices::opcua::IdentifierType::Guid => {
-                let guid: Guid = serde_json::from_value(variable_conf.identifier.clone()).unwrap();
-                Identifier::Guid(guid)
-            }
-            types::devices::opcua::IdentifierType::ByteString => {
-                let bs: ByteString =
-                    serde_json::from_value(variable_conf.identifier.clone()).unwrap();
-                Identifier::ByteString(bs)
-            }
-        };
+    pub fn group_get_read_value_id(variable: &VariableConf) -> ReadValueId {
+        let identifier = transfer_identifier(&variable.identifier);
 
         ReadValueId {
             node_id: NodeId {
-                namespace,
+                namespace: variable.namespace,
                 identifier,
             },
             attribute_id: 13,
