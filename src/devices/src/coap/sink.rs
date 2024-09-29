@@ -17,7 +17,6 @@ use super::{transform_options, TokenManager};
 
 pub struct Sink {
     stop_signal_tx: mpsc::Sender<()>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
 
     join_handle: Option<
         JoinHandle<(
@@ -29,9 +28,14 @@ pub struct Sink {
     >,
 
     token_manager: Arc<Mutex<TokenManager>>,
+    pub mb_tx: mpsc::Sender<MessageBatch>,
 }
 
 impl Sink {
+    pub fn validate_conf(_conf: SinkConf) -> HaliaResult<()> {
+        Ok(())
+    }
+
     pub async fn new(
         coap_client: Arc<UdpCoAPClient>,
         conf: SinkConf,
@@ -48,19 +52,6 @@ impl Sink {
             join_handle: Some(join_handle),
             token_manager,
         }
-    }
-
-    pub fn validate_conf(_ext_conf: &SinkConf) -> HaliaResult<()> {
-        Ok(())
-    }
-
-    pub fn search(&self) -> SearchSourcesOrSinksInfoResp {
-        todo!()
-        // SearchSinksItemResp {
-        //     id: self.id.clone(),
-        //     conf: self.conf.clone(),
-        //     rule_ref: self.ref_info.get_rule_ref(),
-        // }
     }
 
     pub async fn update_conf(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {

@@ -64,14 +64,22 @@ pub enum TimestampsToReturn {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct VariableConf {
     pub field: String,
+    #[serde(flatten)]
+    pub node_id: NodeId,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct NodeId {
+    #[serde(flatten)]
     pub namespace: u16,
     pub identifier: Identifer,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Identifer {
-    #[serde(rename = "type")]
+    #[serde(rename = "identifier_type")]
     pub typ: IdentifierType,
+    #[serde(rename = "identifier")]
     pub value: serde_json::Value,
 }
 
@@ -124,7 +132,7 @@ pub enum MonitoringMode {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct SinkConf {
-    pub namespace: u16,
     pub field: String,
-    pub identifier: Identifer,
+    #[serde(flatten)]
+    pub node_id: NodeId,
 }

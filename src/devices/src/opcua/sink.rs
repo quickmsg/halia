@@ -4,7 +4,7 @@ use anyhow::Result;
 use message::MessageBatch;
 use opcua::{
     client::Session,
-    types::{DataValue, NodeId, UAString, WriteValue},
+    types::{DataValue, UAString, WriteValue},
 };
 use tokio::{
     select,
@@ -13,7 +13,7 @@ use tokio::{
 use tracing::warn;
 use types::devices::opcua::SinkConf;
 
-use super::transfer_identifier;
+use super::transfer_node_id;
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -80,12 +80,9 @@ impl Sink {
             message::MessageValue::Object(hash_map) => todo!(),
         };
 
-        let identifier = transfer_identifier(&conf.identifier);
+        let node_id = transfer_node_id(&conf.node_id);
         let nodes_to_write = vec![WriteValue {
-            node_id: NodeId {
-                namespace: conf.namespace,
-                identifier,
-            },
+            node_id,
             attribute_id: 13,
             index_range: UAString::null(),
             value: data_value,

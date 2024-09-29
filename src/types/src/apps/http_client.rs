@@ -22,9 +22,8 @@ pub struct SourceConf {
     // pub method: SinkMethod,
     pub path: String,
     pub basic_auth: Option<BasicAuth>,
-    pub headers: Vec<(String, String)>,
-    pub query_params: Vec<(String, String)>,
-    pub body: serde_json::Value,
+    pub headers: Option<Vec<(String, String)>>,
+    pub query_params: Option<Vec<(String, String)>>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
@@ -32,14 +31,15 @@ pub struct SinkConf {
     pub method: SinkMethod,
     pub path: String,
     pub basic_auth: Option<BasicAuth>,
-    pub headers: Vec<(String, String)>,
-    pub query_params: Vec<(String, String)>,
-    pub body: serde_json::Value,
+    pub headers: Option<Vec<(String, String)>>,
+    pub query_params: Option<Vec<(String, String)>>,
+    pub body: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct BasicAuth {
     pub username: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
 }
 

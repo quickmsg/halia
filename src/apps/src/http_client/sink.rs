@@ -101,8 +101,10 @@ impl Sink {
 
         builder = builder.query(&conf.query_params);
 
-        for (k, v) in conf.headers.iter() {
-            builder = builder.header(k, v);
+        if let Some(headers) = &conf.headers {
+            for (k, v) in headers.iter() {
+                builder = builder.header(k, v);
+            }
         }
 
         let request = builder.build().unwrap();

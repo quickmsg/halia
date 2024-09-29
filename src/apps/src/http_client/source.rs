@@ -83,14 +83,17 @@ impl Source {
             builder = builder.basic_auth(basic_auth.username.clone(), basic_auth.password.clone());
         }
 
-        for (key, value) in ext_conf.headers.iter() {
-            builder = builder.header(key, value);
+        if let Some(headers) = &ext_conf.headers {
+            for (key, value) in headers.iter() {
+                builder = builder.header(key, value);
+            }
         }
+
         builder = builder.query(&ext_conf.query_params);
 
-        for (k, v) in ext_conf.headers.iter() {
-            builder = builder.header(k, v);
-        }
+        // for (k, v) in ext_conf.headers.iter() {
+        //     builder = builder.header(k, v);
+        // }
         let request = builder.build().unwrap();
         match client.execute(request).await {
             Ok(resp) => trace!("{:?}", resp),

@@ -42,7 +42,7 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
+    pub fn validate_conf(conf: SourceConf) -> HaliaResult<()> {
         match conf.method {
             SourceMethod::Get => {
                 if conf.get.is_none() {

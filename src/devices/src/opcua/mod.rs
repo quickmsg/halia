@@ -7,7 +7,7 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
-    types::{EndpointDescription, Identifier, StatusCode},
+    types::{EndpointDescription, Identifier, NodeId, StatusCode},
 };
 use sink::Sink;
 use source::Source;
@@ -301,9 +301,9 @@ impl Device for Opcua {
     }
 }
 
-fn transfer_identifier(identifier: &types::devices::opcua::Identifer) -> Identifier {
-    let value = identifier.value.clone();
-    match identifier.typ {
+fn transfer_node_id(node_id: &types::devices::opcua::NodeId) -> NodeId {
+    let value = node_id.identifier.value.clone();
+    let identifier = match node_id.identifier.typ {
         types::devices::opcua::IdentifierType::Numeric => {
             let num: u32 = serde_json::from_value(value).unwrap();
             Identifier::Numeric(num)
@@ -320,5 +320,10 @@ fn transfer_identifier(identifier: &types::devices::opcua::Identifer) -> Identif
             let bs: opcua::types::ByteString = serde_json::from_value(value).unwrap();
             Identifier::ByteString(bs)
         }
+    };
+
+    NodeId {
+        namespace: node_id.namespace,
+        identifier,
     }
 }

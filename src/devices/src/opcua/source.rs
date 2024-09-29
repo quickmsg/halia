@@ -5,8 +5,8 @@ use message::{Message, MessageBatch, MessageValue};
 use opcua::{
     client::{DataChangeCallback, MonitoredItem, Session},
     types::{
-        ByteString, DataValue, Guid, Identifier, MonitoredItemCreateRequest, NodeId, QualifiedName,
-        ReadValueId, TimestampsToReturn, UAString,
+        DataValue, MonitoredItemCreateRequest, NodeId, QualifiedName, ReadValueId,
+        TimestampsToReturn, UAString,
     },
 };
 use tokio::{
@@ -18,7 +18,7 @@ use tokio::{
 use tracing::debug;
 use types::devices::opcua::{GroupConf, SourceConf, Subscriptionconf, VariableConf};
 
-use super::transfer_identifier;
+use super::transfer_node_id;
 
 pub struct Source {
     group_stop_signal_tx: watch::Sender<()>,
@@ -197,13 +197,10 @@ impl Source {
     }
 
     pub fn group_get_read_value_id(variable: &VariableConf) -> ReadValueId {
-        let identifier = transfer_identifier(&variable.identifier);
+        let node_id = transfer_node_id(&variable.node_id);
 
         ReadValueId {
-            node_id: NodeId {
-                namespace: variable.namespace,
-                identifier,
-            },
+            node_id,
             attribute_id: 13,
             index_range: UAString::null(),
             data_encoding: QualifiedName::null(),
