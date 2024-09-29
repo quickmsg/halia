@@ -16,6 +16,16 @@ pub struct SinkConf {
     pub topic: String,
     pub partition: i32,
     pub compression: Compression,
+    // ms
+    pub ack_timeout: u64,
+    pub required_acks: RequiredAcks,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub enum RequiredAcks {
+    None,
+    One,
+    All,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

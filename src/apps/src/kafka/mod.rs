@@ -3,8 +3,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use kafka::client::KafkaClient;
 use message::MessageBatch;
-use rdkafka::client::Client;
 use sink::Sink;
 use tokio::sync::{mpsc, watch, RwLock};
 use types::apps::kafka::{KafkaConf, SinkConf};
@@ -17,7 +17,7 @@ pub struct Kafka {
     id: String,
     err: Option<String>,
     sinks: DashMap<String, Sink>,
-    kafka_client: Arc<RwLock<Option<Arc<Client>>>>,
+    kafka_client: Arc<RwLock<Option<Arc<KafkaClient>>>>,
 
     stop_signal_tx: watch::Sender<()>,
 }
@@ -37,6 +37,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let kafka_client = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     // Kafka::connect(id.clone(), kafka_client.clone(), conf, stop_signal_rx);
+    let mut client = KafkaClient::new(conf.bootstrap_brokers);
     Box::new(Kafka {
         id,
         err: None,
@@ -107,8 +108,8 @@ impl App for Kafka {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf.clone())?;
-        let sink = Sink::new("servers".to_owned(), conf).await?;
-        self.sinks.insert(sink_id, sink);
+        // let sink = Sink::new("servers".to_owned(), conf).await?;
+        // self.sinks.insert(sink_id, sink);
         Ok(())
     }
 

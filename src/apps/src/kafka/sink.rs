@@ -2,12 +2,8 @@ use std::time::Duration;
 
 use anyhow::{bail, Result};
 use common::error::HaliaResult;
+use kafka::{client::KafkaClient, producer::Producer};
 use message::MessageBatch;
-use rdkafka::{
-    message::{Header, OwnedHeaders},
-    producer::{FutureProducer, FutureRecord},
-    ClientConfig,
-};
 use tokio::{
     select,
     sync::{mpsc, watch},
@@ -28,14 +24,14 @@ impl Sink {
     }
 
     pub async fn new(
-        brokers: String,
+        client: KafkaClient,
         conf: SinkConf,
         // client: Arc<RwLock<Option<Arc<Client>>>>,
     ) -> HaliaResult<Self> {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
-        let join_handle = Self::event_loop(brokers, conf, stop_signal_rx, mb_rx).await?;
+        let join_handle = Self::event_loop(client, conf, stop_signal_rx, mb_rx).await?;
 
         Ok(Self {
             stop_signal_tx,
@@ -45,19 +41,29 @@ impl Sink {
     }
 
     async fn event_loop(
-        brokers: String,
+        client: KafkaClient,
         conf: SinkConf,
         mut stop_signal_rx: watch::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
     ) -> Result<JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)>> {
-        let producer = match ClientConfig::new()
-            .set("bootstrap.servers", &brokers)
-            .set("message.timeout.ms", "5000")
-            .create::<FutureProducer>()
-        {
-            Ok(client) => client,
-            Err(e) => bail!("Failed to create producer: {}", e),
+        let required_acks = match conf.required_acks {
+            types::apps::kafka::RequiredAcks::None => kafka::client::RequiredAcks::None,
+            types::apps::kafka::RequiredAcks::One => kafka::client::RequiredAcks::One,
+            types::apps::kafka::RequiredAcks::All => kafka::client::RequiredAcks::All,
         };
+        let compression = match conf.compression {
+            types::apps::kafka::Compression::None => kafka::client::Compression::NONE,
+            types::apps::kafka::Compression::Gzip => kafka::client::Compression::GZIP,
+            types::apps::kafka::Compression::Lz4 => todo!(),
+            types::apps::kafka::Compression::Snappy => kafka::client::Compression::SNAPPY,
+            types::apps::kafka::Compression::Zstd => todo!(),
+        };
+        let mut producer = Producer::from_client(client)
+            .with_ack_timeout(Duration::from_millis(conf.ack_timeout))
+            .with_required_acks(required_acks)
+            .with_compression(compression)
+            // .with_connection_idle_timeout(cfg.conn_idle_timeout)
+            .create()?;
         // let partition_client = client
         //     .read()
         //     .await
@@ -96,35 +102,35 @@ impl Sink {
     }
 
     async fn send_msg_to_kafka(
-        producer: &FutureProducer,
+        producer: &Producer,
         msg: MessageBatch,
         topic: &str,
         // compression: Compression,
     ) -> Result<()> {
-        let record = FutureRecord::to(topic)
-            // TODO
-            .payload("test")
-            // TODO
-            .key("test_key")
-            .headers(OwnedHeaders::new().insert(Header {
-                key: "header_key",
-                value: Some("header_value"),
-            }));
-        // let record = Record {
-        //     key: None,
-        //     value: Some(msg.to_json()),
-        //     headers: BTreeMap::from([("foo".to_owned(), b"bar".to_vec())]),
-        //     timestamp: Utc.timestamp_millis(42),
-        // };
-        // partition_client.produce(vec![record], compression).await?;
-        match producer.send(record, Duration::from_secs(0)).await {
-            Ok(xx) => {
-                debug!("send msg to kafka: {:?}", xx);
-            }
-            Err(e) => {
-                debug!("send msg to kafka error: {:?}", e);
-            }
-        }
+        // let record = FutureRecord::to(topic)
+        //     // TODO
+        //     .payload("test")
+        //     // TODO
+        //     .key("test_key")
+        //     .headers(OwnedHeaders::new().insert(Header {
+        //         key: "header_key",
+        //         value: Some("header_value"),
+        //     }));
+        // // let record = Record {
+        // //     key: None,
+        // //     value: Some(msg.to_json()),
+        // //     headers: BTreeMap::from([("foo".to_owned(), b"bar".to_vec())]),
+        // //     timestamp: Utc.timestamp_millis(42),
+        // // };
+        // // partition_client.produce(vec![record], compression).await?;
+        // match producer.send(record, Duration::from_secs(0)).await {
+        //     Ok(xx) => {
+        //         debug!("send msg to kafka: {:?}", xx);
+        //     }
+        //     Err(e) => {
+        //         debug!("send msg to kafka error: {:?}", e);
+        //     }
+        // }
 
         Ok(())
     }
