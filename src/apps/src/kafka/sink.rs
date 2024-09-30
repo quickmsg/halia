@@ -32,17 +32,20 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn new(client: &Client, conf: SinkConf) -> HaliaResult<Self> {
+    pub async fn new(client: Option<&Client>, conf: SinkConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
-        let join_handle = Self::event_loop(client, conf, stop_signal_rx, mb_rx).await?;
+        let join_handle = match client {
+            Some(client) => Some(Self::event_loop(client, conf, stop_signal_rx, mb_rx).await),
+            None => None,
+        };
 
-        Ok(Self {
+        Self {
             stop_signal_tx,
             mb_tx,
-            join_handle: Some(join_handle),
-        })
+            join_handle,
+        }
     }
 
     async fn event_loop(
@@ -50,14 +53,15 @@ impl Sink {
         conf: SinkConf,
         mut stop_signal_rx: watch::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
-    ) -> Result<JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)>> {
+    ) -> JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)> {
         let unknown_topic_handling = transfer_unknown_topic_handling(&conf.unknown_topic_handling);
         let partition_client = client
             .partition_client(&conf.topic, conf.partition, unknown_topic_handling)
-            .await?;
+            .await
+            .unwrap();
 
         let compression = transfer_compression(&conf.compression);
-        let join_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.changed() => {
@@ -70,9 +74,7 @@ impl Sink {
                     }
                 }
             }
-        });
-
-        Ok(join_handle)
+        })
     }
 
     async fn send_msg_to_kafka(
@@ -96,13 +98,37 @@ impl Sink {
 
     pub async fn update_conf(
         &mut self,
-        client: &Client,
+        client: Option<&Client>,
         _old_conf: SinkConf,
         new_conf: SinkConf,
-    ) -> HaliaResult<()> {
+    ) {
         let (_, stop_signal_rx, mb_rx) = self.stop().await;
-        Self::event_loop(client, new_conf, stop_signal_rx, mb_rx);
-        Ok(())
+        match client {
+            Some(client) => {
+                let join_handle = Self::event_loop(client, new_conf, stop_signal_rx, mb_rx).await;
+                self.join_handle = Some(join_handle);
+            }
+            None => {}
+        }
+    }
+
+    pub async fn update_kafka_client(&mut self, client: Option<&Client>) {
+        match client {
+            Some(client) => {
+                // if let Some(conf) = self.conf.take() {
+                //     self.join_handle = Some(
+                //         Self::event_loop(
+                //             client,
+                //             conf,
+                //             self.stop_signal_tx.subscribe(),
+                //             self.mb_tx.clone(),
+                //         )
+                //         .await,
+                //     );
+                // }
+            }
+            None => todo!(),
+        }
     }
 
     pub async fn stop(&mut self) -> (SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>) {

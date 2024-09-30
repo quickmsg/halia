@@ -16,6 +16,7 @@ use tokio::{
     sync::{broadcast, mpsc, watch, RwLock},
     time,
 };
+use tracing::debug;
 use types::apps::kafka::{KafkaConf, SinkConf, SourceConf};
 
 use crate::App;
@@ -24,16 +25,14 @@ mod sink;
 mod source;
 
 pub struct Kafka {
-    id: String,
-    err: Option<String>,
+    _err: Option<String>,
     stop_signal_tx: watch::Sender<()>,
 
     kafka_client: Arc<RwLock<Option<Client>>>,
 
-    sources: DashMap<String, Source>,
-    stopped_sources: Option<DashMap<String, SourceConf>>,
-    sinks: DashMap<String, Sink>,
-    stopped_sinks: Option<DashMap<String, SinkConf>>,
+    sources: Arc<DashMap<String, Source>>,
+    sinks: Arc<DashMap<String, Sink>>,
+    kafka_err_tx: mpsc::Sender<String>,
 }
 
 pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
@@ -57,23 +56,26 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let kafka_client = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
-    let (connected_signal_tx, connected_signal_rx) = watch::channel(());
-    Kafka::connect_loop(
+    let sources = Arc::new(DashMap::new());
+    let sinks = Arc::new(DashMap::new());
+    let (kafka_err_tx, kafka_err_rx) = mpsc::channel(1);
+    Kafka::event_loop(
         id.clone(),
+        conf,
         kafka_client.clone(),
-        &conf,
         stop_signal_rx,
-        connected_signal_tx,
+        kafka_err_rx,
+        sources.clone(),
+        sinks.clone(),
     );
+
     Box::new(Kafka {
-        id,
-        err: None,
-        sources: DashMap::new(),
-        stopped_sources: None,
-        sinks: DashMap::new(),
-        stopped_sinks: None,
+        _err: None,
+        sources,
+        sinks,
         kafka_client,
         stop_signal_tx,
+        kafka_err_tx,
     })
 }
 
@@ -118,9 +120,23 @@ impl Kafka {
     }
 
     fn event_loop(
+        id: String,
+        conf: KafkaConf,
+        kafka_client: Arc<RwLock<Option<Client>>>,
         mut stop_signal_rx: watch::Receiver<()>,
-        mut connected_signal_rx: watch::Receiver<()>,
+        mut kafka_err_rx: mpsc::Receiver<String>,
+        sources: Arc<DashMap<String, Source>>,
+        sinks: Arc<DashMap<String, Sink>>,
     ) {
+        let (connect_signal_tx, mut connect_signal_rx) = watch::channel(());
+        Self::connect_loop(
+            id,
+            kafka_client.clone(),
+            &conf,
+            stop_signal_rx.clone(),
+            connect_signal_tx,
+        );
+
         tokio::spawn(async move {
             loop {
                 select! {
@@ -128,12 +144,30 @@ impl Kafka {
                         return;
                     }
 
-                    _ = connected_signal_rx.changed() => {
-                        return;
+                    e = kafka_err_rx.recv() => {
+                        debug!("Kafka error received, {:?}", e);
+                    }
+
+                    _ = connect_signal_rx.changed() => {
+                        Self::handle_connect_status_changed(&kafka_client, &sources, &sinks).await;
                     }
                 }
             }
         });
+    }
+
+    async fn handle_connect_status_changed(
+        kafka_client: &Arc<RwLock<Option<Client>>>,
+        sources: &Arc<DashMap<String, Source>>,
+        sinks: &Arc<DashMap<String, Sink>>,
+    ) {
+        let kafka_client = kafka_client.read().await;
+        for mut source in sources.iter_mut() {
+            source.update_kafka_client(kafka_client.as_ref()).await;
+        }
+        for mut sink in sinks.iter_mut() {
+            sink.update_kafka_client(kafka_client.as_ref()).await;
+        }
     }
 }
 
@@ -144,6 +178,8 @@ impl App for Kafka {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        self.stop_signal_tx.send(()).unwrap();
+        // Self::connect_loop(id, kafka_client, conf, stop_signal_rx, connect_signal_tx);
         todo!()
     }
 
@@ -167,22 +203,13 @@ impl App for Kafka {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf.clone())?;
-        match self.kafka_client.read().await.as_ref() {
-            Some(client) => {
-                let source = Source::new(client, conf).await?;
-                self.sources.insert(source_id, source);
-            }
-            None => match self.stopped_sources.as_mut() {
-                Some(stopped_sources) => {
-                    stopped_sources.insert(source_id, conf);
-                }
-                None => {
-                    let stopped_sources = DashMap::new();
-                    stopped_sources.insert(source_id, conf);
-                    self.stopped_sources = Some(stopped_sources);
-                }
-            },
-        }
+        let source = Source::new(
+            self.kafka_client.read().await.as_ref(),
+            self.kafka_err_tx.clone(),
+            conf,
+        )
+        .await;
+        self.sources.insert(source_id, source);
 
         Ok(())
     }
@@ -193,20 +220,16 @@ impl App for Kafka {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        match self.kafka_client.read().await.as_ref() {
-            Some(_) => match self.sources.get_mut(&source_id) {
-                Some(mut source) => {
-                    let old_conf: SourceConf = serde_json::from_value(old_conf)?;
-                    let new_conf: SourceConf = serde_json::from_value(new_conf)?;
-                    source.update_conf(old_conf, new_conf).await?;
-                    Ok(())
-                }
-                None => return Err(HaliaError::NotFound(source_id)),
-            },
-            None => {
-                todo!()
-                //  todo
+        match self.sources.get_mut(&source_id) {
+            Some(mut source) => {
+                let old_conf: SourceConf = serde_json::from_value(old_conf)?;
+                let new_conf: SourceConf = serde_json::from_value(new_conf)?;
+                source
+                    .update_conf(self.kafka_client.read().await.as_ref(), old_conf, new_conf)
+                    .await;
+                Ok(())
             }
+            None => return Err(HaliaError::NotFound(source_id)),
         }
     }
 
@@ -232,22 +255,9 @@ impl App for Kafka {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf.clone())?;
-        match self.kafka_client.read().await.as_ref() {
-            Some(client) => {
-                let sink = Sink::new(client, conf).await?;
-                self.sinks.insert(sink_id, sink);
-            }
-            None => match self.stopped_sinks.as_mut() {
-                Some(stopped_sinks) => {
-                    stopped_sinks.insert(sink_id, conf);
-                }
-                None => {
-                    let stopped_sinks = DashMap::new();
-                    stopped_sinks.insert(sink_id, conf);
-                    self.stopped_sinks = Some(stopped_sinks);
-                }
-            },
-        }
+        let sink = Sink::new(self.kafka_client.read().await.as_ref(), conf).await;
+        self.sinks.insert(sink_id, sink);
+
         Ok(())
     }
 
@@ -257,35 +267,15 @@ impl App for Kafka {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        match self.kafka_client.read().await.as_ref() {
-            Some(client) => match self.sinks.get_mut(&sink_id) {
-                Some(mut sink) => {
-                    let old_conf: SinkConf = serde_json::from_value(old_conf)?;
-                    let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-                    sink.update_conf(client, old_conf, new_conf).await?;
-                    Ok(())
-                }
-                None => Err(HaliaError::NotFound(sink_id)),
-            },
-            None => match self.stopped_sinks.as_mut() {
-                Some(stopped_sinks) => {
-                    match stopped_sinks.get_mut(&sink_id) {
-                        Some(mut conf) => {
-                            let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-                            *conf = new_conf;
-                        }
-                        None => return Err(HaliaError::NotFound(sink_id)),
-                    }
-                    
-                    Ok(())
-                }
-                None => {
-                    let stopped_sinks = DashMap::new();
-                    stopped_sinks.insert(sink_id, serde_json::from_value(new_conf)?);
-                    self.stopped_sinks = Some(stopped_sinks);
-                    Ok(())
-                }
-            },
+        match self.sinks.get_mut(&sink_id) {
+            Some(mut sink) => {
+                let old_conf: SinkConf = serde_json::from_value(old_conf)?;
+                let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+                sink.update_conf(self.kafka_client.read().await.as_ref(), old_conf, new_conf)
+                    .await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id)),
         }
     }
 
@@ -326,10 +316,10 @@ fn transfer_compression(compression: &types::apps::kafka::Compression) -> Compre
     }
 }
 
-fn transfer_start_offset(start_offset: types::apps::kafka::StartOffset) -> StartOffset {
+fn transfer_start_offset(start_offset: &types::apps::kafka::StartOffset) -> StartOffset {
     match start_offset {
         types::apps::kafka::StartOffset::Earliest => StartOffset::Earliest,
         types::apps::kafka::StartOffset::Latest => StartOffset::Latest,
-        types::apps::kafka::StartOffset::At(offset) => StartOffset::At(offset),
+        types::apps::kafka::StartOffset::At(offset) => StartOffset::At(*offset),
     }
 }
