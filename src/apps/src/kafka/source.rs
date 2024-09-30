@@ -1,29 +1,34 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use chrono::{TimeZone, Utc};
+use bytes::Bytes;
 use common::error::HaliaResult;
 use futures::StreamExt as _;
 use message::MessageBatch;
 use rskafka::{
-    client::{
-        consumer::{StartOffset, StreamConsumerBuilder},
-        partition::{Compression, PartitionClient},
-        Client,
-    },
-    record::Record,
+    client::{consumer::StreamConsumerBuilder, Client},
+    record::RecordAndOffset,
 };
 use tokio::{
     select,
-    sync::{mpsc, watch},
+    sync::{broadcast, mpsc, watch},
     task::JoinHandle,
 };
-use types::apps::kafka::{SinkConf, SourceConf};
+use tracing::warn;
+use types::apps::kafka::SourceConf;
+
+use crate::kafka::{tansfer_unknown_topic_handling, transfer_start_offset};
 
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    join_handle: Option<
+        JoinHandle<(
+            SourceConf,
+            watch::Receiver<()>,
+            mpsc::Receiver<MessageBatch>,
+        )>,
+    >,
+    pub mb_tx: broadcast::Sender<MessageBatch>,
 }
 
 impl Source {
@@ -31,11 +36,11 @@ impl Source {
         Ok(())
     }
 
-    pub async fn new(client: &Client, conf: SinkConf) -> HaliaResult<Self> {
+    pub async fn new(client: &Client, conf: SourceConf) -> HaliaResult<Self> {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, _) = broadcast::channel(16);
 
-        let join_handle = Self::event_loop(client, conf, stop_signal_rx, mb_rx).await?;
+        let join_handle = Self::event_loop(client, conf, stop_signal_rx, mb_tx.clone()).await?;
 
         Ok(Self {
             stop_signal_tx,
@@ -46,35 +51,30 @@ impl Source {
 
     async fn event_loop(
         client: &Client,
-        conf: SinkConf,
+        conf: SourceConf,
         mut stop_signal_rx: watch::Receiver<()>,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
-    ) -> Result<JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)>> {
-        let unknown_topic_handling = match conf.unknown_topic_handling {
-            types::apps::kafka::UnknownTopicHandling::Error => {
-                rskafka::client::partition::UnknownTopicHandling::Error
-            }
-            types::apps::kafka::UnknownTopicHandling::Retry => {
-                rskafka::client::partition::UnknownTopicHandling::Retry
-            }
-        };
+        mb_tx: broadcast::Sender<MessageBatch>,
+    ) -> Result<
+        JoinHandle<(
+            SourceConf,
+            watch::Receiver<()>,
+            mpsc::Receiver<MessageBatch>,
+        )>,
+    > {
         let partition_client = Arc::new(
             client
-                .partition_client(&conf.topic, conf.partition, unknown_topic_handling)
+                .partition_client(
+                    &conf.topic,
+                    conf.partition,
+                    tansfer_unknown_topic_handling(conf.unknown_topic_handling),
+                )
                 .await?,
         );
 
-        let compression = match conf.compression {
-            types::apps::kafka::Compression::None => Compression::NoCompression,
-            types::apps::kafka::Compression::Gzip => Compression::Gzip,
-            types::apps::kafka::Compression::Lz4 => Compression::Lz4,
-            types::apps::kafka::Compression::Snappy => Compression::Snappy,
-            types::apps::kafka::Compression::Zstd => Compression::Zstd,
-        };
-
-        let mut stream = StreamConsumerBuilder::new(partition_client, StartOffset::Earliest)
-            .with_max_wait_ms(100)
-            .build();
+        let mut stream_consumer =
+            StreamConsumerBuilder::new(partition_client, transfer_start_offset(conf.start_offset))
+                .with_max_wait_ms(conf.max_wait)
+                .build();
 
         tokio::spawn(async move {
             loop {
@@ -83,7 +83,12 @@ impl Source {
                         return;
                     }
 
-                    Some(res) = stream.next() => {
+                    Some(res) = stream_consumer.next() => {
+                        match res {
+                            Ok(res) => Self::handle_kafka_msg(res, &mb_tx).await,
+                            Err(_) => todo!(),
+                        }
+                        // Self::handle_kafka_msg(res).await?;
                     }
                 }
             }
@@ -93,25 +98,28 @@ impl Source {
     }
 
     async fn handle_kafka_msg(
-        partition_client: &PartitionClient,
-        mb: MessageBatch,
-        compression: Compression,
-    ) -> Result<()> {
-        let record = Record {
-            key: None,
-            value: Some(mb.to_json()),
-            headers: BTreeMap::from([("foo".to_owned(), b"bar".to_vec())]),
-            timestamp: Utc.timestamp_millis(42),
-        };
-        partition_client
-            .produce(vec![record], compression)
-            .await
-            .unwrap();
-
-        Ok(())
+        res: (RecordAndOffset, i64),
+        mb_tx: &broadcast::Sender<MessageBatch>,
+    ) {
+        if mb_tx.receiver_count() == 0 {
+            return;
+        }
+        match res.0.record.value {
+            Some(data) => match MessageBatch::from_json(Bytes::from(data)) {
+                Ok(mb) => {
+                    mb_tx.send(mb).unwrap();
+                }
+                Err(e) => warn!("parse kafka message error: {}", e),
+            },
+            None => {}
+        }
     }
 
-    pub async fn update_conf(&mut self, old_conf: SinkConf, new_conf: SinkConf) -> HaliaResult<()> {
+    pub async fn update_conf(
+        &mut self,
+        old_conf: SourceConf,
+        new_conf: SourceConf,
+    ) -> HaliaResult<()> {
         Ok(())
     }
 

@@ -16,10 +16,20 @@ pub struct SourceConf {
     pub topic: String,
     pub partition: i32,
     pub unknown_topic_handling: UnknownTopicHandling,
-    pub compression: Compression,
+    pub start_offset: StartOffset,
+    // ms
+    pub max_wait: i32,
     // ms
     pub ack_timeout: u64,
     pub required_acks: RequiredAcks,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum StartOffset {
+    Earliest,
+    Latest,
+    At(i64),
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

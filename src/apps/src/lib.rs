@@ -95,6 +95,12 @@ pub trait App: Send + Sync {
     async fn delete_source(&mut self, _source_id: String) -> HaliaResult<()> {
         Err(HaliaError::NotSupportResource)
     }
+    async fn get_source_rx(
+        &self,
+        _source_id: &String,
+    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        Err(HaliaError::NotSupportResource)
+    }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()>;
     async fn update_sink(
@@ -104,13 +110,6 @@ pub trait App: Send + Sync {
         new_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()>;
-
-    async fn get_source_rx(
-        &self,
-        _source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        Err(HaliaError::NotSupportResource)
-    }
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }
 
@@ -339,7 +338,8 @@ pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> 
     match typ {
         AppType::MqttClient => mqtt_client::validate_source_conf(&req.ext)?,
         AppType::HttpClient => http_client::validate_source_conf(&req.ext)?,
-        AppType::Kafka | AppType::Influxdb => return Err(HaliaError::NotSupportResource),
+        AppType::Kafka => kafka::validate_source_conf(&req.ext)?,
+        AppType::Influxdb => return Err(HaliaError::NotSupportResource),
     }
 
     let source_id = common::get_id();
