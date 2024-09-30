@@ -19,6 +19,8 @@ use tokio::{
 use tracing::warn;
 use types::apps::kafka::SinkConf;
 
+use super::{transfer_compression, transfer_unknown_topic_handling};
+
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
@@ -49,25 +51,12 @@ impl Sink {
         mut stop_signal_rx: watch::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
     ) -> Result<JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)>> {
-        let unknown_topic_handling = match conf.unknown_topic_handling {
-            types::apps::kafka::UnknownTopicHandling::Error => {
-                rskafka::client::partition::UnknownTopicHandling::Error
-            }
-            types::apps::kafka::UnknownTopicHandling::Retry => {
-                rskafka::client::partition::UnknownTopicHandling::Retry
-            }
-        };
+        let unknown_topic_handling = transfer_unknown_topic_handling(&conf.unknown_topic_handling);
         let partition_client = client
             .partition_client(&conf.topic, conf.partition, unknown_topic_handling)
             .await?;
 
-        let compression = match conf.compression {
-            types::apps::kafka::Compression::None => Compression::NoCompression,
-            types::apps::kafka::Compression::Gzip => Compression::Gzip,
-            types::apps::kafka::Compression::Lz4 => Compression::Lz4,
-            types::apps::kafka::Compression::Snappy => Compression::Snappy,
-            types::apps::kafka::Compression::Zstd => Compression::Zstd,
-        };
+        let compression = transfer_compression(&conf.compression);
         let join_handle = tokio::spawn(async move {
             loop {
                 select! {
@@ -105,14 +94,19 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn update_conf(&mut self, old_conf: SinkConf, new_conf: SinkConf) -> HaliaResult<()> {
+    pub async fn update_conf(
+        &mut self,
+        client: &Client,
+        _old_conf: SinkConf,
+        new_conf: SinkConf,
+    ) -> HaliaResult<()> {
+        let (_, stop_signal_rx, mb_rx) = self.stop().await;
+        Self::event_loop(client, new_conf, stop_signal_rx, mb_rx);
         Ok(())
     }
 
-    pub async fn stop(&mut self) {
+    pub async fn stop(&mut self) -> (SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>) {
         self.stop_signal_tx.send(()).unwrap();
-        if let Some(join_handle) = self.join_handle.take() {
-            join_handle.await.unwrap();
-        }
+        self.join_handle.take().unwrap().await.unwrap()
     }
 }

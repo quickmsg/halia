@@ -17,7 +17,7 @@ use tokio::{
 use tracing::warn;
 use types::apps::kafka::SourceConf;
 
-use crate::kafka::{tansfer_unknown_topic_handling, transfer_start_offset};
+use crate::kafka::{transfer_start_offset, transfer_unknown_topic_handling};
 
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
@@ -66,7 +66,7 @@ impl Source {
                 .partition_client(
                     &conf.topic,
                     conf.partition,
-                    tansfer_unknown_topic_handling(conf.unknown_topic_handling),
+                    transfer_unknown_topic_handling(&conf.unknown_topic_handling),
                 )
                 .await?,
         );

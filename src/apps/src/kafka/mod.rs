@@ -31,9 +31,9 @@ pub struct Kafka {
     kafka_client: Arc<RwLock<Option<Client>>>,
 
     sources: DashMap<String, Source>,
-    stopped_sources: Option<Vec<(String, SourceConf)>>,
+    stopped_sources: Option<DashMap<String, SourceConf>>,
     sinks: DashMap<String, Sink>,
-    stopped_sinks: Option<Vec<(String, SinkConf)>>,
+    stopped_sinks: Option<DashMap<String, SinkConf>>,
 }
 
 pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
@@ -174,10 +174,12 @@ impl App for Kafka {
             }
             None => match self.stopped_sources.as_mut() {
                 Some(stopped_sources) => {
-                    stopped_sources.push((source_id, conf));
+                    stopped_sources.insert(source_id, conf);
                 }
                 None => {
-                    self.stopped_sources = Some(vec![(source_id, conf)]);
+                    let stopped_sources = DashMap::new();
+                    stopped_sources.insert(source_id, conf);
+                    self.stopped_sources = Some(stopped_sources);
                 }
             },
         }
@@ -230,8 +232,22 @@ impl App for Kafka {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf.clone())?;
-        // let sink = Sink::new("servers".to_owned(), conf).await?;
-        // self.sinks.insert(sink_id, sink);
+        match self.kafka_client.read().await.as_ref() {
+            Some(client) => {
+                let sink = Sink::new(client, conf).await?;
+                self.sinks.insert(sink_id, sink);
+            }
+            None => match self.stopped_sinks.as_mut() {
+                Some(stopped_sinks) => {
+                    stopped_sinks.insert(sink_id, conf);
+                }
+                None => {
+                    let stopped_sinks = DashMap::new();
+                    stopped_sinks.insert(sink_id, conf);
+                    self.stopped_sinks = Some(stopped_sinks);
+                }
+            },
+        }
         Ok(())
     }
 
@@ -241,14 +257,35 @@ impl App for Kafka {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        match self.sinks.get_mut(&sink_id) {
-            Some(mut sink) => {
-                let old_conf: SinkConf = serde_json::from_value(old_conf)?;
-                let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-                sink.update_conf(old_conf, new_conf).await?;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(sink_id)),
+        match self.kafka_client.read().await.as_ref() {
+            Some(client) => match self.sinks.get_mut(&sink_id) {
+                Some(mut sink) => {
+                    let old_conf: SinkConf = serde_json::from_value(old_conf)?;
+                    let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+                    sink.update_conf(client, old_conf, new_conf).await?;
+                    Ok(())
+                }
+                None => Err(HaliaError::NotFound(sink_id)),
+            },
+            None => match self.stopped_sinks.as_mut() {
+                Some(stopped_sinks) => {
+                    match stopped_sinks.get_mut(&sink_id) {
+                        Some(mut conf) => {
+                            let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+                            *conf = new_conf;
+                        }
+                        None => return Err(HaliaError::NotFound(sink_id)),
+                    }
+                    
+                    Ok(())
+                }
+                None => {
+                    let stopped_sinks = DashMap::new();
+                    stopped_sinks.insert(sink_id, serde_json::from_value(new_conf)?);
+                    self.stopped_sinks = Some(stopped_sinks);
+                    Ok(())
+                }
+            },
         }
     }
 
@@ -270,20 +307,16 @@ impl App for Kafka {
     }
 }
 
-fn tansfer_unknown_topic_handling(
-    unknown_topic_handling: types::apps::kafka::UnknownTopicHandling,
+fn transfer_unknown_topic_handling(
+    unknown_topic_handling: &types::apps::kafka::UnknownTopicHandling,
 ) -> UnknownTopicHandling {
     match unknown_topic_handling {
-        types::apps::kafka::UnknownTopicHandling::Error => {
-            rskafka::client::partition::UnknownTopicHandling::Error
-        }
-        types::apps::kafka::UnknownTopicHandling::Retry => {
-            rskafka::client::partition::UnknownTopicHandling::Retry
-        }
+        types::apps::kafka::UnknownTopicHandling::Error => UnknownTopicHandling::Error,
+        types::apps::kafka::UnknownTopicHandling::Retry => UnknownTopicHandling::Retry,
     }
 }
 
-fn transfer_compression(compression: types::apps::kafka::Compression) -> Compression {
+fn transfer_compression(compression: &types::apps::kafka::Compression) -> Compression {
     match compression {
         types::apps::kafka::Compression::None => Compression::NoCompression,
         types::apps::kafka::Compression::Gzip => Compression::Gzip,
