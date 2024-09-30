@@ -11,7 +11,7 @@ use tokio::{
     sync::{mpsc, Mutex},
     task::JoinHandle,
 };
-use types::{devices::coap::SinkConf, SearchSourcesOrSinksInfoResp};
+use types::devices::coap::SinkConf;
 
 use super::{transform_options, TokenManager};
 

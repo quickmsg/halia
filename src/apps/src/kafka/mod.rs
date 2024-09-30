@@ -3,21 +3,24 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use kafka::client::KafkaClient;
 use message::MessageBatch;
+use rskafka::client::Client;
 use sink::Sink;
+use source::Source;
 use tokio::sync::{mpsc, watch, RwLock};
 use types::apps::kafka::{KafkaConf, SinkConf};
 
 use crate::App;
 
 mod sink;
+mod source;
 
 pub struct Kafka {
     id: String,
     err: Option<String>,
+    sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
-    kafka_client: Arc<RwLock<Option<Arc<KafkaClient>>>>,
+    kafka_client: Arc<RwLock<Option<Arc<Client>>>>,
 
     stop_signal_tx: watch::Sender<()>,
 }
@@ -37,10 +40,12 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let kafka_client = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     // Kafka::connect(id.clone(), kafka_client.clone(), conf, stop_signal_rx);
-    let mut client = KafkaClient::new(conf.bootstrap_brokers);
+    let connection = "localhost:9093".to_owned();
+    // let client = ClientBuilder::new(vec![connection]).build().await.unwrap();
     Box::new(Kafka {
         id,
         err: None,
+        sources: DashMap::new(),
         sinks: DashMap::new(),
         kafka_client,
         stop_signal_tx,

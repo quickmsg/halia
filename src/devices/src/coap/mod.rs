@@ -85,41 +85,18 @@ impl Device for Coap {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        todo!()
-        // let ext_conf: CoapConf = serde_json::from_value(device_conf.ext)?;
-        // Self::validate_conf(&ext_conf)?;
-
-        // let mut restart = false;
-        // if self.ext_conf != ext_conf {
-        //     restart = true;
-        // }
-        // self.base_conf = device_conf.base;
-        // self.ext_conf = ext_conf;
-
-        // if self.on && restart {
-        //     let coap_client = Arc::new(
-        //         UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
-        //     );
-        //     for source in self.sources.iter_mut() {
-        //         _ = source.update_coap_client(coap_client.clone());
-        //     }
-        // for sink in self.sinks.iter_mut() {
-        //     _ = sink.stop();
-        // }
-
-        // let coap_client = Arc::new(
-        //     UdpCoAPClient::new_udp((self.ext_conf.host.clone(), self.ext_conf.port)).await?,
-        // );
-        // for source in self.sources.iter_mut() {
-        //     _ = source.start(coap_client.clone());
-        // }
-        // for sink in self.sinks.iter_mut() {
-        //     _ = sink.start(coap_client.clone());
-        // }
-        //     self.coap_client = Some(coap_client);
-        // }
-
-        // Ok(())
+        let _old_conf: CoapConf = serde_json::from_value(old_conf)?;
+        let new_conf: CoapConf = serde_json::from_value(new_conf)?;
+        let coap_client =
+            Arc::new(UdpCoAPClient::new_udp((new_conf.host.clone(), new_conf.port)).await?);
+        for mut source in self.sources.iter_mut() {
+            _ = source.update_coap_client(coap_client.clone());
+        }
+        for mut sink in self.sinks.iter_mut() {
+            _ = sink.update_coap_client(coap_client.clone());
+        }
+        self.coap_client = coap_client;
+        Ok(())
     }
 
     async fn stop(&mut self) {

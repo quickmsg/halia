@@ -118,3 +118,11 @@ pub enum MessageRetainType {
     LatestCount,
     LatestTime,
 }
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum ValueType {
+    String,
+    // base64 编码
+    Bytes,
+}
