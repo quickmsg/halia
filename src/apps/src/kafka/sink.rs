@@ -32,12 +32,16 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn new(client: Option<&Client>, conf: SinkConf) -> Self {
+    pub async fn new(
+        kafka_client: Option<&Client>,
+        kafka_err_tx: mpsc::Sender<String>,
+        conf: SinkConf,
+    ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
-        let join_handle = match client {
-            Some(client) => Some(Self::event_loop(client, conf, stop_signal_rx, mb_rx).await),
+        let join_handle = match kafka_client {
+            Some(kafka_client) => Some(Self::event_loop(kafka_client, conf, stop_signal_rx, mb_rx).await),
             None => None,
         };
 

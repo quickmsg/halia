@@ -256,7 +256,12 @@ impl App for Kafka {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf.clone())?;
-        let sink = Sink::new(self.kafka_client.read().await.as_ref(), conf).await;
+        let sink = Sink::new(
+            self.kafka_client.read().await.as_ref(),
+            self.kafka_err_tx.clone(),
+            conf,
+        )
+        .await;
         self.sinks.insert(sink_id, sink);
 
         Ok(())
