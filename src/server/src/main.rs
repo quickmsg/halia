@@ -4,7 +4,7 @@ use anyhow::Result;
 use common::{config, storage, sys};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tracing::{info, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,8 +25,10 @@ async fn main() -> Result<()> {
         config::LogLevel::Debug => Level::DEBUG,
         config::LogLevel::Trace => Level::TRACE,
     };
+    let filter = EnvFilter::new("trace,rskafka=off");
     let subscriber = FmtSubscriber::builder()
         .with_max_level(level)
+        .with_env_filter(filter)
         // TODO 发布环境去除
         .with_line_number(true)
         .finish();

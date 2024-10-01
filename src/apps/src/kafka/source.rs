@@ -96,6 +96,7 @@ impl Source {
                     }
 
                     Some(res) = stream_consumer.next() => {
+                        debug!("here");
                         match res {
                             Ok(res) => Self::handle_kafka_msg(res, &mb_tx).await,
                             Err(e) => kafka_err_tx.send(e.to_string()).await.unwrap(),
