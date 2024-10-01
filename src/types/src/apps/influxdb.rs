@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::MessageRetain;
+
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct InfluxdbConf {
     pub url: String,
@@ -14,6 +16,7 @@ pub struct SinkConf {
     pub headers: Vec<(String, String)>,
     pub query_params: Vec<(String, String)>,
     pub body: serde_json::Value,
+    pub message_retain: MessageRetain,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

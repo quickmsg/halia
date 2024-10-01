@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use common::error::HaliaResult;
+use common::{
+    error::HaliaResult,
+    sink_message_retain::{self, SinkMessageRetain},
+};
 use influxdb::{Client, InfluxDbWriteable as _, Timestamp};
 use message::MessageBatch;
 use tokio::{
@@ -17,6 +20,7 @@ pub struct Sink {
         JoinHandle<(
             SinkConf,
             Arc<InfluxdbConf>,
+            Box<dyn SinkMessageRetain>,
             watch::Receiver<()>,
             mpsc::Receiver<MessageBatch>,
         )>,
@@ -32,7 +36,9 @@ impl Sink {
     pub fn new(conf: SinkConf, influxdb_conf: Arc<InfluxdbConf>) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
-        let join_handle = Self::event_loop(conf, influxdb_conf, stop_signal_rx, mb_rx);
+        let message_retainer = sink_message_retain::new(&conf.message_retain);
+        let join_handle =
+            Self::event_loop(conf, influxdb_conf, message_retainer, stop_signal_rx, mb_rx);
         Sink {
             stop_signal_tx,
             mb_tx,
@@ -43,11 +49,13 @@ impl Sink {
     fn event_loop(
         conf: SinkConf,
         influxdb_conf: Arc<InfluxdbConf>,
+        message_retainer: Box<dyn sink_message_retain::SinkMessageRetain>,
         mut stop_signal_rx: watch::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
     ) -> JoinHandle<(
         SinkConf,
         Arc<InfluxdbConf>,
+        Box<dyn SinkMessageRetain>,
         watch::Receiver<()>,
         mpsc::Receiver<MessageBatch>,
     )> {
@@ -56,18 +64,22 @@ impl Sink {
             loop {
                 select! {
                     _ = stop_signal_rx.changed() => {
-                        return (conf, influxdb_conf, stop_signal_rx, mb_rx);
+                        return (conf, influxdb_conf, message_retainer, stop_signal_rx, mb_rx);
                     }
 
                     Some(mb) = mb_rx.recv() => {
-                        Self::send_msg_to_influxdb(&influxdb_client, mb).await;
+                        Self::send_msg_to_influxdb(&influxdb_client, mb, &message_retainer).await;
                     }
                 }
             }
         })
     }
 
-    async fn send_msg_to_influxdb(influxdb_client: &Client, _mb: MessageBatch) {
+    async fn send_msg_to_influxdb(
+        influxdb_client: &Client,
+        _mb: MessageBatch,
+        message_retainer: &Box<dyn sink_message_retain::SinkMessageRetain>,
+    ) {
         let query = Timestamp::Nanoseconds(0)
             .into_query("measurement")
             .add_field("field1", 5);
@@ -81,6 +93,7 @@ impl Sink {
     ) -> (
         SinkConf,
         Arc<InfluxdbConf>,
+        Box<dyn SinkMessageRetain>,
         watch::Receiver<()>,
         mpsc::Receiver<MessageBatch>,
     ) {
@@ -89,17 +102,24 @@ impl Sink {
     }
 
     pub async fn update_conf(&mut self, conf: SinkConf) {
-        let (_, influxdb_client, stop_signal_rx, mb_rx) = self.stop().await;
+        let (_, influxdb_conf, message_retainer, stop_signal_rx, mb_rx) = self.stop().await;
         self.join_handle = Some(Self::event_loop(
             conf,
-            influxdb_client,
+            influxdb_conf,
+            message_retainer,
             stop_signal_rx,
             mb_rx,
         ));
     }
 
     pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
-        let (conf, _, stop_signal_rx, mb_rx) = self.stop().await;
-        self.join_handle = Some(Self::event_loop(conf, influxdb_conf, stop_signal_rx, mb_rx));
+        let (conf, _, message_retainer, stop_signal_rx, mb_rx) = self.stop().await;
+        self.join_handle = Some(Self::event_loop(
+            conf,
+            influxdb_conf,
+            message_retainer,
+            stop_signal_rx,
+            mb_rx,
+        ));
     }
 }
