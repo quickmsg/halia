@@ -1,28 +1,32 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use common::error::HaliaResult;
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc;
-use types::apps::{influxdb::SinkConf, kafka::KafkaConf, AppConf};
+use types::apps::influxdb::{InfluxdbConf, SinkConf};
 
 use crate::App;
 
 mod sink;
 
 pub struct Influxdb {
-    id: String,
-    err: Option<String>,
+    _id: String,
+    _err: Option<String>,
     sinks: DashMap<String, Sink>,
+    conf: Arc<InfluxdbConf>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let conf: KafkaConf = serde_json::from_value(conf).unwrap();
+    let conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
 
     Box::new(Influxdb {
-        id,
-        err: None,
+        _id: id,
+        _err: None,
         sinks: DashMap::new(),
+        conf: Arc::new(conf),
     })
 }
 
@@ -40,34 +44,61 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 impl App for Influxdb {
     async fn update(
         &mut self,
-        old_conf: serde_json::Value,
+        _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        todo!()
+        let new_conf: InfluxdbConf = serde_json::from_value(new_conf)?;
+        self.conf = Arc::new(new_conf);
+        for mut sink in self.sinks.iter_mut() {
+            sink.update_influxdb_client(self.conf.clone()).await;
+        }
+
+        Ok(())
     }
 
     async fn stop(&mut self) {
-        todo!()
+        for mut sink in self.sinks.iter_mut() {
+            sink.stop().await;
+        }
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
-        todo!()
+        let conf: SinkConf = serde_json::from_value(conf)?;
+        let sink = Sink::new(conf, self.conf.clone());
+        self.sinks.insert(sink_id, sink);
+        Ok(())
     }
 
     async fn update_sink(
         &mut self,
         sink_id: String,
-        old_conf: serde_json::Value,
+        _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        todo!()
+        let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+        match self.sinks.get_mut(&sink_id) {
+            Some(mut sink) => {
+                sink.update_conf(new_conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id)),
+        }
     }
 
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
-        todo!()
+        match self.sinks.remove(&sink_id) {
+            Some((_, mut sink)) => {
+                sink.stop().await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id)),
+        }
     }
 
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        todo!()
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }

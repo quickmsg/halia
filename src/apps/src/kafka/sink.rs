@@ -23,7 +23,14 @@ use super::{transfer_compression, transfer_unknown_topic_handling};
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
+    join_handle: Option<
+        JoinHandle<(
+            mpsc::Sender<String>,
+            SinkConf,
+            watch::Receiver<()>,
+            mpsc::Receiver<MessageBatch>,
+        )>,
+    >,
     pub mb_tx: mpsc::Sender<MessageBatch>,
 }
 
@@ -40,10 +47,8 @@ impl Sink {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
-        let join_handle = match kafka_client {
-            Some(kafka_client) => Some(Self::event_loop(kafka_client, conf, stop_signal_rx, mb_rx).await),
-            None => None,
-        };
+        let join_handle =
+            Some(Self::event_loop(kafka_client, kafka_err_tx, conf, stop_signal_rx, mb_rx).await);
 
         Self {
             stop_signal_tx,
@@ -53,28 +58,47 @@ impl Sink {
     }
 
     async fn event_loop(
-        client: &Client,
+        kafka_client: Option<&Client>,
+        kafka_err_tx: mpsc::Sender<String>,
         conf: SinkConf,
         mut stop_signal_rx: watch::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
-    ) -> JoinHandle<(SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>)> {
+    ) -> JoinHandle<(
+        mpsc::Sender<String>,
+        SinkConf,
+        watch::Receiver<()>,
+        mpsc::Receiver<MessageBatch>,
+    )> {
         let unknown_topic_handling = transfer_unknown_topic_handling(&conf.unknown_topic_handling);
-        let partition_client = client
-            .partition_client(&conf.topic, conf.partition, unknown_topic_handling)
-            .await
-            .unwrap();
+        // let mut err = false;
+        let partition_client = match kafka_client {
+            Some(kafka_client) => Some(
+                kafka_client
+                    .partition_client(&conf.topic, conf.partition, unknown_topic_handling)
+                    .await
+                    .unwrap(),
+            ),
+            None => None,
+        };
 
         let compression = transfer_compression(&conf.compression);
         tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.changed() => {
-                        return (conf, stop_signal_rx, mb_rx);
+                        return (kafka_err_tx, conf, stop_signal_rx, mb_rx);
                     }
                     Some(mb) = mb_rx.recv() => {
-                        if let Err(e) = Self::send_msg_to_kafka(&partition_client, mb, compression).await {
-                            warn!("{}", e);
+                        match &partition_client {
+                            Some(partition_client) => {
+                                if let Err(e) = Self::send_msg_to_kafka(partition_client, mb, compression).await {
+                                    warn!("{}", e);
+                                    kafka_err_tx.send(e.to_string()).await.unwrap();
+                                }
+                            }
+                            None => {}
                         }
+
                     }
                 }
             }
@@ -92,50 +116,37 @@ impl Sink {
             headers: BTreeMap::from([("foo".to_owned(), b"bar".to_vec())]),
             timestamp: Utc.timestamp_millis(42),
         };
-        partition_client
-            .produce(vec![record], compression)
-            .await
-            .unwrap();
-
+        partition_client.produce(vec![record], compression).await?;
         Ok(())
     }
 
     pub async fn update_conf(
         &mut self,
-        client: Option<&Client>,
+        kafka_client: Option<&Client>,
         _old_conf: SinkConf,
         new_conf: SinkConf,
     ) {
-        let (_, stop_signal_rx, mb_rx) = self.stop().await;
-        match client {
-            Some(client) => {
-                let join_handle = Self::event_loop(client, new_conf, stop_signal_rx, mb_rx).await;
-                self.join_handle = Some(join_handle);
-            }
-            None => {}
-        }
+        let (kafka_err_tx, _, stop_signal_rx, mb_rx) = self.stop().await;
+        let join_handle =
+            Self::event_loop(kafka_client, kafka_err_tx, new_conf, stop_signal_rx, mb_rx).await;
+        self.join_handle = Some(join_handle);
     }
 
-    pub async fn update_kafka_client(&mut self, client: Option<&Client>) {
-        match client {
-            Some(client) => {
-                // if let Some(conf) = self.conf.take() {
-                //     self.join_handle = Some(
-                //         Self::event_loop(
-                //             client,
-                //             conf,
-                //             self.stop_signal_tx.subscribe(),
-                //             self.mb_tx.clone(),
-                //         )
-                //         .await,
-                //     );
-                // }
-            }
-            None => todo!(),
-        }
+    pub async fn update_kafka_client(&mut self, kafka_client: Option<&Client>) {
+        let (kafka_err_tx, conf, stop_signal_rx, mb_rx) = self.stop().await;
+        let join_handle =
+            Self::event_loop(kafka_client, kafka_err_tx, conf, stop_signal_rx, mb_rx).await;
+        self.join_handle = Some(join_handle);
     }
 
-    pub async fn stop(&mut self) -> (SinkConf, watch::Receiver<()>, mpsc::Receiver<MessageBatch>) {
+    pub async fn stop(
+        &mut self,
+    ) -> (
+        mpsc::Sender<String>,
+        SinkConf,
+        watch::Receiver<()>,
+        mpsc::Receiver<MessageBatch>,
+    ) {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
