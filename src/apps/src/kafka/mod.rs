@@ -96,6 +96,7 @@ impl Kafka {
                         kafka_client.write().await.replace(client);
                         connect_signal_tx.send(()).unwrap();
                         events::insert_connect(types::events::ResourceType::App, &id).await;
+                        return stop_signal_rx;
                     }
                     Err(e) => {
                         events::insert_disconnect(

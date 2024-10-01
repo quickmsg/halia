@@ -126,3 +126,10 @@ pub enum ValueType {
     // base64 编码
     Bytes,
 }
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+pub struct StringOrBytesValue {
+    #[serde(rename = "type")]
+    pub typ: ValueType,
+    pub value: String,
+}

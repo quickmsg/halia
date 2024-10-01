@@ -44,12 +44,14 @@ pub struct SinkConf {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum UnknownTopicHandling {
     Error,
     Retry,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum RequiredAcks {
     None,
     One,
@@ -57,6 +59,7 @@ pub enum RequiredAcks {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum Compression {
     None,
     Gzip,
