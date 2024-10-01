@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{CertInfo, MessageRetain};
+use crate::{MessageRetain, SslInfo, StringOrBytesValue};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientConf {
@@ -28,8 +28,7 @@ pub struct MqttClientV311Conf {
     #[serde(flatten)]
     pub auth: MqttClientAuth,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cert_info: Option<CertInfo>,
+    pub ssl_info: SslInfo,
 
     pub timeout: usize,
     // 秒
@@ -50,7 +49,7 @@ pub struct MqttClientV50Conf {
     #[serde(flatten)]
     pub auth: MqttClientAuth,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cert_info: Option<CertInfo>,
+    pub cert_info: Option<SslInfo>,
     pub last_will: Option<LastWillV50>,
 }
 
@@ -65,10 +64,9 @@ pub struct MqttClientAuth {
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct LastWillV311 {
     pub topic: String,
-    // base64 编码的信息
-    pub message: String,
     pub qos: Qos,
     pub retain: bool,
+    pub message: StringOrBytesValue,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]

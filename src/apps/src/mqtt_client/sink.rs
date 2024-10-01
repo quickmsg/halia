@@ -9,7 +9,7 @@ use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use types::apps::mqtt_client::SinkConf;
 
 use super::{qos_to_v311, qos_to_v50, HaliaMqttClient};

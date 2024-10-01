@@ -32,4 +32,6 @@ pub enum HaliaError {
     Error(#[from] anyhow::Error),
     #[error("不支持的资源！")]
     NotSupportResource,
+    #[error("Base64编码错误：{0}")]
+    Base64DecodeErr(String),
 }

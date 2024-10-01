@@ -27,7 +27,7 @@ mod sink;
 mod source;
 
 pub struct MqttClient {
-    pub id: String,
+    id: String,
 
     err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: mpsc::Sender<()>,
@@ -46,7 +46,7 @@ pub struct MqttClient {
 }
 
 #[derive(Clone)]
-pub(crate) enum HaliaMqttClient {
+enum HaliaMqttClient {
     V311(Arc<AsyncClient>),
     V50(Arc<v5::AsyncClient>),
 }
@@ -91,9 +91,16 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
         types::apps::mqtt_client::Version::V311 => match &conf.v311 {
             Some(conf) => {
                 if let Some(last_will) = &conf.last_will {
-                    BASE64_STANDARD.decode(&last_will.message).map_err(|e| {
-                        HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e))
-                    })?;
+                    match &last_will.message.typ {
+                        types::ValueType::String => {}
+                        types::ValueType::Bytes => {
+                            BASE64_STANDARD
+                                .decode(&last_will.message.value)
+                                .map_err(|e| {
+                                    HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e))
+                                })?;
+                        }
+                    }
                 }
             }
             None => {
@@ -165,19 +172,37 @@ impl MqttClient {
                 mqtt_options.set_credentials(username, password);
             }
         };
-        // if let Some(cert_info) = &conf.cert_info {
-        //     let transport = Transport::Tls(TlsConfiguration::Simple {
-        //         ca: cert_info.ca_cert.clone().into_bytes(),
-        //         alpn: None,
-        //         client_auth: Some((
-        //             cert_info.client_cert.clone().into_bytes(),
-        //             cert_info.client_key.clone().into_bytes(),
-        //         )),
-        //     });
-        //     mqtt_options.set_transport(transport);
-        // }
+
+        match (conf.ssl_info.enable, conf.ssl_info.client_cert_enable) {
+            (true, true) => {
+                let transport = Transport::Tls(TlsConfiguration::Simple {
+                    ca: conf.ssl_info.ca_cert.unwrap().clone().into_bytes(),
+                    alpn: None,
+                    client_auth: Some((
+                        conf.ssl_info.client_cert.unwrap().clone().into_bytes(),
+                        conf.ssl_info.client_key.unwrap().clone().into_bytes(),
+                    )),
+                });
+                mqtt_options.set_transport(transport);
+            }
+            (true, false) => {
+                let transport = Transport::Tls(TlsConfiguration::Simple {
+                    ca: conf.ssl_info.ca_cert.unwrap().clone().into_bytes(),
+                    alpn: None,
+                    client_auth: None,
+                });
+                mqtt_options.set_transport(transport);
+            }
+            _ => {}
+        }
+
         if let Some(last_will) = &conf.last_will {
-            let message = BASE64_STANDARD.decode(&last_will.message).unwrap();
+            let message = match last_will.message.typ {
+                types::ValueType::String => last_will.message.value.clone().into(),
+                types::ValueType::Bytes => {
+                    BASE64_STANDARD.decode(&last_will.message.value).unwrap()
+                }
+            };
             mqtt_options.set_last_will(LastWill {
                 topic: last_will.topic.clone(),
                 message: message.into(),
