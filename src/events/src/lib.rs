@@ -79,17 +79,22 @@ pub async fn insert_stop(resource_type: ResourceType, resource_id: &String) {
     }
 }
 
-pub async fn insert_connect(resource_type: ResourceType, resource_id: &String) {
+pub async fn insert_connect_succeed(resource_type: ResourceType, resource_id: &String) {
     if let Err(e) =
-        storage::event::insert(resource_type, resource_id, EventType::Connect, None).await
+        storage::event::insert(resource_type, resource_id, EventType::ConnectSucceed, None).await
     {
         warn!("failed to insert connect event: {}", e);
     }
 }
 
-pub async fn insert_disconnect(resource_type: ResourceType, resource_id: &String, e: String) {
-    if let Err(e) =
-        storage::event::insert(resource_type, resource_id, EventType::Disconnect, Some(e)).await
+pub async fn insert_connect_failed(resource_type: ResourceType, resource_id: &String, e: String) {
+    if let Err(e) = storage::event::insert(
+        resource_type,
+        resource_id,
+        EventType::ConnectFailed,
+        Some(e),
+    )
+    .await
     {
         warn!("failed to insert disconnect event: {}", e);
     }

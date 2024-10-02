@@ -196,7 +196,7 @@ fn build_basic_auth(
                 basic_auth_item.password.clone(),
             );
         }
-        (Some(basic_auth_item), Some(basic_auth_client)) => {
+        (Some(basic_auth_item), Some(_)) => {
             builder = builder.basic_auth(
                 basic_auth_item.username.clone(),
                 basic_auth_item.password.clone(),

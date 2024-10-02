@@ -95,11 +95,11 @@ impl Kafka {
                     Ok(client) => {
                         kafka_client.write().await.replace(client);
                         connect_signal_tx.send(()).unwrap();
-                        events::insert_connect(types::events::ResourceType::App, &id).await;
+                        events::insert_connect_succeed(types::events::ResourceType::App, &id).await;
                         return stop_signal_rx;
                     }
                     Err(e) => {
-                        events::insert_disconnect(
+                        events::insert_connect_failed(
                             types::events::ResourceType::App,
                             &id,
                             e.to_string(),

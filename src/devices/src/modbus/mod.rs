@@ -142,8 +142,11 @@ impl Modbus {
                             warn!("update device err failed: {}", e);
                         }
 
-                        events::insert_connect(types::events::ResourceType::Device, &device_id)
-                            .await;
+                        events::insert_connect_succeed(
+                            types::events::ResourceType::Device,
+                            &device_id,
+                        )
+                        .await;
 
                         loop {
                             select! {
@@ -184,7 +187,7 @@ impl Modbus {
                         if init {
                             sub_device_running_count();
                         }
-                        events::insert_disconnect(
+                        events::insert_connect_failed(
                             types::events::ResourceType::Device,
                             &device_id,
                             e.to_string(),

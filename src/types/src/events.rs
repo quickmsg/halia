@@ -52,8 +52,8 @@ pub enum EventType {
     Delete,
     Start,
     Stop,
-    Connect,
-    Disconnect,
+    ConnectSucceed,
+    ConnectFailed,
 }
 
 impl Into<i32> for EventType {
@@ -64,8 +64,8 @@ impl Into<i32> for EventType {
             EventType::Delete => 3,
             EventType::Start => 4,
             EventType::Stop => 5,
-            EventType::Connect => 6,
-            EventType::Disconnect => 7,
+            EventType::ConnectSucceed => 6,
+            EventType::ConnectFailed => 7,
         }
     }
 }
@@ -80,8 +80,8 @@ impl TryFrom<i32> for EventType {
             3 => Ok(EventType::Delete),
             4 => Ok(EventType::Start),
             5 => Ok(EventType::Stop),
-            6 => Ok(EventType::Connect),
-            7 => Ok(EventType::Disconnect),
+            6 => Ok(EventType::ConnectSucceed),
+            7 => Ok(EventType::ConnectFailed),
             _ => Err(()),
         }
     }
