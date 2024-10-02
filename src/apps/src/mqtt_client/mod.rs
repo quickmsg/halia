@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    io::{BufReader, Cursor},
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
@@ -6,9 +10,10 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rumqttc::{
-    mqttbytes, v5, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS, TlsConfiguration,
-    Transport,
+    mqttbytes, tokio_rustls::rustls::ClientConfig, v5, AsyncClient, Event, Incoming, LastWill,
+    MqttOptions, QoS,
 };
+use rustls_pemfile::Item;
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -177,27 +182,67 @@ impl MqttClient {
             }
         };
 
-        match (conf.ssl.enable, conf.ssl.client_cert_enable) {
-            (true, true) => {
-                let transport = Transport::Tls(TlsConfiguration::Simple {
-                    ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
-                    alpn: None,
-                    client_auth: Some((
-                        conf.ssl.client_cert.unwrap().clone().into_bytes(),
-                        conf.ssl.client_key.unwrap().clone().into_bytes(),
-                    )),
-                });
-                mqtt_options.set_transport(transport);
+        if conf.ssl.enable {
+            let mut root_cert_store = rumqttc::tokio_rustls::rustls::RootCertStore::empty();
+            let certificate_result = rustls_native_certs::load_native_certs();
+            if certificate_result.errors.is_empty() {
+                root_cert_store.add_parsable_certificates(certificate_result.certs);
             }
-            (true, false) => {
-                let transport = Transport::Tls(TlsConfiguration::Simple {
-                    ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
-                    alpn: None,
-                    client_auth: None,
-                });
-                mqtt_options.set_transport(transport);
+            match conf.ssl.ca_cert {
+                Some(ca_cert) => {
+                    let ca_cert = ca_cert.into_bytes();
+                    let certs = rustls_pemfile::certs(&mut BufReader::new(Cursor::new(ca_cert)))
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap();
+                    for cert in certs {
+                        root_cert_store.add(cert).unwrap();
+                    }
+                }
+                None => {}
             }
-            _ => {}
+
+            let client_config = ClientConfig::builder().with_root_certificates(root_cert_store);
+            match (conf.ssl.client_cert, conf.ssl.client_key) {
+                (Some(client_cert), Some(client_key)) => {
+                    let client_cert = client_cert.into_bytes();
+                    let client_key = client_key.into_bytes();
+                    let client_certs =
+                        rustls_pemfile::certs(&mut BufReader::new(Cursor::new(client_cert)))
+                            .collect::<Result<Vec<_>, _>>()
+                            .unwrap();
+
+                    let mut key_buffer = BufReader::new(Cursor::new(client_key));
+                    let key = loop {
+                        let item = rustls_pemfile::read_one(&mut key_buffer).unwrap();
+                        match item {
+                            Some(Item::Sec1Key(key)) => {
+                                break key.into();
+                            }
+                            Some(Item::Pkcs1Key(key)) => {
+                                break key.into();
+                            }
+                            Some(Item::Pkcs8Key(key)) => {
+                                break key.into();
+                            }
+                            None => {
+                                panic!("no valid key in chain");
+                            }
+                            _ => {}
+                        }
+                    };
+                    let config = client_config
+                        .with_client_auth_cert(client_certs, key)
+                        .unwrap();
+
+                    let transport = rumqttc::Transport::Tls(rumqttc::TlsConfiguration::Rustls(
+                        Arc::new(config),
+                    ));
+                    mqtt_options.set_transport(transport);
+                }
+                _ => {}
+            }
+
+            if conf.ssl.verify {}
         }
 
         if let Some(last_will) = &conf.last_will {
@@ -313,28 +358,28 @@ impl MqttClient {
             }
         };
 
-        match (conf.ssl.enable, conf.ssl.client_cert_enable) {
-            (true, true) => {
-                let transport = Transport::Tls(TlsConfiguration::Simple {
-                    ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
-                    alpn: None,
-                    client_auth: Some((
-                        conf.ssl.client_cert.unwrap().clone().into_bytes(),
-                        conf.ssl.client_key.unwrap().clone().into_bytes(),
-                    )),
-                });
-                mqtt_options.set_transport(transport);
-            }
-            (true, false) => {
-                let transport = Transport::Tls(TlsConfiguration::Simple {
-                    ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
-                    alpn: None,
-                    client_auth: None,
-                });
-                mqtt_options.set_transport(transport);
-            }
-            _ => {}
-        }
+        // match (conf.ssl.enable, conf.ssl.client_cert_enable) {
+        //     (true, true) => {
+        //         let transport = Transport::Tls(TlsConfiguration::Simple {
+        //             ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
+        //             alpn: None,
+        //             client_auth: Some((
+        //                 conf.ssl.client_cert.unwrap().clone().into_bytes(),
+        //                 conf.ssl.client_key.unwrap().clone().into_bytes(),
+        //             )),
+        //         });
+        //         mqtt_options.set_transport(transport);
+        //     }
+        //     (true, false) => {
+        //         let transport = Transport::Tls(TlsConfiguration::Simple {
+        //             ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
+        //             alpn: None,
+        //             client_auth: None,
+        //         });
+        //         mqtt_options.set_transport(transport);
+        //     }
+        //     _ => {}
+        // }
 
         let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
 
