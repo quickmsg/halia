@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
+use reqwest::RequestBuilder;
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
@@ -23,11 +24,11 @@ pub struct HttpClient {
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
-    let ext_conf: HttpClientConf = serde_json::from_value(conf)?;
+    let conf: HttpClientConf = serde_json::from_value(conf)?;
 
     Ok(Box::new(HttpClient {
         id,
-        conf: Arc::new(ext_conf),
+        conf: Arc::new(conf),
         err: None,
         sources: DashMap::new(),
         sinks: DashMap::new(),
@@ -174,4 +175,33 @@ impl App for HttpClient {
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }
+}
+
+fn build_headers(
+    mut builder: RequestBuilder,
+    headers_item: &Option<Vec<(String, String)>>,
+    headers_client: &Option<Vec<(String, String)>>,
+) -> RequestBuilder {
+    match (headers_item, headers_client) {
+        (None, None) => {}
+        (None, Some(headers_client)) => {
+            for (k, v) in headers_client {
+                builder = builder.header(k, v);
+            }
+        }
+        (Some(headers_item), None) => {
+            for (k, v) in headers_item {
+                builder = builder.header(k, v);
+            }
+        }
+        (Some(headers_item), Some(headers_client)) => {
+            for (k, v) in headers_client {
+                if headers_item.iter().find(|(key, _)| key == k).is_none() {
+                    builder = builder.header(k, v);
+                }
+            }
+        }
+    }
+
+    builder
 }

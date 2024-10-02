@@ -7,6 +7,8 @@ use tokio::{select, sync::mpsc, task::JoinHandle};
 use tracing::{trace, warn};
 use types::apps::http_client::{HttpClientConf, SinkConf};
 
+use super::build_headers;
+
 pub struct Sink {
     stop_signal_tx: mpsc::Sender<()>,
     join_handle: Option<
@@ -101,11 +103,7 @@ impl Sink {
 
         builder = builder.query(&conf.query_params);
 
-        if let Some(headers) = &conf.headers {
-            for (k, v) in headers.iter() {
-                builder = builder.header(k, v);
-            }
-        }
+        builder = build_headers(builder, &conf.headers, &http_client_conf.headers);
 
         let request = builder.build().unwrap();
 

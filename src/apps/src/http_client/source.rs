@@ -12,6 +12,8 @@ use tokio::{
 use tracing::{trace, warn};
 use types::apps::http_client::{HttpClientConf, SourceConf};
 
+use super::build_headers;
+
 pub struct Source {
     stop_signal_tx: mpsc::Sender<()>,
     join_handle: Option<JoinHandle<(mpsc::Receiver<()>, Arc<HttpClientConf>, SourceConf, Client)>>,
@@ -76,20 +78,28 @@ impl Source {
     async fn send_request(
         client: &Client,
         http_client_conf: &Arc<HttpClientConf>,
-        ext_conf: &SourceConf,
+        conf: &SourceConf,
     ) {
-        let mut builder = client.get(format!("{}{}", &http_client_conf.host, ext_conf.path));
-        if let Some(basic_auth) = &ext_conf.basic_auth {
-            builder = builder.basic_auth(basic_auth.username.clone(), basic_auth.password.clone());
-        }
-
-        if let Some(headers) = &ext_conf.headers {
-            for (key, value) in headers.iter() {
-                builder = builder.header(key, value);
+        let mut builder = client.get(format!("{}{}", &http_client_conf.host, conf.path));
+        match (&conf.basic_auth, &http_client_conf.basic_auth) {
+            (None, None) => {}
+            (None, Some(basic_auth)) => {
+                builder =
+                    builder.basic_auth(basic_auth.username.clone(), basic_auth.password.clone());
+            }
+            (Some(basic_auth), None) => {
+                builder =
+                    builder.basic_auth(basic_auth.username.clone(), basic_auth.password.clone());
+            }
+            (Some(basic_auth), Some(_)) => {
+                builder =
+                    builder.basic_auth(basic_auth.username.clone(), basic_auth.password.clone());
             }
         }
 
-        builder = builder.query(&ext_conf.query_params);
+        builder = build_headers(builder, &conf.headers, &http_client_conf.headers);
+
+        builder = builder.query(&conf.query_params);
 
         // for (k, v) in ext_conf.headers.iter() {
         //     builder = builder.header(k, v);
