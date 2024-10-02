@@ -12,24 +12,22 @@ use tokio::{
 use tracing::warn;
 use types::devices::modbus::{Area, SourceConf};
 
-#[derive(Debug)]
 pub struct Source {
-    pub id: String,
-
     pub conf: SourceConf,
     quantity: u16,
 
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<
-        JoinHandle<(
-            watch::Receiver<()>,
-            mpsc::Sender<String>,
-            broadcast::Receiver<bool>,
-        )>,
-    >,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
     err_info: Option<String>,
 
     pub mb_tx: broadcast::Sender<MessageBatch>,
+}
+
+pub struct JoinHandleData {
+    id: String,
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub read_tx: mpsc::Sender<String>,
+    pub device_err_rx: broadcast::Receiver<bool>,
 }
 
 impl Source {
@@ -42,20 +40,23 @@ impl Source {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, _) = broadcast::channel(16);
 
-        let quantity = conf.data_type.get_quantity();
-        let mut source = Self {
+        let join_handle_data = JoinHandleData {
             id,
+            stop_signal_rx,
+            read_tx,
+            device_err_rx,
+        };
+        let join_handle = Self::event_loop(join_handle_data, &conf);
+
+        let quantity = conf.data_type.get_quantity();
+        Self {
             conf,
             quantity,
             stop_signal_tx,
             mb_tx,
-            join_handle: None,
+            join_handle: Some(join_handle),
             err_info: None,
-        };
-
-        source.event_loop(stop_signal_rx, read_tx, device_err_rx);
-
-        source
+        }
     }
 
     pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
@@ -119,29 +120,25 @@ impl Source {
     }
 
     fn event_loop(
-        &mut self,
-        mut stop_signal_rx: watch::Receiver<()>,
-        read_tx: mpsc::Sender<String>,
-        mut device_err_rx: broadcast::Receiver<bool>,
-    ) {
-        let interval = self.conf.interval;
-        let point_id = self.id.clone();
-        let join_handle = tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_millis(interval));
-            let mut device_err = false;
+        mut join_handle_data: JoinHandleData,
+        conf: &SourceConf,
+    ) -> JoinHandle<JoinHandleData> {
+        let mut interval = time::interval(Duration::from_millis(conf.interval));
+        let mut device_err = false;
+        tokio::spawn(async move {
             loop {
                 select! {
-                    _ = stop_signal_rx.changed() => {
-                        return (stop_signal_rx, read_tx, device_err_rx);
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
                     }
 
                     _ = interval.tick() => {
                         if !device_err {
-                            _ = read_tx.send(point_id.clone()).await;
+                            _ = join_handle_data.read_tx.send(join_handle_data.id.clone()).await;
                         }
                     }
 
-                    err = device_err_rx.recv() => {
+                    err = join_handle_data.device_err_rx.recv() => {
                         match err {
                             Ok(err) => device_err = err,
                             Err(e) => warn!("{}", e),
@@ -149,25 +146,19 @@ impl Source {
                     }
                 }
             }
-        });
-        self.join_handle = Some(join_handle);
+        })
     }
 
-    pub async fn stop(
-        &mut self,
-    ) -> (
-        watch::Receiver<()>,
-        mpsc::Sender<String>,
-        broadcast::Receiver<bool>,
-    ) {
+    pub async fn stop(&mut self) -> JoinHandleData {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
 
     pub async fn update(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
+        let join_handle_data = self.stop().await;
         self.conf = new_conf;
-        let (stop_signal_rx, read_tx, device_err_rx) = self.stop().await;
-        self.event_loop(stop_signal_rx, read_tx, device_err_rx);
+        let join_handle = Self::event_loop(join_handle_data, &self.conf);
+        self.join_handle = Some(join_handle);
     }
 
     pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {

@@ -14,20 +14,20 @@ use types::devices::modbus::SinkConf;
 
 use super::WritePointEvent;
 
-#[derive(Debug)]
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<
-        JoinHandle<(
-            watch::Receiver<()>,
-            mpsc::Receiver<MessageBatch>,
-            mpsc::Sender<WritePointEvent>,
-            broadcast::Receiver<bool>,
-            Box<dyn SinkMessageRetain>,
-        )>,
-    >,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
 
     pub mb_tx: mpsc::Sender<MessageBatch>,
+}
+
+pub struct JoinHandleData {
+    pub conf: SinkConf,
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub write_tx: mpsc::Sender<WritePointEvent>,
+    pub device_err_rx: broadcast::Receiver<bool>,
+    pub message_retainer: Box<dyn SinkMessageRetain>,
 }
 
 impl Sink {
@@ -44,14 +44,16 @@ impl Sink {
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
-        let join_handle = Self::event_loop(
+        let join_handle_data = JoinHandleData {
+            conf,
             stop_signal_rx,
             mb_rx,
             write_tx,
-            conf,
             device_err_rx,
             message_retainer,
-        );
+        };
+
+        let join_handle = Self::event_loop(join_handle_data);
 
         Self {
             stop_signal_tx,
@@ -61,59 +63,40 @@ impl Sink {
     }
 
     pub async fn update(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
-        let (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer) = self.stop().await;
-        let join_handle = Self::event_loop(
-            stop_signal_rx,
-            mb_rx,
-            write_tx,
-            new_conf,
-            device_err_rx,
-            message_retainer,
-        );
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.conf = new_conf;
+        let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
     }
 
-    fn event_loop(
-        mut stop_signal_rx: watch::Receiver<()>,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
-        write_tx: mpsc::Sender<WritePointEvent>,
-        conf: SinkConf,
-        mut device_err_rx: broadcast::Receiver<bool>,
-        mut message_retainer: Box<dyn SinkMessageRetain>,
-    ) -> JoinHandle<(
-        watch::Receiver<()>,
-        mpsc::Receiver<MessageBatch>,
-        mpsc::Sender<WritePointEvent>,
-        broadcast::Receiver<bool>,
-        Box<dyn SinkMessageRetain>,
-    )> {
+    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
             let mut device_err = false;
             loop {
                 select! {
-                    _ = stop_signal_rx.changed() => {
-                        return (stop_signal_rx, mb_rx, write_tx, device_err_rx, message_retainer);
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
                     }
 
-                    mb = mb_rx.recv() => {
+                    mb = join_handle_data.mb_rx.recv() => {
                         debug!("{:?}", mb);
                         if let Some(mb) = mb {
                             if !device_err {
-                                Self::send_write_point_event(mb, &conf, &write_tx).await;
+                                Self::send_write_point_event(mb, &join_handle_data.conf, &join_handle_data.write_tx).await;
                             } else {
-                                message_retainer.push(mb);
+                                join_handle_data.message_retainer.push(mb);
                             }
                         }
                     }
 
-                    err = device_err_rx.recv() => {
+                    err = join_handle_data.device_err_rx.recv() => {
                         match err {
                             Ok(err) =>{
                                 device_err = err;
                                 match err {
                                     true => {
-                                        while let Some(mb) = message_retainer.pop() {
-                                            Self::send_write_point_event(mb, &conf, &write_tx).await;
+                                        while let Some(mb) = join_handle_data.message_retainer.pop() {
+                                            Self::send_write_point_event(mb, &join_handle_data.conf, &join_handle_data.write_tx).await;
                                         }
                                     }
                                     false => {}
@@ -127,15 +110,7 @@ impl Sink {
         })
     }
 
-    pub async fn stop(
-        &mut self,
-    ) -> (
-        watch::Receiver<()>,
-        mpsc::Receiver<MessageBatch>,
-        mpsc::Sender<WritePointEvent>,
-        broadcast::Receiver<bool>,
-        Box<dyn SinkMessageRetain>,
-    ) {
+    pub async fn stop(&mut self) -> JoinHandleData {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }

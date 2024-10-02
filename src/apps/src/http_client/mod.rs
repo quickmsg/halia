@@ -8,7 +8,7 @@ use reqwest::RequestBuilder;
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
-use types::apps::http_client::{HttpClientConf, SinkConf, SourceConf};
+use types::apps::http_client::{BasicAuth, HttpClientConf, SinkConf, SourceConf};
 
 use crate::App;
 
@@ -175,6 +175,36 @@ impl App for HttpClient {
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }
+}
+
+fn build_basic_auth(
+    mut builder: RequestBuilder,
+    basic_auth_item: &Option<BasicAuth>,
+    basic_auth_client: &Option<BasicAuth>,
+) -> RequestBuilder {
+    match (basic_auth_item, basic_auth_client) {
+        (None, None) => {}
+        (None, Some(basic_auth_client)) => {
+            builder = builder.basic_auth(
+                basic_auth_client.username.clone(),
+                basic_auth_client.password.clone(),
+            );
+        }
+        (Some(basic_auth_item), None) => {
+            builder = builder.basic_auth(
+                basic_auth_item.username.clone(),
+                basic_auth_item.password.clone(),
+            );
+        }
+        (Some(basic_auth_item), Some(basic_auth_client)) => {
+            builder = builder.basic_auth(
+                basic_auth_item.username.clone(),
+                basic_auth_item.password.clone(),
+            );
+        }
+    }
+
+    builder
 }
 
 fn build_headers(

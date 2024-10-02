@@ -40,7 +40,6 @@ use crate::{add_device_running_count, sub_device_running_count, Device};
 mod sink;
 mod source;
 
-#[derive(Debug)]
 struct Modbus {
     id: String,
 
