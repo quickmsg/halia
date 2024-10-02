@@ -8,6 +8,7 @@ pub struct HttpClientConf {
 
     // pub ssl: bool,
     // pub certifacte_verfication: bool,
+    pub basic_auth: Option<BasicAuth>,
     pub headers: Option<Vec<(String, String)>>,
     pub query_params: Option<Vec<(String, String)>>,
     // 超时时间，单位为s
@@ -18,8 +19,6 @@ pub struct HttpClientConf {
 pub struct SourceConf {
     // 间隔 毫秒
     pub interval: u64,
-
-    // pub method: SinkMethod,
     pub path: String,
     pub basic_auth: Option<BasicAuth>,
     pub headers: Option<Vec<(String, String)>>,

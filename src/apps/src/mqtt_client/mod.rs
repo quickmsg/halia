@@ -10,8 +10,10 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rumqttc::{
-    mqttbytes, tokio_rustls::rustls::ClientConfig, v5, AsyncClient, Event, Incoming, LastWill,
-    MqttOptions, QoS,
+    mqttbytes,
+    tokio_rustls::rustls::ClientConfig,
+    v5::{self, mqttbytes::v5::ConnectProperties},
+    AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS,
 };
 use rustls_pemfile::Item;
 use sink::Sink;
@@ -357,6 +359,36 @@ impl MqttClient {
                 mqtt_options.set_credentials(username, password);
             }
         };
+
+        mqtt_options.set_clean_start(conf.clean_start);
+        let mut connect_properties = ConnectProperties::new();
+        connect_properties.session_expiry_interval = conf.session_expire_interval;
+        connect_properties.receive_maximum = conf.receive_maximum;
+        connect_properties.max_packet_size = conf.max_packet_size;
+        connect_properties.topic_alias_max = conf.topic_alias_max;
+        connect_properties.request_response_info = conf.request_response_info;
+        connect_properties.request_problem_info = conf.request_problem_info;
+        if let Some(user_properties) = &conf.user_properties {
+            for (k, v) in user_properties {
+                connect_properties
+                    .user_properties
+                    .push((k.clone(), v.clone()));
+            }
+        }
+        connect_properties.authentication_method = conf.authentication_method;
+        if let Some(authehtication_data) = &conf.authentication_data {
+            match authehtication_data.typ {
+                types::ValueType::String => {
+                    connect_properties.authentication_data =
+                        Some(authehtication_data.value.clone().into());
+                }
+                types::ValueType::Bytes => {
+                    let b = BASE64_STANDARD.decode(&authehtication_data.value).unwrap();
+                    connect_properties.authentication_data = Some(b.into());
+                }
+            }
+        }
+        mqtt_options.set_connect_properties(connect_properties);
 
         // match (conf.ssl.enable, conf.ssl.client_cert_enable) {
         //     (true, true) => {

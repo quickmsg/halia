@@ -35,7 +35,7 @@ use types::{
     Value,
 };
 
-use crate::{add_device_running_count, Device};
+use crate::{add_device_running_count, sub_device_running_count, Device};
 
 mod sink;
 mod source;
@@ -127,11 +127,16 @@ impl Modbus {
         let sources = self.sources.clone();
         let rtt = self.rtt.clone();
         let join_handle = tokio::spawn(async move {
+            let mut init = false;
             let mut task_err: Option<io::Error> = None;
             loop {
                 match Modbus::connect(&modbus_conf).await {
                     Ok(mut ctx) => {
+                        if !init {
+                            init = true;
+                        }
                         add_device_running_count();
+
                         task_err = None;
                         *err.write().await = None;
                         if let Err(e) = storage::device::update_err(&device_id, false).await {
@@ -177,6 +182,9 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
+                        if init {
+                            sub_device_running_count();
+                        }
                         events::insert_disconnect(
                             types::events::ResourceType::Device,
                             &device_id,

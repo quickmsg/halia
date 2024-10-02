@@ -43,11 +43,23 @@ pub struct MqttClientV50Conf {
     pub client_id: String,
     pub host: String,
     pub port: u16,
-    pub timeout: usize,
-    pub keep_alive: u64,
-    pub clean_session: bool,
     #[serde(flatten)]
     pub auth: MqttClientAuth,
+    pub timeout: usize,
+    pub keep_alive: u64,
+    pub clean_start: bool,
+
+    // s
+    pub session_expire_interval: Option<u32>,
+    pub receive_maximum: Option<u16>,
+    pub max_packet_size: Option<u32>,
+    pub topic_alias_max: Option<u16>,
+    pub request_response_info: Option<u8>,
+    pub request_problem_info: Option<u8>,
+    pub user_properties: Option<Vec<(String, String)>>,
+    pub authentication_method: Option<String>,
+    pub authentication_data: Option<StringOrBytesValue>,
+
     pub ssl: Ssl,
     pub last_will: Option<LastWillV50>,
 }

@@ -7,10 +7,7 @@ use message::MessageBatch;
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
-use types::apps::{
-    http_client::{HttpClientConf, SinkConf, SourceConf},
-    AppConf,
-};
+use types::apps::http_client::{HttpClientConf, SinkConf, SourceConf};
 
 use crate::App;
 
