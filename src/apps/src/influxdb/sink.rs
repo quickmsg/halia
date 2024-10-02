@@ -84,6 +84,7 @@ impl Sink {
             .into_query("measurement")
             .add_field("field1", 5);
 
+        // TODO v1 v2
         let results = influxdb_client.query(vec![query]).await.unwrap();
         debug!("InfluxDB results: {:?}", results);
     }

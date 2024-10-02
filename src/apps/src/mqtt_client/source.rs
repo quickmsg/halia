@@ -15,7 +15,6 @@ impl Source {
         Source { conf, mb_tx }
     }
 
-    // TODO 创建时检查
     pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
         if !valid_filter(&conf.topic) {
             return Err(HaliaError::Common("topic错误！".to_owned()));

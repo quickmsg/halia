@@ -68,7 +68,13 @@ pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
             app_err_tx.clone(),
             app_err.clone(),
         ),
-        types::apps::mqtt_client::Version::V50 => todo!(),
+        types::apps::mqtt_client::Version::V50 => MqttClient::start_v50(
+            conf.v50.unwrap(),
+            sources.clone(),
+            stop_signal_rx,
+            app_err_tx.clone(),
+            app_err.clone(),
+        ),
     };
 
     let mqtt_client = MqttClient {
@@ -79,7 +85,7 @@ pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
         halia_mqtt_client,
         stop_signal_tx,
         app_err_tx,
-        join_handle,
+        join_handle: Some(join_handle),
     };
 
     Ok(Box::new(mqtt_client))
@@ -149,13 +155,11 @@ impl MqttClient {
         device_err: Arc<RwLock<Option<String>>>,
     ) -> (
         HaliaMqttClient,
-        Option<
-            JoinHandle<(
-                mpsc::Receiver<()>,
-                broadcast::Sender<bool>,
-                Arc<DashMap<String, Source>>,
-            )>,
-        >,
+        JoinHandle<(
+            mpsc::Receiver<()>,
+            broadcast::Sender<bool>,
+            Arc<DashMap<String, Source>>,
+        )>,
     ) {
         let mut mqtt_options = MqttOptions::new(&conf.client_id, &conf.host, conf.port);
         mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
@@ -173,21 +177,21 @@ impl MqttClient {
             }
         };
 
-        match (conf.ssl_info.enable, conf.ssl_info.client_cert_enable) {
+        match (conf.ssl.enable, conf.ssl.client_cert_enable) {
             (true, true) => {
                 let transport = Transport::Tls(TlsConfiguration::Simple {
-                    ca: conf.ssl_info.ca_cert.unwrap().clone().into_bytes(),
+                    ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
                     alpn: None,
                     client_auth: Some((
-                        conf.ssl_info.client_cert.unwrap().clone().into_bytes(),
-                        conf.ssl_info.client_key.unwrap().clone().into_bytes(),
+                        conf.ssl.client_cert.unwrap().clone().into_bytes(),
+                        conf.ssl.client_key.unwrap().clone().into_bytes(),
                     )),
                 });
                 mqtt_options.set_transport(transport);
             }
             (true, false) => {
                 let transport = Transport::Tls(TlsConfiguration::Simple {
-                    ca: conf.ssl_info.ca_cert.unwrap().clone().into_bytes(),
+                    ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
                     alpn: None,
                     client_auth: None,
                 });
@@ -228,7 +232,7 @@ impl MqttClient {
             }
         });
 
-        (HaliaMqttClient::V311(Arc::new(client)), Some(join_handle))
+        (HaliaMqttClient::V311(Arc::new(client)), join_handle)
     }
 
     async fn handle_v311_event(
@@ -262,6 +266,7 @@ impl MqttClient {
                 }
             }
             Ok(_) => {
+                debug!("v311 event ok null");
                 if *err {
                     *err = false;
                     _ = app_err_tx.send(false);
@@ -278,12 +283,19 @@ impl MqttClient {
         }
     }
 
-    async fn start_v50(
+    fn start_v50(
         conf: MqttClientV50Conf,
         sources: Arc<DashMap<String, Source>>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         app_err_tx: broadcast::Sender<bool>,
         device_err: Arc<RwLock<Option<String>>>,
+    ) -> (
+        HaliaMqttClient,
+        JoinHandle<(
+            mpsc::Receiver<()>,
+            broadcast::Sender<bool>,
+            Arc<DashMap<String, Source>>,
+        )>,
     ) {
         let mut mqtt_options = v5::MqttOptions::new(&conf.client_id, &conf.host, conf.port);
         mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
@@ -301,30 +313,36 @@ impl MqttClient {
             }
         };
 
-        // if let Some(cert_info) = &conf.cert_info {
-        //     let transport = Transport::Tls(TlsConfiguration::Simple {
-        //         ca: cert_info.ca_cert.clone().into_bytes(),
-        //         alpn: None,
-        //         client_auth: Some((
-        //             cert_info.client_cert.clone().into_bytes(),
-        //             cert_info.client_key.clone().into_bytes(),
-        //         )),
-        //     });
-        //     mqtt_options.set_transport(transport);
-        // }
+        match (conf.ssl.enable, conf.ssl.client_cert_enable) {
+            (true, true) => {
+                let transport = Transport::Tls(TlsConfiguration::Simple {
+                    ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
+                    alpn: None,
+                    client_auth: Some((
+                        conf.ssl.client_cert.unwrap().clone().into_bytes(),
+                        conf.ssl.client_key.unwrap().clone().into_bytes(),
+                    )),
+                });
+                mqtt_options.set_transport(transport);
+            }
+            (true, false) => {
+                let transport = Transport::Tls(TlsConfiguration::Simple {
+                    ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
+                    alpn: None,
+                    client_auth: None,
+                });
+                mqtt_options.set_transport(transport);
+            }
+            _ => {}
+        }
 
         let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
-
-        let arc_client = Arc::new(client);
-
-        // let (tx, mut rx) = mpsc::channel(1);
-        // self.stop_signal_tx = Some(tx);
 
         let join_handle = tokio::spawn(async move {
             loop {
                 select! {
                     _ = stop_signal_rx.recv() => {
-                        return
+                        return (stop_signal_rx, app_err_tx, sources)
                     }
 
                     event = event_loop.poll() => {
@@ -334,7 +352,7 @@ impl MqttClient {
             }
         });
 
-        // (HaliaMqttClient::V50(arc_client), None)
+        (HaliaMqttClient::V50(Arc::new(client)), join_handle)
     }
 
     async fn handle_v50_event(
@@ -351,7 +369,7 @@ impl MqttClient {
                                     for source in sources.iter_mut() {
                                         if matches(&source.conf.topic, &topic) {
                                             if source.mb_tx.receiver_count() > 0 {
-                                                source.mb_tx.send(msg.clone());
+                                                source.mb_tx.send(msg.clone()).unwrap();
                                             }
                                         }
                                     }
@@ -466,10 +484,16 @@ impl App for MqttClient {
                 app_err_tx,
                 self.err.clone(),
             ),
-            types::apps::mqtt_client::Version::V50 => todo!(),
+            types::apps::mqtt_client::Version::V50 => MqttClient::start_v50(
+                new_conf.v50.unwrap(),
+                sources,
+                stop_signal_rx,
+                app_err_tx,
+                self.err.clone(),
+            ),
         };
         self.halia_mqtt_client = halia_mqtt_client;
-        self.join_handle = join_hanlde;
+        self.join_handle = Some(join_hanlde);
 
         for mut sink in self.sinks.iter_mut() {
             sink.restart(self.halia_mqtt_client.clone()).await;

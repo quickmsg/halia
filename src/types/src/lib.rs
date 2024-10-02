@@ -95,7 +95,7 @@ pub struct SearchSourcesOrSinksInfoResp {
 
 // security为true时，必须填写ca_cert
 #[derive(Deserialize, Serialize, PartialEq)]
-pub struct SslInfo {
+pub struct Ssl {
     pub enable: bool,
     pub ca_cert: Option<String>,
     pub client_cert_enable: bool,
