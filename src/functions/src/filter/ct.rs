@@ -15,7 +15,7 @@ struct CtDynamic {
 }
 
 pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
-    match get_dynamic_value_from_json(value) {
+    match get_dynamic_value_from_json(&value) {
         common::DynamicValue::Const(value) => Ok(Box::new(CtConst {
             field,
             const_value: MessageValue::from(value),

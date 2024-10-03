@@ -15,7 +15,7 @@ struct NeqDynamic {
 }
 
 pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
-    match get_dynamic_value_from_json(value) {
+    match get_dynamic_value_from_json(&value) {
         common::DynamicValue::Const(value) => {
             let const_value = match value {
                 serde_json::Value::Number(v) => MessageValue::from_json_number(v)?,

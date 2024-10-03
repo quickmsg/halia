@@ -126,7 +126,7 @@ impl Sink {
             None => return,
         };
 
-        let value = match get_dynamic_value_from_json(sink_conf.value.clone()) {
+        let value = match get_dynamic_value_from_json(&sink_conf.value) {
             common::DynamicValue::Const(value) => value,
             common::DynamicValue::Field(s) => match message.get(&s) {
                 Some(v) => v.clone().into(),

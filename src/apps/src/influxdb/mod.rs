@@ -127,8 +127,20 @@ fn new_influxdb_client(conf: &Arc<InfluxdbConf>) -> InfluxdbClient {
     match conf.version {
         types::apps::influxdb::InfluxdbVersion::V1 => {
             let conf = conf.v1.as_ref().unwrap();
-            let client =
+            let mut client =
                 InfluxdbClientV1::new(format!("{}:{}", &conf.host, conf.port), &conf.database);
+
+            match (&conf.username, &conf.password) {
+                (Some(username), Some(password)) => {
+                    client = client.with_auth(username, password);
+                }
+                _ => {}
+            }
+
+            if let Some(api_token) = &conf.api_token {
+                client = client.with_token(api_token);
+            }
+
             InfluxdbClient::V1(client)
         }
         types::apps::influxdb::InfluxdbVersion::V2 => {

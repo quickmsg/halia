@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use common::{
     error::HaliaResult,
+    get_dynamic_value_from_json,
     sink_message_retain::{self, SinkMessageRetain},
 };
 use futures::stream;
-use influxdb::{InfluxDbWriteable as _, Timestamp};
-use influxdb2::models::DataPoint;
+use influxdb::{InfluxDbWriteable as _, Timestamp, Type};
+use influxdb2::models::{DataPoint, FieldValue};
 use message::MessageBatch;
 use tokio::{
     select,
@@ -71,7 +72,7 @@ impl Sink {
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
                         if !app_err {
-                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.influxdb_conf, &join_handle_data.conf, mb).await;
+                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, mb).await;
                         } else {
                             join_handle_data.message_retainer.push(mb);
                         }
@@ -83,43 +84,115 @@ impl Sink {
 
     async fn send_msg_to_influxdb(
         influxdb_client: &InfluxdbClient,
-        influxdb_conf: &Arc<InfluxdbConf>,
-        _conf: &SinkConf,
+        conf: &SinkConf,
         mb: MessageBatch,
     ) {
         match influxdb_client {
             InfluxdbClient::V1(client) => {
                 let mut querys = vec![];
                 for msg in mb.get_messages() {
-                    let query = Timestamp::Nanoseconds(0)
-                        .into_query("measurement")
-                        .add_tag("xx", "xx")
-                        .add_field("field1", 5);
+                    let mut query = Timestamp::Nanoseconds(0).into_query(&conf.mesaurement);
+                    for (field, field_value) in &conf.fields {
+                        let value = match get_dynamic_value_from_json(field_value) {
+                            common::DynamicValue::Const(value) => value,
+                            common::DynamicValue::Field(s) => match msg.get(&s) {
+                                Some(value) => value.clone().into(),
+                                None => serde_json::Value::Null,
+                            },
+                        };
+
+                        match value {
+                            serde_json::Value::Bool(b) => {
+                                query = query.add_field(field, Type::Boolean(b))
+                            }
+                            serde_json::Value::Number(number) => {
+                                if let Some(i) = number.as_i64() {
+                                    query = query.add_field(field, Type::SignedInteger(i));
+                                } else if let Some(u) = number.as_u64() {
+                                    query = query.add_field(field, Type::UnsignedInteger(u));
+                                } else if let Some(f) = number.as_f64() {
+                                    query = query.add_field(field, Type::Float(f));
+                                }
+                            }
+                            serde_json::Value::String(s) => {
+                                query = query.add_field(field, Type::Text(s));
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    if let Some(tags) = &conf.tags {
+                        for (tag, tag_value) in tags {
+                            let value = match get_dynamic_value_from_json(tag_value) {
+                                common::DynamicValue::Const(value) => value,
+                                common::DynamicValue::Field(s) => match msg.get(&s) {
+                                    Some(value) => value.clone().into(),
+                                    None => serde_json::Value::Null,
+                                },
+                            };
+
+                            match value {
+                                serde_json::Value::Bool(b) => {
+                                    query = query.add_tag(tag, Type::Boolean(b))
+                                }
+                                serde_json::Value::Number(number) => {
+                                    if let Some(i) = number.as_i64() {
+                                        query = query.add_tag(tag, Type::SignedInteger(i));
+                                    } else if let Some(u) = number.as_u64() {
+                                        query = query.add_tag(tag, Type::UnsignedInteger(u));
+                                    } else if let Some(f) = number.as_f64() {
+                                        query = query.add_tag(tag, Type::Float(f));
+                                    }
+                                }
+                                serde_json::Value::String(s) => {
+                                    query = query.add_tag(tag, Type::Text(s));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
                     querys.push(query);
                 }
-                let query = Timestamp::Nanoseconds(0)
-                    .into_query("measurement")
-                    .add_tag("xx", "xx")
-                    .add_field("field1", 5);
-
-                let results = client.query(vec![query]).await.unwrap();
-                debug!("InfluxDB results: {:?}", results);
+                if let Err(e) = client.query(querys).await {
+                    debug!("{}", e);
+                }
             }
             InfluxdbClient::V2(client) => {
                 let mut points = vec![];
                 for msg in mb.get_messages() {
-                    let point = DataPoint::builder("cpu")
-                        .tag("host", "server01")
-                        .field("usage", 0.5)
-                        .build()
-                        .unwrap();
-                    points.push(point);
+                    let mut point = DataPoint::builder(&conf.mesaurement);
+                    for (field, field_value) in &conf.fields {
+                        let value = match get_dynamic_value_from_json(field_value) {
+                            common::DynamicValue::Const(value) => value,
+                            common::DynamicValue::Field(s) => match msg.get(&s) {
+                                Some(value) => value.clone().into(),
+                                None => serde_json::Value::Null,
+                            },
+                        };
+
+                        match value {
+                            serde_json::Value::Bool(b) => {
+                                point = point.field(field, FieldValue::Bool(b))
+                            }
+                            serde_json::Value::Number(number) => {
+                                if let Some(i) = number.as_i64() {
+                                    point = point.field(field, FieldValue::I64(i));
+                                } else if let Some(u) = number.as_u64() {
+                                    point = point.field(field, FieldValue::I64(u as i64));
+                                } else if let Some(f) = number.as_f64() {
+                                    point = point.field(field, FieldValue::F64(f));
+                                }
+                            }
+                            serde_json::Value::String(s) => {
+                                point = point.field(field, FieldValue::String(s));
+                            }
+                            _ => {}
+                        }
+                    }
+                    points.push(point.build().unwrap());
                 }
                 client
-                    .write(
-                        &influxdb_conf.v2.as_ref().unwrap().bucket,
-                        stream::iter(points),
-                    )
+                    .write(conf.bucket.as_ref().unwrap(), stream::iter(points))
                     .await
                     .unwrap();
             }

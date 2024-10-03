@@ -23,6 +23,11 @@ pub struct InfluxdbV1 {
     pub host: String,
     pub port: u16,
     pub database: String,
+
+    pub username: Option<String>,
+    pub password: Option<String>,
+
+    pub api_token: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
@@ -31,13 +36,15 @@ pub struct InfluxdbV2 {
     pub port: u16,
     pub api_token: String,
     pub org: String,
-    pub bucket: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
-    // pub version: Version,
-    pub bucket: String,
+    // only v2
+    pub bucket: Option<String>,
+    pub mesaurement: String,
+    pub fields: Vec<(String, serde_json::Value)>,
+    pub tags: Option<Vec<(String, serde_json::Value)>>,
     pub message_retain: MessageRetain,
 }
 
