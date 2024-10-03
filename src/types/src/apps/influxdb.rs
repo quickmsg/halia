@@ -5,17 +5,14 @@ use crate::MessageRetain;
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct InfluxdbConf {
     pub url: String,
-    pub db: String,
-
-    pub username: Option<String>,
-    pub password: Option<String>,
-
-    pub token: Option<String>,
+    pub org: String,
+    pub api_token: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
-    pub version: Version,
+    // pub version: Version,
+    pub bucket: String,
     pub message_retain: MessageRetain,
 }
 

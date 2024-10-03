@@ -9,6 +9,10 @@ rumqttc = "0.24.0"
 rskafka = "0.5.0"
 influxdb = "0.7.2"
 
+influxdb2 = { version = "0.5.2", features = [
+    "rustls",
+], default-features = false }
+
 tokio = { workspace = true }
 types = { workspace = true }
 common = { workspace = true }

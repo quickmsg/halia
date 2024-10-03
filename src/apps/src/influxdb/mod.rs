@@ -105,18 +105,12 @@ impl App for Influxdb {
 }
 
 fn new_influxdb_client(conf: &Arc<InfluxdbConf>) -> Client {
-    let mut client = Client::new(&conf.url, &conf.db);
+    // let mut client = Client::new(&conf.url, &conf.db);
 
-    match (&conf.username, &conf.password) {
-        (Some(username), Some(password)) => {
-            client = client.with_auth(username, password);
-        }
-        _ => {}
-    }
+    // if let Some(token) = &conf.api_token {
+    //     client = client.with_token(token);
+    // }
 
-    if let Some(token) = &conf.token {
-        client = client.with_token(token);
-    }
-
-    client
+    // client
+    todo!()
 }
