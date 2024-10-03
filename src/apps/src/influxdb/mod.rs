@@ -3,7 +3,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use influxdb::Client;
+use influxdb::Client as InfluxdbClientV1;
+use influxdb2::Client as InfluxdbClientV2;
 use message::MessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc;
@@ -20,6 +21,11 @@ pub struct Influxdb {
     conf: Arc<InfluxdbConf>,
 }
 
+pub enum InfluxdbClient {
+    V1(InfluxdbClientV1),
+    V2(InfluxdbClientV2),
+}
+
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
 
@@ -31,7 +37,20 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     })
 }
 
-pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: InfluxdbConf = serde_json::from_value(conf.clone())?;
+    match conf.version {
+        types::apps::influxdb::InfluxdbVersion::V1 => {
+            if conf.v1.is_none() {
+                return Err(HaliaError::Common("v1的配置为空！".to_owned()));
+            }
+        }
+        types::apps::influxdb::InfluxdbVersion::V2 => {
+            if conf.v2.is_none() {
+                return Err(HaliaError::Common("v2的配置为空！".to_owned()));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -104,13 +123,22 @@ impl App for Influxdb {
     }
 }
 
-fn new_influxdb_client(conf: &Arc<InfluxdbConf>) -> Client {
-    // let mut client = Client::new(&conf.url, &conf.db);
-
-    // if let Some(token) = &conf.api_token {
-    //     client = client.with_token(token);
-    // }
-
-    // client
-    todo!()
+fn new_influxdb_client(conf: &Arc<InfluxdbConf>) -> InfluxdbClient {
+    match conf.version {
+        types::apps::influxdb::InfluxdbVersion::V1 => {
+            let conf = conf.v1.as_ref().unwrap();
+            let client =
+                InfluxdbClientV1::new(format!("{}:{}", &conf.host, conf.port), &conf.database);
+            InfluxdbClient::V1(client)
+        }
+        types::apps::influxdb::InfluxdbVersion::V2 => {
+            let conf = conf.v2.as_ref().unwrap();
+            let client = InfluxdbClientV2::new(
+                format!("{}:{}", &conf.url, conf.port),
+                &conf.org,
+                &conf.api_token,
+            );
+            InfluxdbClient::V2(client)
+        }
+    }
 }

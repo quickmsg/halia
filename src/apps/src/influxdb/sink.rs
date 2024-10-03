@@ -4,7 +4,9 @@ use common::{
     error::HaliaResult,
     sink_message_retain::{self, SinkMessageRetain},
 };
-use influxdb::{Client, InfluxDbWriteable as _, Timestamp};
+use futures::stream;
+use influxdb::{InfluxDbWriteable as _, Timestamp};
+use influxdb2::models::DataPoint;
 use message::MessageBatch;
 use tokio::{
     select,
@@ -14,7 +16,7 @@ use tokio::{
 use tracing::debug;
 use types::apps::influxdb::{InfluxdbConf, SinkConf};
 
-use super::new_influxdb_client;
+use super::{new_influxdb_client, InfluxdbClient};
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -60,7 +62,7 @@ impl Sink {
         let influxdb_client = new_influxdb_client(&join_handle_data.influxdb_conf);
 
         tokio::spawn(async move {
-            let mut app_err = false;
+            let app_err = false;
             loop {
                 select! {
                     _ = join_handle_data.stop_signal_rx.changed() => {
@@ -69,7 +71,7 @@ impl Sink {
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
                         if !app_err {
-                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, mb).await;
+                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.influxdb_conf, &join_handle_data.conf, mb).await;
                         } else {
                             join_handle_data.message_retainer.push(mb);
                         }
@@ -79,19 +81,49 @@ impl Sink {
         })
     }
 
-    async fn send_msg_to_influxdb(influxdb_client: &Client, _conf: &SinkConf, _mb: MessageBatch) {
-        // let use_v2 = match conf.version {
-        //     types::apps::influxdb::Version::V1 => false,
-        //     types::apps::influxdb::Version::V2 => true,
-        // };
-        let query = Timestamp::Nanoseconds(0)
-            .into_query("measurement")
-            .add_field("field1", 5);
-        // .build_with_opts(use_v2)
-        // .unwrap();
+    async fn send_msg_to_influxdb(
+        influxdb_client: &InfluxdbClient,
+        influxdb_conf: &Arc<InfluxdbConf>,
+        _conf: &SinkConf,
+        mb: MessageBatch,
+    ) {
+        match influxdb_client {
+            InfluxdbClient::V1(client) => {
+                let mut querys = vec![];
+                for msg in mb.get_messages() {
+                    let query = Timestamp::Nanoseconds(0)
+                        .into_query("measurement")
+                        .add_tag("xx", "xx")
+                        .add_field("field1", 5);
+                    querys.push(query);
+                }
+                let query = Timestamp::Nanoseconds(0)
+                    .into_query("measurement")
+                    .add_tag("xx", "xx")
+                    .add_field("field1", 5);
 
-        let results = influxdb_client.query(query).await.unwrap();
-        debug!("InfluxDB results: {:?}", results);
+                let results = client.query(vec![query]).await.unwrap();
+                debug!("InfluxDB results: {:?}", results);
+            }
+            InfluxdbClient::V2(client) => {
+                let mut points = vec![];
+                for msg in mb.get_messages() {
+                    let point = DataPoint::builder("cpu")
+                        .tag("host", "server01")
+                        .field("usage", 0.5)
+                        .build()
+                        .unwrap();
+                    points.push(point);
+                }
+                client
+                    .write(
+                        &influxdb_conf.v2.as_ref().unwrap().bucket,
+                        stream::iter(points),
+                    )
+                    .await
+                    .unwrap();
+            }
+        }
     }
 
     pub async fn stop(&mut self) -> JoinHandleData {
