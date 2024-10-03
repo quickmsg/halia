@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use influxdb::Client;
 use message::MessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc;
@@ -101,4 +102,21 @@ impl App for Influxdb {
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }
+}
+
+fn new_influxdb_client(conf: &Arc<InfluxdbConf>) -> Client {
+    let mut client = Client::new(&conf.url, &conf.db);
+
+    match (&conf.username, &conf.password) {
+        (Some(username), Some(password)) => {
+            client = client.with_auth(username, password);
+        }
+        _ => {}
+    }
+
+    if let Some(token) = &conf.token {
+        client = client.with_token(token);
+    }
+
+    client
 }

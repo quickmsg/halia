@@ -93,7 +93,6 @@ pub struct SearchSourcesOrSinksInfoResp {
     pub conf: CreateUpdateSourceOrSinkReq,
 }
 
-// security为true时，必须填写ca_cert
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct Ssl {
     pub enable: bool,

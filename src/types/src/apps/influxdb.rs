@@ -6,17 +6,24 @@ use crate::MessageRetain;
 pub struct InfluxdbConf {
     pub url: String,
     pub db: String,
+
+    pub username: Option<String>,
+    pub password: Option<String>,
+
+    pub token: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
-    pub method: SinkMethod,
-    pub path: String,
-    pub basic_auth: Option<BasicAuth>,
-    pub headers: Vec<(String, String)>,
-    pub query_params: Vec<(String, String)>,
-    pub body: serde_json::Value,
+    pub version: Version,
     pub message_retain: MessageRetain,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum Version {
+    V1,
+    V2,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

@@ -14,18 +14,20 @@ use tokio::{
 use tracing::debug;
 use types::apps::influxdb::{InfluxdbConf, SinkConf};
 
+use super::new_influxdb_client;
+
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<
-        JoinHandle<(
-            SinkConf,
-            Arc<InfluxdbConf>,
-            Box<dyn SinkMessageRetain>,
-            watch::Receiver<()>,
-            mpsc::Receiver<MessageBatch>,
-        )>,
-    >,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
     pub mb_tx: mpsc::Sender<MessageBatch>,
+}
+
+pub struct JoinHandleData {
+    pub conf: SinkConf,
+    pub influxdb_conf: Arc<InfluxdbConf>,
+    pub message_retainer: Box<dyn SinkMessageRetain>,
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub mb_rx: mpsc::Receiver<MessageBatch>,
 }
 
 impl Sink {
@@ -36,9 +38,17 @@ impl Sink {
     pub fn new(conf: SinkConf, influxdb_conf: Arc<InfluxdbConf>) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
+
         let message_retainer = sink_message_retain::new(&conf.message_retain);
-        let join_handle =
-            Self::event_loop(conf, influxdb_conf, message_retainer, stop_signal_rx, mb_rx);
+        let join_handle_data = JoinHandleData {
+            conf,
+            influxdb_conf,
+            message_retainer,
+            stop_signal_rx,
+            mb_rx,
+        };
+        let join_handle = Self::event_loop(join_handle_data);
+
         Sink {
             stop_signal_tx,
             mb_tx,
@@ -46,81 +56,58 @@ impl Sink {
         }
     }
 
-    fn event_loop(
-        conf: SinkConf,
-        influxdb_conf: Arc<InfluxdbConf>,
-        message_retainer: Box<dyn sink_message_retain::SinkMessageRetain>,
-        mut stop_signal_rx: watch::Receiver<()>,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
-    ) -> JoinHandle<(
-        SinkConf,
-        Arc<InfluxdbConf>,
-        Box<dyn SinkMessageRetain>,
-        watch::Receiver<()>,
-        mpsc::Receiver<MessageBatch>,
-    )> {
-        let influxdb_client = Client::new(&influxdb_conf.url, &influxdb_conf.db);
+    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+        let influxdb_client = new_influxdb_client(&join_handle_data.influxdb_conf);
+
         tokio::spawn(async move {
+            let mut app_err = false;
             loop {
                 select! {
-                    _ = stop_signal_rx.changed() => {
-                        return (conf, influxdb_conf, message_retainer, stop_signal_rx, mb_rx);
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
                     }
 
-                    Some(mb) = mb_rx.recv() => {
-                        Self::send_msg_to_influxdb(&influxdb_client, mb, &message_retainer).await;
+                    Some(mb) = join_handle_data.mb_rx.recv() => {
+                        if !app_err {
+                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, mb).await;
+                        } else {
+                            join_handle_data.message_retainer.push(mb);
+                        }
                     }
                 }
             }
         })
     }
 
-    async fn send_msg_to_influxdb(
-        influxdb_client: &Client,
-        _mb: MessageBatch,
-        message_retainer: &Box<dyn sink_message_retain::SinkMessageRetain>,
-    ) {
+    async fn send_msg_to_influxdb(influxdb_client: &Client, _conf: &SinkConf, _mb: MessageBatch) {
+        // let use_v2 = match conf.version {
+        //     types::apps::influxdb::Version::V1 => false,
+        //     types::apps::influxdb::Version::V2 => true,
+        // };
         let query = Timestamp::Nanoseconds(0)
             .into_query("measurement")
             .add_field("field1", 5);
+        // .build_with_opts(use_v2)
+        // .unwrap();
 
-        // TODO v1 v2
-        let results = influxdb_client.query(vec![query]).await.unwrap();
+        let results = influxdb_client.query(query).await.unwrap();
         debug!("InfluxDB results: {:?}", results);
     }
 
-    pub async fn stop(
-        &mut self,
-    ) -> (
-        SinkConf,
-        Arc<InfluxdbConf>,
-        Box<dyn SinkMessageRetain>,
-        watch::Receiver<()>,
-        mpsc::Receiver<MessageBatch>,
-    ) {
+    pub async fn stop(&mut self) -> JoinHandleData {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
 
     pub async fn update_conf(&mut self, conf: SinkConf) {
-        let (_, influxdb_conf, message_retainer, stop_signal_rx, mb_rx) = self.stop().await;
-        self.join_handle = Some(Self::event_loop(
-            conf,
-            influxdb_conf,
-            message_retainer,
-            stop_signal_rx,
-            mb_rx,
-        ));
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.conf = conf;
+        self.join_handle = Some(Self::event_loop(join_handle_data));
     }
 
     pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
-        let (conf, _, message_retainer, stop_signal_rx, mb_rx) = self.stop().await;
-        self.join_handle = Some(Self::event_loop(
-            conf,
-            influxdb_conf,
-            message_retainer,
-            stop_signal_rx,
-            mb_rx,
-        ));
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.influxdb_conf = influxdb_conf;
+        self.join_handle = Some(Self::event_loop(join_handle_data));
     }
 }
