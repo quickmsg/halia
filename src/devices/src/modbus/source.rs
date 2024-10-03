@@ -1,6 +1,9 @@
 use std::{io, time::Duration};
 
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    constants,
+    error::{HaliaError, HaliaResult},
+};
 use message::{Message, MessageBatch};
 use protocol::modbus::Context;
 use tokio::{
@@ -38,7 +41,7 @@ impl Source {
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, _) = broadcast::channel(16);
+        let (mb_tx, _) = broadcast::channel(constants::CHANNEL_SIZE);
 
         let join_handle_data = JoinHandleData {
             id,

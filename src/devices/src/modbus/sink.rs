@@ -1,4 +1,5 @@
 use common::{
+    constants,
     error::HaliaResult,
     get_dynamic_value_from_json,
     sink_message_retain::{self, SinkMessageRetain},
@@ -41,7 +42,7 @@ impl Sink {
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = mpsc::channel(constants::CHANNEL_SIZE);
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
         let join_handle_data = JoinHandleData {

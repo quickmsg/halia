@@ -1,0 +1,1 @@
+pub static CHANNEL_SIZE: usize = 16;
