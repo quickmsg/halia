@@ -10,28 +10,43 @@ use common::error::HaliaResult;
 use message::MessageBatch;
 use tokio::{
     select,
-    sync::{mpsc, RwLock},
+    sync::{mpsc, watch, RwLock},
     task::JoinHandle,
 };
 use tracing::error;
 use types::databoard::{DataConf, SearchDatasRuntimeResp};
 
 pub struct Data {
-    stop_signal_tx: mpsc::Sender<()>,
-    join_handle: Option<JoinHandle<(DataConf, mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)>>,
+    stop_signal_tx: watch::Sender<()>,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
     pub value: Arc<RwLock<serde_json::Value>>,
     ts: Arc<AtomicU64>,
     pub mb_tx: mpsc::Sender<MessageBatch>,
 }
 
+pub struct JoinHandleData {
+    pub conf: DataConf,
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub value: Arc<RwLock<serde_json::Value>>,
+    pub ts: Arc<AtomicU64>,
+}
+
 impl Data {
     pub fn new(conf: DataConf) -> Self {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
         let value = Arc::new(RwLock::new(serde_json::Value::Null));
         let ts = Arc::new(AtomicU64::new(0));
-        let join_handle = Self::event_loop(conf, value.clone(), ts.clone(), stop_signal_rx, mb_rx);
+        let join_handle_data = JoinHandleData {
+            conf,
+            stop_signal_rx,
+            mb_rx,
+            value: value.clone(),
+            ts: ts.clone(),
+        };
+        let join_handle = Self::event_loop(join_handle_data);
 
         Self {
             stop_signal_tx,
@@ -46,24 +61,16 @@ impl Data {
         Ok(())
     }
 
-    fn event_loop(
-        conf: DataConf,
-        value: Arc<RwLock<serde_json::Value>>,
-        ts: Arc<AtomicU64>,
-        mut stop_signal_rx: mpsc::Receiver<()>,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
-    ) -> JoinHandle<(DataConf, mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>)> {
+    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
             loop {
                 select! {
-                    _ = stop_signal_rx.recv() => {
-                        return (conf, stop_signal_rx, mb_rx);
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
                     }
 
-                    mb = mb_rx.recv() => {
-                        if let Some(mb) = mb {
-                            Self::handle_messsage_batch(mb, &conf, &value, &ts).await;
-                        }
+                    Some(mb) = join_handle_data.mb_rx.recv() => {
+                        Self::handle_messsage_batch(mb, &join_handle_data.conf, &join_handle_data.value, &join_handle_data.ts).await;
                     }
                 }
             }
@@ -93,24 +100,19 @@ impl Data {
     pub async fn read(&self) -> SearchDatasRuntimeResp {
         SearchDatasRuntimeResp {
             value: self.value.read().await.clone(),
-            ts: self.ts.load(Ordering::SeqCst),
+            ts: self.ts.load(Ordering::Relaxed),
         }
     }
 
     pub async fn update(&mut self, _old_conf: DataConf, new_conf: DataConf) {
-        let (_, stop_signal_rx, mb_rx) = self.stop().await;
-        let join_handle = Self::event_loop(
-            new_conf,
-            self.value.clone(),
-            self.ts.clone(),
-            stop_signal_rx,
-            mb_rx,
-        );
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.conf = new_conf;
+        let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
     }
 
-    pub async fn stop(&mut self) -> (DataConf, mpsc::Receiver<()>, mpsc::Receiver<MessageBatch>) {
-        self.stop_signal_tx.send(()).await.unwrap();
+    pub async fn stop(&mut self) -> JoinHandleData {
+        self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
 }

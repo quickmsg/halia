@@ -42,6 +42,7 @@ pub struct InfluxdbV2 {
 pub struct SinkConf {
     // only v2
     pub bucket: Option<String>,
+
     pub mesaurement: String,
     pub fields: Vec<(String, serde_json::Value)>,
     pub tags: Option<Vec<(String, serde_json::Value)>>,
