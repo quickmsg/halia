@@ -40,13 +40,42 @@ pub struct InfluxdbV2 {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
-    // only v2
-    pub bucket: Option<String>,
+    pub version: Version,
+    #[serde(flatten)]
+    pub conf_v1: Option<SinkConfV1>,
+    #[serde(flatten)]
+    pub conf_v2: Option<SinkConfV2>,
+    pub message_retain: MessageRetain,
+}
 
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct SinkConfV1 {
+    pub database: String,
+    pub gizp: bool,
     pub mesaurement: String,
     pub fields: Vec<(String, serde_json::Value)>,
     pub tags: Option<Vec<(String, serde_json::Value)>>,
-    pub message_retain: MessageRetain,
+    pub precision: Precision,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct SinkConfV2 {
+    pub bucket: String,
+    pub gizp: bool,
+    pub mesaurement: String,
+    pub fields: Vec<(String, serde_json::Value)>,
+    pub tags: Option<Vec<(String, serde_json::Value)>>,
+    pub precision: Precision,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub enum Precision {
+    Nanoseconds,
+    Microseconds,
+    Milliseconds,
+    Seconds,
+    Minutes,
+    Hours,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

@@ -83,6 +83,14 @@ impl App for Influxdb {
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
+        match self.conf.version {
+            types::apps::influxdb::InfluxdbVersion::V1 => {}
+            types::apps::influxdb::InfluxdbVersion::V2 => {
+                if conf["bucket"].is_null() {
+                    return Err(HaliaError::Common("bucket为空！".to_owned()));
+                }
+            }
+        }
         let conf: SinkConf = serde_json::from_value(conf)?;
         let sink = Sink::new(conf, self.conf.clone());
         self.sinks.insert(sink_id, sink);
@@ -127,8 +135,10 @@ fn new_influxdb_client(conf: &Arc<InfluxdbConf>) -> InfluxdbClient {
     match conf.version {
         types::apps::influxdb::InfluxdbVersion::V1 => {
             let conf = conf.v1.as_ref().unwrap();
-            let mut client =
-                InfluxdbClientV1::new(format!("{}:{}", &conf.host, conf.port), &conf.database);
+            let mut client = InfluxdbClientV1::new(
+                format!("http://{}:{}", &conf.host, conf.port),
+                &conf.database,
+            );
 
             match (&conf.username, &conf.password) {
                 (Some(username), Some(password)) => {

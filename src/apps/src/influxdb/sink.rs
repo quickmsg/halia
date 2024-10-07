@@ -7,7 +7,10 @@ use common::{
 };
 use futures::stream;
 use influxdb::{InfluxDbWriteable as _, Timestamp, Type};
-use influxdb2::models::{DataPoint, FieldValue};
+use influxdb2::{
+    api::write::TimestampPrecision,
+    models::{DataPoint, FieldValue},
+};
 use message::MessageBatch;
 use tokio::{
     select,
@@ -91,8 +94,21 @@ impl Sink {
             InfluxdbClient::V1(client) => {
                 let mut querys = vec![];
                 for msg in mb.get_messages() {
-                    let mut query = Timestamp::Nanoseconds(0).into_query(&conf.mesaurement);
-                    for (field, field_value) in &conf.fields {
+                    let timestamp = match &conf.conf_v1.as_ref().unwrap().precision {
+                        types::apps::influxdb::Precision::Nanoseconds => Timestamp::Nanoseconds(0),
+                        types::apps::influxdb::Precision::Microseconds => {
+                            Timestamp::Microseconds(0)
+                        }
+                        types::apps::influxdb::Precision::Milliseconds => {
+                            Timestamp::Milliseconds(0)
+                        }
+                        types::apps::influxdb::Precision::Seconds => Timestamp::Seconds(0),
+                        types::apps::influxdb::Precision::Minutes => Timestamp::Minutes(0),
+                        types::apps::influxdb::Precision::Hours => Timestamp::Hours(0),
+                    };
+                    let mut query =
+                        timestamp.into_query(&conf.conf_v1.as_ref().unwrap().mesaurement);
+                    for (field, field_value) in &conf.conf_v1.as_ref().unwrap().fields {
                         let value = match get_dynamic_value_from_json(field_value) {
                             common::DynamicValue::Const(value) => value,
                             common::DynamicValue::Field(s) => match msg.get(&s) {
@@ -121,7 +137,7 @@ impl Sink {
                         }
                     }
 
-                    if let Some(tags) = &conf.tags {
+                    if let Some(tags) = &conf.conf_v1.as_ref().unwrap().tags {
                         for (tag, tag_value) in tags {
                             let value = match get_dynamic_value_from_json(tag_value) {
                                 common::DynamicValue::Const(value) => value,
@@ -160,8 +176,8 @@ impl Sink {
             InfluxdbClient::V2(client) => {
                 let mut points = vec![];
                 for msg in mb.get_messages() {
-                    let mut point = DataPoint::builder(&conf.mesaurement);
-                    for (field, field_value) in &conf.fields {
+                    let mut point = DataPoint::builder(&conf.conf_v2.as_ref().unwrap().mesaurement);
+                    for (field, field_value) in &conf.conf_v2.as_ref().unwrap().fields {
                         let value = match get_dynamic_value_from_json(field_value) {
                             common::DynamicValue::Const(value) => value,
                             common::DynamicValue::Field(s) => match msg.get(&s) {
@@ -191,8 +207,27 @@ impl Sink {
                     }
                     points.push(point.build().unwrap());
                 }
+
+                let timestamp_precision = match &conf.conf_v2.as_ref().unwrap().precision {
+                    types::apps::influxdb::Precision::Nanoseconds => {
+                        TimestampPrecision::Nanoseconds
+                    }
+                    types::apps::influxdb::Precision::Microseconds => {
+                        TimestampPrecision::Microseconds
+                    }
+                    types::apps::influxdb::Precision::Milliseconds => {
+                        TimestampPrecision::Milliseconds
+                    }
+                    types::apps::influxdb::Precision::Seconds => TimestampPrecision::Seconds,
+                    _ => todo!(),
+                };
+
                 client
-                    .write(conf.bucket.as_ref().unwrap(), stream::iter(points))
+                    .write_with_precision(
+                        &conf.conf_v2.as_ref().unwrap().bucket,
+                        stream::iter(points),
+                        timestamp_precision,
+                    )
                     .await
                     .unwrap();
             }
