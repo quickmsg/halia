@@ -26,6 +26,7 @@ pub enum AppType {
     HttpClient,
     Kafka,
     Influxdb,
+    Tdengine,
 }
 
 impl Into<i32> for AppType {
@@ -35,6 +36,7 @@ impl Into<i32> for AppType {
             AppType::HttpClient => 2,
             AppType::Kafka => 3,
             AppType::Influxdb => 4,
+            AppType::Tdengine => 5,
         }
     }
 }
@@ -48,6 +50,7 @@ impl TryFrom<i32> for AppType {
             2 => Ok(AppType::HttpClient),
             3 => Ok(AppType::Kafka),
             4 => Ok(AppType::Influxdb),
+            5 => Ok(AppType::Tdengine),
             _ => bail!("未知应用类型: {}", value),
         }
     }
@@ -66,6 +69,7 @@ impl fmt::Display for AppType {
             AppType::HttpClient => write!(f, "http_client"),
             AppType::Kafka => write!(f, "kafka"),
             AppType::Influxdb => write!(f, "influxdb"),
+            AppType::Tdengine => write!(f, "tdengine"),
         }
     }
 }
@@ -79,6 +83,7 @@ impl TryFrom<String> for AppType {
             "http_client" => Ok(AppType::HttpClient),
             "kafka" => Ok(AppType::Kafka),
             "influxdb" => Ok(AppType::Influxdb),
+            "tdengine" => Ok(AppType::Tdengine),
             _ => bail!("未知应用类型: {}", value),
         }
     }

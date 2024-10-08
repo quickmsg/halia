@@ -9,5 +9,6 @@ pub struct TDengineConf {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
     pub db: String,
-    pub sql: String,
+    pub table: String,
+    pub values: Vec<(String, String)>,
 }

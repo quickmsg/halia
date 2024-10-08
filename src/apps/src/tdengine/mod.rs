@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common::error::HaliaResult;
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use sink::Sink;
@@ -47,7 +47,9 @@ impl App for TDengine {
     }
 
     async fn stop(&mut self) {
-        todo!()
+        for mut sink in self.sinks.iter_mut() {
+            sink.stop().await;
+        }
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
@@ -67,11 +69,20 @@ impl App for TDengine {
     }
 
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
-        todo!()
+        match self.sinks.remove(&sink_id) {
+            Some((_, mut sink)) => {
+                sink.stop().await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id)),
+        }
     }
 
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        todo!()
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }
 

@@ -5,24 +5,21 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rskafka::client::{
-    consumer::StartOffset,
     partition::{Compression, UnknownTopicHandling},
     Client, ClientBuilder,
 };
 use sink::Sink;
-use source::Source;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, watch, RwLock},
+    sync::{mpsc, watch, RwLock},
     time,
 };
 use tracing::debug;
-use types::apps::kafka::{KafkaConf, SinkConf, SourceConf};
+use types::apps::kafka::{KafkaConf, SinkConf};
 
 use crate::App;
 
 mod sink;
-mod source;
 
 pub struct Kafka {
     _err: Option<String>,
@@ -30,18 +27,11 @@ pub struct Kafka {
 
     kafka_client: Arc<RwLock<Option<Client>>>,
 
-    sources: Arc<DashMap<String, Source>>,
     sinks: Arc<DashMap<String, Sink>>,
     kafka_err_tx: mpsc::Sender<String>,
 }
 
 pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
-    Ok(())
-}
-
-pub fn validate_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let conf: SourceConf = serde_json::from_value(conf.clone())?;
-    Source::validate_conf(&conf)?;
     Ok(())
 }
 
@@ -56,7 +46,6 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let kafka_client = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
-    let sources = Arc::new(DashMap::new());
     let sinks = Arc::new(DashMap::new());
     let (kafka_err_tx, kafka_err_rx) = mpsc::channel(1);
     Kafka::event_loop(
@@ -65,13 +54,11 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         kafka_client.clone(),
         stop_signal_rx,
         kafka_err_rx,
-        sources.clone(),
         sinks.clone(),
     );
 
     Box::new(Kafka {
         _err: None,
-        sources,
         sinks,
         kafka_client,
         stop_signal_tx,
@@ -126,7 +113,6 @@ impl Kafka {
         kafka_client: Arc<RwLock<Option<Client>>>,
         mut stop_signal_rx: watch::Receiver<()>,
         mut kafka_err_rx: mpsc::Receiver<String>,
-        sources: Arc<DashMap<String, Source>>,
         sinks: Arc<DashMap<String, Sink>>,
     ) {
         let (connect_signal_tx, mut connect_signal_rx) = watch::channel(());
@@ -150,7 +136,7 @@ impl Kafka {
                     }
 
                     _ = connect_signal_rx.changed() => {
-                        Self::handle_connect_status_changed(&kafka_client, &sources, &sinks).await;
+                        Self::handle_connect_status_changed(&kafka_client, &sinks).await;
                     }
                 }
             }
@@ -159,13 +145,9 @@ impl Kafka {
 
     async fn handle_connect_status_changed(
         kafka_client: &Arc<RwLock<Option<Client>>>,
-        sources: &Arc<DashMap<String, Source>>,
         sinks: &Arc<DashMap<String, Sink>>,
     ) {
         let kafka_client = kafka_client.read().await;
-        for mut source in sources.iter_mut() {
-            source.update_kafka_client(kafka_client.as_ref()).await;
-        }
         for mut sink in sinks.iter_mut() {
             sink.update_kafka_client(kafka_client.as_ref()).await;
         }
@@ -187,71 +169,11 @@ impl App for Kafka {
     async fn stop(&mut self) {
         self.stop_signal_tx.send(()).unwrap();
 
-        for mut source in self.sources.iter_mut() {
-            source.stop().await;
-        }
-
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
 
         // todo disconenct kafka client
-    }
-
-    async fn create_source(
-        &mut self,
-        source_id: String,
-        conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let conf: SourceConf = serde_json::from_value(conf.clone())?;
-        let source = Source::new(
-            self.kafka_client.read().await.as_ref(),
-            self.kafka_err_tx.clone(),
-            conf,
-        )
-        .await;
-        self.sources.insert(source_id, source);
-
-        Ok(())
-    }
-
-    async fn update_source(
-        &mut self,
-        source_id: String,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        match self.sources.get_mut(&source_id) {
-            Some(mut source) => {
-                let old_conf: SourceConf = serde_json::from_value(old_conf)?;
-                let new_conf: SourceConf = serde_json::from_value(new_conf)?;
-                source
-                    .update_conf(self.kafka_client.read().await.as_ref(), old_conf, new_conf)
-                    .await;
-                Ok(())
-            }
-            None => return Err(HaliaError::NotFound(source_id)),
-        }
-    }
-
-    async fn delete_source(&mut self, source_id: String) -> HaliaResult<()> {
-        match self.sources.remove(&source_id) {
-            Some((_, mut source)) => {
-                source.stop().await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(source_id)),
-        }
-    }
-
-    async fn get_source_rx(
-        &self,
-        source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.sources.get(source_id) {
-            Some(source) => Ok(source.mb_tx.subscribe()),
-            None => Err(HaliaError::NotFound(source_id.to_owned())),
-        }
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
@@ -319,13 +241,5 @@ fn transfer_compression(compression: &types::apps::kafka::Compression) -> Compre
         types::apps::kafka::Compression::Lz4 => Compression::Lz4,
         types::apps::kafka::Compression::Snappy => Compression::Snappy,
         types::apps::kafka::Compression::Zstd => Compression::Zstd,
-    }
-}
-
-fn transfer_start_offset(start_offset: &types::apps::kafka::StartOffset) -> StartOffset {
-    match start_offset {
-        types::apps::kafka::StartOffset::Earliest => StartOffset::Earliest,
-        types::apps::kafka::StartOffset::Latest => StartOffset::Latest,
-        types::apps::kafka::StartOffset::At(offset) => StartOffset::At(*offset),
     }
 }

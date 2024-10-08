@@ -58,10 +58,16 @@ impl Sink {
         })
     }
 
-    fn handle_message_batch(conf: &SinkConf, taos: &Taos, mb: MessageBatch) {}
+    fn handle_message_batch(conf: &SinkConf, taos: &Taos, mb: MessageBatch) {
+        // INSERT INTO d1001 VALUES (1538548685000, 10.3, 219, 0.31);
+    }
 
-    async fn stop(&mut self) -> JoinHandleData {
+    pub async fn stop(&mut self) -> JoinHandleData {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
+
+    pub async fn update_conf() {}
+
+    pub async fn update_tdengine_conf() {}
 }

@@ -12,27 +12,6 @@ pub struct KafkaConf {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
-pub struct SourceConf {
-    pub topic: String,
-    pub partition: i32,
-    pub unknown_topic_handling: UnknownTopicHandling,
-    pub start_offset: StartOffset,
-    // ms
-    pub max_wait: i32,
-    // ms
-    pub ack_timeout: u64,
-    pub required_acks: RequiredAcks,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
-#[serde(rename_all = "snake_case")]
-pub enum StartOffset {
-    Earliest,
-    Latest,
-    At(i64),
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
     pub topic: String,
     pub partition: i32,
@@ -66,21 +45,4 @@ pub enum Compression {
     Lz4,
     Snappy,
     Zstd,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
-pub struct BasicAuth {
-    pub username: String,
-    pub password: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
-#[serde(rename_all = "snake_case")]
-pub enum SinkMethod {
-    Get,
-    Post,
-    Put,
-    Patch,
-    Delete,
-    Head,
 }

@@ -196,6 +196,7 @@ pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
         AppType::HttpClient => http_client::validate_conf(&req.conf.ext)?,
         AppType::Kafka => kafka::validate_conf(&req.conf.ext)?,
         AppType::Influxdb => influxdb::validate_conf(&req.conf.ext)?,
+        AppType::Tdengine => tdengine::validate_conf(&req.conf.ext)?,
     }
 
     let app_id = common::get_id();
@@ -261,6 +262,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
         AppType::HttpClient => http_client::new(app_id.clone(), app_conf.ext)?,
         AppType::Kafka => kafka::new(app_id.clone(), app_conf.ext),
         AppType::Influxdb => influxdb::new(app_id.clone(), app_conf.ext),
+        AppType::Tdengine => tdengine::new(app_id.clone(), app_conf.ext),
     };
     GLOBAL_APP_MANAGER.insert(app_id.clone(), app);
 
@@ -339,8 +341,9 @@ pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> 
     match typ {
         AppType::MqttClient => mqtt_client::validate_source_conf(&req.ext)?,
         AppType::HttpClient => http_client::validate_source_conf(&req.ext)?,
-        AppType::Kafka => kafka::validate_source_conf(&req.ext)?,
-        AppType::Influxdb => return Err(HaliaError::NotSupportResource),
+        AppType::Kafka | AppType::Influxdb | AppType::Tdengine => {
+            return Err(HaliaError::NotSupportResource)
+        }
     }
 
     let source_id = common::get_id();
@@ -471,6 +474,7 @@ pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> Ha
         AppType::HttpClient => http_client::validate_sink_conf(&req.ext)?,
         AppType::Kafka => kafka::validate_sink_conf(&req.ext)?,
         AppType::Influxdb => influxdb::validate_sink_conf(&req.ext)?,
+        AppType::Tdengine => tdengine::validate_sink_conf(&req.ext)?,
     }
 
     let sink_id = common::get_id();
