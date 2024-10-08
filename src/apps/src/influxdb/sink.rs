@@ -63,7 +63,8 @@ impl Sink {
     }
 
     fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        let influxdb_client = new_influxdb_client(&join_handle_data.influxdb_conf);
+        let influxdb_client =
+            new_influxdb_client(&join_handle_data.influxdb_conf, &join_handle_data.conf);
 
         tokio::spawn(async move {
             let app_err = false;

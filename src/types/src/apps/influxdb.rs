@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use crate::MessageRetain;
+use crate::{MessageRetain, Ssl};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct InfluxdbConf {
     pub version: InfluxdbVersion,
     #[serde(flatten)]
-    pub v1: Option<InfluxdbV1>,
+    pub conf_v1: Option<InfluxdbV1>,
     #[serde(flatten)]
-    pub v2: Option<InfluxdbV2>,
+    pub conf_v2: Option<InfluxdbV2>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
@@ -22,12 +22,9 @@ pub enum InfluxdbVersion {
 pub struct InfluxdbV1 {
     pub host: String,
     pub port: u16,
-    pub database: String,
 
-    pub username: Option<String>,
-    pub password: Option<String>,
-
-    pub api_token: Option<String>,
+    pub auth: InfluxdbV1Auth,
+    pub ssl: Ssl,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
@@ -51,11 +48,30 @@ pub struct SinkConf {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConfV1 {
     pub database: String,
+    pub auth: InfluxdbV1Auth,
     pub gizp: bool,
     pub mesaurement: String,
     pub fields: Vec<(String, serde_json::Value)>,
     pub tags: Option<Vec<(String, serde_json::Value)>>,
     pub precision: Precision,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct InfluxdbV1Auth {
+    pub method: InfluxdbV1AuthMethod,
+
+    pub username: Option<String>,
+    pub password: Option<String>,
+
+    pub api_token: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum InfluxdbV1AuthMethod {
+    None,
+    BasicAuthentication,
+    ApiToken,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

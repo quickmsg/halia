@@ -93,7 +93,7 @@ pub struct SearchSourcesOrSinksInfoResp {
     pub conf: CreateUpdateSourceOrSinkReq,
 }
 
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct Ssl {
     pub enable: bool,
     pub verify: bool,
