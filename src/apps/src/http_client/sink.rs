@@ -3,32 +3,42 @@ use std::sync::Arc;
 use common::error::HaliaResult;
 use message::MessageBatch;
 use reqwest::Client;
-use tokio::{select, sync::mpsc, task::JoinHandle};
+use tokio::{
+    select,
+    sync::{mpsc, watch},
+    task::JoinHandle,
+};
 use tracing::{trace, warn};
 use types::apps::http_client::{HttpClientConf, SinkConf};
 
 use super::build_headers;
 
 pub struct Sink {
-    stop_signal_tx: mpsc::Sender<()>,
-    join_handle: Option<
-        JoinHandle<(
-            mpsc::Receiver<()>,
-            Arc<HttpClientConf>,
-            SinkConf,
-            Client,
-            mpsc::Receiver<MessageBatch>,
-        )>,
-    >,
+    stop_signal_tx: watch::Sender<()>,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
     pub mb_tx: mpsc::Sender<MessageBatch>,
+}
+
+pub struct JoinHandleData {
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub http_client_conf: Arc<HttpClientConf>,
+    pub conf: SinkConf,
+    pub client: Client,
+    pub mb_rx: mpsc::Receiver<MessageBatch>,
 }
 
 impl Sink {
     pub fn new(http_client_conf: Arc<HttpClientConf>, conf: SinkConf) -> Sink {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
-        let join_handle =
-            Self::event_loop(http_client_conf, conf, stop_signal_rx, mb_rx, Client::new());
+        let join_handle_data = JoinHandleData {
+            stop_signal_rx,
+            http_client_conf,
+            conf,
+            client: Client::new(),
+            mb_rx,
+        };
+        let join_handle = Self::event_loop(join_handle_data);
 
         Sink {
             stop_signal_tx,
@@ -41,40 +51,24 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn update_conf(&mut self, old_conf: SinkConf, new_conf: SinkConf) {
-        if old_conf == new_conf {
-            return;
-        }
-
-        let (stop_signal_rx, http_client_conf, _, client, mb_rx) = self.stop().await;
-        let join_handle =
-            Self::event_loop(http_client_conf, new_conf, stop_signal_rx, mb_rx, client);
+    pub async fn update_conf(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.conf = new_conf;
+        let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
     }
 
-    fn event_loop(
-        http_client_conf: Arc<HttpClientConf>,
-        conf: SinkConf,
-        mut stop_signal_rx: mpsc::Receiver<()>,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
-        client: Client,
-    ) -> JoinHandle<(
-        mpsc::Receiver<()>,
-        Arc<HttpClientConf>,
-        SinkConf,
-        Client,
-        mpsc::Receiver<MessageBatch>,
-    )> {
+    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
             loop {
                 select! {
-                    _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, http_client_conf, conf, client, mb_rx);
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
                     }
 
-                    mb = mb_rx.recv() => {
+                    mb = join_handle_data.mb_rx.recv() => {
                         match mb {
-                            Some(mb) => Sink::send_request(&client, &http_client_conf, &conf, mb).await,
+                            Some(mb) => Sink::send_request(&join_handle_data.client, &join_handle_data.http_client_conf, &join_handle_data.conf, mb).await,
                             None => warn!("http客户端收到空消息"),
                         }
                     }
@@ -114,21 +108,14 @@ impl Sink {
     }
 
     pub async fn update_http_client(&mut self, http_client_conf: Arc<HttpClientConf>) {
-        let (stop_signal_rx, _, conf, client, mb_rx) = self.stop().await;
-        let join_handle = Self::event_loop(http_client_conf, conf, stop_signal_rx, mb_rx, client);
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.http_client_conf = http_client_conf;
+        let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
     }
 
-    pub async fn stop(
-        &mut self,
-    ) -> (
-        mpsc::Receiver<()>,
-        Arc<HttpClientConf>,
-        SinkConf,
-        Client,
-        mpsc::Receiver<MessageBatch>,
-    ) {
-        self.stop_signal_tx.send(()).await.unwrap();
+    pub async fn stop(&mut self) -> JoinHandleData {
+        self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
 }
