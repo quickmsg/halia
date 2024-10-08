@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use common::constants::CHANNEL_SIZE;
 use message::MessageBatch;
-use taos::Taos;
+use taos::{AsyncQueryable, Taos};
 use tokio::{
     select,
     sync::{mpsc, watch},
     task::JoinHandle,
 };
+use tracing::warn;
 use types::apps::tdengine::{SinkConf, TDengineConf};
 
 use super::new_tdengine_client;
@@ -19,6 +20,7 @@ pub struct Sink {
 }
 
 pub struct JoinHandleData {
+    conf: SinkConf,
     taos: Taos,
     stop_signal_rx: watch::Receiver<()>,
     mb_rx: mpsc::Receiver<MessageBatch>,
@@ -30,6 +32,7 @@ impl Sink {
         let (mb_tx, mb_rx) = mpsc::channel(CHANNEL_SIZE);
         let taos = new_tdengine_client(&tdengine_conf, &conf).await;
         let join_handle_data = JoinHandleData {
+            conf,
             taos,
             stop_signal_rx,
             mb_rx,
@@ -52,14 +55,32 @@ impl Sink {
                         return join_handle_data;
                     }
                     Some(mb) = join_handle_data.mb_rx.recv() => {
+                        Self::handle_message_batch(&join_handle_data.conf, &join_handle_data.taos, mb).await;
                     }
                 }
             }
         })
     }
 
-    fn handle_message_batch(conf: &SinkConf, taos: &Taos, mb: MessageBatch) {
-        // INSERT INTO d1001 VALUES (1538548685000, 10.3, 219, 0.31);
+    // INSERT INTO d1001 VALUES (1538548685000, 10.3, 219, 0.31);
+    async fn handle_message_batch(conf: &SinkConf, taos: &Taos, mut mb: MessageBatch) {
+        // TODO remove unwrap
+        let mut values = vec![];
+        let msg = mb.take_one_message().unwrap();
+        for (_, value) in conf.values.iter() {
+            let v = msg.get(value).unwrap();
+            values.push(v);
+        }
+        let values = values
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<String>>()
+            .join(",");
+        // TODO ts
+        let sql = format!("INSERT INTO {} VALUES ({}, {});", conf.table, 22, values);
+        if let Err(e) = taos.exec(&sql).await {
+            warn!("{}", e);
+        }
     }
 
     pub async fn stop(&mut self) -> JoinHandleData {
@@ -67,7 +88,8 @@ impl Sink {
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn update_conf() {}
+    pub async fn update_conf() {
+    }
 
     pub async fn update_tdengine_conf() {}
 }
