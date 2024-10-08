@@ -34,7 +34,7 @@ mod sink;
 mod source;
 
 pub struct MqttClient {
-    id: String,
+    _id: String,
 
     err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: mpsc::Sender<()>,
@@ -58,8 +58,8 @@ enum HaliaMqttClient {
     V50(Arc<v5::AsyncClient>),
 }
 
-pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
-    let conf: MqttClientConf = serde_json::from_value(conf)?;
+pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
+    let conf: MqttClientConf = serde_json::from_value(conf).unwrap();
 
     let (app_err_tx, _) = broadcast::channel(16);
 
@@ -84,8 +84,8 @@ pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
         ),
     };
 
-    let mqtt_client = MqttClient {
-        id,
+    Box::new(MqttClient {
+        _id: id,
         err: app_err,
         sources,
         sinks: DashMap::new(),
@@ -93,9 +93,7 @@ pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
         stop_signal_tx,
         app_err_tx,
         join_handle: Some(join_handle),
-    };
-
-    Ok(Box::new(mqtt_client))
+    })
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
@@ -335,7 +333,7 @@ impl MqttClient {
         sources: Arc<DashMap<String, Source>>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         app_err_tx: broadcast::Sender<bool>,
-        device_err: Arc<RwLock<Option<String>>>,
+        _device_err: Arc<RwLock<Option<String>>>,
     ) -> (
         HaliaMqttClient,
         JoinHandle<(

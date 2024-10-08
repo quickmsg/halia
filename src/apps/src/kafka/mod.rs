@@ -158,8 +158,8 @@ impl Kafka {
 impl App for Kafka {
     async fn update(
         &mut self,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
+        _old_conf: serde_json::Value,
+        _new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         self.stop_signal_tx.send(()).unwrap();
         // Self::connect_loop(id, kafka_client, conf, stop_signal_rx, connect_signal_tx);

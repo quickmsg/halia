@@ -114,7 +114,7 @@ impl Sink {
             key: None,
             value: Some(mb.to_json()),
             headers: BTreeMap::from([("foo".to_owned(), b"bar".to_vec())]),
-            timestamp: Utc.timestamp_millis(42),
+            timestamp: Utc.timestamp_millis_opt(0).unwrap(),
         };
         partition_client.produce(vec![record], compression).await?;
         Ok(())

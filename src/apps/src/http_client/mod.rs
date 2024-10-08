@@ -16,23 +16,23 @@ mod sink;
 mod source;
 
 pub struct HttpClient {
-    id: String,
+    _id: String,
     conf: Arc<HttpClientConf>,
-    err: Option<String>,
+    _err: Option<String>,
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
 }
 
-pub fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn App>> {
-    let conf: HttpClientConf = serde_json::from_value(conf)?;
+pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
+    let conf: HttpClientConf = serde_json::from_value(conf).unwrap();
 
-    Ok(Box::new(HttpClient {
-        id,
+    Box::new(HttpClient {
+        _id: id,
         conf: Arc::new(conf),
-        err: None,
+        _err: None,
         sources: DashMap::new(),
         sinks: DashMap::new(),
-    }))
+    })
 }
 
 pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {

@@ -258,8 +258,8 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     };
 
     let app = match app_type {
-        AppType::MqttClient => mqtt_client::new(app_id.clone(), app_conf.ext)?,
-        AppType::HttpClient => http_client::new(app_id.clone(), app_conf.ext)?,
+        AppType::MqttClient => mqtt_client::new(app_id.clone(), app_conf.ext),
+        AppType::HttpClient => http_client::new(app_id.clone(), app_conf.ext),
         AppType::Kafka => kafka::new(app_id.clone(), app_conf.ext),
         AppType::Influxdb => influxdb::new(app_id.clone(), app_conf.ext),
         AppType::Tdengine => tdengine::new(app_id.clone(), app_conf.ext),
