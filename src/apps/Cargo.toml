@@ -11,6 +11,7 @@ influxdb = "0.7.2"
 influxdb2 = { version = "0.5.2", features = [
     "rustls",
 ], default-features = false }
+taos = "0.12.3"
 
 tokio = { workspace = true }
 types = { workspace = true }

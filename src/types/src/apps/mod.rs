@@ -9,6 +9,7 @@ pub mod http_client;
 pub mod influxdb;
 pub mod kafka;
 pub mod mqtt_client;
+pub mod tdengine;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateAppReq {

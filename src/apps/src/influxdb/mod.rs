@@ -41,12 +41,12 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     let conf: InfluxdbConf = serde_json::from_value(conf.clone())?;
     match conf.version {
         types::apps::influxdb::InfluxdbVersion::V1 => {
-            if conf.v1.is_none() {
+            if conf.conf_v1.is_none() {
                 return Err(HaliaError::Common("v1的配置为空！".to_owned()));
             }
         }
         types::apps::influxdb::InfluxdbVersion::V2 => {
-            if conf.v2.is_none() {
+            if conf.conf_v2.is_none() {
                 return Err(HaliaError::Common("v2的配置为空！".to_owned()));
             }
         }
@@ -150,12 +150,12 @@ fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) 
 
             match &sink_conf.conf_v1.as_ref().unwrap().auth.method {
                 types::apps::influxdb::InfluxdbV1AuthMethod::None => {
-                    match &influxdb_conf.v1.as_ref().unwrap().auth.method {
+                    match &influxdb_conf.conf_v1.as_ref().unwrap().auth.method {
                         types::apps::influxdb::InfluxdbV1AuthMethod::None => {}
                         types::apps::influxdb::InfluxdbV1AuthMethod::BasicAuthentication => {
                             client = client.with_auth(
                                 influxdb_conf
-                                    .v1
+                                    .conf_v1
                                     .as_ref()
                                     .unwrap()
                                     .auth
@@ -163,7 +163,7 @@ fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) 
                                     .as_ref()
                                     .unwrap(),
                                 influxdb_conf
-                                    .v1
+                                    .conf_v1
                                     .as_ref()
                                     .unwrap()
                                     .auth
@@ -175,7 +175,7 @@ fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) 
                         types::apps::influxdb::InfluxdbV1AuthMethod::ApiToken => {
                             client = client.with_token(
                                 influxdb_conf
-                                    .v1
+                                    .conf_v1
                                     .as_ref()
                                     .unwrap()
                                     .auth
@@ -223,7 +223,7 @@ fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) 
             InfluxdbClient::V1(client)
         }
         types::apps::influxdb::InfluxdbVersion::V2 => {
-            let conf = influxdb_conf.v2.as_ref().unwrap();
+            let conf = influxdb_conf.conf_v2.as_ref().unwrap();
             let client = InfluxdbClientV2::new(
                 format!("{}:{}", &conf.url, conf.port),
                 &conf.org,

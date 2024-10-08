@@ -24,6 +24,7 @@ mod http_client;
 mod influxdb;
 mod kafka;
 mod mqtt_client;
+mod tdengine;
 
 static GLOBAL_APP_MANAGER: LazyLock<DashMap<String, Box<dyn App>>> =
     LazyLock::new(|| DashMap::new());
