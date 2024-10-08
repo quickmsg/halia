@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use common::constants::CHANNEL_SIZE;
 use message::MessageBatch;
 use taos::{AsyncQueryable, Taos};
@@ -67,7 +68,7 @@ impl Sink {
         // TODO remove unwrap
         let mut values = vec![];
         let msg = mb.take_one_message().unwrap();
-        for (_, value) in conf.values.iter() {
+        for value in conf.values.iter() {
             let v = msg.get(value).unwrap();
             values.push(v);
         }
@@ -76,8 +77,8 @@ impl Sink {
             .map(|v| v.to_string())
             .collect::<Vec<String>>()
             .join(",");
-        // TODO ts
-        let sql = format!("INSERT INTO {} VALUES ({}, {});", conf.table, 22, values);
+        let utc: DateTime<Utc> = Utc::now();
+        let sql = format!("INSERT INTO {} VALUES ({}, {});", conf.table, utc, values);
         if let Err(e) = taos.exec(&sql).await {
             warn!("{}", e);
         }
@@ -88,8 +89,17 @@ impl Sink {
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn update_conf() {
+    pub async fn update_conf(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.conf = new_conf;
+        let join_handle = Self::event_loop(join_handle_data);
+        self.join_handle = Some(join_handle);
     }
 
-    pub async fn update_tdengine_conf() {}
+    pub async fn update_tdengine_conf(&mut self, tdengine_conf: Arc<TDengineConf>) {
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.taos = new_tdengine_client(&tdengine_conf, &join_handle_data.conf).await;
+        let join_handle = Self::event_loop(join_handle_data);
+        self.join_handle = Some(join_handle);
+    }
 }

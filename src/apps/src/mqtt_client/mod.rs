@@ -720,7 +720,7 @@ impl App for MqttClient {
 
         match self.sinks.get_mut(&sink_id) {
             Some(mut sink) => sink.update(old_conf, new_conf).await,
-            None => return Err(HaliaError::NotFound(sink_id)),
+            None => Err(HaliaError::NotFound(sink_id)),
         }
     }
 

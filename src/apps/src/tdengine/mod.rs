@@ -15,11 +15,21 @@ use crate::App;
 mod sink;
 
 pub struct TDengine {
+    _id: String,
     conf: Arc<TDengineConf>,
     sinks: DashMap<String, Sink>,
 }
 
-pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let conf: TDengineConf = serde_json::from_value(conf.clone())?;
+    match conf.auth_method {
+        types::apps::tdengine::TDengineAuthMethod::None => {}
+        types::apps::tdengine::TDengineAuthMethod::Password => {
+            if conf.auth_password.is_none() {
+                return Err(HaliaError::Common("密码为空！".to_owned()));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -31,6 +41,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: TDengineConf = serde_json::from_value(conf).unwrap();
 
     Box::new(TDengine {
+        _id: id,
         conf: Arc::new(conf),
         sinks: DashMap::new(),
     })
@@ -41,8 +52,13 @@ impl App for TDengine {
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,
-        _new_conf: serde_json::Value,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        let new_conf: Arc<TDengineConf> = Arc::new(serde_json::from_value(new_conf.clone())?);
+        for mut sink in self.sinks.iter_mut() {
+            sink.update_tdengine_conf(new_conf.clone()).await;
+        }
+        self.conf = new_conf;
         Ok(())
     }
 
@@ -65,7 +81,15 @@ impl App for TDengine {
         old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        todo!()
+        match self.sinks.get_mut(&sink_id) {
+            Some(mut sink) => {
+                let old_conf: SinkConf = serde_json::from_value(old_conf)?;
+                let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+                sink.update_conf(old_conf, new_conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id)),
+        }
     }
 
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()> {
@@ -86,15 +110,23 @@ impl App for TDengine {
     }
 }
 
-async fn new_tdengine_client(tdengine_conf: &Arc<TDengineConf>, sink_conf: &SinkConf) -> Taos {
-    let taos = TaosBuilder::from_dsn(format!(
-        "taos://{}:{}",
-        tdengine_conf.host, tdengine_conf.port
-    ))
-    .unwrap()
-    .build()
-    .await
-    .unwrap();
+async fn new_tdengine_client(td_engine_conf: &Arc<TDengineConf>, sink_conf: &SinkConf) -> Taos {
+    let dsn = match td_engine_conf.auth_method {
+        types::apps::tdengine::TDengineAuthMethod::None => {
+            format!("taos://{}:{}", td_engine_conf.host, td_engine_conf.port)
+        }
+        types::apps::tdengine::TDengineAuthMethod::Password => {
+            let auth_password = td_engine_conf.auth_password.as_ref().unwrap();
+            format!(
+                "taos://{}:{}@{}:{}",
+                auth_password.username,
+                auth_password.password,
+                td_engine_conf.host,
+                td_engine_conf.port
+            )
+        }
+    };
+    let taos = TaosBuilder::from_dsn(dsn).unwrap().build().await.unwrap();
     if let Err(e) = taos.exec(format!("USE `{}`", sink_conf.db)).await {
         warn!("{}", e);
     }
