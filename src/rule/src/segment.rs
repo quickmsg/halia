@@ -38,7 +38,7 @@ pub fn start_segment(
                                     }
                                 }
                             }
-                            Err(e) => warn!("{}", e),
+                            Err(e) => panic!("{e:?}"),
                         }
 
                     }

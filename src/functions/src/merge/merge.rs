@@ -11,7 +11,7 @@ pub fn run(
     tx: broadcast::Sender<MessageBatch>,
     mut stop_signal_rx: broadcast::Receiver<()>,
 ) {
-    let mut msgs: Vec<Option<Message>> = Vec::with_capacity(rxs.len());
+    let mut msgs: Vec<Option<Message>> = vec![None; rxs.len()];
 
     let mut stream_map = StreamMap::new();
     let mut i: u8 = 0;
@@ -53,10 +53,12 @@ fn handle_mb(
     msgs[pos as usize] = message;
 
     if msgs.iter().all(|msg| msg.is_some()) {
-        let mut mb = MessageBatch::default();
+        let mut merge_mb = MessageBatch::default();
+        let mut merge_msg = Message::default();
         for msg in msgs.iter_mut() {
-            mb.push_message(msg.take().unwrap());
+            merge_msg.merge(msg.take().unwrap());
         }
-        tx.send(mb).unwrap();
+        merge_mb.push_message(merge_msg);
+        tx.send(merge_mb).unwrap();
     }
 }
