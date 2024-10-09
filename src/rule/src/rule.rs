@@ -152,6 +152,7 @@ impl Rule {
                             }
                             receivers.insert(id, n_rxs);
                             merge::run(rxs, tx, self.stop_signal_tx.subscribe());
+                            debug!("here");
                             break;
                         }
                         NodeType::Window => {

@@ -571,13 +571,15 @@ pub async fn update_sink(
         return Err(HaliaError::NameExists);
     }
 
-    let old_conf = storage::source_or_sink::read_conf(&sink_id).await?;
-    let new_conf = req.ext.clone();
-    GLOBAL_DEVICE_MANAGER
-        .get_mut(&device_id)
-        .ok_or(HaliaError::NotFound(device_id.to_owned()))?
-        .update_sink(&sink_id, old_conf, new_conf)
-        .await?;
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+        let old_conf = storage::source_or_sink::read_conf(&sink_id).await?;
+        let new_conf = req.ext.clone();
+        if old_conf != new_conf {
+            device
+                .update_sink(&sink_id, old_conf.clone(), new_conf.clone())
+                .await?;
+        }
+    }
 
     storage::source_or_sink::update(&sink_id, req).await?;
 

@@ -12,7 +12,9 @@ use rule::Rule;
 use tracing::debug;
 use types::{
     rules::{
-        AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node, QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp, SearchRulesResp, Summary
+        AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
+        DeviceSourceNode, Node, QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp,
+        SearchRulesResp, Summary,
     },
     BaseConf, Pagination,
 };
@@ -137,7 +139,9 @@ pub async fn start(id: String) -> HaliaResult<()> {
     .await?;
 
     let db_conf = storage::rule::read_conf(&id).await?;
+    debug!("here");
     let conf: RuleConf = serde_json::from_slice(&db_conf)?;
+    debug!("here");
 
     let rule = Rule::new(id.clone(), &conf).await?;
     GLOBAL_RULE_MANAGER.insert(id.clone(), rule);
@@ -173,8 +177,6 @@ pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
     if storage::rule::update_name_exists(&id, &req.base.name).await? {
         return Err(HaliaError::NameExists);
     }
-
-    debug!("here");
 
     storage::rule_ref::delete_many_by_rule_id(&id).await?;
     create_rule_refs(&id, &req.ext.nodes).await?;
