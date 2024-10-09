@@ -74,7 +74,7 @@ impl Merge {
     }
 }
 
-pub async fn run(
+pub fn run(
     mut rxs: Vec<Receiver<MessageBatch>>,
     tx: Sender<MessageBatch>,
     mut stop_signal_rx: broadcast::Receiver<()>,

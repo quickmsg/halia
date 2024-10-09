@@ -5,7 +5,7 @@ use common::{
     error::HaliaResult,
     storage::{self, rule_ref},
 };
-use functions::{computes, filter, merge::merge::Merge, metadata, window};
+use functions::{computes, filter, merge::merge, metadata, window};
 use message::{MessageBatch, MessageValue};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error};
@@ -151,12 +151,7 @@ impl Rule {
                                 n_rxs.push(tx.subscribe());
                             }
                             receivers.insert(id, n_rxs);
-                            match Merge::new(rxs, tx) {
-                                Ok(mut merge) => {
-                                    merge.run().await;
-                                }
-                                Err(e) => error!("create merge err:{}", e),
-                            }
+                            merge::run(rxs, tx, self.stop_signal_tx.subscribe());
                             break;
                         }
                         NodeType::Window => {
