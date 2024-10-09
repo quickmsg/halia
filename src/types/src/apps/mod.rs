@@ -1,15 +1,19 @@
 use std::fmt;
 
-use anyhow::{bail, Error};
+use anyhow::{bail, Error, Ok};
 use serde::{Deserialize, Serialize};
 
 use crate::{BaseConf, SearchSourcesOrSinksInfoResp};
 
 pub mod http_client;
 pub mod influxdb;
+pub mod influxdb_v1;
+pub mod influxdb_v2;
 pub mod kafka;
 pub mod mqtt_client;
 pub mod tdengine;
+pub mod mqtt_client_v311;
+pub mod mqtt_client_v50; 
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateAppReq {
@@ -22,20 +26,24 @@ pub struct CreateUpdateAppReq {
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AppType {
-    MqttClient,
+    MqttClientV311,
+    MqttClientV50,
     HttpClient,
     Kafka,
-    Influxdb,
+    InfluxdbV1,
+    InfluxdbV2,
     Tdengine,
 }
 
 impl Into<i32> for AppType {
     fn into(self) -> i32 {
         match self {
-            AppType::MqttClient => 1,
+            AppType::MqttClientV311 => 10,
+            AppType::MqttClientV50 => 11,
             AppType::HttpClient => 2,
             AppType::Kafka => 3,
-            AppType::Influxdb => 4,
+            AppType::InfluxdbV1 => 40,
+            AppType::InfluxdbV2 => 41,
             AppType::Tdengine => 5,
         }
     }
@@ -46,10 +54,12 @@ impl TryFrom<i32> for AppType {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(AppType::MqttClient),
+            10 => Ok(AppType::MqttClientV311),
+            11 => Ok(AppType::MqttClientV50),
             2 => Ok(AppType::HttpClient),
             3 => Ok(AppType::Kafka),
-            4 => Ok(AppType::Influxdb),
+            40 => Ok(AppType::InfluxdbV1),
+            41 => Ok(AppType::InfluxdbV2),
             5 => Ok(AppType::Tdengine),
             _ => bail!("未知应用类型: {}", value),
         }
@@ -65,24 +75,26 @@ pub struct AppConf {
 impl fmt::Display for AppType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            AppType::MqttClient => write!(f, "mqtt_client"),
+            AppType::MqttClientV311 => write!(f, "mqtt_client"),
             AppType::HttpClient => write!(f, "http_client"),
             AppType::Kafka => write!(f, "kafka"),
-            AppType::Influxdb => write!(f, "influxdb"),
+            AppType::InfluxdbV1 | AppType::InfluxdbV2 => write!(f, "influxdb"),
             AppType::Tdengine => write!(f, "tdengine"),
+            AppType::MqttClientV50 => write!(f, "mqtt_client"),
         }
     }
 }
 
+// TODO
 impl TryFrom<String> for AppType {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
-            "mqtt_client" => Ok(AppType::MqttClient),
+            "mqtt_client" => Ok(AppType::MqttClientV311),
             "http_client" => Ok(AppType::HttpClient),
             "kafka" => Ok(AppType::Kafka),
-            "influxdb" => Ok(AppType::Influxdb),
+            "influxdb" => Ok(AppType::InfluxdbV1),
             "tdengine" => Ok(AppType::Tdengine),
             _ => bail!("未知应用类型: {}", value),
         }

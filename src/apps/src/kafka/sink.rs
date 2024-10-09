@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
+use base64::{engine::general_purpose, Engine};
 use chrono::{TimeZone, Utc};
 use common::error::HaliaResult;
 use message::MessageBatch;
@@ -91,7 +92,7 @@ impl Sink {
                     Some(mb) = mb_rx.recv() => {
                         match &partition_client {
                             Some(partition_client) => {
-                                if let Err(e) = Self::send_msg_to_kafka(partition_client, mb, compression).await {
+                                if let Err(e) = Self::send_msg_to_kafka(&conf, partition_client, mb, compression).await {
                                     warn!("{}", e);
                                     kafka_err_tx.send(e.to_string()).await.unwrap();
                                 }
@@ -106,14 +107,37 @@ impl Sink {
     }
 
     async fn send_msg_to_kafka(
+        conf: &SinkConf,
         partition_client: &PartitionClient,
         mb: MessageBatch,
         compression: Compression,
     ) -> Result<()> {
+        let key = match &conf.key {
+            Some(key) => match key.typ {
+                types::ValueType::String => Some(key.value.as_bytes().to_vec()),
+                types::ValueType::Bytes => {
+                    let bytes = general_purpose::STANDARD.decode(&key.value).unwrap();
+                    Some(bytes)
+                }
+            },
+            None => None,
+        };
+        let mut headers = BTreeMap::new();
+        for (k, v) in &conf.headers {
+            match v.typ {
+                types::ValueType::String => {
+                    headers.insert(k.clone(), v.value.as_bytes().to_vec());
+                }
+                types::ValueType::Bytes => {
+                    let bytes = general_purpose::STANDARD.decode(&v.value).unwrap();
+                    headers.insert(k.clone(), bytes);
+                }
+            }
+        }
         let record = Record {
-            key: None,
+            key,
             value: Some(mb.to_json()),
-            headers: BTreeMap::from([("foo".to_owned(), b"bar".to_vec())]),
+            headers,
             timestamp: Utc.timestamp_millis_opt(0).unwrap(),
         };
         partition_client.produce(vec![record], compression).await?;

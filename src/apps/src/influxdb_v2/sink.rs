@@ -1,0 +1,254 @@
+use std::sync::Arc;
+
+use common::{
+    error::HaliaResult,
+    get_dynamic_value_from_json,
+    sink_message_retain::{self, SinkMessageRetain},
+};
+use futures::stream;
+use influxdb::{InfluxDbWriteable as _, Timestamp, Type};
+use influxdb2::{
+    api::write::TimestampPrecision,
+    models::{DataPoint, FieldValue},
+};
+use message::MessageBatch;
+use tokio::{
+    select,
+    sync::{mpsc, watch},
+    task::JoinHandle,
+};
+use tracing::debug;
+use types::apps::influxdb::{InfluxdbConf, SinkConf};
+
+use super::{new_influxdb_client, InfluxdbClient};
+
+pub struct Sink {
+    stop_signal_tx: watch::Sender<()>,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
+    pub mb_tx: mpsc::Sender<MessageBatch>,
+}
+
+pub struct JoinHandleData {
+    pub conf: SinkConf,
+    pub influxdb_conf: Arc<InfluxdbConf>,
+    pub message_retainer: Box<dyn SinkMessageRetain>,
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub mb_rx: mpsc::Receiver<MessageBatch>,
+}
+
+impl Sink {
+    pub fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    pub fn new(conf: SinkConf, influxdb_conf: Arc<InfluxdbConf>) -> Self {
+        let (stop_signal_tx, stop_signal_rx) = watch::channel(());
+        let (mb_tx, mb_rx) = mpsc::channel(16);
+
+        let message_retainer = sink_message_retain::new(&conf.message_retain);
+        let join_handle_data = JoinHandleData {
+            conf,
+            influxdb_conf,
+            message_retainer,
+            stop_signal_rx,
+            mb_rx,
+        };
+        let join_handle = Self::event_loop(join_handle_data);
+
+        Sink {
+            stop_signal_tx,
+            mb_tx,
+            join_handle: Some(join_handle),
+        }
+    }
+
+    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+        let influxdb_client =
+            new_influxdb_client(&join_handle_data.influxdb_conf, &join_handle_data.conf);
+
+        tokio::spawn(async move {
+            let app_err = false;
+            loop {
+                select! {
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
+                    }
+
+                    Some(mb) = join_handle_data.mb_rx.recv() => {
+                        if !app_err {
+                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, mb).await;
+                        } else {
+                            join_handle_data.message_retainer.push(mb);
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    async fn send_msg_to_influxdb(
+        influxdb_client: &InfluxdbClient,
+        conf: &SinkConf,
+        mb: MessageBatch,
+    ) {
+        match influxdb_client {
+            InfluxdbClient::V1(client) => {
+                let mut querys = vec![];
+                for msg in mb.get_messages() {
+                    let timestamp = match &conf.conf_v1.as_ref().unwrap().precision {
+                        types::apps::influxdb::Precision::Nanoseconds => Timestamp::Nanoseconds(0),
+                        types::apps::influxdb::Precision::Microseconds => {
+                            Timestamp::Microseconds(0)
+                        }
+                        types::apps::influxdb::Precision::Milliseconds => {
+                            Timestamp::Milliseconds(0)
+                        }
+                        types::apps::influxdb::Precision::Seconds => Timestamp::Seconds(0),
+                        types::apps::influxdb::Precision::Minutes => Timestamp::Minutes(0),
+                        types::apps::influxdb::Precision::Hours => Timestamp::Hours(0),
+                    };
+                    let mut query =
+                        timestamp.into_query(&conf.conf_v1.as_ref().unwrap().mesaurement);
+                    for (field, field_value) in &conf.conf_v1.as_ref().unwrap().fields {
+                        let value = match get_dynamic_value_from_json(field_value) {
+                            common::DynamicValue::Const(value) => value,
+                            common::DynamicValue::Field(s) => match msg.get(&s) {
+                                Some(value) => value.clone().into(),
+                                None => serde_json::Value::Null,
+                            },
+                        };
+
+                        match value {
+                            serde_json::Value::Bool(b) => {
+                                query = query.add_field(field, Type::Boolean(b))
+                            }
+                            serde_json::Value::Number(number) => {
+                                if let Some(i) = number.as_i64() {
+                                    query = query.add_field(field, Type::SignedInteger(i));
+                                } else if let Some(u) = number.as_u64() {
+                                    query = query.add_field(field, Type::UnsignedInteger(u));
+                                } else if let Some(f) = number.as_f64() {
+                                    query = query.add_field(field, Type::Float(f));
+                                }
+                            }
+                            serde_json::Value::String(s) => {
+                                query = query.add_field(field, Type::Text(s));
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    if let Some(tags) = &conf.conf_v1.as_ref().unwrap().tags {
+                        for (tag, tag_value) in tags {
+                            let value = match get_dynamic_value_from_json(tag_value) {
+                                common::DynamicValue::Const(value) => value,
+                                common::DynamicValue::Field(s) => match msg.get(&s) {
+                                    Some(value) => value.clone().into(),
+                                    None => serde_json::Value::Null,
+                                },
+                            };
+
+                            match value {
+                                serde_json::Value::Bool(b) => {
+                                    query = query.add_tag(tag, Type::Boolean(b))
+                                }
+                                serde_json::Value::Number(number) => {
+                                    if let Some(i) = number.as_i64() {
+                                        query = query.add_tag(tag, Type::SignedInteger(i));
+                                    } else if let Some(u) = number.as_u64() {
+                                        query = query.add_tag(tag, Type::UnsignedInteger(u));
+                                    } else if let Some(f) = number.as_f64() {
+                                        query = query.add_tag(tag, Type::Float(f));
+                                    }
+                                }
+                                serde_json::Value::String(s) => {
+                                    query = query.add_tag(tag, Type::Text(s));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    querys.push(query);
+                }
+                if let Err(e) = client.query(querys).await {
+                    debug!("{}", e);
+                }
+            }
+            InfluxdbClient::V2(client) => {
+                let mut points = vec![];
+                for msg in mb.get_messages() {
+                    let mut point = DataPoint::builder(&conf.conf_v2.as_ref().unwrap().mesaurement);
+                    for (field, field_value) in &conf.conf_v2.as_ref().unwrap().fields {
+                        let value = match get_dynamic_value_from_json(field_value) {
+                            common::DynamicValue::Const(value) => value,
+                            common::DynamicValue::Field(s) => match msg.get(&s) {
+                                Some(value) => value.clone().into(),
+                                None => serde_json::Value::Null,
+                            },
+                        };
+
+                        match value {
+                            serde_json::Value::Bool(b) => {
+                                point = point.field(field, FieldValue::Bool(b))
+                            }
+                            serde_json::Value::Number(number) => {
+                                if let Some(i) = number.as_i64() {
+                                    point = point.field(field, FieldValue::I64(i));
+                                } else if let Some(u) = number.as_u64() {
+                                    point = point.field(field, FieldValue::I64(u as i64));
+                                } else if let Some(f) = number.as_f64() {
+                                    point = point.field(field, FieldValue::F64(f));
+                                }
+                            }
+                            serde_json::Value::String(s) => {
+                                point = point.field(field, FieldValue::String(s));
+                            }
+                            _ => {}
+                        }
+                    }
+                    points.push(point.build().unwrap());
+                }
+
+                let timestamp_precision = match &conf.conf_v2.as_ref().unwrap().precision {
+                    types::apps::influxdb::Precision::Nanoseconds => {
+                        TimestampPrecision::Nanoseconds
+                    }
+                    types::apps::influxdb::Precision::Microseconds => {
+                        TimestampPrecision::Microseconds
+                    }
+                    types::apps::influxdb::Precision::Milliseconds => {
+                        TimestampPrecision::Milliseconds
+                    }
+                    types::apps::influxdb::Precision::Seconds => TimestampPrecision::Seconds,
+                    _ => todo!(),
+                };
+
+                client
+                    .write_with_precision(
+                        &conf.conf_v2.as_ref().unwrap().bucket,
+                        stream::iter(points),
+                        timestamp_precision,
+                    )
+                    .await
+                    .unwrap();
+            }
+        }
+    }
+
+    pub async fn stop(&mut self) -> JoinHandleData {
+        self.stop_signal_tx.send(()).unwrap();
+        self.join_handle.take().unwrap().await.unwrap()
+    }
+
+    pub async fn update_conf(&mut self, conf: SinkConf) {
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.conf = conf;
+        self.join_handle = Some(Self::event_loop(join_handle_data));
+    }
+
+    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.influxdb_conf = influxdb_conf;
+        self.join_handle = Some(Self::event_loop(join_handle_data));
+    }
+}

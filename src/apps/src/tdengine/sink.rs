@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use common::constants::CHANNEL_SIZE;
 use message::MessageBatch;
 use taos::{AsyncQueryable, Taos};
@@ -9,7 +9,7 @@ use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use types::apps::tdengine::{SinkConf, TDengineConf};
 
 use super::new_tdengine_client;

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::StringOrBytesValue;
+
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct KafkaConf {
     pub bootstrap_brokers: Vec<String>,
@@ -15,6 +17,8 @@ pub struct KafkaConf {
 pub struct SinkConf {
     pub topic: String,
     pub partition: i32,
+    pub key: Option<StringOrBytesValue>,
+    pub headers: Vec<(String, StringOrBytesValue)>,
     pub unknown_topic_handling: UnknownTopicHandling,
     pub compression: Compression,
     // ms
