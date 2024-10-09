@@ -9,7 +9,7 @@ use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 use types::apps::tdengine::{SinkConf, TDengineConf};
 
 use super::new_tdengine_client;
@@ -65,8 +65,8 @@ impl Sink {
 
     // INSERT INTO d1001 VALUES (1538548685000, 10.3, 219, 0.31);
     async fn handle_message_batch(conf: &SinkConf, taos: &Taos, mut mb: MessageBatch) {
-        // TODO remove unwrap
         let mut values = vec![];
+        // TODO remove unwrap
         let msg = mb.take_one_message().unwrap();
         for value in conf.values.iter() {
             let v = msg.get(value).unwrap();
@@ -77,8 +77,8 @@ impl Sink {
             .map(|v| v.to_string())
             .collect::<Vec<String>>()
             .join(",");
-        let utc: DateTime<Utc> = Utc::now();
-        let sql = format!("INSERT INTO {} VALUES ({}, {});", conf.table, utc, values);
+        let ts = Utc::now().timestamp_millis();
+        let sql = format!("INSERT INTO {} VALUES ({}, {});", conf.table, ts, values);
         if let Err(e) = taos.exec(&sql).await {
             warn!("{}", e);
         }
