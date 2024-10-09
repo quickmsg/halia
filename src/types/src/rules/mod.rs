@@ -23,9 +23,7 @@ pub struct QueryParams {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateUpdateRuleReq {
-    #[serde(flatten)]
     pub base: BaseConf,
-    #[serde(flatten)]
     pub ext: RuleConf,
 }
 

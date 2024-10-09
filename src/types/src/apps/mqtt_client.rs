@@ -39,6 +39,14 @@ pub struct MqttClientV311Conf {
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
+pub struct LastWillV311 {
+    pub topic: String,
+    pub qos: Qos,
+    pub retain: bool,
+    pub message: StringOrBytesValue,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientV50Conf {
     pub client_id: String,
     pub host: String,
@@ -70,14 +78,6 @@ pub struct MqttClientAuth {
     pub username: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-pub struct LastWillV311 {
-    pub topic: String,
-    pub qos: Qos,
-    pub retain: bool,
-    pub message: StringOrBytesValue,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
