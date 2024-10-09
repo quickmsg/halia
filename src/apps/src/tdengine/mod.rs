@@ -7,7 +7,7 @@ use message::MessageBatch;
 use sink::Sink;
 use taos::{AsyncQueryable, AsyncTBuilder, Taos, TaosBuilder};
 use tokio::sync::mpsc;
-use tracing::warn;
+use tracing::{debug, warn};
 use types::apps::tdengine::{SinkConf, TDengineConf};
 
 use crate::App;
@@ -126,6 +126,7 @@ async fn new_tdengine_client(td_engine_conf: &Arc<TDengineConf>, sink_conf: &Sin
             )
         }
     };
+    debug!("{}", dsn);
     let taos = TaosBuilder::from_dsn(dsn).unwrap().build().await.unwrap();
     if let Err(e) = taos.exec(format!("USE `{}`", sink_conf.db)).await {
         warn!("{}", e);
