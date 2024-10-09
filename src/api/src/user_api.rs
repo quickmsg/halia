@@ -133,7 +133,8 @@ async fn login(Json(user): Json<User>) -> AppResult<AppSuccess<AuthInfo>> {
 
 fn sign_jwt(user: User) -> String {
     let iat = OffsetDateTime::now_utc();
-    let exp = iat + Duration::hours(2);
+    // todo
+    let exp = iat + Duration::hours(2000);
     let claims = Claims::new(user.username, iat, exp);
 
     let header = Header {

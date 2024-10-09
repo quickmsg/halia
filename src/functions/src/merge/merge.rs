@@ -1,11 +1,16 @@
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 use anyhow::Result;
+use futures::Stream;
 use message::{Message, MessageBatch};
-use tokio::sync::{
-    broadcast::{Receiver, Sender},
-    RwLock,
+use tokio::{
+    select,
+    sync::{
+        broadcast::{self, Receiver, Sender},
+        RwLock,
+    },
 };
+use tokio_stream::{StreamExt, StreamMap};
 use tracing::debug;
 
 pub struct Merge {
@@ -67,4 +72,39 @@ impl Merge {
             i += 1;
         }
     }
+}
+
+pub async fn run(
+    mut rxs: Vec<Receiver<MessageBatch>>,
+    tx: Sender<MessageBatch>,
+    mut stop_signal_rx: broadcast::Receiver<()>,
+) {
+    let mut stream_map = StreamMap::new();
+    let mut i = 0;
+    while let Some(mut rx) = rxs.pop() {
+        stream_map.insert(
+            i,
+            Box::pin(async_stream::stream! {
+                  while let Ok(item) = rx.recv().await {
+                      yield item;
+                  }
+            }) as Pin<Box<dyn Stream<Item = MessageBatch> + Send>>,
+        );
+        i += 1;
+    }
+
+    tokio::spawn(async move {
+        loop {
+            select! {
+                Some((pos, mb)) = stream_map.next() => {
+                    debug!("pos: {}, mb: {:?}", pos, mb);
+                }
+
+                _ = stop_signal_rx.recv() => {
+                    debug!("stop signal received");
+                    return;
+                }
+            }
+        }
+    });
 }

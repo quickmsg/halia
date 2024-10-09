@@ -151,7 +151,7 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn update(&mut self, old_conf: SinkConf, new_conf: SinkConf) -> HaliaResult<()> {
+    pub async fn update(&mut self, _old_conf: SinkConf, new_conf: SinkConf) -> HaliaResult<()> {
         let (stop_signal_rx, mb_rx, halia_mqtt_client, app_err_rx, message_retainer) =
             self.stop().await;
 

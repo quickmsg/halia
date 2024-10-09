@@ -10,6 +10,7 @@ pub struct TDengineConf {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum TDengineAuthMethod {
     None,
     Password,
