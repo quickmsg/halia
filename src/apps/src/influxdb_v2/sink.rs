@@ -150,7 +150,7 @@ impl Sink {
 
 fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) -> Client {
     let client = Client::new(
-        format!("{}:{}", &influxdb_conf.url, influxdb_conf.port),
+        format!("{}:{}", &influxdb_conf.host, influxdb_conf.port),
         &influxdb_conf.org,
         &influxdb_conf.api_token,
     );

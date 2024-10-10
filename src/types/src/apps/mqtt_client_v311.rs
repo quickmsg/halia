@@ -13,19 +13,20 @@ pub struct MqttClientConf {
     pub auth_method: MqttClientAuthMethod,
     pub auth_password: Option<MqttClientAuthPassword>,
 
-    pub ssl_enable: bool,
-    pub ssl: Option<Ssl>,
-
     pub timeout: usize,
     // 秒
     pub keep_alive: u64,
     pub clean_session: bool,
+
+    pub ssl_enable: bool,
+    pub ssl: Option<Ssl>,
 
     pub last_will_enable: bool,
     pub last_will: Option<LastWill>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum MqttClientAuthMethod {
     None,
     Password,

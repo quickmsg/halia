@@ -4,7 +4,7 @@ use crate::MessageRetain;
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct InfluxdbConf {
-    pub url: String,
+    pub host: String,
     pub port: u16,
     pub api_token: String,
     pub org: String,
@@ -29,10 +29,4 @@ pub enum Precision {
     Seconds,
     Minutes,
     Hours,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
-pub struct BasicAuth {
-    pub username: String,
-    pub password: Option<String>,
 }

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use anyhow::{bail, Error, Ok};
+use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
 use crate::{BaseConf, SearchSourcesOrSinksInfoResp};
