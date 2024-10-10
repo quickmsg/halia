@@ -122,21 +122,26 @@ impl MqttClient {
         );
         mqtt_options.set_keep_alive(Duration::from_secs(join_handle_data.conf.keep_alive));
         mqtt_options.set_clean_session(join_handle_data.conf.clean_session);
-        match (
-            &join_handle_data.conf.auth.username,
-            &join_handle_data.conf.auth.password,
-        ) {
-            (None, None) => {}
-            (None, Some(password)) => {
-                mqtt_options.set_credentials("", password);
+
+        match join_handle_data.conf.auth_method {
+            types::apps::mqtt_client_v311::MqttClientAuthMethod::None => {}
+            types::apps::mqtt_client_v311::MqttClientAuthMethod::Password => {
+                mqtt_options.set_credentials(
+                    &join_handle_data
+                        .conf
+                        .auth_password
+                        .as_ref()
+                        .unwrap()
+                        .username,
+                    &join_handle_data
+                        .conf
+                        .auth_password
+                        .as_ref()
+                        .unwrap()
+                        .password,
+                );
             }
-            (Some(username), None) => {
-                mqtt_options.set_credentials(username, "");
-            }
-            (Some(username), Some(password)) => {
-                mqtt_options.set_credentials(username, password);
-            }
-        };
+        }
 
         // if join_handle_data.conf.ssl.enable {
         //     let mut root_cert_store = rumqttc::tokio_rustls::rustls::RootCertStore::empty();

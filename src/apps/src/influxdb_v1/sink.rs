@@ -13,7 +13,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::apps::influxdb_v1::{InfluxdbConf, SinkConf};
+use types::apps::influxdb_v1::{Conf, SinkConf};
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -23,7 +23,7 @@ pub struct Sink {
 
 pub struct JoinHandleData {
     pub conf: SinkConf,
-    pub influxdb_conf: Arc<InfluxdbConf>,
+    pub influxdb_conf: Arc<Conf>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: mpsc::Receiver<MessageBatch>,
@@ -34,7 +34,7 @@ impl Sink {
         Ok(())
     }
 
-    pub fn new(conf: SinkConf, influxdb_conf: Arc<InfluxdbConf>) -> Self {
+    pub fn new(conf: SinkConf, influxdb_conf: Arc<Conf>) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
@@ -82,7 +82,7 @@ impl Sink {
     async fn send_msg_to_influxdb(influxdb_client: &Client, conf: &SinkConf, mb: MessageBatch) {
         let mut querys = vec![];
         for msg in mb.get_messages() {
-            let timestamp = match &conf.conf_v1.as_ref().unwrap().precision {
+            let timestamp = match &conf.precision {
                 types::apps::influxdb_v1::Precision::Nanoseconds => Timestamp::Nanoseconds(0),
                 types::apps::influxdb_v1::Precision::Microseconds => Timestamp::Microseconds(0),
                 types::apps::influxdb_v1::Precision::Milliseconds => Timestamp::Milliseconds(0),
@@ -90,8 +90,8 @@ impl Sink {
                 types::apps::influxdb_v1::Precision::Minutes => Timestamp::Minutes(0),
                 types::apps::influxdb_v1::Precision::Hours => Timestamp::Hours(0),
             };
-            let mut query = timestamp.into_query(&conf.conf_v1.as_ref().unwrap().mesaurement);
-            for (field, field_value) in &conf.conf_v1.as_ref().unwrap().fields {
+            let mut query = timestamp.into_query(&conf.mesaurement);
+            for (field, field_value) in &conf.fields {
                 let value = match get_dynamic_value_from_json(field_value) {
                     common::DynamicValue::Const(value) => value,
                     common::DynamicValue::Field(s) => match msg.get(&s) {
@@ -118,7 +118,7 @@ impl Sink {
                 }
             }
 
-            if let Some(tags) = &conf.conf_v1.as_ref().unwrap().tags {
+            if let Some(tags) = &conf.tags {
                 for (tag, tag_value) in tags {
                     let value = match get_dynamic_value_from_json(tag_value) {
                         common::DynamicValue::Const(value) => value,
@@ -164,99 +164,95 @@ impl Sink {
         self.join_handle = Some(Self::event_loop(join_handle_data));
     }
 
-    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
+    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<Conf>) {
         let mut join_handle_data = self.stop().await;
         join_handle_data.influxdb_conf = influxdb_conf;
         self.join_handle = Some(Self::event_loop(join_handle_data));
     }
 }
 
-fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) -> Client {
-    let schema = match &influxdb_conf.conf_v1.as_ref().unwrap().ssl.enable {
+fn new_influxdb_client(influxdb_conf: &Arc<Conf>, sink_conf: &SinkConf) -> Client {
+    let schema = match &influxdb_conf.ssl_enable {
         true => "https",
         false => "http",
     };
     let mut client = Client::new(
         format!(
             "{}://{}:{}",
-            schema,
-            &influxdb_conf.conf_v1.as_ref().unwrap().host,
-            influxdb_conf.conf_v1.as_ref().unwrap().port
+            schema, &influxdb_conf.host, influxdb_conf.port
         ),
-        &sink_conf.conf_v1.as_ref().unwrap().database,
+        &sink_conf.database,
     );
 
-    match &sink_conf.conf_v1.as_ref().unwrap().auth.method {
-        types::apps::influxdb_v1::InfluxdbAuthMethod::None => {
-            match &influxdb_conf.conf_v1.as_ref().unwrap().auth.method {
-                types::apps::influxdb_v1::InfluxdbAuthMethod::None => {}
-                types::apps::influxdb_v1::InfluxdbAuthMethod::BasicAuthentication => {
-                    client = client.with_auth(
-                        influxdb_conf
-                            .conf_v1
-                            .as_ref()
-                            .unwrap()
-                            .auth
-                            .username
-                            .as_ref()
-                            .unwrap(),
-                        influxdb_conf
-                            .conf_v1
-                            .as_ref()
-                            .unwrap()
-                            .auth
-                            .password
-                            .as_ref()
-                            .unwrap(),
-                    );
-                }
-                types::apps::influxdb_v1::InfluxdbAuthMethod::ApiToken => {
-                    client = client.with_token(
-                        influxdb_conf
-                            .conf_v1
-                            .as_ref()
-                            .unwrap()
-                            .auth
-                            .api_token
-                            .as_ref()
-                            .unwrap(),
-                    );
-                }
-            }
-        }
-        types::apps::influxdb_v1::InfluxdbAuthMethod::BasicAuthentication => {
-            client = client.with_auth(
-                sink_conf
-                    .conf_v1
-                    .as_ref()
-                    .unwrap()
-                    .auth
-                    .username
-                    .as_ref()
-                    .unwrap(),
-                sink_conf
-                    .conf_v1
-                    .as_ref()
-                    .unwrap()
-                    .auth
-                    .password
-                    .as_ref()
-                    .unwrap(),
-            );
-        }
-        types::apps::influxdb_v1::InfluxdbAuthMethod::ApiToken => {
-            client = client.with_token(
-                sink_conf
-                    .conf_v1
-                    .as_ref()
-                    .unwrap()
-                    .auth
-                    .api_token
-                    .as_ref()
-                    .unwrap(),
-            );
-        }
-    }
+    // match &sink_conf.auth_method {
+    //     types::apps::influxdb_v1::AuthMethod::None => match &influxdb_conf.auth_method {
+    //         types::apps::influxdb_v1::InfluxdbAuthMethod::None => {}
+    //         types::apps::influxdb_v1::InfluxdbAuthMethod::BasicAuthentication => {
+    //             client = client.with_auth(
+    //                 influxdb_conf
+    //                     .conf_v1
+    //                     .as_ref()
+    //                     .unwrap()
+    //                     .auth
+    //                     .username
+    //                     .as_ref()
+    //                     .unwrap(),
+    //                 influxdb_conf
+    //                     .conf_v1
+    //                     .as_ref()
+    //                     .unwrap()
+    //                     .auth
+    //                     .password
+    //                     .as_ref()
+    //                     .unwrap(),
+    //             );
+    //         }
+    //         types::apps::influxdb_v1::InfluxdbAuthMethod::ApiToken => {
+    //             client = client.with_token(
+    //                 influxdb_conf
+    //                     .conf_v1
+    //                     .as_ref()
+    //                     .unwrap()
+    //                     .auth
+    //                     .api_token
+    //                     .as_ref()
+    //                     .unwrap(),
+    //             );
+    //         }
+    //     },
+    //     types::apps::influxdb_v1::InfluxdbAuthMethod::BasicAuthentication => {
+    //         client = client.with_auth(
+    //             sink_conf
+    //                 .conf_v1
+    //                 .as_ref()
+    //                 .unwrap()
+    //                 .auth
+    //                 .username
+    //                 .as_ref()
+    //                 .unwrap(),
+    //             sink_conf
+    //                 .conf_v1
+    //                 .as_ref()
+    //                 .unwrap()
+    //                 .auth
+    //                 .password
+    //                 .as_ref()
+    //                 .unwrap(),
+    //         );
+    //     }
+    //     types::apps::influxdb_v1::InfluxdbAuthMethod::ApiToken => {
+    //         client = client.with_token(
+    //             sink_conf
+    //                 .conf_v1
+    //                 .as_ref()
+    //                 .unwrap()
+    //                 .auth
+    //                 .api_token
+    //                 .as_ref()
+    //                 .unwrap(),
+    //         );
+    //     }
+    // }
 
     client
 }

@@ -6,7 +6,7 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc;
-use types::apps::influxdb_v1::{InfluxdbConf, SinkConf};
+use types::apps::influxdb_v1::{Conf, SinkConf};
 
 use crate::App;
 
@@ -16,11 +16,11 @@ pub struct Influxdb {
     _id: String,
     _err: Option<String>,
     sinks: DashMap<String, Sink>,
-    conf: Arc<InfluxdbConf>,
+    conf: Arc<Conf>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
+    let conf: Conf = serde_json::from_value(conf).unwrap();
 
     Box::new(Influxdb {
         _id: id,
@@ -31,7 +31,23 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let _conf: InfluxdbConf = serde_json::from_value(conf.clone())?;
+    let conf: Conf = serde_json::from_value(conf.clone())?;
+    match conf.auth_method {
+        types::apps::influxdb_v1::AuthMethod::None => {}
+        types::apps::influxdb_v1::AuthMethod::Password => {
+            if conf.auth_password.is_none() {
+                return Err(HaliaError::Common("auth_password字段不能为空！".to_owned()));
+            }
+        }
+        types::apps::influxdb_v1::AuthMethod::ApiToken => {
+            if conf.auth_api_token.is_none() {
+                return Err(HaliaError::Common(
+                    "auth_api_token字段不能为空！".to_owned(),
+                ));
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -48,7 +64,7 @@ impl App for Influxdb {
         _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let new_conf: InfluxdbConf = serde_json::from_value(new_conf)?;
+        let new_conf: Conf = serde_json::from_value(new_conf)?;
         self.conf = Arc::new(new_conf);
         for mut sink in self.sinks.iter_mut() {
             sink.update_influxdb_client(self.conf.clone()).await;

@@ -5,23 +5,31 @@ use crate::{MessageRetain, Ssl, StringOrBytesValue};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientConf {
-    pub client_id: String,
     pub host: String,
     pub port: u16,
 
-    #[serde(flatten)]
-    pub auth: MqttClientAuth,
+    pub client_id: String,
 
-    pub ssl: Ssl,
+    pub auth_method: MqttClientAuthMethod,
+    pub auth_password: Option<MqttClientAuthPassword>,
+
+    pub ssl_enable: bool,
+    pub ssl: Option<Ssl>,
 
     pub timeout: usize,
     // 秒
     pub keep_alive: u64,
     pub clean_session: bool,
 
+    pub last_will_enable: bool,
     pub last_will: Option<LastWill>,
 }
 
+#[derive(Deserialize, Serialize, PartialEq)]
+pub enum MqttClientAuthMethod {
+    None,
+    Password,
+}
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct LastWill {
@@ -32,11 +40,9 @@ pub struct LastWill {
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
-pub struct MqttClientAuth {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub username: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub password: Option<String>,
+pub struct MqttClientAuthPassword {
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]

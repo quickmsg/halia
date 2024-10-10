@@ -70,8 +70,8 @@ pub struct VariableConf {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct NodeId {
-    #[serde(flatten)]
     pub namespace: u16,
+    #[serde(flatten)]
     pub identifier: Identifer,
 }
 

@@ -95,7 +95,6 @@ pub struct SearchSourcesOrSinksInfoResp {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct Ssl {
-    pub enable: bool,
     pub verify: bool,
     pub alpn: Option<StringOrBytesValue>,
     pub ca_cert: Option<String>,
