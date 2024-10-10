@@ -17,7 +17,7 @@ use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
-use types::apps::influxdb_v2::{InfluxdbConf, SinkConf};
+use types::apps::influxdb_v2::{Conf, SinkConf};
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -27,7 +27,7 @@ pub struct Sink {
 
 pub struct JoinHandleData {
     pub conf: SinkConf,
-    pub influxdb_conf: Arc<InfluxdbConf>,
+    pub influxdb_conf: Arc<Conf>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: mpsc::Receiver<MessageBatch>,
@@ -38,7 +38,7 @@ impl Sink {
         Ok(())
     }
 
-    pub fn new(conf: SinkConf, influxdb_conf: Arc<InfluxdbConf>) -> Self {
+    pub fn new(conf: SinkConf, influxdb_conf: Arc<Conf>) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
@@ -117,11 +117,10 @@ impl Sink {
         }
 
         let timestamp_precision = match &conf.precision {
-            types::apps::influxdb_v2::Precision::Nanoseconds => TimestampPrecision::Nanoseconds,
-            types::apps::influxdb_v2::Precision::Microseconds => TimestampPrecision::Microseconds,
-            types::apps::influxdb_v2::Precision::Milliseconds => TimestampPrecision::Milliseconds,
             types::apps::influxdb_v2::Precision::Seconds => TimestampPrecision::Seconds,
-            _ => todo!(),
+            types::apps::influxdb_v2::Precision::Milliseconds => TimestampPrecision::Milliseconds,
+            types::apps::influxdb_v2::Precision::Microseconds => TimestampPrecision::Microseconds,
+            types::apps::influxdb_v2::Precision::Nanoseconds => TimestampPrecision::Nanoseconds,
         };
 
         influxdb_client
@@ -141,18 +140,18 @@ impl Sink {
         self.join_handle = Some(Self::event_loop(join_handle_data));
     }
 
-    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
+    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<Conf>) {
         let mut join_handle_data = self.stop().await;
         join_handle_data.influxdb_conf = influxdb_conf;
         self.join_handle = Some(Self::event_loop(join_handle_data));
     }
 }
 
-fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) -> Client {
+fn new_influxdb_client(influxdb_conf: &Arc<Conf>, sink_conf: &SinkConf) -> Client {
     let client = Client::new(
         format!("{}:{}", &influxdb_conf.host, influxdb_conf.port),
-        &influxdb_conf.org,
-        &influxdb_conf.api_token,
+        &sink_conf.org,
+        &sink_conf.api_token,
     );
     client
 }

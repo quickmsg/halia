@@ -6,7 +6,7 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc;
-use types::apps::influxdb_v2::{InfluxdbConf, SinkConf};
+use types::apps::influxdb_v2::{Conf, SinkConf};
 
 use crate::App;
 
@@ -16,11 +16,11 @@ pub struct Influxdb {
     _id: String,
     _err: Option<String>,
     sinks: DashMap<String, Sink>,
-    conf: Arc<InfluxdbConf>,
+    conf: Arc<Conf>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
+    let conf: Conf = serde_json::from_value(conf).unwrap();
 
     Box::new(Influxdb {
         _id: id,
@@ -31,7 +31,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let _conf: InfluxdbConf = serde_json::from_value(conf.clone())?;
+    let _conf: Conf = serde_json::from_value(conf.clone())?;
     Ok(())
 }
 
@@ -48,7 +48,7 @@ impl App for Influxdb {
         _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let new_conf: InfluxdbConf = serde_json::from_value(new_conf)?;
+        let new_conf: Conf = serde_json::from_value(new_conf)?;
         self.conf = Arc::new(new_conf);
         for mut sink in self.sinks.iter_mut() {
             sink.update_influxdb_client(self.conf.clone()).await;
