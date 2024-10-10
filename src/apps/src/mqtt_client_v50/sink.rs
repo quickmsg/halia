@@ -10,9 +10,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::warn;
-use types::apps::mqtt_client::SinkConf;
-
-use super::{qos_to_v311, qos_to_v50, HaliaMqttClient};
+use types::apps::mqtt_client_v50::SinkConf;
 
 pub struct Sink {
     conf: SinkConf,
@@ -27,7 +25,6 @@ pub struct Sink {
         JoinHandle<(
             mpsc::Receiver<()>,
             mpsc::Receiver<MessageBatch>,
-            HaliaMqttClient,
             broadcast::Receiver<bool>,
             Box<dyn SinkMessageRetain>,
         )>,

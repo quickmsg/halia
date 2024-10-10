@@ -58,7 +58,7 @@ pub struct SinkConfV1 {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct InfluxdbV1Auth {
-    pub method: InfluxdbV1AuthMethod,
+    pub method: InfluxdbAuthMethod,
 
     pub username: Option<String>,
     pub password: Option<String>,
@@ -68,7 +68,7 @@ pub struct InfluxdbV1Auth {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
-pub enum InfluxdbV1AuthMethod {
+pub enum InfluxdbAuthMethod {
     None,
     BasicAuthentication,
     ApiToken,

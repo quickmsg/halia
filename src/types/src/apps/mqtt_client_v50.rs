@@ -5,49 +5,6 @@ use crate::{MessageRetain, Ssl, StringOrBytesValue};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientConf {
-    pub version: Version,
-    #[serde(flatten)]
-    pub v311: Option<MqttClientV311Conf>,
-    #[serde(flatten)]
-    pub v50: Option<MqttClientV50Conf>,
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum Version {
-    V311,
-    V50,
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-pub struct MqttClientV311Conf {
-    pub client_id: String,
-    pub host: String,
-    pub port: u16,
-
-    #[serde(flatten)]
-    pub auth: MqttClientAuth,
-
-    pub ssl: Ssl,
-
-    pub timeout: usize,
-    // 秒
-    pub keep_alive: u64,
-    pub clean_session: bool,
-
-    pub last_will: Option<LastWillV311>,
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-pub struct LastWillV311 {
-    pub topic: String,
-    pub qos: Qos,
-    pub retain: bool,
-    pub message: StringOrBytesValue,
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-pub struct MqttClientV50Conf {
     pub client_id: String,
     pub host: String,
     pub port: u16,
@@ -69,7 +26,7 @@ pub struct MqttClientV50Conf {
     pub authentication_data: Option<StringOrBytesValue>,
 
     pub ssl: Ssl,
-    pub last_will: Option<LastWillV50>,
+    pub last_will: Option<LastWill>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
@@ -81,7 +38,7 @@ pub struct MqttClientAuth {
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
-pub struct LastWillV50 {
+pub struct LastWill {
     pub topic: String,
     // base64 编码的信息
     pub message: String,

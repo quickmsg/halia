@@ -3,13 +3,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use influxdb::Client as InfluxdbClientV1;
-use influxdb2::Client as InfluxdbClientV2;
 use message::MessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc;
-use tracing::debug;
-use types::apps::influxdb::{InfluxdbConf, SinkConf};
+use types::apps::influxdb_v1::{InfluxdbConf, SinkConf};
 
 use crate::App;
 
@@ -20,11 +17,6 @@ pub struct Influxdb {
     _err: Option<String>,
     sinks: DashMap<String, Sink>,
     conf: Arc<InfluxdbConf>,
-}
-
-pub enum InfluxdbClient {
-    V1(InfluxdbClientV1),
-    V2(InfluxdbClientV2),
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -39,19 +31,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let conf: InfluxdbConf = serde_json::from_value(conf.clone())?;
-    match conf.version {
-        types::apps::influxdb::InfluxdbVersion::V1 => {
-            if conf.conf_v1.is_none() {
-                return Err(HaliaError::Common("v1的配置为空！".to_owned()));
-            }
-        }
-        types::apps::influxdb::InfluxdbVersion::V2 => {
-            if conf.conf_v2.is_none() {
-                return Err(HaliaError::Common("v2的配置为空！".to_owned()));
-            }
-        }
-    }
+    let _conf: InfluxdbConf = serde_json::from_value(conf.clone())?;
     Ok(())
 }
 
@@ -84,14 +64,6 @@ impl App for Influxdb {
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
-        match self.conf.version {
-            types::apps::influxdb::InfluxdbVersion::V1 => {}
-            types::apps::influxdb::InfluxdbVersion::V2 => {
-                if conf["bucket"].is_null() {
-                    return Err(HaliaError::Common("bucket为空！".to_owned()));
-                }
-            }
-        }
         let conf: SinkConf = serde_json::from_value(conf)?;
         let sink = Sink::new(conf, self.conf.clone());
         self.sinks.insert(sink_id, sink);
@@ -128,109 +100,6 @@ impl App for Influxdb {
         match self.sinks.get(sink_id) {
             Some(sink) => Ok(sink.mb_tx.clone()),
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        }
-    }
-}
-
-fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) -> InfluxdbClient {
-    match &influxdb_conf.version {
-        types::apps::influxdb::InfluxdbVersion::V1 => {
-            let schema = match &influxdb_conf.conf_v1.as_ref().unwrap().ssl.enable {
-                true => "https",
-                false => "http",
-            };
-            let mut client = InfluxdbClientV1::new(
-                format!(
-                    "{}://{}:{}",
-                    schema,
-                    &influxdb_conf.conf_v1.as_ref().unwrap().host,
-                    influxdb_conf.conf_v1.as_ref().unwrap().port
-                ),
-                &sink_conf.conf_v1.as_ref().unwrap().database,
-            );
-
-            match &sink_conf.conf_v1.as_ref().unwrap().auth.method {
-                types::apps::influxdb::InfluxdbV1AuthMethod::None => {
-                    match &influxdb_conf.conf_v1.as_ref().unwrap().auth.method {
-                        types::apps::influxdb::InfluxdbV1AuthMethod::None => {}
-                        types::apps::influxdb::InfluxdbV1AuthMethod::BasicAuthentication => {
-                            client = client.with_auth(
-                                influxdb_conf
-                                    .conf_v1
-                                    .as_ref()
-                                    .unwrap()
-                                    .auth
-                                    .username
-                                    .as_ref()
-                                    .unwrap(),
-                                influxdb_conf
-                                    .conf_v1
-                                    .as_ref()
-                                    .unwrap()
-                                    .auth
-                                    .password
-                                    .as_ref()
-                                    .unwrap(),
-                            );
-                        }
-                        types::apps::influxdb::InfluxdbV1AuthMethod::ApiToken => {
-                            client = client.with_token(
-                                influxdb_conf
-                                    .conf_v1
-                                    .as_ref()
-                                    .unwrap()
-                                    .auth
-                                    .api_token
-                                    .as_ref()
-                                    .unwrap(),
-                            );
-                        }
-                    }
-                }
-                types::apps::influxdb::InfluxdbV1AuthMethod::BasicAuthentication => {
-                    client = client.with_auth(
-                        sink_conf
-                            .conf_v1
-                            .as_ref()
-                            .unwrap()
-                            .auth
-                            .username
-                            .as_ref()
-                            .unwrap(),
-                        sink_conf
-                            .conf_v1
-                            .as_ref()
-                            .unwrap()
-                            .auth
-                            .password
-                            .as_ref()
-                            .unwrap(),
-                    );
-                }
-                types::apps::influxdb::InfluxdbV1AuthMethod::ApiToken => {
-                    client = client.with_token(
-                        sink_conf
-                            .conf_v1
-                            .as_ref()
-                            .unwrap()
-                            .auth
-                            .api_token
-                            .as_ref()
-                            .unwrap(),
-                    );
-                }
-            }
-
-            InfluxdbClient::V1(client)
-        }
-        types::apps::influxdb::InfluxdbVersion::V2 => {
-            let conf = influxdb_conf.conf_v2.as_ref().unwrap();
-            let client = InfluxdbClientV2::new(
-                format!("{}:{}", &conf.url, conf.port),
-                &conf.org,
-                &conf.api_token,
-            );
-            InfluxdbClient::V2(client)
         }
     }
 }

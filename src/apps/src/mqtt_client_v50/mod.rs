@@ -1,8 +1,4 @@
-use std::{
-    io::{BufReader, Cursor},
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
@@ -10,12 +6,9 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rumqttc::{
-    mqttbytes,
-    tokio_rustls::rustls::ClientConfig,
     v5::{self, mqttbytes::v5::ConnectProperties},
-    AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS,
+    AsyncClient,
 };
-use rustls_pemfile::Item;
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -23,10 +16,8 @@ use tokio::{
     sync::{broadcast, mpsc, RwLock},
     task::JoinHandle,
 };
-use tracing::{debug, error, warn};
-use types::apps::mqtt_client::{
-    MqttClientConf, MqttClientV311Conf, MqttClientV50Conf, Qos, SinkConf, SourceConf,
-};
+use tracing::{error, warn};
+use types::apps::mqtt_client_v50::{MqttClientConf, Qos, SinkConf, SourceConf};
 
 use crate::App;
 
@@ -52,12 +43,6 @@ pub struct MqttClient {
     >,
 }
 
-#[derive(Clone)]
-enum HaliaMqttClient {
-    V311(Arc<AsyncClient>),
-    V50(Arc<v5::AsyncClient>),
-}
-
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: MqttClientConf = serde_json::from_value(conf).unwrap();
 
@@ -67,22 +52,13 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     let sources = Arc::new(DashMap::new());
     let app_err = Arc::new(RwLock::new(None));
-    let (halia_mqtt_client, join_handle) = match conf.version {
-        types::apps::mqtt_client::Version::V311 => MqttClient::start_v311(
-            conf.v311.unwrap(),
-            sources.clone(),
-            stop_signal_rx,
-            app_err_tx.clone(),
-            app_err.clone(),
-        ),
-        types::apps::mqtt_client::Version::V50 => MqttClient::start_v50(
-            conf.v50.unwrap(),
-            sources.clone(),
-            stop_signal_rx,
-            app_err_tx.clone(),
-            app_err.clone(),
-        ),
-    };
+    let (halia_mqtt_client, join_handle) = MqttClient::start(
+        conf,
+        sources.clone(),
+        stop_signal_rx,
+        app_err_tx.clone(),
+        app_err.clone(),
+    );
 
     Box::new(MqttClient {
         _id: id,
@@ -98,42 +74,10 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     let conf: MqttClientConf = serde_json::from_value(conf.clone())?;
-    match conf.version {
-        types::apps::mqtt_client::Version::V311 => match &conf.v311 {
-            Some(conf) => {
-                if let Some(last_will) = &conf.last_will {
-                    match &last_will.message.typ {
-                        types::ValueType::String => {}
-                        types::ValueType::Bytes => {
-                            BASE64_STANDARD
-                                .decode(&last_will.message.value)
-                                .map_err(|e| {
-                                    HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e))
-                                })?;
-                        }
-                    }
-                }
-            }
-            None => {
-                return Err(HaliaError::Common(
-                    "配置错误,未填写mqtt v311的配置!".to_string(),
-                ))
-            }
-        },
-        types::apps::mqtt_client::Version::V50 => match &conf.v50 {
-            Some(conf) => {
-                if let Some(last_will) = &conf.last_will {
-                    BASE64_STANDARD.decode(&last_will.message).map_err(|e| {
-                        HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e))
-                    })?;
-                }
-            }
-            None => {
-                return Err(HaliaError::Common(
-                    "配置错误,未填写mqtt v5.0的配置!".to_string(),
-                ))
-            }
-        },
+    if let Some(last_will) = &conf.last_will {
+        BASE64_STANDARD
+            .decode(&last_will.message)
+            .map_err(|e| HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e)))?;
     }
 
     Ok(())
@@ -152,184 +96,8 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl MqttClient {
-    fn start_v311(
-        conf: MqttClientV311Conf,
-        sources: Arc<DashMap<String, Source>>,
-        mut stop_signal_rx: mpsc::Receiver<()>,
-        app_err_tx: broadcast::Sender<bool>,
-        device_err: Arc<RwLock<Option<String>>>,
-    ) -> (
-        HaliaMqttClient,
-        JoinHandle<(
-            mpsc::Receiver<()>,
-            broadcast::Sender<bool>,
-            Arc<DashMap<String, Source>>,
-        )>,
-    ) {
-        let mut mqtt_options = MqttOptions::new(&conf.client_id, &conf.host, conf.port);
-        mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
-        mqtt_options.set_clean_session(conf.clean_session);
-        match (&conf.auth.username, &conf.auth.password) {
-            (None, None) => {}
-            (None, Some(password)) => {
-                mqtt_options.set_credentials("", password);
-            }
-            (Some(username), None) => {
-                mqtt_options.set_credentials(username, "");
-            }
-            (Some(username), Some(password)) => {
-                mqtt_options.set_credentials(username, password);
-            }
-        };
-
-        if conf.ssl.enable {
-            let mut root_cert_store = rumqttc::tokio_rustls::rustls::RootCertStore::empty();
-            let certificate_result = rustls_native_certs::load_native_certs();
-            if certificate_result.errors.is_empty() {
-                root_cert_store.add_parsable_certificates(certificate_result.certs);
-            }
-            match conf.ssl.ca_cert {
-                Some(ca_cert) => {
-                    let ca_cert = ca_cert.into_bytes();
-                    let certs = rustls_pemfile::certs(&mut BufReader::new(Cursor::new(ca_cert)))
-                        .collect::<Result<Vec<_>, _>>()
-                        .unwrap();
-                    for cert in certs {
-                        root_cert_store.add(cert).unwrap();
-                    }
-                }
-                None => {}
-            }
-
-            let client_config = ClientConfig::builder().with_root_certificates(root_cert_store);
-            match (conf.ssl.client_cert, conf.ssl.client_key) {
-                (Some(client_cert), Some(client_key)) => {
-                    let client_cert = client_cert.into_bytes();
-                    let client_key = client_key.into_bytes();
-                    let client_certs =
-                        rustls_pemfile::certs(&mut BufReader::new(Cursor::new(client_cert)))
-                            .collect::<Result<Vec<_>, _>>()
-                            .unwrap();
-
-                    let mut key_buffer = BufReader::new(Cursor::new(client_key));
-                    let key = loop {
-                        let item = rustls_pemfile::read_one(&mut key_buffer).unwrap();
-                        match item {
-                            Some(Item::Sec1Key(key)) => {
-                                break key.into();
-                            }
-                            Some(Item::Pkcs1Key(key)) => {
-                                break key.into();
-                            }
-                            Some(Item::Pkcs8Key(key)) => {
-                                break key.into();
-                            }
-                            None => {
-                                panic!("no valid key in chain");
-                            }
-                            _ => {}
-                        }
-                    };
-                    let config = client_config
-                        .with_client_auth_cert(client_certs, key)
-                        .unwrap();
-
-                    let transport = rumqttc::Transport::Tls(rumqttc::TlsConfiguration::Rustls(
-                        Arc::new(config),
-                    ));
-                    mqtt_options.set_transport(transport);
-                }
-                _ => {}
-            }
-
-            if conf.ssl.verify {}
-        }
-
-        if let Some(last_will) = &conf.last_will {
-            let message = match last_will.message.typ {
-                types::ValueType::String => last_will.message.value.clone().into(),
-                types::ValueType::Bytes => {
-                    BASE64_STANDARD.decode(&last_will.message.value).unwrap()
-                }
-            };
-            mqtt_options.set_last_will(LastWill {
-                topic: last_will.topic.clone(),
-                message: message.into(),
-                qos: qos_to_v311(&last_will.qos),
-                retain: last_will.retain,
-            });
-        }
-
-        let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
-
-        let join_handle = tokio::spawn(async move {
-            let mut err = false;
-            loop {
-                select! {
-                    _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, app_err_tx, sources);
-                    }
-
-                    event = event_loop.poll() => {
-                        Self::handle_v311_event(event, &sources, &device_err, &mut err, &app_err_tx).await;
-                    }
-                }
-            }
-        });
-
-        (HaliaMqttClient::V311(Arc::new(client)), join_handle)
-    }
-
-    async fn handle_v311_event(
-        event: Result<Event, rumqttc::ConnectionError>,
-        sources: &Arc<DashMap<String, Source>>,
-        device_err: &Arc<RwLock<Option<String>>>,
-        err: &mut bool,
-        app_err_tx: &broadcast::Sender<bool>,
-    ) {
-        match event {
-            Ok(Event::Incoming(Incoming::Publish(p))) => {
-                debug!("topic:{}, payload:{:?}", p.topic, p.payload);
-                if *err {
-                    *err = false;
-                    _ = app_err_tx.send(false);
-                    *device_err.write().await = None;
-                }
-                match MessageBatch::from_json(p.payload) {
-                    Ok(msg) => {
-                        for source in sources.iter_mut() {
-                            if matches(&source.conf.topic, &p.topic) {
-                                if source.mb_tx.receiver_count() > 0 {
-                                    if let Err(e) = source.mb_tx.send(msg.clone()) {
-                                        warn!("{}", e);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => error!("Failed to decode msg:{}", e),
-                }
-            }
-            Ok(_) => {
-                debug!("v311 event ok null");
-                if *err {
-                    *err = false;
-                    _ = app_err_tx.send(false);
-                    *device_err.write().await = None;
-                }
-            }
-            Err(e) => {
-                if !*err {
-                    *err = true;
-                    _ = app_err_tx.send(true);
-                    *device_err.write().await = Some(e.to_string());
-                }
-            }
-        }
-    }
-
-    fn start_v50(
-        conf: MqttClientV50Conf,
+    fn start(
+        conf: MqttClientConf,
         sources: Arc<DashMap<String, Source>>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         app_err_tx: broadcast::Sender<bool>,
@@ -421,7 +189,7 @@ impl MqttClient {
                     }
 
                     event = event_loop.poll() => {
-                        Self::handle_v50_event(event, &sources).await;
+                        Self::handle_event(event, &sources).await;
                     }
                 }
             }
@@ -430,7 +198,7 @@ impl MqttClient {
         (HaliaMqttClient::V50(Arc::new(client)), join_handle)
     }
 
-    async fn handle_v50_event(
+    async fn handle_event(
         event: Result<v5::Event, rumqttc::v5::ConnectionError>,
         sources: &Arc<DashMap<String, Source>>,
     ) {
@@ -524,15 +292,7 @@ pub fn matches(topic: &str, filter: &str) -> bool {
     true
 }
 
-pub(crate) fn qos_to_v311(qos: &Qos) -> mqttbytes::QoS {
-    match qos {
-        Qos::AtMostOnce => QoS::AtMostOnce,
-        Qos::AtLeastOnce => QoS::AtLeastOnce,
-        Qos::ExactlyOnce => QoS::ExactlyOnce,
-    }
-}
-
-pub(crate) fn qos_to_v50(qos: &Qos) -> v5::mqttbytes::QoS {
+fn transfer_qos(qos: &Qos) -> v5::mqttbytes::QoS {
     match qos {
         Qos::AtMostOnce => v5::mqttbytes::QoS::AtMostOnce,
         Qos::AtLeastOnce => v5::mqttbytes::QoS::AtLeastOnce,
@@ -551,22 +311,13 @@ impl App for MqttClient {
 
         let (stop_signal_rx, app_err_tx, sources) = self.join_handle.take().unwrap().await.unwrap();
         let new_conf: MqttClientConf = serde_json::from_value(new_conf)?;
-        let (halia_mqtt_client, join_hanlde) = match new_conf.version {
-            types::apps::mqtt_client::Version::V311 => MqttClient::start_v311(
-                new_conf.v311.unwrap(),
-                sources,
-                stop_signal_rx,
-                app_err_tx,
-                self.err.clone(),
-            ),
-            types::apps::mqtt_client::Version::V50 => MqttClient::start_v50(
-                new_conf.v50.unwrap(),
-                sources,
-                stop_signal_rx,
-                app_err_tx,
-                self.err.clone(),
-            ),
-        };
+        let (halia_mqtt_client, join_hanlde) = MqttClient::start(
+            new_conf,
+            sources,
+            stop_signal_rx,
+            app_err_tx,
+            self.err.clone(),
+        );
         self.halia_mqtt_client = halia_mqtt_client;
         self.join_handle = Some(join_hanlde);
 
@@ -602,23 +353,12 @@ impl App for MqttClient {
         let conf: SourceConf = serde_json::from_value(conf)?;
 
         let source = Source::new(conf);
-        match &self.halia_mqtt_client {
-            HaliaMqttClient::V311(client_v311) => {
-                if let Err(e) = client_v311
-                    .subscribe(&source.conf.topic, qos_to_v311(&source.conf.qos))
-                    .await
-                {
-                    error!("client subscribe err:{e}");
-                }
-            }
-            HaliaMqttClient::V50(client_v50) => {
-                if let Err(e) = client_v50
-                    .subscribe(&source.conf.topic, qos_to_v50(&source.conf.qos))
-                    .await
-                {
-                    error!("client subscribe err:{e}");
-                }
-            }
+
+        if let Err(e) = client_v311
+            .subscribe(&source.conf.topic, transfer_qos(&source.conf.qos))
+            .await
+        {
+            error!("client subscribe err:{e}");
         }
         self.sources.insert(source_id, source);
 
@@ -639,29 +379,14 @@ impl App for MqttClient {
             .get_mut(&source_id)
             .ok_or(HaliaError::NotFound(source_id.to_owned()))?;
 
-        match &self.halia_mqtt_client {
-            HaliaMqttClient::V311(client_v311) => {
-                if let Err(e) = client_v311.unsubscribe(old_conf.topic).await {
-                    error!("unsubscribe err:{e}");
-                }
-                if let Err(e) = client_v311
-                    .subscribe(&new_conf.topic, qos_to_v311(&new_conf.qos))
-                    .await
-                {
-                    error!("subscribe err:{e}");
-                }
-            }
-            HaliaMqttClient::V50(client_v50) => {
-                if let Err(e) = client_v50.unsubscribe(old_conf.topic).await {
-                    error!("unsubscribe err:{e}");
-                }
-                if let Err(e) = client_v50
-                    .subscribe(&new_conf.topic, qos_to_v50(&new_conf.qos))
-                    .await
-                {
-                    error!("subscribe err:{e}");
-                }
-            }
+        if let Err(e) = client_v311.unsubscribe(old_conf.topic).await {
+            error!("unsubscribe err:{e}");
+        }
+        if let Err(e) = client_v311
+            .subscribe(&new_conf.topic, transfer_qos(&new_conf.qos))
+            .await
+        {
+            error!("subscribe err:{e}");
         }
 
         source.conf = new_conf;
@@ -675,17 +400,8 @@ impl App for MqttClient {
             .remove(&source_id)
             .ok_or(HaliaError::NotFound(source_id))?;
 
-        match &self.halia_mqtt_client {
-            HaliaMqttClient::V311(client_v311) => {
-                if let Err(e) = client_v311.unsubscribe(source.conf.topic).await {
-                    error!("unsubscribe err:{e}");
-                }
-            }
-            HaliaMqttClient::V50(client_v50) => {
-                if let Err(e) = client_v50.unsubscribe(source.conf.topic).await {
-                    error!("unsubscribe err:{e}");
-                }
-            }
+        if let Err(e) = client_v50.unsubscribe(source.conf.topic).await {
+            error!("unsubscribe err:{e}");
         }
 
         Ok(())

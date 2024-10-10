@@ -6,14 +6,12 @@ use serde::{Deserialize, Serialize};
 use crate::{BaseConf, SearchSourcesOrSinksInfoResp};
 
 pub mod http_client;
-pub mod influxdb;
 pub mod influxdb_v1;
 pub mod influxdb_v2;
 pub mod kafka;
-pub mod mqtt_client;
-pub mod tdengine;
 pub mod mqtt_client_v311;
-pub mod mqtt_client_v50; 
+pub mod mqtt_client_v50;
+pub mod tdengine;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateAppReq {

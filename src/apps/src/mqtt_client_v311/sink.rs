@@ -1,25 +1,26 @@
+use std::sync::Arc;
+
 use common::{
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
 use message::MessageBatch;
-use rumqttc::v5::mqttbytes::{self, v5::PublishProperties};
+use rumqttc::{
+    v5::mqttbytes::{self, v5::PublishProperties},
+    AsyncClient,
+};
 use tokio::{
     select,
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
 use tracing::warn;
-use types::apps::mqtt_client::SinkConf;
-
-use super::{qos_to_v311, qos_to_v50, HaliaMqttClient};
+use types::apps::mqtt_client_v311::SinkConf;
 
 pub struct Sink {
     conf: SinkConf,
 
     stop_signal_tx: mpsc::Sender<()>,
-
-    pub publish_properties: Option<PublishProperties>,
 
     pub mb_tx: mpsc::Sender<MessageBatch>,
 
@@ -27,7 +28,7 @@ pub struct Sink {
         JoinHandle<(
             mpsc::Receiver<()>,
             mpsc::Receiver<MessageBatch>,
-            HaliaMqttClient,
+            Arc<AsyncClient>,
             broadcast::Receiver<bool>,
             Box<dyn SinkMessageRetain>,
         )>,
@@ -37,10 +38,9 @@ pub struct Sink {
 impl Sink {
     pub async fn new(
         conf: SinkConf,
-        halia_mqtt_client: HaliaMqttClient,
+        mqtt_client: Arc<AsyncClient>,
         app_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
-        let publish_properties = get_publish_properties(&conf);
         let (mb_tx, mb_rx) = mpsc::channel(16);
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
 
@@ -51,7 +51,6 @@ impl Sink {
             mb_tx,
             stop_signal_tx,
             join_handle: None,
-            publish_properties,
         };
         sink.event_loop(
             halia_mqtt_client,
@@ -65,7 +64,7 @@ impl Sink {
 
     fn event_loop(
         &mut self,
-        halia_mqtt_client: HaliaMqttClient,
+        mqtt_client: HaliaMqttClient,
         mut app_err_rx: broadcast::Receiver<bool>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         mut mb_rx: mpsc::Receiver<MessageBatch>,
@@ -190,54 +189,5 @@ impl Sink {
             mb_rx,
             message_retainer,
         );
-    }
-}
-
-fn get_publish_properties(conf: &SinkConf) -> Option<PublishProperties> {
-    let mut some = false;
-    let mut pp = PublishProperties {
-        payload_format_indicator: None,
-        message_expiry_interval: None,
-        topic_alias: None,
-        response_topic: None,
-        correlation_data: None,
-        user_properties: vec![],
-        subscription_identifiers: vec![],
-        content_type: None,
-    };
-
-    if let Some(pfi) = conf.payload_format_indicator {
-        some = true;
-        pp.payload_format_indicator = Some(pfi);
-    }
-    if let Some(mpi) = conf.message_expiry_interval {
-        some = true;
-        pp.message_expiry_interval = Some(mpi);
-    }
-    if let Some(ta) = conf.topic_alias {
-        some = true;
-        pp.topic_alias = Some(ta);
-    }
-    if let Some(cd) = &conf.correlation_data {
-        some = true;
-        todo!()
-    }
-    if let Some(up) = &conf.user_properties {
-        some = true;
-        pp.user_properties = up.clone();
-    }
-    if let Some(si) = &conf.subscription_identifiers {
-        some = true;
-        pp.subscription_identifiers = si.clone();
-    }
-    if let Some(ct) = &conf.content_type {
-        some = true;
-        pp.content_type = Some(ct.clone());
-    }
-
-    if some {
-        Some(pp)
-    } else {
-        None
     }
 }

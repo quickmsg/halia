@@ -21,11 +21,9 @@ use types::{
 };
 
 mod http_client;
-mod influxdb;
 mod influxdb_v1;
 mod influxdb_v2;
 mod kafka;
-mod mqtt_client;
 mod mqtt_client_v311;
 mod mqtt_client_v50;
 mod tdengine;
