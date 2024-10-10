@@ -17,6 +17,7 @@ use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
+use tracing::warn;
 use types::apps::influxdb_v2::{Conf, SinkConf};
 
 pub struct Sink {
@@ -24,7 +25,6 @@ pub struct Sink {
     join_handle: Option<JoinHandle<JoinHandleData>>,
     pub mb_tx: mpsc::Sender<MessageBatch>,
 }
-
 pub struct JoinHandleData {
     pub conf: SinkConf,
     pub influxdb_conf: Arc<Conf>,
@@ -63,6 +63,13 @@ impl Sink {
         let influxdb_client =
             new_influxdb_client(&join_handle_data.influxdb_conf, &join_handle_data.conf);
 
+        let timestamp_precision = match &join_handle_data.conf.precision {
+            types::apps::influxdb_v2::Precision::Seconds => TimestampPrecision::Seconds,
+            types::apps::influxdb_v2::Precision::Milliseconds => TimestampPrecision::Milliseconds,
+            types::apps::influxdb_v2::Precision::Microseconds => TimestampPrecision::Microseconds,
+            types::apps::influxdb_v2::Precision::Nanoseconds => TimestampPrecision::Nanoseconds,
+        };
+
         tokio::spawn(async move {
             let app_err = false;
             loop {
@@ -73,7 +80,7 @@ impl Sink {
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
                         if !app_err {
-                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, mb).await;
+                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, timestamp_precision.clone(),  mb).await;
                         } else {
                             join_handle_data.message_retainer.push(mb);
                         }
@@ -83,7 +90,12 @@ impl Sink {
         })
     }
 
-    async fn send_msg_to_influxdb(influxdb_client: &Client, conf: &SinkConf, mb: MessageBatch) {
+    async fn send_msg_to_influxdb(
+        influxdb_client: &Client,
+        conf: &SinkConf,
+        timestamp_precision: TimestampPrecision,
+        mb: MessageBatch,
+    ) {
         let mut points = vec![];
         for msg in mb.get_messages() {
             let mut point = DataPoint::builder(&conf.mesaurement);
@@ -116,17 +128,12 @@ impl Sink {
             points.push(point.build().unwrap());
         }
 
-        let timestamp_precision = match &conf.precision {
-            types::apps::influxdb_v2::Precision::Seconds => TimestampPrecision::Seconds,
-            types::apps::influxdb_v2::Precision::Milliseconds => TimestampPrecision::Milliseconds,
-            types::apps::influxdb_v2::Precision::Microseconds => TimestampPrecision::Microseconds,
-            types::apps::influxdb_v2::Precision::Nanoseconds => TimestampPrecision::Nanoseconds,
-        };
-
-        influxdb_client
+        if let Err(e) = influxdb_client
             .write_with_precision(&conf.bucket, stream::iter(points), timestamp_precision)
             .await
-            .unwrap();
+        {
+            warn!("Failed to write to influxdb: {}", e);
+        }
     }
 
     pub async fn stop(&mut self) -> JoinHandleData {
@@ -148,10 +155,9 @@ impl Sink {
 }
 
 fn new_influxdb_client(influxdb_conf: &Arc<Conf>, sink_conf: &SinkConf) -> Client {
-    let client = Client::new(
+    Client::new(
         format!("{}:{}", &influxdb_conf.host, influxdb_conf.port),
         &sink_conf.org,
         &sink_conf.api_token,
-    );
-    client
+    )
 }

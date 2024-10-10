@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::StringOrBytesValue;
+use crate::{MessageRetain, StringOrBytesValue};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
-pub struct KafkaConf {
+pub struct Conf {
     pub bootstrap_brokers: Vec<String>,
 
     // pub ssl: bool,
@@ -24,6 +24,7 @@ pub struct SinkConf {
     // ms
     pub ack_timeout: u64,
     pub required_acks: RequiredAcks,
+    pub message_retain: MessageRetain,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

@@ -4,10 +4,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
-use rskafka::client::{
-    partition::{Compression, UnknownTopicHandling},
-    Client, ClientBuilder,
-};
+use rskafka::client::{Client, ClientBuilder};
 use sink::Sink;
 use tokio::{
     select,
@@ -15,7 +12,7 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::apps::kafka::{KafkaConf, SinkConf};
+use types::apps::kafka::{Conf, SinkConf};
 
 use crate::App;
 
@@ -42,7 +39,7 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let conf: KafkaConf = serde_json::from_value(conf).unwrap();
+    let conf: Conf = serde_json::from_value(conf).unwrap();
     let kafka_client = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
@@ -70,7 +67,7 @@ impl Kafka {
     fn connect_loop(
         id: String,
         kafka_client: Arc<RwLock<Option<Client>>>,
-        conf: &KafkaConf,
+        conf: &Conf,
         mut stop_signal_rx: watch::Receiver<()>,
         connect_signal_tx: watch::Sender<()>,
     ) {
@@ -109,7 +106,7 @@ impl Kafka {
 
     fn event_loop(
         id: String,
-        conf: KafkaConf,
+        conf: Conf,
         kafka_client: Arc<RwLock<Option<Client>>>,
         mut stop_signal_rx: watch::Receiver<()>,
         mut kafka_err_rx: mpsc::Receiver<String>,
@@ -222,24 +219,5 @@ impl App for Kafka {
             Some(sink) => Ok(sink.mb_tx.clone()),
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
-    }
-}
-
-fn transfer_unknown_topic_handling(
-    unknown_topic_handling: &types::apps::kafka::UnknownTopicHandling,
-) -> UnknownTopicHandling {
-    match unknown_topic_handling {
-        types::apps::kafka::UnknownTopicHandling::Error => UnknownTopicHandling::Error,
-        types::apps::kafka::UnknownTopicHandling::Retry => UnknownTopicHandling::Retry,
-    }
-}
-
-fn transfer_compression(compression: &types::apps::kafka::Compression) -> Compression {
-    match compression {
-        types::apps::kafka::Compression::None => Compression::NoCompression,
-        types::apps::kafka::Compression::Gzip => Compression::Gzip,
-        types::apps::kafka::Compression::Lz4 => Compression::Lz4,
-        types::apps::kafka::Compression::Snappy => Compression::Snappy,
-        types::apps::kafka::Compression::Zstd => Compression::Zstd,
     }
 }

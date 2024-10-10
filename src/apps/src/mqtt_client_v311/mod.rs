@@ -18,7 +18,7 @@ use sink::Sink;
 use source::Source;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, RwLock},
+    sync::{broadcast, mpsc, watch, RwLock},
     task::JoinHandle,
 };
 use tracing::{debug, error, warn};
@@ -33,7 +33,7 @@ pub struct MqttClient {
     _id: String,
 
     err: Arc<RwLock<Option<String>>>,
-    stop_signal_tx: mpsc::Sender<()>,
+    stop_signal_tx: watch::Sender<()>,
     app_err_tx: broadcast::Sender<bool>,
 
     mqtt_client: Arc<AsyncClient>,
@@ -45,7 +45,7 @@ pub struct MqttClient {
 
 struct JoinHandleData {
     conf: MqttClientConf,
-    stop_signal_rx: mpsc::Receiver<()>,
+    stop_signal_rx: watch::Receiver<()>,
     app_err_tx: broadcast::Sender<bool>,
     sources: Arc<DashMap<String, Source>>,
     app_err: Arc<RwLock<Option<String>>>,
@@ -53,10 +53,8 @@ struct JoinHandleData {
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: MqttClientConf = serde_json::from_value(conf).unwrap();
-
     let (app_err_tx, _) = broadcast::channel(16);
-
-    let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
     let sources = Arc::new(DashMap::new());
     let app_err = Arc::new(RwLock::new(None));
@@ -84,6 +82,15 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     let conf: MqttClientConf = serde_json::from_value(conf.clone())?;
+
+    match conf.auth_method {
+        types::apps::mqtt_client_v311::MqttClientAuthMethod::None => {}
+        types::apps::mqtt_client_v311::MqttClientAuthMethod::Password => {
+            if conf.auth_password.is_none() {
+                return Err(HaliaError::Common("auth_password is required".to_owned()));
+            }
+        }
+    }
 
     if let Some(last_will) = &conf.last_will {
         match &last_will.message.typ {
@@ -227,7 +234,7 @@ impl MqttClient {
             let mut err = false;
             loop {
                 select! {
-                    _ = join_handle_data.stop_signal_rx.recv() => {
+                    _ = join_handle_data.stop_signal_rx.changed() => {
                         return join_handle_data;
                     }
 
@@ -340,7 +347,7 @@ impl App for MqttClient {
         _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        self.stop_signal_tx.send(()).await.unwrap();
+        self.stop_signal_tx.send(()).unwrap();
 
         let new_conf: MqttClientConf = serde_json::from_value(new_conf)?;
         let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
@@ -361,10 +368,10 @@ impl App for MqttClient {
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
+        self.stop_signal_tx.send(()).unwrap();
         if let Err(e) = self.mqtt_client.disconnect().await {
             warn!("client disconnect err:{e}");
         }
-        self.stop_signal_tx.send(()).await.unwrap();
     }
 
     async fn create_source(
