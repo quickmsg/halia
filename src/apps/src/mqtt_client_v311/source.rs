@@ -2,7 +2,7 @@ use common::error::{HaliaError, HaliaResult};
 use message::MessageBatch;
 use rumqttc::valid_filter;
 use tokio::sync::broadcast;
-use types::apps::mqtt_client::SourceConf;
+use types::apps::mqtt_client_v311::SourceConf;
 
 pub struct Source {
     pub conf: SourceConf,

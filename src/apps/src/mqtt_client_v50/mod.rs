@@ -5,10 +5,7 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
-use rumqttc::{
-    v5::{self, mqttbytes::v5::ConnectProperties},
-    AsyncClient,
-};
+use rumqttc::v5::{self, mqttbytes::v5::ConnectProperties, AsyncClient};
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -33,7 +30,7 @@ pub struct MqttClient {
 
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
-    halia_mqtt_client: HaliaMqttClient,
+    mqtt_client: Arc<AsyncClient>,
     join_handle: Option<
         JoinHandle<(
             mpsc::Receiver<()>,
@@ -41,6 +38,14 @@ pub struct MqttClient {
             Arc<DashMap<String, Source>>,
         )>,
     >,
+}
+
+struct JoinHandleData {
+    conf: MqttClientConf,
+    stop_signal_rx: mpsc::Receiver<()>,
+    app_err_tx: broadcast::Sender<bool>,
+    sources: Arc<DashMap<String, Source>>,
+    app_err: Arc<RwLock<Option<String>>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -52,7 +57,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     let sources = Arc::new(DashMap::new());
     let app_err = Arc::new(RwLock::new(None));
-    let (halia_mqtt_client, join_handle) = MqttClient::start(
+    let (join_handle, mqtt_client) = MqttClient::event_loop(
         conf,
         sources.clone(),
         stop_signal_rx,
@@ -65,7 +70,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         err: app_err,
         sources,
         sinks: DashMap::new(),
-        halia_mqtt_client,
+        mqtt_client,
         stop_signal_tx,
         app_err_tx,
         join_handle: Some(join_handle),
@@ -96,19 +101,19 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl MqttClient {
-    fn start(
+    fn event_loop(
         conf: MqttClientConf,
         sources: Arc<DashMap<String, Source>>,
         mut stop_signal_rx: mpsc::Receiver<()>,
         app_err_tx: broadcast::Sender<bool>,
         _device_err: Arc<RwLock<Option<String>>>,
     ) -> (
-        HaliaMqttClient,
         JoinHandle<(
             mpsc::Receiver<()>,
             broadcast::Sender<bool>,
             Arc<DashMap<String, Source>>,
         )>,
+        Arc<AsyncClient>,
     ) {
         let mut mqtt_options = v5::MqttOptions::new(&conf.client_id, &conf.host, conf.port);
         mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
@@ -195,7 +200,7 @@ impl MqttClient {
             }
         });
 
-        (HaliaMqttClient::V50(Arc::new(client)), join_handle)
+        (join_handle, Arc::new(client))
     }
 
     async fn handle_event(
@@ -311,18 +316,18 @@ impl App for MqttClient {
 
         let (stop_signal_rx, app_err_tx, sources) = self.join_handle.take().unwrap().await.unwrap();
         let new_conf: MqttClientConf = serde_json::from_value(new_conf)?;
-        let (halia_mqtt_client, join_hanlde) = MqttClient::start(
+        let (join_hanlde, mqtt_client) = MqttClient::event_loop(
             new_conf,
             sources,
             stop_signal_rx,
             app_err_tx,
             self.err.clone(),
         );
-        self.halia_mqtt_client = halia_mqtt_client;
+        self.mqtt_client = mqtt_client;
         self.join_handle = Some(join_hanlde);
 
         for mut sink in self.sinks.iter_mut() {
-            sink.restart(self.halia_mqtt_client.clone()).await;
+            sink.update_mqtt_client(self.mqtt_client.clone()).await;
         }
 
         Ok(())
@@ -332,16 +337,8 @@ impl App for MqttClient {
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
-        match &self.halia_mqtt_client {
-            HaliaMqttClient::V311(client_v311) => {
-                if let Err(e) = client_v311.disconnect().await {
-                    warn!("client disconnect err:{e}");
-                }
-            }
-            HaliaMqttClient::V50(client_v50) => {
-                let _ = client_v50.disconnect().await;
-            }
-        }
+
+        let _ = self.mqtt_client.disconnect().await;
         self.stop_signal_tx.send(()).await.unwrap();
     }
 
@@ -354,7 +351,8 @@ impl App for MqttClient {
 
         let source = Source::new(conf);
 
-        if let Err(e) = client_v311
+        if let Err(e) = self
+            .mqtt_client
             .subscribe(&source.conf.topic, transfer_qos(&source.conf.qos))
             .await
         {
@@ -379,10 +377,11 @@ impl App for MqttClient {
             .get_mut(&source_id)
             .ok_or(HaliaError::NotFound(source_id.to_owned()))?;
 
-        if let Err(e) = client_v311.unsubscribe(old_conf.topic).await {
+        if let Err(e) = self.mqtt_client.unsubscribe(old_conf.topic).await {
             error!("unsubscribe err:{e}");
         }
-        if let Err(e) = client_v311
+        if let Err(e) = self
+            .mqtt_client
             .subscribe(&new_conf.topic, transfer_qos(&new_conf.qos))
             .await
         {
@@ -400,7 +399,7 @@ impl App for MqttClient {
             .remove(&source_id)
             .ok_or(HaliaError::NotFound(source_id))?;
 
-        if let Err(e) = client_v50.unsubscribe(source.conf.topic).await {
+        if let Err(e) = self.mqtt_client.unsubscribe(source.conf.topic).await {
             error!("unsubscribe err:{e}");
         }
 
@@ -413,12 +412,7 @@ impl App for MqttClient {
         // sink.check_duplicate(&req.base, &ext_conf)?;
         // }
 
-        let sink = Sink::new(
-            conf,
-            self.halia_mqtt_client.clone(),
-            self.app_err_tx.subscribe(),
-        )
-        .await;
+        let sink = Sink::new(conf, self.mqtt_client.clone(), self.app_err_tx.subscribe()).await;
         self.sinks.insert(sink_id, sink);
         Ok(())
     }

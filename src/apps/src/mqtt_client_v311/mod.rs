@@ -36,16 +36,19 @@ pub struct MqttClient {
     stop_signal_tx: mpsc::Sender<()>,
     app_err_tx: broadcast::Sender<bool>,
 
+    mqtt_client: Arc<AsyncClient>,
+
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
 }
 
 struct JoinHandleData {
-    mqtt_client: Arc<AsyncClient>,
+    conf: MqttClientConf,
     stop_signal_rx: mpsc::Receiver<()>,
     app_err_tx: broadcast::Sender<bool>,
     sources: Arc<DashMap<String, Source>>,
+    app_err: Arc<RwLock<Option<String>>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -57,13 +60,15 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     let sources = Arc::new(DashMap::new());
     let app_err = Arc::new(RwLock::new(None));
-    let join_handle = MqttClient::start(
+
+    let join_handle_data = JoinHandleData {
         conf,
-        sources.clone(),
         stop_signal_rx,
-        app_err_tx.clone(),
-        app_err.clone(),
-    );
+        app_err_tx: app_err_tx.clone(),
+        sources: sources.clone(),
+        app_err: app_err.clone(),
+    };
+    let (join_handle, mqtt_client) = MqttClient::event_loop(join_handle_data);
 
     Box::new(MqttClient {
         _id: id,
@@ -73,6 +78,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         stop_signal_tx,
         app_err_tx,
         join_handle: Some(join_handle),
+        mqtt_client,
     })
 }
 
@@ -106,23 +112,20 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl MqttClient {
-    fn start(
-        conf: MqttClientConf,
-        sources: Arc<DashMap<String, Source>>,
-        mut stop_signal_rx: mpsc::Receiver<()>,
-        app_err_tx: broadcast::Sender<bool>,
-        device_err: Arc<RwLock<Option<String>>>,
-    ) -> (
-        JoinHandle<(
-            mpsc::Receiver<()>,
-            broadcast::Sender<bool>,
-            Arc<DashMap<String, Source>>,
-        )>,
-    ) {
-        let mut mqtt_options = MqttOptions::new(&conf.client_id, &conf.host, conf.port);
-        mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
-        mqtt_options.set_clean_session(conf.clean_session);
-        match (&conf.auth.username, &conf.auth.password) {
+    fn event_loop(
+        mut join_handle_data: JoinHandleData,
+    ) -> (JoinHandle<JoinHandleData>, Arc<AsyncClient>) {
+        let mut mqtt_options = MqttOptions::new(
+            &join_handle_data.conf.client_id,
+            &join_handle_data.conf.host,
+            join_handle_data.conf.port,
+        );
+        mqtt_options.set_keep_alive(Duration::from_secs(join_handle_data.conf.keep_alive));
+        mqtt_options.set_clean_session(join_handle_data.conf.clean_session);
+        match (
+            &join_handle_data.conf.auth.username,
+            &join_handle_data.conf.auth.password,
+        ) {
             (None, None) => {}
             (None, Some(password)) => {
                 mqtt_options.set_credentials("", password);
@@ -135,70 +138,70 @@ impl MqttClient {
             }
         };
 
-        if conf.ssl.enable {
-            let mut root_cert_store = rumqttc::tokio_rustls::rustls::RootCertStore::empty();
-            let certificate_result = rustls_native_certs::load_native_certs();
-            if certificate_result.errors.is_empty() {
-                root_cert_store.add_parsable_certificates(certificate_result.certs);
-            }
-            match conf.ssl.ca_cert {
-                Some(ca_cert) => {
-                    let ca_cert = ca_cert.into_bytes();
-                    let certs = rustls_pemfile::certs(&mut BufReader::new(Cursor::new(ca_cert)))
-                        .collect::<Result<Vec<_>, _>>()
-                        .unwrap();
-                    for cert in certs {
-                        root_cert_store.add(cert).unwrap();
-                    }
-                }
-                None => {}
-            }
+        // if join_handle_data.conf.ssl.enable {
+        //     let mut root_cert_store = rumqttc::tokio_rustls::rustls::RootCertStore::empty();
+        //     let certificate_result = rustls_native_certs::load_native_certs();
+        //     if certificate_result.errors.is_empty() {
+        //         root_cert_store.add_parsable_certificates(certificate_result.certs);
+        //     }
+        //     match conf.ssl.ca_cert {
+        //         Some(ca_cert) => {
+        //             let ca_cert = ca_cert.into_bytes();
+        //             let certs = rustls_pemfile::certs(&mut BufReader::new(Cursor::new(ca_cert)))
+        //                 .collect::<Result<Vec<_>, _>>()
+        //                 .unwrap();
+        //             for cert in certs {
+        //                 root_cert_store.add(cert).unwrap();
+        //             }
+        //         }
+        //         None => {}
+        //     }
 
-            let client_config = ClientConfig::builder().with_root_certificates(root_cert_store);
-            match (conf.ssl.client_cert, conf.ssl.client_key) {
-                (Some(client_cert), Some(client_key)) => {
-                    let client_cert = client_cert.into_bytes();
-                    let client_key = client_key.into_bytes();
-                    let client_certs =
-                        rustls_pemfile::certs(&mut BufReader::new(Cursor::new(client_cert)))
-                            .collect::<Result<Vec<_>, _>>()
-                            .unwrap();
+        //     let client_config = ClientConfig::builder().with_root_certificates(root_cert_store);
+        //     match (conf.ssl.client_cert, conf.ssl.client_key) {
+        //         (Some(client_cert), Some(client_key)) => {
+        //             let client_cert = client_cert.into_bytes();
+        //             let client_key = client_key.into_bytes();
+        //             let client_certs =
+        //                 rustls_pemfile::certs(&mut BufReader::new(Cursor::new(client_cert)))
+        //                     .collect::<Result<Vec<_>, _>>()
+        //                     .unwrap();
 
-                    let mut key_buffer = BufReader::new(Cursor::new(client_key));
-                    let key = loop {
-                        let item = rustls_pemfile::read_one(&mut key_buffer).unwrap();
-                        match item {
-                            Some(Item::Sec1Key(key)) => {
-                                break key.into();
-                            }
-                            Some(Item::Pkcs1Key(key)) => {
-                                break key.into();
-                            }
-                            Some(Item::Pkcs8Key(key)) => {
-                                break key.into();
-                            }
-                            None => {
-                                panic!("no valid key in chain");
-                            }
-                            _ => {}
-                        }
-                    };
-                    let config = client_config
-                        .with_client_auth_cert(client_certs, key)
-                        .unwrap();
+        //             let mut key_buffer = BufReader::new(Cursor::new(client_key));
+        //             let key = loop {
+        //                 let item = rustls_pemfile::read_one(&mut key_buffer).unwrap();
+        //                 match item {
+        //                     Some(Item::Sec1Key(key)) => {
+        //                         break key.into();
+        //                     }
+        //                     Some(Item::Pkcs1Key(key)) => {
+        //                         break key.into();
+        //                     }
+        //                     Some(Item::Pkcs8Key(key)) => {
+        //                         break key.into();
+        //                     }
+        //                     None => {
+        //                         panic!("no valid key in chain");
+        //                     }
+        //                     _ => {}
+        //                 }
+        //             };
+        //             let config = client_config
+        //                 .with_client_auth_cert(client_certs, key)
+        //                 .unwrap();
 
-                    let transport = rumqttc::Transport::Tls(rumqttc::TlsConfiguration::Rustls(
-                        Arc::new(config),
-                    ));
-                    mqtt_options.set_transport(transport);
-                }
-                _ => {}
-            }
+        //             let transport = rumqttc::Transport::Tls(rumqttc::TlsConfiguration::Rustls(
+        //                 Arc::new(config),
+        //             ));
+        //             mqtt_options.set_transport(transport);
+        //         }
+        //         _ => {}
+        //     }
 
-            if conf.ssl.verify {}
-        }
+        //     if conf.ssl.verify {}
+        // }
 
-        if let Some(last_will) = &conf.last_will {
+        if let Some(last_will) = &join_handle_data.conf.last_will {
             let message = match last_will.message.typ {
                 types::ValueType::String => last_will.message.value.clone().into(),
                 types::ValueType::Bytes => {
@@ -208,7 +211,7 @@ impl MqttClient {
             mqtt_options.set_last_will(LastWill {
                 topic: last_will.topic.clone(),
                 message: message.into(),
-                qos: qos_to_v311(&last_will.qos),
+                qos: transfer_qos(&last_will.qos),
                 retain: last_will.retain,
             });
         }
@@ -219,18 +222,18 @@ impl MqttClient {
             let mut err = false;
             loop {
                 select! {
-                    _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, app_err_tx, sources);
+                    _ = join_handle_data.stop_signal_rx.recv() => {
+                        return join_handle_data;
                     }
 
                     event = event_loop.poll() => {
-                        Self::handle_event(event, &sources, &device_err, &mut err, &app_err_tx).await;
+                        Self::handle_event(event, &join_handle_data.sources, &join_handle_data.app_err, &mut err, &join_handle_data.app_err_tx).await;
                     }
                 }
             }
         });
 
-        (HaliaMqttClient::V311(Arc::new(client)), join_handle)
+        (join_handle, Arc::new(client))
     }
 
     async fn handle_event(
@@ -334,20 +337,16 @@ impl App for MqttClient {
     ) -> HaliaResult<()> {
         self.stop_signal_tx.send(()).await.unwrap();
 
-        let join_handle_data = self.join_handle.take().unwrap().await.unwrap();
         let new_conf: MqttClientConf = serde_json::from_value(new_conf)?;
-        let (halia_mqtt_client, join_hanlde) = Self::start(
-            new_conf.unwrap(),
-            sources,
-            stop_signal_rx,
-            app_err_tx,
-            self.err.clone(),
-        );
-        self.halia_mqtt_client = halia_mqtt_client;
+        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
+        join_handle_data.conf = new_conf;
+
+        let (join_hanlde, mqtt_client) = Self::event_loop(join_handle_data);
+        self.mqtt_client = mqtt_client;
         self.join_handle = Some(join_hanlde);
 
         for mut sink in self.sinks.iter_mut() {
-            sink.restart(self.halia_mqtt_client.clone()).await;
+            sink.update_mqtt_client(self.mqtt_client.clone()).await;
         }
 
         Ok(())
@@ -357,15 +356,8 @@ impl App for MqttClient {
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
-        match &self.halia_mqtt_client {
-            HaliaMqttClient::V311(client_v311) => {
-                if let Err(e) = client_v311.disconnect().await {
-                    warn!("client disconnect err:{e}");
-                }
-            }
-            HaliaMqttClient::V50(client_v50) => {
-                let _ = client_v50.disconnect().await;
-            }
+        if let Err(e) = self.mqtt_client.disconnect().await {
+            warn!("client disconnect err:{e}");
         }
         self.stop_signal_tx.send(()).await.unwrap();
     }
@@ -376,25 +368,13 @@ impl App for MqttClient {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
-
         let source = Source::new(conf);
-        match &self.halia_mqtt_client {
-            HaliaMqttClient::V311(client_v311) => {
-                if let Err(e) = client_v311
-                    .subscribe(&source.conf.topic, qos_to_v311(&source.conf.qos))
-                    .await
-                {
-                    error!("client subscribe err:{e}");
-                }
-            }
-            HaliaMqttClient::V50(client_v50) => {
-                if let Err(e) = client_v50
-                    .subscribe(&source.conf.topic, qos_to_v50(&source.conf.qos))
-                    .await
-                {
-                    error!("client subscribe err:{e}");
-                }
-            }
+        if let Err(e) = self
+            .mqtt_client
+            .subscribe(&source.conf.topic, transfer_qos(&source.conf.qos))
+            .await
+        {
+            error!("client subscribe err:{e}");
         }
         self.sources.insert(source_id, source);
 
@@ -415,29 +395,15 @@ impl App for MqttClient {
             .get_mut(&source_id)
             .ok_or(HaliaError::NotFound(source_id.to_owned()))?;
 
-        match &self.halia_mqtt_client {
-            HaliaMqttClient::V311(client_v311) => {
-                if let Err(e) = client_v311.unsubscribe(old_conf.topic).await {
-                    error!("unsubscribe err:{e}");
-                }
-                if let Err(e) = client_v311
-                    .subscribe(&new_conf.topic, qos_to_v311(&new_conf.qos))
-                    .await
-                {
-                    error!("subscribe err:{e}");
-                }
-            }
-            HaliaMqttClient::V50(client_v50) => {
-                if let Err(e) = client_v50.unsubscribe(old_conf.topic).await {
-                    error!("unsubscribe err:{e}");
-                }
-                if let Err(e) = client_v50
-                    .subscribe(&new_conf.topic, qos_to_v50(&new_conf.qos))
-                    .await
-                {
-                    error!("subscribe err:{e}");
-                }
-            }
+        if let Err(e) = self.mqtt_client.unsubscribe(old_conf.topic).await {
+            error!("unsubscribe err:{e}");
+        }
+        if let Err(e) = self
+            .mqtt_client
+            .subscribe(&new_conf.topic, transfer_qos(&new_conf.qos))
+            .await
+        {
+            error!("subscribe err:{e}");
         }
 
         source.conf = new_conf;
@@ -451,7 +417,7 @@ impl App for MqttClient {
             .remove(&source_id)
             .ok_or(HaliaError::NotFound(source_id))?;
 
-        if let Err(e) = client_v311.unsubscribe(source.conf.topic).await {
+        if let Err(e) = self.mqtt_client.unsubscribe(source.conf.topic).await {
             error!("unsubscribe err:{e}");
         }
 
@@ -464,12 +430,7 @@ impl App for MqttClient {
         // sink.check_duplicate(&req.base, &ext_conf)?;
         // }
 
-        let sink = Sink::new(
-            conf,
-            self.halia_mqtt_client.clone(),
-            self.app_err_tx.subscribe(),
-        )
-        .await;
+        let sink = Sink::new(conf, self.mqtt_client.clone(), self.app_err_tx.subscribe()).await;
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
@@ -484,7 +445,7 @@ impl App for MqttClient {
         let new_conf: SinkConf = serde_json::from_value(new_conf)?;
 
         match self.sinks.get_mut(&sink_id) {
-            Some(mut sink) => sink.update(old_conf, new_conf).await,
+            Some(mut sink) => sink.update_conf(old_conf, new_conf).await,
             None => Err(HaliaError::NotFound(sink_id)),
         }
     }

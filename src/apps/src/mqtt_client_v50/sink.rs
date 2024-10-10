@@ -1,9 +1,14 @@
+use std::sync::Arc;
+
 use common::{
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
 use message::MessageBatch;
-use rumqttc::v5::mqttbytes::{self, v5::PublishProperties};
+use rumqttc::v5::{
+    mqttbytes::{self, v5::PublishProperties},
+    AsyncClient,
+};
 use tokio::{
     select,
     sync::{broadcast, mpsc},
@@ -12,29 +17,30 @@ use tokio::{
 use tracing::warn;
 use types::apps::mqtt_client_v50::SinkConf;
 
-pub struct Sink {
-    conf: SinkConf,
+use super::transfer_qos;
 
+pub struct Sink {
     stop_signal_tx: mpsc::Sender<()>,
 
     pub publish_properties: Option<PublishProperties>,
 
+    join_handle: Option<JoinHandle<JoinHandleData>>,
     pub mb_tx: mpsc::Sender<MessageBatch>,
+}
 
-    join_handle: Option<
-        JoinHandle<(
-            mpsc::Receiver<()>,
-            mpsc::Receiver<MessageBatch>,
-            broadcast::Receiver<bool>,
-            Box<dyn SinkMessageRetain>,
-        )>,
-    >,
+pub struct JoinHandleData {
+    mqtt_client: Arc<AsyncClient>,
+    pub conf: SinkConf,
+    pub message_retainer: Box<dyn SinkMessageRetain>,
+    pub stop_signal_rx: mpsc::Receiver<()>,
+    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub app_err_rx: broadcast::Receiver<bool>,
 }
 
 impl Sink {
     pub async fn new(
         conf: SinkConf,
-        halia_mqtt_client: HaliaMqttClient,
+        mqtt_client: Arc<AsyncClient>,
         app_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let publish_properties = get_publish_properties(&conf);
@@ -42,102 +48,47 @@ impl Sink {
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
-
-        let mut sink = Self {
+        let join_handle_data = JoinHandleData {
+            mqtt_client,
             conf,
-            mb_tx,
-            stop_signal_tx,
-            join_handle: None,
-            publish_properties,
-        };
-        sink.event_loop(
-            halia_mqtt_client,
-            app_err_rx,
+            message_retainer,
             stop_signal_rx,
             mb_rx,
-            message_retainer,
-        );
-        sink
+            app_err_rx,
+        };
+
+        let join_handle = Self::event_loop(join_handle_data);
+
+        Self {
+            mb_tx,
+            stop_signal_tx,
+            publish_properties,
+            join_handle: Some(join_handle),
+        }
     }
 
-    fn event_loop(
-        &mut self,
-        halia_mqtt_client: HaliaMqttClient,
-        mut app_err_rx: broadcast::Receiver<bool>,
-        mut stop_signal_rx: mpsc::Receiver<()>,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
-        mut message_retainer: Box<dyn SinkMessageRetain>,
-    ) {
-        let topic = self.conf.topic.clone();
-        let retain = self.conf.retain;
+    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         let mut err = false;
-        match halia_mqtt_client {
-            HaliaMqttClient::V311(mqtt_client_v311) => {
-                let qos = qos_to_v311(&self.conf.qos);
-                let join_handle = tokio::spawn(async move {
-                    loop {
-                        select! {
-                            _ = stop_signal_rx.recv() => {
-                                return (stop_signal_rx, mb_rx, HaliaMqttClient::V311(mqtt_client_v311), app_err_rx, message_retainer);
-                            }
+        let qos = transfer_qos(&join_handle_data.conf.qos);
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = join_handle_data.stop_signal_rx.recv() => {
+                        return join_handle_data;
+                    }
 
-                            chan_err = app_err_rx.recv() => {
-                                match chan_err {
-                                    Ok(chan_err) => err = chan_err,
-                                    Err(e) => warn!("{:?}", e),
-                                }
+                    Some(mb) = join_handle_data.mb_rx.recv() => {
+                        if !err {
+                            if let Err(e) = join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, mb.to_json()).await {
+                                warn!("{:?}", e);
                             }
-
-                            mb = mb_rx.recv() => {
-                                match mb {
-                                    Some(mb) => {
-                                        if !err {
-                                            if let Err(e) = mqtt_client_v311.publish(&topic, qos, retain, mb.to_json()).await {
-                                                warn!("{:?}", e);
-                                            }
-                                        } else {
-                                            message_retainer.push(mb);
-                                        }
-
-                                    }
-                                    None => {}
-                                }
-                            }
+                        } else {
+                            join_handle_data.message_retainer.push(mb);
                         }
                     }
-                });
-                self.join_handle = Some(join_handle);
+                }
             }
-            HaliaMqttClient::V50(mqtt_client_v5) => {
-                let qos = qos_to_v50(&self.conf.qos);
-                let join_handle = tokio::spawn(async move {
-                    loop {
-                        select! {
-                            _ = stop_signal_rx.recv() => {
-                                return (stop_signal_rx, mb_rx, HaliaMqttClient::V50(mqtt_client_v5), app_err_rx, message_retainer);
-                            }
-
-                            mb = mb_rx.recv() => {
-                                match mb {
-                                    Some(mb) => {
-                                        if !err {
-                                            if let Err(e) = mqtt_client_v5.publish(&topic, qos, retain, mb.to_json()).await {
-                                                warn!("{:?}", e);
-                                            }
-                                        } else {
-                                            message_retainer.push(mb);
-                                        }
-
-                                    }
-                                    None => {}
-                                }
-                            }
-                        }
-                    }
-                });
-                self.join_handle = Some(join_handle);
-            }
-        }
+        })
     }
 
     pub fn validate_conf(conf: &SinkConf) -> HaliaResult<()> {
@@ -149,44 +100,22 @@ impl Sink {
     }
 
     pub async fn update(&mut self, _old_conf: SinkConf, new_conf: SinkConf) -> HaliaResult<()> {
-        let (stop_signal_rx, mb_rx, halia_mqtt_client, app_err_rx, message_retainer) =
-            self.stop().await;
-
-        self.conf = new_conf;
-
-        self.event_loop(
-            halia_mqtt_client,
-            app_err_rx,
-            stop_signal_rx,
-            mb_rx,
-            message_retainer,
-        );
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.conf = new_conf;
+        Self::event_loop(join_handle_data);
 
         Ok(())
     }
 
-    pub async fn stop(
-        &mut self,
-    ) -> (
-        mpsc::Receiver<()>,
-        mpsc::Receiver<MessageBatch>,
-        HaliaMqttClient,
-        broadcast::Receiver<bool>,
-        Box<dyn SinkMessageRetain>,
-    ) {
+    pub async fn stop(&mut self) -> JoinHandleData {
         self.stop_signal_tx.send(()).await.unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn restart(&mut self, halia_mqtt_client: HaliaMqttClient) {
-        let (stop_signal_rx, mb_rx, _, app_err_rx, message_retainer) = self.stop().await;
-        self.event_loop(
-            halia_mqtt_client,
-            app_err_rx,
-            stop_signal_rx,
-            mb_rx,
-            message_retainer,
-        );
+    pub async fn update_mqtt_client(&mut self, mqtt_client: Arc<AsyncClient>) {
+        let mut join_handle_data = self.stop().await;
+        join_handle_data.mqtt_client = mqtt_client;
+        Self::event_loop(join_handle_data);
     }
 }
 
