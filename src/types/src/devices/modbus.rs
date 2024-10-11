@@ -3,6 +3,7 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use message::MessageValue;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use tracing::debug;
 
 use crate::MessageRetain;
 
@@ -126,6 +127,7 @@ impl DataType {
     }
 
     pub fn decode(&self, data: &mut [u8]) -> MessageValue {
+        debug!("{:?}", data);
         match self.typ {
             Type::Bool => match self.pos {
                 Some(pos) => {

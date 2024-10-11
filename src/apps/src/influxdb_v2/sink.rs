@@ -25,6 +25,7 @@ pub struct Sink {
     join_handle: Option<JoinHandle<JoinHandleData>>,
     pub mb_tx: mpsc::Sender<MessageBatch>,
 }
+
 pub struct JoinHandleData {
     pub conf: SinkConf,
     pub influxdb_conf: Arc<Conf>,
@@ -112,8 +113,10 @@ impl Sink {
                     serde_json::Value::Bool(b) => point = point.field(field, FieldValue::Bool(b)),
                     serde_json::Value::Number(number) => {
                         if let Some(i) = number.as_i64() {
+                            debug!("i64: {}", i);
                             point = point.field(field, FieldValue::I64(i));
                         } else if let Some(u) = number.as_u64() {
+                            debug!("u64: {}", u);
                             point = point.field(field, FieldValue::I64(u as i64));
                         } else if let Some(f) = number.as_f64() {
                             point = point.field(field, FieldValue::F64(f));

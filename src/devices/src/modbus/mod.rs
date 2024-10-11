@@ -26,7 +26,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use types::{
     devices::{
         modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
@@ -312,6 +312,8 @@ impl WritePointEvent {
                 return Err(HaliaError::Common(format!("数据解析错误：{:?}", e)));
             }
         };
+
+        debug!("write point event: {:?}", data);
 
         Ok(WritePointEvent {
             slave,
