@@ -17,7 +17,7 @@ use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use types::apps::influxdb_v2::{Conf, SinkConf};
 
 pub struct Sink {
@@ -97,9 +97,9 @@ impl Sink {
         timestamp_precision: TimestampPrecision,
         mb: MessageBatch,
     ) {
-        let mut points = vec![];
+        let mut data_points = Vec::with_capacity(mb.len());
         for msg in mb.get_messages() {
-            let mut point = DataPoint::builder(&conf.mesaurement);
+            let mut data_point_builder = DataPoint::builder(&conf.mesaurement);
             for (field, field_value) in &conf.fields {
                 let value = match get_dynamic_value_from_json(field_value) {
                     common::DynamicValue::Const(value) => value,
@@ -109,32 +109,35 @@ impl Sink {
                     },
                 };
 
-                match value {
-                    serde_json::Value::Bool(b) => point = point.field(field, FieldValue::Bool(b)),
+                let value = match value {
+                    serde_json::Value::Bool(b) => FieldValue::Bool(b),
                     serde_json::Value::Number(number) => {
-                        if let Some(i) = number.as_i64() {
-                            debug!("i64: {}", i);
-                            point = point.field(field, FieldValue::I64(i));
-                        } else if let Some(u) = number.as_u64() {
-                            debug!("u64: {}", u);
-                            point = point.field(field, FieldValue::I64(u as i64));
-                        } else if let Some(f) = number.as_f64() {
-                            point = point.field(field, FieldValue::F64(f));
+                        if number.is_f64() {
+                            FieldValue::F64(number.as_f64().unwrap())
+                        } else {
+                            FieldValue::I64(number.as_i64().unwrap())
                         }
                     }
-                    serde_json::Value::String(s) => {
-                        point = point.field(field, FieldValue::String(s));
+                    serde_json::Value::String(_) => todo!(),
+                    serde_json::Value::Null
+                    | serde_json::Value::Array(_)
+                    | serde_json::Value::Object(_) => {
+                        warn!("Unsupported field value: {:?}", value);
+                        break;
                     }
-                    _ => {}
-                }
+                };
+
+                data_point_builder = data_point_builder.field(field, value);
             }
 
-            debug!("point: {:?}", point);
-            points.push(point.build().unwrap());
+            match data_point_builder.build() {
+                Ok(data_point) => data_points.push(data_point),
+                Err(e) => warn!("Failed to build point: {}", e),
+            }
         }
 
         if let Err(e) = influxdb_client
-            .write_with_precision(&conf.bucket, stream::iter(points), timestamp_precision)
+            .write_with_precision(&conf.bucket, stream::iter(data_points), timestamp_precision)
             .await
         {
             warn!("Failed to write to influxdb: {}", e);
