@@ -296,6 +296,7 @@ pub async fn stop_device(device_id: String) -> HaliaResult<()> {
     }
 
     let active_rule_ref_cnt = storage::rule_ref::count_active_cnt_by_parent_id(&device_id).await?;
+    debug!("active_rule_ref_cnt: {}", active_rule_ref_cnt);
     if active_rule_ref_cnt > 0 {
         return Err(HaliaError::StopActiveRefing);
     }

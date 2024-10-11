@@ -82,8 +82,8 @@ pub async fn count_cnt_by_parent_id(parent_id: &String) -> Result<usize> {
 pub async fn count_active_cnt_by_parent_id(parent_id: &String) -> Result<usize> {
     let active_cnt: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = ? AND parent_id = ?")
-            .bind(parent_id)
             .bind(true as i32)
+            .bind(parent_id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 

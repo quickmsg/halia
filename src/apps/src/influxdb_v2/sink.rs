@@ -17,7 +17,7 @@ use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 use types::apps::influxdb_v2::{Conf, SinkConf};
 
 pub struct Sink {
@@ -125,6 +125,8 @@ impl Sink {
                     _ => {}
                 }
             }
+
+            debug!("point: {:?}", point);
             points.push(point.build().unwrap());
         }
 
@@ -156,7 +158,7 @@ impl Sink {
 
 fn new_influxdb_client(influxdb_conf: &Arc<Conf>, sink_conf: &SinkConf) -> Client {
     Client::new(
-        format!("{}:{}", &influxdb_conf.host, influxdb_conf.port),
+        format!("http://{}:{}", &influxdb_conf.host, influxdb_conf.port),
         &sink_conf.org,
         &sink_conf.api_token,
     )
