@@ -78,6 +78,7 @@ impl Sink {
                     _ = join_handle_data.stop_signal_rx.changed() => {
                         return join_handle_data;
                     }
+
                     Some(mb) = join_handle_data.mb_rx.recv() => {
                         match &join_handle_data.partition_client {
                             Some(partition_client) => {
@@ -86,7 +87,9 @@ impl Sink {
                                     join_handle_data.kafka_err_tx.send(e.to_string()).await.unwrap();
                                 }
                             }
-                            None => {}
+                            None => {
+                                join_handle_data.message_retainer.push(mb);
+                            }
                         }
 
                     }
@@ -112,17 +115,20 @@ impl Sink {
             None => None,
         };
         let mut headers = BTreeMap::new();
-        for (k, v) in &conf.headers {
-            match v.typ {
-                types::ValueType::String => {
-                    headers.insert(k.clone(), v.value.as_bytes().to_vec());
-                }
-                types::ValueType::Bytes => {
-                    let bytes = general_purpose::STANDARD.decode(&v.value).unwrap();
-                    headers.insert(k.clone(), bytes);
+        if let Some(conf_headers) = &conf.headers {
+            for (k, v) in conf_headers.iter() {
+                match v.typ {
+                    types::ValueType::String => {
+                        headers.insert(k.clone(), v.value.as_bytes().to_vec());
+                    }
+                    types::ValueType::Bytes => {
+                        let bytes = general_purpose::STANDARD.decode(&v.value).unwrap();
+                        headers.insert(k.clone(), bytes);
+                    }
                 }
             }
         }
+
         let record = Record {
             key,
             value: Some(mb.to_json()),
@@ -133,12 +139,7 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn update_conf(
-        &mut self,
-        kafka_client: Option<&Client>,
-        _old_conf: SinkConf,
-        new_conf: SinkConf,
-    ) {
+    pub async fn update_conf(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
         let mut join_handle_data = self.stop().await;
         join_handle_data.conf = new_conf;
         let join_handle = Self::event_loop(join_handle_data).await;

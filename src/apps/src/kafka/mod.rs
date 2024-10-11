@@ -46,7 +46,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let sinks = Arc::new(DashMap::new());
     let (kafka_err_tx, kafka_err_rx) = mpsc::channel(1);
     Kafka::event_loop(
-        id.clone(),
+        id,
         conf,
         kafka_client.clone(),
         stop_signal_rx,
@@ -71,7 +71,10 @@ impl Kafka {
         mut stop_signal_rx: watch::Receiver<()>,
         connect_signal_tx: watch::Sender<()>,
     ) {
-        let bootstrap_brokers = conf.bootstrap_brokers.clone();
+        let mut bootstrap_brokers = vec![];
+        for (host, port) in &conf.bootstrap_brokers {
+            bootstrap_brokers.push(format!("{}:{}", host, port));
+        }
         let reconnect = conf.reconnect;
         tokio::spawn(async move {
             loop {
@@ -196,8 +199,7 @@ impl App for Kafka {
             Some(mut sink) => {
                 let old_conf: SinkConf = serde_json::from_value(old_conf)?;
                 let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-                sink.update_conf(self.kafka_client.read().await.as_ref(), old_conf, new_conf)
-                    .await;
+                sink.update_conf(old_conf, new_conf).await;
                 Ok(())
             }
             None => Err(HaliaError::NotFound(sink_id)),

@@ -4,7 +4,7 @@ use crate::{MessageRetain, StringOrBytesValue};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct Conf {
-    pub bootstrap_brokers: Vec<String>,
+    pub bootstrap_brokers: Vec<(String, u16)>,
 
     // pub ssl: bool,
     // pub certifacte_verfication: bool,
@@ -18,7 +18,7 @@ pub struct SinkConf {
     pub topic: String,
     pub partition: i32,
     pub key: Option<StringOrBytesValue>,
-    pub headers: Vec<(String, StringOrBytesValue)>,
+    pub headers: Option<Vec<(String, StringOrBytesValue)>>,
     pub unknown_topic_handling: UnknownTopicHandling,
     pub compression: Compression,
     // ms
