@@ -19,7 +19,7 @@ use protocol::modbus::{rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
 use tokio::{
-    net::TcpStream,
+    net::{lookup_host, TcpStream},
     select,
     sync::{broadcast, mpsc, watch, RwLock},
     task::JoinHandle,
@@ -166,18 +166,13 @@ impl Modbus {
                                     }
                                 }
 
-                                point_id = read_rx.recv() => {
-                                   if let Some(point_id) = point_id {
-                                        match sources.get_mut(&point_id) {
-                                            Some(mut source) => {
-                                                let now = Instant::now();
-                                                if let Err(_) = source.read(&mut ctx).await {
-                                                    break
-                                                }
-                                                rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
-                                            }
-                                            None => {}
+                                Some(point_id) = read_rx.recv() => {
+                                    if let Some(mut source) = sources.get_mut(&point_id) {
+                                        let now = Instant::now();
+                                        if let Err(_) = source.read(&mut ctx).await {
+                                            break
                                         }
+                                        rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
                                     }
                                 }
                             }
@@ -232,11 +227,14 @@ impl Modbus {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
                 let ethernet = conf.ethernet.as_ref().unwrap();
-                let addr: SocketAddr = format!("{}:{}", ethernet.host, ethernet.port)
-                    .parse()
-                    .unwrap();
+                let socket_addrs = lookup_host(format!("{}:{}", ethernet.host, ethernet.port))
+                    .await?
+                    .collect::<Vec<SocketAddr>>();
+                if socket_addrs.len() == 0 {
+                    return Err(io::Error::new(io::ErrorKind::Other, "no address found"));
+                }
+                let stream = TcpStream::connect(socket_addrs[0]).await?;
 
-                let stream = TcpStream::connect(addr).await?;
                 match ethernet.encode {
                     Encode::Tcp => tcp::new(stream),
                     Encode::RtuOverTcp => rtu::new(stream),

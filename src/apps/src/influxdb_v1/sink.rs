@@ -176,7 +176,7 @@ fn new_influxdb_client(influxdb_conf: &Arc<Conf>, sink_conf: &SinkConf) -> Clien
         true => "https",
         false => "http",
     };
-    let mut client = Client::new(
+    let client = Client::new(
         format!(
             "{}://{}:{}",
             schema, &influxdb_conf.host, influxdb_conf.port

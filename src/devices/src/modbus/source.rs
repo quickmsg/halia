@@ -27,7 +27,7 @@ pub struct Source {
 }
 
 pub struct JoinHandleData {
-    id: String,
+    pub id: String,
     pub stop_signal_rx: watch::Receiver<()>,
     pub read_tx: mpsc::Sender<String>,
     pub device_err_rx: broadcast::Receiver<bool>,
