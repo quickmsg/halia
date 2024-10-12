@@ -4,14 +4,14 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use crate::{MessageRetain, Ssl, StringOrBytesValue};
 
 #[derive(Deserialize, Serialize, PartialEq)]
-pub struct MqttClientConf {
+pub struct Conf {
     pub host: String,
     pub port: u16,
 
     pub client_id: String,
 
-    pub auth_method: MqttClientAuthMethod,
-    pub auth_password: Option<MqttClientAuthPassword>,
+    pub auth_method: AuthMethod,
+    pub auth_password: Option<AuthPassword>,
 
     pub timeout: usize,
     // 秒
@@ -27,7 +27,7 @@ pub struct MqttClientConf {
 
 #[derive(Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
-pub enum MqttClientAuthMethod {
+pub enum AuthMethod {
     None,
     Password,
 }
@@ -41,7 +41,7 @@ pub struct LastWill {
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
-pub struct MqttClientAuthPassword {
+pub struct AuthPassword {
     pub username: String,
     pub password: String,
 }

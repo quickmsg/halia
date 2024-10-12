@@ -10,8 +10,12 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rumqttc::{
-    mqttbytes, tokio_rustls::rustls::ClientConfig, AsyncClient, Event, Incoming, LastWill,
-    MqttOptions, QoS,
+    mqttbytes,
+    tokio_rustls::rustls::{
+        client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
+        ClientConfig, RootCertStore, SignatureScheme,
+    },
+    AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS,
 };
 use rustls_pemfile::Item;
 use sink::Sink;
@@ -22,7 +26,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, error, warn};
-use types::apps::mqtt_client_v311::{MqttClientConf, Qos, SinkConf, SourceConf};
+use types::apps::mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf};
 
 use crate::App;
 
@@ -32,7 +36,7 @@ mod source;
 pub struct MqttClient {
     _id: String,
 
-    err: Arc<RwLock<Option<String>>>,
+    _err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: watch::Sender<()>,
     app_err_tx: broadcast::Sender<bool>,
 
@@ -44,7 +48,7 @@ pub struct MqttClient {
 }
 
 struct JoinHandleData {
-    conf: MqttClientConf,
+    conf: Conf,
     stop_signal_rx: watch::Receiver<()>,
     app_err_tx: broadcast::Sender<bool>,
     sources: Arc<DashMap<String, Source>>,
@@ -52,7 +56,7 @@ struct JoinHandleData {
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let conf: MqttClientConf = serde_json::from_value(conf).unwrap();
+    let conf: Conf = serde_json::from_value(conf).unwrap();
     let (app_err_tx, _) = broadcast::channel(16);
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
@@ -70,7 +74,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     Box::new(MqttClient {
         _id: id,
-        err: app_err,
+        _err: app_err,
         sources,
         sinks: DashMap::new(),
         stop_signal_tx,
@@ -81,11 +85,11 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let conf: MqttClientConf = serde_json::from_value(conf.clone())?;
+    let conf: Conf = serde_json::from_value(conf.clone())?;
 
     match conf.auth_method {
-        types::apps::mqtt_client_v311::MqttClientAuthMethod::None => {}
-        types::apps::mqtt_client_v311::MqttClientAuthMethod::Password => {
+        types::apps::mqtt_client_v311::AuthMethod::None => {}
+        types::apps::mqtt_client_v311::AuthMethod::Password => {
             if conf.auth_password.is_none() {
                 return Err(HaliaError::Common("auth_password is required".to_owned()));
             }
@@ -131,8 +135,8 @@ impl MqttClient {
         mqtt_options.set_clean_session(join_handle_data.conf.clean_session);
 
         match join_handle_data.conf.auth_method {
-            types::apps::mqtt_client_v311::MqttClientAuthMethod::None => {}
-            types::apps::mqtt_client_v311::MqttClientAuthMethod::Password => {
+            types::apps::mqtt_client_v311::AuthMethod::None => {}
+            types::apps::mqtt_client_v311::AuthMethod::Password => {
                 mqtt_options.set_credentials(
                     &join_handle_data
                         .conf
@@ -150,68 +154,75 @@ impl MqttClient {
             }
         }
 
-        // if join_handle_data.conf.ssl.enable {
-        //     let mut root_cert_store = rumqttc::tokio_rustls::rustls::RootCertStore::empty();
-        //     let certificate_result = rustls_native_certs::load_native_certs();
-        //     if certificate_result.errors.is_empty() {
-        //         root_cert_store.add_parsable_certificates(certificate_result.certs);
-        //     }
-        //     match conf.ssl.ca_cert {
-        //         Some(ca_cert) => {
-        //             let ca_cert = ca_cert.into_bytes();
-        //             let certs = rustls_pemfile::certs(&mut BufReader::new(Cursor::new(ca_cert)))
-        //                 .collect::<Result<Vec<_>, _>>()
-        //                 .unwrap();
-        //             for cert in certs {
-        //                 root_cert_store.add(cert).unwrap();
-        //             }
-        //         }
-        //         None => {}
-        //     }
+        if join_handle_data.conf.ssl_enable {
+            let builder = match &join_handle_data.conf.ssl.as_ref().unwrap().verify {
+                true => {
+                    let root_cert_store = match &join_handle_data.conf.ssl.as_ref().unwrap().ca_cert
+                    {
+                        Some(ca_cert) => {
+                            let mut root_cert_store = RootCertStore::empty();
+                            let certs =
+                                rustls_pemfile::certs(&mut BufReader::new(Cursor::new(ca_cert)))
+                                    .collect::<Result<Vec<_>, _>>()
+                                    .unwrap();
+                            for cert in certs {
+                                root_cert_store.add(cert).unwrap();
+                            }
+                            root_cert_store
+                        }
+                        None => RootCertStore {
+                            roots: webpki_roots::TLS_SERVER_ROOTS.into(),
+                        },
+                    };
+                    ClientConfig::builder().with_root_certificates(root_cert_store)
+                }
+                false => ClientConfig::builder()
+                    .dangerous()
+                    .with_custom_certificate_verifier(Arc::new(ServerCertVerifierNo {})),
+            };
 
-        //     let client_config = ClientConfig::builder().with_root_certificates(root_cert_store);
-        //     match (conf.ssl.client_cert, conf.ssl.client_key) {
-        //         (Some(client_cert), Some(client_key)) => {
-        //             let client_cert = client_cert.into_bytes();
-        //             let client_key = client_key.into_bytes();
-        //             let client_certs =
-        //                 rustls_pemfile::certs(&mut BufReader::new(Cursor::new(client_cert)))
-        //                     .collect::<Result<Vec<_>, _>>()
-        //                     .unwrap();
+            match (
+                &join_handle_data.conf.ssl.as_ref().unwrap().client_cert,
+                &join_handle_data.conf.ssl.as_ref().unwrap().client_key,
+            ) {
+                (Some(client_cert), Some(client_key)) => {
+                    let client_cert = client_cert.clone().into_bytes();
+                    let client_key = client_key.clone().into_bytes();
+                    let client_certs =
+                        rustls_pemfile::certs(&mut BufReader::new(Cursor::new(client_cert)))
+                            .collect::<Result<Vec<_>, _>>()
+                            .unwrap();
 
-        //             let mut key_buffer = BufReader::new(Cursor::new(client_key));
-        //             let key = loop {
-        //                 let item = rustls_pemfile::read_one(&mut key_buffer).unwrap();
-        //                 match item {
-        //                     Some(Item::Sec1Key(key)) => {
-        //                         break key.into();
-        //                     }
-        //                     Some(Item::Pkcs1Key(key)) => {
-        //                         break key.into();
-        //                     }
-        //                     Some(Item::Pkcs8Key(key)) => {
-        //                         break key.into();
-        //                     }
-        //                     None => {
-        //                         panic!("no valid key in chain");
-        //                     }
-        //                     _ => {}
-        //                 }
-        //             };
-        //             let config = client_config
-        //                 .with_client_auth_cert(client_certs, key)
-        //                 .unwrap();
+                    let mut key_buffer = BufReader::new(Cursor::new(client_key));
+                    let key = loop {
+                        let item = rustls_pemfile::read_one(&mut key_buffer).unwrap();
+                        match item {
+                            Some(Item::Sec1Key(key)) => {
+                                break key.into();
+                            }
+                            Some(Item::Pkcs1Key(key)) => {
+                                break key.into();
+                            }
+                            Some(Item::Pkcs8Key(key)) => {
+                                break key.into();
+                            }
+                            None => {
+                                panic!("no valid key in chain");
+                            }
+                            _ => {}
+                        }
+                    };
+                    let config = builder.with_client_auth_cert(client_certs, key).unwrap();
+                    let transport = rumqttc::Transport::Tls(rumqttc::TlsConfiguration::Rustls(
+                        Arc::new(config),
+                    ));
+                    mqtt_options.set_transport(transport);
+                }
+                _ => {}
+            }
 
-        //             let transport = rumqttc::Transport::Tls(rumqttc::TlsConfiguration::Rustls(
-        //                 Arc::new(config),
-        //             ));
-        //             mqtt_options.set_transport(transport);
-        //         }
-        //         _ => {}
-        //     }
-
-        //     if conf.ssl.verify {}
-        // }
+            // if conf.ssl.verify {}
+        }
 
         if let Some(last_will) = &join_handle_data.conf.last_will {
             let message = match last_will.message.typ {
@@ -349,7 +360,7 @@ impl App for MqttClient {
     ) -> HaliaResult<()> {
         self.stop_signal_tx.send(()).unwrap();
 
-        let new_conf: MqttClientConf = serde_json::from_value(new_conf)?;
+        let new_conf: Conf = serde_json::from_value(new_conf)?;
         let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
         join_handle_data.conf = new_conf;
 
@@ -487,5 +498,61 @@ impl App for MqttClient {
             Some(sink) => Ok(sink.mb_tx.clone()),
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
+    }
+}
+
+#[derive(Debug)]
+struct ServerCertVerifierNo {}
+
+impl ServerCertVerifier for ServerCertVerifierNo {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<
+        rumqttc::tokio_rustls::rustls::client::danger::ServerCertVerified,
+        rumqttc::tokio_rustls::rustls::Error,
+    > {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rumqttc::tokio_rustls::rustls::DigitallySignedStruct,
+    ) -> Result<
+        rumqttc::tokio_rustls::rustls::client::danger::HandshakeSignatureValid,
+        rumqttc::tokio_rustls::rustls::Error,
+    > {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rumqttc::tokio_rustls::rustls::DigitallySignedStruct,
+    ) -> Result<
+        rumqttc::tokio_rustls::rustls::client::danger::HandshakeSignatureValid,
+        rumqttc::tokio_rustls::rustls::Error,
+    > {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rumqttc::tokio_rustls::rustls::SignatureScheme> {
+        vec![
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            SignatureScheme::ECDSA_NISTP384_SHA384,
+            SignatureScheme::RSA_PSS_SHA256,
+            SignatureScheme::RSA_PSS_SHA384,
+            SignatureScheme::RSA_PSS_SHA512,
+            SignatureScheme::RSA_PKCS1_SHA256,
+            SignatureScheme::RSA_PKCS1_SHA384,
+            SignatureScheme::RSA_PKCS1_SHA512,
+        ]
     }
 }

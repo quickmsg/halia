@@ -3,6 +3,7 @@ use axum::{
     routing::{self, get, post, put},
     Json, Router,
 };
+use tracing::debug;
 use types::{
     apps::{
         CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsResp, SearchRuleInfo, Summary,
@@ -56,7 +57,9 @@ async fn get_rule_info(
 }
 
 async fn create_app(Json(req): Json<CreateUpdateAppReq>) -> AppResult<AppSuccess<()>> {
+    debug!("here");
     apps::create_app(req).await?;
+    debug!("here");
     Ok(AppSuccess::empty())
 }
 
