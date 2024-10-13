@@ -55,15 +55,10 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 impl App for HttpClient {
     async fn update(
         &mut self,
-        old_conf: serde_json::Value,
+        _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let old_conf: HttpClientConf = serde_json::from_value(old_conf)?;
         let new_conf: HttpClientConf = serde_json::from_value(new_conf)?;
-
-        if old_conf == new_conf {
-            return Ok(());
-        }
 
         self.conf = Arc::new(new_conf);
 

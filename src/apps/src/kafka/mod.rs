@@ -9,6 +9,7 @@ use sink::Sink;
 use tokio::{
     select,
     sync::{mpsc, watch, RwLock},
+    task::JoinHandle,
     time,
 };
 use tracing::debug;
@@ -26,6 +27,16 @@ pub struct Kafka {
 
     sinks: Arc<DashMap<String, Sink>>,
     kafka_err_tx: mpsc::Sender<String>,
+    jh: Option<JoinHandle<JoinHandleData>>,
+}
+
+struct JoinHandleData {
+    pub id: String,
+    pub conf: Conf,
+    pub kafka_client: Arc<RwLock<Option<Client>>>,
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub kafka_err_rx: mpsc::Receiver<String>,
+    pub sinks: Arc<DashMap<String, Sink>>,
 }
 
 pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
@@ -45,14 +56,17 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     let sinks = Arc::new(DashMap::new());
     let (kafka_err_tx, kafka_err_rx) = mpsc::channel(1);
-    Kafka::event_loop(
+
+    let jhd = JoinHandleData {
         id,
         conf,
-        kafka_client.clone(),
+        kafka_client: kafka_client.clone(),
         stop_signal_rx,
         kafka_err_rx,
-        sinks.clone(),
-    );
+        sinks: sinks.clone(),
+    };
+
+    let jh = Kafka::event_loop(jhd);
 
     Box::new(Kafka {
         _err: None,
@@ -60,87 +74,63 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         kafka_client,
         stop_signal_tx,
         kafka_err_tx,
+        jh: Some(jh),
     })
 }
 
 impl Kafka {
-    fn connect_loop(
-        id: String,
-        kafka_client: Arc<RwLock<Option<Client>>>,
-        conf: &Conf,
-        mut stop_signal_rx: watch::Receiver<()>,
-        connect_signal_tx: watch::Sender<()>,
-    ) {
+    async fn connect_loop(jhd: &mut JoinHandleData) {
         let mut bootstrap_brokers = vec![];
-        for (host, port) in &conf.bootstrap_brokers {
+        for (host, port) in &jhd.conf.bootstrap_brokers {
             bootstrap_brokers.push(format!("{}:{}", host, port));
         }
-        let reconnect = conf.reconnect;
-        tokio::spawn(async move {
-            loop {
-                match ClientBuilder::new(bootstrap_brokers.clone()).build().await {
-                    Ok(client) => {
-                        kafka_client.write().await.replace(client);
-                        connect_signal_tx.send(()).unwrap();
-                        events::insert_connect_succeed(types::events::ResourceType::App, &id).await;
-                        return stop_signal_rx;
-                    }
-                    Err(e) => {
-                        events::insert_connect_failed(
-                            types::events::ResourceType::App,
-                            &id,
-                            e.to_string(),
-                        )
-                        .await;
-                        let sleep = time::sleep(Duration::from_secs(reconnect));
-                        tokio::pin!(sleep);
-                        select! {
-                            _ = stop_signal_rx.changed() => {
-                                return stop_signal_rx;
-                            }
-
-                            _ = &mut sleep => {}
+        let reconnect = jhd.conf.reconnect;
+        loop {
+            match ClientBuilder::new(bootstrap_brokers.clone()).build().await {
+                Ok(client) => {
+                    jhd.kafka_client.write().await.replace(client);
+                    events::insert_connect_succeed(types::events::ResourceType::App, &jhd.id).await;
+                    return;
+                }
+                Err(e) => {
+                    events::insert_connect_failed(
+                        types::events::ResourceType::App,
+                        &jhd.id,
+                        e.to_string(),
+                    )
+                    .await;
+                    let sleep = time::sleep(Duration::from_secs(reconnect));
+                    tokio::pin!(sleep);
+                    select! {
+                        _ = jhd.stop_signal_rx.changed() => {
+                            return;
                         }
+
+                        _ = &mut sleep => {}
                     }
                 }
             }
-        });
+        }
     }
 
-    fn event_loop(
-        id: String,
-        conf: Conf,
-        kafka_client: Arc<RwLock<Option<Client>>>,
-        mut stop_signal_rx: watch::Receiver<()>,
-        mut kafka_err_rx: mpsc::Receiver<String>,
-        sinks: Arc<DashMap<String, Sink>>,
-    ) {
-        let (connect_signal_tx, mut connect_signal_rx) = watch::channel(());
-        Self::connect_loop(
-            id,
-            kafka_client.clone(),
-            &conf,
-            stop_signal_rx.clone(),
-            connect_signal_tx,
-        );
-
+    fn event_loop(mut jhd: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
+            Self::connect_loop(&mut jhd).await;
+
             loop {
                 select! {
-                    _ = stop_signal_rx.changed() => {
-                        return;
+                    _ = jhd.stop_signal_rx.changed() => {
+                        return jhd;
                     }
 
-                    e = kafka_err_rx.recv() => {
+                    e = jhd.kafka_err_rx.recv() => {
                         debug!("Kafka error received, {:?}", e);
-                    }
-
-                    _ = connect_signal_rx.changed() => {
-                        Self::handle_connect_status_changed(&kafka_client, &sinks).await;
+                        Self::connect_loop(&mut jhd).await;
+                        Self::handle_connect_status_changed(&jhd.kafka_client, &jhd.sinks).await;
                     }
                 }
             }
-        });
+        })
     }
 
     async fn handle_connect_status_changed(
@@ -159,11 +149,14 @@ impl App for Kafka {
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,
-        _new_conf: serde_json::Value,
+        new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        let new_conf: Conf = serde_json::from_value(new_conf)?;
         self.stop_signal_tx.send(()).unwrap();
-        // Self::connect_loop(id, kafka_client, conf, stop_signal_rx, connect_signal_tx);
-        todo!()
+        let mut jhd = self.jh.take().unwrap().await.unwrap();
+        jhd.conf = new_conf;
+        Self::event_loop(jhd);
+        Ok(())
     }
 
     async fn stop(&mut self) {
@@ -172,8 +165,6 @@ impl App for Kafka {
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
-
-        // todo disconenct kafka client
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
