@@ -12,7 +12,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use types::devices::modbus::{Area, SourceConf};
 
 pub struct Source {
@@ -187,8 +187,6 @@ impl Source {
         match res {
             Ok(mut data) => {
                 let value = self.conf.data_type.decode(&mut data);
-                debug!("{}", value);
-
                 if self.mb_tx.receiver_count() == 0 {
                     return Ok(());
                 }

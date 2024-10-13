@@ -4606,6 +4606,7 @@ name = "schema"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "apache-avro",
  "bytes",
  "csv",
  "message",

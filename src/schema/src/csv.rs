@@ -5,8 +5,8 @@ use bytes::{BufMut, Bytes, BytesMut};
 use message::{Message, MessageBatch, MessageValue};
 
 pub struct Csv {
-    headers: Option<Vec<String>>,
     has_headers: bool,
+    headers: Option<Vec<String>>,
 }
 
 impl Csv {
@@ -76,6 +76,7 @@ mod tests {
 
     use super::*;
 
+    #[cfg(test)]
     fn test_payload_to_mb() {
         let headers = vec![
             "a".to_owned(),
