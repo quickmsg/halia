@@ -8,7 +8,6 @@ use anyhow::{bail, Result};
 
 mod avro;
 mod csv;
-pub mod decoder;
 mod json;
 
 #[derive(Debug, Clone)]
