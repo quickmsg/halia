@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sqlx::prelude::FromRow;
+use tracing::debug;
 use types::{
     devices::{CreateUpdateDeviceReq, QueryParams},
     Pagination,
@@ -501,6 +502,7 @@ pub async fn update_status(id: &String, status: bool) -> Result<()> {
 }
 
 pub async fn update_err(id: &String, err: bool) -> Result<()> {
+    debug!("here");
     sqlx::query("UPDATE devices SET err = ? WHERE id = ?")
         .bind(err as i32)
         .bind(id)

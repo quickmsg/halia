@@ -214,7 +214,8 @@ impl MqttClient {
                     Err(e) => error!("Failed to decode msg:{}", e),
                 }
             }
-            Ok(_) => {
+            Ok(event) => {
+                debug!("{:?}", event);
                 debug!("v311 event ok null");
                 if *err {
                     *err = false;

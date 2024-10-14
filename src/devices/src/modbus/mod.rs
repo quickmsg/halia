@@ -31,7 +31,7 @@ use tracing::{debug, trace, warn};
 use types::{
     devices::{
         modbus::{Area, Conf, DataType, Encode, SinkConf, SourceConf, Type},
-        DeviceConf, SearchDevicesItemRunningInfo,
+        SearchDevicesItemRunningInfo,
     },
     Value,
 };
@@ -111,8 +111,8 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
     let join_handle = Modbus::event_loop(join_handle_data);
 
     Box::new(Modbus {
-        err: Arc::new(RwLock::new(None)),
-        rtt: Arc::new(AtomicU16::new(0)),
+        err,
+        rtt,
         sources,
         sinks: DashMap::new(),
         stop_signal_tx,
@@ -138,14 +138,11 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 impl Modbus {
     fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
-            let mut status = false;
             let mut task_err: Option<io::Error> = None;
             loop {
                 match Modbus::connect(&join_handle_data.conf).await {
                     Ok(mut ctx) => {
-                        status = true;
                         add_device_running_count();
-
                         task_err = None;
                         *join_handle_data.err.write().await = None;
                         if let Err(e) =
@@ -191,10 +188,6 @@ impl Modbus {
                         }
                     }
                     Err(e) => {
-                        if status {
-                            sub_device_running_count();
-                            status = false;
-                        }
                         events::insert_connect_failed(
                             types::events::ResourceType::Device,
                             &join_handle_data.id,
@@ -209,10 +202,15 @@ impl Modbus {
                                 }
                             }
                             None => {
+                                sub_device_running_count();
+                                debug!("{:?}", join_handle_data.err.read().await);
+                                debug!("connect err: {:?}", e);
                                 *join_handle_data.err.write().await = Some(e.to_string());
+                                debug!("{:?}", join_handle_data.err.read().await);
                                 if let Err(storage_err) =
                                     storage::device::update_err(&join_handle_data.id, true).await
                                 {
+                                    debug!("here");
                                     warn!("update device err failed: {}", storage_err);
                                 }
                             }
@@ -410,7 +408,8 @@ impl Device for Modbus {
         self.stop_signal_tx.send(()).unwrap();
         let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
         join_handle_data.conf = new_conf;
-        Self::event_loop(join_handle_data);
+        let join_handle = Self::event_loop(join_handle_data);
+        self.join_handle = Some(join_handle);
 
         Ok(())
     }
