@@ -1,3 +1,4 @@
+use base64::{prelude::BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 
 pub mod apps;
@@ -96,7 +97,7 @@ pub struct SearchSourcesOrSinksInfoResp {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct Ssl {
     pub verify: bool,
-    pub alpn: Option<StringOrBytesValue>,
+    pub alpn: Option<PlainOrBase64Value>,
     pub ca_cert: Option<String>,
     pub client_cert: Option<String>,
     pub client_key: Option<String>,
@@ -120,16 +121,26 @@ pub enum MessageRetainType {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum ValueType {
-    String,
-    // base64 编码
-    Bytes,
+pub struct PlainOrBase64Value {
+    #[serde(rename = "type")]
+    pub typ: PlainOrBase64ValueType,
+    pub value: serde_json::Value,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
-pub struct StringOrBytesValue {
-    #[serde(rename = "type")]
-    pub typ: ValueType,
-    pub value: String,
+#[serde(rename_all = "snake_case")]
+pub enum PlainOrBase64ValueType {
+    Plain,
+    Base64,
+}
+
+impl Into<Vec<u8>> for PlainOrBase64Value {
+    fn into(self) -> Vec<u8> {
+        match self.typ {
+            PlainOrBase64ValueType::Plain => serde_json::to_vec(&self.value).unwrap(),
+            PlainOrBase64ValueType::Base64 => BASE64_STANDARD
+                .decode(self.value.as_str().unwrap())
+                .unwrap(),
+        }
+    }
 }

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{MessageRetain, Ssl, StringOrBytesValue};
+use crate::{MessageRetain, PlainOrBase64Value, Ssl};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct Conf {
@@ -37,7 +37,7 @@ pub struct LastWill {
     pub topic: String,
     pub qos: Qos,
     pub retain: bool,
-    pub message: StringOrBytesValue,
+    pub message: PlainOrBase64Value,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]

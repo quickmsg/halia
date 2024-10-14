@@ -86,12 +86,19 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
     if let Some(last_will) = &conf.last_will {
         match &last_will.message.typ {
-            types::ValueType::String => {}
-            types::ValueType::Bytes => {
-                BASE64_STANDARD
-                    .decode(&last_will.message.value)
-                    .map_err(|e| HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e)))?;
-            }
+            types::PlainOrBase64ValueType::Plain => {}
+            types::PlainOrBase64ValueType::Base64 => match &last_will.message.value {
+                serde_json::Value::String(s) => {
+                    BASE64_STANDARD.decode(s).map_err(|e| {
+                        HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e))
+                    })?;
+                }
+                _ => {
+                    return Err(HaliaError::Common(
+                        "遗嘱信息base64编码时，value必须是字符串".to_owned(),
+                    ));
+                }
+            },
         }
     }
 
@@ -149,18 +156,26 @@ impl MqttClient {
             mqtt_options.set_transport(transport);
         }
 
-        if let Some(last_will) = &join_handle_data.conf.last_will {
-            let message = match last_will.message.typ {
-                types::ValueType::String => last_will.message.value.clone().into(),
-                types::ValueType::Bytes => {
-                    BASE64_STANDARD.decode(&last_will.message.value).unwrap()
-                }
-            };
+        if join_handle_data.conf.last_will_enable {
+            let message: Vec<u8> = join_handle_data
+                .conf
+                .last_will
+                .as_ref()
+                .unwrap()
+                .message
+                .clone()
+                .into();
             mqtt_options.set_last_will(LastWill {
-                topic: last_will.topic.clone(),
+                topic: join_handle_data
+                    .conf
+                    .last_will
+                    .as_ref()
+                    .unwrap()
+                    .topic
+                    .clone(),
                 message: message.into(),
-                qos: transfer_qos(&last_will.qos),
-                retain: last_will.retain,
+                qos: transfer_qos(&join_handle_data.conf.last_will.as_ref().unwrap().qos),
+                retain: join_handle_data.conf.last_will.as_ref().unwrap().retain,
             });
         }
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{MessageRetain, StringOrBytesValue};
+use crate::{MessageRetain, PlainOrBase64Value};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct Conf {
@@ -17,8 +17,8 @@ pub struct Conf {
 pub struct SinkConf {
     pub topic: String,
     pub partition: i32,
-    pub key: Option<StringOrBytesValue>,
-    pub headers: Option<Vec<(String, StringOrBytesValue)>>,
+    pub key: Option<PlainOrBase64Value>,
+    pub headers: Option<Vec<(String, PlainOrBase64Value)>>,
     pub unknown_topic_handling: UnknownTopicHandling,
     pub compression: Compression,
     // ms

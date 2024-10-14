@@ -106,9 +106,13 @@ impl Sink {
     ) -> Result<()> {
         let key = match &conf.key {
             Some(key) => match key.typ {
-                types::ValueType::String => Some(key.value.as_bytes().to_vec()),
-                types::ValueType::Bytes => {
-                    let bytes = general_purpose::STANDARD.decode(&key.value).unwrap();
+                types::PlainOrBase64ValueType::Plain => {
+                    Some(serde_json::to_vec(&key.value).unwrap())
+                }
+                types::PlainOrBase64ValueType::Base64 => {
+                    let bytes = general_purpose::STANDARD
+                        .decode(&key.value.as_str().unwrap())
+                        .unwrap();
                     Some(bytes)
                 }
             },
@@ -118,13 +122,15 @@ impl Sink {
         if let Some(conf_headers) = &conf.headers {
             for (k, v) in conf_headers.iter() {
                 match v.typ {
-                    types::ValueType::String => {
-                        headers.insert(k.clone(), v.value.as_bytes().to_vec());
-                    }
-                    types::ValueType::Bytes => {
-                        let bytes = general_purpose::STANDARD.decode(&v.value).unwrap();
-                        headers.insert(k.clone(), bytes);
-                    }
+                    types::PlainOrBase64ValueType::Plain => todo!(),
+                    types::PlainOrBase64ValueType::Base64 => todo!(),
+                    // types::ValueType::String => {
+                    //     headers.insert(k.clone(), v.value.as_bytes().to_vec());
+                    // }
+                    // types::ValueType::Bytes => {
+                    //     let bytes = general_purpose::STANDARD.decode(&v.value).unwrap();
+                    //     headers.insert(k.clone(), bytes);
+                    // }
                 }
             }
         }

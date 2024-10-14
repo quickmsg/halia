@@ -149,12 +149,17 @@ impl MqttClient {
         connect_properties.authentication_method = conf.authentication_method;
         if let Some(authehtication_data) = &conf.authentication_data {
             match authehtication_data.typ {
-                types::ValueType::String => {
-                    connect_properties.authentication_data =
-                        Some(authehtication_data.value.clone().into());
+                types::PlainOrBase64ValueType::Plain => {
+                    connect_properties.authentication_data = Some(
+                        serde_json::to_vec(&authehtication_data.value)
+                            .unwrap()
+                            .into(),
+                    );
                 }
-                types::ValueType::Bytes => {
-                    let b = BASE64_STANDARD.decode(&authehtication_data.value).unwrap();
+                types::PlainOrBase64ValueType::Base64 => {
+                    let b = BASE64_STANDARD
+                        .decode(authehtication_data.value.as_str().unwrap())
+                        .unwrap();
                     connect_properties.authentication_data = Some(b.into());
                 }
             }
