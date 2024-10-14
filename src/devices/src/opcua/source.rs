@@ -214,6 +214,10 @@ impl Source {
         max_age: f64,
         mb_tx: &broadcast::Sender<MessageBatch>,
     ) {
+        debug!("{:?}", need_read_variable_ids);
+        if mb_tx.receiver_count() == 0 {
+            return;
+        }
         match opcua_client.read().await.as_ref() {
             Some(client) => match client
                 .read(
@@ -224,6 +228,7 @@ impl Source {
                 .await
             {
                 Ok(data_values) => {
+                    debug!("data_values: {:?}", data_values);
                     let mut message = Message::default();
                     // todo
                     for (index, data_value) in data_values.into_iter().enumerate() {
@@ -266,7 +271,9 @@ impl Source {
                     }
                     let mut mb = MessageBatch::default();
                     mb.push_message(message);
-                    _ = mb_tx.send(mb);
+                    debug!("{:?}", mb);
+                    mb_tx.send(mb).unwrap();
+                    debug!("here");
                 }
                 Err(e) => {
                     debug!("err code :{:?}", e);

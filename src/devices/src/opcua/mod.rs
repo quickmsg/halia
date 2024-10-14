@@ -21,7 +21,7 @@ use tracing::{debug, warn};
 use types::{
     devices::{
         opcua::{Conf, SinkConf, SourceConf},
-        DeviceConf, SearchDevicesItemRunningInfo,
+        SearchDevicesItemRunningInfo,
     },
     Value,
 };
@@ -124,6 +124,7 @@ impl Opcua {
                 let mut status = false;
                 match Opcua::connect(&join_handle_data.conf).await {
                     Ok((session, join_handle)) => {
+                        debug!("opcua connect success");
                         status = true;
                         add_device_running_count();
                         events::insert_connect_succeed(
@@ -140,6 +141,7 @@ impl Opcua {
                         }
                     }
                     Err(e) => {
+                        debug!("{}", e);
                         if status {
                             sub_device_running_count();
                             status = false;

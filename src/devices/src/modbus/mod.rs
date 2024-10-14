@@ -27,7 +27,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{debug, trace, warn};
+use tracing::{trace, warn};
 use types::{
     devices::{
         modbus::{Area, Conf, DataType, Encode, SinkConf, SourceConf, Type},
@@ -138,7 +138,7 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 impl Modbus {
     fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
-            let mut task_err: Option<io::Error> = None;
+            let mut task_err: Option<String> = Some("not connectd.".to_owned());
             loop {
                 match Modbus::connect(&join_handle_data.conf).await {
                     Ok(mut ctx) => {
@@ -197,26 +197,22 @@ impl Modbus {
 
                         match &task_err {
                             Some(te) => {
-                                if te.to_string() != e.to_string() {
+                                if *te != e.to_string() {
                                     *join_handle_data.err.write().await = Some(e.to_string());
                                 }
                             }
                             None => {
                                 sub_device_running_count();
-                                debug!("{:?}", join_handle_data.err.read().await);
-                                debug!("connect err: {:?}", e);
                                 *join_handle_data.err.write().await = Some(e.to_string());
-                                debug!("{:?}", join_handle_data.err.read().await);
                                 if let Err(storage_err) =
                                     storage::device::update_err(&join_handle_data.id, true).await
                                 {
-                                    debug!("here");
                                     warn!("update device err failed: {}", storage_err);
                                 }
                             }
                         }
 
-                        task_err = Some(e);
+                        task_err = Some(e.to_string());
 
                         let sleep =
                             time::sleep(Duration::from_secs(join_handle_data.conf.reconnect));
@@ -321,8 +317,6 @@ impl WritePointEvent {
                 return Err(HaliaError::Common(format!("数据解析错误：{:?}", e)));
             }
         };
-
-        debug!("write point event: {:?}", data);
 
         Ok(WritePointEvent {
             slave,

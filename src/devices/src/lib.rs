@@ -11,7 +11,6 @@ use common::{
 use dashmap::DashMap;
 use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
-use tracing::debug;
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
@@ -62,12 +61,10 @@ pub(crate) fn get_device_running_count() -> usize {
 }
 
 pub(crate) fn add_device_running_count() {
-    debug!(" add device running ");
     DEVICE_RUNNING_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
 pub(crate) fn sub_device_running_count() {
-    debug!("sub device running ");
     DEVICE_RUNNING_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 
@@ -614,7 +611,6 @@ pub async fn get_sink_tx(
 async fn transer_db_device_to_resp(
     db_device: storage::device::Device,
 ) -> HaliaResult<SearchDevicesItemResp> {
-    debug!("here");
     let source_cnt = storage::source_or_sink::count_by_parent_id(
         &db_device.id,
         storage::source_or_sink::Type::Source,
@@ -626,8 +622,6 @@ async fn transer_db_device_to_resp(
         storage::source_or_sink::Type::Sink,
     )
     .await?;
-
-    debug!("db_device.status: {}", db_device.status);
 
     let running_info = match db_device.status {
         0 => None,
