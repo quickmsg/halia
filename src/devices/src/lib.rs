@@ -257,8 +257,8 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     };
 
     let mut device = match typ {
-        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf),
-        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf),
+        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf.ext.clone()),
+        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf.ext.clone()),
         DeviceType::Coap => coap::new(device_id.clone(), device_conf).await?,
     };
 
@@ -290,13 +290,11 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 }
 
 pub async fn stop_device(device_id: String) -> HaliaResult<()> {
-    // 设备已停止
     if !GLOBAL_DEVICE_MANAGER.contains_key(&device_id) {
         return Ok(());
     }
 
     let active_rule_ref_cnt = storage::rule_ref::count_active_cnt_by_parent_id(&device_id).await?;
-    debug!("active_rule_ref_cnt: {}", active_rule_ref_cnt);
     if active_rule_ref_cnt > 0 {
         return Err(HaliaError::StopActiveRefing);
     }

@@ -20,43 +20,56 @@ use tokio::{
 use tracing::{debug, warn};
 use types::{
     devices::{
-        opcua::{OpcuaConf, SinkConf, SourceConf},
+        opcua::{Conf, SinkConf, SourceConf},
         DeviceConf, SearchDevicesItemRunningInfo,
     },
     Value,
 };
 
-use crate::Device;
+use crate::{add_device_running_count, sub_device_running_count, Device};
 
 mod sink;
 mod source;
 
 struct Opcua {
-    id: String,
-
     err: Option<String>,
     stop_signal_tx: watch::Sender<()>,
     opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
 
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
 }
 
-pub fn new(id: String, device_conf: DeviceConf) -> Box<dyn Device> {
-    let conf: OpcuaConf = serde_json::from_value(device_conf.ext).unwrap();
+struct JoinHandleData {
+    pub id: String,
+    pub conf: Conf,
+    pub opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
+    pub stop_signal_rx: watch::Receiver<()>,
+}
+
+pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
+    let conf: Conf = serde_json::from_value(conf).unwrap();
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
     let opcua_client: Arc<RwLock<Option<Arc<Session>>>> = Arc::new(RwLock::new(None));
 
-    Opcua::event_loop(opcua_client.clone(), conf, stop_signal_rx);
+    let join_handle_data = JoinHandleData {
+        id,
+        conf,
+        opcua_client: opcua_client.clone(),
+        stop_signal_rx,
+    };
+
+    let join_handle = Opcua::event_loop(join_handle_data);
 
     Box::new(Opcua {
-        id: id,
         err: None,
         opcua_client,
         stop_signal_tx,
         sources: DashMap::new(),
         sinks: DashMap::new(),
+        join_handle: Some(join_handle),
     })
 }
 
@@ -77,7 +90,7 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl Opcua {
-    async fn connect(conf: &OpcuaConf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
+    async fn connect(conf: &Conf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
         debug!("{}", conf.addr);
         let mut client = ClientBuilder::new()
             .application_name("test")
@@ -91,7 +104,6 @@ impl Opcua {
 
         let endpoint: EndpointDescription = EndpointDescription::from(conf.addr.as_ref());
 
-        debug!("here");
         let (session, event_loop) = match client
             .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
             .await
@@ -100,25 +112,26 @@ impl Opcua {
             Err(e) => bail!(e.to_string()),
         };
 
-        debug!("here");
-
         let handle = event_loop.spawn();
         // session.wait_for_connection().await;
         debug!("opcua connect success");
         Ok((session, handle))
     }
 
-    fn event_loop(
-        opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
-        conf: OpcuaConf,
-        mut stop_signal_rx: watch::Receiver<()>,
-    ) {
+    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
             loop {
-                match Opcua::connect(&conf).await {
+                let mut status = false;
+                match Opcua::connect(&join_handle_data.conf).await {
                     Ok((session, join_handle)) => {
-                        debug!("connect success");
-                        opcua_client.write().await.replace(session);
+                        status = true;
+                        add_device_running_count();
+                        events::insert_connect_succeed(
+                            types::events::ResourceType::Device,
+                            &join_handle_data.id,
+                        )
+                        .await;
+                        join_handle_data.opcua_client.write().await.replace(session);
                         match join_handle.await {
                             Ok(s) => {
                                 debug!("{}", s);
@@ -127,12 +140,24 @@ impl Opcua {
                         }
                     }
                     Err(e) => {
+                        if status {
+                            sub_device_running_count();
+                            status = false;
+                        }
+
+                        events::insert_connect_failed(
+                            types::events::ResourceType::Device,
+                            &join_handle_data.id,
+                            e.to_string(),
+                        )
+                        .await;
                         warn!("connect error: {}", e);
-                        let sleep = time::sleep(Duration::from_secs(conf.reconnect));
+                        let sleep =
+                            time::sleep(Duration::from_secs(join_handle_data.conf.reconnect));
                         tokio::pin!(sleep);
                         select! {
-                            _ = stop_signal_rx.changed() => {
-                                return
+                            _ = join_handle_data.stop_signal_rx.changed() => {
+                                return join_handle_data;
                             }
 
                             _ = &mut sleep => {}
@@ -141,7 +166,7 @@ impl Opcua {
                     }
                 }
             }
-        });
+        })
     }
 }
 
@@ -157,31 +182,17 @@ impl Device for Opcua {
 
     async fn update(
         &mut self,
-        old_conf: serde_json::Value,
+        _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
+        let new_conf: Conf = serde_json::from_value(new_conf)?;
         self.stop_signal_tx.send(()).unwrap();
-        // let ext_conf: OpcuaConf = serde_json::from_value(device_conf.ext)?;
-        // Self::validate_conf(&ext_conf)?;
+        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
+        join_handle_data.conf = new_conf;
+        let join_handle = Self::event_loop(join_handle_data);
+        self.join_handle = Some(join_handle);
 
-        // let mut restart = false;
-        // if self.ext_conf != ext_conf {
-        //     restart = true;
-        // }
-        // self.base_conf = device_conf.base;
-        // self.ext_conf = ext_conf;
-
-        // if restart && self.on {
-        //     self.stop_signal_tx
-        //         .as_ref()
-        //         .unwrap()
-        //         .send(())
-        //         .await
-        //         .unwrap();
-        // }
-
-        // Ok(())
-        todo!()
+        Ok(())
     }
 
     async fn create_source(

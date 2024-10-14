@@ -1,24 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::BaseConf;
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdateOpcuaReq {
-    pub base: BaseConf,
-    pub ext: OpcuaConf,
-}
-
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct OpcuaConf {
+pub struct Conf {
     pub addr: String,
     // 秒数
     pub reconnect: u64,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct CreaetUpdateSourceReq {
-    pub base: BaseConf,
-    pub ext: SourceConf,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

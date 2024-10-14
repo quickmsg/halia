@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use common::constants::CHANNEL_SIZE;
 use message::MessageBatch;
 use opcua::{
     client::Session,
@@ -27,7 +28,7 @@ impl Sink {
 
     pub fn new(opcua_client: Arc<RwLock<Option<Arc<Session>>>>, conf: SinkConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = mpsc::channel(CHANNEL_SIZE);
         Self::event_loop(conf, stop_signal_rx, mb_rx);
         Self {
             stop_signal_tx,

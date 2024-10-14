@@ -10,12 +10,13 @@ use std::{
 
 use async_trait::async_trait;
 use common::{
+    constants::CHANNEL_SIZE,
     error::{HaliaError, HaliaResult},
     storage,
 };
 use dashmap::DashMap;
 use message::MessageBatch;
-use protocol::modbus::{rtu, tcp, Context};
+use protocol::modbus::{self, rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -29,7 +30,7 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{debug, trace, warn};
 use types::{
     devices::{
-        modbus::{Area, DataType, Encode, ModbusConf, SinkConf, SourceConf, Type},
+        modbus::{Area, Conf, DataType, Encode, SinkConf, SourceConf, Type},
         DeviceConf, SearchDevicesItemRunningInfo,
     },
     Value,
@@ -41,8 +42,6 @@ mod sink;
 mod source;
 
 struct Modbus {
-    id: String,
-
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
 
@@ -54,51 +53,74 @@ struct Modbus {
     write_tx: mpsc::Sender<WritePointEvent>,
     read_tx: mpsc::Sender<String>,
 
-    join_handle: Option<
-        JoinHandle<(
-            watch::Receiver<()>,
-            mpsc::Receiver<WritePointEvent>,
-            mpsc::Receiver<String>,
-        )>,
-    >,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
+}
+
+struct JoinHandleData {
+    pub id: String,
+    pub conf: Conf,
+    pub sources: Arc<DashMap<String, Source>>,
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub write_rx: mpsc::Receiver<WritePointEvent>,
+    pub read_rx: mpsc::Receiver<String>,
+    pub err: Arc<RwLock<Option<String>>>,
+    pub rtt: Arc<AtomicU16>,
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let conf: ModbusConf = serde_json::from_value(conf.clone())?;
+    let conf: Conf = serde_json::from_value(conf.clone())?;
 
-    if conf.ethernet.is_none() && conf.serial.is_none() {
-        return Err(HaliaError::Common(
-            "必须提供以太网或串口的配置！".to_owned(),
-        ));
+    match conf.link_type {
+        types::devices::modbus::LinkType::Ethernet => {
+            if conf.ethernet.is_none() {
+                return Err(HaliaError::Common("必须提供以太网的配置！".to_owned()));
+            }
+        }
+        types::devices::modbus::LinkType::Serial => {
+            if conf.serial.is_none() {
+                return Err(HaliaError::Common("必须提供串口的配置！".to_owned()));
+            }
+        }
     }
 
     Ok(())
 }
 
-pub fn new(device_id: String, device_conf: DeviceConf) -> Box<dyn Device> {
-    let conf: ModbusConf = serde_json::from_value(device_conf.ext).unwrap();
+pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
+    let conf: Conf = serde_json::from_value(conf).unwrap();
 
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-    let (read_tx, read_rx) = mpsc::channel::<String>(16);
-    let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(16);
-    let (device_err_tx, _) = broadcast::channel(16);
+    let (read_tx, read_rx) = mpsc::channel::<String>(CHANNEL_SIZE);
+    let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(CHANNEL_SIZE);
+    let (device_err_tx, _) = broadcast::channel(CHANNEL_SIZE);
 
-    let mut device = Modbus {
-        id: device_id,
+    let sources = Arc::new(DashMap::new());
+    let err = Arc::new(RwLock::new(None));
+    let rtt = Arc::new(AtomicU16::new(0));
+    let join_handle_data = JoinHandleData {
+        id,
+        conf,
+        stop_signal_rx,
+        write_rx,
+        read_rx,
+        sources: sources.clone(),
+        err: err.clone(),
+        rtt: rtt.clone(),
+    };
+
+    let join_handle = Modbus::event_loop(join_handle_data);
+
+    Box::new(Modbus {
         err: Arc::new(RwLock::new(None)),
         rtt: Arc::new(AtomicU16::new(0)),
-        sources: Arc::new(DashMap::new()),
+        sources,
         sinks: DashMap::new(),
         stop_signal_tx,
         device_err_tx,
         write_tx,
         read_tx,
-        join_handle: None,
-    };
-
-    device.event_loop(conf, stop_signal_rx, read_rx, write_rx);
-
-    Box::new(device)
+        join_handle: Some(join_handle),
+    })
 }
 
 pub fn validate_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
@@ -114,77 +136,68 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl Modbus {
-    fn event_loop(
-        &mut self,
-        modbus_conf: ModbusConf,
-        mut stop_signal_rx: watch::Receiver<()>,
-        mut read_rx: mpsc::Receiver<String>,
-        mut write_rx: mpsc::Receiver<WritePointEvent>,
-    ) {
-        let device_id = self.id.clone();
-        let err = self.err.clone();
-        let sources = self.sources.clone();
-        let rtt = self.rtt.clone();
-        let join_handle = tokio::spawn(async move {
-            let mut init = false;
+    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+        tokio::spawn(async move {
+            let mut status = false;
             let mut task_err: Option<io::Error> = None;
             loop {
-                match Modbus::connect(&modbus_conf).await {
+                match Modbus::connect(&join_handle_data.conf).await {
                     Ok(mut ctx) => {
-                        if !init {
-                            init = true;
-                        }
+                        status = true;
                         add_device_running_count();
 
                         task_err = None;
-                        *err.write().await = None;
-                        if let Err(e) = storage::device::update_err(&device_id, false).await {
+                        *join_handle_data.err.write().await = None;
+                        if let Err(e) =
+                            storage::device::update_err(&join_handle_data.id, false).await
+                        {
                             warn!("update device err failed: {}", e);
                         }
 
                         events::insert_connect_succeed(
                             types::events::ResourceType::Device,
-                            &device_id,
+                            &join_handle_data.id,
                         )
                         .await;
 
                         loop {
                             select! {
                                 biased;
-                                _ = stop_signal_rx.changed() => {
-                                    return (stop_signal_rx, write_rx, read_rx);
+                                _ = join_handle_data.stop_signal_rx.changed() => {
+                                    return join_handle_data;
                                 }
 
-                                wpe = write_rx.recv() => {
+                                wpe = join_handle_data.write_rx.recv() => {
                                     if let Some(wpe) = wpe {
                                         if write_value(&mut ctx, wpe).await.is_err() {
                                             break
                                         }
                                     }
-                                    if modbus_conf.interval > 0 {
-                                        time::sleep(Duration::from_millis(modbus_conf.interval)).await;
+                                    if join_handle_data.conf.interval > 0 {
+                                        time::sleep(Duration::from_millis(join_handle_data.conf.interval)).await;
                                     }
                                 }
 
-                                Some(point_id) = read_rx.recv() => {
-                                    if let Some(mut source) = sources.get_mut(&point_id) {
+                                Some(point_id) = join_handle_data.read_rx.recv() => {
+                                    if let Some(mut source) = join_handle_data.sources.get_mut(&point_id) {
                                         let now = Instant::now();
                                         if let Err(_) = source.read(&mut ctx).await {
                                             break
                                         }
-                                        rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
+                                        join_handle_data.rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
                                     }
                                 }
                             }
                         }
                     }
                     Err(e) => {
-                        if init {
+                        if status {
                             sub_device_running_count();
+                            status = false;
                         }
                         events::insert_connect_failed(
                             types::events::ResourceType::Device,
-                            &device_id,
+                            &join_handle_data.id,
                             e.to_string(),
                         )
                         .await;
@@ -192,13 +205,13 @@ impl Modbus {
                         match &task_err {
                             Some(te) => {
                                 if te.to_string() != e.to_string() {
-                                    *err.write().await = Some(e.to_string());
+                                    *join_handle_data.err.write().await = Some(e.to_string());
                                 }
                             }
                             None => {
-                                *err.write().await = Some(e.to_string());
+                                *join_handle_data.err.write().await = Some(e.to_string());
                                 if let Err(storage_err) =
-                                    storage::device::update_err(&device_id, true).await
+                                    storage::device::update_err(&join_handle_data.id, true).await
                                 {
                                     warn!("update device err failed: {}", storage_err);
                                 }
@@ -207,11 +220,12 @@ impl Modbus {
 
                         task_err = Some(e);
 
-                        let sleep = time::sleep(Duration::from_secs(modbus_conf.reconnect));
+                        let sleep =
+                            time::sleep(Duration::from_secs(join_handle_data.conf.reconnect));
                         tokio::pin!(sleep);
                         select! {
-                            _ = stop_signal_rx.changed() => {
-                                return (stop_signal_rx, write_rx, read_rx);
+                            _ = join_handle_data.stop_signal_rx.changed() => {
+                                return join_handle_data;
                             }
 
                             _ = &mut sleep => {}
@@ -219,11 +233,10 @@ impl Modbus {
                     }
                 }
             }
-        });
-        self.join_handle = Some(join_handle);
+        })
     }
 
-    async fn connect(conf: &ModbusConf) -> io::Result<Box<dyn Context>> {
+    async fn connect(conf: &Conf) -> io::Result<Box<dyn Context>> {
         match conf.link_type {
             types::devices::modbus::LinkType::Ethernet => {
                 let ethernet = conf.ethernet.as_ref().unwrap();
@@ -323,7 +336,7 @@ impl WritePointEvent {
     }
 }
 
-async fn write_value(ctx: &mut Box<dyn Context>, wpe: WritePointEvent) -> HaliaResult<()> {
+async fn write_value(ctx: &mut Box<dyn modbus::Context>, wpe: WritePointEvent) -> HaliaResult<()> {
     let resp = match (wpe.area, wpe.data_type.typ) {
         (Area::Coils, Type::Bool) => {
             ctx.write_single_coil(wpe.slave, wpe.address, wpe.data)
@@ -389,18 +402,15 @@ impl Device for Modbus {
 
     async fn update(
         &mut self,
-        old_conf: serde_json::Value,
+        _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let old_conf: ModbusConf = serde_json::from_value(old_conf)?;
-        let new_conf: ModbusConf = serde_json::from_value(new_conf)?;
-        if old_conf == new_conf {
-            return Ok(());
-        }
+        let new_conf: Conf = serde_json::from_value(new_conf)?;
 
         self.stop_signal_tx.send(()).unwrap();
-        let (stop_signal_rx, write_rx, read_rx) = self.join_handle.take().unwrap().await.unwrap();
-        self.event_loop(new_conf, stop_signal_rx, read_rx, write_rx);
+        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
+        join_handle_data.conf = new_conf;
+        Self::event_loop(join_handle_data);
 
         Ok(())
     }
