@@ -20,13 +20,13 @@ use types::{
     SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
 };
 
-mod http_client;
+mod http;
 mod influxdb_v1;
 mod influxdb_v2;
 mod kafka;
 mod mqtt_client_ssl;
-mod mqtt_client_v311;
-mod mqtt_client_v50;
+mod mqtt_v311;
+mod mqtt_v50;
 mod tdengine;
 
 static GLOBAL_APP_MANAGER: LazyLock<DashMap<String, Box<dyn App>>> =
@@ -195,9 +195,9 @@ pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
     }
 
     match req.typ {
-        AppType::MqttV311 => mqtt_client_v311::validate_conf(&req.conf.ext)?,
-        AppType::MqttV50 => mqtt_client_v50::validate_conf(&req.conf.ext)?,
-        AppType::Http => http_client::validate_conf(&req.conf.ext)?,
+        AppType::MqttV311 => mqtt_v311::validate_conf(&req.conf.ext)?,
+        AppType::MqttV50 => mqtt_v50::validate_conf(&req.conf.ext)?,
+        AppType::Http => http::validate_conf(&req.conf.ext)?,
         AppType::Kafka => kafka::validate_conf(&req.conf.ext)?,
         AppType::InfluxdbV1 => influxdb_v1::validate_conf(&req.conf.ext)?,
         AppType::InfluxdbV2 => influxdb_v2::validate_conf(&req.conf.ext)?,
@@ -263,9 +263,9 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     };
 
     let app = match app_type {
-        AppType::MqttV311 => mqtt_client_v311::new(app_id.clone(), app_conf.ext),
-        AppType::MqttV50 => mqtt_client_v50::new(app_id.clone(), app_conf.ext),
-        AppType::Http => http_client::new(app_id.clone(), app_conf.ext),
+        AppType::MqttV311 => mqtt_v311::new(app_id.clone(), app_conf.ext),
+        AppType::MqttV50 => mqtt_v50::new(app_id.clone(), app_conf.ext),
+        AppType::Http => http::new(app_id.clone(), app_conf.ext),
         AppType::Kafka => kafka::new(app_id.clone(), app_conf.ext),
         AppType::InfluxdbV1 => influxdb_v1::new(app_id.clone(), app_conf.ext),
         AppType::InfluxdbV2 => influxdb_v2::new(app_id.clone(), app_conf.ext),
@@ -346,9 +346,9 @@ pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> 
 
     let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
     match typ {
-        AppType::MqttV311 => mqtt_client_v311::validate_source_conf(&req.ext)?,
-        AppType::MqttV50 => mqtt_client_v50::validate_source_conf(&req.ext)?,
-        AppType::Http => http_client::validate_source_conf(&req.ext)?,
+        AppType::MqttV311 => mqtt_v311::validate_source_conf(&req.ext)?,
+        AppType::MqttV50 => mqtt_v50::validate_source_conf(&req.ext)?,
+        AppType::Http => http::validate_source_conf(&req.ext)?,
         AppType::Kafka | AppType::InfluxdbV1 | AppType::InfluxdbV2 | AppType::Tdengine => {
             return Err(HaliaError::NotSupportResource)
         }
@@ -478,9 +478,9 @@ pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> Ha
 
     let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
     match typ {
-        AppType::MqttV311 => mqtt_client_v311::validate_sink_conf(&req.ext)?,
-        AppType::MqttV50 => mqtt_client_v50::validate_sink_conf(&req.ext)?,
-        AppType::Http => http_client::validate_sink_conf(&req.ext)?,
+        AppType::MqttV311 => mqtt_v311::validate_sink_conf(&req.ext)?,
+        AppType::MqttV50 => mqtt_v50::validate_sink_conf(&req.ext)?,
+        AppType::Http => http::validate_sink_conf(&req.ext)?,
         AppType::Kafka => kafka::validate_sink_conf(&req.ext)?,
         AppType::InfluxdbV1 => influxdb_v1::validate_sink_conf(&req.ext)?,
         AppType::InfluxdbV2 => influxdb_v2::validate_sink_conf(&req.ext)?,
