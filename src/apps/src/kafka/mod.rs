@@ -129,6 +129,7 @@ impl Kafka {
     fn event_loop(mut jhd: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
             Self::connect_loop(&mut jhd).await;
+            Self::handle_connect_status_changed(&jhd.kafka_client, &jhd.sinks).await;
 
             loop {
                 select! {

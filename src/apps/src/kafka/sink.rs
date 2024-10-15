@@ -20,7 +20,7 @@ use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 use types::apps::kafka::SinkConf;
 
 pub struct Sink {
