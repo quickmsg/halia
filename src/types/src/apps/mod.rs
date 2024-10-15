@@ -24,9 +24,9 @@ pub struct CreateUpdateAppReq {
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AppType {
-    MqttClientV311,
-    MqttClientV50,
-    HttpClient,
+    MqttV311,
+    MqttV50,
+    Http,
     Kafka,
     InfluxdbV1,
     InfluxdbV2,
@@ -36,9 +36,9 @@ pub enum AppType {
 impl Into<i32> for AppType {
     fn into(self) -> i32 {
         match self {
-            AppType::MqttClientV311 => 10,
-            AppType::MqttClientV50 => 11,
-            AppType::HttpClient => 2,
+            AppType::MqttV311 => 10,
+            AppType::MqttV50 => 11,
+            AppType::Http => 2,
             AppType::Kafka => 3,
             AppType::InfluxdbV1 => 40,
             AppType::InfluxdbV2 => 41,
@@ -52,9 +52,9 @@ impl TryFrom<i32> for AppType {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            10 => Ok(AppType::MqttClientV311),
-            11 => Ok(AppType::MqttClientV50),
-            2 => Ok(AppType::HttpClient),
+            10 => Ok(AppType::MqttV311),
+            11 => Ok(AppType::MqttV50),
+            2 => Ok(AppType::Http),
             3 => Ok(AppType::Kafka),
             40 => Ok(AppType::InfluxdbV1),
             41 => Ok(AppType::InfluxdbV2),
@@ -73,12 +73,12 @@ pub struct AppConf {
 impl fmt::Display for AppType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            AppType::MqttClientV311 => write!(f, "mqtt_client"),
-            AppType::HttpClient => write!(f, "http_client"),
+            AppType::MqttV311 => write!(f, "mqtt_v311"),
+            AppType::Http => write!(f, "http"),
             AppType::Kafka => write!(f, "kafka"),
             AppType::InfluxdbV1 | AppType::InfluxdbV2 => write!(f, "influxdb"),
             AppType::Tdengine => write!(f, "tdengine"),
-            AppType::MqttClientV50 => write!(f, "mqtt_client"),
+            AppType::MqttV50 => write!(f, "mqtt_v50"),
         }
     }
 }
@@ -89,10 +89,12 @@ impl TryFrom<String> for AppType {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
-            "mqtt_client" => Ok(AppType::MqttClientV311),
-            "http_client" => Ok(AppType::HttpClient),
+            "mqtt_v311" => Ok(AppType::MqttV311),
+            "mqtt_v50" => Ok(AppType::MqttV50),
+            "http" => Ok(AppType::Http),
             "kafka" => Ok(AppType::Kafka),
-            "influxdb" => Ok(AppType::InfluxdbV1),
+            "influxdb_v1" => Ok(AppType::InfluxdbV1),
+            "influxdb_v2" => Ok(AppType::InfluxdbV2),
             "tdengine" => Ok(AppType::Tdengine),
             _ => bail!("未知应用类型: {}", value),
         }
@@ -135,6 +137,7 @@ pub struct SearchAppsItemCommon {
     pub on: bool,
     pub source_cnt: usize,
     pub sink_cnt: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_info: Option<SearchAppsItemCommonMemory>,
 }
 
