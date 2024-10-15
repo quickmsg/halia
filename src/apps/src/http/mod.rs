@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    Arc,
+};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -8,7 +11,10 @@ use reqwest::RequestBuilder;
 use sink::Sink;
 use source::Source;
 use tokio::sync::{broadcast, mpsc};
-use types::apps::http_client::{BasicAuth, HttpClientConf, SinkConf, SourceConf};
+use types::apps::{
+    http_client::{BasicAuth, HttpClientConf, SinkConf, SourceConf},
+    SearchAppsItemRunningInfo,
+};
 
 use crate::App;
 
@@ -18,9 +24,10 @@ mod source;
 pub struct HttpClient {
     _id: String,
     conf: Arc<HttpClientConf>,
-    _err: Option<String>,
+    err: Option<String>,
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
+    rtt: AtomicU16,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -29,9 +36,10 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     Box::new(HttpClient {
         _id: id,
         conf: Arc::new(conf),
-        _err: None,
+        err: None,
         sources: DashMap::new(),
         sinks: DashMap::new(),
+        rtt: AtomicU16::new(0),
     })
 }
 
@@ -53,6 +61,13 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl App for HttpClient {
+    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
+        SearchAppsItemRunningInfo {
+            err: self.err.clone(),
+            rtt: self.rtt.load(Ordering::SeqCst),
+        }
+    }
+
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,

@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    Arc,
+};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -6,7 +9,10 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc;
-use types::apps::influxdb_v2::{Conf, SinkConf};
+use types::apps::{
+    influxdb_v2::{Conf, SinkConf},
+    SearchAppsItemRunningInfo,
+};
 
 use crate::App;
 
@@ -14,9 +20,10 @@ mod sink;
 
 pub struct Influxdb {
     _id: String,
-    _err: Option<String>,
+    err: Option<String>,
     sinks: DashMap<String, Sink>,
     conf: Arc<Conf>,
+    rtt: AtomicU16,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -24,9 +31,10 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     Box::new(Influxdb {
         _id: id,
-        _err: None,
+        err: None,
         sinks: DashMap::new(),
         conf: Arc::new(conf),
+        rtt: AtomicU16::new(0),
     })
 }
 
@@ -43,6 +51,13 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl App for Influxdb {
+    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
+        SearchAppsItemRunningInfo {
+            err: self.err.clone(),
+            rtt: self.rtt.load(Ordering::SeqCst),
+        }
+    }
+
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,

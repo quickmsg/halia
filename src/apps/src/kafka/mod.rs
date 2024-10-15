@@ -1,4 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -13,14 +19,17 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::apps::kafka::{Conf, SinkConf};
+use types::apps::{
+    kafka::{Conf, SinkConf},
+    SearchAppsItemRunningInfo,
+};
 
 use crate::App;
 
 mod sink;
 
 pub struct Kafka {
-    _err: Option<String>,
+    err: Option<String>,
     stop_signal_tx: watch::Sender<()>,
 
     kafka_client: Arc<RwLock<Option<Client>>>,
@@ -28,6 +37,7 @@ pub struct Kafka {
     sinks: Arc<DashMap<String, Sink>>,
     kafka_err_tx: mpsc::Sender<String>,
     jh: Option<JoinHandle<JoinHandleData>>,
+    rtt: AtomicU16,
 }
 
 struct JoinHandleData {
@@ -69,12 +79,13 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let jh = Kafka::event_loop(jhd);
 
     Box::new(Kafka {
-        _err: None,
+        err: None,
         sinks,
         kafka_client,
         stop_signal_tx,
         kafka_err_tx,
         jh: Some(jh),
+        rtt: AtomicU16::new(0),
     })
 }
 
@@ -146,6 +157,13 @@ impl Kafka {
 
 #[async_trait]
 impl App for Kafka {
+    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
+        SearchAppsItemRunningInfo {
+            err: self.err.clone(),
+            rtt: self.rtt.load(Ordering::SeqCst),
+        }
+    }
+
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,

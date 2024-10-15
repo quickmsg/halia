@@ -126,6 +126,8 @@ pub struct SearchAppsResp {
 #[derive(Serialize)]
 pub struct SearchAppsItemResp {
     pub common: SearchAppsItemCommon,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub running_info: Option<SearchAppsItemRunningInfo>,
     pub conf: SearchAppsItemConf,
 }
 
@@ -137,12 +139,11 @@ pub struct SearchAppsItemCommon {
     pub on: bool,
     pub source_cnt: usize,
     pub sink_cnt: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub memory_info: Option<SearchAppsItemCommonMemory>,
 }
 
 #[derive(Serialize)]
-pub struct SearchAppsItemCommonMemory {
+pub struct SearchAppsItemRunningInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     pub rtt: u16,
 }

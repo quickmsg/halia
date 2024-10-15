@@ -14,7 +14,8 @@ use tokio::sync::{broadcast, mpsc};
 use types::{
     apps::{
         AppConf, AppType, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsItemCommon,
-        SearchAppsItemConf, SearchAppsItemResp, SearchAppsResp, SearchRuleInfo, Summary,
+        SearchAppsItemConf, SearchAppsItemResp, SearchAppsItemRunningInfo, SearchAppsResp,
+        SearchRuleInfo, Summary,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
     SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
@@ -74,6 +75,7 @@ pub(crate) fn _sub_app_running_count() {
 
 #[async_trait]
 pub trait App: Send + Sync {
+    async fn read_running_info(&self) -> SearchAppsItemRunningInfo;
     async fn update(
         &mut self,
         old_conf: serde_json::Value,
@@ -610,6 +612,18 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<Search
     )
     .await?;
 
+    let running_info = match db_app.status {
+        0 => None,
+        1 => Some(
+            GLOBAL_APP_MANAGER
+                .get(&db_app.id)
+                .unwrap()
+                .read_running_info()
+                .await,
+        ),
+        _ => unreachable!(),
+    };
+
     let typ = AppType::try_from(db_app.typ)?;
     Ok(SearchAppsItemResp {
         common: SearchAppsItemCommon {
@@ -618,7 +632,6 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<Search
             on: db_app.status == 1,
             source_cnt,
             sink_cnt,
-            memory_info: None,
         },
         conf: SearchAppsItemConf {
             base: BaseConf {
@@ -629,5 +642,6 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<Search
             },
             ext: serde_json::from_slice(&db_app.conf)?,
         },
+        running_info,
     })
 }

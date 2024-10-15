@@ -217,15 +217,18 @@ pub async fn search(
         }
         (None, Some(typ), None, None) => {
             let typ = transfer_type(&typ)?;
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE typ = ?")
-                .bind(&typ)
-                .fetch_one(POOL.get().unwrap())
-                .await?;
+            let count: i64 =
+                sqlx::query_scalar(format!("SELECT COUNT(*) FROM apps WHERE {}", typ).as_str())
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                format!(
+                    "SELECT * FROM apps WHERE {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    typ
+                )
+                .as_str(),
             )
-            .bind(&typ)
             .bind(limit)
             .bind(offset)
             .fetch_all(POOL.get().unwrap())
@@ -235,17 +238,21 @@ pub async fn search(
         }
         (None, Some(typ), None, Some(err)) => {
             let typ = transfer_type(&typ)?;
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE typ = ? AND err = ?")
-                    .bind(&typ)
-                    .bind(err as i32)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
+
+            let count: i64 = sqlx::query_scalar(
+                format!("SELECT COUNT(*) FROM apps WHERE {} AND err = ?", typ).as_str(),
+            )
+            .bind(err as i32)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE typ = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                format!(
+                    "SELECT * FROM apps WHERE {} AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    typ
+                )
+                .as_str(),
             )
-            .bind(&typ)
             .bind(err as i32)
             .bind(limit)
             .bind(offset)
@@ -256,17 +263,20 @@ pub async fn search(
         }
         (None, Some(typ), Some(on), None) => {
             let typ = transfer_type(&typ)?;
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE typ = ? AND status = ?")
-                    .bind(&typ)
-                    .bind(on as i32)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
+            let count: i64 = sqlx::query_scalar(
+                format!("SELECT COUNT(*) FROM apps WHERE {} AND status = ?", typ).as_str(),
+            )
+            .bind(on as i32)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE typ = ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                format!(
+                    "SELECT * FROM apps WHERE {} AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    typ
+                )
+                .as_str(),
             )
-            .bind(&typ)
             .bind(on as i32)
             .bind(limit)
             .bind(offset)
@@ -277,19 +287,22 @@ pub async fn search(
         }
         (None, Some(typ), Some(on), Some(err)) => {
             let typ = transfer_type(&typ)?;
+
             let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM apps WHERE typ = ? AND status = ? AND err = ?",
+                format!(
+                    "SELECT COUNT(*) FROM apps WHERE {} AND status = ? AND err = ?",
+                    typ
+                )
+                .as_str(),
             )
-            .bind(&typ)
             .bind(on as i32)
             .bind(err as i32)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE typ = ? AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                format!("SELECT * FROM apps WHERE {} AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?", typ).as_str(),
             )
-            .bind(&typ)
             .bind(on as i32)
             .bind(err as i32)
             .bind(limit)
@@ -384,18 +397,21 @@ pub async fn search(
         (Some(name), Some(typ), None, None) => {
             let name = format!("%{}%", name);
             let typ = transfer_type(&typ)?;
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name LIKE ? AND typ = ?")
-                    .bind(&name)
-                    .bind(&typ)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
-
-            let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE name LIKE ? AND typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            let count: i64 = sqlx::query_scalar(
+                format!("SELECT COUNT(*) FROM apps WHERE name LIKE ? AND {}", typ).as_str(),
             )
             .bind(&name)
-            .bind(&typ)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+            let apps = sqlx::query_as::<_, App>(
+                format!(
+                    "SELECT * FROM apps WHERE name LIKE ? AND {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    typ
+                )
+                .as_str(),
+            )
+            .bind(&name)
             .bind(limit)
             .bind(offset)
             .fetch_all(POOL.get().unwrap())
@@ -406,20 +422,23 @@ pub async fn search(
         (Some(name), Some(typ), None, Some(err)) => {
             let name = format!("%{}%", name);
             let typ = transfer_type(&typ)?;
+
             let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND typ = ? AND err = ?",
+                format!(
+                    "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND {} AND err = ?",
+                    typ
+                )
+                .as_str(),
             )
             .bind(&name)
-            .bind(&typ)
             .bind(err as i32)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE name LIKE ? AND typ = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                format!("SELECT * FROM apps WHERE name LIKE ? AND {} AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?", typ).as_str(),
             )
             .bind(&name)
-            .bind(&typ)
             .bind(err as i32)
             .bind(limit)
             .bind(offset)
@@ -431,20 +450,23 @@ pub async fn search(
         (Some(name), Some(typ), Some(on), None) => {
             let name = format!("%{}%", name);
             let typ = transfer_type(&typ)?;
+
             let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND typ = ? AND status = ?",
+                format!(
+                    "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND {} AND status = ?",
+                    typ
+                )
+                .as_str(),
             )
             .bind(&name)
-            .bind(&typ)
             .bind(on as i32)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE name LIKE ? AND typ = ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                format!("SELECT * FROM apps WHERE name LIKE ? AND {} AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?", typ).as_str(),
             )
             .bind(&name)
-            .bind(&typ)
             .bind(on as i32)
             .bind(limit)
             .bind(offset)
@@ -456,21 +478,24 @@ pub async fn search(
         (Some(name), Some(typ), Some(on), Some(err)) => {
             let name = format!("%{}%", name);
             let typ = transfer_type(&typ)?;
+
             let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND typ = ? AND status = ? AND err = ?",
+                format!(
+                    "SELECT COUNT(*) FROM apps WHERE name LIKE ? AND {} AND status = ? AND err = ?",
+                    typ
+                )
+                .as_str(),
             )
             .bind(&name)
-            .bind(&typ)
             .bind(on as i32)
             .bind(err as i32)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let apps = sqlx::query_as::<_, App>(
-                "SELECT * FROM apps WHERE name LIKE ? AND typ = ? AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                format!("SELECT * FROM apps WHERE name LIKE ? AND {} AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?", typ).as_str(),
             )
             .bind(&name)
-            .bind(&typ)
             .bind(on as i32)
             .bind(err as i32)
             .bind(limit)
@@ -529,11 +554,11 @@ pub async fn delete(id: &String) -> Result<()> {
 
 fn transfer_type(typ: &str) -> Result<String> {
     let typ = match typ {
-        "mqtt" => "10 OR typ = 11".to_owned(),
-        "http" => "2".to_owned(),
-        "kafka" => "3".to_owned(),
-        "influxdb" => "40 OR typ = 41".to_owned(),
-        "tdengine" => "5".to_owned(),
+        "mqtt" => "(typ = 10 OR typ = 11)".to_owned(),
+        "http" => "typ = 2".to_owned(),
+        "kafka" => "typ = 3".to_owned(),
+        "influxdb" => "(typ = 40 OR typ = 41)".to_owned(),
+        "tdengine" => "typ = 5".to_owned(),
         _ => bail!("未知应用类型。"),
     };
     Ok(typ)

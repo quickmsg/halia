@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    Arc,
+};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -8,7 +11,10 @@ use sink::Sink;
 use taos::{AsyncQueryable, AsyncTBuilder, Taos, TaosBuilder};
 use tokio::sync::mpsc;
 use tracing::warn;
-use types::apps::tdengine::{SinkConf, TDengineConf};
+use types::apps::{
+    tdengine::{SinkConf, TDengineConf},
+    SearchAppsItemRunningInfo,
+};
 
 use crate::App;
 
@@ -18,6 +24,8 @@ pub struct TDengine {
     _id: String,
     conf: Arc<TDengineConf>,
     sinks: DashMap<String, Sink>,
+    err: Option<String>,
+    rtt: AtomicU16,
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
@@ -44,11 +52,20 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         _id: id,
         conf: Arc::new(conf),
         sinks: DashMap::new(),
+        err: None,
+        rtt: AtomicU16::new(0),
     })
 }
 
 #[async_trait]
 impl App for TDengine {
+    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
+        SearchAppsItemRunningInfo {
+            err: self.err.clone(),
+            rtt: self.rtt.load(Ordering::SeqCst),
+        }
+    }
+
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,

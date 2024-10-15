@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::{AtomicU16, Ordering}, Arc},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
@@ -14,7 +17,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, error, warn};
-use types::apps::mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf};
+use types::apps::{
+    mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf},
+    SearchAppsItemRunningInfo,
+};
 
 use crate::{mqtt_client_ssl::get_ssl_config, App};
 
@@ -24,7 +30,7 @@ mod source;
 pub struct MqttClient {
     _id: String,
 
-    _err: Arc<RwLock<Option<String>>>,
+    err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: watch::Sender<()>,
     app_err_tx: broadcast::Sender<bool>,
 
@@ -33,6 +39,7 @@ pub struct MqttClient {
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
+    rtt: AtomicU16,
 }
 
 struct JoinHandleData {
@@ -62,13 +69,14 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     Box::new(MqttClient {
         _id: id,
-        _err: app_err,
+        err: app_err,
         sources,
         sinks: DashMap::new(),
         stop_signal_tx,
         app_err_tx,
         join_handle: Some(join_handle),
         mqtt_client,
+        rtt: AtomicU16::new(0),
     })
 }
 
@@ -302,6 +310,13 @@ fn transfer_qos(qos: &Qos) -> mqttbytes::QoS {
 
 #[async_trait]
 impl App for MqttClient {
+    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
+        SearchAppsItemRunningInfo {
+            err: self.err.read().await.clone(),
+            rtt: self.rtt.load(Ordering::SeqCst),
+        }
+    }
+
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,
