@@ -10,7 +10,7 @@ use message::{MessageBatch, MessageValue};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error};
 use types::rules::{
-    functions::{ComputerConf, FilterConf, FilterConfItem, WindowConf},
+    functions::{ComputerConf, FilterConf, WindowConf},
     AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, LogNode, Node,
     NodeType, ReadRuleNodeResp, RuleConf,
 };
@@ -117,8 +117,6 @@ impl Rule {
             rule_ref::active(&self.id).await?;
         }
 
-        debug!("here");
-
         let threed_ids = get_3d_ids(
             &mut ids,
             &node_map,
@@ -126,7 +124,6 @@ impl Rule {
             &mut tmp_outgoing_edges,
         )?;
 
-        debug!("here");
         for twod_ids in threed_ids {
             for oned_ids in twod_ids {
                 let mut functions = vec![];
@@ -300,7 +297,6 @@ impl Rule {
             }
         }
 
-        debug!("here");
         match error {
             Some(error) => {
                 rule_ref::deactive(&self.id).await?;

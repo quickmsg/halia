@@ -99,11 +99,13 @@ impl Kafka {
         loop {
             match ClientBuilder::new(bootstrap_brokers.clone()).build().await {
                 Ok(client) => {
-                    jhd.kafka_client.write().await.replace(client);
+                    debug!("kafla client connected");
+                    *jhd.kafka_client.write().await = Some(client);
                     events::insert_connect_succeed(types::events::ResourceType::App, &jhd.id).await;
                     return;
                 }
                 Err(e) => {
+                    debug!("kafla client connect err: {}", e);
                     events::insert_connect_failed(
                         types::events::ResourceType::App,
                         &jhd.id,

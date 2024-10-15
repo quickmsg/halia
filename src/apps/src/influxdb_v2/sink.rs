@@ -144,7 +144,23 @@ impl Sink {
             .write_with_precision(&conf.bucket, stream::iter(data_points), timestamp_precision)
             .await
         {
-            warn!("Failed to write to influxdb: {}", e);
+            match e {
+                influxdb2::RequestError::ReqwestProcessing { source } => {
+                    warn!(
+                        "Failed to write to influxdb reqwest processing: {:?}",
+                        source,
+                    );
+                    warn!(
+                        "Failed to write to influxdb reqwest processing: {:?}",
+                        source.is_connect()
+                    );
+                }
+                influxdb2::RequestError::Http { status, text } => {
+                    debug!("Failed to write to influxdb http: {}, {}", status, text);
+                }
+                influxdb2::RequestError::Serializing { source } => {}
+                influxdb2::RequestError::Deserializing { text } => {}
+            }
         }
     }
 
