@@ -492,7 +492,7 @@ pub async fn count_all() -> Result<usize> {
 }
 
 pub async fn update_status(id: &String, status: bool) -> Result<()> {
-    sqlx::query("UPDATE devices SET status = ? WHERE id = ?")
+    sqlx::query("UPDATE devices SET status = ? AND err = 1 WHERE id = ?")
         .bind(status as i32)
         .bind(id)
         .execute(POOL.get().unwrap())

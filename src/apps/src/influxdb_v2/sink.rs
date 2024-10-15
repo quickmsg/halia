@@ -27,6 +27,7 @@ pub struct Sink {
 }
 
 pub struct JoinHandleData {
+    pub app_err_tx: mpsc::Sender<Option<String>>,
     pub conf: SinkConf,
     pub influxdb_conf: Arc<Conf>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
@@ -39,7 +40,11 @@ impl Sink {
         Ok(())
     }
 
-    pub fn new(conf: SinkConf, influxdb_conf: Arc<Conf>) -> Self {
+    pub fn new(
+        conf: SinkConf,
+        influxdb_conf: Arc<Conf>,
+        app_err_tx: mpsc::Sender<Option<String>>,
+    ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = mpsc::channel(16);
 
@@ -50,6 +55,7 @@ impl Sink {
             message_retainer,
             stop_signal_rx,
             mb_rx,
+            app_err_tx,
         };
         let join_handle = Self::event_loop(join_handle_data);
 
@@ -72,7 +78,7 @@ impl Sink {
         };
 
         tokio::spawn(async move {
-            let app_err = false;
+            let mut err = None;
             loop {
                 select! {
                     _ = join_handle_data.stop_signal_rx.changed() => {
@@ -80,11 +86,11 @@ impl Sink {
                     }
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
-                        if !app_err {
-                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, timestamp_precision.clone(),  mb).await;
-                        } else {
-                            join_handle_data.message_retainer.push(mb);
-                        }
+                        // if !app_err {
+                        Self::send_msg_to_influxdb(&join_handle_data.app_err_tx, &mut err, &influxdb_client, &join_handle_data.conf, timestamp_precision.clone(), mb, &mut join_handle_data.message_retainer).await;
+                        // } else {
+                        //     join_handle_data.message_retainer.push(mb);
+                        // }
                     }
                 }
             }
@@ -92,17 +98,18 @@ impl Sink {
     }
 
     async fn send_msg_to_influxdb(
+        app_err_tx: &mpsc::Sender<Option<String>>,
+        err: &mut Option<String>,
         influxdb_client: &Client,
         conf: &SinkConf,
         timestamp_precision: TimestampPrecision,
         mb: MessageBatch,
+        message_retainer: &mut Box<dyn SinkMessageRetain>,
     ) {
         let mut data_points = Vec::with_capacity(mb.len());
         for msg in mb.get_messages() {
-            debug!("msg: {:?}", msg);
             let mut data_point_builder = DataPoint::builder(&conf.mesaurement);
             for (field, field_value) in &conf.fields {
-                debug!("field: {}, field_value: {:?}", field, field_value);
                 let value = match get_dynamic_value_from_json(field_value) {
                     common::DynamicValue::Const(value) => value,
                     common::DynamicValue::Field(s) => match msg.get(&s) {
@@ -140,26 +147,43 @@ impl Sink {
             }
         }
 
-        if let Err(e) = influxdb_client
+        match influxdb_client
             .write_with_precision(&conf.bucket, stream::iter(data_points), timestamp_precision)
             .await
         {
-            match e {
-                influxdb2::RequestError::ReqwestProcessing { source } => {
-                    warn!(
-                        "Failed to write to influxdb reqwest processing: {:?}",
-                        source,
-                    );
-                    warn!(
-                        "Failed to write to influxdb reqwest processing: {:?}",
-                        source.is_connect()
-                    );
+            Ok(_) => match err {
+                Some(_) => {
+                    app_err_tx.send(None).await.unwrap();
+                    *err = None;
                 }
-                influxdb2::RequestError::Http { status, text } => {
-                    debug!("Failed to write to influxdb http: {}, {}", status, text);
+                None => {}
+            },
+            Err(e) => {
+                match e {
+                    influxdb2::RequestError::ReqwestProcessing { source } => {
+                        message_retainer.push(mb);
+                        match err {
+                            Some(err) => {
+                                if *err != source.to_string() {
+                                    app_err_tx.send(Some(source.to_string())).await.unwrap();
+                                    *err = source.to_string();
+                                }
+                            }
+                            None => {
+                                app_err_tx.send(Some(source.to_string())).await.unwrap();
+                                *err = Some(source.to_string());
+                            }
+                        };
+                    }
+                    influxdb2::RequestError::Http { status, text } => {
+                        // TODO sink err
+                        debug!("Failed to write to influxdb http: {}, {}", status, text);
+                    }
+                    // TODO sink err
+                    influxdb2::RequestError::Serializing { source } => {}
+                    // TODO sink err
+                    influxdb2::RequestError::Deserializing { text } => {}
                 }
-                influxdb2::RequestError::Serializing { source } => {}
-                influxdb2::RequestError::Deserializing { text } => {}
             }
         }
     }

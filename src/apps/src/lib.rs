@@ -65,11 +65,11 @@ pub(crate) fn get_app_running_count() -> usize {
     APP_RUNNING_COUNT.load(Ordering::SeqCst)
 }
 
-pub(crate) fn _add_app_running_count() {
+pub(crate) fn add_app_running_count() {
     APP_RUNNING_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
-pub(crate) fn _sub_app_running_count() {
+pub(crate) fn sub_app_running_count() {
     APP_RUNNING_COUNT.fetch_sub(1, Ordering::SeqCst);
 }
 

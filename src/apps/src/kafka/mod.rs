@@ -7,7 +7,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    storage,
+};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rskafka::client::{Client, ClientBuilder};
@@ -24,12 +27,12 @@ use types::apps::{
     SearchAppsItemRunningInfo,
 };
 
-use crate::App;
+use crate::{add_app_running_count, sub_app_running_count, App};
 
 mod sink;
 
 pub struct Kafka {
-    err: Option<String>,
+    err: Arc<RwLock<Option<Arc<String>>>>,
     stop_signal_tx: watch::Sender<()>,
 
     kafka_client: Arc<RwLock<Option<Client>>>,
@@ -43,6 +46,7 @@ pub struct Kafka {
 struct JoinHandleData {
     pub id: String,
     pub conf: Conf,
+    pub err: Arc<RwLock<Option<Arc<String>>>>,
     pub kafka_client: Arc<RwLock<Option<Client>>>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub kafka_err_rx: mpsc::Receiver<String>,
@@ -67,9 +71,12 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let sinks = Arc::new(DashMap::new());
     let (kafka_err_tx, kafka_err_rx) = mpsc::channel(1);
 
+    let err = Arc::new(RwLock::new(None));
+
     let jhd = JoinHandleData {
         id,
         conf,
+        err: err.clone(),
         kafka_client: kafka_client.clone(),
         stop_signal_rx,
         kafka_err_rx,
@@ -79,7 +86,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let jh = Kafka::event_loop(jhd);
 
     Box::new(Kafka {
-        err: None,
+        err,
         sinks,
         kafka_client,
         stop_signal_tx,
@@ -90,32 +97,54 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 }
 
 impl Kafka {
-    async fn connect_loop(jhd: &mut JoinHandleData) {
+    async fn connect_loop(join_handle_data: &mut JoinHandleData) {
         let mut bootstrap_brokers = vec![];
-        for (host, port) in &jhd.conf.bootstrap_brokers {
+        for (host, port) in &join_handle_data.conf.bootstrap_brokers {
             bootstrap_brokers.push(format!("{}:{}", host, port));
         }
-        let reconnect = jhd.conf.reconnect;
+        let reconnect = join_handle_data.conf.reconnect;
+        let mut task_err: Option<Arc<String>> = None;
         loop {
             match ClientBuilder::new(bootstrap_brokers.clone()).build().await {
                 Ok(client) => {
-                    debug!("kafla client connected");
-                    *jhd.kafka_client.write().await = Some(client);
-                    events::insert_connect_succeed(types::events::ResourceType::App, &jhd.id).await;
+                    add_app_running_count();
+                    *join_handle_data.kafka_client.write().await = Some(client);
+                    events::insert_connect_succeed(
+                        types::events::ResourceType::App,
+                        &join_handle_data.id,
+                    )
+                    .await;
                     return;
                 }
                 Err(e) => {
-                    debug!("kafla client connect err: {}", e);
                     events::insert_connect_failed(
                         types::events::ResourceType::App,
-                        &jhd.id,
+                        &join_handle_data.id,
                         e.to_string(),
                     )
                     .await;
+
+                    match &task_err {
+                        Some(inner_task_err) => {
+                            sub_app_running_count();
+                            if **inner_task_err != e.to_string() {
+                                let err = Arc::new(e.to_string());
+                                task_err = Some(err.clone());
+                                join_handle_data.err.write().await.replace(err);
+                            }
+                        }
+                        None => {
+                            let _ = storage::app::update_err(&join_handle_data.id, true).await;
+                            let err = Arc::new(e.to_string());
+                            task_err = Some(err.clone());
+                            join_handle_data.err.write().await.replace(err);
+                        }
+                    }
+
                     let sleep = time::sleep(Duration::from_secs(reconnect));
                     tokio::pin!(sleep);
                     select! {
-                        _ = jhd.stop_signal_rx.changed() => {
+                        _ = join_handle_data.stop_signal_rx.changed() => {
                             return;
                         }
 
@@ -161,8 +190,12 @@ impl Kafka {
 #[async_trait]
 impl App for Kafka {
     async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
+        let err = match self.err.read().await.as_ref() {
+            Some(err) => Some(err.as_ref().clone()),
+            None => None,
+        };
         SearchAppsItemRunningInfo {
-            err: self.err.clone(),
+            err,
             rtt: self.rtt.load(Ordering::SeqCst),
         }
     }

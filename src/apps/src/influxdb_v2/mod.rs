@@ -1,12 +1,16 @@
-use std::sync::{
-    atomic::{AtomicU16, Ordering},
-    Arc,
+use std::{
+    ops::Deref,
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        Arc,
+    },
 };
 
 use async_trait::async_trait;
 use common::{
     constants::CHANNEL_SIZE,
     error::{HaliaError, HaliaResult},
+    storage,
 };
 use dashmap::DashMap;
 use message::MessageBatch;
@@ -21,38 +25,41 @@ use types::apps::{
     SearchAppsItemRunningInfo,
 };
 
-use crate::App;
+use crate::{add_app_running_count, sub_app_running_count, App};
 
 mod sink;
 
 pub struct Influxdb {
-    err: Arc<RwLock<Option<String>>>,
+    err: Arc<RwLock<Option<Arc<String>>>>,
     sinks: DashMap<String, Sink>,
     conf: Arc<Conf>,
     rtt: AtomicU16,
-    app_err_tx: mpsc::Sender<String>,
+    app_err_tx: mpsc::Sender<Option<String>>,
     stop_signal_tx: watch::Sender<()>,
 }
 
 struct JoinHandleData {
     id: String,
+    err: Arc<RwLock<Option<Arc<String>>>>,
     stop_signal_rx: watch::Receiver<()>,
-    app_err_rx: mpsc::Receiver<String>,
+    app_err_rx: mpsc::Receiver<Option<String>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: Conf = serde_json::from_value(conf).unwrap();
 
+    let err = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     let (app_err_tx, app_err_rx) = mpsc::channel(CHANNEL_SIZE);
     let join_handle_data = JoinHandleData {
         id,
+        err: err.clone(),
         stop_signal_rx,
         app_err_rx,
     };
     Influxdb::event_loop(join_handle_data);
     Box::new(Influxdb {
-        err: Arc::new(RwLock::new(None)),
+        err,
         sinks: DashMap::new(),
         conf: Arc::new(conf),
         rtt: AtomicU16::new(0),
@@ -74,28 +81,79 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 impl Influxdb {
     fn event_loop(mut join_handle_data: JoinHandleData) {
+        add_app_running_count();
         tokio::spawn(async move {
+            let mut task_err = None;
             loop {
                 select! {
                     _ = join_handle_data.stop_signal_rx.changed() => {
                         break;
                     }
-                    err = join_handle_data.app_err_rx.recv() => {
-                        if let Some(err) = err {
-                            warn!("Influxdb app error: {}", err);
-                        }
+                    Some(err) = join_handle_data.app_err_rx.recv() => {
+                        Self::handle_err(&join_handle_data, &mut task_err, err).await;
                     }
                 }
             }
         });
+    }
+
+    async fn handle_err(
+        join_handle_data: &JoinHandleData,
+        task_err: &mut Option<Arc<String>>,
+        err: Option<String>,
+    ) {
+        match err {
+            Some(err) => {
+                events::insert_connect_failed(
+                    types::events::ResourceType::App,
+                    &join_handle_data.id,
+                    err.clone(),
+                )
+                .await;
+
+                if task_err.is_none() {
+                    sub_app_running_count();
+                    if let Err(e) = storage::app::update_err(&join_handle_data.id, true).await {
+                        warn!("{}", e);
+                    }
+                    let err = Arc::new(err);
+                    join_handle_data.err.write().await.replace(err.clone());
+                    *task_err = Some(err);
+                } else {
+                    if *task_err.as_ref().unwrap().deref() != err {
+                        let err = Arc::new(err);
+                        join_handle_data.err.write().await.replace(err.clone());
+                        *task_err = Some(err);
+                    }
+                }
+            }
+            None => {
+                events::insert_connect_succeed(
+                    types::events::ResourceType::App,
+                    &join_handle_data.id,
+                )
+                .await;
+                if task_err.is_some() {
+                    if let Err(e) = storage::app::update_err(&join_handle_data.id, false).await {
+                        warn!("{}", e);
+                    }
+                    *task_err = None;
+                    *join_handle_data.err.write().await = None;
+                }
+            }
+        }
     }
 }
 
 #[async_trait]
 impl App for Influxdb {
     async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
+        let err = match self.err.read().await.as_ref() {
+            Some(err) => Some(err.as_ref().clone()),
+            None => None,
+        };
         SearchAppsItemRunningInfo {
-            err: self.err.read().await.clone(),
+            err,
             rtt: self.rtt.load(Ordering::SeqCst),
         }
     }
@@ -118,11 +176,12 @@ impl App for Influxdb {
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
+        self.stop_signal_tx.send(()).unwrap();
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(conf, self.conf.clone());
+        let sink = Sink::new(conf, self.conf.clone(), self.app_err_tx.clone());
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
