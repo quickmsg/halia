@@ -121,17 +121,8 @@ impl Sink {
         let mut headers = BTreeMap::new();
         if let Some(conf_headers) = &conf.headers {
             for (k, v) in conf_headers.iter() {
-                match v.typ {
-                    types::PlainOrBase64ValueType::Plain => todo!(),
-                    types::PlainOrBase64ValueType::Base64 => todo!(),
-                    // types::ValueType::String => {
-                    //     headers.insert(k.clone(), v.value.as_bytes().to_vec());
-                    // }
-                    // types::ValueType::Bytes => {
-                    //     let bytes = general_purpose::STANDARD.decode(&v.value).unwrap();
-                    //     headers.insert(k.clone(), bytes);
-                    // }
-                }
+                let v: Vec<u8> = v.clone().into();
+                headers.insert(k.clone(), v);
             }
         }
 

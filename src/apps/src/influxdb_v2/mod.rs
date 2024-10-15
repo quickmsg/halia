@@ -4,11 +4,18 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    constants::CHANNEL_SIZE,
+    error::{HaliaError, HaliaResult},
+};
 use dashmap::DashMap;
 use message::MessageBatch;
 use sink::Sink;
-use tokio::sync::mpsc;
+use tokio::{
+    select,
+    sync::{mpsc, watch, RwLock},
+};
+use tracing::warn;
 use types::apps::{
     influxdb_v2::{Conf, SinkConf},
     SearchAppsItemRunningInfo,
@@ -19,22 +26,38 @@ use crate::App;
 mod sink;
 
 pub struct Influxdb {
-    _id: String,
-    err: Option<String>,
+    err: Arc<RwLock<Option<String>>>,
     sinks: DashMap<String, Sink>,
     conf: Arc<Conf>,
     rtt: AtomicU16,
+    app_err_tx: mpsc::Sender<String>,
+    stop_signal_tx: watch::Sender<()>,
+}
+
+struct JoinHandleData {
+    id: String,
+    stop_signal_rx: watch::Receiver<()>,
+    app_err_rx: mpsc::Receiver<String>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: Conf = serde_json::from_value(conf).unwrap();
 
+    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
+    let (app_err_tx, app_err_rx) = mpsc::channel(CHANNEL_SIZE);
+    let join_handle_data = JoinHandleData {
+        id,
+        stop_signal_rx,
+        app_err_rx,
+    };
+    Influxdb::event_loop(join_handle_data);
     Box::new(Influxdb {
-        _id: id,
-        err: None,
+        err: Arc::new(RwLock::new(None)),
         sinks: DashMap::new(),
         conf: Arc::new(conf),
         rtt: AtomicU16::new(0),
+        app_err_tx,
+        stop_signal_tx,
     })
 }
 
@@ -49,11 +72,30 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
+impl Influxdb {
+    fn event_loop(mut join_handle_data: JoinHandleData) {
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        break;
+                    }
+                    err = join_handle_data.app_err_rx.recv() => {
+                        if let Some(err) = err {
+                            warn!("Influxdb app error: {}", err);
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
 #[async_trait]
 impl App for Influxdb {
     async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
         SearchAppsItemRunningInfo {
-            err: self.err.clone(),
+            err: self.err.read().await.clone(),
             rtt: self.rtt.load(Ordering::SeqCst),
         }
     }
