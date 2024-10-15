@@ -110,7 +110,7 @@ pub struct Summary {
 pub struct QueryParams {
     pub name: Option<String>,
     #[serde(rename = "type")]
-    pub typ: Option<AppType>,
+    pub typ: Option<String>,
     pub on: Option<bool>,
     pub err: Option<bool>,
 }
