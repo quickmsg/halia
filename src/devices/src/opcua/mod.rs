@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::AtomicU16, Arc},
+    time::Duration,
+};
 
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -32,7 +35,8 @@ mod sink;
 mod source;
 
 struct Opcua {
-    err: Option<String>,
+    err: Arc<RwLock<Option<String>>>,
+    rtt: Arc<AtomicU16>,
     stop_signal_tx: watch::Sender<()>,
     opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
 
@@ -46,6 +50,7 @@ struct JoinHandleData {
     pub conf: Conf,
     pub opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
     pub stop_signal_rx: watch::Receiver<()>,
+    pub err: Arc<RwLock<Option<String>>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
@@ -54,22 +59,25 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
 
     let opcua_client: Arc<RwLock<Option<Arc<Session>>>> = Arc::new(RwLock::new(None));
 
+    let err = Arc::new(RwLock::new(None));
     let join_handle_data = JoinHandleData {
         id,
         conf,
         opcua_client: opcua_client.clone(),
         stop_signal_rx,
+        err: err.clone(),
     };
 
     let join_handle = Opcua::event_loop(join_handle_data);
 
     Box::new(Opcua {
-        err: None,
+        err,
         opcua_client,
         stop_signal_tx,
         sources: DashMap::new(),
         sinks: DashMap::new(),
         join_handle: Some(join_handle),
+        rtt: Arc::new(AtomicU16::new(0)),
     })
 }
 
@@ -120,12 +128,12 @@ impl Opcua {
 
     fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
+            let mut task_err: Option<String> = Some("not connectd.".to_owned());
             loop {
-                let mut status = false;
                 match Opcua::connect(&join_handle_data.conf).await {
                     Ok((session, join_handle)) => {
                         debug!("opcua connect success");
-                        status = true;
+                        task_err = None;
                         add_device_running_count();
                         events::insert_connect_succeed(
                             types::events::ResourceType::Device,
@@ -141,11 +149,10 @@ impl Opcua {
                         }
                     }
                     Err(e) => {
-                        debug!("{}", e);
-                        if status {
+                        if task_err.is_none() {
                             sub_device_running_count();
-                            status = false;
                         }
+                        debug!("{}", e);
 
                         events::insert_connect_failed(
                             types::events::ResourceType::Device,
@@ -175,10 +182,9 @@ impl Opcua {
 #[async_trait]
 impl Device for Opcua {
     async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
-        // TODO
         SearchDevicesItemRunningInfo {
-            err: self.err.clone(),
-            rtt: 0,
+            err: self.err.read().await.clone(),
+            rtt: self.rtt.load(std::sync::atomic::Ordering::Relaxed),
         }
     }
 

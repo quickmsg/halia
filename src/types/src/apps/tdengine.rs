@@ -26,6 +26,5 @@ pub struct TDengineAuthPassword {
 pub struct SinkConf {
     pub db: String,
     pub table: String,
-    // TODO serde_json_value
-    pub values: Vec<String>,
+    pub values: Vec<serde_json::Value>,
 }

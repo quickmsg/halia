@@ -214,10 +214,18 @@ impl MqttClient {
                     _ = app_err_tx.send(false);
                     *device_err.write().await = None;
                 }
+                debug!("here");
                 match MessageBatch::from_json(p.payload) {
                     Ok(msg) => {
+                        debug!("here");
                         for source in sources.iter_mut() {
-                            if matches(&source.conf.topic, &p.topic) {
+                            debug!("source:{}, msg:{:?}", source.conf.topic, p.topic);
+                            if matches(&p.topic, &source.conf.topic) {
+                                debug!("source:{}, msg:{:?}", source.key(), msg);
+                                debug!(
+                                    "source.mb_tx.receiver_count():{}",
+                                    source.mb_tx.receiver_count()
+                                );
                                 if source.mb_tx.receiver_count() > 0 {
                                     if let Err(e) = source.mb_tx.send(msg.clone()) {
                                         warn!("{}", e);
@@ -230,8 +238,8 @@ impl MqttClient {
                 }
             }
             Ok(event) => {
-                debug!("{:?}", event);
-                debug!("v311 event ok null");
+                // debug!("{:?}", event);
+                // debug!("v311 event ok null");
                 if *err {
                     *err = false;
                     _ = app_err_tx.send(false);

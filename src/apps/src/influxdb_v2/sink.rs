@@ -17,7 +17,7 @@ use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 use types::apps::influxdb_v2::{Conf, SinkConf};
 
 pub struct Sink {
@@ -99,8 +99,10 @@ impl Sink {
     ) {
         let mut data_points = Vec::with_capacity(mb.len());
         for msg in mb.get_messages() {
+            debug!("msg: {:?}", msg);
             let mut data_point_builder = DataPoint::builder(&conf.mesaurement);
             for (field, field_value) in &conf.fields {
+                debug!("field: {}, field_value: {:?}", field, field_value);
                 let value = match get_dynamic_value_from_json(field_value) {
                     common::DynamicValue::Const(value) => value,
                     common::DynamicValue::Field(s) => match msg.get(&s) {
@@ -118,7 +120,7 @@ impl Sink {
                             FieldValue::I64(number.as_i64().unwrap())
                         }
                     }
-                    serde_json::Value::String(_) => todo!(),
+                    serde_json::Value::String(s) => FieldValue::String(s),
                     serde_json::Value::Null
                     | serde_json::Value::Array(_)
                     | serde_json::Value::Object(_) => {
@@ -126,6 +128,8 @@ impl Sink {
                         break;
                     }
                 };
+
+                debug!("{:?}", value);
 
                 data_point_builder = data_point_builder.field(field, value);
             }

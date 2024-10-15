@@ -15,7 +15,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 use types::devices::opcua::{GroupConf, SourceConf, Subscriptionconf, VariableConf};
 
 use super::transfer_node_id;
@@ -65,7 +65,6 @@ impl Source {
     }
 
     pub fn validate_conf(conf: SourceConf) -> Result<()> {
-        debug!("validate conf: {:?}", conf);
         match conf.typ {
             types::devices::opcua::SourceType::Group => match conf.group {
                 Some(_group) => Ok(()),
@@ -214,7 +213,6 @@ impl Source {
         max_age: f64,
         mb_tx: &broadcast::Sender<MessageBatch>,
     ) {
-        debug!("{:?}", need_read_variable_ids);
         if mb_tx.receiver_count() == 0 {
             return;
         }
@@ -228,7 +226,6 @@ impl Source {
                 .await
             {
                 Ok(data_values) => {
-                    debug!("data_values: {:?}", data_values);
                     let mut message = Message::default();
                     // todo
                     for (index, data_value) in data_values.into_iter().enumerate() {
@@ -247,11 +244,14 @@ impl Source {
                                 opcua::types::Variant::UInt64(u) => MessageValue::Int64(u as i64),
                                 opcua::types::Variant::Float(f) => MessageValue::Float64(f as f64),
                                 opcua::types::Variant::Double(f) => MessageValue::Float64(f),
-                                // opcua::types::Variant::String(s) => MessageValue::String(s as String),
-                                opcua::types::Variant::String(_s) => todo!(),
+                                opcua::types::Variant::String(s) => {
+                                    MessageValue::String(s.to_string())
+                                }
                                 opcua::types::Variant::DateTime(_) => todo!(),
-                                opcua::types::Variant::Guid(_) => todo!(),
-                                opcua::types::Variant::StatusCode(_) => todo!(),
+                                opcua::types::Variant::Guid(guid) => {
+                                    MessageValue::String(guid.to_string())
+                                }
+                                opcua::types::Variant::StatusCode(s) => todo!(),
                                 opcua::types::Variant::ByteString(_) => todo!(),
                                 opcua::types::Variant::XmlElement(_) => todo!(),
                                 opcua::types::Variant::QualifiedName(_) => todo!(),
@@ -271,12 +271,10 @@ impl Source {
                     }
                     let mut mb = MessageBatch::default();
                     mb.push_message(message);
-                    debug!("{:?}", mb);
                     mb_tx.send(mb).unwrap();
-                    debug!("here");
                 }
                 Err(e) => {
-                    debug!("err code :{:?}", e);
+                    warn!("err code :{:?}", e);
                     return;
                 }
             },

@@ -73,6 +73,7 @@ impl Sink {
     fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
             let mut device_err = false;
+            debug!("here");
             loop {
                 select! {
                     _ = join_handle_data.stop_signal_rx.changed() => {

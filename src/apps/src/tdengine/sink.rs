@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common::constants::CHANNEL_SIZE;
+use common::{constants::CHANNEL_SIZE, get_dynamic_value_from_json};
 use message::MessageBatch;
 use taos::{AsyncQueryable, Taos};
 use tokio::{
@@ -66,11 +66,38 @@ impl Sink {
     // INSERT INTO d1001 VALUES (1538548685000, 10.3, 219, 0.31);
     async fn handle_message_batch(conf: &SinkConf, taos: &Taos, mut mb: MessageBatch) {
         let mut values = vec![];
-        // TODO remove unwrap
         let msg = mb.take_one_message().unwrap();
         for value in conf.values.iter() {
-            let v = msg.get(value).unwrap();
-            values.push(v);
+            match get_dynamic_value_from_json(value) {
+                common::DynamicValue::Const(value) => {
+                    match value {
+                        serde_json::Value::Bool(b) => values.push(b.to_string()),
+                        serde_json::Value::Number(number) => {
+                            values.push(number.to_string());
+                        }
+                        serde_json::Value::String(s) => values.push(s),
+                        _ => {}
+                    }
+                    // values.push(value),
+                }
+                common::DynamicValue::Field(field) => match msg.get(&field) {
+                    Some(v) => match v {
+                        message::MessageValue::Boolean(b) => values.push(b.to_string()),
+                        message::MessageValue::Int64(i) => values.push(i.to_string()),
+                        message::MessageValue::Float64(f) => values.push(f.to_string()),
+                        message::MessageValue::String(s) => {
+                            values.push(format!("'${}'", s.clone()))
+                        }
+                        _ => {
+                            warn!("field {} type not supported", field);
+                        }
+                    },
+                    None => {
+                        warn!("field {} not found in message", field);
+                        continue;
+                    }
+                },
+            }
         }
         let values = values
             .iter()
