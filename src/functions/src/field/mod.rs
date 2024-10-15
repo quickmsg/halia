@@ -1,6 +1,5 @@
 use anyhow::Result;
-use message::{Message, MessageBatch};
-use types::rules::functions::FilterConf;
+use message::MessageBatch;
 
 use crate::Function;
 
@@ -21,9 +20,9 @@ pub struct FieldNode {
     operators: Vec<Box<dyn Operator>>,
 }
 
-pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
-    todo!()
-}
+// pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
+//     todo!()
+// }
 
 impl Function for FieldNode {
     fn call(&self, message_batch: &mut message::MessageBatch) -> bool {

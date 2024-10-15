@@ -1,6 +1,6 @@
 use anyhow::Result;
 use message::Message;
-use types::rules::functions::FilterConf;
+use types::rules::functions::{FilterConf, FilterConfItem};
 
 use crate::Function;
 
@@ -23,15 +23,15 @@ pub struct Node {
 
 pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
     let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(conf.filters.len());
-    for conf in conf.filters {
-        let filter = match conf.typ {
-            types::rules::functions::FilterType::Eq => eq::new(conf.field, conf.value)?,
-            types::rules::functions::FilterType::Gt => gt::new(conf.field, conf.value)?,
-            types::rules::functions::FilterType::Gte => gte::new(conf.field, conf.value)?,
-            types::rules::functions::FilterType::Lt => lt::new(conf.field, conf.value)?,
-            types::rules::functions::FilterType::Lte => lte::new(conf.field, conf.value)?,
-            types::rules::functions::FilterType::Neq => neq::new(conf.field, conf.value)?,
-            types::rules::functions::FilterType::Ct => ct::new(conf.field, conf.value)?,
+    for conf_item in conf.filters {
+        let filter = match conf_item.typ {
+            types::rules::functions::FilterType::Eq => eq::new(conf_item.field, conf_item.value)?,
+            types::rules::functions::FilterType::Gt => gt::new(conf_item.field, conf_item.value)?,
+            types::rules::functions::FilterType::Gte => gte::new(conf_item.field, conf_item.value)?,
+            types::rules::functions::FilterType::Lt => lt::new(conf_item.field, conf_item.value)?,
+            types::rules::functions::FilterType::Lte => lte::new(conf_item.field, conf_item.value)?,
+            types::rules::functions::FilterType::Neq => neq::new(conf_item.field, conf_item.value)?,
+            types::rules::functions::FilterType::Ct => ct::new(conf_item.field, conf_item.value)?,
             types::rules::functions::FilterType::Reg => todo!(),
         };
         filters.push(filter);

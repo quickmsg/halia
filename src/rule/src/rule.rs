@@ -10,7 +10,7 @@ use message::{MessageBatch, MessageValue};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error};
 use types::rules::{
-    functions::{ComputerConf, FilterConf, WindowConf},
+    functions::{ComputerConf, FilterConf, FilterConfItem, WindowConf},
     AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, LogNode, Node,
     NodeType, ReadRuleNodeResp, RuleConf,
 };
@@ -172,6 +172,7 @@ impl Rule {
                                 .unwrap();
                         }
                         NodeType::Filter => {
+                            debug!("{:?}", node.conf);
                             let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
                             functions.push(filter::new(conf)?);
                             ids.push(id);

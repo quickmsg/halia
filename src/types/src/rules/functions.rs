@@ -11,6 +11,7 @@ pub struct WindowConf {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct FilterConf {
+    #[serde(rename = "conf")]
     pub filters: Vec<FilterConfItem>,
 }
 
