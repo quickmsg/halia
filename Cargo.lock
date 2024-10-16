@@ -2881,6 +2881,7 @@ dependencies = [
  "apache-avro",
  "bytes",
  "csv",
+ "prost-reflect",
  "serde",
  "serde_json",
  "tracing",
@@ -3767,6 +3768,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b0487d90e047de87f984913713b85c601c05609aad5b0df4b4573fbf69aa13f"
+dependencies = [
+ "bytes",
+ "prost-derive",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9552f850d5f0964a4e4d0bf306459ac29323ddfbae05e35a7c0d35cb0803cc5"
+dependencies = [
+ "anyhow",
+ "itertools 0.13.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.77",
+]
+
+[[package]]
+name = "prost-reflect"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b7535b02f0e5efe3e1dbfcb428be152226ed0c66cad9541f2274c8ba8d4cd40"
+dependencies = [
+ "once_cell",
+ "prost",
+ "prost-types",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4759aa0d3a6232fb8dbdb97b61de2c20047c68aca932c7ed76da9d788508d670"
+dependencies = [
+ "prost",
+]
+
+[[package]]
 name = "protocol"
 version = "0.1.0"
 dependencies = [
@@ -4610,6 +4654,7 @@ dependencies = [
  "bytes",
  "csv",
  "message",
+ "prost-reflect",
  "serde",
  "serde_json",
  "tracing",

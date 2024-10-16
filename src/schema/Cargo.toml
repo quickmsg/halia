@@ -13,3 +13,4 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 apache-avro = "0.17.0"
+prost-reflect = "0.14.2"

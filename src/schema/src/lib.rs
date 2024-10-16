@@ -2,11 +2,8 @@ use anyhow::Result;
 use bytes::Bytes;
 use message::MessageBatch;
 
-pub mod avro;
-pub mod csv;
-pub mod json;
-pub mod yaml;
 pub mod decoders;
+pub mod encoders;
 
 pub enum Schema {
     Json,
