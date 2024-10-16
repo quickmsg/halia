@@ -4,14 +4,10 @@ use message::{Message, MessageValue};
 
 use super::Filter;
 
-struct NeqConst {
+struct Neq {
     field: String,
-    const_value: MessageValue,
-}
-
-struct NeqDynamic {
-    field: String,
-    target_field: String,
+    const_value: Option<MessageValue>,
+    target_field: Option<String>,
 }
 
 pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
@@ -22,42 +18,45 @@ pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
                 _ => bail!("不支持该类型"),
             };
 
-            Ok(Box::new(NeqConst { field, const_value }))
+            Ok(Box::new(Neq {
+                field,
+                const_value: Some(const_value),
+                target_field: None,
+            }))
         }
-        common::DynamicValue::Field(s) => Ok(Box::new(NeqDynamic {
+        common::DynamicValue::Field(s) => Ok(Box::new(Neq {
             field,
-            target_field: s,
+            const_value: None,
+            target_field: Some(s),
         })),
     }
 }
 
-impl Filter for NeqConst {
+impl Filter for Neq {
     fn filter(&self, msg: &Message) -> bool {
-        match msg.get(&self.field) {
-            Some(mv) => neq(mv, &self.const_value),
-            None => false,
-        }
-    }
-}
+        let value = match msg.get(&self.field) {
+            Some(value) => value,
+            None => return false,
+        };
 
-impl Filter for NeqDynamic {
-    fn filter(&self, msg: &Message) -> bool {
-        match (msg.get(&self.field), msg.get(&self.target_field)) {
-            (Some(mv), Some(tv)) => neq(mv, tv),
+        let target_value = match (&self.const_value, &self.target_field) {
+            (Some(const_value), None) => const_value,
+            (None, Some(target_field)) => match msg.get(&target_field) {
+                Some(target_value) => target_value,
+                None => return false,
+            },
+            _ => unreachable!(),
+        };
+
+        match (value, target_value) {
+            (MessageValue::Boolean(mv), MessageValue::Boolean(tv)) => mv != tv,
+            (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv != tv,
+            (MessageValue::Float64(v), MessageValue::Float64(tv)) => (v - tv).abs() > 1e-10,
+            (MessageValue::String(v), MessageValue::String(tv)) => v != tv,
+            (MessageValue::Bytes(mv), MessageValue::Bytes(tv)) => mv != tv,
+            (MessageValue::Array(_v), MessageValue::Array(_tv)) => todo!(),
+            (MessageValue::Object(_), MessageValue::Object(_)) => todo!(),
             _ => false,
         }
-    }
-}
-
-fn neq(mv: &MessageValue, tv: &MessageValue) -> bool {
-    match (mv, tv) {
-        (MessageValue::Boolean(mv), MessageValue::Boolean(tv)) => mv != tv,
-        (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv != tv,
-        (MessageValue::Float64(mv), MessageValue::Float64(tv)) => (mv - tv).abs() > 1e-10,
-        (MessageValue::String(_), MessageValue::String(_)) => todo!(),
-        (MessageValue::Bytes(mv), MessageValue::Bytes(tv)) => mv != tv,
-        (MessageValue::Array(_), MessageValue::Array(_)) => todo!(),
-        (MessageValue::Object(_), MessageValue::Object(_)) => todo!(),
-        _ => false,
     }
 }

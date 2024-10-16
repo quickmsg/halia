@@ -4,14 +4,10 @@ use message::{Message, MessageValue};
 
 use super::Filter;
 
-struct GtConst {
+struct Gt {
     field: String,
-    const_value: MessageValue,
-}
-
-struct GtDynamic {
-    field: String,
-    target_field: String,
+    const_value: Option<MessageValue>,
+    target_field: Option<String>,
 }
 
 pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
@@ -22,37 +18,40 @@ pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
                 _ => bail!("不支持该类型"),
             };
 
-            Ok(Box::new(GtConst { field, const_value }))
+            Ok(Box::new(Gt {
+                field,
+                const_value: Some(const_value),
+                target_field: None,
+            }))
         }
-        common::DynamicValue::Field(s) => Ok(Box::new(GtDynamic {
+        common::DynamicValue::Field(s) => Ok(Box::new(Gt {
             field,
-            target_field: s,
+            target_field: Some(s),
+            const_value: None,
         })),
     }
 }
 
-impl Filter for GtConst {
+impl Filter for Gt {
     fn filter(&self, msg: &Message) -> bool {
-        match msg.get(&self.field) {
-            Some(mv) => gt(mv, &self.const_value),
-            None => false,
-        }
-    }
-}
+        let value = match msg.get(&self.field) {
+            Some(value) => value,
+            None => return false,
+        };
 
-impl Filter for GtDynamic {
-    fn filter(&self, msg: &Message) -> bool {
-        match (msg.get(&self.field), msg.get(&self.target_field)) {
-            (Some(mv), Some(tv)) => gt(mv, tv),
+        let target_value = match (&self.const_value, &self.target_field) {
+            (Some(value), None) => value,
+            (None, Some(target_field)) => match msg.get(target_field) {
+                Some(target_value) => target_value,
+                None => return false,
+            },
+            _ => unreachable!(),
+        };
+
+        match (value, target_value) {
+            (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv > tv,
+            (MessageValue::Float64(mv), MessageValue::Float64(tv)) => mv - tv > 1e-10,
             _ => false,
         }
-    }
-}
-
-fn gt(mv: &MessageValue, tv: &MessageValue) -> bool {
-    match (mv, tv) {
-        (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv > tv,
-        (MessageValue::Float64(mv), MessageValue::Float64(tv)) => mv - tv > 1e-10,
-        _ => false,
     }
 }

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use message::Message;
-use types::rules::functions::{FilterConf, FilterConfItem};
+use types::rules::functions::FilterConf;
 
 use crate::Function;
 
@@ -11,7 +11,7 @@ mod gte;
 mod lt;
 mod lte;
 mod neq;
-// mod reg;
+mod reg;
 
 pub(crate) trait Filter: Sync + Send {
     fn filter(&self, msg: &Message) -> bool;
@@ -32,7 +32,7 @@ pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
             types::rules::functions::FilterType::Lte => lte::new(conf_item.field, conf_item.value)?,
             types::rules::functions::FilterType::Neq => neq::new(conf_item.field, conf_item.value)?,
             types::rules::functions::FilterType::Ct => ct::new(conf_item.field, conf_item.value)?,
-            types::rules::functions::FilterType::Reg => todo!(),
+            types::rules::functions::FilterType::Reg => reg::new(conf_item.field, conf_item.value)?,
         };
         filters.push(filter);
     }

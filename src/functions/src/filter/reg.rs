@@ -1,48 +1,66 @@
 use anyhow::{bail, Result};
+use common::get_dynamic_value_from_json;
 use message::MessageValue;
 use regex::Regex;
-use serde::Deserialize;
-use types::rules::functions::FilterConf;
+use tracing::warn;
 
 use super::Filter;
 
 struct Reg {
     field: String,
-    value: Regex,
+    reg: Option<Regex>,
+    target_field: Option<String>,
 }
 
-pub const TYPE: &str = "reg";
-
-#[derive(Deserialize)]
-struct Conf {
-    field: String,
-    value: String,
-}
-
-pub fn new(conf: FilterConf) -> Result<Box<dyn Filter>> {
-    match Regex::new(&conf.value) {
-        Ok(reg) => Ok(Box::new(Reg {
-            field: conf.field,
-            value: reg,
+pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
+    match get_dynamic_value_from_json(&value) {
+        common::DynamicValue::Const(value) => match value {
+            serde_json::Value::String(s) => match Regex::new(&s) {
+                Ok(reg) => Ok(Box::new(Reg {
+                    field,
+                    reg: Some(reg),
+                    target_field: None,
+                })),
+                Err(e) => bail!("regex err:{}", e),
+            },
+            _ => bail!("不支持该类型"),
+        },
+        common::DynamicValue::Field(s) => Ok(Box::new(Reg {
+            field,
+            target_field: Some(s),
+            reg: None,
         })),
-        Err(e) => bail!("regex err:{}", e),
     }
 }
 
 impl Filter for Reg {
     fn filter(&self, message: &message::Message) -> bool {
-        match message.get(&self.field) {
-            Some(value) => match value {
-                MessageValue::String(string) => {
-                    if self.value.is_match(string) {
-                        true
-                    } else {
-                        false
-                    }
-                }
-                _ => false,
+        match (&self.reg, &self.target_field) {
+            (Some(reg), None) => match message.get(&self.field) {
+                Some(value) => match value {
+                    MessageValue::String(string) => reg.is_match(string),
+                    _ => false,
+                },
+                None => false,
             },
-            None => false,
+            (None, Some(target_field)) => {
+                match (message.get(&self.field), message.get(target_field)) {
+                    (Some(value), Some(target_value)) => match (value, target_value) {
+                        (MessageValue::String(string), MessageValue::String(target_string)) => {
+                            match Regex::new(target_string) {
+                                Ok(reg) => reg.is_match(string),
+                                Err(e) => {
+                                    warn!("regex err:{}", e);
+                                    false
+                                }
+                            }
+                        }
+                        _ => false,
+                    },
+                    _ => false,
+                }
+            }
+            _ => unreachable!(),
         }
     }
 }

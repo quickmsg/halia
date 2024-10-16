@@ -4,14 +4,10 @@ use message::{Message, MessageValue};
 
 use super::Filter;
 
-struct LtConst {
+struct Lt {
     field: String,
-    const_value: MessageValue,
-}
-
-struct LtDynamic {
-    field: String,
-    target_field: String,
+    const_value: Option<MessageValue>,
+    target_field: Option<String>,
 }
 
 pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
@@ -22,37 +18,40 @@ pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
                 _ => bail!("不支持该类型"),
             };
 
-            Ok(Box::new(LtConst { field, const_value }))
+            Ok(Box::new(Lt {
+                field,
+                const_value: Some(const_value),
+                target_field: None,
+            }))
         }
-        common::DynamicValue::Field(s) => Ok(Box::new(LtDynamic {
+        common::DynamicValue::Field(s) => Ok(Box::new(Lt {
             field,
-            target_field: s,
+            const_value: None,
+            target_field: Some(s),
         })),
     }
 }
 
-impl Filter for LtConst {
+impl Filter for Lt {
     fn filter(&self, msg: &Message) -> bool {
-        match msg.get(&self.field) {
-            Some(mv) => lt(mv, &self.const_value),
-            None => false,
-        }
-    }
-}
+        let value = match msg.get(&self.field) {
+            Some(value) => value,
+            None => return false,
+        };
 
-impl Filter for LtDynamic {
-    fn filter(&self, msg: &Message) -> bool {
-        match (msg.get(&self.field), msg.get(&self.target_field)) {
-            (Some(mv), Some(tv)) => lt(mv, tv),
+        let target_value = match (&self.const_value, &self.target_field) {
+            (Some(const_value), None) => const_value,
+            (None, Some(target_field)) => match msg.get(target_field) {
+                Some(target_value) => target_value,
+                None => return false,
+            },
+            _ => unreachable!(),
+        };
+
+        match (value, target_value) {
+            (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv < tv,
+            (MessageValue::Float64(mv), MessageValue::Float64(tv)) => mv - tv < -1e-10,
             _ => false,
         }
-    }
-}
-
-fn lt(mv: &MessageValue, tv: &MessageValue) -> bool {
-    match (mv, tv) {
-        (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv < tv,
-        (MessageValue::Float64(mv), MessageValue::Float64(tv)) => mv - tv < -1e-10,
-        _ => false,
     }
 }
