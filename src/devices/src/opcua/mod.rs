@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
-    types::{EndpointDescription, Identifier, NodeId, StatusCode},
+    types::{EndpointDescription, Identifier, MonitoringMode, NodeId, StatusCode},
 };
 use sink::Sink;
 use source::Source;
@@ -344,5 +344,13 @@ fn transfer_node_id(node_id: &types::devices::opcua::NodeId) -> NodeId {
     NodeId {
         namespace: node_id.namespace,
         identifier,
+    }
+}
+
+fn transfer_monitoring_node(mode: &types::devices::opcua::MonitoringMode) -> MonitoringMode {
+    match mode {
+        types::devices::opcua::MonitoringMode::Disabled => MonitoringMode::Disabled,
+        types::devices::opcua::MonitoringMode::Sampling => MonitoringMode::Sampling,
+        types::devices::opcua::MonitoringMode::Reporting => MonitoringMode::Reporting,
     }
 }

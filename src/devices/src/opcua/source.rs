@@ -5,8 +5,8 @@ use message::{Message, MessageBatch, MessageValue};
 use opcua::{
     client::{DataChangeCallback, MonitoredItem, Session},
     types::{
-        DataValue, MonitoredItemCreateRequest, NodeId, QualifiedName, ReadValueId,
-        TimestampsToReturn, UAString,
+        DataValue, ExtensionObject, MonitoredItemCreateRequest, MonitoringParameters,
+        QualifiedName, ReadValueId, TimestampsToReturn, UAString,
     },
 };
 use tokio::{
@@ -15,46 +15,49 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use types::devices::opcua::{GroupConf, SourceConf, Subscriptionconf, VariableConf};
 
-use super::transfer_node_id;
+use super::{transfer_monitoring_node, transfer_node_id};
 
 pub struct Source {
-    group_stop_signal_tx: watch::Sender<()>,
-
     // variables: Option<Arc<RwLock<(Vec<Variable>, Vec<ReadValueId>)>>>,
-    group_join_handle: Option<
-        JoinHandle<(
-            Arc<RwLock<Option<Arc<Session>>>>,
-            GroupConf,
-            watch::Receiver<()>,
-        )>,
-    >,
+    group_stop_signal_tx: Option<watch::Sender<()>>,
+    group_join_handle: Option<JoinHandle<GroupJoinHandleData>>,
     err: Option<String>,
 
     pub mb_tx: broadcast::Sender<MessageBatch>,
 }
 
+pub struct GroupJoinHandleData {
+    pub opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
+    pub conf: GroupConf,
+    pub stop_signal_rx: watch::Receiver<()>,
+    pub mb_tx: broadcast::Sender<MessageBatch>,
+}
+
 impl Source {
     pub async fn new(opcua_client: Arc<RwLock<Option<Arc<Session>>>>, conf: SourceConf) -> Self {
-        let (group_stop_signal_tx, group_stop_signal_rx) = watch::channel(());
         let (mb_tx, _) = broadcast::channel(16);
+
         let mut source = Self {
-            group_stop_signal_tx,
+            group_stop_signal_tx: None,
             mb_tx: mb_tx.clone(),
             group_join_handle: None,
             err: None,
         };
+
         match conf.typ {
             types::devices::opcua::SourceType::Group => {
-                let join_handle = Self::start_group(
-                    group_stop_signal_rx,
-                    conf.group.unwrap(),
-                    opcua_client,
-                    mb_tx.clone(),
-                )
-                .await;
+                let (group_stop_signal_tx, group_stop_signal_rx) = watch::channel(());
+                let join_handle_data = GroupJoinHandleData {
+                    opcua_client: opcua_client.clone(),
+                    conf: conf.group.unwrap(),
+                    stop_signal_rx: group_stop_signal_rx,
+                    mb_tx,
+                };
+                let join_handle = Self::start_group(join_handle_data);
+                source.group_stop_signal_tx = Some(group_stop_signal_tx);
                 source.group_join_handle = Some(join_handle);
             }
             types::devices::opcua::SourceType::Subscription => {}
@@ -86,36 +89,25 @@ impl Source {
         }
     }
 
-    async fn start_group(
-        mut stop_signal_rx: watch::Receiver<()>,
-        conf: GroupConf,
-        opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
-        mb_tx: broadcast::Sender<MessageBatch>,
-    ) -> JoinHandle<(
-        Arc<RwLock<Option<Arc<Session>>>>,
-        GroupConf,
-        watch::Receiver<()>,
-    )> {
-        let interval = conf.interval;
+    fn start_group(mut join_handle_data: GroupJoinHandleData) -> JoinHandle<GroupJoinHandleData> {
         let mut need_read_variable_fields = vec![];
         let mut need_read_variable_ids = vec![];
-        for variable_conf in conf.variables.iter() {
+        for variable_conf in join_handle_data.conf.variables.iter() {
             need_read_variable_fields.push(variable_conf.field.clone());
             need_read_variable_ids.push(Self::group_get_read_value_id(variable_conf));
         }
 
-        let max_age = conf.max_age;
-
         tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_millis(interval));
+            let mut interval =
+                time::interval(Duration::from_millis(join_handle_data.conf.interval));
 
             loop {
                 select! {
-                    _ = stop_signal_rx.changed() => {
-                        return (opcua_client, conf, stop_signal_rx);
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
                     }
                     _ = interval.tick() => {
-                        Self::group_read_variables_from_remote(&opcua_client, &need_read_variable_fields, &need_read_variable_ids, max_age, &mb_tx).await;
+                        Self::group_read_variables_from_remote(&join_handle_data.opcua_client, &need_read_variable_fields, &need_read_variable_ids, join_handle_data.conf.max_age, &join_handle_data.mb_tx).await;
                     }
                 }
             }
@@ -145,9 +137,26 @@ impl Source {
 
         // TODO
         let ns = 2;
-        let items_to_create: Vec<MonitoredItemCreateRequest> = ["v1", "v2", "v3", "v4"]
+        let items_to_create: Vec<MonitoredItemCreateRequest> = conf
+            .monitored_items
             .iter()
-            .map(|v| NodeId::new(ns, *v).into())
+            .map(|v| MonitoredItemCreateRequest {
+                item_to_monitor: ReadValueId {
+                    node_id: transfer_node_id(&v.variable.node_id),
+                    attribute_id: 13,
+                    index_range: UAString::null(),
+                    data_encoding: QualifiedName::null(),
+                },
+                monitoring_mode: transfer_monitoring_node(&v.monitoring_mode),
+                requested_parameters: MonitoringParameters {
+                    client_handle: v.client_handle,
+                    sampling_interval: v.sampling_interval,
+                    // TODO
+                    filter: ExtensionObject::null(),
+                    queue_size: v.queue_size,
+                    discard_oldest: v.discard_oldest,
+                },
+            })
             .collect();
 
         let _ = opcua_client
@@ -176,7 +185,10 @@ impl Source {
     async fn start_monitored_item(&mut self) {}
 
     pub async fn stop(&mut self) {
-        self.group_stop_signal_tx.send(()).unwrap();
+        match &self.group_stop_signal_tx {
+            Some(stop_signal_tx) => stop_signal_tx.send(()).unwrap(),
+            None => {}
+        }
     }
 
     pub async fn update_conf(&mut self, old_conf: SourceConf, new_conf: SourceConf) {
@@ -227,7 +239,6 @@ impl Source {
             {
                 Ok(data_values) => {
                     let mut message = Message::default();
-                    // todo
                     for (index, data_value) in data_values.into_iter().enumerate() {
                         let name = unsafe { need_read_variable_names.get_unchecked(index) };
                         let value = match data_value.value {
@@ -251,7 +262,9 @@ impl Source {
                                 opcua::types::Variant::Guid(guid) => {
                                     MessageValue::String(guid.to_string())
                                 }
-                                opcua::types::Variant::StatusCode(s) => todo!(),
+                                opcua::types::Variant::StatusCode(s) => {
+                                    MessageValue::String(s.name().to_owned())
+                                }
                                 opcua::types::Variant::ByteString(_) => todo!(),
                                 opcua::types::Variant::XmlElement(_) => todo!(),
                                 opcua::types::Variant::QualifiedName(_) => todo!(),

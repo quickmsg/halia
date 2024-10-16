@@ -511,7 +511,7 @@ pub async fn search(
 }
 
 pub async fn update_status(id: &String, status: bool) -> Result<()> {
-    sqlx::query("UPDATE apps SET status = ? AND err = 1 WHERE id = ?")
+    sqlx::query("UPDATE apps SET status = ? WHERE id = ?")
         .bind(status as i32)
         .bind(id)
         .execute(POOL.get().unwrap())

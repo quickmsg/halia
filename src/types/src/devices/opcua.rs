@@ -89,7 +89,7 @@ pub struct Subscriptionconf {
     pub priority: u8,
     pub publishing_enabled: bool,
 
-    pub monitored_items: Vec<VariableConf>,
+    pub monitored_items: Vec<MonitoredItemconf>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -105,7 +105,7 @@ pub struct MonitoredItemconf {
     pub sampling_interval: f64,
     // pub filter:
     pub queue_size: u32,
-    pub discard_oleds: bool,
+    pub discard_oldest: bool,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
