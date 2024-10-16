@@ -287,30 +287,17 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 }
 
 pub async fn stop_device(device_id: String) -> HaliaResult<()> {
-    if !GLOBAL_DEVICE_MANAGER.contains_key(&device_id) {
-        return Ok(());
-    }
-
-    let active_rule_ref_cnt = storage::rule_ref::count_active_cnt_by_parent_id(&device_id).await?;
-    if active_rule_ref_cnt > 0 {
+    if storage::rule_ref::count_active_cnt_by_parent_id(&device_id).await? > 0 {
         return Err(HaliaError::StopActiveRefing);
     }
 
-    events::insert_stop(types::events::ResourceType::Device, &device_id).await;
-
-    storage::device::update_status(&device_id, false).await?;
-    match GLOBAL_DEVICE_MANAGER.remove(&device_id) {
-        Some((_, mut device)) => {
-            device.stop().await;
-            GLOBAL_DEVICE_MANAGER.remove(&device_id);
-            sub_device_on_count();
-        }
-
-        None => {}
+    if let Some((_, mut device)) = GLOBAL_DEVICE_MANAGER.remove(&device_id) {
+        device.stop().await;
+        sub_device_on_count();
+        events::insert_stop(types::events::ResourceType::Device, &device_id).await;
+        storage::device::update_status(&device_id, false).await?;
+        storage::device::update_err(&device_id, false).await?;
     }
-
-    GLOBAL_DEVICE_MANAGER.remove(&device_id);
-    sub_device_on_count();
 
     Ok(())
 }

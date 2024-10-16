@@ -303,18 +303,18 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
 }
 
 pub async fn stop_app(app_id: String) -> HaliaResult<()> {
-    if !GLOBAL_APP_MANAGER.contains_key(&app_id) {
-        return Ok(());
-    }
-
     if storage::rule_ref::count_active_cnt_by_parent_id(&app_id).await? > 0 {
         return Err(HaliaError::StopActiveRefing);
     }
 
-    GLOBAL_APP_MANAGER.get_mut(&app_id).unwrap().stop().await;
-    GLOBAL_APP_MANAGER.remove(&app_id);
-    storage::app::update_status(&app_id, false).await?;
-    sub_app_on_count();
+    if let Some((_, mut app)) = GLOBAL_APP_MANAGER.remove(&app_id) {
+        app.stop().await;
+        sub_app_on_count();
+        events::insert_stop(types::events::ResourceType::App, &app_id).await;
+        storage::app::update_status(&app_id, false).await?;
+        storage::app::update_err(&app_id, false).await?;
+    }
+
     Ok(())
 }
 
