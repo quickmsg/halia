@@ -5,8 +5,6 @@ use types::{
     Pagination,
 };
 
-use crate::timestamp_millis;
-
 use super::{databoard_data, POOL};
 
 #[derive(FromRow)]
@@ -41,7 +39,7 @@ CREATE TABLE IF NOT EXISTS databoards (
 pub async fn insert(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;
-    let ts = timestamp_millis();
+    let ts = common::timestamp_millis();
     sqlx::query(
         "INSERT INTO databoards (id, status, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
     )

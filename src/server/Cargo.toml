@@ -11,6 +11,7 @@ apps = { workspace = true }
 protocol = { workspace = true }
 common = { workspace = true }
 databoard = { workspace = true }
+storage = { workspace = true }
 
 tracing = { workspace = true }
 tracing-subscriber = "0.3.0"

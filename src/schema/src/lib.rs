@@ -2,12 +2,12 @@ use anyhow::Result;
 use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, storage,
+    get_id, vec_to_string,
 };
 use message::MessageBatch;
 use types::{
-    schema::{CreateUpdateSchemaReq, QueryParams, SearchSchemasResp},
-    Pagination,
+    schema::{CreateUpdateSchemaReq, QueryParams, SearchSchemasItemResp, SearchSchemasResp},
+    BaseConf, Pagination,
 };
 
 pub mod decoders;
@@ -45,7 +45,17 @@ pub async fn search(
     pagination: Pagination,
     query_params: QueryParams,
 ) -> HaliaResult<SearchSchemasResp> {
-    todo!()
+    let (count, db_schemas) = storage::schema::search(pagination, query_params).await?;
+
+    let mut resp_schemas = vec![];
+    for db_schema in db_schemas {
+        resp_schemas.push(transfer_db_schema_to_resp(db_schema)?);
+    }
+
+    Ok(SearchSchemasResp {
+        total: count,
+        data: resp_schemas,
+    })
 }
 
 pub async fn update(id: String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
@@ -79,4 +89,20 @@ fn validate_conf(req: &CreateUpdateSchemaReq) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn transfer_db_schema_to_resp(
+    db_schema: storage::schema::Schema,
+) -> HaliaResult<SearchSchemasItemResp> {
+    Ok(SearchSchemasItemResp {
+        conf: CreateUpdateSchemaReq {
+            typ: types::schema::SchemaType::try_from(db_schema.typ)?,
+            protocol: types::schema::ProtocolType::try_from(db_schema.protocol_type)?,
+            base: BaseConf {
+                name: db_schema.name,
+                desc: vec_to_string(db_schema.des),
+            },
+            ext: serde_json::from_slice(&db_schema.conf)?,
+        },
+    })
 }

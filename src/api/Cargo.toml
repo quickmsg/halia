@@ -12,6 +12,7 @@ apps = { workspace = true }
 databoard = { workspace = true }
 events = { workspace = true }
 schema = { workspace = true }
+storage = { workspace = true }
 
 axum = { version = "0.7.5", features = ["macros", "query", "multipart"] }
 tracing = { workspace = true }

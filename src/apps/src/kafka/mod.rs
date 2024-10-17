@@ -7,10 +7,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::{
-    error::{HaliaError, HaliaResult},
-    storage,
-};
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::MessageBatch;
 use rskafka::client::{Client, ClientBuilder};

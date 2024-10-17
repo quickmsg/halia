@@ -106,6 +106,5 @@ pub struct SearchSchemasResp {
 
 #[derive(Serialize)]
 pub struct SearchSchemasItemResp {
-    pub base: BaseConf,
-    pub ext: serde_json::Value,
+    pub conf: CreateUpdateSchemaReq,
 }

@@ -9,6 +9,7 @@ common = { workspace = true }
 apps = { workspace = true }
 devices = { workspace = true }
 databoard = { workspace = true }
+storage = { workspace = true }
 
 tokio = { workspace = true }
 tracing = { workspace = true }

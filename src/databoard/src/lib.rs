@@ -3,10 +3,7 @@ use std::sync::{
     LazyLock,
 };
 
-use common::{
-    error::{HaliaError, HaliaResult},
-    storage,
-};
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use databoard_struct::Databoard;
 use message::MessageBatch;

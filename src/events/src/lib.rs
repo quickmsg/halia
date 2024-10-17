@@ -1,8 +1,5 @@
 //! 事件类型主要用于记录主要资源（设备、应用）等的启动停止和异常以及恢复，方便客户排查系统问题。
-use common::{
-    error::{HaliaError, HaliaResult},
-    storage,
-};
+use common::error::{HaliaError, HaliaResult};
 use tracing::warn;
 use types::{
     events::{EventType, QueryParams, ResourceType, SearchEventsItemResp, SearchEventsResp},

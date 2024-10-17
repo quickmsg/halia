@@ -14,6 +14,7 @@ members = [
     "src/mqtt-server",
     "src/schema",
     "src/events",
+    "src/storage",
 ]
 resolver = "2"
 
@@ -22,6 +23,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
+storage = { path = "src/storage" }
 api = { path = "src/api" }
 types = { path = "src/types" }
 message = { path = "src/message" }

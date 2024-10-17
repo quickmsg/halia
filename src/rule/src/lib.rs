@@ -3,10 +3,7 @@ use std::sync::{
     LazyLock,
 };
 
-use common::{
-    error::{HaliaError, HaliaResult},
-    storage,
-};
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use rule::Rule;
 use tracing::debug;

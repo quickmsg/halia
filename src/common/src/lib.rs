@@ -6,7 +6,6 @@ pub mod error;
 pub mod json;
 pub mod ref_info;
 pub mod sink_message_retain;
-pub mod storage;
 pub mod sys;
 
 pub fn check_page_size(i: usize, page: usize, size: usize) -> bool {
@@ -44,4 +43,11 @@ pub fn timestamp_millis() -> i64 {
     now.duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64
+}
+
+pub fn vec_to_string(v: Option<Vec<u8>>) -> Option<String> {
+    match v {
+        Some(v) => unsafe { Some(String::from_utf8_unchecked(v)) },
+        None => None,
+    }
 }

@@ -12,7 +12,6 @@ use async_trait::async_trait;
 use common::{
     constants::CHANNEL_SIZE,
     error::{HaliaError, HaliaResult},
-    storage,
 };
 use dashmap::DashMap;
 use message::MessageBatch;

@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use common::{
-    error::HaliaResult,
-    storage::{self, rule_ref},
-};
+use common::error::HaliaResult;
 use functions::{computes, filter, merge::merge, metadata, window};
 use message::{MessageBatch, MessageValue};
 use tokio::sync::{broadcast, mpsc};
@@ -111,10 +108,10 @@ impl Rule {
         }
 
         if let Some(e) = error {
-            rule_ref::deactive(&self.id).await?;
+            storage::rule_ref::deactive(&self.id).await?;
             return Err(e.into());
         } else {
-            rule_ref::active(&self.id).await?;
+            storage::rule_ref::active(&self.id).await?;
         }
 
         let threed_ids = get_3d_ids(
@@ -299,7 +296,7 @@ impl Rule {
 
         match error {
             Some(error) => {
-                rule_ref::deactive(&self.id).await?;
+                storage::rule_ref::deactive(&self.id).await?;
                 return Err(error);
             }
             None => {}

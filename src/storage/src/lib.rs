@@ -4,7 +4,7 @@ use anyhow::Result;
 use sqlx::{any::AnyConnectOptions, AnyPool, ConnectOptions as _};
 use tokio::sync::OnceCell;
 
-use crate::config::StorageConfig;
+use common::config::StorageConfig;
 
 static POOL: LazyLock<OnceCell<AnyPool>> = LazyLock::new(OnceCell::new);
 
