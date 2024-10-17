@@ -229,6 +229,7 @@ dependencies = [
  "futures-util",
  "jsonwebtoken",
  "rule",
+ "schema",
  "serde",
  "serde_json",
  "time",
@@ -4652,12 +4653,14 @@ dependencies = [
  "anyhow",
  "apache-avro",
  "bytes",
+ "common",
  "csv",
  "message",
  "prost-reflect",
  "serde",
  "serde_json",
  "tracing",
+ "types",
 ]
 
 [[package]]

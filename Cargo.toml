@@ -33,6 +33,7 @@ rule = { path = "src/rule" }
 apps = { path = "src/apps" }
 databoard = { path = "src/databoard" }
 events = { path = "src/events" }
+schema = { path = "src/schema" }
 
 serde_json = { version = "1.0.120" }
 serde_repr = "0.1.19"

@@ -27,8 +27,8 @@ pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
         },
         common::DynamicValue::Field(s) => Ok(Box::new(Reg {
             field,
-            target_field: Some(s),
             reg: None,
+            target_field: Some(s),
         })),
     }
 }

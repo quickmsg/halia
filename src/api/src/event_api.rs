@@ -7,10 +7,10 @@ use types::{
 use crate::{AppResult, AppSuccess};
 
 pub fn routes() -> Router {
-    Router::new().route("/", get(search_events))
+    Router::new().route("/", get(search))
 }
 
-async fn search_events(
+async fn search(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppResult<AppSuccess<SearchEventsResp>> {

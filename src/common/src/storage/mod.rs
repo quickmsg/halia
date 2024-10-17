@@ -17,6 +17,7 @@ pub mod rule;
 pub mod rule_ref;
 pub mod source_or_sink;
 pub mod user;
+pub mod schema;
 
 pub async fn init(config: &StorageConfig) -> Result<()> {
     sqlx::any::install_default_drivers();

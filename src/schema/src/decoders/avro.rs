@@ -5,11 +5,18 @@ use apache_avro::{Reader, Schema};
 use bytes::Bytes;
 use message::{Message, MessageBatch};
 use tracing::warn;
+use types::schema::AvroDecodeConf;
 
 use crate::Decoder;
 
 pub struct Avro {
     schema: Option<Schema>,
+}
+
+pub(crate) fn validate_conf(conf: &serde_json::Value) -> Result<()> {
+    let conf: AvroDecodeConf = serde_json::from_value(conf.clone())?;
+    Schema::parse_str(&conf.schema)?;
+    Ok(())
 }
 
 impl Avro {

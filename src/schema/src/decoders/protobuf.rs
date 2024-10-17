@@ -3,11 +3,21 @@ use std::io::Cursor;
 use anyhow::{bail, Result};
 use message::{Message, MessageBatch};
 use prost_reflect::{DescriptorPool, DynamicMessage};
+use types::schema::ProtobufDecodeConf;
 
 use crate::Decoder;
 
 pub struct Protobuf {
     message_descriptor: prost_reflect::MessageDescriptor,
+}
+
+pub fn validate_conf(conf: &serde_json::Value) -> Result<()> {
+    let conf: ProtobufDecodeConf = serde_json::from_value(conf.clone())?;
+    let pool = DescriptorPool::decode(Cursor::new(conf.descriptor))?;
+    if pool.get_message_by_name(&conf.message_type).is_none() {
+        bail!("message type not found");
+    };
+    Ok(())
 }
 
 impl Protobuf {

@@ -3,12 +3,18 @@ use std::io::Cursor;
 use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 use message::{Message, MessageBatch, MessageValue};
+use types::schema::CsvDecodeConf;
 
 use crate::Decoder;
 
 pub struct Csv {
     has_headers: bool,
     headers: Option<Vec<String>>,
+}
+
+pub(crate) fn validate_conf(conf: &serde_json::Value) -> Result<()> {
+    let conf: CsvDecodeConf = serde_json::from_value(conf.clone())?;
+    Ok(())
 }
 
 impl Csv {

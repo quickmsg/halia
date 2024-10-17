@@ -53,17 +53,21 @@ pub fn start_segment(
 
     if broadcast_tx.is_some() {
         tokio::spawn(async move {
+            let mut next = true;
             loop {
                 select! {
                     mb = rx.recv() => {
                         match mb {
                             Ok(mut mb) => {
                                 for function in &functions {
-                                    if !function.call(&mut mb) {
+                                    next = function.call(&mut mb);
+                                    if !next {
                                         break;
                                     }
                                 }
-                                let _ = broadcast_tx.as_ref().unwrap().send(mb);
+                                if next {
+                                    let _ = broadcast_tx.as_ref().unwrap().send(mb);
+                                }
                             }
                             Err(e) => warn!("{}", e),
                         }

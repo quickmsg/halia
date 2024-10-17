@@ -6,7 +6,8 @@ edition.workspace = true
 [dependencies]
 message = { workspace = true }
 anyhow = { workspace = true }
-
+types = { workspace = true }
+common = { workspace = true }
 bytes = { workspace = true }
 csv = "1.3.0"
 serde_json = { workspace = true }

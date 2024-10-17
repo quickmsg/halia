@@ -22,6 +22,7 @@ mod databoard_api;
 mod device_api;
 mod event_api;
 mod rule_api;
+mod schema_api;
 mod user_api;
 
 pub static EMPTY_USER_CODE: u16 = 2;
@@ -98,6 +99,7 @@ pub async fn start(port: u16) {
                 .nest("/databoard", databoard_api::routes())
                 .nest("/rule", rule_api::routes())
                 .nest("/event", event_api::routes())
+                .nest("/schema", schema_api::routes())
                 .route_layer(middleware::from_fn(auth)),
         )
         .fallback_service(

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use sqlx::prelude::FromRow;
-use tracing::debug;
 use types::{
     devices::{CreateUpdateDeviceReq, QueryParams},
     Pagination,
