@@ -1,4 +1,5 @@
 use anyhow::Result;
+use common::error::{HaliaError, HaliaResult};
 use sqlx::{
     any::AnyArguments,
     prelude::FromRow,
@@ -48,7 +49,11 @@ CREATE TABLE IF NOT EXISTS {} (
     Ok(())
 }
 
-pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> Result<()> {
+pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
+    if super::insert_name_exists(&req.base.name, TABLE_NAME).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
@@ -173,22 +178,17 @@ pub async fn count_all() -> Result<usize> {
 }
 
 // TODO 更新运行中的源和动作
-pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> Result<()> {
+pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
+    if super::update_name_exists(id, &req.base.name, TABLE_NAME).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     let conf = serde_json::to_vec(&req.ext)?;
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query("UPDATE devices SET name = ?, des = ?, conf = ? WHERE id = ?")
         .bind(req.base.name)
         .bind(desc)
         .bind(conf)
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-
-    Ok(())
-}
-
-pub async fn delete(id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM schemas WHERE id = ?")
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;

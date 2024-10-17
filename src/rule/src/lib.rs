@@ -211,7 +211,7 @@ pub async fn delete(id: String) -> HaliaResult<()> {
     )
     .await?;
 
-    storage::rule::delete(&id).await?;
+    storage::rule::delete_by_id(&id).await?;
     storage::rule_ref::delete_many_by_rule_id(&id).await?;
 
     sub_rule_count();

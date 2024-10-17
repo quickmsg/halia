@@ -138,14 +138,6 @@ pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {
     Ok(())
 }
 
-pub async fn delete_one(databoard_data_id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM databoard_datas WHERE id = ?")
-        .bind(databoard_data_id)
-        .execute(POOL.get().unwrap())
-        .await?;
-    Ok(())
-}
-
 pub(crate) async fn delete_many(databoard_id: &String) -> Result<()> {
     sqlx::query("DELETE FROM databoard_datas WHERE parent_id = ?")
         .bind(databoard_id)
@@ -161,4 +153,8 @@ pub async fn check_exists(id: &String) -> Result<bool> {
         .await?;
 
     Ok(count == 1)
+}
+
+pub async fn delete_by_id(id: &String) -> Result<()> {
+    super::delete_by_id(id, TABLE_NAME).await
 }

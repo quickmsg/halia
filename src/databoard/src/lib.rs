@@ -319,7 +319,7 @@ pub async fn delete_data(databoard_id: String, databoard_data_id: String) -> Hal
         databoard.delete_data(&databoard_data_id).await?;
     }
 
-    storage::databoard_data::delete_one(&databoard_data_id).await?;
+    storage::databoard_data::delete_by_id(&databoard_data_id).await?;
 
     Ok(())
 }

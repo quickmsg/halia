@@ -197,10 +197,6 @@ pub async fn update(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
     Ok(())
 }
 
-pub async fn delete(id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM rules WHERE id = ?")
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-    Ok(())
+pub async fn delete_by_id(id: &String) -> Result<()> {
+    super::delete_by_id(id, TABLE_NAME).await
 }

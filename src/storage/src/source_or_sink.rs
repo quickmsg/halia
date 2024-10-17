@@ -237,14 +237,6 @@ pub async fn update(id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()>
     Ok(())
 }
 
-pub async fn delete(id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM sources_or_sinks WHERE id = ?")
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-    Ok(())
-}
-
 pub async fn delete_by_parent_id(parent_id: &String) -> Result<()> {
     sqlx::query("DELETE FROM sources_or_sinks WHERE parent_id = ?")
         .bind(parent_id)
@@ -260,4 +252,8 @@ pub async fn check_exists(id: &String) -> Result<bool> {
         .await?;
 
     Ok(count == 1)
+}
+
+pub async fn delete_by_id(id: &String) -> Result<()> {
+    super::delete_by_id(id, TABLE_NAME).await
 }

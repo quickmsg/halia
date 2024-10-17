@@ -6,6 +6,8 @@ pub type HaliaResult<T, E = HaliaError> = result::Result<T, E>;
 pub enum HaliaError {
     #[error("ID{0} 未找到！")]
     NotFound(String),
+    #[error("持久化错误：{0}")]
+    StorageErr(#[from] sqlx::Error),
     #[error("{0}")]
     JsonErr(#[from] serde_json::Error),
     #[error("{0}")]

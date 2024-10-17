@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use common::error::{HaliaError, HaliaResult};
 use sqlx::prelude::FromRow;
 use types::{
     apps::{CreateUpdateAppReq, QueryParams},
@@ -7,7 +8,7 @@ use types::{
 
 use super::POOL;
 
-pub static TABLE_NAME: &str = "apps";
+static TABLE_NAME: &str = "apps";
 
 #[derive(FromRow)]
 pub struct App {
@@ -42,7 +43,11 @@ CREATE TABLE IF NOT EXISTS apps (
     Ok(())
 }
 
-pub async fn insert(id: &String, req: CreateUpdateAppReq) -> Result<()> {
+pub async fn insert(id: &String, req: CreateUpdateAppReq) -> HaliaResult<()> {
+    if super::insert_name_exists(&req.conf.base.name, TABLE_NAME).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     let typ: i32 = req.typ.into();
     let ts = common::timestamp_millis();
     let conf = serde_json::to_vec(&req.conf.ext)?;
@@ -511,7 +516,11 @@ pub async fn update_err(id: &String, err: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn update(id: String, req: CreateUpdateAppReq) -> Result<()> {
+pub async fn update_conf(id: String, req: CreateUpdateAppReq) -> HaliaResult<()> {
+    if super::update_name_exists(&id, &req.conf.base.name, TABLE_NAME).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
     sqlx::query("UPDATE apps SET name = ?, des = ?, conf = ? WHERE id = ?")
@@ -521,15 +530,6 @@ pub async fn update(id: String, req: CreateUpdateAppReq) -> Result<()> {
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;
-    Ok(())
-}
-
-pub async fn delete(id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM apps WHERE id = ?")
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-
     Ok(())
 }
 
@@ -543,4 +543,8 @@ fn transfer_type(typ: &str) -> Result<String> {
         _ => bail!("未知应用类型。"),
     };
     Ok(typ)
+}
+
+pub async fn delete_by_id(id: &String) -> Result<()> {
+    super::delete_by_id(id, TABLE_NAME).await
 }

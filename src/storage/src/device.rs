@@ -1,4 +1,5 @@
 use anyhow::Result;
+use common::error::{HaliaError, HaliaResult};
 use sqlx::{
     any::AnyArguments,
     prelude::FromRow,
@@ -54,7 +55,11 @@ CREATE TABLE IF NOT EXISTS {} (
     Ok(())
 }
 
-pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
+pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
+    if super::insert_name_exists(&req.conf.base.name, TABLE_NAME).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let ts = common::timestamp_millis();
     let typ: i32 = req.typ.into();
@@ -219,7 +224,11 @@ pub async fn update_err(id: &String, err: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn update(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
+pub async fn update_conf(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
+    if super::update_name_exists(&req.conf.base.name, id, TABLE_NAME).await? {
+        return Err(HaliaError::NameExists);
+    }
+
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
     sqlx::query("UPDATE devices SET name = ?, des = ?, conf = ? WHERE id = ?")
@@ -233,11 +242,6 @@ pub async fn update(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
     Ok(())
 }
 
-pub async fn delete(id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM devices WHERE id = ?")
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-
-    Ok(())
+pub async fn delete_by_id(id: &String) -> Result<()> {
+    super::delete_by_id(id, TABLE_NAME).await
 }

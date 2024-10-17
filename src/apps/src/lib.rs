@@ -189,10 +189,6 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
 }
 
 pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
-    if storage::insert_name_exists(&req.conf.base.name, storage::app::TABLE_NAME).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     match req.typ {
         AppType::MqttV311 => mqtt_v311::validate_conf(&req.conf.ext)?,
         AppType::MqttV50 => mqtt_v50::validate_conf(&req.conf.ext)?,
@@ -229,17 +225,13 @@ pub async fn search_apps(
 }
 
 pub async fn update_app(app_id: String, req: CreateUpdateAppReq) -> HaliaResult<()> {
-    if storage::update_name_exists(&app_id, &req.conf.base.name, storage::app::TABLE_NAME).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         let db_conf = storage::app::read_conf(&app_id).await?;
         let old_conf: serde_json::Value = serde_json::from_slice(&db_conf)?;
         app.update(old_conf, req.conf.ext.clone()).await?;
     }
 
-    storage::app::update(app_id, req).await?;
+    storage::app::update_conf(app_id, req).await?;
 
     Ok(())
 }
@@ -328,7 +320,7 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
     events::insert_delete(types::events::ResourceType::App, &app_id).await;
 
     sub_app_count();
-    storage::app::delete(&app_id).await?;
+    storage::app::delete_by_id(&app_id).await?;
     Ok(())
 }
 
@@ -443,8 +435,7 @@ pub async fn delete_source(app_id: String, source_id: String) -> HaliaResult<()>
         return Err(HaliaError::DeleteRefing);
     }
 
-    storage::source_or_sink::delete(&source_id).await?;
-
+    storage::source_or_sink::delete_by_id(&source_id).await?;
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         app.delete_source(source_id).await?;
     }
@@ -575,7 +566,7 @@ pub async fn delete_sink(app_id: String, sink_id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRefing);
     }
 
-    storage::source_or_sink::delete(&sink_id).await?;
+    storage::source_or_sink::delete_by_id(&sink_id).await?;
 
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         app.delete_sink(sink_id).await?;

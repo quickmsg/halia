@@ -176,10 +176,6 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
 }
 
 pub async fn create_device(device_id: String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
-    if storage::insert_name_exists(&req.conf.base.name, storage::device::TABLE_NAME).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     match &req.typ {
         DeviceType::Modbus => modbus::validate_conf(&req.conf.ext)?,
         DeviceType::Opcua => opcua::validate_conf(&req.conf.ext)?,
@@ -210,12 +206,6 @@ pub async fn search_devices(
 }
 
 pub async fn update_device(device_id: String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
-    if storage::update_name_exists(&req.conf.base.name, &device_id, storage::device::TABLE_NAME)
-        .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let old_conf = storage::device::read_conf(&device_id).await?;
         let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
@@ -227,7 +217,7 @@ pub async fn update_device(device_id: String, req: CreateUpdateDeviceReq) -> Hal
     }
 
     events::insert_update(types::events::ResourceType::Device, &device_id).await;
-    storage::device::update(&device_id, req).await?;
+    storage::device::update_conf(&device_id, req).await?;
 
     Ok(())
 }
@@ -313,7 +303,7 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
 
     sub_device_count();
     events::insert_delete(types::events::ResourceType::Device, &device_id).await;
-    storage::device::delete(&device_id).await?;
+    storage::device::delete_by_id(&device_id).await?;
     storage::source_or_sink::delete_by_parent_id(&device_id).await?;
 
     Ok(())
@@ -440,7 +430,7 @@ pub async fn delete_source(device_id: String, source_id: String) -> HaliaResult<
         return Err(HaliaError::DeleteRefing);
     }
 
-    storage::source_or_sink::delete(&source_id).await?;
+    storage::source_or_sink::delete_by_id(&source_id).await?;
 
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         device.delete_source(&source_id).await?;
@@ -577,7 +567,7 @@ pub async fn delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> 
         device.delete_sink(&sink_id).await?;
     }
 
-    storage::source_or_sink::delete(&sink_id).await?;
+    storage::source_or_sink::delete_by_id(&sink_id).await?;
 
     Ok(())
 }

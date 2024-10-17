@@ -59,7 +59,7 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
     Ok(())
 }
 
-pub async fn insert_name_exists(name: &String, table_name: &str) -> Result<bool> {
+async fn insert_name_exists(name: &String, table_name: &str) -> Result<bool> {
     let count: i64 =
         sqlx::query_scalar(format!("SELECT COUNT(*) FROM {} WHERE name = ?", table_name).as_str())
             .bind(name)
@@ -69,7 +69,7 @@ pub async fn insert_name_exists(name: &String, table_name: &str) -> Result<bool>
     Ok(count > 0)
 }
 
-pub async fn update_name_exists(id: &String, name: &String, table_name: &str) -> Result<bool> {
+async fn update_name_exists(id: &String, name: &String, table_name: &str) -> Result<bool> {
     let count: i64 = sqlx::query_scalar(
         format!(
             "SELECT COUNT(*) FROM {} WHERE name = ? AND id != ?",
@@ -83,4 +83,13 @@ pub async fn update_name_exists(id: &String, name: &String, table_name: &str) ->
     .await?;
 
     Ok(count > 0)
+}
+
+async fn delete_by_id(id: &String, table_name: &str) -> Result<()> {
+    sqlx::query(format!("DELETE FROM {} WHERE id = ?", table_name).as_str())
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
+
+    Ok(())
 }
