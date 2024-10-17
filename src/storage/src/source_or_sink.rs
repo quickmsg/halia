@@ -4,6 +4,8 @@ use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
 
 use super::POOL;
 
+pub static TABLE_NAME: &str = "sources_or_sinks";
+
 pub enum Type {
     Source,
     Sink,

@@ -7,6 +7,8 @@ use types::{
 
 use super::POOL;
 
+pub static TABLE_NAME: &str = "events";
+
 #[derive(FromRow)]
 pub struct Event {
     pub resource_type: i32,

@@ -7,6 +7,8 @@ use types::{
 
 use super::{databoard_data, POOL};
 
+pub static TABLE_NAME: &str = "databoards";
+
 #[derive(FromRow)]
 pub struct Databoard {
     pub id: String,

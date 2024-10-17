@@ -7,6 +7,8 @@ use types::{
 
 use super::POOL;
 
+pub static TABLE_NAME: &str = "rules";
+
 #[derive(FromRow)]
 pub struct Rule {
     pub id: String,

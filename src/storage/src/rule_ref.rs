@@ -3,6 +3,8 @@ use sqlx::prelude::FromRow;
 
 use super::POOL;
 
+pub static TABLE_NAME: &str = "rule_refs";
+
 #[derive(FromRow)]
 pub struct RuleRef {
     pub rule_id: String,

@@ -15,9 +15,9 @@ pub mod device;
 pub mod event;
 pub mod rule;
 pub mod rule_ref;
+pub mod schema;
 pub mod source_or_sink;
 pub mod user;
-pub mod schema;
 
 pub async fn init(config: &StorageConfig) -> Result<()> {
     sqlx::any::install_default_drivers();
@@ -57,4 +57,30 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
     user::init_table().await?;
 
     Ok(())
+}
+
+pub async fn insert_name_exists(name: &String, table_name: &str) -> Result<bool> {
+    let count: i64 =
+        sqlx::query_scalar(format!("SELECT COUNT(*) FROM {} WHERE name = ?", table_name).as_str())
+            .bind(name)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+    Ok(count > 0)
+}
+
+pub async fn update_name_exists(id: &String, name: &String, table_name: &str) -> Result<bool> {
+    let count: i64 = sqlx::query_scalar(
+        format!(
+            "SELECT COUNT(*) FROM {} WHERE name = ? AND id != ?",
+            table_name
+        )
+        .as_str(),
+    )
+    .bind(name)
+    .bind(id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+
+    Ok(count > 0)
 }

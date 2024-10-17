@@ -30,7 +30,7 @@ pub trait Encoder {
 }
 
 pub async fn create(req: CreateUpdateSchemaReq) -> HaliaResult<()> {
-    if storage::schema::insert_name_exists(&req.base.name).await? {
+    if storage::insert_name_exists(&req.base.name, storage::schema::TABLE_NAME).await? {
         return Err(HaliaError::NameExists);
     }
 
@@ -59,7 +59,7 @@ pub async fn search(
 }
 
 pub async fn update(id: String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
-    if storage::schema::update_name_exists(&id, &req.base.name).await? {
+    if storage::update_name_exists(&id, &req.base.name, storage::schema::TABLE_NAME).await? {
         return Err(HaliaError::NameExists);
     }
 

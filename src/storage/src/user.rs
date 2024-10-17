@@ -3,6 +3,8 @@ use sqlx::prelude::FromRow;
 
 use super::POOL;
 
+pub static TABLE_NAME: &str = "users";
+
 #[derive(FromRow)]
 pub struct User {
     pub username: String,

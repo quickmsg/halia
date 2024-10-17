@@ -189,7 +189,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
 }
 
 pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
-    if storage::app::insert_name_exists(&req.conf.base.name).await? {
+    if storage::insert_name_exists(&req.conf.base.name, storage::app::TABLE_NAME).await? {
         return Err(HaliaError::NameExists);
     }
 
@@ -229,7 +229,7 @@ pub async fn search_apps(
 }
 
 pub async fn update_app(app_id: String, req: CreateUpdateAppReq) -> HaliaResult<()> {
-    if storage::app::update_name_exists(&app_id, &req.conf.base.name).await? {
+    if storage::update_name_exists(&app_id, &req.conf.base.name, storage::app::TABLE_NAME).await? {
         return Err(HaliaError::NameExists);
     }
 

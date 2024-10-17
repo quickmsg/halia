@@ -1,11 +1,18 @@
 use anyhow::Result;
-use sqlx::prelude::FromRow;
+use sqlx::{
+    any::AnyArguments,
+    prelude::FromRow,
+    query::{QueryAs, QueryScalar},
+    Any,
+};
 use types::{
     devices::{CreateUpdateDeviceReq, QueryParams},
     Pagination,
 };
 
 use super::POOL;
+
+pub const TABLE_NAME: &str = "devices";
 
 #[derive(FromRow)]
 pub struct Device {
@@ -24,8 +31,9 @@ pub struct Device {
 
 pub async fn init_table() -> Result<()> {
     sqlx::query(
-        r#"  
-CREATE TABLE IF NOT EXISTS devices (
+        format!(
+            r#"  
+CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     status SMALLINT UNSIGNED NOT NULL,
     err SMALLINT UNSIGNED NOT NULL,
@@ -36,30 +44,14 @@ CREATE TABLE IF NOT EXISTS devices (
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
+            TABLE_NAME
+        )
+        .as_str(),
     )
     .execute(POOL.get().unwrap())
     .await?;
 
     Ok(())
-}
-
-pub async fn insert_name_exists(name: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ?")
-        .bind(name)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count > 0)
-}
-
-pub async fn update_name_exists(id: &String, name: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name = ? AND id != ?")
-        .bind(name)
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count > 0)
 }
 
 pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> Result<()> {
@@ -107,349 +99,68 @@ pub async fn search(
     query_params: QueryParams,
 ) -> Result<(usize, Vec<Device>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, devices) = match (
-        query_params.name,
-        query_params.typ,
-        query_params.on,
-        query_params.err,
-    ) {
-        (None, None, None, None) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
-                .fetch_one(POOL.get().unwrap())
-                .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, devices)
+    let mut where_cluase = String::new();
+    if query_params.name.is_some() {
+        match where_cluase.is_empty() {
+            true => where_cluase.push_str("WHERE name LIKE ?"),
+            false => where_cluase.push_str(" AND name LIKE ?"),
         }
-        (None, None, None, Some(err)) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE err = ?")
-                .bind(err as i32)
-                .fetch_one(POOL.get().unwrap())
-                .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(err as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, devices)
+    }
+    if query_params.typ.is_some() {
+        match where_cluase.is_empty() {
+            true => where_cluase.push_str("WHERE typ = ?"),
+            false => where_cluase.push_str(" AND typ = ?"),
         }
-        (None, None, Some(on), None) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE status = ?")
-                .bind(on as i32)
-                .fetch_one(POOL.get().unwrap())
-                .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(on as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, devices)
+    }
+    if query_params.on.is_some() {
+        match where_cluase.is_empty() {
+            true => where_cluase.push_str("WHERE status = ?"),
+            false => where_cluase.push_str(" AND status = ?"),
         }
-        (None, None, Some(on), Some(err)) => {
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE status = ? AND err = ?")
-                    .bind(on as i32)
-                    .bind(err as i32)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(on as i32)
-            .bind(err as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, devices)
+    }
+    if query_params.err.is_some() {
+        match where_cluase.is_empty() {
+            true => where_cluase.push_str("WHERE err = ?"),
+            false => where_cluase.push_str(" AND err = ?"),
         }
-        (None, Some(typ), None, None) => {
-            let typ: i32 = typ.into();
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE typ = ?")
-                .bind(typ)
-                .fetch_one(POOL.get().unwrap())
-                .await?;
+    }
 
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(typ)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
+    let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_cluase);
+    let mut query_count_builder: QueryScalar<'_, Any, i64, AnyArguments> =
+        sqlx::query_scalar(&query_count_str);
 
-            (count as usize, devices)
-        }
-        (None, Some(typ), None, Some(err)) => {
-            let typ: i32 = typ.into();
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE typ = ? AND err = ?")
-                    .bind(typ)
-                    .bind(err as i32)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
+    let query_schemas_str = format!(
+        "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+        TABLE_NAME, where_cluase
+    );
+    let mut query_schemas_builder: QueryAs<'_, Any, Device, AnyArguments> =
+        sqlx::query_as::<_, Device>(&query_schemas_str);
 
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE typ = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(typ)
-            .bind(err as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
+    if let Some(name) = query_params.name {
+        let name = format!("%{}%", name);
+        query_count_builder = query_count_builder.bind(name.clone());
+        query_schemas_builder = query_schemas_builder.bind(name);
+    }
+    if let Some(typ) = query_params.typ {
+        let typ: i32 = typ.into();
+        query_count_builder = query_count_builder.bind(typ);
+        query_schemas_builder = query_schemas_builder.bind(typ);
+    }
+    if let Some(on) = query_params.on {
+        query_count_builder = query_count_builder.bind(on as i32);
+        query_schemas_builder = query_schemas_builder.bind(on as i32);
+    }
+    if let Some(err) = query_params.err {
+        query_count_builder = query_count_builder.bind(err as i32);
+        query_schemas_builder = query_schemas_builder.bind(err as i32);
+    }
 
-            (count as usize, devices)
-        }
-        (None, Some(typ), Some(on), None) => {
-            let typ: i32 = typ.into();
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE typ = ? AND status = ?")
-                    .bind(typ)
-                    .bind(on as i32)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                    "SELECT * FROM devices WHERE typ = ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-                )
-                .bind(typ)
-                .bind(on as i32)
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(POOL.get().unwrap())
-                .await?;
-
-            (count as usize, devices)
-        }
-        (None, Some(typ), Some(on), Some(err)) => {
-            let typ: i32 = typ.into();
-            let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM devices WHERE typ = ? AND status = ? AND err = ?",
-            )
-            .bind(typ)
-            .bind(on as i32)
-            .bind(err as i32)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE typ = ? AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(typ)
-            .bind(on as i32)
-            .bind(err as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, devices)
-        }
-        (Some(name), None, None, None) => {
-            let name = format!("%{}%", name);
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name LIKE ?")
-                .bind(&name)
-                .fetch_one(POOL.get().unwrap())
-                .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(&name)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, devices)
-        }
-        (Some(name), None, None, Some(err)) => {
-            let name = format!("%{}%", name);
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name LIKE ? AND err = ?")
-                    .bind(&name)
-                    .bind(err as i32)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE name LIKE ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(&name)
-            .bind(err as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, devices)
-        }
-        (Some(name), None, Some(on), None) => {
-            let name = format!("%{}%", name);
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name LIKE ? AND status = ?")
-                    .bind(&name)
-                    .bind(on as i32)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                    "SELECT * FROM devices WHERE name LIKE ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-                )
-                .bind(&name)
-                .bind(on as i32)
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(POOL.get().unwrap())
-                .await?;
-
-            (count as usize, devices)
-        }
-        (Some(name), None, Some(on), Some(err)) => {
-            let name = format!("%{}%", name);
-            let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM devices WHERE name LIKE ? AND status = ? AND err = ?",
-            )
-            .bind(&name)
-            .bind(on as i32)
-            .bind(err as i32)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                "SELECT * FROM devices WHERE name LIKE ? AND status = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(&name)
-            .bind(on as i32)
-            .bind(err as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, devices)
-        }
-        (Some(name), Some(typ), None, None) => {
-            let name = format!("%{}%", name);
-            let typ: i32 = typ.into();
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM devices WHERE name LIKE ? AND typ = ?")
-                    .bind(&name)
-                    .bind(typ)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                    "SELECT * FROM devices WHERE name LIKE ? AND typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-                )
-                .bind(&name)
-                .bind(typ)
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(POOL.get().unwrap())
-                .await?;
-
-            (count as usize, devices)
-        }
-        (Some(name), Some(typ), None, Some(err)) => {
-            let name = format!("%{}%", name);
-            let typ: i32 = typ.into();
-            let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM devices WHERE name LIKE ? AND typ = ? AND err = ?",
-            )
-            .bind(&name)
-            .bind(typ)
-            .bind(err as i32)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                    "SELECT * FROM devices WHERE name LIKE ? AND typ = ? AND err = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-                )
-                .bind(&name)
-                .bind(typ)
-                .bind(err as i32)
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(POOL.get().unwrap())
-                .await?;
-
-            (count as usize, devices)
-        }
-        (Some(name), Some(typ), Some(on), None) => {
-            let name = format!("%{}%", name);
-            let typ: i32 = typ.into();
-            let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM devices WHERE name LIKE ? AND typ = ? AND status = ?",
-            )
-            .bind(&name)
-            .bind(typ)
-            .bind(on as i32)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                    "SELECT * FROM devices WHERE name LIKE ? AND typ = ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-                )
-                .bind(&name)
-                .bind(typ)
-                .bind(on as i32)
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(POOL.get().unwrap())
-                .await?;
-
-            (count as usize, devices)
-        }
-        (Some(name), Some(typ), Some(err), Some(on)) => {
-            let name = format!("%{}%", name);
-            let typ: i32 = typ.into();
-            let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM devices WHERE name LIKE ? AND typ = ? AND err = ? AND status = ?",
-            )
-            .bind(&name)
-            .bind(typ)
-            .bind(err as i32)
-            .bind(on as i32)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
-
-            let devices = sqlx::query_as::<_, Device>(
-                    "SELECT * FROM devices WHERE name LIKE ? AND typ = ? AND err = ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-                )
-                .bind(&name)
-                .bind(typ)
-                .bind(err as i32)
-                .bind(on as i32)
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(POOL.get().unwrap())
-                .await?;
-
-            (count as usize, devices)
-        }
-    };
+    let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
+    let devices = query_schemas_builder
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(POOL.get().unwrap())
+        .await?;
 
     Ok((count as usize, devices))
 }

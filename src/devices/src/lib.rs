@@ -176,7 +176,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
 }
 
 pub async fn create_device(device_id: String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
-    if storage::device::insert_name_exists(&req.conf.base.name).await? {
+    if storage::insert_name_exists(&req.conf.base.name, storage::device::TABLE_NAME).await? {
         return Err(HaliaError::NameExists);
     }
 
@@ -210,7 +210,9 @@ pub async fn search_devices(
 }
 
 pub async fn update_device(device_id: String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
-    if storage::device::update_name_exists(&req.conf.base.name, &device_id).await? {
+    if storage::update_name_exists(&req.conf.base.name, &device_id, storage::device::TABLE_NAME)
+        .await?
+    {
         return Err(HaliaError::NameExists);
     }
 

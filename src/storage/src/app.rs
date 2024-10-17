@@ -7,6 +7,8 @@ use types::{
 
 use super::POOL;
 
+pub static TABLE_NAME: &str = "apps";
+
 #[derive(FromRow)]
 pub struct App {
     pub id: String,
@@ -38,25 +40,6 @@ CREATE TABLE IF NOT EXISTS apps (
     .await?;
 
     Ok(())
-}
-
-pub async fn insert_name_exists(name: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name = ?")
-        .bind(name)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count > 0)
-}
-
-pub async fn update_name_exists(id: &String, name: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps WHERE name = ? AND id != ?")
-        .bind(name)
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count > 0)
 }
 
 pub async fn insert(id: &String, req: CreateUpdateAppReq) -> Result<()> {
