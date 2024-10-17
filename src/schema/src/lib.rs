@@ -56,10 +56,12 @@ pub async fn search(
 
 pub async fn update(id: String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
     validate_conf(&req)?;
+    storage::schema::update(&id, req).await?;
     Ok(())
 }
 
 pub async fn delete(id: String) -> HaliaResult<()> {
+    storage::schema::delete_by_id(&id).await?;
     todo!()
 }
 
