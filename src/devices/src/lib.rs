@@ -310,16 +310,6 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
 }
 
 pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-    if storage::source_or_sink::insert_name_exists(
-        &device_id,
-        storage::source_or_sink::Type::Source,
-        &req.base.name,
-    )
-    .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     let typ: DeviceType = storage::device::read_type(&device_id).await?.try_into()?;
     match typ {
         DeviceType::Modbus => modbus::validate_source_conf(&req.ext)?,
@@ -390,17 +380,6 @@ pub async fn update_source(
     source_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    if storage::source_or_sink::update_name_exists(
-        &device_id,
-        storage::source_or_sink::Type::Source,
-        &req.base.name,
-        &source_id,
-    )
-    .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let old_conf = storage::source_or_sink::read_conf(&source_id).await?;
         let new_conf = req.ext.clone();
@@ -454,16 +433,6 @@ pub async fn get_source_rx(
 }
 
 pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-    if storage::source_or_sink::insert_name_exists(
-        &device_id,
-        storage::source_or_sink::Type::Sink,
-        &req.base.name,
-    )
-    .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     let typ = storage::device::read_type(&device_id).await?;
     let typ: DeviceType = typ.try_into()?;
     match typ {
@@ -535,17 +504,6 @@ pub async fn update_sink(
     sink_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    if storage::source_or_sink::update_name_exists(
-        &device_id,
-        storage::source_or_sink::Type::Sink,
-        &req.base.name,
-        &sink_id,
-    )
-    .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let old_conf = storage::source_or_sink::read_conf(&sink_id).await?;
         let new_conf = req.ext.clone();

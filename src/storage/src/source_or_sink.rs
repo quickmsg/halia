@@ -4,7 +4,7 @@ use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
 
 use super::POOL;
 
-pub static TABLE_NAME: &str = "sources_or_sinks";
+static TABLE_NAME: &str = "sources_or_sinks";
 
 pub enum Type {
     Source,
@@ -51,45 +51,12 @@ CREATE TABLE IF NOT EXISTS {} (
     name VARCHAR(255) NOT NULL,
     des BLOB,
     conf BLOB NOT NULL,
-    ts BIGINT UNSIGNED NOT NULL
+    ts BIGINT UNSIGNED NOT NULL,
+    UNIQUE (parent_id, typ, name)
 );
 "#,
         TABLE_NAME
     )
-}
-
-pub async fn insert_name_exists(parent_id: &String, typ: Type, name: &String) -> Result<bool> {
-    let typ: i32 = typ.into();
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ? AND name = ? AND typ = ?",
-    )
-    .bind(parent_id)
-    .bind(name)
-    .bind(typ)
-    .fetch_one(POOL.get().unwrap())
-    .await?;
-
-    Ok(count > 0)
-}
-
-pub async fn update_name_exists(
-    parent_id: &String,
-    typ: Type,
-    id: &String,
-    name: &String,
-) -> Result<bool> {
-    let typ: i32 = typ.into();
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sources_or_sinks WHERE parent_id = ? AND name = ? AND typ = ? AND id != ?",
-    )
-    .bind(parent_id)
-    .bind(name)
-    .bind(typ)
-    .bind(id)
-    .fetch_one(POOL.get().unwrap())
-    .await?;
-
-    Ok(count > 0)
 }
 
 pub async fn insert(

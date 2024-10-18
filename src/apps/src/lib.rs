@@ -325,16 +325,6 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
 }
 
 pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-    if storage::source_or_sink::insert_name_exists(
-        &app_id,
-        storage::source_or_sink::Type::Source,
-        &req.base.name,
-    )
-    .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
     match typ {
         AppType::MqttV311 => mqtt_v311::validate_source_conf(&req.ext)?,
@@ -409,17 +399,6 @@ pub async fn update_source(
     source_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    if storage::source_or_sink::update_name_exists(
-        &app_id,
-        storage::source_or_sink::Type::Source,
-        &req.base.name,
-        &source_id,
-    )
-    .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         let old_conf = storage::source_or_sink::read_conf(&source_id).await?;
         let new_conf = req.ext.clone();
@@ -458,16 +437,6 @@ pub async fn get_source_rx(
 }
 
 pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-    if storage::source_or_sink::insert_name_exists(
-        &app_id,
-        storage::source_or_sink::Type::Sink,
-        &req.base.name,
-    )
-    .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
     match typ {
         AppType::MqttV311 => mqtt_v311::validate_sink_conf(&req.ext)?,
@@ -542,17 +511,6 @@ pub async fn update_sink(
     sink_id: String,
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
-    if storage::source_or_sink::update_name_exists(
-        &app_id,
-        storage::source_or_sink::Type::Sink,
-        &req.base.name,
-        &sink_id,
-    )
-    .await?
-    {
-        return Err(HaliaError::NameExists);
-    }
-
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         let old_conf = storage::source_or_sink::read_conf(&sink_id).await?;
         let new_conf = req.ext.clone();
