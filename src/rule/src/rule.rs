@@ -108,10 +108,10 @@ impl Rule {
         }
 
         if let Some(e) = error {
-            storage::rule_ref::deactive(&self.id).await?;
+            storage::rule::reference::deactive(&self.id).await?;
             return Err(e.into());
         } else {
-            storage::rule_ref::active(&self.id).await?;
+            storage::rule::reference::active(&self.id).await?;
         }
 
         let threed_ids = get_3d_ids(
@@ -296,7 +296,7 @@ impl Rule {
 
         match error {
             Some(error) => {
-                storage::rule_ref::deactive(&self.id).await?;
+                storage::rule::reference::deactive(&self.id).await?;
                 return Err(error);
             }
             None => {}
@@ -393,22 +393,19 @@ impl Rule {
 
         self.logger = None;
 
-        storage::rule_ref::deactive(&self.id).await?;
+        storage::rule::reference::deactive(&self.id).await?;
 
         Ok(())
     }
 
     pub async fn update(&mut self, _old_conf: RuleConf, new_conf: RuleConf) -> HaliaResult<()> {
-        debug!("here");
         self.stop().await?;
-        debug!("here");
         self.start(&new_conf).await?;
-        debug!("here");
         Ok(())
     }
 
     pub async fn delete(&mut self) -> HaliaResult<()> {
-        storage::rule_ref::delete_many_by_rule_id(&self.id).await?;
+        storage::rule::reference::delete_many_by_rule_id(&self.id).await?;
 
         Ok(())
     }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use common::error::{HaliaError, HaliaResult};
+use common::error::HaliaResult;
 use sqlx::{
     any::AnyArguments,
     prelude::FromRow,
@@ -13,47 +13,27 @@ use types::{
 
 use super::POOL;
 
-pub const TABLE_NAME: &str = "schemas";
+pub const TABLE_NAME: &str = "schema_refs";
 
 #[derive(FromRow)]
 pub struct Schema {
-    pub id: String,
-    pub name: String,
-    pub typ: i32,
-    pub protocol_type: i32,
-    // desc为关键字
-    pub des: Option<Vec<u8>>,
-    pub conf: Vec<u8>,
-    pub ts: i64,
+    pub schema_id: String,
+    pub resource_id: String,
 }
 
-pub async fn init_table() -> Result<()> {
-    sqlx::query(
-        format!(
-            r#"  
+pub(crate) fn create_table() -> String {
+    format!(
+        r#"  
 CREATE TABLE IF NOT EXISTS {} (
-    id CHAR(32) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    des BLOB,
-    conf BLOB NOT NULL,
-    ts BIGINT UNSIGNED NOT NULL
+    schema_id CHAR(32) NOT NULL,
+    resource_id CHAR(32) NOT NULL
 );
 "#,
-            TABLE_NAME,
-        )
-        .as_str(),
+        TABLE_NAME,
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
-    if super::insert_name_exists(&req.base.name, TABLE_NAME).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
@@ -179,10 +159,6 @@ pub async fn count_all() -> Result<usize> {
 
 // TODO 更新运行中的源和动作
 pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
-    if super::update_name_exists(id, &req.base.name, TABLE_NAME).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     let conf = serde_json::to_vec(&req.ext)?;
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query("UPDATE devices SET name = ?, des = ?, conf = ? WHERE id = ?")
@@ -197,5 +173,6 @@ pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
 }
 
 pub async fn delete_by_id(id: &String) -> Result<()> {
-    super::delete_by_id(id, TABLE_NAME).await
+    todo!()
+    // super::delete_by_id(id, TABLE_NAME).await
 }

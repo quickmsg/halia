@@ -1,9 +1,6 @@
 use anyhow::Result;
 use bytes::Bytes;
-use common::{
-    error::{HaliaError, HaliaResult},
-    get_id, vec_to_string,
-};
+use common::{error::HaliaResult, get_id, vec_to_string};
 use message::MessageBatch;
 use types::{
     schema::{CreateUpdateSchemaReq, QueryParams, SearchSchemasItemResp, SearchSchemasResp},

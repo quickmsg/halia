@@ -10,7 +10,7 @@ use super::POOL;
 pub static TABLE_NAME: &str = "databoard_datas";
 
 #[derive(FromRow)]
-pub struct DataboardData {
+pub struct Data {
     pub id: String,
     pub parent_id: String,
     pub name: String,
@@ -19,23 +19,20 @@ pub struct DataboardData {
     pub ts: i64,
 }
 
-pub async fn init_table() -> Result<()> {
-    sqlx::query(
+pub(crate) fn create_table() -> String {
+    format!(
         r#"  
-CREATE TABLE IF NOT EXISTS databoard_datas (
+CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     parent_id CHAR(32) NOT NULL,
-    name VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
+        TABLE_NAME
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn insert(
@@ -62,7 +59,7 @@ pub async fn search(
     databoard_id: &String,
     pagination: Pagination,
     query_params: QueryDatasParams,
-) -> Result<(usize, Vec<DataboardData>)> {
+) -> Result<(usize, Vec<Data>)> {
     let (limit, offset) = pagination.to_sql();
     let (count, databoard_datas) = match query_params.name {
         Some(name) => {
@@ -74,7 +71,7 @@ pub async fn search(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let databoard_datas = sqlx::query_as::<_, DataboardData>(
+            let databoard_datas = sqlx::query_as::<_, Data>(
                 "SELECT * FROM databoard_datas WHERE parent_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
             .bind(databoard_id)
@@ -91,7 +88,7 @@ pub async fn search(
                     .bind(databoard_id)
                     .fetch_one(POOL.get().unwrap())
                     .await?;
-            let databoard_datas = sqlx::query_as::<_, DataboardData>(
+            let databoard_datas = sqlx::query_as::<_, Data>(
                 "SELECT * FROM databoard_datas WHERE parent_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
             .bind(databoard_id)
@@ -105,9 +102,9 @@ pub async fn search(
     Ok((count as usize, databoard_datas))
 }
 
-pub async fn read_all_by_parent_id(databoard_id: &String) -> Result<Vec<DataboardData>> {
+pub async fn read_all_by_parent_id(databoard_id: &String) -> Result<Vec<Data>> {
     let databoard_datas =
-        sqlx::query_as::<_, DataboardData>("SELECT * FROM databoard_datas WHERE parent_id = ?")
+        sqlx::query_as::<_, Data>("SELECT * FROM databoard_datas WHERE parent_id = ?")
             .bind(databoard_id)
             .fetch_all(POOL.get().unwrap())
             .await?;
@@ -115,12 +112,11 @@ pub async fn read_all_by_parent_id(databoard_id: &String) -> Result<Vec<Databoar
     Ok(databoard_datas)
 }
 
-pub async fn read_one(databoard_data_id: &String) -> Result<DataboardData> {
-    let databoard_data =
-        sqlx::query_as::<_, DataboardData>("SELECT * FROM databoard_datas WHERE id = ?")
-            .bind(databoard_data_id)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
+pub async fn read_one(databoard_data_id: &String) -> Result<Data> {
+    let databoard_data = sqlx::query_as::<_, Data>("SELECT * FROM databoard_datas WHERE id = ?")
+        .bind(databoard_data_id)
+        .fetch_one(POOL.get().unwrap())
+        .await?;
 
     Ok(databoard_data)
 }
@@ -156,5 +152,5 @@ pub async fn check_exists(id: &String) -> Result<bool> {
 }
 
 pub async fn delete_by_id(id: &String) -> Result<()> {
-    super::delete_by_id(id, TABLE_NAME).await
+    crate::delete_by_id(id, TABLE_NAME).await
 }

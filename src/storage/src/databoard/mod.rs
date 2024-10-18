@@ -5,7 +5,9 @@ use types::{
     Pagination,
 };
 
-use super::{databoard_data, POOL};
+pub mod data;
+
+use super::POOL;
 
 pub static TABLE_NAME: &str = "databoards";
 
@@ -19,10 +21,10 @@ pub struct Databoard {
     pub ts: i64,
 }
 
-pub async fn init_table() -> Result<()> {
-    sqlx::query(
+pub(crate) fn create_table() -> String {
+    format!(
         r#"  
-CREATE TABLE IF NOT EXISTS databoards (
+CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     status SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -31,11 +33,8 @@ CREATE TABLE IF NOT EXISTS databoards (
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
+        TABLE_NAME
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn insert(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
@@ -193,13 +192,13 @@ pub async fn update_status(id: &String, status: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn delete(id: &String) -> Result<()> {
+pub async fn delete_by_id(id: &String) -> Result<()> {
     sqlx::query("DELETE FROM databoards WHERE id = ?")
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;
 
-    databoard_data::delete_many(id).await?;
+    data::delete_many(id).await?;
 
     Ok(())
 }

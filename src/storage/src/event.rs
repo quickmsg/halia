@@ -18,22 +18,19 @@ pub struct Event {
     pub ts: i64,
 }
 
-pub async fn init_table() -> Result<()> {
-    sqlx::query(
+pub(crate) fn create_table() -> String {
+    format!(
         r#"  
-CREATE TABLE IF NOT EXISTS events (
+CREATE TABLE IF NOT EXISTS {} (
     resource_type SMALLINT UNSIGNED NOT NULL,
     resource_name VARCHAR(255) NOT NULL,
     typ SMALLINT UNSIGNED NOT NULL,
     info BLOB,
-    ts INTEGER UNSIGNED NOT NULL
+    ts BIGINT UNSIGNED NOT NULL
 );
 "#,
+        TABLE_NAME
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn insert(

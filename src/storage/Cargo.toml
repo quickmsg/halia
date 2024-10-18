@@ -10,3 +10,4 @@ tokio = { workspace = true }
 types = { workspace = true }
 common = { workspace = true }
 serde_json = { workspace = true }
+tracing = { workspace = true }

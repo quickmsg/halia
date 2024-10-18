@@ -175,7 +175,7 @@ pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
         return Err(HaliaError::NameExists);
     }
 
-    storage::rule_ref::delete_many_by_rule_id(&id).await?;
+    storage::rule::reference::delete_many_by_rule_id(&id).await?;
     create_rule_refs(&id, &req.ext.nodes).await?;
 
     if let Some(mut rule) = GLOBAL_RULE_MANAGER.get_mut(&id) {
@@ -212,7 +212,7 @@ pub async fn delete(id: String) -> HaliaResult<()> {
     .await?;
 
     storage::rule::delete_by_id(&id).await?;
-    storage::rule_ref::delete_many_by_rule_id(&id).await?;
+    storage::rule::reference::delete_many_by_rule_id(&id).await?;
 
     sub_rule_count();
     Ok(())
@@ -238,8 +238,12 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
                     err = Some(format!("设备源 {} 不存在！", source_node.source_id));
                     break;
                 }
-                storage::rule_ref::insert(&id, &source_node.device_id, &source_node.source_id)
-                    .await?;
+                storage::rule::reference::insert(
+                    &id,
+                    &source_node.device_id,
+                    &source_node.source_id,
+                )
+                .await?;
             }
             types::rules::NodeType::AppSource => {
                 let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
@@ -247,7 +251,8 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
                     err = Some(format!("应用源 {} 不存在！", source_node.source_id));
                     break;
                 }
-                storage::rule_ref::insert(&id, &source_node.app_id, &source_node.source_id).await?;
+                storage::rule::reference::insert(&id, &source_node.app_id, &source_node.source_id)
+                    .await?;
             }
             types::rules::NodeType::DeviceSink => {
                 let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
@@ -255,7 +260,8 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
                     err = Some(format!("设备动作 {} 不存在！", sink_node.sink_id));
                     break;
                 }
-                storage::rule_ref::insert(&id, &sink_node.device_id, &sink_node.sink_id).await?;
+                storage::rule::reference::insert(&id, &sink_node.device_id, &sink_node.sink_id)
+                    .await?;
             }
             types::rules::NodeType::AppSink => {
                 let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
@@ -263,15 +269,16 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
                     err = Some(format!("应用动作 {} 不存在！", sink_node.sink_id));
                     break;
                 }
-                storage::rule_ref::insert(&id, &sink_node.app_id, &sink_node.sink_id).await?;
+                storage::rule::reference::insert(&id, &sink_node.app_id, &sink_node.sink_id)
+                    .await?;
             }
             types::rules::NodeType::Databoard => {
                 let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                if !storage::databoard_data::check_exists(&databoard_node.data_id).await? {
+                if !storage::databoard::data::check_exists(&databoard_node.data_id).await? {
                     err = Some(format!("数据看板数据 {} 不存在！", databoard_node.data_id));
                     break;
                 }
-                storage::rule_ref::insert(
+                storage::rule::reference::insert(
                     &id,
                     &databoard_node.databoard_id,
                     &databoard_node.data_id,
@@ -284,7 +291,7 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
 
     match err {
         Some(e) => {
-            storage::rule_ref::delete_many_by_rule_id(&id).await?;
+            storage::rule::reference::delete_many_by_rule_id(&id).await?;
             return Err(HaliaError::NotFound(e));
         }
         None => Ok(()),

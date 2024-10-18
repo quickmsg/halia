@@ -3,7 +3,7 @@ use sqlx::prelude::FromRow;
 
 use super::POOL;
 
-pub static TABLE_NAME: &str = "users";
+static TABLE_NAME: &str = "users";
 
 #[derive(FromRow)]
 pub struct User {
@@ -11,19 +11,16 @@ pub struct User {
     pub password: String,
 }
 
-pub async fn init_table() -> Result<()> {
-    sqlx::query(
+pub(crate) fn create_table() -> String {
+    format!(
         r#"  
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS {} (
     username VARCHAR(255) NOT NULL,
     password VARCHAR(255) NOT NULL
 );
 "#,
+        TABLE_NAME
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn create_user(username: String, password: &String) -> Result<()> {

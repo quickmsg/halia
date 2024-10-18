@@ -10,11 +10,9 @@ static POOL: LazyLock<OnceCell<AnyPool>> = LazyLock::new(OnceCell::new);
 
 pub mod app;
 pub mod databoard;
-pub mod databoard_data;
 pub mod device;
 pub mod event;
 pub mod rule;
-pub mod rule_ref;
 pub mod schema;
 pub mod source_or_sink;
 pub mod user;
@@ -46,43 +44,41 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
     let pool = AnyPool::connect_with(opt).await?;
     POOL.set(pool).unwrap();
 
-    device::init_table().await.unwrap();
-    app::init_table().await?;
-    source_or_sink::init_table().await?;
-    databoard::init_table().await?;
-    databoard_data::init_table().await?;
-    rule_ref::init_table().await?;
-    rule::init_table().await?;
-    event::init_table().await?;
-    user::init_table().await?;
+    sqlx::query(&device::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&app::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&databoard::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&databoard::data::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&source_or_sink::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&rule::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&rule::reference::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&schema::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&schema::reference::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&user::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&event::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
 
     Ok(())
-}
-
-async fn insert_name_exists(name: &String, table_name: &str) -> Result<bool> {
-    let count: i64 =
-        sqlx::query_scalar(format!("SELECT COUNT(*) FROM {} WHERE name = ?", table_name).as_str())
-            .bind(name)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
-
-    Ok(count > 0)
-}
-
-async fn update_name_exists(id: &String, name: &String, table_name: &str) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar(
-        format!(
-            "SELECT COUNT(*) FROM {} WHERE name = ? AND id != ?",
-            table_name
-        )
-        .as_str(),
-    )
-    .bind(name)
-    .bind(id)
-    .fetch_one(POOL.get().unwrap())
-    .await?;
-
-    Ok(count > 0)
 }
 
 async fn delete_by_id(id: &String, table_name: &str) -> Result<()> {

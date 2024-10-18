@@ -70,7 +70,7 @@ pub async fn load_from_storage() -> HaliaResult<()> {
         let mut databoard = Databoard::new(conf);
 
         // todo start
-        let db_datas = storage::databoard_data::read_all_by_parent_id(&db_on_databoard.id).await?;
+        let db_datas = storage::databoard::data::read_all_by_parent_id(&db_on_databoard.id).await?;
         for db_data in db_datas {
             let data_conf: DataConf = serde_json::from_slice(&db_data.conf)?;
             databoard.create_data(db_data.id, data_conf).await?;
@@ -84,7 +84,7 @@ pub async fn load_from_storage() -> HaliaResult<()> {
 
 pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
     let db_databoard = storage::databoard::read_one(&query.databoard_id).await?;
-    let db_databoard_data = storage::databoard_data::read_one(&query.data_id).await?;
+    let db_databoard_data = storage::databoard::data::read_one(&query.data_id).await?;
 
     Ok(SearchRuleInfo {
         databoard: SearchDataboardsItemResp {
@@ -178,7 +178,7 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
     GLOBAL_DATABOARD_MANAGER.insert(databoard_id.clone(), databoard);
 
     let mut databoard = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id).unwrap();
-    let db_datas = storage::databoard_data::read_all_by_parent_id(&databoard_id).await?;
+    let db_datas = storage::databoard::data::read_all_by_parent_id(&databoard_id).await?;
     for db_data in db_datas {
         let data_conf: DataConf = serde_json::from_slice(&db_data.conf)?;
         databoard.create_data(db_data.id, data_conf).await?;
@@ -197,7 +197,7 @@ pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
     }
 
     let active_rule_ref_cnt =
-        storage::rule_ref::count_active_cnt_by_parent_id(&databoard_id).await?;
+        storage::rule::reference::count_active_cnt_by_parent_id(&databoard_id).await?;
     if active_rule_ref_cnt > 0 {
         return Err(HaliaError::StopActiveRefing);
     }
@@ -214,7 +214,7 @@ pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
 }
 
 pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_cnt_by_parent_id(&databoard_id).await?;
+    let rule_ref_cnt = storage::rule::reference::count_cnt_by_parent_id(&databoard_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
@@ -227,7 +227,7 @@ pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
 
     sub_databoard_count();
     GLOBAL_DATABOARD_MANAGER.remove(&databoard_id);
-    storage::databoard::delete(&databoard_id).await?;
+    storage::databoard::delete_by_id(&databoard_id).await?;
 
     Ok(())
 }
@@ -240,7 +240,7 @@ pub async fn create_data(databoard_id: String, req: CreateUpdateDataReq) -> Hali
         databoard.create_data(data_id.clone(), conf).await?;
     }
 
-    storage::databoard_data::insert(&databoard_id, &data_id, req).await?;
+    storage::databoard::data::insert(&databoard_id, &data_id, req).await?;
 
     Ok(())
 }
@@ -251,7 +251,7 @@ pub async fn search_datas(
     query: QueryDatasParams,
 ) -> HaliaResult<SearchDatasResp> {
     let (count, db_datas) =
-        storage::databoard_data::search(&databoard_id, pagination, query).await?;
+        storage::databoard::data::search(&databoard_id, pagination, query).await?;
 
     let mut datas = Vec::with_capacity(db_datas.len());
 
@@ -266,9 +266,11 @@ pub async fn search_datas(
             None => (None, None),
         };
         let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(&db_data.id).await?,
-            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(&db_data.id)
-                .await?,
+            rule_ref_cnt: storage::rule::reference::count_cnt_by_resource_id(&db_data.id).await?,
+            rule_active_ref_cnt: storage::rule::reference::count_active_cnt_by_resource_id(
+                &db_data.id,
+            )
+            .await?,
         };
         datas.push(SearchDatasItemResp {
             info: SearchDatasInfoResp {
@@ -296,21 +298,22 @@ pub async fn search_datas(
 }
 
 pub async fn update_data(
-    databoard_id: String,
+    _databoard_id: String,
     databoard_data_id: String,
     req: CreateUpdateDataReq,
 ) -> HaliaResult<()> {
-    if let Some(databoard) = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id) {
-        // databoard.update_data(&databoard_data_id, req).await?;
-    }
+    // if let Some(databoard) = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id) {
+    //     // databoard.update_data(&databoard_data_id, req).await?;
+    // }
 
-    storage::databoard_data::update(&databoard_data_id, req).await?;
+    storage::databoard::data::update(&databoard_data_id, req).await?;
 
     Ok(())
 }
 
 pub async fn delete_data(databoard_id: String, databoard_data_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(&databoard_data_id).await?;
+    let rule_ref_cnt =
+        storage::rule::reference::count_cnt_by_resource_id(&databoard_data_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
@@ -319,7 +322,7 @@ pub async fn delete_data(databoard_id: String, databoard_data_id: String) -> Hal
         databoard.delete_data(&databoard_data_id).await?;
     }
 
-    storage::databoard_data::delete_by_id(&databoard_data_id).await?;
+    storage::databoard::data::delete_by_id(&databoard_data_id).await?;
 
     Ok(())
 }

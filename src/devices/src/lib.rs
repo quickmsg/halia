@@ -276,7 +276,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 }
 
 pub async fn stop_device(device_id: String) -> HaliaResult<()> {
-    if storage::rule_ref::count_active_cnt_by_parent_id(&device_id).await? > 0 {
+    if storage::rule::reference::count_active_cnt_by_parent_id(&device_id).await? > 0 {
         return Err(HaliaError::StopActiveRefing);
     }
 
@@ -296,7 +296,7 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
         return Err(HaliaError::Common("运行中，不能删除".to_string()));
     }
 
-    let cnt = storage::rule_ref::count_cnt_by_parent_id(&device_id).await?;
+    let cnt = storage::rule::reference::count_cnt_by_parent_id(&device_id).await?;
     if cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
@@ -359,9 +359,11 @@ pub async fn search_sources(
     let mut data = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
         let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(&db_source.id).await?,
-            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(&db_source.id)
-                .await?,
+            rule_ref_cnt: storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?,
+            rule_active_ref_cnt: storage::rule::reference::count_active_cnt_by_resource_id(
+                &db_source.id,
+            )
+            .await?,
         };
         data.push(SearchSourcesOrSinksItemResp {
             info: SearchSourcesOrSinksInfoResp {
@@ -425,7 +427,7 @@ pub async fn write_source_value(
 }
 
 pub async fn delete_source(device_id: String, source_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(&source_id).await?;
+    let rule_ref_cnt = storage::rule::reference::count_cnt_by_resource_id(&source_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }
@@ -502,9 +504,11 @@ pub async fn search_sinks(
     let mut data = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
         let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule_ref::count_cnt_by_resource_id(&db_sink.id).await?,
-            rule_active_ref_cnt: storage::rule_ref::count_active_cnt_by_resource_id(&db_sink.id)
-                .await?,
+            rule_ref_cnt: storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?,
+            rule_active_ref_cnt: storage::rule::reference::count_active_cnt_by_resource_id(
+                &db_sink.id,
+            )
+            .await?,
         };
         data.push(SearchSourcesOrSinksItemResp {
             info: SearchSourcesOrSinksInfoResp {
@@ -558,7 +562,7 @@ pub async fn update_sink(
 }
 
 pub async fn delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule_ref::count_cnt_by_resource_id(&sink_id).await?;
+    let rule_ref_cnt = storage::rule::reference::count_cnt_by_resource_id(&sink_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
     }

@@ -3,7 +3,7 @@ use sqlx::prelude::FromRow;
 
 use super::POOL;
 
-pub static TABLE_NAME: &str = "rule_refs";
+static TABLE_NAME: &str = "rule_refs";
 
 #[derive(FromRow)]
 pub struct RuleRef {
@@ -13,21 +13,18 @@ pub struct RuleRef {
     pub active: i32,
 }
 
-pub(crate) async fn init_table() -> Result<()> {
-    sqlx::query(
+pub(crate) fn create_table() -> String {
+    format!(
         r#"  
-CREATE TABLE IF NOT EXISTS rule_refs (
+CREATE TABLE IF NOT EXISTS {} (
     rule_id CHAR(32) NOT NULL,
     parent_id CHAR(32) NOT NULL,
     resource_id CHAR(32) NOT NULL,
     active SMALLINT NOT NULL
 );
 "#,
+        TABLE_NAME
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn insert(rule_id: &String, parent_id: &String, resource_id: &String) -> Result<()> {

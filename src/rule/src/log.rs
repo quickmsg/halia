@@ -37,11 +37,8 @@ impl Logger {
         tokio::spawn(async move {
             loop {
                 select! {
-                    mb = mb_rx.recv() => {
-                        match mb {
-                            Some(mb) => Self::log(&mut file, mb),
-                            None => {}
-                        }
+                    Some(mb) = mb_rx.recv() => {
+                        Self::log(&mut file, mb);
                     }
 
                     _ = stop_signal_rx.recv() => {

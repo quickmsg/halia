@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use common::error::{HaliaError, HaliaResult};
+use common::error::HaliaResult;
 use sqlx::prelude::FromRow;
 use types::{
     apps::{CreateUpdateAppReq, QueryParams},
@@ -22,38 +22,31 @@ pub struct App {
     pub ts: i64,
 }
 
-pub async fn init_table() -> Result<()> {
-    sqlx::query(
+pub(crate) fn create_table() -> String {
+    format!(
         r#"  
-CREATE TABLE IF NOT EXISTS apps (
+CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     status SMALLINT UNSIGNED NOT NULL,
     err SMALLINT UNSIGNED NOT NULL,
     typ SMALLINT UNSIGNED NOT NULL,
-    name VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
-)
+);
 "#,
+        TABLE_NAME
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn insert(id: &String, req: CreateUpdateAppReq) -> HaliaResult<()> {
-    if super::insert_name_exists(&req.conf.base.name, TABLE_NAME).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     let typ: i32 = req.typ.into();
     let ts = common::timestamp_millis();
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
-        "INSERT INTO apps (id, status, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO apps (id, status_, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id)
     .bind(false as i32)
@@ -517,10 +510,6 @@ pub async fn update_err(id: &String, err: bool) -> Result<()> {
 }
 
 pub async fn update_conf(id: String, req: CreateUpdateAppReq) -> HaliaResult<()> {
-    if super::update_name_exists(&id, &req.conf.base.name, TABLE_NAME).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
     sqlx::query("UPDATE apps SET name = ?, des = ?, conf = ? WHERE id = ?")

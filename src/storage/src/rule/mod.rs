@@ -7,7 +7,9 @@ use types::{
 
 use super::POOL;
 
-pub static TABLE_NAME: &str = "rules";
+pub mod reference;
+
+static TABLE_NAME: &str = "rules";
 
 #[derive(FromRow)]
 pub struct Rule {
@@ -19,23 +21,20 @@ pub struct Rule {
     pub ts: i64,
 }
 
-pub async fn init_table() -> Result<()> {
-    sqlx::query(
+pub(crate) fn create_table() -> String {
+    format!(
         r#"  
-CREATE TABLE IF NOT EXISTS rules (
+CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     status SMALLINT NOT NULL,
-    name VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
+        TABLE_NAME
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn insert_name_exists(name: &String) -> Result<bool> {

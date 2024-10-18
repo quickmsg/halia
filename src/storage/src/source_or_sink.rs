@@ -41,10 +41,10 @@ pub struct SourceOrSink {
     pub ts: i64,
 }
 
-pub async fn init_table() -> Result<()> {
-    sqlx::query(
+pub(crate) fn create_table() -> String {
+    format!(
         r#"  
-CREATE TABLE IF NOT EXISTS sources_or_sinks (
+CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     typ SMALLINT UNSIGNED NOT NULL,
     parent_id CHAR(32) NOT NULL,
@@ -54,11 +54,8 @@ CREATE TABLE IF NOT EXISTS sources_or_sinks (
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
+        TABLE_NAME
     )
-    .execute(POOL.get().unwrap())
-    .await?;
-
-    Ok(())
 }
 
 pub async fn insert_name_exists(parent_id: &String, typ: Type, name: &String) -> Result<bool> {
