@@ -14,8 +14,9 @@ use types::{
         SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemResp,
         SearchDevicesItemRunningInfo, SearchDevicesResp, SearchRuleInfo, Summary,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
-    SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Value,
+    BaseConf, CreateUpdateSourceOrSinkReq, CreateUpdateSourceOrSinkTemplateReq, Pagination,
+    QuerySourcesOrSinksParams, RuleRef, SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp,
+    SearchSourcesOrSinksResp, Value,
 };
 
 pub mod coap;
@@ -593,3 +594,14 @@ async fn transer_db_device_to_resp(
         running_info,
     })
 }
+
+pub async fn create_source_template(req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
+    match req.device_type {
+        DeviceType::Modbus => modbus::source_template::validate(&req.ext)?,
+        DeviceType::Opcua => todo!(),
+        DeviceType::Coap => todo!(),
+    }
+    todo!()
+}
+
+pub async fn create_sink_template() {}

@@ -1,4 +1,5 @@
 use base64::{prelude::BASE64_STANDARD, Engine as _};
+use devices::DeviceType;
 use serde::{Deserialize, Serialize};
 
 pub mod apps;
@@ -67,6 +68,13 @@ pub struct RuleRef {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSourceOrSinkReq {
+    pub base: BaseConf,
+    pub ext: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct CreateUpdateSourceOrSinkTemplateReq {
+    pub device_type: DeviceType,
     pub base: BaseConf,
     pub ext: serde_json::Value,
 }

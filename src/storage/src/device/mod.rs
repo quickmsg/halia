@@ -13,18 +13,18 @@ use types::{
 
 use super::POOL;
 
+pub mod source_or_sink_template;
+pub mod source_or_sink_template_reference;
+
 const TABLE_NAME: &str = "devices";
 
 #[derive(FromRow)]
 pub struct Device {
     pub id: String,
-    // 0:close 1:open
-    pub status: i32,
-    // 0:错误中 1:正常中
-    pub err: i32,
+    pub status: i32, // 0:close 1:open
+    pub err: i32,    // 0:错误中 1:正常中
     pub typ: i32,
     pub name: String,
-    // desc为关键字
     pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,

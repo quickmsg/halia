@@ -47,6 +47,13 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
     sqlx::query(&device::create_table())
         .execute(POOL.get().unwrap())
         .await?;
+    sqlx::query(&device::source_or_sink_template::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&device::source_or_sink_template_reference::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+
     sqlx::query(&app::create_table())
         .execute(POOL.get().unwrap())
         .await?;
@@ -88,4 +95,28 @@ async fn delete_by_id(id: &String, table_name: &str) -> HaliaResult<()> {
         .await?;
 
     Ok(())
+}
+
+pub enum SourceSinkType {
+    Source,
+    Sink,
+}
+
+impl From<i32> for SourceSinkType {
+    fn from(i: i32) -> Self {
+        match i {
+            1 => SourceSinkType::Source,
+            2 => SourceSinkType::Sink,
+            _ => panic!("invalid type"),
+        }
+    }
+}
+
+impl Into<i32> for SourceSinkType {
+    fn into(self) -> i32 {
+        match self {
+            SourceSinkType::Source => 1,
+            SourceSinkType::Sink => 2,
+        }
+    }
 }

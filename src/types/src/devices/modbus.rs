@@ -87,12 +87,32 @@ pub enum Encode {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub enum SourceConfType {
+    // 模板
+    Template,
+    // 自定义
+    Customize,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SourceConf {
     // 字段名称
     pub field: String,
     #[serde(flatten)]
     pub data_type: DataType,
     pub slave: u8,
+    pub area: Area,
+    pub address: u16,
+    pub interval: u64,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct SourceTemplateConf {
+    // 字段名称
+    pub field: String,
+    #[serde(flatten)]
+    pub data_type: DataType,
+    // pub slave: u8,
     pub area: Area,
     pub address: u16,
     pub interval: u64,
