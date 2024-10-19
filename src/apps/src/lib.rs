@@ -327,7 +327,7 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
 pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
     let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
     match typ {
-        AppType::MqttV311 => mqtt_v311::validate_source_conf(&req.ext)?,
+        AppType::MqttV311 => mqtt_v311::process_source_conf(&req.ext).await?,
         AppType::MqttV50 => mqtt_v50::validate_source_conf(&req.ext)?,
         AppType::Http => http::validate_source_conf(&req.ext)?,
         AppType::Kafka | AppType::InfluxdbV1 | AppType::InfluxdbV2 | AppType::Tdengine => {

@@ -4,7 +4,7 @@ use anyhow::Result;
 use sqlx::{any::AnyConnectOptions, AnyPool, ConnectOptions as _};
 use tokio::sync::OnceCell;
 
-use common::config::StorageConfig;
+use common::{config::StorageConfig, error::HaliaResult};
 
 static POOL: LazyLock<OnceCell<AnyPool>> = LazyLock::new(OnceCell::new);
 
@@ -81,7 +81,7 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
     Ok(())
 }
 
-async fn delete_by_id(id: &String, table_name: &str) -> Result<()> {
+async fn delete_by_id(id: &String, table_name: &str) -> HaliaResult<()> {
     sqlx::query(format!("DELETE FROM {} WHERE id = ?", table_name).as_str())
         .bind(id)
         .execute(POOL.get().unwrap())

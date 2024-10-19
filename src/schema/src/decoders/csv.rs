@@ -2,6 +2,7 @@ use std::io::Cursor;
 
 use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
+use common::error::HaliaResult;
 use message::{Message, MessageBatch, MessageValue};
 use types::schema::CsvDecodeConf;
 
@@ -18,18 +19,27 @@ pub(crate) fn validate_conf(conf: &serde_json::Value) -> Result<()> {
 }
 
 impl Csv {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Box<dyn Decoder> {
+        Box::new(Self {
             headers: None,
             has_headers: false,
-        }
+        })
     }
 
-    pub fn set_has_headers(&mut self, has_headers: bool) {
+    pub async fn new_with_conf(id: &String) -> HaliaResult<Box<dyn Decoder>> {
+        let conf = storage::schema::read_conf(id).await.unwrap();
+        let conf: CsvDecodeConf = serde_json::from_slice(&conf)?;
+        Ok(Box::new(Self {
+            has_headers: conf.has_headers,
+            headers: conf.headers,
+        }))
+    }
+
+    fn set_has_headers(&mut self, has_headers: bool) {
         self.has_headers = has_headers;
     }
 
-    pub fn set_headers(&mut self, headers: Vec<String>) {
+    fn set_headers(&mut self, headers: Vec<String>) {
         self.headers = Some(headers);
     }
 

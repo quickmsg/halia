@@ -3,6 +3,7 @@ use std::io::Cursor;
 use anyhow::{bail, Result};
 use apache_avro::{Reader, Schema};
 use bytes::Bytes;
+use common::error::HaliaResult;
 use message::{Message, MessageBatch};
 use tracing::warn;
 use types::schema::AvroDecodeConf;
@@ -20,11 +21,20 @@ pub(crate) fn validate_conf(conf: &serde_json::Value) -> Result<()> {
 }
 
 impl Avro {
-    pub fn new() -> Self {
-        Self { schema: None }
+    pub fn new() -> Box<dyn Decoder> {
+        Box::new(Self { schema: None })
     }
 
-    pub fn set_schema(&mut self, schema: &String) -> Result<()> {
+    pub async fn new_with_conf(id: &String) -> HaliaResult<Box<dyn Decoder>> {
+        let conf = storage::schema::read_conf(id).await?;
+        let conf: AvroDecodeConf = serde_json::from_slice(&conf)?;
+        let schema = Schema::parse_str(&conf.schema).unwrap();
+        Ok(Box::new(Self {
+            schema: Some(schema),
+        }))
+    }
+
+    fn set_schema(&mut self, schema: &String) -> Result<()> {
         let schema = Schema::parse_str(schema)?;
         self.schema = Some(schema);
         Ok(())

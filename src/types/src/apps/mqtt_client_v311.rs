@@ -50,6 +50,21 @@ pub struct AuthPassword {
 pub struct SourceConf {
     pub topic: String,
     pub qos: Qos,
+    pub decode_type: DecodeType,
+    pub schema_id: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
+pub enum DecodeType {
+    Raw,
+    Json,
+    Csv,
+    CsvWithSchema,
+    Avro,
+    AvroWithSchema,
+    Yaml,
+    Toml,
+    Protobuf,
 }
 
 #[derive(Deserialize_repr, Serialize_repr, Clone, PartialEq, Copy)]

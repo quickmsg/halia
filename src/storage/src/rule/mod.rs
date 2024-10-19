@@ -1,4 +1,5 @@
 use anyhow::Result;
+use common::error::HaliaResult;
 use sqlx::prelude::FromRow;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams},
@@ -196,6 +197,6 @@ pub async fn update(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
     Ok(())
 }
 
-pub async fn delete_by_id(id: &String) -> Result<()> {
+pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
     super::delete_by_id(id, TABLE_NAME).await
 }

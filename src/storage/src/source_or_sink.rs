@@ -1,4 +1,5 @@
 use anyhow::Result;
+use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
 
@@ -218,6 +219,6 @@ pub async fn check_exists(id: &String) -> Result<bool> {
     Ok(count == 1)
 }
 
-pub async fn delete_by_id(id: &String) -> Result<()> {
+pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
     super::delete_by_id(id, TABLE_NAME).await
 }

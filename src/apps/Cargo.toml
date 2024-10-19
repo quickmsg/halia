@@ -19,6 +19,7 @@ common = { workspace = true }
 message = { workspace = true }
 events = { workspace = true }
 storage = { workspace = true }
+schema = { workspace = true }
 
 anyhow = { workspace = true }
 tracing = { workspace = true }

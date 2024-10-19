@@ -1,5 +1,5 @@
 use anyhow::Result;
-use common::error::HaliaResult;
+use common::error::{HaliaError, HaliaResult};
 use sqlx::{
     any::AnyArguments,
     prelude::FromRow,
@@ -15,7 +15,7 @@ pub mod reference;
 
 use super::POOL;
 
-pub const TABLE_NAME: &str = "halia_schemas";
+const TABLE_NAME: &str = "halia_schemas";
 
 #[derive(FromRow)]
 pub struct Schema {
@@ -23,10 +23,10 @@ pub struct Schema {
     pub name: String,
     pub typ: i32,
     pub protocol_type: i32,
-    // desc为关键字
     pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,
+    pub rc: i32,
 }
 
 pub(crate) fn create_table() -> String {
@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS {} (
     name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
     conf BLOB NOT NULL,
+    rc INT NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
@@ -49,14 +50,42 @@ pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
     let ts = common::timestamp_millis();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
-    format!("INSERT INTO {} (id, status, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", TABLE_NAME).as_str()
+        format!(
+            "INSERT INTO {} (id, name, des, conf, rc, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            TABLE_NAME
+        )
+        .as_str(),
     )
     .bind(id)
+    .bind(&req.base.name)
     .bind(desc)
     .bind(conf)
+    .bind(0)
     .bind(ts)
     .execute(POOL.get().unwrap())
     .await?;
+
+    Ok(())
+}
+
+pub async fn add_rc(id: &String) -> HaliaResult<()> {
+    let rc = get_rc(id).await?;
+    sqlx::query(format!("UPDATE {} SET rc = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(rc + 1)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
+
+    Ok(())
+}
+
+pub async fn sub_rc(id: &String) -> HaliaResult<()> {
+    let rc = get_rc(id).await?;
+    sqlx::query(format!("UPDATE {} SET rc = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(rc - 1)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
 
     Ok(())
 }
@@ -183,6 +212,19 @@ pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
     Ok(())
 }
 
-pub async fn delete_by_id(id: &String) -> Result<()> {
+pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
+    let rc = get_rc(id).await?;
+    if rc > 0 {
+        return Err(HaliaError::DeleteRefing);
+    }
     super::delete_by_id(id, TABLE_NAME).await
+}
+
+async fn get_rc(id: &String) -> HaliaResult<i64> {
+    let rc: i64 =
+        sqlx::query_scalar(format!("SELECT rc FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+    Ok(rc)
 }

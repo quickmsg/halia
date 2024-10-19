@@ -18,7 +18,7 @@ pub enum Schema {
     Toml,
 }
 
-pub trait Decoder {
+pub trait Decoder: Sync + Send {
     fn decode(&self, data: Bytes) -> Result<MessageBatch>;
 }
 
@@ -63,22 +63,25 @@ pub async fn delete(id: String) -> HaliaResult<()> {
 }
 
 fn validate_conf(req: &CreateUpdateSchemaReq) -> Result<()> {
-    match (&req.typ, &req.protocol) {
-        (types::schema::SchemaType::Code, types::schema::ProtocolType::Avro) => {
-            todo!()
-        }
-        (types::schema::SchemaType::Code, types::schema::ProtocolType::Protobuf) => todo!(),
-        (types::schema::SchemaType::Code, types::schema::ProtocolType::Csv) => todo!(),
-        (types::schema::SchemaType::Decode, types::schema::ProtocolType::Avro) => {
-            decoders::avro::validate_conf(&req.ext)?;
-        }
-        (types::schema::SchemaType::Decode, types::schema::ProtocolType::Protobuf) => {
-            decoders::protobuf::validate_conf(&req.ext)?;
-        }
-        (types::schema::SchemaType::Decode, types::schema::ProtocolType::Csv) => {
-            decoders::csv::validate_conf(&req.ext)?;
-        }
+    match &req.typ {
+        types::schema::SchemaType::Encode => match &req.protocol {
+            types::schema::ProtocolType::Avro => todo!(),
+            types::schema::ProtocolType::Protobuf => todo!(),
+            types::schema::ProtocolType::Csv => todo!(),
+        },
+        types::schema::SchemaType::Decode => match &req.protocol {
+            types::schema::ProtocolType::Avro => {
+                decoders::avro::validate_conf(&req.ext)?;
+            }
+            types::schema::ProtocolType::Protobuf => {
+                decoders::protobuf::validate_conf(&req.ext)?;
+            }
+            types::schema::ProtocolType::Csv => {
+                decoders::csv::validate_conf(&req.ext)?;
+            }
+        },
     }
+
     Ok(())
 }
 

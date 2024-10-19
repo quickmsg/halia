@@ -1,5 +1,8 @@
 use std::{
-    sync::{atomic::{AtomicU16, Ordering}, Arc},
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -16,7 +19,7 @@ use tokio::{
     sync::{broadcast, mpsc, watch, RwLock},
     task::JoinHandle,
 };
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 use types::apps::{
     mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf},
     SearchAppsItemRunningInfo,
@@ -113,10 +116,9 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn validate_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+pub async fn process_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     let conf: SourceConf = serde_json::from_value(conf.clone())?;
-    Source::validate_conf(&conf)?;
-    Ok(())
+    Source::validate_conf(&conf).await
 }
 
 pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
@@ -216,36 +218,31 @@ impl MqttClient {
     ) {
         match event {
             Ok(Event::Incoming(Incoming::Publish(p))) => {
-                debug!("topic:{}, payload:{:?}", p.topic, p.payload);
                 if *err {
                     *err = false;
                     _ = app_err_tx.send(false);
                     *device_err.write().await = None;
                 }
-                debug!("here");
-                match MessageBatch::from_json(p.payload) {
-                    Ok(msg) => {
-                        debug!("here");
-                        for source in sources.iter_mut() {
-                            debug!("source:{}, msg:{:?}", source.conf.topic, p.topic);
-                            if matches(&p.topic, &source.conf.topic) {
-                                debug!("source:{}, msg:{:?}", source.key(), msg);
-                                debug!(
-                                    "source.mb_tx.receiver_count():{}",
-                                    source.mb_tx.receiver_count()
-                                );
-                                if source.mb_tx.receiver_count() > 0 {
-                                    if let Err(e) = source.mb_tx.send(msg.clone()) {
-                                        warn!("{}", e);
-                                    }
-                                }
+                for source in sources.iter_mut() {
+                    if matches(&p.topic, &source.conf.topic) {
+                        // TODO remove clone
+                        let mb = match source.decoder.decode(p.payload.clone()) {
+                            Ok(mb) => mb,
+                            Err(e) => {
+                                warn!("decode err :{}", e);
+                                break;
+                            }
+                        };
+
+                        if source.mb_tx.receiver_count() > 0 {
+                            if let Err(e) = source.mb_tx.send(mb) {
+                                warn!("{}", e);
                             }
                         }
                     }
-                    Err(e) => error!("Failed to decode msg:{}", e),
                 }
             }
-            Ok(event) => {
+            Ok(_event) => {
                 // debug!("{:?}", event);
                 // debug!("v311 event ok null");
                 if *err {
@@ -355,7 +352,7 @@ impl App for MqttClient {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
-        let source = Source::new(conf);
+        let source = Source::new(conf).await;
         if let Err(e) = self
             .mqtt_client
             .subscribe(&source.conf.topic, transfer_qos(&source.conf.qos))

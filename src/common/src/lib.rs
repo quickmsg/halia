@@ -8,10 +8,6 @@ pub mod ref_info;
 pub mod sink_message_retain;
 pub mod sys;
 
-pub fn check_page_size(i: usize, page: usize, size: usize) -> bool {
-    i >= (page - 1) * size && i < page * size
-}
-
 pub enum DynamicValue {
     Const(serde_json::Value),
     Field(String),

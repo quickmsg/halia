@@ -5,6 +5,12 @@ use crate::Decoder;
 
 pub struct Json;
 
+impl Json {
+    pub fn new() -> Box<dyn Decoder> {
+        Box::new(Self)
+    }
+}
+
 impl Decoder for Json {
     fn decode(&self, data: bytes::Bytes) -> anyhow::Result<message::MessageBatch> {
         let data: serde_json::Value = serde_json::from_slice(&data)?;

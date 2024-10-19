@@ -4,6 +4,12 @@ use crate::Decoder;
 
 pub struct Raw;
 
+impl Raw {
+    pub fn new() -> Box<dyn Decoder> {
+        Box::new(Self)
+    }
+}
+
 impl Decoder for Raw {
     fn decode(&self, data: bytes::Bytes) -> anyhow::Result<message::MessageBatch> {
         let mut message = Message::default();

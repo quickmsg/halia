@@ -17,14 +17,14 @@ pub struct CreateUpdateSchemaReq {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum SchemaType {
-    Code,
+    Encode,
     Decode,
 }
 
 impl Into<i32> for SchemaType {
     fn into(self) -> i32 {
         match self {
-            SchemaType::Code => 1,
+            SchemaType::Encode => 1,
             SchemaType::Decode => 2,
         }
     }
@@ -35,7 +35,7 @@ impl TryFrom<i32> for SchemaType {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(SchemaType::Code),
+            1 => Ok(SchemaType::Encode),
             2 => Ok(SchemaType::Decode),
             _ => bail!("未知模式类型: {}", value),
         }

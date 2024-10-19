@@ -1,4 +1,5 @@
 use anyhow::Result;
+use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
     databoard::{CreateUpdateDataReq, QueryDatasParams},
@@ -7,7 +8,7 @@ use types::{
 
 use super::POOL;
 
-pub static TABLE_NAME: &str = "databoard_datas";
+static TABLE_NAME: &str = "databoard_datas";
 
 #[derive(FromRow)]
 pub struct Data {
@@ -151,6 +152,6 @@ pub async fn check_exists(id: &String) -> Result<bool> {
     Ok(count == 1)
 }
 
-pub async fn delete_by_id(id: &String) -> Result<()> {
+pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
     crate::delete_by_id(id, TABLE_NAME).await
 }
