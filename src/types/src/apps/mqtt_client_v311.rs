@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{MessageRetain, PlainOrBase64Value, Ssl};
+use crate::{schema::DecodeType, MessageRetain, PlainOrBase64Value, Ssl};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct Conf {
@@ -52,19 +52,6 @@ pub struct SourceConf {
     pub qos: Qos,
     pub decode_type: DecodeType,
     pub schema_id: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
-pub enum DecodeType {
-    Raw,
-    Json,
-    Csv,
-    CsvWithSchema,
-    Avro,
-    AvroWithSchema,
-    Yaml,
-    Toml,
-    Protobuf,
 }
 
 #[derive(Deserialize_repr, Serialize_repr, Clone, PartialEq, Copy)]

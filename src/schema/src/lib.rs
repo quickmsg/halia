@@ -1,9 +1,15 @@
 use anyhow::Result;
 use bytes::Bytes;
-use common::{error::HaliaResult, get_id, vec_to_string};
+use common::{
+    error::{HaliaError, HaliaResult},
+    get_id, vec_to_string,
+};
 use message::MessageBatch;
 use types::{
-    schema::{CreateUpdateSchemaReq, QueryParams, SearchSchemasItemResp, SearchSchemasResp},
+    schema::{
+        AvroDecodeConf, CreateUpdateSchemaReq, CsvDecodeConf, DecodeType, QueryParams,
+        SearchSchemasItemResp, SearchSchemasResp,
+    },
     BaseConf, Pagination,
 };
 
@@ -91,7 +97,7 @@ fn transfer_db_schema_to_resp(
     Ok(SearchSchemasItemResp {
         conf: CreateUpdateSchemaReq {
             typ: types::schema::SchemaType::try_from(db_schema.typ)?,
-            protocol: types::schema::ProtocolType::try_from(db_schema.protocol_type)?,
+            protocol: types::schema::ProtocolType::try_from(db_schema.protocol)?,
             base: BaseConf {
                 name: db_schema.name,
                 desc: vec_to_string(db_schema.des),
@@ -99,4 +105,48 @@ fn transfer_db_schema_to_resp(
             ext: serde_json::from_slice(&db_schema.conf)?,
         },
     })
+}
+
+pub async fn new_decoder(
+    decode_type: &DecodeType,
+    schema_id: &Option<String>,
+) -> HaliaResult<Box<dyn Decoder>> {
+    match decode_type {
+        DecodeType::Raw => decoders::raw::new(),
+        DecodeType::Json => decoders::json::new(),
+        DecodeType::Csv => decoders::csv::new(),
+        DecodeType::CsvWithSchema => match schema_id {
+            Some(schema_id) => {
+                let conf = storage::schema::read_conf(schema_id).await?;
+                let conf: CsvDecodeConf = serde_json::from_slice(&conf)?;
+                decoders::csv::new_with_conf(conf)
+            }
+            None => return Err(HaliaError::Common("必须提供schema_id".to_owned())),
+        },
+        DecodeType::Avro => decoders::avro::new(),
+        DecodeType::AvroWithSchema => match schema_id {
+            Some(schema_id) => {
+                let conf = storage::schema::read_conf(schema_id).await?;
+                let conf: AvroDecodeConf = serde_json::from_slice(&conf)?;
+                decoders::avro::new_with_conf(conf)
+            }
+            None => return Err(HaliaError::Common("必须提供schema_id".to_owned())),
+        },
+        DecodeType::Yaml => todo!(),
+        DecodeType::Toml => todo!(),
+        DecodeType::Protobuf => todo!(),
+    }
+}
+
+pub enum ResourceType {
+    Device,
+    App,
+}
+
+pub async fn reference(
+    _rt: ResourceType,
+    schema_id: &String,
+    resource_id: &String,
+) -> HaliaResult<()> {
+    storage::schema::reference::insert(schema_id, resource_id).await
 }

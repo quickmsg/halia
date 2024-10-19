@@ -1,10 +1,9 @@
-use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::prelude::FromRow;
 
 use super::POOL;
 
-pub const TABLE_NAME: &str = "schema_refs";
+const TABLE_NAME: &str = "schema_refs";
 
 #[derive(FromRow)]
 pub struct Schema {
@@ -17,31 +16,37 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     schema_id CHAR(32) NOT NULL,
-    resource_id CHAR(32) NOT NULL
+    resource_id CHAR(32) NOT NULL,
+    UNIQUE(schema_id, resource_id)
 );
 "#,
         TABLE_NAME,
     )
 }
 
-pub async fn insert(id: &String) -> HaliaResult<()> {
-    let ts = common::timestamp_millis();
+pub async fn insert(schema_id: &String, resource_id: &String) -> HaliaResult<()> {
     sqlx::query(
-    format!("INSERT INTO {} (id, status, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", TABLE_NAME).as_str()
+        format!(
+            "INSERT INTO {} (schema_id, resource_id) VALUES (?, ?)",
+            TABLE_NAME
+        )
+        .as_str(),
     )
-    .bind(id)
-    .bind(ts)
+    .bind(schema_id)
+    .bind(resource_id)
     .execute(POOL.get().unwrap())
     .await?;
 
     Ok(())
 }
 
-pub async fn read_one(id: &String) -> Result<Schema> {
-    let schema = sqlx::query_as::<_, Schema>("SELECT * FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
+pub async fn count_by_schema_id(schema_id: &String) -> HaliaResult<i64> {
+    let count: i64 = sqlx::query_scalar(
+        format!("SELECT COUNT(*) FROM {} WHERE schema_id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(schema_id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
 
-    Ok(schema)
+    Ok(count)
 }

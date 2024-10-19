@@ -1,14 +1,13 @@
 use anyhow::bail;
+use common::error::HaliaResult;
 use message::{Message, MessageBatch};
 
 use crate::Decoder;
 
-pub struct Json;
+struct Json;
 
-impl Json {
-    pub fn new() -> Box<dyn Decoder> {
-        Box::new(Self)
-    }
+pub fn new() -> HaliaResult<Box<dyn Decoder>> {
+    Ok(Box::new(Json))
 }
 
 impl Decoder for Json {

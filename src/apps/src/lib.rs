@@ -326,16 +326,15 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
 
 pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
     let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
+    let source_id = common::get_id();
     match typ {
-        AppType::MqttV311 => mqtt_v311::process_source_conf(&req.ext).await?,
+        AppType::MqttV311 => mqtt_v311::process_source_conf(&source_id, &req.ext).await?,
         AppType::MqttV50 => mqtt_v50::validate_source_conf(&req.ext)?,
         AppType::Http => http::validate_source_conf(&req.ext)?,
         AppType::Kafka | AppType::InfluxdbV1 | AppType::InfluxdbV2 | AppType::Tdengine => {
             return Err(HaliaError::NotSupportResource)
         }
     }
-
-    let source_id = common::get_id();
 
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         let conf = req.ext.clone();

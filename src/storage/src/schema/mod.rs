@@ -22,11 +22,10 @@ pub struct Schema {
     pub id: String,
     pub name: String,
     pub typ: i32,
-    pub protocol_type: i32,
+    pub protocol: i32,
     pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,
-    pub rc: i32,
 }
 
 pub(crate) fn create_table() -> String {
@@ -35,9 +34,10 @@ pub(crate) fn create_table() -> String {
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
+    typ SMALLINT NOT NULL,
+    protocol SMALLINT NOT NULL,
     des BLOB,
     conf BLOB NOT NULL,
-    rc INT NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
@@ -49,43 +49,24 @@ pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
     let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
+    let typ: i32 = req.typ.into();
+    let protocol: i32 = req.protocol.into();
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, name, des, conf, rc, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, name, typ, protocol, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
     .bind(&req.base.name)
+    .bind(typ)
+    .bind(protocol)
     .bind(desc)
     .bind(conf)
-    .bind(0)
     .bind(ts)
     .execute(POOL.get().unwrap())
     .await?;
-
-    Ok(())
-}
-
-pub async fn add_rc(id: &String) -> HaliaResult<()> {
-    let rc = get_rc(id).await?;
-    sqlx::query(format!("UPDATE {} SET rc = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(rc + 1)
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-
-    Ok(())
-}
-
-pub async fn sub_rc(id: &String) -> HaliaResult<()> {
-    let rc = get_rc(id).await?;
-    sqlx::query(format!("UPDATE {} SET rc = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(rc - 1)
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
 
     Ok(())
 }
@@ -171,32 +152,6 @@ pub async fn search(
     Ok((count as usize, schemas))
 }
 
-pub async fn read_name(id: &String) -> Result<String> {
-    let name: String = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(name)
-}
-
-pub async fn read_type(id: &String) -> Result<i32> {
-    let typ: i32 = sqlx::query_scalar("SELECT typ FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(typ)
-}
-
-pub async fn count_all() -> Result<usize> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count as usize)
-}
-
 // TODO 更新运行中的源和动作
 pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.ext)?;
@@ -213,18 +168,9 @@ pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
 }
 
 pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
-    let rc = get_rc(id).await?;
-    if rc > 0 {
+    let count = reference::count_by_schema_id(id).await?;
+    if count > 0 {
         return Err(HaliaError::DeleteRefing);
     }
     super::delete_by_id(id, TABLE_NAME).await
-}
-
-async fn get_rc(id: &String) -> HaliaResult<i64> {
-    let rc: i64 =
-        sqlx::query_scalar(format!("SELECT rc FROM {} WHERE id = ?", TABLE_NAME).as_str())
-            .bind(id)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
-    Ok(rc)
 }

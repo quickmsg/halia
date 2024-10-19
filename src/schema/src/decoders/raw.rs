@@ -1,13 +1,12 @@
+use common::error::HaliaResult;
 use message::{Message, MessageBatch};
 
 use crate::Decoder;
 
-pub struct Raw;
+struct Raw;
 
-impl Raw {
-    pub fn new() -> Box<dyn Decoder> {
-        Box::new(Self)
-    }
+pub fn new() -> HaliaResult<Box<dyn Decoder>> {
+    Ok(Box::new(Raw))
 }
 
 impl Decoder for Raw {

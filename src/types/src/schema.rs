@@ -42,6 +42,19 @@ impl TryFrom<i32> for SchemaType {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub enum DecodeType {
+    Raw,
+    Json,
+    Csv,
+    CsvWithSchema,
+    Avro,
+    AvroWithSchema,
+    Yaml,
+    Toml,
+    Protobuf,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum ProtocolType {

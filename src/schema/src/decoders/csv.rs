@@ -8,7 +8,7 @@ use types::schema::CsvDecodeConf;
 
 use crate::Decoder;
 
-pub struct Csv {
+struct Csv {
     has_headers: bool,
     headers: Option<Vec<String>>,
 }
@@ -18,23 +18,21 @@ pub(crate) fn validate_conf(conf: &serde_json::Value) -> Result<()> {
     Ok(())
 }
 
+pub fn new() -> HaliaResult<Box<dyn Decoder>> {
+    Ok(Box::new(Csv {
+        headers: None,
+        has_headers: false,
+    }))
+}
+
+pub(crate) fn new_with_conf(conf: CsvDecodeConf) -> HaliaResult<Box<dyn Decoder>> {
+    Ok(Box::new(Csv {
+        has_headers: conf.has_headers,
+        headers: conf.headers,
+    }))
+}
+
 impl Csv {
-    pub fn new() -> Box<dyn Decoder> {
-        Box::new(Self {
-            headers: None,
-            has_headers: false,
-        })
-    }
-
-    pub async fn new_with_conf(id: &String) -> HaliaResult<Box<dyn Decoder>> {
-        let conf = storage::schema::read_conf(id).await.unwrap();
-        let conf: CsvDecodeConf = serde_json::from_slice(&conf)?;
-        Ok(Box::new(Self {
-            has_headers: conf.has_headers,
-            headers: conf.headers,
-        }))
-    }
-
     fn set_has_headers(&mut self, has_headers: bool) {
         self.has_headers = has_headers;
     }

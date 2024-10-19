@@ -116,9 +116,9 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn process_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+pub async fn process_source_conf(id: &String, conf: &serde_json::Value) -> HaliaResult<()> {
     let conf: SourceConf = serde_json::from_value(conf.clone())?;
-    Source::validate_conf(&conf).await
+    Source::process_conf(id, &conf).await
 }
 
 pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {

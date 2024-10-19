@@ -13,25 +13,9 @@ pub struct Source {
 
 impl Source {
     pub async fn new(conf: SourceConf) -> Self {
-        let decoder = match &conf.decode_type {
-            types::apps::mqtt_client_v311::DecodeType::Raw => schema::decoders::raw::Raw::new(),
-            types::apps::mqtt_client_v311::DecodeType::Json => schema::decoders::json::Json::new(),
-            types::apps::mqtt_client_v311::DecodeType::Csv => schema::decoders::csv::Csv::new(),
-            types::apps::mqtt_client_v311::DecodeType::CsvWithSchema => {
-                schema::decoders::csv::Csv::new_with_conf(&conf.schema_id.as_ref().unwrap())
-                    .await
-                    .unwrap()
-            }
-            types::apps::mqtt_client_v311::DecodeType::Avro => schema::decoders::avro::Avro::new(),
-            types::apps::mqtt_client_v311::DecodeType::AvroWithSchema => {
-                schema::decoders::avro::Avro::new_with_conf(&conf.schema_id.as_ref().unwrap())
-                    .await
-                    .unwrap()
-            }
-            types::apps::mqtt_client_v311::DecodeType::Yaml => todo!(),
-            types::apps::mqtt_client_v311::DecodeType::Toml => todo!(),
-            types::apps::mqtt_client_v311::DecodeType::Protobuf => todo!(),
-        };
+        let decoder = schema::new_decoder(&conf.decode_type, &conf.schema_id)
+            .await
+            .unwrap();
         let (mb_tx, _) = broadcast::channel(16);
         Source {
             conf,
@@ -40,21 +24,19 @@ impl Source {
         }
     }
 
-    pub async fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
+    pub async fn process_conf(id: &String, conf: &SourceConf) -> HaliaResult<()> {
         if !valid_filter(&conf.topic) {
             return Err(HaliaError::Common("topic错误！".to_owned()));
         }
 
         match conf.decode_type {
-            types::apps::mqtt_client_v311::DecodeType::CsvWithSchema
-            | types::apps::mqtt_client_v311::DecodeType::AvroWithSchema
-            | types::apps::mqtt_client_v311::DecodeType::Protobuf => match &conf.schema_id {
+            types::schema::DecodeType::CsvWithSchema
+            | types::schema::DecodeType::AvroWithSchema
+            | types::schema::DecodeType::Protobuf => match &conf.schema_id {
                 Some(schema_id) => {
-                    storage::schema::add_rc(schema_id).await?;
+                    schema::reference(schema::ResourceType::Device, schema_id, id).await?
                 }
-                None => {
-                    return Err(HaliaError::Common("请填写schema_id".to_owned()));
-                }
+                None => return Err(HaliaError::Common("请填写schema_id".to_owned())),
             },
             _ => {}
         }

@@ -20,25 +20,15 @@ pub(crate) fn validate_conf(conf: &serde_json::Value) -> Result<()> {
     Ok(())
 }
 
-impl Avro {
-    pub fn new() -> Box<dyn Decoder> {
-        Box::new(Self { schema: None })
-    }
+pub(crate) fn new() -> HaliaResult<Box<dyn Decoder>> {
+    Ok(Box::new(Avro { schema: None }))
+}
 
-    pub async fn new_with_conf(id: &String) -> HaliaResult<Box<dyn Decoder>> {
-        let conf = storage::schema::read_conf(id).await?;
-        let conf: AvroDecodeConf = serde_json::from_slice(&conf)?;
-        let schema = Schema::parse_str(&conf.schema).unwrap();
-        Ok(Box::new(Self {
-            schema: Some(schema),
-        }))
-    }
-
-    fn set_schema(&mut self, schema: &String) -> Result<()> {
-        let schema = Schema::parse_str(schema)?;
-        self.schema = Some(schema);
-        Ok(())
-    }
+pub(crate) fn new_with_conf(conf: AvroDecodeConf) -> HaliaResult<Box<dyn Decoder>> {
+    let schema = Schema::parse_str(&conf.schema).unwrap();
+    Ok(Box::new(Avro {
+        schema: Some(schema),
+    }))
 }
 
 impl Decoder for Avro {
