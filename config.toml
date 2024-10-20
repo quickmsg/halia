@@ -8,7 +8,7 @@ log_level = "warn"
 event_retain_days = 10
 
 [storage.mysql]
-host = "192.168.124.39"
+host = "192.168.124.37"
 port = 3306
 username = "root"
 password = "my-secret-pw"

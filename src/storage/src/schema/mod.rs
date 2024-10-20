@@ -108,10 +108,10 @@ pub async fn search(
             false => where_cluase.push_str(" AND typ = ?"),
         }
     }
-    if query_params.protocol_type.is_some() {
+    if query_params.protocol.is_some() {
         match where_cluase.is_empty() {
-            true => where_cluase.push_str("WHERE protocol_type = ?"),
-            false => where_cluase.push_str(" AND protocol_type = ?"),
+            true => where_cluase.push_str("WHERE protocol = ?"),
+            false => where_cluase.push_str(" AND protocol = ?"),
         }
     }
 
@@ -136,10 +136,10 @@ pub async fn search(
         query_count_builder = query_count_builder.bind(typ);
         query_schemas_builder = query_schemas_builder.bind(typ);
     }
-    if let Some(protocol_type) = query_params.protocol_type {
-        let protocol_type: i32 = protocol_type.into();
-        query_count_builder = query_count_builder.bind(protocol_type);
-        query_schemas_builder = query_schemas_builder.bind(protocol_type);
+    if let Some(protocol) = query_params.protocol {
+        let protocol: i32 = protocol.into();
+        query_count_builder = query_count_builder.bind(protocol);
+        query_schemas_builder = query_schemas_builder.bind(protocol);
     }
 
     let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;

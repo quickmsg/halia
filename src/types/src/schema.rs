@@ -8,9 +8,7 @@ pub struct CreateUpdateSchemaReq {
     #[serde(rename = "type")]
     pub typ: SchemaType,
     pub protocol: ProtocolType,
-    #[serde(flatten)]
     pub base: BaseConf,
-    #[serde(flatten)]
     pub ext: serde_json::Value,
 }
 
@@ -91,7 +89,7 @@ pub struct QueryParams {
     pub name: Option<String>,
     #[serde(rename = "type")]
     pub typ: Option<SchemaType>,
-    pub protocol_type: Option<ProtocolType>,
+    pub protocol: Option<ProtocolType>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -108,7 +106,7 @@ pub struct ProtobufDecodeConf {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CsvDecodeConf {
     pub has_headers: bool,
-    pub headers: Option<Vec<String>>,
+    pub headers: Vec<String>,
 }
 
 #[derive(Serialize)]

@@ -28,7 +28,7 @@ pub fn new() -> HaliaResult<Box<dyn Decoder>> {
 pub(crate) fn new_with_conf(conf: CsvDecodeConf) -> HaliaResult<Box<dyn Decoder>> {
     Ok(Box::new(Csv {
         has_headers: conf.has_headers,
-        headers: conf.headers,
+        headers: Some(conf.headers),
     }))
 }
 
