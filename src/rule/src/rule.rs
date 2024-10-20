@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
-use common::error::HaliaResult;
+use common::{
+    constants::CHANNEL_SIZE,
+    error::{HaliaError, HaliaResult},
+};
 use functions::{computes, filter, merge::merge, metadata, window};
 use message::{MessageBatch, MessageValue};
 use tokio::sync::{broadcast, mpsc};
@@ -259,7 +261,7 @@ impl Rule {
                                 "log".to_string(),
                                 MessageValue::String(log_node.name),
                             ));
-                            mpsc_tx = Some(tx);
+                            broadcast_tx = Some(tx);
                         }
                     }
                 }
@@ -410,32 +412,11 @@ impl Rule {
         Ok(())
     }
 
-    pub async fn tail_log(&self) -> Result<()> {
-        // let (tx, rx) = tokio::sync::mpsc::channel(16);
-
-        // let file = File::open("xxx").await?;
-        // let mut reader = BufReader::new(file).lines();
-
-        // while let Some(line) = reader.next_line().await? {
-        //     tx.send(line).await?;
-        // }
-
-        // tokio::spawn(async move {
-        //     loop {
-        //         if let Some(line) = reader.next_line().await? {
-        //             tx.send(line).await?;
-        //         } else {
-        //             time::sleep(Duration::from_millis(30)).await;
-        //         }
-        //     }
-        // });
-
-        // Body::from_stream();
-        // StreamBody::new(rx);
-
-        // StreamBody::new(rx);
-
-        Ok(())
+    pub fn tail_log(&self) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+        match &self.logger {
+            Some(logger) => Ok(logger.mb_tx.subscribe()),
+            None => Err(HaliaError::Common("logger为空".to_owned())),
+        }
     }
 
     // pub async fn download_log(&self) {

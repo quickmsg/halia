@@ -5,20 +5,17 @@ use std::{
 
 use anyhow::Result;
 use message::MessageBatch;
-use tokio::{
-    select,
-    sync::{broadcast, mpsc},
-};
+use tokio::{select, sync::broadcast};
 use tracing::{debug, warn};
 
 pub struct Logger {
-    mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: broadcast::Sender<MessageBatch>,
 }
 
 impl Logger {
     // 新建即启动
     pub async fn new(rule_id: &String, stop_signal_rx: broadcast::Receiver<()>) -> Result<Self> {
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = broadcast::channel(16);
 
         Self::handle_message(rule_id, mb_rx, stop_signal_rx).await?;
 
@@ -27,7 +24,7 @@ impl Logger {
 
     pub async fn handle_message(
         rule_id: &String,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
+        mut mb_rx: broadcast::Receiver<MessageBatch>,
         mut stop_signal_rx: broadcast::Receiver<()>,
     ) -> Result<()> {
         let mut file = OpenOptions::new()
@@ -37,7 +34,7 @@ impl Logger {
         tokio::spawn(async move {
             loop {
                 select! {
-                    Some(mb) = mb_rx.recv() => {
+                    Ok(mb) = mb_rx.recv() => {
                         Self::log(&mut file, mb);
                     }
 
@@ -62,7 +59,7 @@ impl Logger {
         }
     }
 
-    pub fn get_mb_tx(&self) -> mpsc::Sender<MessageBatch> {
+    pub fn get_mb_tx(&self) -> broadcast::Sender<MessageBatch> {
         self.mb_tx.clone()
     }
 }

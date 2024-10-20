@@ -219,6 +219,7 @@ name = "api"
 version = "0.1.0"
 dependencies = [
  "apps",
+ "async-stream",
  "axum 0.7.5",
  "bytes",
  "common",

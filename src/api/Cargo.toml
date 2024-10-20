@@ -27,3 +27,4 @@ jsonwebtoken = { workspace = true }
 time = "0.3.36"
 tokio-util = "0.7.12"
 dashmap = { workspace = true }
+async-stream = "0.3.6"

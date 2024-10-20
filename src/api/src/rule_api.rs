@@ -1,11 +1,14 @@
+use std::convert::Infallible;
+
 use axum::{
     body::Body,
     extract::{Path, Query},
     http::{header, StatusCode},
-    response::IntoResponse,
+    response::{sse::Event, IntoResponse, Sse},
     routing::{self, get, post, put},
     Json, Router,
 };
+use futures_util::Stream;
 use tokio_util::io::ReaderStream;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
@@ -23,6 +26,7 @@ pub fn routes() -> Router {
         .route("/:id", put(update))
         .route("/:id/start", put(start))
         .route("/:id/stop", put(stop))
+        .route("/:id/log/sse", get(sse_log))
         .route("/:id/log/download", get(download_log))
         .route("/:id", routing::delete(delete))
 }
@@ -58,6 +62,18 @@ async fn start(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
 async fn stop(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
     rule::stop(id).await?;
     Ok(AppSuccess::empty())
+}
+
+async fn sse_log(
+    Path(id): Path<String>,
+) -> AppResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
+    let mut rx = rule::sse_log(&id)?;
+    let stream = async_stream::stream! {
+        while let Ok(item) = rx.recv().await {
+            yield Ok(Event::default().data(format!("{:?}", item)));
+        }
+    };
+    Ok(Sse::new(stream))
 }
 
 async fn download_log(Path(id): Path<String>) -> impl IntoResponse {

@@ -5,7 +5,9 @@ use std::sync::{
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use message::MessageBatch;
 use rule::Rule;
+use tokio::sync::broadcast;
 use tracing::debug;
 use types::{
     rules::{
@@ -295,5 +297,12 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
             return Err(HaliaError::NotFound(e));
         }
         None => Ok(()),
+    }
+}
+
+pub fn sse_log(id: &String) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+    match GLOBAL_RULE_MANAGER.get(id) {
+        Some(rule) => rule.tail_log(),
+        None => Err(HaliaError::Common("规则未运行。".to_string())),
     }
 }
