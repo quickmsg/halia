@@ -41,6 +41,7 @@ impl TryFrom<i32> for SchemaType {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum DecodeType {
     Raw,
     Json,

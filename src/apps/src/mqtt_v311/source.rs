@@ -1,4 +1,7 @@
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    constants::CHANNEL_SIZE,
+    error::{HaliaError, HaliaResult},
+};
 use message::MessageBatch;
 use rumqttc::valid_filter;
 use schema::Decoder;
@@ -16,7 +19,7 @@ impl Source {
         let decoder = schema::new_decoder(&conf.decode_type, &conf.schema_id)
             .await
             .unwrap();
-        let (mb_tx, _) = broadcast::channel(16);
+        let (mb_tx, _) = broadcast::channel(CHANNEL_SIZE);
         Source {
             conf,
             mb_tx,

@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use common::{
-    constants::CHANNEL_SIZE,
-    error::{HaliaError, HaliaResult},
-};
+use common::error::{HaliaError, HaliaResult};
 use functions::{computes, filter, merge::merge, metadata, window};
 use message::{MessageBatch, MessageValue};
 use tokio::sync::{broadcast, mpsc};
@@ -94,11 +91,7 @@ impl Rule {
                             match apps::get_source_rx(&source_node.app_id, &source_node.source_id)
                                 .await
                             {
-                                Ok(rx) => {
-                                    // app_source_active_ref_nodes
-                                    //     .push((source_node.app_id, source_node.source_id));
-                                    rx
-                                }
+                                Ok(rx) => rx,
                                 Err(e) => return Err(e.into()),
                             },
                         )
@@ -168,7 +161,6 @@ impl Rule {
                                 .unwrap();
                         }
                         NodeType::Filter => {
-                            debug!("{:?}", node.conf);
                             let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
                             functions.push(filter::new(conf)?);
                             ids.push(id);
@@ -274,16 +266,20 @@ impl Rule {
                     let source_ids = incoming_edges.get(&ids[0]).unwrap();
                     let source_id = source_ids[0];
                     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
-                    if mpsc_tx.is_none() {
-                        let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                        let mut rxs = vec![];
-                        let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
-                        for _ in 0..cnt {
-                            rxs.push(tx.subscribe());
-                        }
-                        receivers.insert(*ids.last().unwrap(), rxs);
-                        broadcast_tx = Some(tx);
-                    }
+                    // TODO
+                    // if mpsc_tx.is_none() {
+                    //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
+                    //     let mut rxs = vec![];
+                    //     debug!("{:?}", outgoing_edges);
+                    //     debug!("{:?}", ids.last());
+                    //     debug!("{:?}", outgoing_edges.get(&2));
+                    //     let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
+                    //     for _ in 0..cnt {
+                    //         rxs.push(tx.subscribe());
+                    //     }
+                    //     receivers.insert(*ids.last().unwrap(), rxs);
+                    //     broadcast_tx = Some(tx);
+                    // }
                     // TODO
                     start_segment(
                         rx,

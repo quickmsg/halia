@@ -51,7 +51,7 @@ pub async fn insert(id: &String, req: CreateUpdateAppReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.conf.ext)?;
     let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
 
-    sqlx::query("INSERT INTO apps (id, status_, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    sqlx::query("INSERT INTO apps (id, status, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(id)
     .bind(false as i32)
     .bind(false as i32)

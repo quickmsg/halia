@@ -1,6 +1,7 @@
+use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::BaseConf;
 
@@ -169,4 +170,11 @@ pub struct SearchRulesItemResp {
 pub struct ReadRuleNodeResp {
     pub index: usize,
     pub data: serde_json::Value,
+}
+
+// 规则引擎中传递的消息，避免内存消耗
+#[derive(Clone)]
+pub enum MessageBatchType {
+    Arc(Arc<MessageBatch>),
+    Owned(MessageBatch),
 }
