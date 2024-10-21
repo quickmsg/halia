@@ -103,20 +103,20 @@ pub struct QueryParams {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AvroDecodeConf {
-    pub base64_decode: bool,
+    // pub base64_decode: bool,
     pub schema: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ProtobufDecodeConf {
-    pub base64_decode: bool,
+    // pub base64_decode: bool,
     pub descriptor: String,
     pub message_type: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CsvDecodeConf {
-    pub base64_decode: bool,
+    // pub base64_decode: bool,
     pub has_headers: bool,
     pub headers: Vec<String>,
 }
