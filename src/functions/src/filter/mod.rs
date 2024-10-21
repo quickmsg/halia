@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use message::Message;
 use types::rules::functions::FilterConf;
 
@@ -39,8 +40,9 @@ pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
     Ok(Box::new(Node { filters }))
 }
 
+#[async_trait]
 impl Function for Node {
-    fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
+    async fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
         let messages = message_batch.get_messages_mut();
         messages.retain(|message| {
             for filter in &self.filters {

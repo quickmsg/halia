@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use message::Message;
 use types::rules::functions::ComputerConf;
 
@@ -30,8 +31,9 @@ pub fn new(conf: ComputerConf) -> Result<Box<dyn Function>> {
     Ok(Box::new(Node { computers }))
 }
 
+#[async_trait]
 impl Function for Node {
-    fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
+    async fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
         let messages = message_batch.get_messages_mut();
         messages.iter_mut().for_each(|msg| {
             for computer in &self.computers {

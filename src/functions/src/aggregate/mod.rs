@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use async_trait::async_trait;
 use message::{Message, MessageBatch, MessageValue};
 use serde::Deserialize;
 use serde_json::Value;
@@ -50,8 +51,9 @@ impl Aggregate {
     }
 }
 
+#[async_trait]
 impl Function for Aggregate {
-    fn call(&self, message_batch: &mut MessageBatch) -> bool {
+    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
         let mut message = Message::default();
         for (aggregater, new_filed) in self.aggregaters.iter() {
             message.add(new_filed.clone(), aggregater.aggregate(&message_batch));

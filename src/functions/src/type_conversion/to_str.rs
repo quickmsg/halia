@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use message::{MessageBatch, MessageValue};
 use serde_json::Value;
 
@@ -18,8 +19,9 @@ impl ToString {
     }
 }
 
+#[async_trait]
 impl Function for ToString {
-    fn call(&self, message_batch: &mut MessageBatch) -> bool {
+    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
         for message in message_batch.get_messages_mut() {
             match message.get(&self.field) {
                 Some(value) => match value {

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use message::{MessageBatch, MessageValue};
 use serde_json::Value;
 
@@ -17,8 +18,9 @@ impl IsString {
     }
 }
 
+#[async_trait]
 impl Function for IsString {
-    fn call(&self, message_batch: &mut MessageBatch) -> bool {
+    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
         for message in message_batch.get_messages_mut() {
             match message.get(&self.field) {
                 Some(value) => match value {
@@ -47,8 +49,9 @@ impl IsNotString {
     }
 }
 
+#[async_trait]
 impl Function for IsNotString {
-    fn call(&self, message_batch: &mut MessageBatch) -> bool {
+    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
         for message in message_batch.get_messages_mut() {
             match message.get(&self.field) {
                 Some(value) => match value {

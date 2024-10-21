@@ -8,7 +8,6 @@ use dashmap::DashMap;
 use message::MessageBatch;
 use rule::Rule;
 use tokio::sync::broadcast;
-use tracing::debug;
 use types::{
     rules::{
         AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
@@ -68,21 +67,11 @@ pub async fn load_from_storage() -> HaliaResult<()> {
 }
 
 pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
-    if storage::rule::insert_name_exists(&req.base.name).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     let id = common::get_id();
     create_rule_refs(&id, &req.ext.nodes).await?;
 
     storage::rule::insert(&id, req).await?;
-    storage::event::insert(
-        types::events::ResourceType::Rule,
-        &id,
-        types::events::EventType::Create,
-        None,
-    )
-    .await?;
+    events::insert_create(types::events::ResourceType::Rule, &id).await;
     add_rule_count();
     Ok(())
 }
@@ -128,19 +117,9 @@ pub async fn start(id: String) -> HaliaResult<()> {
     }
 
     add_rule_on_count();
-
-    storage::event::insert(
-        types::events::ResourceType::Rule,
-        &id,
-        types::events::EventType::Start,
-        None,
-    )
-    .await?;
-
+    events::insert_update(types::events::ResourceType::Rule, &id).await;
     let db_conf = storage::rule::read_conf(&id).await?;
-    debug!("here");
     let conf: RuleConf = serde_json::from_slice(&db_conf)?;
-    debug!("here");
 
     let rule = Rule::new(id.clone(), &conf).await?;
     GLOBAL_RULE_MANAGER.insert(id.clone(), rule);
@@ -157,13 +136,7 @@ pub async fn stop(id: String) -> HaliaResult<()> {
         Some((_, mut rule)) => {
             rule.stop().await?;
             storage::rule::update_status(&id, false).await?;
-            storage::event::insert(
-                types::events::ResourceType::Rule,
-                &id,
-                types::events::EventType::Stop,
-                None,
-            )
-            .await?;
+            events::insert_stop(types::events::ResourceType::Rule, &id).await;
             sub_rule_on_count();
         }
         None => return Err(HaliaError::NotFound(id)),
@@ -173,10 +146,6 @@ pub async fn stop(id: String) -> HaliaResult<()> {
 }
 
 pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
-    if storage::rule::update_name_exists(&id, &req.base.name).await? {
-        return Err(HaliaError::NameExists);
-    }
-
     storage::rule::reference::delete_many_by_rule_id(&id).await?;
     create_rule_refs(&id, &req.ext.nodes).await?;
 
@@ -189,14 +158,7 @@ pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
     }
 
     storage::rule::update(&id, req).await?;
-    storage::event::insert(
-        types::events::ResourceType::Rule,
-        &id,
-        types::events::EventType::Update,
-        None,
-    )
-    .await?;
-
+    events::insert_update(types::events::ResourceType::Rule, &id).await;
     Ok(())
 }
 
@@ -205,14 +167,7 @@ pub async fn delete(id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRunning);
     }
 
-    storage::event::insert(
-        types::events::ResourceType::Rule,
-        &id,
-        types::events::EventType::Delete,
-        None,
-    )
-    .await?;
-
+    events::insert_delete(types::events::ResourceType::Rule, &id).await;
     storage::rule::delete_by_id(&id).await?;
     storage::rule::reference::delete_many_by_rule_id(&id).await?;
 
@@ -300,7 +255,7 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
     }
 }
 
-pub fn sse_log(id: &String) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+pub fn sse_log(id: &String) -> HaliaResult<broadcast::Receiver<String>> {
     match GLOBAL_RULE_MANAGER.get(id) {
         Some(rule) => rule.tail_log(),
         None => Err(HaliaError::Common("规则未运行。".to_string())),

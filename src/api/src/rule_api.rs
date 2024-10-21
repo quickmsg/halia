@@ -70,7 +70,7 @@ async fn sse_log(
     let mut rx = rule::sse_log(&id)?;
     let stream = async_stream::stream! {
         while let Ok(item) = rx.recv().await {
-            yield Ok(Event::default().data(format!("{:?}", item)));
+            yield Ok(Event::default().data(item));
         }
     };
     Ok(Sse::new(stream))

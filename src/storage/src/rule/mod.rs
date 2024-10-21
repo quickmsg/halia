@@ -38,25 +38,6 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert_name_exists(name: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rules WHERE name = ?")
-        .bind(name)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count > 0)
-}
-
-pub async fn update_name_exists(id: &String, name: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rules WHERE name = ? AND id != ?")
-        .bind(name)
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count > 0)
-}
-
 pub async fn insert(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;

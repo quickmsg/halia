@@ -26,3 +26,5 @@ brotli = { workspace = true }
 lz4_flex = { workspace = true }
 tokio-stream = "0.1.16"
 async-stream = "0.3.6"
+chrono = { workspace = true }
+async-trait = { workspace = true }

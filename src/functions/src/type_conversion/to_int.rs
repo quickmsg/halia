@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use message::{MessageBatch, MessageValue};
 
 use crate::{add_or_set_message_value, Function};
@@ -14,8 +15,9 @@ pub fn new(field: String, target_field: Option<String>) -> Box<dyn Function> {
     })
 }
 
+#[async_trait]
 impl Function for ToInt {
-    fn call(&self, message_batch: &mut MessageBatch) -> bool {
+    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
         for message in message_batch.get_messages_mut() {
             match message.get(&self.field) {
                 Some(value) => match value {

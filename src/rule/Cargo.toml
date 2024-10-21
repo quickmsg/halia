@@ -10,6 +10,7 @@ apps = { workspace = true }
 devices = { workspace = true }
 databoard = { workspace = true }
 storage = { workspace = true }
+events = { workspace = true }
 
 tokio = { workspace = true }
 tracing = { workspace = true }

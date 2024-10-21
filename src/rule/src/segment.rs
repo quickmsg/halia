@@ -26,7 +26,7 @@ pub fn start_segment(
                         match mb {
                             Ok(mut mb) => {
                                 for function in &functions {
-                                    next = function.call(&mut mb);
+                                    next = function.call(&mut mb).await;
                                     if !next {
                                         break;
                                     }
@@ -60,7 +60,7 @@ pub fn start_segment(
                         match mb {
                             Ok(mut mb) => {
                                 for function in &functions {
-                                    next = function.call(&mut mb);
+                                    next = function.call(&mut mb).await;
                                     if !next {
                                         break;
                                     }

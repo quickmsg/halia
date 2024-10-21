@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use common::error::{HaliaError, HaliaResult};
-use functions::{computes, filter, merge::merge, metadata, window};
-use message::{MessageBatch, MessageValue};
+use functions::{computes, filter, log, merge::merge, window};
+use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error};
 use types::rules::{
@@ -239,21 +239,17 @@ impl Rule {
                             ids.push(id);
                             let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
                             let tx = match &self.logger {
-                                Some(logger) => logger.get_mb_tx(),
+                                Some(logger) => logger.get_tx(),
                                 None => {
                                     let logger =
                                         Logger::new(&self.id, self.stop_signal_tx.subscribe())
                                             .await?;
-                                    let tx = logger.get_mb_tx();
+                                    let tx = logger.get_tx();
                                     self.logger = Some(logger);
                                     tx
                                 }
                             };
-                            functions.push(metadata::new_add_metadata(
-                                "log".to_string(),
-                                MessageValue::String(log_node.name),
-                            ));
-                            broadcast_tx = Some(tx);
+                            functions.push(log::new(log_node.name, tx));
                         }
                     }
                 }
@@ -267,19 +263,19 @@ impl Rule {
                     let source_id = source_ids[0];
                     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
                     // TODO
-                    // if mpsc_tx.is_none() {
-                    //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                    //     let mut rxs = vec![];
-                    //     debug!("{:?}", outgoing_edges);
-                    //     debug!("{:?}", ids.last());
-                    //     debug!("{:?}", outgoing_edges.get(&2));
-                    //     let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
-                    //     for _ in 0..cnt {
-                    //         rxs.push(tx.subscribe());
-                    //     }
-                    //     receivers.insert(*ids.last().unwrap(), rxs);
-                    //     broadcast_tx = Some(tx);
-                    // }
+                    if mpsc_tx.is_none() {
+                        let (tx, _) = broadcast::channel::<MessageBatch>(16);
+                        let mut rxs = vec![];
+                        debug!("{:?}", outgoing_edges);
+                        debug!("{:?}", ids.last());
+                        debug!("{:?}", outgoing_edges.get(&2));
+                        let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
+                        for _ in 0..cnt {
+                            rxs.push(tx.subscribe());
+                        }
+                        receivers.insert(*ids.last().unwrap(), rxs);
+                        broadcast_tx = Some(tx);
+                    }
                     // TODO
                     start_segment(
                         rx,
@@ -408,9 +404,9 @@ impl Rule {
         Ok(())
     }
 
-    pub fn tail_log(&self) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+    pub fn tail_log(&self) -> HaliaResult<broadcast::Receiver<String>> {
         match &self.logger {
-            Some(logger) => Ok(logger.mb_tx.subscribe()),
+            Some(logger) => Ok(logger.get_broadcast_rx()),
             None => Err(HaliaError::Common("logger为空".to_owned())),
         }
     }
