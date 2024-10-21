@@ -19,7 +19,7 @@ use tokio::{
     sync::{broadcast, mpsc, watch, RwLock},
     task::JoinHandle,
 };
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use types::apps::{
     mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf},
     SearchAppsItemRunningInfo,
@@ -225,6 +225,7 @@ impl MqttClient {
                 }
                 for source in sources.iter_mut() {
                     if matches(&p.topic, &source.conf.topic) {
+                        debug!("matches");
                         // TODO remove clone
                         let mb = match source.decoder.decode(p.payload.clone()) {
                             Ok(mb) => mb,
@@ -234,7 +235,12 @@ impl MqttClient {
                             }
                         };
 
+                        debug!("{:?}", mb);
+
+                        debug!("receiver_count:{}", source.mb_tx.receiver_count());
+
                         if source.mb_tx.receiver_count() > 0 {
+                            debug!("here");
                             if let Err(e) = source.mb_tx.send(mb) {
                                 warn!("{}", e);
                             }

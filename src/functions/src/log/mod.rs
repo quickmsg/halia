@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, FixedOffset, Utc};
 use message::MessageBatch;
 use tokio::sync::mpsc;
+use tracing::debug;
 
 use crate::Function;
 
@@ -24,6 +25,7 @@ impl Function for Log {
             "{} name:{}, {:?}\n",
             datetime_in_fixed_zone, self.name, message_batch
         );
+        debug!("{}", s);
         self.tx.send(s).await.unwrap();
         true
     }

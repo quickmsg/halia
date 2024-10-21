@@ -263,19 +263,19 @@ impl Rule {
                     let source_id = source_ids[0];
                     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
                     // TODO
-                    if mpsc_tx.is_none() {
-                        let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                        let mut rxs = vec![];
-                        debug!("{:?}", outgoing_edges);
-                        debug!("{:?}", ids.last());
-                        debug!("{:?}", outgoing_edges.get(&2));
-                        let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
-                        for _ in 0..cnt {
-                            rxs.push(tx.subscribe());
-                        }
-                        receivers.insert(*ids.last().unwrap(), rxs);
-                        broadcast_tx = Some(tx);
-                    }
+                    // if mpsc_tx.is_none() {
+                    //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
+                    //     let mut rxs = vec![];
+                    //     debug!("{:?}", outgoing_edges);
+                    //     debug!("{:?}", ids.last());
+                    //     debug!("{:?}", outgoing_edges.get(&2));
+                    //     let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
+                    //     for _ in 0..cnt {
+                    //         rxs.push(tx.subscribe());
+                    //     }
+                    //     receivers.insert(*ids.last().unwrap(), rxs);
+                    //     broadcast_tx = Some(tx);
+                    // }
                     // TODO
                     start_segment(
                         rx,
