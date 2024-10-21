@@ -60,6 +60,7 @@ pub enum ProtocolType {
     Avro,
     Protobuf,
     Csv,
+    Template,
 }
 
 impl Into<i32> for ProtocolType {
@@ -68,6 +69,7 @@ impl Into<i32> for ProtocolType {
             ProtocolType::Avro => 1,
             ProtocolType::Protobuf => 2,
             ProtocolType::Csv => 3,
+            ProtocolType::Template => 4,
         }
     }
 }
@@ -80,6 +82,7 @@ impl TryFrom<i32> for ProtocolType {
             1 => Ok(ProtocolType::Avro),
             2 => Ok(ProtocolType::Protobuf),
             3 => Ok(ProtocolType::Csv),
+            4 => Ok(ProtocolType::Template),
             _ => bail!("未知模式类型: {}", value),
         }
     }
@@ -95,17 +98,20 @@ pub struct QueryParams {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AvroDecodeConf {
+    pub base64_decode: bool,
     pub schema: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ProtobufDecodeConf {
+    pub base64_decode: bool,
     pub descriptor: String,
     pub message_type: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CsvDecodeConf {
+    pub base64_decode: bool,
     pub has_headers: bool,
     pub headers: Vec<String>,
 }

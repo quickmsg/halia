@@ -4668,6 +4668,7 @@ dependencies = [
  "csv",
  "message",
  "prost-reflect",
+ "regex",
  "serde",
  "serde_json",
  "storage",

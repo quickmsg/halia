@@ -12,6 +12,7 @@ bytes = { workspace = true }
 storage = { workspace = true }
 
 
+regex = { workspace = true }
 csv = "1.3.0"
 serde_json = { workspace = true }
 serde = { workspace = true }

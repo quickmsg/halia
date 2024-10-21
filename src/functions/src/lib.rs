@@ -9,7 +9,6 @@ pub mod filter;
 pub mod log;
 pub mod merge;
 pub mod metadata;
-pub mod template;
 pub mod type_conversion;
 pub mod type_judgment;
 pub mod types;

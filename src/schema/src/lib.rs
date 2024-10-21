@@ -68,12 +68,13 @@ pub async fn delete(id: String) -> HaliaResult<()> {
     todo!()
 }
 
-fn validate_conf(req: &CreateUpdateSchemaReq) -> Result<()> {
+fn validate_conf(req: &CreateUpdateSchemaReq) -> HaliaResult<()> {
     match &req.typ {
         types::schema::SchemaType::Encode => match &req.protocol {
             types::schema::ProtocolType::Avro => todo!(),
             types::schema::ProtocolType::Protobuf => todo!(),
             types::schema::ProtocolType::Csv => todo!(),
+            types::schema::ProtocolType::Template => todo!(),
         },
         types::schema::SchemaType::Decode => match &req.protocol {
             types::schema::ProtocolType::Avro => {
@@ -84,6 +85,9 @@ fn validate_conf(req: &CreateUpdateSchemaReq) -> Result<()> {
             }
             types::schema::ProtocolType::Csv => {
                 decoders::csv::validate_conf(&req.ext)?;
+            }
+            types::schema::ProtocolType::Template => {
+                return Err(HaliaError::NotSupportResource);
             }
         },
     }

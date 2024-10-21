@@ -10,9 +10,7 @@ use types::schema::AvroDecodeConf;
 
 use crate::Decoder;
 
-pub struct Avro {
-    schema: Option<Schema>,
-}
+struct Avro;
 
 pub(crate) fn validate_conf(conf: &serde_json::Value) -> Result<()> {
     let conf: AvroDecodeConf = serde_json::from_value(conf.clone())?;
@@ -21,48 +19,49 @@ pub(crate) fn validate_conf(conf: &serde_json::Value) -> Result<()> {
 }
 
 pub(crate) fn new() -> HaliaResult<Box<dyn Decoder>> {
-    Ok(Box::new(Avro { schema: None }))
+    Ok(Box::new(Avro))
 }
 
 pub(crate) fn new_with_conf(conf: AvroDecodeConf) -> HaliaResult<Box<dyn Decoder>> {
     let schema = Schema::parse_str(&conf.schema).unwrap();
-    Ok(Box::new(Avro {
-        schema: Some(schema),
-    }))
+    Ok(Box::new(AvroWithSchema { schema }))
 }
 
 impl Decoder for Avro {
     fn decode(&self, data: Bytes) -> Result<MessageBatch> {
-        match &self.schema {
-            Some(schema) => {
-                let reader = Reader::with_schema(schema, Cursor::new(data)).unwrap();
-                let mut mb = MessageBatch::default();
-                for value in reader {
-                    match value {
-                        Ok(v) => {
-                            let msg = Message::try_from(v)?;
-                            mb.push_message(msg);
-                        }
-                        Err(e) => bail!(e),
-                    }
+        let mut mb = MessageBatch::default();
+        let reader = Reader::new(&data[..]).unwrap();
+        for value in reader {
+            match value {
+                Ok(value) => {
+                    let msg = Message::try_from(value)?;
+                    mb.push_message(msg);
                 }
-                Ok(mb)
-            }
-            None => {
-                let mut mb = MessageBatch::default();
-                let reader = Reader::new(&data[..]).unwrap();
-                for value in reader {
-                    match value {
-                        Ok(value) => {
-                            let msg = Message::try_from(value)?;
-                            mb.push_message(msg);
-                        }
-                        Err(e) => warn!("Error decoding avro: {:?}", e),
-                    }
-                }
-
-                Ok(mb)
+                Err(e) => warn!("Error decoding avro: {:?}", e),
             }
         }
+
+        Ok(mb)
+    }
+}
+
+struct AvroWithSchema {
+    schema: Schema,
+}
+
+impl Decoder for AvroWithSchema {
+    fn decode(&self, data: Bytes) -> Result<MessageBatch> {
+        let reader = Reader::with_schema(&self.schema, Cursor::new(data)).unwrap();
+        let mut mb = MessageBatch::default();
+        for value in reader {
+            match value {
+                Ok(v) => {
+                    let msg = Message::try_from(v)?;
+                    mb.push_message(msg);
+                }
+                Err(e) => bail!(e),
+            }
+        }
+        Ok(mb)
     }
 }
