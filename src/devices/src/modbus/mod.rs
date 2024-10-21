@@ -40,6 +40,7 @@ use crate::{add_device_running_count, sub_device_running_count, Device};
 mod sink;
 mod source;
 pub(crate) mod source_template;
+pub(crate) mod sink_template;
 
 struct Modbus {
     sources: Arc<DashMap<String, Source>>,

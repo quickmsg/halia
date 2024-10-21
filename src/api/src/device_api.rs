@@ -41,6 +41,26 @@ pub fn routes() -> Router {
                         .route("/:sink_id", delete(delete_sink)),
                 ),
         )
+        .nest(
+            "/template",
+            Router::new()
+                .nest(
+                    "/source",
+                    Router::new()
+                        .route("/", post(create_source_template))
+                        .route("/", get(search_source_templates))
+                        .route("/:id", put(update_source_template))
+                        .route("/:id", delete(delete_source_template)),
+                )
+                .nest(
+                    "/sink",
+                    Router::new()
+                        .route("/", post(create_sink_template))
+                        .route("/", get(search_sink_templates))
+                        .route("/:id", put(update_source_template))
+                        .route("/:id", delete(delete_sink_template)),
+                ),
+        )
 }
 
 async fn get_devices_summary() -> AppSuccess<Summary> {
@@ -153,4 +173,62 @@ async fn delete_sink(
 ) -> AppResult<AppSuccess<()>> {
     devices::delete_sink(device_id, sink_id).await?;
     Ok(AppSuccess::empty())
+}
+
+async fn create_source_template(
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    // devices::create_source_template(req).await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn search_source_templates() -> AppResult<AppSuccess<()>> {
+    // devices::search_source_templates().await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn update_source_template(
+    Path(id): Path<String>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    // devices::update_source_template(id, req).await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn delete_source_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    // devices::delete_source_template(id).await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn create_sink_template(
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    // devices::create_sink_template(req).await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn search_sink_templates() -> AppResult<AppSuccess<()>> {
+    // devices::search_sink_templates().await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn update_sink_template(
+    Path(id): Path<String>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    // devices::update_sink_template(id, req).await?;
+    // Ok(AppSuccess::empty())
+    todo!()
+}
+
+async fn delete_sink_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    // devices::delete_sink_template(id).await?;
+    // Ok(AppSuccess::empty())
+    todo!()
 }

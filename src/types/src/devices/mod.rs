@@ -145,3 +145,26 @@ pub struct SearchRuleInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sink: Option<SearchSourcesOrSinksInfoResp>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct QuerySourceSinkTemplateParams {
+    pub name: Option<String>,
+    pub device_type: Option<DeviceType>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSourcesOrSinkTemplatesResp {
+    pub total: usize,
+    pub data: Vec<SearchSourcesOrSinkTemplatesItemResp>,
+}
+
+// TODO
+#[derive(Serialize)]
+pub struct SearchSourcesOrSinkTemplatesItemResp {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+    pub device_type: DeviceType,
+    pub conf: serde_json::Value,
+}

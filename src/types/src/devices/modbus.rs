@@ -118,6 +118,11 @@ pub struct SourceTemplateConf {
     pub interval: u64,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct SinkTemplateConf {
+    // todo
+}
+
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq)]
 pub struct DataType {
     #[serde(rename = "type")]

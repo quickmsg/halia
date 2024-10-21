@@ -7,7 +7,7 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::{CreateUpdateDeviceReq, QueryParams},
+    devices::{CreateUpdateDeviceReq, QuerySourceSinkTemplateParams},
     CreateUpdateSourceOrSinkTemplateReq, Pagination,
 };
 
@@ -15,10 +15,10 @@ use crate::SourceSinkType;
 
 use super::POOL;
 
-const TABLE_NAME: &str = "device_source_templates";
+const TABLE_NAME: &str = "device_source_sink_templates";
 
 #[derive(FromRow)]
-pub struct SourceTemplate {
+pub struct SourceSinkTemplate {
     pub id: String,
     pub name: String,
     pub des: Option<Vec<u8>>,
@@ -88,111 +88,85 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
     Ok(conf)
 }
 
-// pub async fn search(
-//     pagination: Pagination,
-//     query_params: QueryParams,
-// ) -> Result<(usize, Vec<Device>)> {
-//     let (limit, offset) = pagination.to_sql();
-//     let (count, devices) = match (
-//         &query_params.name,
-//         &query_params.typ,
-//         &query_params.on,
-//         &query_params.err,
-//     ) {
-//         (None, None, None, None) => {
-//             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
-//                 .fetch_one(POOL.get().unwrap())
-//                 .await?;
+pub async fn search(
+    pagination: Pagination,
+    typ: SourceSinkType,
+    query: QuerySourceSinkTemplateParams,
+) -> Result<(usize, Vec<SourceSinkTemplate>)> {
+    let (limit, offset) = pagination.to_sql();
+    let typ: i32 = typ.into();
+    let (count, templates) = match (&query.name, &query.device_type) {
+        (None, None) => {
+            let count: i64 = sqlx::query_scalar(
+                format!("SELECT COUNT(*) FROM {} WHERE typ = ?", TABLE_NAME).as_str(),
+            )
+            .bind(typ)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
-//             let devices = sqlx::query_as::<_, Device>(
-//                 "SELECT * FROM devices ORDER BY ts DESC LIMIT ? OFFSET ?",
-//             )
-//             .bind(limit)
-//             .bind(offset)
-//             .fetch_all(POOL.get().unwrap())
-//             .await?;
+            let devices = sqlx::query_as::<_, SourceSinkTemplate>(
+                format!(
+                    "SELECT * FROM {} WHERE typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    TABLE_NAME
+                )
+                .as_str(),
+            )
+            .bind(typ)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
 
-//             (count, devices)
-//         }
-//         _ => {
-//             let mut where_clause = String::new();
+            (count, devices)
+        }
+        _ => {
+            let mut where_clause = String::from("WHERE typ = ?");
 
-//             if query_params.name.is_some() {
-//                 match where_clause.is_empty() {
-//                     true => where_clause.push_str("WHERE name LIKE ?"),
-//                     false => where_clause.push_str(" AND name LIKE ?"),
-//                 }
-//             }
-//             if query_params.typ.is_some() {
-//                 match where_clause.is_empty() {
-//                     true => where_clause.push_str("WHERE typ = ?"),
-//                     false => where_clause.push_str(" AND typ = ?"),
-//                 }
-//             }
-//             if query_params.on.is_some() {
-//                 match where_clause.is_empty() {
-//                     true => where_clause.push_str("WHERE status = ?"),
-//                     false => where_clause.push_str(" AND status = ?"),
-//                 }
-//             }
-//             if query_params.err.is_some() {
-//                 match where_clause.is_empty() {
-//                     true => where_clause.push_str("WHERE err = ?"),
-//                     false => where_clause.push_str(" AND err = ?"),
-//                 }
-//             }
+            if query.name.is_some() {
+                where_clause.push_str(" AND name LIKE ?");
+            }
+            if query.device_type.is_some() {
+                where_clause.push_str(" AND device_type = ?");
+            }
 
-//             let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_clause);
-//             let mut query_count_builder: QueryScalar<'_, Any, i64, AnyArguments> =
-//                 sqlx::query_scalar(&query_count_str);
+            let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_clause);
+            let mut query_count_builder: QueryScalar<'_, Any, i64, AnyArguments> =
+                sqlx::query_scalar(&query_count_str);
 
-//             let query_schemas_str = format!(
-//                 "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
-//                 TABLE_NAME, where_clause
-//             );
-//             let mut query_schemas_builder: QueryAs<'_, Any, Device, AnyArguments> =
-//                 sqlx::query_as::<_, Device>(&query_schemas_str);
+            let query_schemas_str = format!(
+                "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+                TABLE_NAME, where_clause
+            );
+            let mut query_schemas_builder: QueryAs<'_, Any, SourceSinkTemplate, AnyArguments> =
+                sqlx::query_as::<_, SourceSinkTemplate>(&query_schemas_str);
 
-//             if let Some(name) = query_params.name {
-//                 let name = format!("%{}%", name);
-//                 query_count_builder = query_count_builder.bind(name.clone());
-//                 query_schemas_builder = query_schemas_builder.bind(name);
-//             }
-//             if let Some(typ) = query_params.typ {
-//                 let typ: i32 = typ.into();
-//                 query_count_builder = query_count_builder.bind(typ);
-//                 query_schemas_builder = query_schemas_builder.bind(typ);
-//             }
-//             if let Some(on) = query_params.on {
-//                 query_count_builder = query_count_builder.bind(on as i32);
-//                 query_schemas_builder = query_schemas_builder.bind(on as i32);
-//             }
-//             if let Some(err) = query_params.err {
-//                 query_count_builder = query_count_builder.bind(err as i32);
-//                 query_schemas_builder = query_schemas_builder.bind(err as i32);
-//             }
+            query_count_builder = query_count_builder.bind(typ);
+            query_schemas_builder = query_schemas_builder.bind(typ);
 
-//             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
-//             let devices = query_schemas_builder
-//                 .bind(limit)
-//                 .bind(offset)
-//                 .fetch_all(POOL.get().unwrap())
-//                 .await?;
+            if let Some(name) = query.name {
+                let name = format!("%{}%", name);
+                query_count_builder = query_count_builder.bind(name.clone());
+                query_schemas_builder = query_schemas_builder.bind(name);
+            }
+            if let Some(device_type) = query.device_type {
+                let device_type: i32 = device_type.into();
+                query_count_builder = query_count_builder.bind(device_type);
+                query_schemas_builder = query_schemas_builder.bind(device_type);
+            }
 
-//             (count, devices)
-//         }
-//     };
+            let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
+            let templates = query_schemas_builder
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(POOL.get().unwrap())
+                .await?;
 
-//     Ok((count as usize, devices))
-// }
+            (count, templates)
+        }
+    };
 
-// pub async fn read_on() -> Result<Vec<Device>> {
-//     let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE status = 1")
-//         .fetch_all(POOL.get().unwrap())
-//         .await?;
-
-//     Ok(devices)
-// }
+    Ok((count as usize, templates))
+}
 
 pub async fn read_name(id: &String) -> Result<String> {
     let name: String = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?")
@@ -254,7 +228,7 @@ pub async fn update_conf(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult
     Ok(())
 }
 
-pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
+pub async fn delete_by_id(_id: &String) -> HaliaResult<()> {
     todo!()
     // super::delete_by_id(id, TABLE_NAME).await
 }

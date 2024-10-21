@@ -11,8 +11,9 @@ use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
         CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
-        SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemResp,
-        SearchDevicesItemRunningInfo, SearchDevicesResp, SearchRuleInfo, Summary,
+        QuerySourceSinkTemplateParams, SearchDevicesItemCommon, SearchDevicesItemConf,
+        SearchDevicesItemResp, SearchDevicesItemRunningInfo, SearchDevicesResp, SearchRuleInfo,
+        SearchSourcesOrSinkTemplatesItemResp, SearchSourcesOrSinkTemplatesResp, Summary,
     },
     BaseConf, CreateUpdateSourceOrSinkReq, CreateUpdateSourceOrSinkTemplateReq, Pagination,
     QuerySourcesOrSinksParams, RuleRef, SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp,
@@ -597,11 +598,66 @@ async fn transer_db_device_to_resp(
 
 pub async fn create_source_template(req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
     match req.device_type {
-        DeviceType::Modbus => modbus::source_template::validate(&req.ext)?,
+        DeviceType::Modbus => modbus::source_template::validate(&req.ext),
+        DeviceType::Opcua => todo!(),
+        DeviceType::Coap => todo!(),
+    }
+}
+
+pub async fn search_source_templates(
+    pagination: Pagination,
+    query: QuerySourceSinkTemplateParams,
+) -> HaliaResult<SearchSourcesOrSinkTemplatesResp> {
+    let (count, db_sources) = storage::device::source_or_sink_template::search(
+        pagination,
+        storage::SourceSinkType::Source,
+        query,
+    )
+    .await?;
+
+    let templates: Vec<_> = db_sources
+        .into_iter()
+        .map(|x| transer_db_source_sink_template_to_resp(x))
+        .collect();
+
+    Ok(SearchSourcesOrSinkTemplatesResp {
+        total: count,
+        data: templates,
+    })
+}
+
+pub async fn update_source_template(
+    id: String,
+    req: CreateUpdateSourceOrSinkTemplateReq,
+) -> HaliaResult<()> {
+    // 更新所有引用模板的源
+    todo!()
+}
+
+pub async fn delete_source_template(id: String) -> HaliaResult<()> {
+    // 判断是否引用
+    todo!()
+}
+
+pub async fn create_sink_template(req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
+    match req.device_type {
+        DeviceType::Modbus => modbus::sink_template::validate(&req.ext)?,
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
     }
     todo!()
 }
 
-pub async fn create_sink_template() {}
+fn transer_db_source_sink_template_to_resp(
+    db_template: storage::device::source_or_sink_template::SourceSinkTemplate,
+) -> SearchSourcesOrSinkTemplatesItemResp {
+    SearchSourcesOrSinkTemplatesItemResp {
+        id: db_template.id,
+        name: db_template.name,
+        desc: db_template
+            .des
+            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+        device_type: db_template.device_type.try_into().unwrap(),
+        conf: serde_json::from_slice(&db_template.conf).unwrap(),
+    }
+}
