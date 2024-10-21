@@ -49,9 +49,7 @@ pub fn start_segment(
             }
         });
         return;
-    }
-
-    if broadcast_tx.is_some() {
+    } else if broadcast_tx.is_some() {
         tokio::spawn(async move {
             let mut next = true;
             loop {
@@ -79,9 +77,35 @@ pub fn start_segment(
                 }
             }
         });
+    } else {
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    mb = rx.recv() => {
+                        match mb {
+                            Ok(mut mb) => {
+                                for function in &functions {
+                                    next = function.call(&mut mb).await;
+                                    if !next {
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(e) => panic!("{e:?}"),
+                        }
+
+                    }
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
+                }
+            }
+        });
+        return;
     }
 }
 
+/// 将最开始的节点取出，并从ids里面删除
 pub fn take_source_ids(
     ids: &mut Vec<usize>,
     incoming_edges: &mut HashMap<usize, Vec<usize>>,

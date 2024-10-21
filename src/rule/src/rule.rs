@@ -57,6 +57,8 @@ impl Rule {
         let mut device_sink_active_ref_nodes = vec![];
         let mut app_sink_active_ref_nodes = vec![];
         let mut databoard_active_ref_nodes = vec![];
+
+        // 最初的源rx获取
         for source_id in source_ids {
             let node = node_map.get(&source_id).unwrap();
             match node.node_type {
@@ -121,7 +123,8 @@ impl Rule {
                 let mut functions = vec![];
                 let mut ids = vec![];
                 let mut mpsc_tx: Option<mpsc::Sender<MessageBatch>> = None;
-                let mut broadcast_tx: Option<broadcast::Sender<MessageBatch>> = None;
+                let mut is_log = false;
+                // let mut broadcast_tx: Option<broadcast::Sender<MessageBatch>> = None;
 
                 for id in oned_ids {
                     let node = node_map.get(&id).unwrap();
@@ -250,6 +253,7 @@ impl Rule {
                                 }
                             };
                             functions.push(log::new(log_node.name, tx));
+                            is_log = true;
                         }
                     }
                 }
@@ -260,30 +264,48 @@ impl Rule {
 
                 if ids.len() > 0 {
                     let source_ids = incoming_edges.get(&ids[0]).unwrap();
+                    debug!("{:?}", source_ids);
                     let source_id = source_ids[0];
                     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
-                    // TODO
-                    // if mpsc_tx.is_none() {
-                    //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                    //     let mut rxs = vec![];
-                    //     debug!("{:?}", outgoing_edges);
-                    //     debug!("{:?}", ids.last());
-                    //     debug!("{:?}", outgoing_edges.get(&2));
-                    //     let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
-                    //     for _ in 0..cnt {
-                    //         rxs.push(tx.subscribe());
-                    //     }
-                    //     receivers.insert(*ids.last().unwrap(), rxs);
-                    //     broadcast_tx = Some(tx);
-                    // }
-                    // TODO
-                    start_segment(
-                        rx,
-                        functions,
-                        mpsc_tx,
-                        broadcast_tx,
-                        self.stop_signal_tx.subscribe(),
-                    );
+
+                    match mpsc_tx {
+                        Some(mpsc_tx) => {
+                            start_segment(
+                                rx,
+                                functions,
+                                Some(mpsc_tx),
+                                None,
+                                self.stop_signal_tx.subscribe(),
+                            );
+                        }
+                        None => match is_log {
+                            true => {
+                                start_segment(
+                                    rx,
+                                    functions,
+                                    None,
+                                    None,
+                                    self.stop_signal_tx.subscribe(),
+                                );
+                            }
+                            false => {
+                                let (tx, _) = broadcast::channel::<MessageBatch>(16);
+                                let mut rxs = vec![];
+                                let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
+                                for _ in 0..cnt {
+                                    rxs.push(tx.subscribe());
+                                }
+                                receivers.insert(*ids.last().unwrap(), rxs);
+                                start_segment(
+                                    rx,
+                                    functions,
+                                    None,
+                                    Some(tx),
+                                    self.stop_signal_tx.subscribe(),
+                                );
+                            }
+                        },
+                    }
                 }
             }
         }
@@ -301,7 +323,6 @@ impl Rule {
 
     pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
         let mut read_rule_node_resp = vec![];
-        // let mut read_rule_resp = ReadRuleResp { nodes: vec![] };
         for node in conf.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
