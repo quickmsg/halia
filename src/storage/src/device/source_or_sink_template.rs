@@ -7,8 +7,8 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::{CreateUpdateDeviceReq, QuerySourceSinkTemplateParams},
-    CreateUpdateSourceOrSinkTemplateReq, Pagination,
+    devices::{CreateUpdateSourceOrSinkTemplateReq, QuerySourceOrSinkTemplateParams},
+    Pagination,
 };
 
 use crate::SourceSinkType;
@@ -80,10 +80,11 @@ pub async fn insert(
 // }
 
 pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
-    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
+    let conf: Vec<u8> =
+        sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
     Ok(conf)
 }
@@ -91,7 +92,7 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
 pub async fn search(
     pagination: Pagination,
     typ: SourceSinkType,
-    query: QuerySourceSinkTemplateParams,
+    query: QuerySourceOrSinkTemplateParams,
 ) -> Result<(usize, Vec<SourceSinkTemplate>)> {
     let (limit, offset) = pagination.to_sql();
     let typ: i32 = typ.into();
@@ -214,16 +215,22 @@ pub async fn update_err(id: &String, err: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn update_conf(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
-    let conf = serde_json::to_vec(&req.conf.ext)?;
-    let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
-    sqlx::query("UPDATE devices SET name = ?, des = ?, conf = ? WHERE id = ?")
-        .bind(req.conf.base.name)
-        .bind(desc)
-        .bind(conf)
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
+pub async fn update_conf(id: &String, req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
+    let conf = serde_json::to_vec(&req.ext)?;
+    let desc = req.base.desc.map(|desc| desc.into_bytes());
+    sqlx::query(
+        format!(
+            "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(req.base.name)
+    .bind(desc)
+    .bind(conf)
+    .bind(id)
+    .execute(POOL.get().unwrap())
+    .await?;
 
     Ok(())
 }

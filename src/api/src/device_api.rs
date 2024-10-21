@@ -4,9 +4,12 @@ use axum::{
     Json, Router,
 };
 use types::{
-    devices::{CreateUpdateDeviceReq, QueryParams, SearchDevicesResp, Summary},
-    CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, SearchSourcesOrSinksResp,
-    Value,
+    devices::{
+        CreateUpdateDeviceReq, CreateUpdateSourceOrSinkReq, CreateUpdateSourceOrSinkTemplateReq,
+        QueryParams, QuerySourceOrSinkTemplateParams, SearchDevicesResp,
+        SearchSourcesOrSinkTemplatesResp, SearchSourcesOrSinksResp, Summary,
+    },
+    Pagination, QuerySourcesOrSinksParams, Value,
 };
 
 use crate::{AppResult, AppSuccess};
@@ -176,32 +179,31 @@ async fn delete_sink(
 }
 
 async fn create_source_template(
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    Json(req): Json<CreateUpdateSourceOrSinkTemplateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    // devices::create_source_template(req).await?;
-    // Ok(AppSuccess::empty())
-    todo!()
+    devices::create_source_template(req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn search_source_templates() -> AppResult<AppSuccess<()>> {
-    // devices::search_source_templates().await?;
-    // Ok(AppSuccess::empty())
-    todo!()
+async fn search_source_templates(
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<QuerySourceOrSinkTemplateParams>,
+) -> AppResult<AppSuccess<SearchSourcesOrSinkTemplatesResp>> {
+    let data = devices::search_source_templates(pagination, query).await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_source_template(
     Path(id): Path<String>,
-    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+    Json(req): Json<CreateUpdateSourceOrSinkTemplateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    // devices::update_source_template(id, req).await?;
-    // Ok(AppSuccess::empty())
-    todo!()
+    devices::update_source_template(id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn delete_source_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    // devices::delete_source_template(id).await?;
-    // Ok(AppSuccess::empty())
-    todo!()
+    devices::delete_source_template(id).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_sink_template(

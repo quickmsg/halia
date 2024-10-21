@@ -3,7 +3,7 @@ use std::fmt;
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::{BaseConf, SearchSourcesOrSinksInfoResp};
+use crate::{BaseConf, RuleRef};
 
 pub mod coap;
 pub mod modbus;
@@ -146,8 +146,14 @@ pub struct SearchRuleInfo {
     pub sink: Option<SearchSourcesOrSinksInfoResp>,
 }
 
+#[derive(Serialize)]
+pub struct SearchSourcesOrSinksInfoResp {
+    pub id: String,
+    pub conf: CreateUpdateSourceOrSinkReq,
+}
+
 #[derive(Debug, Deserialize)]
-pub struct QuerySourceSinkTemplateParams {
+pub struct QuerySourceOrSinkTemplateParams {
     pub name: Option<String>,
     pub device_type: Option<DeviceType>,
 }
@@ -158,7 +164,6 @@ pub struct SearchSourcesOrSinkTemplatesResp {
     pub data: Vec<SearchSourcesOrSinkTemplatesItemResp>,
 }
 
-// TODO
 #[derive(Serialize)]
 pub struct SearchSourcesOrSinkTemplatesItemResp {
     pub id: String,
@@ -167,4 +172,30 @@ pub struct SearchSourcesOrSinkTemplatesItemResp {
     pub desc: Option<String>,
     pub device_type: DeviceType,
     pub conf: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct CreateUpdateSourceOrSinkReq {
+    pub base: BaseConf,
+    pub ext: serde_json::Value,
+}
+
+#[derive(Serialize)]
+pub struct SearchSourcesOrSinksResp {
+    pub total: usize,
+    pub data: Vec<SearchSourcesOrSinksItemResp>,
+}
+
+#[derive(Serialize)]
+pub struct SearchSourcesOrSinksItemResp {
+    #[serde(flatten)]
+    pub info: SearchSourcesOrSinksInfoResp,
+    pub rule_ref: RuleRef,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct CreateUpdateSourceOrSinkTemplateReq {
+    pub device_type: DeviceType,
+    pub base: BaseConf,
+    pub ext: serde_json::Value,
 }

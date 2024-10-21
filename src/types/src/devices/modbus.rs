@@ -95,6 +95,18 @@ pub enum SourceConfType {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct CreateUpdateSourceConf {
+    pub typ: SourceConfType,
+    #[serde(flatten)]
+    pub conf: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct CreateUpdateSourceTemplateConf {
+    pub slave: u8,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SourceConf {
     // 字段名称
     pub field: String,

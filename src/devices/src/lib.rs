@@ -10,14 +10,15 @@ use message::MessageBatch;
 use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
-        CreateUpdateDeviceReq, DeviceConf, DeviceType, QueryParams, QueryRuleInfo,
-        QuerySourceSinkTemplateParams, SearchDevicesItemCommon, SearchDevicesItemConf,
-        SearchDevicesItemResp, SearchDevicesItemRunningInfo, SearchDevicesResp, SearchRuleInfo,
-        SearchSourcesOrSinkTemplatesItemResp, SearchSourcesOrSinkTemplatesResp, Summary,
+        CreateUpdateDeviceReq, CreateUpdateSourceOrSinkReq, CreateUpdateSourceOrSinkTemplateReq,
+        DeviceConf, DeviceType, QueryParams, QueryRuleInfo, QuerySourceOrSinkTemplateParams,
+        SearchDevicesItemCommon, SearchDevicesItemConf, SearchDevicesItemResp,
+        SearchDevicesItemRunningInfo, SearchDevicesResp, SearchRuleInfo,
+        SearchSourcesOrSinkTemplatesItemResp, SearchSourcesOrSinkTemplatesResp,
+        SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
+        Summary,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, CreateUpdateSourceOrSinkTemplateReq, Pagination,
-    QuerySourcesOrSinksParams, RuleRef, SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp,
-    SearchSourcesOrSinksResp, Value,
+    BaseConf, Pagination, QuerySourcesOrSinksParams, RuleRef, Value,
 };
 
 pub mod coap;
@@ -325,10 +326,10 @@ pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) 
         device.create_source(source_id.clone(), conf).await?;
     }
 
-    storage::source_or_sink::insert(
+    storage::device::source_or_sink::insert(
         &device_id,
         &source_id,
-        storage::source_or_sink::Type::Source,
+        storage::SourceSinkType::Source,
         req,
     )
     .await?;
@@ -390,7 +391,7 @@ pub async fn update_source(
         }
     }
 
-    storage::source_or_sink::update(&source_id, req).await?;
+    storage::device::source_or_sink::update(&source_id, req).await?;
 
     Ok(())
 }
@@ -449,10 +450,10 @@ pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) ->
         device.create_sink(sink_id.clone(), conf).await?;
     }
 
-    storage::source_or_sink::insert(
+    storage::device::source_or_sink::insert(
         &device_id,
         &sink_id,
-        storage::source_or_sink::Type::Sink,
+        storage::SourceSinkType::Sink,
         req,
     )
     .await?;
@@ -516,7 +517,7 @@ pub async fn update_sink(
         }
     }
 
-    storage::source_or_sink::update(&sink_id, req).await?;
+    storage::device::source_or_sink::update(&sink_id, req).await?;
 
     Ok(())
 }
@@ -606,7 +607,7 @@ pub async fn create_source_template(req: CreateUpdateSourceOrSinkTemplateReq) ->
 
 pub async fn search_source_templates(
     pagination: Pagination,
-    query: QuerySourceSinkTemplateParams,
+    query: QuerySourceOrSinkTemplateParams,
 ) -> HaliaResult<SearchSourcesOrSinkTemplatesResp> {
     let (count, db_sources) = storage::device::source_or_sink_template::search(
         pagination,
@@ -630,13 +631,23 @@ pub async fn update_source_template(
     id: String,
     req: CreateUpdateSourceOrSinkTemplateReq,
 ) -> HaliaResult<()> {
-    // 更新所有引用模板的源
-    todo!()
+    let old_conf = storage::device::source_or_sink_template::read_conf(&id).await?;
+    let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
+    if old_conf != req.ext {
+        // TODO
+        // 更新所有引用模板的源
+    }
+
+    storage::device::source_or_sink_template::update_conf(&id, req).await?;
+    Ok(())
 }
 
 pub async fn delete_source_template(id: String) -> HaliaResult<()> {
-    // 判断是否引用
-    todo!()
+    if storage::device::source_or_sink_template_reference::count_by_template_id(&id).await? > 0 {
+        return Err(HaliaError::DeleteRefing);
+    }
+    storage::device::source_or_sink_template_reference::delete_by_id(&id).await?;
+    Ok(())
 }
 
 pub async fn create_sink_template(req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
