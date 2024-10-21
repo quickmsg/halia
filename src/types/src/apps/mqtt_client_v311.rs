@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{schema::DecodeType, MessageRetain, PlainOrBase64Value, Ssl};
+use crate::{schema::{DecodeType, EncodeType}, MessageRetain, PlainOrBase64Value, Ssl};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct Conf {
@@ -68,4 +68,6 @@ pub struct SinkConf {
     pub qos: Qos,
     pub retain: bool,
     pub message_retain: MessageRetain,
+    pub encode_type: EncodeType,
+    pub schema_id: Option<String>,
 }

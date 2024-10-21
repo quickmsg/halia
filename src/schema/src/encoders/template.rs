@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::{bail, Result};
+use common::error::HaliaResult;
 use message::MessageBatch;
 use regex::Regex;
 
@@ -11,16 +12,20 @@ struct Template {
     fields: Vec<String>,
 }
 
-pub(crate) fn new(template: String) -> Result<Template> {
+pub(crate) fn validate_conf(_conf: &serde_json::Value) -> Result<()> {
+    Ok(())
+}
+
+pub(crate) fn new(template: String) -> HaliaResult<Box<dyn Encoder>> {
     let re = Regex::new(r"\$\{(.*?)\}").unwrap();
     let mut fields = HashSet::new();
     for cap in re.captures_iter(&template) {
         fields.insert(cap[1].to_owned());
     }
-    Ok(Template {
+    Ok(Box::new(Template {
         template,
         fields: fields.into_iter().collect(),
-    })
+    }))
 }
 
 impl Encoder for Template {

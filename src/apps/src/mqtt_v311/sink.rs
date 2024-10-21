@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use common::{
+    constants::CHANNEL_SIZE,
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
 use message::MessageBatch;
 use rumqttc::{valid_topic, AsyncClient};
+use schema::Encoder;
 use tokio::{
     select,
     sync::{broadcast, mpsc, watch},
@@ -24,6 +26,7 @@ pub struct Sink {
 
 pub struct JoinHandleData {
     pub conf: SinkConf,
+    pub encoder: Box<dyn Encoder>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: mpsc::Receiver<MessageBatch>,
@@ -46,11 +49,15 @@ impl Sink {
         app_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = mpsc::channel(CHANNEL_SIZE);
+        let encoder = schema::new_encoder(&conf.encode_type, &conf.schema_id)
+            .await
+            .unwrap();
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
         let join_handle_data = JoinHandleData {
             conf,
+            encoder,
             message_retainer,
             stop_signal_rx,
             mb_rx,
@@ -79,9 +86,15 @@ impl Sink {
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
                         if !err {
-                            if let Err(e) = &join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, mb.to_json()).await {
-                                warn!("{:?}", e);
+                            match join_handle_data.encoder.encode(mb) {
+                                Ok(data) => {
+                                    if let Err(e) = &join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, data).await {
+                                        warn!("{:?}", e);
+                                    }
+                                }
+                                Err(e) => warn!("{:?}", e),
                             }
+
                         } else {
                             join_handle_data.message_retainer.push(mb);
                         }

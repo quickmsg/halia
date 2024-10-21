@@ -54,6 +54,11 @@ pub enum DecodeType {
     Protobuf,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub enum EncodeType {
+    Template,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum ProtocolType {
@@ -114,6 +119,11 @@ pub struct CsvDecodeConf {
     pub base64_decode: bool,
     pub has_headers: bool,
     pub headers: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct TemplateEncodeConf {
+    pub template: String,
 }
 
 #[derive(Serialize)]

@@ -7,8 +7,8 @@ use common::{
 use message::MessageBatch;
 use types::{
     schema::{
-        AvroDecodeConf, CreateUpdateSchemaReq, CsvDecodeConf, DecodeType, QueryParams,
-        SearchSchemasItemResp, SearchSchemasResp,
+        AvroDecodeConf, CreateUpdateSchemaReq, CsvDecodeConf, DecodeType, EncodeType, QueryParams,
+        SearchSchemasItemResp, SearchSchemasResp, TemplateEncodeConf,
     },
     BaseConf, Pagination,
 };
@@ -28,7 +28,7 @@ pub trait Decoder: Sync + Send {
     fn decode(&self, data: Bytes) -> Result<MessageBatch>;
 }
 
-pub trait Encoder {
+pub trait Encoder: Sync + Send {
     fn encode(&self, mb: MessageBatch) -> Result<Bytes>;
 }
 
@@ -74,7 +74,9 @@ fn validate_conf(req: &CreateUpdateSchemaReq) -> HaliaResult<()> {
             types::schema::ProtocolType::Avro => todo!(),
             types::schema::ProtocolType::Protobuf => todo!(),
             types::schema::ProtocolType::Csv => todo!(),
-            types::schema::ProtocolType::Template => todo!(),
+            types::schema::ProtocolType::Template => {
+                encoders::template::validate_conf(&req.ext)?;
+            }
         },
         types::schema::SchemaType::Decode => match &req.protocol {
             types::schema::ProtocolType::Avro => {
@@ -139,6 +141,22 @@ pub async fn new_decoder(
         DecodeType::Yaml => todo!(),
         DecodeType::Toml => todo!(),
         DecodeType::Protobuf => todo!(),
+    }
+}
+
+pub async fn new_encoder(
+    encode_type: &EncodeType,
+    schema_id: &Option<String>,
+) -> HaliaResult<Box<dyn Encoder>> {
+    match encode_type {
+        EncodeType::Template => match schema_id {
+            Some(schema_id) => {
+                let conf = storage::schema::read_conf(schema_id).await?;
+                let conf: TemplateEncodeConf = serde_json::from_slice(&conf)?;
+                encoders::template::new(conf.template)
+            }
+            None => return Err(HaliaError::Common("必须提供schema_id".to_owned())),
+        },
     }
 }
 
