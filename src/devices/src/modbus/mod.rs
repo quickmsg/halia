@@ -29,7 +29,10 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{trace, warn};
 use types::{
     devices::{
-        modbus::{Area, Conf, DataType, Encode, SinkConf, SourceConf, Type},
+        modbus::{
+            Area, Conf, DataType, Encode, SinkConf, SourceConf, SourceCustomizeConf,
+            SourceTemplateConf, Type,
+        },
         SearchDevicesItemRunningInfo,
     },
     Value,
@@ -441,10 +444,20 @@ impl Device for Modbus {
     async fn create_template_source(
         &mut self,
         source_id: String,
-        conf: serde_json::Value,
+        customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf: SourceConf = serde_json::from_value(conf)?;
+        let customize_conf: SourceCustomizeConf = serde_json::from_value(customize_conf)?;
+        let template_conf: SourceTemplateConf = serde_json::from_value(template_conf)?;
+        let conf = SourceConf {
+            field: template_conf.field,
+            data_type: template_conf.data_type,
+            slave: customize_conf.slave,
+            area: template_conf.area,
+            address: template_conf.address,
+            interval: template_conf.interval,
+        };
+
         let source = Source::new(
             source_id.clone(),
             conf,

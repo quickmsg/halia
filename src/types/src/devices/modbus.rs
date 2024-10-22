@@ -87,11 +87,6 @@ pub enum Encode {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct CreateUpdateSourceTemplateConf {
-    pub slave: u8,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SourceConf {
     // 字段名称
     pub field: String,
@@ -101,6 +96,11 @@ pub struct SourceConf {
     pub area: Area,
     pub address: u16,
     pub interval: u64,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct SourceCustomizeConf {
+    pub slave: u8,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

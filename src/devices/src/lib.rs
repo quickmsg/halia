@@ -86,7 +86,7 @@ pub trait Device: Send + Sync {
     async fn create_template_source(
         &mut self,
         source_id: String,
-        conf: serde_json::Value,
+        customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
 
@@ -107,7 +107,7 @@ pub trait Device: Send + Sync {
     async fn create_template_sink(
         &mut self,
         sink_id: String,
-        conf: serde_json::Value,
+        customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn update_sink(
@@ -338,6 +338,10 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
 }
 
 pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
+    if req.conf_type == types::devices::SourceSinkConfType::Template && req.template_id.is_none() {
+        return Err(HaliaError::Common("模板ID不能为空".to_string()));
+    }
+
     let typ: DeviceType = storage::device::read_type(&device_id).await?.try_into()?;
     match typ {
         DeviceType::Modbus => modbus::validate_source_conf(&req.ext)?,
@@ -348,8 +352,24 @@ pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) 
     let source_id = common::get_id();
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let conf = req.ext.clone();
-        // TODO
-        // device.create_source(source_id.clone(), conf).await?;
+        match req.conf_type {
+            types::devices::SourceSinkConfType::Template => {
+                let template_conf = storage::device::source_or_sink_template::read_conf(
+                    // 函数入口处即进行了验证，此处永远不会panic
+                    req.template_id.as_ref().unwrap(),
+                )
+                .await?;
+                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
+                device
+                    .create_template_source(source_id.clone(), conf, template_conf)
+                    .await?
+            }
+            types::devices::SourceSinkConfType::Customize => {
+                device
+                    .create_customize_source(source_id.clone(), conf)
+                    .await?
+            }
+        }
     }
 
     storage::device::source_sink::insert_source(&device_id, &source_id, req).await?;
@@ -454,6 +474,10 @@ pub async fn get_source_rx(
 }
 
 pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
+    if req.conf_type == types::devices::SourceSinkConfType::Template && req.template_id.is_none() {
+        return Err(HaliaError::Common("模板ID不能为空".to_string()));
+    }
+
     let typ = storage::device::read_type(&device_id).await?;
     let typ: DeviceType = typ.try_into()?;
     match typ {
@@ -465,8 +489,22 @@ pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) ->
     let sink_id = common::get_id();
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let conf: serde_json::Value = req.ext.clone();
-        // TODO
-        // device.create_sink(sink_id.clone(), conf).await?;
+        match req.conf_type {
+            types::devices::SourceSinkConfType::Template => {
+                let template_conf = storage::device::source_or_sink_template::read_conf(
+                    // 函数入口处即进行了验证，此处永远不会panic
+                    req.template_id.as_ref().unwrap(),
+                )
+                .await?;
+                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
+                device
+                    .create_template_sink(sink_id.clone(), conf, template_conf)
+                    .await?
+            }
+            types::devices::SourceSinkConfType::Customize => {
+                device.create_customize_sink(sink_id.clone(), conf).await?
+            }
+        }
     }
 
     storage::device::source_sink::insert_sink(&device_id, &sink_id, req).await?;
