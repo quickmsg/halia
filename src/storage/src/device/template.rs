@@ -8,7 +8,10 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::{CreateUpdateDeviceReq, QueryParams},
+    devices::{
+        device_template::{CreateUpdateReq, QueryParams},
+        CreateUpdateDeviceReq,
+    },
     Pagination,
 };
 
@@ -42,19 +45,21 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
-    let conf = serde_json::to_vec(&req.conf.ext)?;
+pub async fn insert(id: &String, req: CreateUpdateReq) -> HaliaResult<()> {
+    let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis();
     let typ: i32 = req.typ.into();
-    let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
+    let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
-    r#"INSERT INTO devices (id, status, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
+        format!(
+            "INSERT INTO {} (id, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            TABLE_NAME
+        )
+        .as_str(),
     )
     .bind(id)
-    .bind(false as i32)
-    .bind(false as i32)
     .bind(typ)
-    .bind(req.conf.base.name)
+    .bind(req.base.name)
     .bind(desc)
     .bind(conf)
     .bind(ts)
@@ -65,19 +70,22 @@ pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult<()> 
 }
 
 pub async fn read_one(id: &String) -> Result<DeviceTemplate> {
-    let device = sqlx::query_as::<_, DeviceTemplate>("SELECT * FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
+    let device = sqlx::query_as::<_, DeviceTemplate>(
+        format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
 
     Ok(device)
 }
 
 pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
-    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
+    let conf: Vec<u8> =
+        sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
     Ok(conf)
 }
@@ -87,13 +95,8 @@ pub async fn search(
     query_params: QueryParams,
 ) -> Result<(usize, Vec<DeviceTemplate>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, devices) = match (
-        &query_params.name,
-        &query_params.typ,
-        &query_params.on,
-        &query_params.err,
-    ) {
-        (None, None, None, None) => {
+    let (count, devices) = match (&query_params.name, &query_params.typ) {
+        (None, None) => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
                 .fetch_one(POOL.get().unwrap())
                 .await?;
@@ -123,18 +126,6 @@ pub async fn search(
                     false => where_clause.push_str(" AND typ = ?"),
                 }
             }
-            if query_params.on.is_some() {
-                match where_clause.is_empty() {
-                    true => where_clause.push_str("WHERE status = ?"),
-                    false => where_clause.push_str(" AND status = ?"),
-                }
-            }
-            if query_params.err.is_some() {
-                match where_clause.is_empty() {
-                    true => where_clause.push_str("WHERE err = ?"),
-                    false => where_clause.push_str(" AND err = ?"),
-                }
-            }
 
             let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_clause);
             let mut query_count_builder: QueryScalar<'_, Any, i64, AnyArguments> =
@@ -156,14 +147,6 @@ pub async fn search(
                 let typ: i32 = typ.into();
                 query_count_builder = query_count_builder.bind(typ);
                 query_schemas_builder = query_schemas_builder.bind(typ);
-            }
-            if let Some(on) = query_params.on {
-                query_count_builder = query_count_builder.bind(on as i32);
-                query_schemas_builder = query_schemas_builder.bind(on as i32);
-            }
-            if let Some(err) = query_params.err {
-                query_count_builder = query_count_builder.bind(err as i32);
-                query_schemas_builder = query_schemas_builder.bind(err as i32);
             }
 
             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
@@ -188,15 +171,6 @@ pub async fn read_on() -> Result<Vec<DeviceTemplate>> {
     Ok(devices)
 }
 
-pub async fn read_name(id: &String) -> Result<String> {
-    let name: String = sqlx::query_scalar("SELECT name FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(name)
-}
-
 pub async fn read_type(id: &String) -> Result<i32> {
     let typ: i32 = sqlx::query_scalar("SELECT typ FROM devices WHERE id = ?")
         .bind(id)
@@ -212,26 +186,6 @@ pub async fn count_all() -> Result<usize> {
         .await?;
 
     Ok(count as usize)
-}
-
-pub async fn update_status(id: &String, status: bool) -> Result<()> {
-    sqlx::query("UPDATE devices SET status = ? WHERE id = ?")
-        .bind(status as i32)
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-
-    Ok(())
-}
-
-pub async fn update_err(id: &String, err: bool) -> Result<()> {
-    sqlx::query("UPDATE devices SET err = ? WHERE id = ?")
-        .bind(err as i32)
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-
-    Ok(())
 }
 
 pub async fn update_conf(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {

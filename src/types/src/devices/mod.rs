@@ -8,6 +8,7 @@ use crate::{BaseConf, RuleRef};
 pub mod coap;
 pub mod modbus;
 pub mod opcua;
+pub mod device_template;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateUpdateDeviceReq {

@@ -45,14 +45,6 @@ pub fn routes() -> Router {
                 ),
         )
         .nest(
-            "/device_template",
-            Router::new()
-                .route("/", post(create_device_template))
-                .route("/", get(search_device_templates))
-                .route("/:id", put(update_device_template))
-                .route("/:id", delete(delete_device_template)),
-        )
-        .nest(
             "/source_template",
             Router::new()
                 .route("/", post(create_source_template))
@@ -67,6 +59,34 @@ pub fn routes() -> Router {
                 .route("/", get(search_sink_templates))
                 .route("/:id", put(update_source_template))
                 .route("/:id", delete(delete_sink_template)),
+        )
+        .nest(
+            "/device_template",
+            Router::new()
+                .route("/", post(create_device_template))
+                .route("/", get(search_device_templates))
+                .route("/:id", put(update_device_template))
+                .route("/:id", delete(delete_device_template))
+                .nest(
+                    "/:device_template_id",
+                    Router::new()
+                        .nest(
+                            "/source",
+                            Router::new()
+                                .route("/", post(create_device_template_source))
+                                .route("/", get(search_device_template_sources))
+                                .route("/:source_id", put(update_device_template_source))
+                                .route("/:source_id", delete(delete_device_template_source)),
+                        )
+                        .nest(
+                            "/sink",
+                            Router::new()
+                                .route("/", post(create_device_template_sink))
+                                .route("/", get(search_device_template_sinks))
+                                .route("/:sink_id", put(update_device_template_sink))
+                                .route("/:sink_id", delete(delete_device_template_sink)),
+                        ),
+                ),
         )
 }
 
@@ -182,38 +202,10 @@ async fn delete_sink(
     Ok(AppSuccess::empty())
 }
 
-async fn create_device_template(
-    Json(req): Json<CreateUpdateSourceOrSinkTemplateReq>,
-) -> AppResult<AppSuccess<()>> {
-    devices::create_source_template(req).await?;
-    Ok(AppSuccess::empty())
-}
-
-async fn search_device_templates(
-    Query(pagination): Query<Pagination>,
-    Query(query): Query<QuerySourceOrSinkTemplateParams>,
-) -> AppResult<AppSuccess<SearchSourcesOrSinkTemplatesResp>> {
-    let data = devices::search_source_templates(pagination, query).await?;
-    Ok(AppSuccess::data(data))
-}
-
-async fn update_device_template(
-    Path(id): Path<String>,
-    Json(req): Json<CreateUpdateSourceOrSinkTemplateReq>,
-) -> AppResult<AppSuccess<()>> {
-    devices::update_source_template(id, req).await?;
-    Ok(AppSuccess::empty())
-}
-
-async fn delete_device_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    devices::delete_source_template(id).await?;
-    Ok(AppSuccess::empty())
-}
-
 async fn create_source_template(
     Json(req): Json<CreateUpdateSourceOrSinkTemplateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_source_template(req).await?;
+    devices::source_template::create(req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -221,7 +213,7 @@ async fn search_source_templates(
     Query(pagination): Query<Pagination>,
     Query(query): Query<QuerySourceOrSinkTemplateParams>,
 ) -> AppResult<AppSuccess<SearchSourcesOrSinkTemplatesResp>> {
-    let data = devices::search_source_templates(pagination, query).await?;
+    let data = devices::source_template::search(pagination, query).await?;
     Ok(AppSuccess::data(data))
 }
 
@@ -229,12 +221,12 @@ async fn update_source_template(
     Path(id): Path<String>,
     Json(req): Json<CreateUpdateSourceOrSinkTemplateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::update_source_template(id, req).await?;
+    devices::source_template::update(id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn delete_source_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    devices::delete_source_template(id).await?;
+    devices::source_template::delete(id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -265,4 +257,108 @@ async fn delete_sink_template(Path(id): Path<String>) -> AppResult<AppSuccess<()
     // devices::delete_sink_template(id).await?;
     // Ok(AppSuccess::empty())
     todo!()
+}
+
+async fn create_device_template(
+    Json(req): Json<CreateUpdateSourceOrSinkTemplateReq>,
+) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::create_source_template(req).await?;
+    // Ok(AppSuccess::empty())
+}
+
+async fn search_device_templates(
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<QuerySourceOrSinkTemplateParams>,
+) -> AppResult<AppSuccess<SearchSourcesOrSinkTemplatesResp>> {
+    todo!()
+    // let data = devices::search_source_templates(pagination, query).await?;
+    // Ok(AppSuccess::data(data))
+}
+
+async fn update_device_template(
+    Path(id): Path<String>,
+    Json(req): Json<CreateUpdateSourceOrSinkTemplateReq>,
+) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::update_source_template(id, req).await?;
+    // Ok(AppSuccess::empty())
+}
+
+async fn delete_device_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::delete_source_template(id).await?;
+    // Ok(AppSuccess::empty())
+}
+
+async fn create_device_template_source(
+    Path(device_template_id): Path<String>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::create_device_template_source(device_template_id, req).await?;
+    // Ok(AppSuccess::empty())
+}
+
+async fn search_device_template_sources(
+    Path(device_template_id): Path<String>,
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<QuerySourceOrSinkTemplateParams>,
+) -> AppResult<AppSuccess<SearchSourcesOrSinkTemplatesResp>> {
+    todo!()
+    // let data = devices::search_device_template_sources(device_template_id, pagination, query).await?;
+    // Ok(AppSuccess::data(data))
+}
+
+async fn update_device_template_source(
+    Path((device_template_id, source_id)): Path<(String, String)>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::update_device_template_source(device_template_id, source_id, req).await?;
+    // Ok(AppSuccess::empty())
+}
+
+async fn delete_device_template_source(
+    Path((device_template_id, source_id)): Path<(String, String)>,
+) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::delete_device_template_source(device_template_id, source_id).await?;
+    // Ok(AppSuccess::empty())
+}
+
+async fn create_device_template_sink(
+    Path(device_template_id): Path<String>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::create_device_template_sink(device_template_id, req).await?;
+    // Ok(AppSuccess::empty())
+}
+
+async fn search_device_template_sinks(
+    Path(device_template_id): Path<String>,
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<QuerySourceOrSinkTemplateParams>,
+) -> AppResult<AppSuccess<SearchSourcesOrSinkTemplatesResp>> {
+    todo!()
+    // let data = devices::search_device_template_sinks(device_template_id, pagination, query).await?;
+    // Ok(AppSuccess::data(data))
+}
+
+async fn update_device_template_sink(
+    Path((device_template_id, sink_id)): Path<(String, String)>,
+    Json(req): Json<CreateUpdateSourceOrSinkReq>,
+) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::update_device_template_sink(device_template_id, sink_id, req).await?;
+    // Ok(AppSuccess::empty())
+}
+
+async fn delete_device_template_sink(
+    Path((device_template_id, sink_id)): Path<(String, String)>,
+) -> AppResult<AppSuccess<()>> {
+    todo!()
+    // devices::delete_device_template_sink(device_template_id, sink_id).await?;
+    // Ok(AppSuccess::empty())
 }
