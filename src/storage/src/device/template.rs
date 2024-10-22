@@ -1,3 +1,4 @@
+/// 设备模板
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::{
@@ -13,17 +14,11 @@ use types::{
 
 use super::POOL;
 
-pub mod source_sink_template;
-pub mod source_sink;
-pub mod template;
-
-const TABLE_NAME: &str = "devices";
+const TABLE_NAME: &str = "device_templates";
 
 #[derive(FromRow)]
-pub struct Device {
+pub struct DeviceTemplate {
     pub id: String,
-    pub status: i32, // 0:close 1:open
-    pub err: i32,    // 0:错误中 1:正常中
     pub typ: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
@@ -36,8 +31,6 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
-    status SMALLINT UNSIGNED NOT NULL,
-    err SMALLINT UNSIGNED NOT NULL,
     typ SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
@@ -71,8 +64,8 @@ pub async fn insert(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult<()> 
     Ok(())
 }
 
-pub async fn read_one(id: &String) -> Result<Device> {
-    let device = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE id = ?")
+pub async fn read_one(id: &String) -> Result<DeviceTemplate> {
+    let device = sqlx::query_as::<_, DeviceTemplate>("SELECT * FROM devices WHERE id = ?")
         .bind(id)
         .fetch_one(POOL.get().unwrap())
         .await?;
@@ -92,7 +85,7 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
 pub async fn search(
     pagination: Pagination,
     query_params: QueryParams,
-) -> Result<(usize, Vec<Device>)> {
+) -> Result<(usize, Vec<DeviceTemplate>)> {
     let (limit, offset) = pagination.to_sql();
     let (count, devices) = match (
         &query_params.name,
@@ -105,7 +98,7 @@ pub async fn search(
                 .fetch_one(POOL.get().unwrap())
                 .await?;
 
-            let devices = sqlx::query_as::<_, Device>(
+            let devices = sqlx::query_as::<_, DeviceTemplate>(
                 "SELECT * FROM devices ORDER BY ts DESC LIMIT ? OFFSET ?",
             )
             .bind(limit)
@@ -151,8 +144,8 @@ pub async fn search(
                 "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
                 TABLE_NAME, where_clause
             );
-            let mut query_schemas_builder: QueryAs<'_, Any, Device, AnyArguments> =
-                sqlx::query_as::<_, Device>(&query_schemas_str);
+            let mut query_schemas_builder: QueryAs<'_, Any, DeviceTemplate, AnyArguments> =
+                sqlx::query_as::<_, DeviceTemplate>(&query_schemas_str);
 
             if let Some(name) = query_params.name {
                 let name = format!("%{}%", name);
@@ -187,8 +180,8 @@ pub async fn search(
     Ok((count as usize, devices))
 }
 
-pub async fn read_on() -> Result<Vec<Device>> {
-    let devices = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE status = 1")
+pub async fn read_on() -> Result<Vec<DeviceTemplate>> {
+    let devices = sqlx::query_as::<_, DeviceTemplate>("SELECT * FROM devices WHERE status = 1")
         .fetch_all(POOL.get().unwrap())
         .await?;
 
@@ -256,5 +249,5 @@ pub async fn update_conf(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult
 }
 
 pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
-    super::delete_by_id(id, TABLE_NAME).await
+    crate::delete_by_id(id, TABLE_NAME).await
 }

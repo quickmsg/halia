@@ -47,13 +47,13 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
     sqlx::query(&device::create_table())
         .execute(POOL.get().unwrap())
         .await?;
-    sqlx::query(&device::source_or_sink_template::create_table())
-        .execute(POOL.get().unwrap())
-        .await?;
-    sqlx::query(&device::source_or_sink_template_reference::create_table())
+    sqlx::query(&device::source_sink_template::create_table())
         .execute(POOL.get().unwrap())
         .await?;
     sqlx::query(&device::source_sink::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&device::template::create_table())
         .execute(POOL.get().unwrap())
         .await?;
 

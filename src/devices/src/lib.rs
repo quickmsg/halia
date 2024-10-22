@@ -288,7 +288,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
                     let customize_conf: serde_json::Value =
                         serde_json::from_slice(&db_source.conf)?;
                     let template_conf =
-                        storage::device::source_or_sink_template::read_conf(&template_id).await?;
+                        storage::device::source_sink_template::read_conf(&template_id).await?;
                     let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                     device
                         .create_template_source(db_source.id, customize_conf, template_conf)
@@ -311,7 +311,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
                 Some(template_id) => {
                     let customize_conf: serde_json::Value = serde_json::from_slice(&db_sink.conf)?;
                     let template_conf =
-                        storage::device::source_or_sink_template::read_conf(&template_id).await?;
+                        storage::device::source_sink_template::read_conf(&template_id).await?;
                     let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                     device
                         .create_template_sink(db_sink.id, customize_conf, template_conf)
@@ -384,7 +384,7 @@ pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) 
         let conf = req.ext.clone();
         match req.conf_type {
             types::devices::SourceSinkConfType::Template => {
-                let template_conf = storage::device::source_or_sink_template::read_conf(
+                let template_conf = storage::device::source_sink_template::read_conf(
                     // 函数入口处即进行了验证，此处永远不会panic
                     req.template_id.as_ref().unwrap(),
                 )
@@ -461,7 +461,7 @@ pub async fn update_source(
         match req.conf_type {
             types::devices::SourceSinkConfType::Template => {
                 // TODO 判断配置相同的情况下，不更新
-                let template_conf = storage::device::source_or_sink_template::read_conf(
+                let template_conf = storage::device::source_sink_template::read_conf(
                     req.template_id.as_ref().unwrap(),
                 )
                 .await?;
@@ -539,7 +539,7 @@ pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) ->
         let conf: serde_json::Value = req.ext.clone();
         match req.conf_type {
             types::devices::SourceSinkConfType::Template => {
-                let template_conf = storage::device::source_or_sink_template::read_conf(
+                let template_conf = storage::device::source_sink_template::read_conf(
                     // 函数入口处即进行了验证，此处永远不会panic
                     req.template_id.as_ref().unwrap(),
                 )
@@ -694,7 +694,7 @@ pub async fn create_source_template(req: CreateUpdateSourceOrSinkTemplateReq) ->
     }
 
     let id = common::get_id();
-    storage::device::source_or_sink_template::insert(&id, storage::SourceSinkType::Source, req)
+    storage::device::source_sink_template::insert(&id, storage::SourceSinkType::Source, req)
         .await?;
 
     Ok(())
@@ -704,7 +704,7 @@ pub async fn search_source_templates(
     pagination: Pagination,
     query: QuerySourceOrSinkTemplateParams,
 ) -> HaliaResult<SearchSourcesOrSinkTemplatesResp> {
-    let (count, db_sources) = storage::device::source_or_sink_template::search(
+    let (count, db_sources) = storage::device::source_sink_template::search(
         pagination,
         storage::SourceSinkType::Source,
         query,
@@ -727,7 +727,7 @@ pub async fn update_source_template(
     req: CreateUpdateSourceOrSinkTemplateReq,
 ) -> HaliaResult<()> {
     // todo validate
-    let old_conf = storage::device::source_or_sink_template::read_conf(&id).await?;
+    let old_conf = storage::device::source_sink_template::read_conf(&id).await?;
     let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
     if old_conf != req.ext {
         let sources = storage::device::source_sink::read_sources_by_template_id(&id).await?;
@@ -741,15 +741,15 @@ pub async fn update_source_template(
         }
     }
 
-    storage::device::source_or_sink_template::update_conf(&id, req).await?;
+    storage::device::source_sink_template::update_conf(&id, req).await?;
     Ok(())
 }
 
 pub async fn delete_source_template(id: String) -> HaliaResult<()> {
-    if storage::device::source_or_sink_template_reference::count_by_template_id(&id).await? > 0 {
+    if storage::device::source_sink::count_by_template_id(&id).await? > 0 {
         return Err(HaliaError::DeleteRefing);
     }
-    storage::device::source_or_sink_template_reference::delete_by_id(&id).await?;
+    storage::device::source_sink_template::delete_by_id(&id).await?;
     Ok(())
 }
 
@@ -763,7 +763,7 @@ pub async fn create_sink_template(req: CreateUpdateSourceOrSinkTemplateReq) -> H
 }
 
 fn transer_db_source_sink_template_to_resp(
-    db_template: storage::device::source_or_sink_template::SourceSinkTemplate,
+    db_template: storage::device::source_sink_template::SourceSinkTemplate,
 ) -> SearchSourcesOrSinkTemplatesItemResp {
     SearchSourcesOrSinkTemplatesItemResp {
         id: db_template.id,

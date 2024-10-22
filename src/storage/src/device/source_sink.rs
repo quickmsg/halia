@@ -304,3 +304,13 @@ pub async fn check_exists(id: &String) -> Result<bool> {
 pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
     crate::delete_by_id(id, TABLE_NAME).await
 }
+
+pub async fn count_by_template_id(template_id: &String) -> Result<usize> {
+    let count: i64 = sqlx::query_scalar(
+        format!("SELECT COUNT(*) FROM {} WHERE template_id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(template_id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+    Ok(count as usize)
+}

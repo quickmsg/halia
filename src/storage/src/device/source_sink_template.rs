@@ -187,14 +187,6 @@ pub async fn read_type(id: &String) -> Result<i32> {
     Ok(typ)
 }
 
-pub async fn count_all() -> Result<usize> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count as usize)
-}
-
 pub async fn update_status(id: &String, status: bool) -> Result<()> {
     sqlx::query("UPDATE devices SET status = ? WHERE id = ?")
         .bind(status as i32)
@@ -235,7 +227,6 @@ pub async fn update_conf(id: &String, req: CreateUpdateSourceOrSinkTemplateReq) 
     Ok(())
 }
 
-pub async fn delete_by_id(_id: &String) -> HaliaResult<()> {
-    todo!()
-    // super::delete_by_id(id, TABLE_NAME).await
+pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
+    crate::delete_by_id(id, TABLE_NAME).await
 }
