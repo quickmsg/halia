@@ -1,11 +1,9 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
-use types::{devices::CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
+use types::{devices::device::source_sink::CreateUpdateReq, Pagination, QuerySourcesOrSinksParams};
 
-use crate::SourceSinkType;
-
-use super::POOL;
+use crate::{SourceSinkType, POOL};
 
 static TABLE_NAME: &str = "device_sources_sinks";
 
@@ -28,63 +26,57 @@ pub(crate) fn create_table() -> String {
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     device_id CHAR(32) NOT NULL,
-    typ SMALLINT UNSIGNED NOT NULL,
+    source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     des BLOB,
     conf_type SMALLINT UNSIGNED NOT NULL,
-    template_id CHAR(32),
     conf BLOB NOT NULL,
+    template_id CHAR(32),
     ts BIGINT UNSIGNED NOT NULL,
-    UNIQUE (device_id, typ, name)
+    UNIQUE (device_id, source_sink_type, name)
 );
 "#,
         TABLE_NAME
     )
 }
 
-pub async fn insert_source(
-    id: &String,
-    device_id: &String,
-    req: CreateUpdateSourceOrSinkReq,
-) -> Result<()> {
+pub async fn insert_source(id: &String, device_id: &String, req: CreateUpdateReq) -> Result<()> {
     insert(SourceSinkType::Source, id, device_id, req).await
 }
 
-pub async fn insert_sink(
-    id: &String,
-    device_id: &String,
-    req: CreateUpdateSourceOrSinkReq,
-) -> Result<()> {
+pub async fn insert_sink(id: &String, device_id: &String, req: CreateUpdateReq) -> Result<()> {
     insert(SourceSinkType::Sink, id, device_id, req).await
 }
 
 async fn insert(
-    typ: SourceSinkType,
+    source_sink_type: SourceSinkType,
     id: &String,
     device_id: &String,
-    req: CreateUpdateSourceOrSinkReq,
+    req: CreateUpdateReq,
 ) -> Result<()> {
-    let typ: i32 = typ.into();
+    let source_sink_type: i32 = source_sink_type.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf_type: i32 = req.conf_type.into();
-    let conf = serde_json::to_vec(&req.ext)?;
+    let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis();
 
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, device_id, typ, name, des, conf_type, template_id, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            r#"INSERT INTO {} 
+(id, device_id, source_sink_type, name, des, conf_type, conf, template_id, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
     .bind(device_id)
-    .bind(typ)
+    .bind(source_sink_type)
     .bind(req.base.name)
     .bind(desc)
     .bind(conf_type)
-    .bind(req.template_id)
     .bind(conf)
+    .bind(req.template_id)
     .bind(ts)
     .execute(POOL.get().unwrap())
     .await?;
@@ -110,16 +102,19 @@ pub async fn read_sinks_by_device_id(device_id: &String) -> Result<Vec<SourceSin
     read_by_device_id(SourceSinkType::Sink, device_id).await
 }
 
-async fn read_by_device_id(typ: SourceSinkType, device_id: &String) -> Result<Vec<SourceSink>> {
-    let typ: i32 = typ.into();
+async fn read_by_device_id(
+    source_sink_type: SourceSinkType,
+    device_id: &String,
+) -> Result<Vec<SourceSink>> {
+    let source_sink_type: i32 = source_sink_type.into();
     let sources_sinks = sqlx::query_as::<_, SourceSink>(
         format!(
-            "SELECT * FROM {} WHERE typ = ? AND device_id = ?",
+            "SELECT * FROM {} WHERE source_sink_type = ? AND device_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(typ)
+    .bind(source_sink_type)
     .bind(device_id)
     .fetch_all(POOL.get().unwrap())
     .await?;
@@ -264,19 +259,22 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
+pub async fn update(id: &String, req: CreateUpdateReq) -> Result<()> {
+    let conf_type: i32 = req.conf_type.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
+    let conf = serde_json::to_vec(&req.conf)?;
     sqlx::query(
         format!(
-            "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
+            "UPDATE {} SET name = ?, des = ?, conf_type = ?, conf = ?, template_id = ? WHERE id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(req.base.name)
     .bind(desc)
+    .bind(conf_type)
     .bind(conf)
+    .bind(req.template_id)
     .bind(id)
     .execute(POOL.get().unwrap())
     .await?;

@@ -7,22 +7,22 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::{CreateUpdateSourceOrSinkTemplateReq, QuerySourceOrSinkTemplateParams},
+    devices::source_sink_template::{CreateUpdateReq, QueryParams},
     Pagination,
 };
 
 use crate::SourceSinkType;
 
-use super::POOL;
+use crate::POOL;
 
 const TABLE_NAME: &str = "device_source_sink_templates";
 
 #[derive(FromRow)]
 pub struct SourceSinkTemplate {
     pub id: String,
+    pub source_sink_type: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
-    pub typ: i32,
     pub device_type: i32,
     pub conf: Vec<u8>,
     pub ts: i64,
@@ -33,9 +33,9 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
+    source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
-    typ SMALLINT UNSIGNED NOT NULL,
     device_type SMALLINT UNSIGNED NOT NULL,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
@@ -47,20 +47,27 @@ CREATE TABLE IF NOT EXISTS {} (
 
 pub async fn insert(
     id: &String,
-    typ: SourceSinkType,
-    req: CreateUpdateSourceOrSinkTemplateReq,
+    source_sink_type: SourceSinkType,
+    req: CreateUpdateReq,
 ) -> HaliaResult<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
-    let ts = common::timestamp_millis();
-    let typ: i32 = typ.into();
+    let source_sink_type: i32 = source_sink_type.into();
+    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let device_type: i32 = req.device_type.into();
+    let conf = serde_json::to_vec(&req.conf)?;
+    let ts = common::timestamp_millis();
     sqlx::query(
-    format!("INSERT INTO {} (id, name, des, typ, device_type, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)", TABLE_NAME).as_str(),
+        format!(
+            r#"INSERT INTO {} 
+(id, source_sink_type, name, des, device_type, conf, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?)"#,
+            TABLE_NAME
+        )
+        .as_str(),
     )
     .bind(id)
+    .bind(source_sink_type)
     .bind(req.base.name)
-    .bind(req.base.desc)
-    .bind(typ)
+    .bind(desc)
     .bind(device_type)
     .bind(conf)
     .bind(ts)
@@ -69,15 +76,6 @@ pub async fn insert(
 
     Ok(())
 }
-
-// pub async fn read_one(id: &String) -> Result<Device> {
-//     let device = sqlx::query_as::<_, Device>("SELECT * FROM devices WHERE id = ?")
-//         .bind(id)
-//         .fetch_one(POOL.get().unwrap())
-//         .await?;
-
-//     Ok(device)
-// }
 
 pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
     let conf: Vec<u8> =
@@ -92,7 +90,7 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
 pub async fn search(
     pagination: Pagination,
     typ: SourceSinkType,
-    query: QuerySourceOrSinkTemplateParams,
+    query: QueryParams,
 ) -> Result<(usize, Vec<SourceSinkTemplate>)> {
     let (limit, offset) = pagination.to_sql();
     let typ: i32 = typ.into();
@@ -207,9 +205,9 @@ pub async fn update_err(id: &String, err: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn update_conf(id: &String, req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
+pub async fn update_conf(id: &String, req: CreateUpdateReq) -> HaliaResult<()> {
     let desc = req.base.desc.map(|desc| desc.into_bytes());
+    let conf = serde_json::to_vec(&req.conf)?;
     sqlx::query(
         format!(
             "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",

@@ -15,7 +15,7 @@ use types::{
     Pagination,
 };
 
-use super::POOL;
+use crate::POOL;
 
 const TABLE_NAME: &str = "device_templates";
 

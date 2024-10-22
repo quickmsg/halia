@@ -8,9 +8,9 @@ pub mod modbus;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateUpdateReq {
-    pub typ: DeviceType,
+    pub device_type: DeviceType,
     pub base: BaseConf,
-    pub ext: serde_json::Value,
+    pub conf: serde_json::Value,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
@@ -28,7 +28,5 @@ pub struct SearchResp {
 #[derive(Serialize)]
 pub struct SearchItemResp {
     pub id: String,
-    pub typ: DeviceType,
-    pub base: BaseConf,
-    pub ext: serde_json::Value,
+    pub req: CreateUpdateReq,
 }

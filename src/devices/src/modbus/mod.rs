@@ -150,7 +150,7 @@ impl Modbus {
                         task_err = None;
                         *join_handle_data.err.write().await = None;
                         if let Err(e) =
-                            storage::device::update_err(&join_handle_data.id, false).await
+                            storage::device::device::update_err(&join_handle_data.id, false).await
                         {
                             warn!("update device err failed: {}", e);
                         }
@@ -209,7 +209,8 @@ impl Modbus {
                                 sub_device_running_count();
                                 *join_handle_data.err.write().await = Some(e.to_string());
                                 if let Err(storage_err) =
-                                    storage::device::update_err(&join_handle_data.id, true).await
+                                    storage::device::device::update_err(&join_handle_data.id, true)
+                                        .await
                                 {
                                     warn!("update device err failed: {}", storage_err);
                                 }

@@ -4,9 +4,7 @@ use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{devices::CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
 
-use crate::SourceSinkType;
-
-use super::POOL;
+use crate::{SourceSinkType, POOL};
 
 static TABLE_NAME: &str = "device_template_sources_sinks";
 
