@@ -176,6 +176,8 @@ pub struct SearchSourcesOrSinkTemplatesItemResp {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSourceOrSinkReq {
+    pub conf_type: SourceSinkConfType,
+    pub template_id: Option<String>,
     pub base: BaseConf,
     pub ext: serde_json::Value,
 }
@@ -198,4 +200,34 @@ pub struct CreateUpdateSourceOrSinkTemplateReq {
     pub device_type: DeviceType,
     pub base: BaseConf,
     pub ext: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceSinkConfType {
+    // 模板
+    Template,
+    // 自定义
+    Customize,
+}
+
+impl Into<i32> for SourceSinkConfType {
+    fn into(self) -> i32 {
+        match self {
+            SourceSinkConfType::Template => 1,
+            SourceSinkConfType::Customize => 2,
+        }
+    }
+}
+
+impl TryFrom<i32> for SourceSinkConfType {
+    type Error = Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(SourceSinkConfType::Template),
+            2 => Ok(SourceSinkConfType::Customize),
+            _ => bail!("未知配置类型: {}", value),
+        }
+    }
 }

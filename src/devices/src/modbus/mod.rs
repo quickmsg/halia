@@ -38,9 +38,9 @@ use types::{
 use crate::{add_device_running_count, sub_device_running_count, Device};
 
 mod sink;
+pub(crate) mod sink_template;
 mod source;
 pub(crate) mod source_template;
-pub(crate) mod sink_template;
 
 struct Modbus {
     sources: Arc<DashMap<String, Source>>,
@@ -421,10 +421,28 @@ impl Device for Modbus {
         self.stop_signal_tx.send(()).unwrap();
     }
 
-    async fn create_source(
+    async fn create_customize_source(
         &mut self,
         source_id: String,
         conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        let conf: SourceConf = serde_json::from_value(conf)?;
+        let source = Source::new(
+            source_id.clone(),
+            conf,
+            self.read_tx.clone(),
+            self.device_err_tx.subscribe(),
+        );
+        self.sources.insert(source_id, source);
+        Ok(())
+    }
+
+    // TODO
+    async fn create_template_source(
+        &mut self,
+        source_id: String,
+        conf: serde_json::Value,
+        template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
         let source = Source::new(
@@ -492,7 +510,23 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn create_customize_sink(
+        &mut self,
+        sink_id: String,
+        conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        let conf: SinkConf = serde_json::from_value(conf)?;
+        let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
+        self.sinks.insert(sink_id, sink);
+        Ok(())
+    }
+
+    async fn create_template_sink(
+        &mut self,
+        sink_id: String,
+        conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
         let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
         self.sinks.insert(sink_id, sink);

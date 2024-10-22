@@ -78,11 +78,18 @@ pub trait Device: Send + Sync {
     ) -> HaliaResult<()>;
     async fn stop(&mut self);
 
-    async fn create_source(
+    async fn create_customize_source(
         &mut self,
         source_id: String,
         conf: serde_json::Value,
     ) -> HaliaResult<()>;
+    async fn create_template_source(
+        &mut self,
+        source_id: String,
+        conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()>;
+
     async fn update_source(
         &mut self,
         source_id: &String,
@@ -92,7 +99,17 @@ pub trait Device: Send + Sync {
     async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()>;
     async fn delete_source(&mut self, source_id: &String) -> HaliaResult<()>;
 
-    async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()>;
+    async fn create_customize_sink(
+        &mut self,
+        sink_id: String,
+        conf: serde_json::Value,
+    ) -> HaliaResult<()>;
+    async fn create_template_sink(
+        &mut self,
+        sink_id: String,
+        conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()>;
     async fn update_sink(
         &mut self,
         sink_id: &String,
@@ -135,7 +152,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
     let device_resp = transer_db_device_to_resp(db_device).await?;
     match (query.source_id, query.sink_id) {
         (Some(source_id), None) => {
-            let db_source = storage::source_or_sink::read_one(&source_id).await?;
+            let db_source = storage::device::source_sink::read_one(&source_id).await?;
             Ok(SearchRuleInfo {
                 device: device_resp,
                 source: Some(SearchSourcesOrSinksInfoResp {
@@ -147,20 +164,24 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
                                 .des
                                 .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                         },
+                        conf_type: db_source.conf_type.try_into()?,
                         ext: serde_json::from_slice(&db_source.conf).unwrap(),
+                        // TODO
+                        template_id: None,
                     },
                 }),
                 sink: None,
             })
         }
         (None, Some(sink_id)) => {
-            let db_sink = storage::source_or_sink::read_one(&sink_id).await?;
+            let db_sink = storage::device::source_sink::read_one(&sink_id).await?;
             Ok(SearchRuleInfo {
                 device: device_resp,
                 source: None,
                 sink: Some(SearchSourcesOrSinksInfoResp {
                     id: db_sink.id,
                     conf: CreateUpdateSourceOrSinkReq {
+                        conf_type: db_sink.conf_type.try_into()?,
                         base: BaseConf {
                             name: db_sink.name,
                             desc: db_sink
@@ -168,6 +189,8 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
                                 .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                         },
                         ext: serde_json::from_slice(&db_sink.conf).unwrap(),
+                        // TODO
+                        template_id: None,
                     },
                 }),
             })
@@ -258,7 +281,8 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     .await?;
     for db_source in db_sources {
         let conf: serde_json::Value = serde_json::from_slice(&db_source.conf).unwrap();
-        device.create_source(db_source.id, conf).await?;
+        // TODO
+        // device.create_source(db_source.id, conf).await?;
     }
 
     let db_sinks = storage::source_or_sink::read_all_by_parent_id(
@@ -268,7 +292,8 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     .await?;
     for db_sink in db_sinks {
         let conf: serde_json::Value = serde_json::from_slice(&db_sink.conf).unwrap();
-        device.create_sink(db_sink.id, conf).await?;
+        // TODO
+        // device.create_sink(db_sink.id, conf).await?;
     }
 
     GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);
@@ -323,16 +348,11 @@ pub async fn create_source(device_id: String, req: CreateUpdateSourceOrSinkReq) 
     let source_id = common::get_id();
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let conf = req.ext.clone();
-        device.create_source(source_id.clone(), conf).await?;
+        // TODO
+        // device.create_source(source_id.clone(), conf).await?;
     }
 
-    storage::device::source_or_sink::insert(
-        &device_id,
-        &source_id,
-        storage::SourceSinkType::Source,
-        req,
-    )
-    .await?;
+    storage::device::source_sink::insert_source(&device_id, &source_id, req).await?;
 
     Ok(())
 }
@@ -342,13 +362,8 @@ pub async fn search_sources(
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    let (count, db_sources) = storage::source_or_sink::query_by_parent_id(
-        &device_id,
-        storage::source_or_sink::Type::Source,
-        pagination,
-        query,
-    )
-    .await?;
+    let (count, db_sources) =
+        storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
     let mut data = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
         let rule_ref = RuleRef {
@@ -362,6 +377,7 @@ pub async fn search_sources(
             info: SearchSourcesOrSinksInfoResp {
                 id: db_source.id,
                 conf: CreateUpdateSourceOrSinkReq {
+                    conf_type: db_source.conf_type.try_into()?,
                     base: BaseConf {
                         name: db_source.name,
                         desc: db_source
@@ -369,6 +385,8 @@ pub async fn search_sources(
                             .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                     },
                     ext: serde_json::from_slice(&db_source.conf).unwrap(),
+                    // TODO
+                    template_id: None,
                 },
             },
             rule_ref,
@@ -391,7 +409,7 @@ pub async fn update_source(
         }
     }
 
-    storage::device::source_or_sink::update(&source_id, req).await?;
+    storage::device::source_sink::update(&source_id, req).await?;
 
     Ok(())
 }
@@ -447,16 +465,11 @@ pub async fn create_sink(device_id: String, req: CreateUpdateSourceOrSinkReq) ->
     let sink_id = common::get_id();
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let conf: serde_json::Value = req.ext.clone();
-        device.create_sink(sink_id.clone(), conf).await?;
+        // TODO
+        // device.create_sink(sink_id.clone(), conf).await?;
     }
 
-    storage::device::source_or_sink::insert(
-        &device_id,
-        &sink_id,
-        storage::SourceSinkType::Sink,
-        req,
-    )
-    .await?;
+    storage::device::source_sink::insert_sink(&device_id, &sink_id, req).await?;
 
     Ok(())
 }
@@ -466,13 +479,8 @@ pub async fn search_sinks(
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    let (count, db_sinks) = storage::source_or_sink::query_by_parent_id(
-        &device_id,
-        storage::source_or_sink::Type::Sink,
-        pagination,
-        query,
-    )
-    .await?;
+    let (count, db_sinks) =
+        storage::device::source_sink::search_sinks(&device_id, pagination, query).await?;
     let mut data = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
         let rule_ref = RuleRef {
@@ -486,6 +494,7 @@ pub async fn search_sinks(
             info: SearchSourcesOrSinksInfoResp {
                 id: db_sink.id,
                 conf: CreateUpdateSourceOrSinkReq {
+                    conf_type: db_sink.conf_type.try_into()?,
                     base: BaseConf {
                         name: db_sink.name,
                         desc: db_sink
@@ -493,6 +502,8 @@ pub async fn search_sinks(
                             .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                     },
                     ext: serde_json::from_slice(&db_sink.conf).unwrap(),
+                    // TODO
+                    template_id: None,
                 },
             },
             rule_ref,
@@ -517,7 +528,7 @@ pub async fn update_sink(
         }
     }
 
-    storage::device::source_or_sink::update(&sink_id, req).await?;
+    storage::device::source_sink::update(&sink_id, req).await?;
 
     Ok(())
 }
@@ -599,10 +610,16 @@ async fn transer_db_device_to_resp(
 
 pub async fn create_source_template(req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
     match req.device_type {
-        DeviceType::Modbus => modbus::source_template::validate(&req.ext),
+        DeviceType::Modbus => modbus::source_template::validate(&req.ext)?,
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
     }
+
+    let id = common::get_id();
+    storage::device::source_or_sink_template::insert(&id, storage::SourceSinkType::Source, req)
+        .await?;
+
+    Ok(())
 }
 
 pub async fn search_source_templates(

@@ -13,9 +13,9 @@ use types::{
 
 use super::POOL;
 
-pub mod source_or_sink;
 pub mod source_or_sink_template;
 pub mod source_or_sink_template_reference;
+pub mod source_sink;
 
 const TABLE_NAME: &str = "devices";
 

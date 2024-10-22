@@ -87,21 +87,6 @@ pub enum Encode {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub enum SourceConfType {
-    // 模板
-    Template,
-    // 自定义
-    Customize,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct CreateUpdateSourceConf {
-    pub typ: SourceConfType,
-    #[serde(flatten)]
-    pub conf: serde_json::Value,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct CreateUpdateSourceTemplateConf {
     pub slave: u8,
 }
