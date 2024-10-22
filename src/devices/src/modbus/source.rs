@@ -157,9 +157,9 @@ impl Source {
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn update(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
+    pub async fn update(&mut self, conf: SourceConf) {
         let join_handle_data = self.stop().await;
-        self.conf = new_conf;
+        self.conf = conf;
         let join_handle = Self::event_loop(join_handle_data, &self.conf);
         self.join_handle = Some(join_handle);
     }

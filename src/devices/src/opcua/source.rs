@@ -191,7 +191,7 @@ impl Source {
         }
     }
 
-    pub async fn update_conf(&mut self, old_conf: SourceConf, new_conf: SourceConf) {
+    pub async fn update_conf(&mut self, _conf: SourceConf) {
         // if self.stop_signal_tx.is_some() && restart {
         //     self.stop_signal_tx
         //         .as_ref()

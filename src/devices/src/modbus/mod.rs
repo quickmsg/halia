@@ -128,8 +128,8 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
 }
 
 pub fn validate_source_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let conf: SourceConf = serde_json::from_value(conf.clone())?;
-    Source::validate_conf(&conf)?;
+    // let conf: SourceConf = serde_json::from_value(conf.clone())?;
+    // Source::validate_conf(&conf)?;
     Ok(())
 }
 
@@ -447,17 +447,7 @@ impl Device for Modbus {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let customize_conf: SourceCustomizeConf = serde_json::from_value(customize_conf)?;
-        let template_conf: SourceTemplateConf = serde_json::from_value(template_conf)?;
-        let conf = SourceConf {
-            field: template_conf.field,
-            data_type: template_conf.data_type,
-            slave: customize_conf.slave,
-            area: template_conf.area,
-            address: template_conf.address,
-            interval: template_conf.interval,
-        };
-
+        let conf = get_source_conf(customize_conf, template_conf)?;
         let source = Source::new(
             source_id.clone(),
             conf,
@@ -468,17 +458,31 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn update_source(
+    async fn update_customize_source(
         &mut self,
         source_id: &String,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
+        conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let old_conf: SourceConf = serde_json::from_value(old_conf)?;
-        let new_conf: SourceConf = serde_json::from_value(new_conf)?;
+        let conf: SourceConf = serde_json::from_value(conf)?;
         match self.sources.get_mut(source_id) {
             Some(mut source) => {
-                source.update(old_conf, new_conf).await;
+                source.update(conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
+    }
+
+    async fn update_template_source(
+        &mut self,
+        source_id: &String,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        let conf = get_source_conf(customize_conf, template_conf)?;
+        match self.sources.get_mut(source_id) {
+            Some(mut source) => {
+                source.update(conf).await;
                 Ok(())
             }
             None => Err(HaliaError::NotFound(source_id.to_owned())),
@@ -589,4 +593,20 @@ impl Device for Modbus {
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }
+}
+
+fn get_source_conf(
+    customize_conf: serde_json::Value,
+    template_conf: serde_json::Value,
+) -> HaliaResult<SourceConf> {
+    let customize_conf: SourceCustomizeConf = serde_json::from_value(customize_conf)?;
+    let template_conf: SourceTemplateConf = serde_json::from_value(template_conf)?;
+    Ok(SourceConf {
+        field: template_conf.field,
+        data_type: template_conf.data_type,
+        slave: customize_conf.slave,
+        area: template_conf.area,
+        address: template_conf.address,
+        interval: template_conf.interval,
+    })
 }

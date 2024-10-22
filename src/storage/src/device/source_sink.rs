@@ -17,6 +17,7 @@ pub struct SourceSink {
     pub name: String,
     pub des: Option<Vec<u8>>,
     pub conf_type: i32,
+    pub template_id: Option<String>,
     pub conf: Vec<u8>,
     pub ts: i64,
 }
@@ -31,6 +32,7 @@ CREATE TABLE IF NOT EXISTS {} (
     name VARCHAR(255) NOT NULL,
     des BLOB,
     conf_type SMALLINT UNSIGNED NOT NULL,
+    template_id CHAR(32),
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
     UNIQUE (device_id, typ, name)
@@ -70,7 +72,7 @@ async fn insert(
 
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, device_id, typ, name, des, conf_type, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, device_id, typ, name, des, conf_type, template_id, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
@@ -81,6 +83,7 @@ async fn insert(
     .bind(req.base.name)
     .bind(desc)
     .bind(conf_type)
+    .bind(req.template_id)
     .bind(conf)
     .bind(ts)
     .execute(POOL.get().unwrap())
@@ -97,6 +100,54 @@ pub async fn read_one(id: &String) -> Result<SourceSink> {
     .fetch_one(POOL.get().unwrap())
     .await?;
     Ok(source_or_sink)
+}
+
+pub async fn read_sources_by_device_id(device_id: &String) -> Result<Vec<SourceSink>> {
+    read_by_device_id(SourceSinkType::Source, device_id).await
+}
+
+pub async fn read_sinks_by_device_id(device_id: &String) -> Result<Vec<SourceSink>> {
+    read_by_device_id(SourceSinkType::Sink, device_id).await
+}
+
+async fn read_by_device_id(typ: SourceSinkType, device_id: &String) -> Result<Vec<SourceSink>> {
+    let typ: i32 = typ.into();
+    let sources_sinks = sqlx::query_as::<_, SourceSink>(
+        format!(
+            "SELECT * FROM {} WHERE typ = ? AND device_id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(typ)
+    .bind(device_id)
+    .fetch_all(POOL.get().unwrap())
+    .await?;
+    Ok(sources_sinks)
+}
+
+pub async fn read_sources_by_template_id(template_id: &String) -> Result<Vec<SourceSink>> {
+    read_by_template_id(SourceSinkType::Source, template_id).await
+}
+
+pub async fn read_sinks_by_template_id(template_id: &String) -> Result<Vec<SourceSink>> {
+    read_by_template_id(SourceSinkType::Sink, template_id).await
+}
+
+async fn read_by_template_id(typ: SourceSinkType, template_id: &String) -> Result<Vec<SourceSink>> {
+    let typ: i32 = typ.into();
+    let sources_sinks = sqlx::query_as::<_, SourceSink>(
+        format!(
+            "SELECT * FROM {} WHERE typ = ? AND template_id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(typ)
+    .bind(template_id)
+    .fetch_all(POOL.get().unwrap())
+    .await?;
+    Ok(sources_sinks)
 }
 
 pub async fn search_sources(
@@ -180,15 +231,15 @@ async fn search(
     Ok((count as usize, sources_or_sinks))
 }
 
-pub async fn count_sources_by_deviec_id(device_id: &String) -> Result<usize> {
-    count_by_deviec_id(SourceSinkType::Source, device_id).await
+pub async fn count_sources_by_device_id(device_id: &String) -> Result<usize> {
+    count_by_device_id(SourceSinkType::Source, device_id).await
 }
 
-pub async fn count_sinks_by_deviec_id(device_id: &String) -> Result<usize> {
-    count_by_deviec_id(SourceSinkType::Sink, device_id).await
+pub async fn count_sinks_by_device_id(device_id: &String) -> Result<usize> {
+    count_by_device_id(SourceSinkType::Sink, device_id).await
 }
 
-async fn count_by_deviec_id(typ: SourceSinkType, device_id: &String) -> Result<usize> {
+async fn count_by_device_id(typ: SourceSinkType, device_id: &String) -> Result<usize> {
     let typ: i32 = typ.into();
     let count: i64 = sqlx::query_scalar(
         format!(

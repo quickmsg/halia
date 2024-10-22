@@ -112,84 +112,81 @@ impl Source {
         source
     }
 
-    pub async fn update_conf(
-        &mut self,
-        old_conf: SourceConf,
-        new_conf: SourceConf,
-    ) -> HaliaResult<()> {
-        match (&old_conf.method, &new_conf.method) {
-            (SourceMethod::Get, SourceMethod::Get) => {
-                let (coap_client, stop_signal_rx, token_manager, _) = self.stop_get().await;
-                let join_handle = Self::start_get(
-                    new_conf.get.unwrap(),
-                    coap_client,
-                    stop_signal_rx,
-                    token_manager,
-                )
-                .await;
-                self.join_handle = Some(join_handle);
-            }
-            (SourceMethod::Get, SourceMethod::Observe) => {
-                let (coap_client, _, token_manager, _) = self.stop_get().await;
-                self.stop_signal_tx = None;
-                self.join_handle = None;
+    pub async fn update_conf(&mut self, conf: SourceConf) -> HaliaResult<()> {
+        // match (&old_conf.method, &new_conf.method) {
+        //     (SourceMethod::Get, SourceMethod::Get) => {
+        //         let (coap_client, stop_signal_rx, token_manager, _) = self.stop_get().await;
+        //         let join_handle = Self::start_get(
+        //             new_conf.get.unwrap(),
+        //             coap_client,
+        //             stop_signal_rx,
+        //             token_manager,
+        //         )
+        //         .await;
+        //         self.join_handle = Some(join_handle);
+        //     }
+        //     (SourceMethod::Get, SourceMethod::Observe) => {
+        //         let (coap_client, _, token_manager, _) = self.stop_get().await;
+        //         self.stop_signal_tx = None;
+        //         self.join_handle = None;
 
-                let observe_conf = new_conf.observe.unwrap();
-                let token = token_manager.lock().await.acquire();
-                match Self::start_observe(
-                    &coap_client,
-                    &observe_conf,
-                    self.mb_tx.clone(),
-                    token.clone(),
-                )
-                .await
-                {
-                    Ok(observe_tx) => self.observe_tx = Some(observe_tx),
-                    Err(e) => {
-                        warn!("start observe err:{:?}", e);
-                    }
-                }
-                self.oberserve_conf = Some(observe_conf);
-                self.coap_client = Some(coap_client);
-                self.token_manager = Some(token_manager);
-                self.token = Some(token);
-            }
-            (SourceMethod::Observe, SourceMethod::Get) => {
-                self.stop_obeserve().await;
-                self.observe_tx = None;
-                let token_manager = self.token_manager.take().unwrap();
-                token_manager
-                    .lock()
-                    .await
-                    .release(self.token.take().unwrap());
+        //         let observe_conf = new_conf.observe.unwrap();
+        //         let token = token_manager.lock().await.acquire();
+        //         match Self::start_observe(
+        //             &coap_client,
+        //             &observe_conf,
+        //             self.mb_tx.clone(),
+        //             token.clone(),
+        //         )
+        //         .await
+        //         {
+        //             Ok(observe_tx) => self.observe_tx = Some(observe_tx),
+        //             Err(e) => {
+        //                 warn!("start observe err:{:?}", e);
+        //             }
+        //         }
+        //         self.oberserve_conf = Some(observe_conf);
+        //         self.coap_client = Some(coap_client);
+        //         self.token_manager = Some(token_manager);
+        //         self.token = Some(token);
+        //     }
+        //     (SourceMethod::Observe, SourceMethod::Get) => {
+        //         self.stop_obeserve().await;
+        //         self.observe_tx = None;
+        //         let token_manager = self.token_manager.take().unwrap();
+        //         token_manager
+        //             .lock()
+        //             .await
+        //             .release(self.token.take().unwrap());
 
-                let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-                self.stop_signal_tx = Some(stop_signal_tx);
-                let coap_client = self.coap_client.take().unwrap();
-                let join_handle = Self::start_get(
-                    new_conf.get.unwrap(),
-                    coap_client,
-                    stop_signal_rx,
-                    token_manager,
-                )
-                .await;
-                self.join_handle = Some(join_handle);
-            }
-            (SourceMethod::Observe, SourceMethod::Observe) => {
-                self.stop_obeserve().await;
-                let observe_conf = new_conf.observe.unwrap();
-                Self::start_observe(
-                    self.coap_client.as_ref().unwrap(),
-                    &observe_conf,
-                    self.mb_tx.clone(),
-                    self.token.as_ref().unwrap().clone(),
-                )
-                .await;
-                self.oberserve_conf = Some(observe_conf);
-            }
-        }
+        //         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+        //         self.stop_signal_tx = Some(stop_signal_tx);
+        //         let coap_client = self.coap_client.take().unwrap();
+        //         let join_handle = Self::start_get(
+        //             new_conf.get.unwrap(),
+        //             coap_client,
+        //             stop_signal_rx,
+        //             token_manager,
+        //         )
+        //         .await;
+        //         self.join_handle = Some(join_handle);
+        //     }
+        //     (SourceMethod::Observe, SourceMethod::Observe) => {
+        //         self.stop_obeserve().await;
+        //         let observe_conf = new_conf.observe.unwrap();
+        //         Self::start_observe(
+        //             self.coap_client.as_ref().unwrap(),
+        //             &observe_conf,
+        //             self.mb_tx.clone(),
+        //             self.token.as_ref().unwrap().clone(),
+        //         )
+        //         .await;
+        //         self.oberserve_conf = Some(observe_conf);
+        //     }
+        // }
+        todo!()
 
-        Ok(())
+        // Ok(())
     }
 
     pub async fn update_coap_client(&mut self, coap_client: Arc<UdpCoAPClient>) -> HaliaResult<()> {

@@ -226,17 +226,32 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn update_source(
+    async fn update_customize_source(
         &mut self,
         source_id: &String,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
+        conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let old_conf: SourceConf = serde_json::from_value(old_conf)?;
-        let new_conf: SourceConf = serde_json::from_value(new_conf)?;
+        let conf: SourceConf = serde_json::from_value(conf)?;
         match self.sources.get_mut(source_id) {
             Some(mut source) => {
-                source.update_conf(old_conf, new_conf).await;
+                source.update_conf(conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(source_id.to_string())),
+        }
+    }
+
+    async fn update_template_source(
+        &mut self,
+        source_id: &String,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        // TODO
+        let conf: SourceConf = serde_json::from_value(customize_conf)?;
+        match self.sources.get_mut(source_id) {
+            Some(mut source) => {
+                source.update_conf(conf).await;
                 Ok(())
             }
             None => Err(HaliaError::NotFound(source_id.to_string())),
