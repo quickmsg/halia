@@ -29,11 +29,11 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{trace, warn};
 use types::{
     devices::{
+        device::RunningInfo,
         modbus::{
             Area, Conf, DataType, Encode, SinkConf, SourceConf, SourceCustomizeConf,
             SourceTemplateConf, Type,
         },
-        SearchDevicesItemRunningInfo,
     },
     Value,
 };
@@ -390,8 +390,8 @@ async fn write_value(ctx: &mut Box<dyn modbus::Context>, wpe: WritePointEvent) -
 
 #[async_trait]
 impl Device for Modbus {
-    async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
-        SearchDevicesItemRunningInfo {
+    async fn read_running_info(&self) -> RunningInfo {
+        RunningInfo {
             err: self.err.read().await.clone(),
             rtt: self.rtt.load(Ordering::SeqCst),
         }

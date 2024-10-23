@@ -3,7 +3,8 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    devices::source_sink_template::CreateUpdateReq, Pagination, QuerySourcesOrSinksParams,
+    devices::device_template::source_sink::{CreateUpdateReq, QueryParams},
+    Pagination,
 };
 
 use crate::{SourceSinkType, POOL};
@@ -146,7 +147,7 @@ async fn read_by_template_id(typ: SourceSinkType, template_id: &String) -> Resul
 pub async fn search_sources(
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QueryParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     search(SourceSinkType::Source, device_id, pagination, query).await
 }
@@ -154,7 +155,7 @@ pub async fn search_sources(
 pub async fn search_sinks(
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QueryParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     search(SourceSinkType::Sink, device_id, pagination, query).await
 }
@@ -163,7 +164,7 @@ async fn search(
     typ: SourceSinkType,
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QueryParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     let typ: i32 = typ.into();
     let (limit, offset) = pagination.to_sql();

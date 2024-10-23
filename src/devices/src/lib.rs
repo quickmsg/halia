@@ -12,7 +12,7 @@ use types::{
     devices::{
         device::{
             self, source_sink, CreateUpdateReq, QueryParams, QueryRuleInfoParams, RunningInfo,
-            SearchResp,
+            SearchResp, SearchRuleInfo,
         },
         DeviceType, Summary,
     },
@@ -23,8 +23,7 @@ pub mod coap;
 pub mod device_template;
 pub mod modbus;
 pub mod opcua;
-pub mod sink_template;
-pub mod source_template;
+pub mod source_sink_template;
 
 static GLOBAL_DEVICE_MANAGER: LazyLock<DashMap<String, Box<dyn Device>>> =
     LazyLock::new(|| DashMap::new());
@@ -161,20 +160,16 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
             let db_source = storage::device::source_sink::read_one(&source_id).await?;
             Ok(SearchRuleInfo {
                 device: device_resp,
-                source: Some(SearchSourcesOrSinksInfoResp {
-                    id: db_source.id,
-                    conf: CreateUpdateSourceOrSinkReq {
-                        base: BaseConf {
-                            name: db_source.name,
-                            desc: db_source
-                                .des
-                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                        },
-                        conf_type: db_source.conf_type.try_into()?,
-                        ext: serde_json::from_slice(&db_source.conf).unwrap(),
-                        // TODO
-                        template_id: None,
+                source: Some(source_sink::CreateUpdateReq {
+                    conf_type: db_source.conf_type.try_into()?,
+                    template_id: db_source.template_id,
+                    base: BaseConf {
+                        name: db_source.name,
+                        desc: db_source
+                            .des
+                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                     },
+                    conf: serde_json::from_slice(&db_source.conf)?,
                 }),
                 sink: None,
             })
@@ -184,20 +179,16 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
             Ok(SearchRuleInfo {
                 device: device_resp,
                 source: None,
-                sink: Some(SearchSourcesOrSinksInfoResp {
-                    id: db_sink.id,
-                    conf: CreateUpdateSourceOrSinkReq {
-                        conf_type: db_sink.conf_type.try_into()?,
-                        base: BaseConf {
-                            name: db_sink.name,
-                            desc: db_sink
-                                .des
-                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                        },
-                        ext: serde_json::from_slice(&db_sink.conf).unwrap(),
-                        // TODO
-                        template_id: None,
+                sink: Some(source_sink::CreateUpdateReq {
+                    conf_type: db_sink.conf_type.try_into()?,
+                    template_id: db_sink.template_id,
+                    base: BaseConf {
+                        name: db_sink.name,
+                        desc: db_sink
+                            .des
+                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
                     },
+                    conf: serde_json::from_slice(&db_sink.conf)?,
                 }),
             })
         }
@@ -264,27 +255,19 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     let db_device = storage::device::device::read_one(&device_id).await?;
     let typ = DeviceType::try_from(db_device.device_type)?;
 
-    let device_conf: DeviceConf = DeviceConf {
-        base: BaseConf {
-            name: db_device.name,
-            desc: db_device
-                .des
-                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-        },
-        ext: serde_json::from_slice(&db_device.conf)?,
-    };
+    let device_conf: serde_json::Value = serde_json::from_slice(&db_device.conf)?;
 
     let mut device = match typ {
-        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf.ext.clone()),
-        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf.ext.clone()),
-        DeviceType::Coap => coap::new(device_id.clone(), device_conf).await?,
+        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf.clone()),
+        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf.clone()),
+        DeviceType::Coap => coap::new(device_id.clone(), device_conf.clone()).await?,
     };
 
     let db_sources = storage::device::source_sink::read_sources_by_device_id(&device_id).await?;
     for db_source in db_sources {
-        let conf_type: types::devices::SourceSinkConfType = db_source.conf_type.try_into()?;
+        let conf_type: types::devices::ConfType = db_source.conf_type.try_into()?;
         match conf_type {
-            types::devices::SourceSinkConfType::Template => match db_source.template_id {
+            types::devices::ConfType::Template => match db_source.template_id {
                 Some(template_id) => {
                     let customize_conf: serde_json::Value =
                         serde_json::from_slice(&db_source.conf)?;
@@ -297,7 +280,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
                 }
                 None => panic!("数据库数据损坏"),
             },
-            types::devices::SourceSinkConfType::Customize => {
+            types::devices::ConfType::Customize => {
                 let conf: serde_json::Value = serde_json::from_slice(&db_source.conf).unwrap();
                 device.create_customize_source(db_source.id, conf).await?;
             }
@@ -306,9 +289,9 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     let db_sinks = storage::device::source_sink::read_sinks_by_device_id(&device_id).await?;
     for db_sink in db_sinks {
-        let conf_type: types::devices::SourceSinkConfType = db_sink.conf_type.try_into()?;
+        let conf_type: types::devices::ConfType = db_sink.conf_type.try_into()?;
         match conf_type {
-            types::devices::SourceSinkConfType::Template => match db_sink.template_id {
+            types::devices::ConfType::Template => match db_sink.template_id {
                 Some(template_id) => {
                     let customize_conf: serde_json::Value = serde_json::from_slice(&db_sink.conf)?;
                     let template_conf =
@@ -320,7 +303,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
                 }
                 None => panic!("数据库数据损坏"),
             },
-            types::devices::SourceSinkConfType::Customize => {
+            types::devices::ConfType::Customize => {
                 let conf: serde_json::Value = serde_json::from_slice(&db_sink.conf).unwrap();
                 device.create_customize_sink(db_sink.id, conf).await?;
             }
@@ -368,7 +351,10 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn create_source(device_id: String, req: CreateUpdateReq) -> HaliaResult<()> {
+pub async fn create_source(
+    device_id: String,
+    req: source_sink::CreateUpdateReq,
+) -> HaliaResult<()> {
     if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }

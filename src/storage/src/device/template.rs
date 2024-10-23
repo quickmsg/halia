@@ -19,7 +19,7 @@ const TABLE_NAME: &str = "device_templates";
 #[derive(FromRow)]
 pub struct DeviceTemplate {
     pub id: String,
-    pub typ: i32,
+    pub device_type: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
@@ -31,7 +31,7 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
-    typ SMALLINT UNSIGNED NOT NULL,
+    device_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
     conf BLOB NOT NULL,

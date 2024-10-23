@@ -1,17 +1,17 @@
 use common::error::{HaliaError, HaliaResult};
 use types::{
     devices::{
-        CreateUpdateSourceOrSinkTemplateReq, DeviceType, QuerySourceOrSinkTemplateParams,
-        SearchSourcesOrSinkTemplatesItemResp, SearchSourcesOrSinkTemplatesResp,
+        source_sink_template::{CreateUpdateReq, QueryParams, SearchItemResp, SearchResp},
+        DeviceType,
     },
-    Pagination,
+    BaseConf, Pagination,
 };
 
 use crate::{modbus, GLOBAL_DEVICE_MANAGER};
 
-pub async fn create(req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
+pub async fn create(req: CreateUpdateReq) -> HaliaResult<()> {
     match req.device_type {
-        DeviceType::Modbus => modbus::source_template::validate(&req.ext)?,
+        DeviceType::Modbus => modbus::source_template::validate(&req.conf)?,
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
     }
@@ -23,39 +23,35 @@ pub async fn create(req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()>
     Ok(())
 }
 
-pub async fn search(
+pub async fn search_source_templates(
     pagination: Pagination,
-    query: QuerySourceOrSinkTemplateParams,
-) -> HaliaResult<SearchSourcesOrSinkTemplatesResp> {
-    let (count, db_sources) = storage::device::source_sink_template::search(
-        pagination,
-        storage::SourceSinkType::Source,
-        query,
-    )
-    .await?;
+    query: QueryParams,
+) -> HaliaResult<SearchResp> {
+    let (count, db_sources) =
+        storage::device::source_sink_template::search_source_templates(pagination, query).await?;
 
-    let templates: Vec<_> = db_sources
-        .into_iter()
-        .map(|x| transer_db_source_sink_template_to_resp(x))
-        .collect();
+    let mut source_templates = vec![];
+    for db_source_template in db_sources {
+        source_templates.push(transer_db_source_sink_template_to_resp(db_source_template)?);
+    }
 
-    Ok(SearchSourcesOrSinkTemplatesResp {
+    Ok(SearchResp {
         total: count,
-        data: templates,
+        data: source_templates,
     })
 }
 
-pub async fn update(id: String, req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
+pub async fn update(id: String, req: CreateUpdateReq) -> HaliaResult<()> {
     // todo validate
     let old_conf = storage::device::source_sink_template::read_conf(&id).await?;
     let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
-    if old_conf != req.ext {
+    if old_conf != req.conf {
         let sources = storage::device::source_sink::read_sources_by_template_id(&id).await?;
         for source in sources {
             if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&source.device_id) {
                 let customize_conf: serde_json::Value = serde_json::from_slice(&source.conf)?;
                 device
-                    .update_template_source(&source.id, customize_conf, req.ext.clone())
+                    .update_template_source(&source.id, customize_conf, req.conf.clone())
                     .await?;
             }
         }
@@ -73,7 +69,7 @@ pub async fn delete(id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn create_sink_template(req: CreateUpdateSourceOrSinkTemplateReq) -> HaliaResult<()> {
+pub async fn create_sink_template(req: CreateUpdateReq) -> HaliaResult<()> {
     // match req.device_type {
     //     DeviceType::Modbus => modbus::sink_template::validate(&req.ext)?,
     //     DeviceType::Opcua => todo!(),
@@ -84,14 +80,16 @@ pub async fn create_sink_template(req: CreateUpdateSourceOrSinkTemplateReq) -> H
 
 fn transer_db_source_sink_template_to_resp(
     db_template: storage::device::source_sink_template::SourceSinkTemplate,
-) -> SearchSourcesOrSinkTemplatesItemResp {
-    SearchSourcesOrSinkTemplatesItemResp {
+) -> HaliaResult<SearchItemResp> {
+    Ok(SearchItemResp {
         id: db_template.id,
-        name: db_template.name,
-        desc: db_template
-            .des
-            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-        device_type: db_template.device_type.try_into().unwrap(),
-        conf: serde_json::from_slice(&db_template.conf).unwrap(),
-    }
+        req: CreateUpdateReq {
+            device_type: db_template.device_type.try_into()?,
+            base: BaseConf {
+                name: db_template.name,
+                desc: db_template.des.map(|desc| String::from_utf8(desc).unwrap()),
+            },
+            conf: serde_json::from_slice(&db_template.conf)?,
+        },
+    })
 }

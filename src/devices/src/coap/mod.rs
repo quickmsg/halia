@@ -14,7 +14,7 @@ use tokio::sync::{broadcast, mpsc, Mutex};
 use types::{
     devices::{
         coap::{CoapConf, SinkConf, SourceConf},
-        DeviceConf, SearchDevicesItemRunningInfo,
+        device::RunningInfo,
     },
     Value,
 };
@@ -41,8 +41,8 @@ struct Coap {
     token_manager: Arc<Mutex<TokenManager>>,
 }
 
-pub async fn new(id: String, device_conf: DeviceConf) -> HaliaResult<Box<dyn Device>> {
-    let conf: CoapConf = serde_json::from_value(device_conf.ext)?;
+pub async fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn Device>> {
+    let conf: CoapConf = serde_json::from_value(conf)?;
     let coap_client = Arc::new(UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?);
 
     Ok(Box::new(Coap {
@@ -73,8 +73,8 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl Device for Coap {
-    async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
-        SearchDevicesItemRunningInfo {
+    async fn read_running_info(&self) -> RunningInfo {
+        RunningInfo {
             err: self.err.clone(),
             rtt: self.rtt,
         }

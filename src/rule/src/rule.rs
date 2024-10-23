@@ -327,12 +327,13 @@ impl Rule {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let rule_info = devices::get_rule_info(types::devices::QueryRuleInfo {
-                        device_id: source_node.device_id,
-                        source_id: Some(source_node.source_id),
-                        sink_id: None,
-                    })
-                    .await?;
+                    let rule_info =
+                        devices::get_rule_info(types::devices::device::QueryRuleInfoParams {
+                            device_id: source_node.device_id,
+                            source_id: Some(source_node.source_id),
+                            sink_id: None,
+                        })
+                        .await?;
                     read_rule_node_resp.push(ReadRuleNodeResp {
                         index: node.index,
                         data: serde_json::to_value(rule_info).unwrap(),
@@ -353,12 +354,13 @@ impl Rule {
                 }
                 NodeType::DeviceSink => {
                     let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    let rule_info = devices::get_rule_info(types::devices::QueryRuleInfo {
-                        device_id: sink_node.device_id,
-                        source_id: None,
-                        sink_id: Some(sink_node.sink_id),
-                    })
-                    .await?;
+                    let rule_info =
+                        devices::get_rule_info(types::devices::device::QueryRuleInfoParams {
+                            device_id: sink_node.device_id,
+                            source_id: None,
+                            sink_id: Some(sink_node.sink_id),
+                        })
+                        .await?;
                     read_rule_node_resp.push(ReadRuleNodeResp {
                         index: node.index,
                         data: serde_json::to_value(rule_info).unwrap(),

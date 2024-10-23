@@ -87,7 +87,21 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
     Ok(conf)
 }
 
-pub async fn search(
+pub async fn search_source_templates(
+    pagination: Pagination,
+    query: QueryParams,
+) -> Result<(usize, Vec<SourceSinkTemplate>)> {
+    search(pagination, SourceSinkType::Source, query).await
+}
+
+pub async fn search_sink_templates(
+    pagination: Pagination,
+    query: QueryParams,
+) -> Result<(usize, Vec<SourceSinkTemplate>)> {
+    search(pagination, SourceSinkType::Sink, query).await
+}
+
+async fn search(
     pagination: Pagination,
     typ: SourceSinkType,
     query: QueryParams,

@@ -1,23 +1,18 @@
 use serde::{Deserialize, Serialize};
 
-use crate::BaseConf;
+use crate::{devices::ConfType, BaseConf};
 
-use super::DeviceType;
-
-pub mod modbus;
-pub mod source_sink;
-
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct CreateUpdateReq {
-    pub device_type: DeviceType,
+    pub conf_type: ConfType,
+    pub template_id: Option<String>,
     pub base: BaseConf,
     pub conf: serde_json::Value,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    pub typ: Option<DeviceType>,
 }
 
 #[derive(Serialize)]

@@ -24,14 +24,16 @@ pub async fn search(pagination: Pagination, query_params: QueryParams) -> HaliaR
     for db_device_template in db_device_templates {
         resp_device_templates.push(SearchItemResp {
             id: db_device_template.id,
-            typ: db_device_template.typ.try_into()?,
-            base: BaseConf {
-                name: db_device_template.name,
-                desc: db_device_template
-                    .des
-                    .map(|desc| String::from_utf8(desc).unwrap()),
+            req: CreateUpdateReq {
+                device_type: db_device_template.device_type.try_into()?,
+                base: BaseConf {
+                    name: db_device_template.name,
+                    desc: db_device_template
+                        .des
+                        .map(|des| String::from_utf8(des).unwrap()),
+                },
+                conf: serde_json::from_slice(&db_device_template.conf)?,
             },
-            ext: serde_json::from_slice(&db_device_template.conf)?,
         });
     }
 

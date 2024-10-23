@@ -23,8 +23,8 @@ use tokio::{
 use tracing::{debug, warn};
 use types::{
     devices::{
+        device::RunningInfo,
         opcua::{Conf, SinkConf, SourceConf},
-        SearchDevicesItemRunningInfo,
     },
     Value,
 };
@@ -181,8 +181,8 @@ impl Opcua {
 
 #[async_trait]
 impl Device for Opcua {
-    async fn read_running_info(&self) -> SearchDevicesItemRunningInfo {
-        SearchDevicesItemRunningInfo {
+    async fn read_running_info(&self) -> RunningInfo {
+        RunningInfo {
             err: self.err.read().await.clone(),
             rtt: self.rtt.load(std::sync::atomic::Ordering::Relaxed),
         }

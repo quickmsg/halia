@@ -53,11 +53,11 @@ pub struct QueryRuleInfoParams {
     pub sink_id: Option<String>,
 }
 
-// #[derive(Serialize)]
-// pub struct SearchRuleInfo {
-//     pub device: SearchDevicesItemResp,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub source: Option<SearchSourcesOrSinksInfoResp>,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub sink: Option<SearchSourcesOrSinksInfoResp>,
-// }
+#[derive(Serialize)]
+pub struct SearchRuleInfo {
+    pub device: SearchItemResp,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<source_sink::CreateUpdateReq>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sink: Option<source_sink::CreateUpdateReq>,
+}
