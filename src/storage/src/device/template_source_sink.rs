@@ -44,21 +44,29 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert_source(id: &String, device_id: &String, req: CreateUpdateReq) -> Result<()> {
-    insert(SourceSinkType::Source, id, device_id, req).await
+pub async fn insert_source(
+    id: &String,
+    device_template_id: &String,
+    req: CreateUpdateReq,
+) -> Result<()> {
+    insert(SourceSinkType::Source, id, device_template_id, req).await
 }
 
-pub async fn insert_sink(id: &String, device_id: &String, req: CreateUpdateReq) -> Result<()> {
-    insert(SourceSinkType::Sink, id, device_id, req).await
+pub async fn insert_sink(
+    id: &String,
+    device_template_id: &String,
+    req: CreateUpdateReq,
+) -> Result<()> {
+    insert(SourceSinkType::Sink, id, device_template_id, req).await
 }
 
 async fn insert(
-    typ: SourceSinkType,
+    source_sink_type: SourceSinkType,
     id: &String,
-    device_id: &String,
+    device_template_id: &String,
     req: CreateUpdateReq,
 ) -> Result<()> {
-    let typ: i32 = typ.into();
+    let source_sink_type: i32 = source_sink_type.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf_type: i32 = req.conf_type.into();
     let conf = serde_json::to_vec(&req.conf)?;
@@ -66,14 +74,16 @@ async fn insert(
 
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, device_id, typ, name, des, conf_type, template_id, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            r#"INSERT INTO {} 
+            (id, device_template_id, source_sink_type, name, des, conf_type, template_id, conf, ts) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
-    .bind(device_id)
-    .bind(typ)
+    .bind(device_template_id)
+    .bind(source_sink_type)
     .bind(req.base.name)
     .bind(desc)
     .bind(conf_type)

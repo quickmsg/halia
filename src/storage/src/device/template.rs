@@ -87,6 +87,26 @@ pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
     Ok(conf)
 }
 
+pub async fn check_exists(id: &String) -> Result<bool> {
+    let count: i64 =
+        sqlx::query_scalar(format!("SELECT COUNT(*) FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+    Ok(count > 0)
+}
+
+pub async fn read_device_type(id: &String) -> Result<i32> {
+    let device_type: i32 =
+        sqlx::query_scalar(format!("SELECT device_type FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+    Ok(device_type)
+}
+
 pub async fn search(
     pagination: Pagination,
     query_params: QueryParams,

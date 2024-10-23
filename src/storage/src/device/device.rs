@@ -6,6 +6,7 @@ use sqlx::{
     query::{QueryAs, QueryScalar},
     Any,
 };
+use tracing::debug;
 use types::{
     devices::device::{CreateReq, QueryParams, UpdateReq},
     Pagination,
@@ -104,6 +105,7 @@ pub async fn search(
     pagination: Pagination,
     query_params: QueryParams,
 ) -> Result<(usize, Vec<Device>)> {
+    debug!("here");
     let (limit, offset) = pagination.to_sql();
     let (count, devices) = match (
         &query_params.name,
@@ -223,14 +225,14 @@ pub async fn read_name(id: &String) -> Result<String> {
     Ok(name)
 }
 
-pub async fn read_protocol(id: &String) -> Result<i32> {
-    let typ: i32 =
+pub async fn read_device_type(id: &String) -> Result<i32> {
+    let device_type: i32 =
         sqlx::query_scalar(format!("SELECT device_type FROM {} WHERE id = ?", TABLE_NAME).as_str())
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-    Ok(typ)
+    Ok(device_type)
 }
 
 pub async fn count_all() -> Result<usize> {
@@ -239,6 +241,16 @@ pub async fn count_all() -> Result<usize> {
         .await?;
 
     Ok(count as usize)
+}
+
+pub async fn read_ids_by_template_id(template_id: &String) -> Result<Vec<String>> {
+    let ids: Vec<String> =
+        sqlx::query_scalar(format!("SELECT id FROM {} WHERE template_id = ?", TABLE_NAME).as_str())
+            .bind(template_id)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
+
+    Ok(ids)
 }
 
 pub async fn update_status(id: &String, status: bool) -> Result<()> {
@@ -286,4 +298,14 @@ pub async fn update_conf(id: &String, req: UpdateReq) -> HaliaResult<()> {
 
 pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
     crate::delete_by_id(id, TABLE_NAME).await
+}
+
+pub async fn count_by_template_id(template_id: &String) -> Result<usize> {
+    let count: i64 = sqlx::query_scalar(
+        format!("SELECT COUNT(*) FROM {} WHERE template_id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(template_id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+    Ok(count as usize)
 }

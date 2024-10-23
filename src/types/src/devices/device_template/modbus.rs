@@ -4,10 +4,6 @@ use crate::devices::modbus::{DataBits, Encode, LinkType, Mode, Parity, StopBits}
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct CustomizeConf {
-    pub link_type: LinkType,
-    pub interval: u64,  // ms
-    pub reconnect: u64, // s
-
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ethernet: Option<EthernetCustomizeConf>,
 

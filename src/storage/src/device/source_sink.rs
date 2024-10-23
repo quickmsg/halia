@@ -11,7 +11,7 @@ static TABLE_NAME: &str = "device_sources_sinks";
 pub struct SourceSink {
     pub id: String,
     pub device_id: String,
-    pub typ: i32,
+    pub source_sink_type: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
     pub conf_type: i32,
@@ -234,16 +234,16 @@ pub async fn count_sinks_by_device_id(device_id: &String) -> Result<usize> {
     count_by_device_id(SourceSinkType::Sink, device_id).await
 }
 
-async fn count_by_device_id(typ: SourceSinkType, device_id: &String) -> Result<usize> {
-    let typ: i32 = typ.into();
+async fn count_by_device_id(source_sink_type: SourceSinkType, device_id: &String) -> Result<usize> {
+    let source_sink_type: i32 = source_sink_type.into();
     let count: i64 = sqlx::query_scalar(
         format!(
-            "SELECT COUNT(*) FROM {} WHERE typ = ? AND device_id = ?",
+            "SELECT COUNT(*) FROM {} WHERE source_sink_type = ? AND device_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(typ)
+    .bind(source_sink_type)
     .bind(device_id)
     .fetch_one(POOL.get().unwrap())
     .await?;

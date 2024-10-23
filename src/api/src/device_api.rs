@@ -256,7 +256,7 @@ async fn delete_sink_template(Path(id): Path<String>) -> AppResult<AppSuccess<()
 async fn create_device_template(
     Json(req): Json<types::devices::device_template::CreateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::device_template::create(req).await?;
+    devices::device_template::create_device_template(req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -264,7 +264,7 @@ async fn search_device_templates(
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::device_template::QueryParams>,
 ) -> AppResult<AppSuccess<types::devices::device_template::SearchResp>> {
-    let data = devices::device_template::search(pagination, query).await?;
+    let data = devices::device_template::search_device_templates(pagination, query).await?;
     Ok(AppSuccess::data(data))
 }
 
@@ -272,12 +272,12 @@ async fn update_device_template(
     Path(id): Path<String>,
     Json(req): Json<types::devices::device_template::UpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::device_template::update(id, req).await?;
+    devices::device_template::update_device_template(id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn delete_device_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    devices::device_template::delete(id).await?;
+    devices::device_template::delete_device_template(id).await?;
     Ok(AppSuccess::empty())
 }
 

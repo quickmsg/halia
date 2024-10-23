@@ -203,10 +203,20 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
 }
 
 pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaResult<()> {
-    match &req.device_type {
-        DeviceType::Modbus => modbus::validate_conf(&req.conf)?,
-        DeviceType::Opcua => opcua::validate_conf(&req.conf)?,
-        DeviceType::Coap => coap::validate_conf(&req.conf)?,
+    match &req.conf_type {
+        ConfType::Template => match &req.template_id {
+            Some(template_id) => {
+                if !storage::device::template::check_exists(&template_id).await? {
+                    return Err(HaliaError::Common("模板不存在".to_owned()));
+                }
+            }
+            None => return Err(HaliaError::Common("必须提供模板ID".to_owned())),
+        },
+        ConfType::Customize => match &req.device_type {
+            DeviceType::Modbus => modbus::validate_conf(&req.conf)?,
+            DeviceType::Opcua => opcua::validate_conf(&req.conf)?,
+            DeviceType::Coap => coap::validate_conf(&req.conf)?,
+        },
     }
 
     add_device_count();
@@ -376,11 +386,11 @@ pub async fn create_source(
     device_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
-    if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
+    if req.conf_type == ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let device_type: DeviceType = storage::device::device::read_protocol(&device_id)
+    let device_type: DeviceType = storage::device::device::read_device_type(&device_id)
         .await?
         .try_into()?;
     match device_type {
@@ -532,7 +542,7 @@ pub async fn create_sink(device_id: String, req: source_sink::CreateUpdateReq) -
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let device_type: DeviceType = storage::device::device::read_protocol(&device_id)
+    let device_type: DeviceType = storage::device::device::read_device_type(&device_id)
         .await?
         .try_into()?;
     match device_type {
@@ -683,6 +693,7 @@ async fn transer_db_device_to_resp(
     };
 
     Ok(device::SearchItemResp {
+        id: db_device.id,
         req: device::CreateReq {
             device_type: db_device.device_type.try_into()?,
             conf_type: db_device.conf_type.try_into()?,

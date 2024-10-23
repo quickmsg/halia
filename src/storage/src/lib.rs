@@ -46,51 +46,66 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
 
     sqlx::query(&device::source_sink_template::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
 
     sqlx::query(&device::template::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&device::template_source_sink::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&device::device::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&device::source_sink::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
 
     sqlx::query(&app::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&databoard::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&databoard::data::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&source_or_sink::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&rule::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&rule::reference::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&schema::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&schema::reference::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&user::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
     sqlx::query(&event::create_table())
         .execute(POOL.get().unwrap())
-        .await?;
+        .await
+        .unwrap();
 
     Ok(())
 }

@@ -4,8 +4,8 @@ use crate::BaseConf;
 
 use super::{ConfType, DeviceType};
 
-pub mod source_sink;
 pub mod modbus;
+pub mod source_sink;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {
@@ -40,6 +40,7 @@ pub struct SearchResp {
 
 #[derive(Serialize)]
 pub struct SearchItemResp {
+    pub id: String,
     pub req: CreateReq,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub running_info: Option<RunningInfo>,
