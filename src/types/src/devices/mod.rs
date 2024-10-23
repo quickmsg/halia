@@ -12,53 +12,53 @@ pub mod source_sink_template;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
-pub enum Protocol {
+pub enum DeviceType {
     Modbus,
     Opcua,
     Coap,
 }
 
-impl Into<i32> for Protocol {
+impl Into<i32> for DeviceType {
     fn into(self) -> i32 {
         match self {
-            Protocol::Modbus => 1,
-            Protocol::Opcua => 2,
-            Protocol::Coap => 3,
+            DeviceType::Modbus => 1,
+            DeviceType::Opcua => 2,
+            DeviceType::Coap => 3,
         }
     }
 }
 
-impl TryFrom<i32> for Protocol {
+impl TryFrom<i32> for DeviceType {
     type Error = Error;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(Protocol::Modbus),
-            2 => Ok(Protocol::Opcua),
-            3 => Ok(Protocol::Coap),
+            1 => Ok(DeviceType::Modbus),
+            2 => Ok(DeviceType::Opcua),
+            3 => Ok(DeviceType::Coap),
             _ => bail!("未知协议类型: {}", value),
         }
     }
 }
 
-impl fmt::Display for Protocol {
+impl fmt::Display for DeviceType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Protocol::Modbus => write!(f, "modbus"),
-            Protocol::Opcua => write!(f, "opcua"),
-            Protocol::Coap => write!(f, "coap"),
+            DeviceType::Modbus => write!(f, "modbus"),
+            DeviceType::Opcua => write!(f, "opcua"),
+            DeviceType::Coap => write!(f, "coap"),
         }
     }
 }
 
-impl TryFrom<&str> for Protocol {
+impl TryFrom<&str> for DeviceType {
     type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "modbus" => Ok(Protocol::Modbus),
-            "opcua" => Ok(Protocol::Opcua),
-            "coap" => Ok(Protocol::Coap),
+            "modbus" => Ok(DeviceType::Modbus),
+            "opcua" => Ok(DeviceType::Opcua),
+            "coap" => Ok(DeviceType::Coap),
             _ => bail!("未知协议类型: {}", value),
         }
     }
@@ -105,7 +105,7 @@ pub struct Summary {
 pub struct QueryParams {
     pub name: Option<String>,
     #[serde(rename = "type")]
-    pub protocol: Option<Protocol>,
+    pub device_type: Option<DeviceType>,
     pub on: Option<bool>,
     pub err: Option<bool>,
 }

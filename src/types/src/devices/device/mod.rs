@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::BaseConf;
 
-use super::{ConfType, Protocol};
+use super::{ConfType, DeviceType};
 
 pub mod source_sink;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {
-    pub protocol: Protocol,
+    pub device_type: DeviceType,
     pub conf_type: ConfType,
     pub template_id: Option<String>,
     pub base: BaseConf,
@@ -26,7 +26,7 @@ pub struct UpdateReq {
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    pub protocol: Option<Protocol>,
+    pub device_type: Option<DeviceType>,
     pub on: Option<bool>,
     pub err: Option<bool>,
 }

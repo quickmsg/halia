@@ -2,7 +2,7 @@ use common::error::{HaliaError, HaliaResult};
 use types::{
     devices::{
         source_sink_template::{CreateReq, QueryParams, SearchItemResp, SearchResp, UpdateReq},
-        Protocol,
+        DeviceType,
     },
     BaseConf, Pagination,
 };
@@ -10,10 +10,10 @@ use types::{
 use crate::{modbus, GLOBAL_DEVICE_MANAGER};
 
 pub async fn create(req: CreateReq) -> HaliaResult<()> {
-    match req.protocol {
-        Protocol::Modbus => modbus::source_template::validate(&req.conf)?,
-        Protocol::Opcua => todo!(),
-        Protocol::Coap => todo!(),
+    match req.device_type {
+        DeviceType::Modbus => modbus::source_template::validate(&req.conf)?,
+        DeviceType::Opcua => todo!(),
+        DeviceType::Coap => todo!(),
     }
 
     let id = common::get_id();
@@ -83,7 +83,7 @@ fn transer_db_source_sink_template_to_resp(
     Ok(SearchItemResp {
         id: db_template.id,
         req: CreateReq {
-            protocol: db_template.protocol.try_into()?,
+            device_type: db_template.device_type.try_into()?,
             base: BaseConf {
                 name: db_template.name,
                 desc: db_template.des.map(|desc| String::from_utf8(desc).unwrap()),

@@ -2,7 +2,7 @@ use common::error::HaliaResult;
 use types::{
     devices::{
         device_template::{self, QueryParams, SearchItemResp, SearchResp},
-        Protocol,
+        DeviceType,
     },
     BaseConf, Pagination,
 };
@@ -10,12 +10,12 @@ use types::{
 use crate::modbus;
 
 pub async fn create(req: device_template::CreateReq) -> HaliaResult<()> {
-    match &req.protocol {
-        Protocol::Modbus => modbus::template::validate_conf(req.conf.clone())?,
+    match &req.device_type {
+        DeviceType::Modbus => modbus::template::validate_conf(req.conf.clone())?,
         // DeviceType::Opcua => opcua::validate_conf(&req.conf.ext)?,
-        Protocol::Opcua => todo!(),
+        DeviceType::Opcua => todo!(),
         // DeviceType::Coap => coap::validate_conf(&req.conf.ext)?,
-        Protocol::Coap => todo!(),
+        DeviceType::Coap => todo!(),
     }
 
     let id = common::get_id();
@@ -32,7 +32,7 @@ pub async fn search(pagination: Pagination, query_params: QueryParams) -> HaliaR
         resp_device_templates.push(SearchItemResp {
             id: db_device_template.id,
             req: device_template::CreateReq {
-                protocol: db_device_template.protocol.try_into()?,
+                device_type: db_device_template.device_type.try_into()?,
                 base: BaseConf {
                     name: db_device_template.name,
                     desc: db_device_template

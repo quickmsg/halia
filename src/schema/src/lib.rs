@@ -69,8 +69,8 @@ pub async fn delete(id: String) -> HaliaResult<()> {
 }
 
 fn validate_conf(req: &CreateUpdateSchemaReq) -> HaliaResult<()> {
-    match &req.typ {
-        types::schema::SchemaType::Encode => match &req.protocol {
+    match &req.schema_type {
+        types::schema::SchemaType::Encode => match &req.protocol_type {
             types::schema::ProtocolType::Avro => todo!(),
             types::schema::ProtocolType::Protobuf => todo!(),
             types::schema::ProtocolType::Csv => todo!(),
@@ -78,7 +78,7 @@ fn validate_conf(req: &CreateUpdateSchemaReq) -> HaliaResult<()> {
                 encoders::template::validate_conf(&req.ext)?;
             }
         },
-        types::schema::SchemaType::Decode => match &req.protocol {
+        types::schema::SchemaType::Decode => match &req.protocol_type {
             types::schema::ProtocolType::Avro => {
                 decoders::avro::validate_conf(&req.ext)?;
             }
@@ -102,8 +102,8 @@ fn transfer_db_schema_to_resp(
 ) -> HaliaResult<SearchSchemasItemResp> {
     Ok(SearchSchemasItemResp {
         conf: CreateUpdateSchemaReq {
-            typ: types::schema::SchemaType::try_from(db_schema.typ)?,
-            protocol: types::schema::ProtocolType::try_from(db_schema.protocol)?,
+            schema_type: db_schema.schema_type.try_into()?,
+            protocol_type: db_schema.protocol_type.try_into()?,
             base: BaseConf {
                 name: db_schema.name,
                 desc: vec_to_string(db_schema.des),

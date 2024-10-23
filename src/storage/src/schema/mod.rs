@@ -20,9 +20,9 @@ const TABLE_NAME: &str = "halia_schemas";
 #[derive(FromRow)]
 pub struct Schema {
     pub id: String,
+    pub schema_type: i32,
+    pub protocol_type: i32,
     pub name: String,
-    pub typ: i32,
-    pub protocol: i32,
     pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,
@@ -33,9 +33,10 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
+    schema_type SMALLINT NOT NULL,
+    protocol_type SMALLINT NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
-    typ SMALLINT NOT NULL,
-    protocol SMALLINT NOT NULL,
+    device_type SMALLINT NOT NULL,
     des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
@@ -49,19 +50,17 @@ pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
     let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
-    let typ: i32 = req.typ.into();
-    let protocol: i32 = req.protocol.into();
+    let schema_type: i32 = req.schema_type.into();
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, name, typ, protocol, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, schema_type name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
+    .bind(schema_type)
     .bind(&req.base.name)
-    .bind(typ)
-    .bind(protocol)
     .bind(desc)
     .bind(conf)
     .bind(ts)
@@ -108,10 +107,10 @@ pub async fn search(
             false => where_cluase.push_str(" AND typ = ?"),
         }
     }
-    if query_params.protocol.is_some() {
+    if query_params.device_type.is_some() {
         match where_cluase.is_empty() {
-            true => where_cluase.push_str("WHERE protocol = ?"),
-            false => where_cluase.push_str(" AND protocol = ?"),
+            true => where_cluase.push_str("WHERE device_type = ?"),
+            false => where_cluase.push_str(" AND device_type = ?"),
         }
     }
 
@@ -136,10 +135,10 @@ pub async fn search(
         query_count_builder = query_count_builder.bind(typ);
         query_schemas_builder = query_schemas_builder.bind(typ);
     }
-    if let Some(protocol) = query_params.protocol {
-        let protocol: i32 = protocol.into();
-        query_count_builder = query_count_builder.bind(protocol);
-        query_schemas_builder = query_schemas_builder.bind(protocol);
+    if let Some(device_type) = query_params.device_type {
+        let device_type: i32 = device_type.into();
+        query_count_builder = query_count_builder.bind(device_type);
+        query_schemas_builder = query_schemas_builder.bind(device_type);
     }
 
     let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;

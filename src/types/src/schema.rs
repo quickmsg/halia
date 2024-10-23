@@ -5,9 +5,8 @@ use crate::BaseConf;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateSchemaReq {
-    #[serde(rename = "type")]
-    pub typ: SchemaType,
-    pub protocol: ProtocolType,
+    pub schema_type: SchemaType,
+    pub protocol_type: ProtocolType,
     pub base: BaseConf,
     pub ext: serde_json::Value,
 }
@@ -98,7 +97,7 @@ pub struct QueryParams {
     pub name: Option<String>,
     #[serde(rename = "type")]
     pub typ: Option<SchemaType>,
-    pub protocol: Option<ProtocolType>,
+    pub device_type: Option<ProtocolType>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

@@ -378,7 +378,7 @@ async fn write_value(ctx: &mut Box<dyn modbus::Context>, wpe: WritePointEvent) -
         Err(e) => match e {
             protocol::modbus::ModbusError::Transport(t) => Err(HaliaError::Io(t)),
             protocol::modbus::ModbusError::Protocol(e) => {
-                warn!("modbus protocol err :{:?}", e);
+                warn!("modbus device_type err :{:?}", e);
                 Ok(())
             }
             protocol::modbus::ModbusError::Exception(e) => {

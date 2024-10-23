@@ -18,7 +18,7 @@ const TABLE_NAME: &str = "devices";
 #[derive(FromRow)]
 pub struct Device {
     pub id: String,
-    pub protocol: i32,
+    pub device_type: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
     pub conf_type: i32,
@@ -34,7 +34,7 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
-    protocol SMALLINT UNSIGNED NOT NULL,
+    device_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
     conf_type SMALLINT UNSIGNED NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS {} (
 }
 
 pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
-    let protocol: i32 = req.protocol.into();
+    let device_type: i32 = req.device_type.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf_type: i32 = req.conf_type.into();
     let conf = serde_json::to_vec(&req.conf)?;
@@ -58,14 +58,14 @@ pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, protocol, name, des, conf_type, conf, template_id, status, err, ts) 
+(id, device_type, name, des, conf_type, conf, template_id, status, err, ts) 
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
-    .bind(protocol)
+    .bind(device_type)
     .bind(req.base.name)
     .bind(desc)
     .bind(conf_type)
@@ -107,7 +107,7 @@ pub async fn search(
     let (limit, offset) = pagination.to_sql();
     let (count, devices) = match (
         &query_params.name,
-        &query_params.protocol,
+        &query_params.device_type,
         &query_params.on,
         &query_params.err,
     ) {
@@ -140,10 +140,10 @@ pub async fn search(
                     false => where_clause.push_str(" AND name LIKE ?"),
                 }
             }
-            if query_params.protocol.is_some() {
+            if query_params.device_type.is_some() {
                 match where_clause.is_empty() {
-                    true => where_clause.push_str("WHERE protocol = ?"),
-                    false => where_clause.push_str(" AND protocol = ?"),
+                    true => where_clause.push_str("WHERE device_type = ?"),
+                    false => where_clause.push_str(" AND device_type = ?"),
                 }
             }
             if query_params.on.is_some() {
@@ -175,10 +175,10 @@ pub async fn search(
                 query_count_builder = query_count_builder.bind(name.clone());
                 query_schemas_builder = query_schemas_builder.bind(name);
             }
-            if let Some(protocol) = query_params.protocol {
-                let protocol: i32 = protocol.into();
-                query_count_builder = query_count_builder.bind(protocol);
-                query_schemas_builder = query_schemas_builder.bind(protocol);
+            if let Some(device_type) = query_params.device_type {
+                let device_type: i32 = device_type.into();
+                query_count_builder = query_count_builder.bind(device_type);
+                query_schemas_builder = query_schemas_builder.bind(device_type);
             }
             if let Some(on) = query_params.on {
                 query_count_builder = query_count_builder.bind(on as i32);
@@ -225,7 +225,7 @@ pub async fn read_name(id: &String) -> Result<String> {
 
 pub async fn read_protocol(id: &String) -> Result<i32> {
     let typ: i32 =
-        sqlx::query_scalar(format!("SELECT protocol FROM {} WHERE id = ?", TABLE_NAME).as_str())
+        sqlx::query_scalar(format!("SELECT device_type FROM {} WHERE id = ?", TABLE_NAME).as_str())
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;

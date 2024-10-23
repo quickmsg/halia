@@ -21,7 +21,7 @@ const TABLE_NAME: &str = "device_source_sink_templates";
 pub struct SourceSinkTemplate {
     pub id: String,
     pub source_sink_type: i32,
-    pub protocol: i32,
+    pub device_type: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
@@ -34,7 +34,7 @@ pub(crate) fn create_table() -> String {
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     source_sink_type SMALLINT UNSIGNED NOT NULL,
-    protocol SMALLINT UNSIGNED NOT NULL,
+    device_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
     conf BLOB NOT NULL,
@@ -51,14 +51,14 @@ pub async fn insert(
     req: CreateReq,
 ) -> HaliaResult<()> {
     let source_sink_type: i32 = source_sink_type.into();
-    let protocol: i32 = req.protocol.into();
+    let device_type: i32 = req.device_type.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis();
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, source_sink_type, protocol, name, des, conf, ts) 
+(id, source_sink_type, device_type, name, des, conf, ts) 
 VALUES (?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
@@ -66,7 +66,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?)"#,
     )
     .bind(id)
     .bind(source_sink_type)
-    .bind(protocol)
+    .bind(device_type)
     .bind(req.base.name)
     .bind(desc)
     .bind(conf)
@@ -108,7 +108,7 @@ async fn search(
 ) -> Result<(usize, Vec<SourceSinkTemplate>)> {
     let (limit, offset) = pagination.to_sql();
     let source_sink_type: i32 = source_sink_type.into();
-    let (count, templates) = match (&query.name, &query.protocol) {
+    let (count, templates) = match (&query.name, &query.device_type) {
         (None, None) => {
             let count: i64 = sqlx::query_scalar(
                 format!(
@@ -142,8 +142,8 @@ async fn search(
             if query.name.is_some() {
                 where_clause.push_str(" AND name LIKE ?");
             }
-            if query.protocol.is_some() {
-                where_clause.push_str(" AND protocol = ?");
+            if query.device_type.is_some() {
+                where_clause.push_str(" AND device_type = ?");
             }
 
             let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_clause);
@@ -165,10 +165,10 @@ async fn search(
                 query_count_builder = query_count_builder.bind(name.clone());
                 query_schemas_builder = query_schemas_builder.bind(name);
             }
-            if let Some(protocol) = query.protocol {
-                let protocol: i32 = protocol.into();
-                query_count_builder = query_count_builder.bind(protocol);
-                query_schemas_builder = query_schemas_builder.bind(protocol);
+            if let Some(device_type) = query.device_type {
+                let device_type: i32 = device_type.into();
+                query_count_builder = query_count_builder.bind(device_type);
+                query_schemas_builder = query_schemas_builder.bind(device_type);
             }
 
             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;

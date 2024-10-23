@@ -14,7 +14,7 @@ use types::{
             self, source_sink, QueryParams, QueryRuleInfoParams, RunningInfo, SearchResp,
             SearchRuleInfo,
         },
-        Protocol, Summary,
+        DeviceType, Summary,
     },
     BaseConf, Pagination, QuerySourcesOrSinksParams, RuleRef, Value,
 };
@@ -199,10 +199,10 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
 }
 
 pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaResult<()> {
-    match &req.protocol {
-        Protocol::Modbus => modbus::validate_conf(&req.conf)?,
-        Protocol::Opcua => opcua::validate_conf(&req.conf)?,
-        Protocol::Coap => coap::validate_conf(&req.conf)?,
+    match &req.device_type {
+        DeviceType::Modbus => modbus::validate_conf(&req.conf)?,
+        DeviceType::Opcua => opcua::validate_conf(&req.conf)?,
+        DeviceType::Coap => coap::validate_conf(&req.conf)?,
     }
 
     add_device_count();
@@ -253,14 +253,14 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     events::insert_start(types::events::ResourceType::Device, &device_id).await;
 
     let db_device = storage::device::device::read_one(&device_id).await?;
-    let protocol = Protocol::try_from(db_device.protocol)?;
+    let device_type = DeviceType::try_from(db_device.device_type)?;
 
     let device_conf: serde_json::Value = serde_json::from_slice(&db_device.conf)?;
 
-    let mut device = match protocol {
-        Protocol::Modbus => modbus::new(device_id.clone(), device_conf.clone()),
-        Protocol::Opcua => opcua::new(device_id.clone(), device_conf.clone()),
-        Protocol::Coap => coap::new(device_id.clone(), device_conf.clone()).await?,
+    let mut device = match device_type {
+        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf.clone()),
+        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf.clone()),
+        DeviceType::Coap => coap::new(device_id.clone(), device_conf.clone()).await?,
     };
 
     let db_sources = storage::device::source_sink::read_sources_by_device_id(&device_id).await?;
@@ -359,13 +359,13 @@ pub async fn create_source(
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let protocol: Protocol = storage::device::device::read_protocol(&device_id)
+    let device_type: DeviceType = storage::device::device::read_protocol(&device_id)
         .await?
         .try_into()?;
-    match protocol {
-        Protocol::Modbus => modbus::validate_source_conf(&req.conf)?,
-        Protocol::Opcua => opcua::validate_source_conf(&req.conf)?,
-        Protocol::Coap => coap::validate_source_conf(&req.conf)?,
+    match device_type {
+        DeviceType::Modbus => modbus::validate_source_conf(&req.conf)?,
+        DeviceType::Opcua => opcua::validate_source_conf(&req.conf)?,
+        DeviceType::Coap => coap::validate_source_conf(&req.conf)?,
     }
 
     let source_id = common::get_id();
@@ -511,13 +511,13 @@ pub async fn create_sink(device_id: String, req: source_sink::CreateUpdateReq) -
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let protocol: Protocol = storage::device::device::read_protocol(&device_id)
+    let device_type: DeviceType = storage::device::device::read_protocol(&device_id)
         .await?
         .try_into()?;
-    match protocol {
-        Protocol::Modbus => modbus::validate_sink_conf(&req.conf)?,
-        Protocol::Opcua => opcua::validate_sink_conf(&req.conf)?,
-        Protocol::Coap => coap::validate_sink_conf(&req.conf)?,
+    match device_type {
+        DeviceType::Modbus => modbus::validate_sink_conf(&req.conf)?,
+        DeviceType::Opcua => opcua::validate_sink_conf(&req.conf)?,
+        DeviceType::Coap => coap::validate_sink_conf(&req.conf)?,
     }
 
     let sink_id = common::get_id();
@@ -649,7 +649,7 @@ async fn transer_db_device_to_resp(
 
     Ok(device::SearchItemResp {
         req: device::CreateReq {
-            protocol: db_device.protocol.try_into()?,
+            device_type: db_device.device_type.try_into()?,
             conf_type: db_device.conf_type.try_into()?,
             template_id: db_device.template_id,
             base: BaseConf {
