@@ -11,7 +11,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{debug, warn};
-use types::devices::modbus::SinkConf;
+use types::devices::device::modbus::SinkConf;
 
 use super::WritePointEvent;
 
@@ -63,9 +63,9 @@ impl Sink {
         }
     }
 
-    pub async fn update(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
+    pub async fn update(&mut self, conf: SinkConf) {
         let mut join_handle_data = self.stop().await;
-        join_handle_data.conf = new_conf;
+        join_handle_data.conf = conf;
         let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
     }

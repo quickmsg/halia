@@ -4,48 +4,11 @@ use message::MessageValue;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::MessageRetain;
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct Conf {
-    pub link_type: LinkType,
-
-    // ms
-    pub interval: u64,
-    // s
-    pub reconnect: u64,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    pub ethernet: Option<Ethernet>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    pub serial: Option<Serial>,
-}
-
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum LinkType {
     Ethernet,
     Serial,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct Ethernet {
-    pub mode: Mode,
-    pub encode: Encode,
-    pub host: String,
-    pub port: u16,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct Serial {
-    pub path: String,
-    pub stop_bits: StopBits,
-    pub baud_rate: u32,
-    pub data_bits: DataBits,
-    pub parity: Parity,
 }
 
 #[derive(Deserialize_repr, Serialize_repr, Debug, Clone, PartialEq)]
@@ -84,40 +47,6 @@ pub enum Mode {
 pub enum Encode {
     Tcp,
     RtuOverTcp,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct SourceConf {
-    // 字段名称
-    pub field: String,
-    #[serde(flatten)]
-    pub data_type: DataType,
-    pub slave: u8,
-    pub area: Area,
-    pub address: u16,
-    pub interval: u64,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct SourceCustomizeConf {
-    pub slave: u8,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct SourceTemplateConf {
-    // 字段名称
-    pub field: String,
-    #[serde(flatten)]
-    pub data_type: DataType,
-    // pub slave: u8,
-    pub area: Area,
-    pub address: u16,
-    pub interval: u64,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct SinkTemplateConf {
-    // todo
 }
 
 #[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq)]
@@ -807,15 +736,4 @@ pub enum Area {
     Coils,            // bit 读写
     InputRegisters,   // 16-bit word 只读
     HoldingRegisters, // 16-bit word 读写
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct SinkConf {
-    #[serde(flatten)]
-    pub data_type: DataType,
-    pub slave: u8,
-    pub area: Area,
-    pub address: u16,
-    pub value: serde_json::Value,
-    pub message_retain: MessageRetain,
 }

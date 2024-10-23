@@ -50,7 +50,7 @@ pub fn routes() -> Router {
             Router::new()
                 .route("/", post(create_sink_template))
                 .route("/", get(search_sink_templates))
-                .route("/:id", put(update_source_template))
+                .route("/:id", put(update_sink_template))
                 .route("/:id", delete(delete_sink_template)),
         )
         .nest(
@@ -200,7 +200,7 @@ async fn delete_sink(
 async fn create_source_template(
     Json(req): Json<types::devices::source_sink_template::CreateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::source_sink_template::create(req).await?;
+    devices::source_sink_template::create_source_template(req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -216,42 +216,41 @@ async fn update_source_template(
     Path(id): Path<String>,
     Json(req): Json<types::devices::source_sink_template::UpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::source_sink_template::update(id, req).await?;
+    devices::source_sink_template::update_source_template(id, req).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn delete_source_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    devices::source_sink_template::delete(id).await?;
+    devices::source_sink_template::delete_source_template(id).await?;
     Ok(AppSuccess::empty())
 }
 
 async fn create_sink_template(
     Json(req): Json<types::devices::source_sink_template::CreateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    // devices::create_sink_template(req).await?;
-    // Ok(AppSuccess::empty())
-    todo!()
+    devices::source_sink_template::create_sink_template(req).await?;
+    Ok(AppSuccess::empty())
 }
 
-async fn search_sink_templates() -> AppResult<AppSuccess<()>> {
-    // devices::search_sink_templates().await?;
-    // Ok(AppSuccess::empty())
-    todo!()
+async fn search_sink_templates(
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<types::devices::source_sink_template::QueryParams>,
+) -> AppResult<AppSuccess<types::devices::source_sink_template::SearchResp>> {
+    let data = devices::source_sink_template::search_sink_templates(pagination, query).await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_sink_template(
     Path(id): Path<String>,
     Json(req): Json<types::devices::source_sink_template::UpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    // devices::update_sink_template(id, req).await?;
-    // Ok(AppSuccess::empty())
-    todo!()
+    devices::source_sink_template::update_sink_template(id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn delete_sink_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    // devices::delete_sink_template(id).await?;
-    // Ok(AppSuccess::empty())
-    todo!()
+    devices::source_sink_template::delete_sink_template(id).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_device_template(
@@ -273,24 +272,21 @@ async fn update_device_template(
     Path(id): Path<String>,
     Json(req): Json<types::devices::device_template::UpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::update_source_template(id, req).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::update(id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn delete_device_template(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::delete_source_template(id).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::delete(id).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_device_template_source(
     Path(device_template_id): Path<String>,
     Json(req): Json<types::devices::device_template::source_sink::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::create_device_template_source(device_template_id, req).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::create_source(device_template_id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_device_template_sources(
@@ -298,35 +294,32 @@ async fn search_device_template_sources(
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::device_template::source_sink::QueryParams>,
 ) -> AppResult<AppSuccess<types::devices::device_template::source_sink::SearchResp>> {
-    todo!()
-    // let data = devices::search_device_template_sources(device_template_id, pagination, query).await?;
-    // Ok(AppSuccess::data(data))
+    let data =
+        devices::device_template::search_sources(device_template_id, pagination, query).await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_device_template_source(
     Path((device_template_id, source_id)): Path<(String, String)>,
     Json(req): Json<types::devices::device_template::source_sink::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::update_device_template_source(device_template_id, source_id, req).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::update_source(device_template_id, source_id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn delete_device_template_source(
     Path((device_template_id, source_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::delete_device_template_source(device_template_id, source_id).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::delete_source(device_template_id, source_id).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn create_device_template_sink(
     Path(device_template_id): Path<String>,
     Json(req): Json<types::devices::device_template::source_sink::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::create_device_template_sink(device_template_id, req).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::create_sink(device_template_id, req).await?;
+    Ok(AppSuccess::data(()))
 }
 
 async fn search_device_template_sinks(
@@ -334,24 +327,22 @@ async fn search_device_template_sinks(
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::device_template::source_sink::QueryParams>,
 ) -> AppResult<AppSuccess<types::devices::device_template::source_sink::SearchResp>> {
-    todo!()
-    // let data = devices::search_device_template_sinks(device_template_id, pagination, query).await?;
-    // Ok(AppSuccess::data(data))
+    let data =
+        devices::device_template::search_sinks(device_template_id, pagination, query).await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_device_template_sink(
     Path((device_template_id, sink_id)): Path<(String, String)>,
     Json(req): Json<types::devices::device_template::source_sink::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::update_device_template_sink(device_template_id, sink_id, req).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::update_sink(device_template_id, sink_id, req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn delete_device_template_sink(
     Path((device_template_id, sink_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::delete_device_template_sink(device_template_id, sink_id).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::delete_sink(device_template_id, sink_id).await?;
+    Ok(AppSuccess::empty())
 }

@@ -4,6 +4,8 @@ use crate::BaseConf;
 
 use super::DeviceType;
 
+pub mod modbus;
+
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateReq {
     pub device_type: DeviceType,

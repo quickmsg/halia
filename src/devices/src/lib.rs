@@ -14,7 +14,7 @@ use types::{
             self, source_sink, QueryParams, QueryRuleInfoParams, RunningInfo, SearchResp,
             SearchRuleInfo,
         },
-        DeviceType, Summary,
+        ConfType, DeviceType, Summary,
     },
     BaseConf, Pagination, QuerySourcesOrSinksParams, RuleRef, Value,
 };
@@ -89,7 +89,6 @@ pub trait Device: Send + Sync {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
-
     async fn update_customize_source(
         &mut self,
         source_id: &String,
@@ -115,11 +114,16 @@ pub trait Device: Send + Sync {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
-    async fn update_sink(
+    async fn update_customize_sink(
         &mut self,
         sink_id: &String,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
+        conf: serde_json::Value,
+    ) -> HaliaResult<()>;
+    async fn update_template_sink(
+        &mut self,
+        sink_id: &String,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()>;
 
@@ -586,13 +590,27 @@ pub async fn update_sink(
     sink_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
+    if req.conf_type == ConfType::Template && req.template_id.is_none() {
+        return Err(HaliaError::Common("模板ID不能为空".to_string()));
+    }
+
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-        let old_conf = storage::source_or_sink::read_conf(&sink_id).await?;
-        let new_conf = req.conf.clone();
-        if old_conf != new_conf {
-            device
-                .update_sink(&sink_id, old_conf.clone(), new_conf.clone())
+        match req.conf_type {
+            ConfType::Template => {
+                let template_conf = storage::device::source_sink_template::read_conf(
+                    req.template_id.as_ref().unwrap(),
+                )
                 .await?;
+                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
+                device
+                    .update_template_sink(&sink_id, req.conf.clone(), template_conf)
+                    .await?;
+            }
+            ConfType::Customize => {
+                device
+                    .update_customize_sink(&sink_id, req.conf.clone())
+                    .await?;
+            }
         }
     }
 

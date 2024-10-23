@@ -9,9 +9,9 @@ use types::{
 
 use crate::{modbus, GLOBAL_DEVICE_MANAGER};
 
-pub async fn create(req: CreateReq) -> HaliaResult<()> {
+pub async fn create_source_template(req: CreateReq) -> HaliaResult<()> {
     match req.device_type {
-        DeviceType::Modbus => modbus::source_template::validate(&req.conf)?,
+        DeviceType::Modbus => modbus::template::validate_source_template_conf(req.conf.clone())?,
         DeviceType::Opcua => todo!(),
         DeviceType::Coap => todo!(),
     }
@@ -41,7 +41,7 @@ pub async fn search_source_templates(
     })
 }
 
-pub async fn update(id: String, req: UpdateReq) -> HaliaResult<()> {
+pub async fn update_source_template(id: String, req: UpdateReq) -> HaliaResult<()> {
     let old_conf = storage::device::source_sink_template::read_conf(&id).await?;
     let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
     if old_conf != req.conf {
@@ -60,7 +60,7 @@ pub async fn update(id: String, req: UpdateReq) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn delete(id: String) -> HaliaResult<()> {
+pub async fn delete_source_template(id: String) -> HaliaResult<()> {
     if storage::device::source_sink::count_by_template_id(&id).await? > 0 {
         return Err(HaliaError::DeleteRefing);
     }
@@ -69,12 +69,60 @@ pub async fn delete(id: String) -> HaliaResult<()> {
 }
 
 pub async fn create_sink_template(req: CreateReq) -> HaliaResult<()> {
-    // match req.device_type {
-    //     DeviceType::Modbus => modbus::sink_template::validate(&req.ext)?,
-    //     DeviceType::Opcua => todo!(),
-    //     DeviceType::Coap => todo!(),
-    // }
-    todo!()
+    match req.device_type {
+        DeviceType::Modbus => modbus::template::validate_sink_template_conf(req.conf.clone())?,
+        DeviceType::Opcua => todo!(),
+        DeviceType::Coap => todo!(),
+    }
+
+    let id = common::get_id();
+    storage::device::source_sink_template::insert(&id, storage::SourceSinkType::Sink, req).await?;
+    Ok(())
+}
+
+pub async fn search_sink_templates(
+    pagination: Pagination,
+    query: QueryParams,
+) -> HaliaResult<SearchResp> {
+    let (count, db_sinks) =
+        storage::device::source_sink_template::search_sink_templates(pagination, query).await?;
+
+    let mut sink_templates = vec![];
+    for db_sink_template in db_sinks {
+        sink_templates.push(transer_db_source_sink_template_to_resp(db_sink_template)?);
+    }
+
+    Ok(SearchResp {
+        total: count,
+        data: sink_templates,
+    })
+}
+
+pub async fn update_sink_template(id: String, req: UpdateReq) -> HaliaResult<()> {
+    let old_conf = storage::device::source_sink_template::read_conf(&id).await?;
+    let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
+    if old_conf != req.conf {
+        let sinks = storage::device::source_sink::read_sinks_by_template_id(&id).await?;
+        for sink in sinks {
+            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&sink.device_id) {
+                let customize_conf: serde_json::Value = serde_json::from_slice(&sink.conf)?;
+                device
+                    .update_template_sink(&sink.id, customize_conf, req.conf.clone())
+                    .await?;
+            }
+        }
+    }
+
+    storage::device::source_sink_template::update(&id, req).await?;
+    Ok(())
+}
+
+pub async fn delete_sink_template(id: String) -> HaliaResult<()> {
+    if storage::device::source_sink::count_by_template_id(&id).await? > 0 {
+        return Err(HaliaError::DeleteRefing);
+    }
+    storage::device::source_sink_template::delete_by_id(&id).await?;
+    Ok(())
 }
 
 fn transer_db_source_sink_template_to_resp(

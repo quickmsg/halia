@@ -13,7 +13,7 @@ use tokio::{
     time,
 };
 use tracing::warn;
-use types::devices::modbus::{Area, SourceConf};
+use types::devices::{device::modbus::SourceConf, modbus::Area};
 
 pub struct Source {
     pub conf: SourceConf,

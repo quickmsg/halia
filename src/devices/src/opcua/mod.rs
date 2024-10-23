@@ -295,21 +295,37 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn update_sink(
+    async fn update_customize_sink(
         &mut self,
         sink_id: &String,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
+        conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let old_conf: SinkConf = serde_json::from_value(old_conf)?;
-        let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-        match self.sinks.get_mut(sink_id) {
-            Some(mut sink) => {
-                sink.update_conf(old_conf, new_conf).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(sink_id.to_string())),
-        }
+        // let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+        // match self.sinks.get_mut(sink_id) {
+        //     Some(mut sink) => {
+        //         sink.update_conf(old_conf, new_conf).await;
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound(sink_id.to_string())),
+        // }
+        todo!()
+    }
+
+    async fn update_template_sink(
+        &mut self,
+        sink_id: &String,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        // let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+        // match self.sinks.get_mut(sink_id) {
+        //     Some(mut sink) => {
+        //         sink.update_conf(old_conf, new_conf).await;
+        //         Ok(())
+        //     }
+        //     None => Err(HaliaError::NotFound(sink_id.to_string())),
+        // }
+        todo!()
     }
 
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()> {

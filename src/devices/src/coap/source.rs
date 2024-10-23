@@ -95,7 +95,7 @@ impl Source {
             SourceMethod::Observe => {
                 let observe_conf = conf.observe.unwrap();
                 let token = token_manager.lock().await.acquire();
-                Self::start_observe(
+                let _ = Self::start_observe(
                     &coap_client,
                     &observe_conf,
                     source.mb_tx.clone(),

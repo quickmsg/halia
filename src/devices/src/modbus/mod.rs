@@ -29,10 +29,13 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{trace, warn};
 use types::{
     devices::{
-        device::RunningInfo,
-        modbus::{
-            Area, Conf, DataType, Encode, SinkConf, SourceConf, SourceCustomizeConf,
-            SourceTemplateConf, Type,
+        device::{
+            modbus::{Conf, SinkConf, SourceConf},
+            RunningInfo,
+        },
+        modbus::{Area, DataType, Encode, Type},
+        source_sink_template::modbus::{
+            SinkCustomizeConf, SinkTemplateConf, SourceCustomizeConf, SourceTemplateConf,
         },
     },
     Value,
@@ -41,9 +44,7 @@ use types::{
 use crate::{add_device_running_count, sub_device_running_count, Device};
 
 mod sink;
-pub(crate) mod sink_template;
 mod source;
-pub(crate) mod source_template;
 pub(crate) mod template;
 
 struct Modbus {
@@ -552,17 +553,31 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn update_sink(
+    async fn update_customize_sink(
         &mut self,
         sink_id: &String,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
+        conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let old_conf: SinkConf = serde_json::from_value(old_conf)?;
-        let new_conf: SinkConf = serde_json::from_value(new_conf)?;
+        let conf: SinkConf = serde_json::from_value(conf)?;
         match self.sinks.get_mut(sink_id) {
             Some(mut sink) => {
-                sink.update(old_conf, new_conf).await;
+                sink.update(conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
+    }
+
+    async fn update_template_sink(
+        &mut self,
+        sink_id: &String,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        let conf = get_sink_conf(customize_conf, template_conf)?;
+        match self.sinks.get_mut(sink_id) {
+            Some(mut sink) => {
+                sink.update(conf).await;
                 Ok(())
             }
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
@@ -604,11 +619,27 @@ fn get_source_conf(
     let customize_conf: SourceCustomizeConf = serde_json::from_value(customize_conf)?;
     let template_conf: SourceTemplateConf = serde_json::from_value(template_conf)?;
     Ok(SourceConf {
+        slave: customize_conf.slave,
         field: template_conf.field,
         data_type: template_conf.data_type,
-        slave: customize_conf.slave,
         area: template_conf.area,
         address: template_conf.address,
         interval: template_conf.interval,
+    })
+}
+
+fn get_sink_conf(
+    customize_conf: serde_json::Value,
+    template_conf: serde_json::Value,
+) -> HaliaResult<SinkConf> {
+    let customize_conf: SinkCustomizeConf = serde_json::from_value(customize_conf)?;
+    let template_conf: SinkTemplateConf = serde_json::from_value(template_conf)?;
+    Ok(SinkConf {
+        slave: customize_conf.slave,
+        data_type: template_conf.data_type,
+        area: template_conf.area,
+        address: template_conf.address,
+        value: template_conf.value,
+        message_retain: template_conf.message_retain,
     })
 }
