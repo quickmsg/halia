@@ -44,6 +44,7 @@ mod sink;
 pub(crate) mod sink_template;
 mod source;
 pub(crate) mod source_template;
+pub(crate) mod template;
 
 struct Modbus {
     sources: Arc<DashMap<String, Source>>,

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::BaseConf;
 
-use super::{ConfType, DeviceType};
+use super::DeviceType;
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateReq {

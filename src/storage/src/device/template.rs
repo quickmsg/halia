@@ -92,14 +92,19 @@ pub async fn search(
     query_params: QueryParams,
 ) -> Result<(usize, Vec<DeviceTemplate>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, devices) = match (&query_params.name, &query_params.typ) {
+    let (count, devices) = match (&query_params.name, &query_params.device_type) {
         (None, None) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
-                .fetch_one(POOL.get().unwrap())
-                .await?;
+            let count: i64 =
+                sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
+                    .fetch_one(POOL.get().unwrap())
+                    .await?;
 
             let devices = sqlx::query_as::<_, DeviceTemplate>(
-                "SELECT * FROM devices ORDER BY ts DESC LIMIT ? OFFSET ?",
+                format!(
+                    "SELECT * FROM {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    TABLE_NAME
+                )
+                .as_str(),
             )
             .bind(limit)
             .bind(offset)
@@ -117,10 +122,10 @@ pub async fn search(
                     false => where_clause.push_str(" AND name LIKE ?"),
                 }
             }
-            if query_params.typ.is_some() {
+            if query_params.device_type.is_some() {
                 match where_clause.is_empty() {
-                    true => where_clause.push_str("WHERE typ = ?"),
-                    false => where_clause.push_str(" AND typ = ?"),
+                    true => where_clause.push_str("WHERE device_type = ?"),
+                    false => where_clause.push_str(" AND device_type = ?"),
                 }
             }
 
@@ -140,10 +145,10 @@ pub async fn search(
                 query_count_builder = query_count_builder.bind(name.clone());
                 query_schemas_builder = query_schemas_builder.bind(name);
             }
-            if let Some(typ) = query_params.typ {
-                let typ: i32 = typ.into();
-                query_count_builder = query_count_builder.bind(typ);
-                query_schemas_builder = query_schemas_builder.bind(typ);
+            if let Some(device_type) = query_params.device_type {
+                let device_type: i32 = device_type.into();
+                query_count_builder = query_count_builder.bind(device_type);
+                query_schemas_builder = query_schemas_builder.bind(device_type);
             }
 
             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;

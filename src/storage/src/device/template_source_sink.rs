@@ -15,7 +15,7 @@ static TABLE_NAME: &str = "device_template_sources_sinks";
 pub struct SourceSink {
     pub id: String,
     pub device_tempalate_id: String,
-    pub typ: i32,
+    pub source_sink_type: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
     pub conf_type: i32,
@@ -30,14 +30,14 @@ pub(crate) fn create_table() -> String {
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     device_template_id CHAR(32) NOT NULL,
-    typ SMALLINT UNSIGNED NOT NULL,
+    source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     des BLOB,
     conf_type SMALLINT UNSIGNED NOT NULL,
     template_id CHAR(32),
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
-    UNIQUE (device_id, typ, name)
+    UNIQUE (device_template_id, source_sink_type, name)
 );
 "#,
         TABLE_NAME

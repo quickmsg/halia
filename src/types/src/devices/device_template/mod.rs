@@ -17,7 +17,7 @@ pub struct CreateUpdateReq {
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct QueryParams {
     pub name: Option<String>,
-    pub typ: Option<DeviceType>,
+    pub device_type: Option<DeviceType>,
 }
 
 #[derive(Serialize)]

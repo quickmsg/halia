@@ -103,28 +103,28 @@ pub async fn search_sink_templates(
 
 async fn search(
     pagination: Pagination,
-    typ: SourceSinkType,
+    source_sink_type: SourceSinkType,
     query: QueryParams,
 ) -> Result<(usize, Vec<SourceSinkTemplate>)> {
     let (limit, offset) = pagination.to_sql();
-    let typ: i32 = typ.into();
+    let source_sink_type: i32 = source_sink_type.into();
     let (count, templates) = match (&query.name, &query.device_type) {
         (None, None) => {
             let count: i64 = sqlx::query_scalar(
-                format!("SELECT COUNT(*) FROM {} WHERE typ = ?", TABLE_NAME).as_str(),
+                format!("SELECT COUNT(*) FROM {} WHERE source_sink_type = ?", TABLE_NAME).as_str(),
             )
-            .bind(typ)
+            .bind(source_sink_type)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let devices = sqlx::query_as::<_, SourceSinkTemplate>(
                 format!(
-                    "SELECT * FROM {} WHERE typ = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    "SELECT * FROM {} WHERE source_sink_type = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
                 )
                 .as_str(),
             )
-            .bind(typ)
+            .bind(source_sink_type)
             .bind(limit)
             .bind(offset)
             .fetch_all(POOL.get().unwrap())
@@ -133,7 +133,7 @@ async fn search(
             (count, devices)
         }
         _ => {
-            let mut where_clause = String::from("WHERE typ = ?");
+            let mut where_clause = String::from("WHERE source_sink_type = ?");
 
             if query.name.is_some() {
                 where_clause.push_str(" AND name LIKE ?");
@@ -153,8 +153,8 @@ async fn search(
             let mut query_schemas_builder: QueryAs<'_, Any, SourceSinkTemplate, AnyArguments> =
                 sqlx::query_as::<_, SourceSinkTemplate>(&query_schemas_str);
 
-            query_count_builder = query_count_builder.bind(typ);
-            query_schemas_builder = query_schemas_builder.bind(typ);
+            query_count_builder = query_count_builder.bind(source_sink_type);
+            query_schemas_builder = query_schemas_builder.bind(source_sink_type);
 
             if let Some(name) = query.name {
                 let name = format!("%{}%", name);

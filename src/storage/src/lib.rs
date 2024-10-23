@@ -44,16 +44,20 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
     let pool = AnyPool::connect_with(opt).await?;
     POOL.set(pool).unwrap();
 
-    sqlx::query(&device::device::create_table())
-        .execute(POOL.get().unwrap())
-        .await?;
     sqlx::query(&device::source_sink_template::create_table())
         .execute(POOL.get().unwrap())
         .await?;
-    sqlx::query(&device::source_sink::create_table())
+
+    sqlx::query(&device::template::create_table())
         .execute(POOL.get().unwrap())
         .await?;
-    sqlx::query(&device::template::create_table())
+    sqlx::query(&device::template_source_sink::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&device::device::create_table())
+        .execute(POOL.get().unwrap())
+        .await?;
+    sqlx::query(&device::source_sink::create_table())
         .execute(POOL.get().unwrap())
         .await?;
 

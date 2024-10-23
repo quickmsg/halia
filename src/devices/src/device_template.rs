@@ -1,17 +1,24 @@
 use common::error::HaliaResult;
 use types::{
-    devices::device_template::{CreateUpdateReq, QueryParams, SearchItemResp, SearchResp},
+    devices::{
+        device_template::{CreateUpdateReq, QueryParams, SearchItemResp, SearchResp},
+        DeviceType,
+    },
     BaseConf, Pagination,
 };
 
-pub async fn create(id: String, req: CreateUpdateReq) -> HaliaResult<()> {
-    // TODO validate
-    // match &req.typ {
-    //     DeviceType::Modbus => modbus::validate_conf(&req.conf.ext)?,
-    //     DeviceType::Opcua => opcua::validate_conf(&req.conf.ext)?,
-    //     DeviceType::Coap => coap::validate_conf(&req.conf.ext)?,
-    // }
+use crate::modbus;
 
+pub async fn create(req: CreateUpdateReq) -> HaliaResult<()> {
+    match &req.device_type {
+        DeviceType::Modbus => modbus::template::validate_conf(req.conf.clone())?,
+        // DeviceType::Opcua => opcua::validate_conf(&req.conf.ext)?,
+        DeviceType::Opcua => todo!(),
+        // DeviceType::Coap => coap::validate_conf(&req.conf.ext)?,
+        DeviceType::Coap => todo!(),
+    }
+
+    let id = common::get_id();
     storage::device::template::insert(&id, req).await?;
 
     Ok(())

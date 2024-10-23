@@ -1,30 +1,18 @@
 use serde::{Deserialize, Serialize};
 
-use crate::devices::modbus::{DataBits, Encode, Mode, Parity, StopBits};
+use crate::devices::modbus::{DataBits, Encode, LinkType, Mode, Parity, StopBits};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Conf {
     pub link_type: LinkType,
-
-    // ms
-    pub interval: u64,
-    // s
-    pub reconnect: u64,
+    pub interval: u64,  // ms
+    pub reconnect: u64, // s
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
     pub ethernet: Option<Ethernet>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
     pub serial: Option<Serial>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum LinkType {
-    Ethernet,
-    Serial,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

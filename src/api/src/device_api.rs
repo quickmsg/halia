@@ -257,18 +257,16 @@ async fn delete_sink_template(Path(id): Path<String>) -> AppResult<AppSuccess<()
 async fn create_device_template(
     Json(req): Json<types::devices::device_template::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    todo!()
-    // devices::create_source_template(req).await?;
-    // Ok(AppSuccess::empty())
+    devices::device_template::create(req).await?;
+    Ok(AppSuccess::empty())
 }
 
 async fn search_device_templates(
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::device_template::QueryParams>,
 ) -> AppResult<AppSuccess<types::devices::device_template::SearchResp>> {
-    todo!()
-    // let data = devices::search_source_templates(pagination, query).await?;
-    // Ok(AppSuccess::data(data))
+    let data = devices::device_template::search(pagination, query).await?;
+    Ok(AppSuccess::data(data))
 }
 
 async fn update_device_template(
