@@ -88,7 +88,7 @@ async fn get_devices_summary() -> AppSuccess<Summary> {
 }
 
 async fn create_device(
-    Json(req): Json<types::devices::device::CreateUpdateReq>,
+    Json(req): Json<types::devices::device::CreateReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::create_device(common::get_id(), req).await?;
     Ok(AppSuccess::empty())
@@ -104,7 +104,7 @@ async fn search_devices(
 
 async fn update_device(
     Path(device_id): Path<String>,
-    Json(req): Json<types::devices::device::CreateUpdateReq>,
+    Json(req): Json<types::devices::device::UpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::update_device(device_id, req).await?;
     Ok(AppSuccess::empty())
@@ -198,7 +198,7 @@ async fn delete_sink(
 }
 
 async fn create_source_template(
-    Json(req): Json<types::devices::source_sink_template::CreateUpdateReq>,
+    Json(req): Json<types::devices::source_sink_template::CreateReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::source_sink_template::create(req).await?;
     Ok(AppSuccess::empty())
@@ -214,7 +214,7 @@ async fn search_source_templates(
 
 async fn update_source_template(
     Path(id): Path<String>,
-    Json(req): Json<types::devices::source_sink_template::CreateUpdateReq>,
+    Json(req): Json<types::devices::source_sink_template::UpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::source_sink_template::update(id, req).await?;
     Ok(AppSuccess::empty())
@@ -226,7 +226,7 @@ async fn delete_source_template(Path(id): Path<String>) -> AppResult<AppSuccess<
 }
 
 async fn create_sink_template(
-    Json(req): Json<types::devices::source_sink_template::CreateUpdateReq>,
+    Json(req): Json<types::devices::source_sink_template::CreateReq>,
 ) -> AppResult<AppSuccess<()>> {
     // devices::create_sink_template(req).await?;
     // Ok(AppSuccess::empty())
@@ -241,7 +241,7 @@ async fn search_sink_templates() -> AppResult<AppSuccess<()>> {
 
 async fn update_sink_template(
     Path(id): Path<String>,
-    Json(req): Json<types::devices::source_sink_template::CreateUpdateReq>,
+    Json(req): Json<types::devices::source_sink_template::UpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
     // devices::update_sink_template(id, req).await?;
     // Ok(AppSuccess::empty())
@@ -255,7 +255,7 @@ async fn delete_sink_template(Path(id): Path<String>) -> AppResult<AppSuccess<()
 }
 
 async fn create_device_template(
-    Json(req): Json<types::devices::device_template::CreateUpdateReq>,
+    Json(req): Json<types::devices::device_template::CreateReq>,
 ) -> AppResult<AppSuccess<()>> {
     devices::device_template::create(req).await?;
     Ok(AppSuccess::empty())
@@ -271,7 +271,7 @@ async fn search_device_templates(
 
 async fn update_device_template(
     Path(id): Path<String>,
-    Json(req): Json<types::devices::device_template::CreateUpdateReq>,
+    Json(req): Json<types::devices::device_template::UpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
     todo!()
     // devices::update_source_template(id, req).await?;

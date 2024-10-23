@@ -2,11 +2,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::BaseConf;
 
-use super::DeviceType;
+use super::Protocol;
 
 #[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateReq {
-    pub device_type: DeviceType,
+pub struct CreateReq {
+    pub protocol: Protocol,
+    pub base: BaseConf,
+    pub conf: serde_json::Value,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct UpdateReq {
     pub base: BaseConf,
     pub conf: serde_json::Value,
 }
@@ -14,7 +20,7 @@ pub struct CreateUpdateReq {
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    pub device_type: Option<DeviceType>,
+    pub protocol: Option<Protocol>,
 }
 
 #[derive(Serialize)]
@@ -26,5 +32,5 @@ pub struct SearchResp {
 #[derive(Serialize)]
 pub struct SearchItemResp {
     pub id: String,
-    pub req: CreateUpdateReq,
+    pub req: CreateReq,
 }

@@ -11,10 +11,10 @@ use tokio::sync::{broadcast, mpsc};
 use types::{
     devices::{
         device::{
-            self, source_sink, CreateUpdateReq, QueryParams, QueryRuleInfoParams, RunningInfo,
-            SearchResp, SearchRuleInfo,
+            self, source_sink, QueryParams, QueryRuleInfoParams, RunningInfo, SearchResp,
+            SearchRuleInfo,
         },
-        DeviceType, Summary,
+        Protocol, Summary,
     },
     BaseConf, Pagination, QuerySourcesOrSinksParams, RuleRef, Value,
 };
@@ -198,11 +198,11 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
     }
 }
 
-pub async fn create_device(device_id: String, req: CreateUpdateReq) -> HaliaResult<()> {
-    match &req.device_type {
-        DeviceType::Modbus => modbus::validate_conf(&req.conf)?,
-        DeviceType::Opcua => opcua::validate_conf(&req.conf)?,
-        DeviceType::Coap => coap::validate_conf(&req.conf)?,
+pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaResult<()> {
+    match &req.protocol {
+        Protocol::Modbus => modbus::validate_conf(&req.conf)?,
+        Protocol::Opcua => opcua::validate_conf(&req.conf)?,
+        Protocol::Coap => coap::validate_conf(&req.conf)?,
     }
 
     add_device_count();
@@ -228,7 +228,7 @@ pub async fn search_devices(
     })
 }
 
-pub async fn update_device(device_id: String, req: CreateUpdateReq) -> HaliaResult<()> {
+pub async fn update_device(device_id: String, req: device::UpdateReq) -> HaliaResult<()> {
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
         let old_conf = storage::device::device::read_conf(&device_id).await?;
         let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
@@ -253,14 +253,14 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     events::insert_start(types::events::ResourceType::Device, &device_id).await;
 
     let db_device = storage::device::device::read_one(&device_id).await?;
-    let typ = DeviceType::try_from(db_device.device_type)?;
+    let protocol = Protocol::try_from(db_device.protocol)?;
 
     let device_conf: serde_json::Value = serde_json::from_slice(&db_device.conf)?;
 
-    let mut device = match typ {
-        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf.clone()),
-        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf.clone()),
-        DeviceType::Coap => coap::new(device_id.clone(), device_conf.clone()).await?,
+    let mut device = match protocol {
+        Protocol::Modbus => modbus::new(device_id.clone(), device_conf.clone()),
+        Protocol::Opcua => opcua::new(device_id.clone(), device_conf.clone()),
+        Protocol::Coap => coap::new(device_id.clone(), device_conf.clone()).await?,
     };
 
     let db_sources = storage::device::source_sink::read_sources_by_device_id(&device_id).await?;
@@ -359,13 +359,13 @@ pub async fn create_source(
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let typ: DeviceType = storage::device::device::read_type(&device_id)
+    let protocol: Protocol = storage::device::device::read_protocol(&device_id)
         .await?
         .try_into()?;
-    match typ {
-        DeviceType::Modbus => modbus::validate_source_conf(&req.conf)?,
-        DeviceType::Opcua => opcua::validate_source_conf(&req.conf)?,
-        DeviceType::Coap => coap::validate_source_conf(&req.conf)?,
+    match protocol {
+        Protocol::Modbus => modbus::validate_source_conf(&req.conf)?,
+        Protocol::Opcua => opcua::validate_source_conf(&req.conf)?,
+        Protocol::Coap => coap::validate_source_conf(&req.conf)?,
     }
 
     let source_id = common::get_id();
@@ -511,12 +511,13 @@ pub async fn create_sink(device_id: String, req: source_sink::CreateUpdateReq) -
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let typ = storage::device::device::read_type(&device_id).await?;
-    let typ: DeviceType = typ.try_into()?;
-    match typ {
-        DeviceType::Modbus => modbus::validate_sink_conf(&req.conf)?,
-        DeviceType::Opcua => opcua::validate_sink_conf(&req.conf)?,
-        DeviceType::Coap => coap::validate_sink_conf(&req.conf)?,
+    let protocol: Protocol = storage::device::device::read_protocol(&device_id)
+        .await?
+        .try_into()?;
+    match protocol {
+        Protocol::Modbus => modbus::validate_sink_conf(&req.conf)?,
+        Protocol::Opcua => opcua::validate_sink_conf(&req.conf)?,
+        Protocol::Coap => coap::validate_sink_conf(&req.conf)?,
     }
 
     let sink_id = common::get_id();
@@ -647,8 +648,8 @@ async fn transer_db_device_to_resp(
     };
 
     Ok(device::SearchItemResp {
-        req: CreateUpdateReq {
-            device_type: db_device.device_type.try_into()?,
+        req: device::CreateReq {
+            protocol: db_device.protocol.try_into()?,
             conf_type: db_device.conf_type.try_into()?,
             template_id: db_device.template_id,
             base: BaseConf {

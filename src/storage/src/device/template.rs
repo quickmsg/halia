@@ -8,7 +8,7 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::device_template::{CreateUpdateReq, QueryParams},
+    devices::device_template::{CreateReq, QueryParams, UpdateReq},
     Pagination,
 };
 
@@ -19,7 +19,7 @@ const TABLE_NAME: &str = "device_templates";
 #[derive(FromRow)]
 pub struct DeviceTemplate {
     pub id: String,
-    pub device_type: i32,
+    pub protocol: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
@@ -31,7 +31,7 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
-    device_type SMALLINT UNSIGNED NOT NULL,
+    protocol SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     des BLOB,
     conf BLOB NOT NULL,
@@ -42,20 +42,20 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert(id: &String, req: CreateUpdateReq) -> HaliaResult<()> {
+pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis();
-    let device_type: i32 = req.device_type.into();
+    let protocol: i32 = req.protocol.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, device_type, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, protocol, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
-    .bind(device_type)
+    .bind(protocol)
     .bind(req.base.name)
     .bind(desc)
     .bind(conf)
@@ -92,7 +92,7 @@ pub async fn search(
     query_params: QueryParams,
 ) -> Result<(usize, Vec<DeviceTemplate>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, devices) = match (&query_params.name, &query_params.device_type) {
+    let (count, devices) = match (&query_params.name, &query_params.protocol) {
         (None, None) => {
             let count: i64 =
                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
@@ -122,10 +122,10 @@ pub async fn search(
                     false => where_clause.push_str(" AND name LIKE ?"),
                 }
             }
-            if query_params.device_type.is_some() {
+            if query_params.protocol.is_some() {
                 match where_clause.is_empty() {
-                    true => where_clause.push_str("WHERE device_type = ?"),
-                    false => where_clause.push_str(" AND device_type = ?"),
+                    true => where_clause.push_str("WHERE protocol = ?"),
+                    false => where_clause.push_str(" AND protocol = ?"),
                 }
             }
 
@@ -145,10 +145,10 @@ pub async fn search(
                 query_count_builder = query_count_builder.bind(name.clone());
                 query_schemas_builder = query_schemas_builder.bind(name);
             }
-            if let Some(device_type) = query_params.device_type {
-                let device_type: i32 = device_type.into();
-                query_count_builder = query_count_builder.bind(device_type);
-                query_schemas_builder = query_schemas_builder.bind(device_type);
+            if let Some(protocol) = query_params.protocol {
+                let protocol: i32 = protocol.into();
+                query_count_builder = query_count_builder.bind(protocol);
+                query_schemas_builder = query_schemas_builder.bind(protocol);
             }
 
             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
@@ -165,41 +165,22 @@ pub async fn search(
     Ok((count as usize, devices))
 }
 
-pub async fn read_on() -> Result<Vec<DeviceTemplate>> {
-    let devices = sqlx::query_as::<_, DeviceTemplate>("SELECT * FROM devices WHERE status = 1")
-        .fetch_all(POOL.get().unwrap())
-        .await?;
-
-    Ok(devices)
-}
-
-pub async fn read_type(id: &String) -> Result<i32> {
-    let typ: i32 = sqlx::query_scalar("SELECT typ FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(typ)
-}
-
-pub async fn count_all() -> Result<usize> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM devices")
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(count as usize)
-}
-
-pub async fn update_conf(id: &String, req: CreateUpdateReq) -> HaliaResult<()> {
+pub async fn update(id: &String, req: UpdateReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.conf)?;
     let desc = req.base.desc.map(|desc| desc.into_bytes());
-    sqlx::query("UPDATE devices SET name = ?, des = ?, conf = ? WHERE id = ?")
-        .bind(req.base.name)
-        .bind(desc)
-        .bind(conf)
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
+    sqlx::query(
+        format!(
+            "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(req.base.name)
+    .bind(desc)
+    .bind(conf)
+    .bind(id)
+    .execute(POOL.get().unwrap())
+    .await?;
 
     Ok(())
 }

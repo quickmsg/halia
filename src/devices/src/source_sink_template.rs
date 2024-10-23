@@ -1,19 +1,19 @@
 use common::error::{HaliaError, HaliaResult};
 use types::{
     devices::{
-        source_sink_template::{CreateUpdateReq, QueryParams, SearchItemResp, SearchResp},
-        DeviceType,
+        source_sink_template::{CreateReq, QueryParams, SearchItemResp, SearchResp, UpdateReq},
+        Protocol,
     },
     BaseConf, Pagination,
 };
 
 use crate::{modbus, GLOBAL_DEVICE_MANAGER};
 
-pub async fn create(req: CreateUpdateReq) -> HaliaResult<()> {
-    match req.device_type {
-        DeviceType::Modbus => modbus::source_template::validate(&req.conf)?,
-        DeviceType::Opcua => todo!(),
-        DeviceType::Coap => todo!(),
+pub async fn create(req: CreateReq) -> HaliaResult<()> {
+    match req.protocol {
+        Protocol::Modbus => modbus::source_template::validate(&req.conf)?,
+        Protocol::Opcua => todo!(),
+        Protocol::Coap => todo!(),
     }
 
     let id = common::get_id();
@@ -41,8 +41,7 @@ pub async fn search_source_templates(
     })
 }
 
-pub async fn update(id: String, req: CreateUpdateReq) -> HaliaResult<()> {
-    // todo validate
+pub async fn update(id: String, req: UpdateReq) -> HaliaResult<()> {
     let old_conf = storage::device::source_sink_template::read_conf(&id).await?;
     let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
     if old_conf != req.conf {
@@ -57,7 +56,7 @@ pub async fn update(id: String, req: CreateUpdateReq) -> HaliaResult<()> {
         }
     }
 
-    storage::device::source_sink_template::update_conf(&id, req).await?;
+    storage::device::source_sink_template::update(&id, req).await?;
     Ok(())
 }
 
@@ -69,7 +68,7 @@ pub async fn delete(id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn create_sink_template(req: CreateUpdateReq) -> HaliaResult<()> {
+pub async fn create_sink_template(req: CreateReq) -> HaliaResult<()> {
     // match req.device_type {
     //     DeviceType::Modbus => modbus::sink_template::validate(&req.ext)?,
     //     DeviceType::Opcua => todo!(),
@@ -83,8 +82,8 @@ fn transer_db_source_sink_template_to_resp(
 ) -> HaliaResult<SearchItemResp> {
     Ok(SearchItemResp {
         id: db_template.id,
-        req: CreateUpdateReq {
-            device_type: db_template.device_type.try_into()?,
+        req: CreateReq {
+            protocol: db_template.protocol.try_into()?,
             base: BaseConf {
                 name: db_template.name,
                 desc: db_template.des.map(|desc| String::from_utf8(desc).unwrap()),

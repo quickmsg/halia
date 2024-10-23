@@ -1,21 +1,21 @@
 use common::error::HaliaResult;
 use types::{
     devices::{
-        device_template::{CreateUpdateReq, QueryParams, SearchItemResp, SearchResp},
-        DeviceType,
+        device_template::{self, QueryParams, SearchItemResp, SearchResp},
+        Protocol,
     },
     BaseConf, Pagination,
 };
 
 use crate::modbus;
 
-pub async fn create(req: CreateUpdateReq) -> HaliaResult<()> {
-    match &req.device_type {
-        DeviceType::Modbus => modbus::template::validate_conf(req.conf.clone())?,
+pub async fn create(req: device_template::CreateReq) -> HaliaResult<()> {
+    match &req.protocol {
+        Protocol::Modbus => modbus::template::validate_conf(req.conf.clone())?,
         // DeviceType::Opcua => opcua::validate_conf(&req.conf.ext)?,
-        DeviceType::Opcua => todo!(),
+        Protocol::Opcua => todo!(),
         // DeviceType::Coap => coap::validate_conf(&req.conf.ext)?,
-        DeviceType::Coap => todo!(),
+        Protocol::Coap => todo!(),
     }
 
     let id = common::get_id();
@@ -31,8 +31,8 @@ pub async fn search(pagination: Pagination, query_params: QueryParams) -> HaliaR
     for db_device_template in db_device_templates {
         resp_device_templates.push(SearchItemResp {
             id: db_device_template.id,
-            req: CreateUpdateReq {
-                device_type: db_device_template.device_type.try_into()?,
+            req: device_template::CreateReq {
+                protocol: db_device_template.protocol.try_into()?,
                 base: BaseConf {
                     name: db_device_template.name,
                     desc: db_device_template
@@ -50,7 +50,7 @@ pub async fn search(pagination: Pagination, query_params: QueryParams) -> HaliaR
     })
 }
 
-pub async fn update(id: String, req: CreateUpdateReq) -> HaliaResult<()> {
+pub async fn update(id: String, req: device_template::UpdateReq) -> HaliaResult<()> {
     // storage::device::update_conf(&device_id, req).await?;
 
     Ok(())
