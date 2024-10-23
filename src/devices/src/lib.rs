@@ -257,14 +257,31 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     events::insert_start(types::events::ResourceType::Device, &device_id).await;
 
     let db_device = storage::device::device::read_one(&device_id).await?;
-    let device_type = DeviceType::try_from(db_device.device_type)?;
-
+    let device_type: DeviceType = db_device.device_type.try_into()?;
+    let conf_type: ConfType = db_device.conf_type.try_into()?;
     let device_conf: serde_json::Value = serde_json::from_slice(&db_device.conf)?;
-
-    let mut device = match device_type {
-        DeviceType::Modbus => modbus::new(device_id.clone(), device_conf.clone()),
-        DeviceType::Opcua => opcua::new(device_id.clone(), device_conf.clone()),
-        DeviceType::Coap => coap::new(device_id.clone(), device_conf.clone()).await?,
+    let mut device = match conf_type {
+        ConfType::Template => match db_device.template_id {
+            Some(template_id) => {
+                let template_conf = storage::device::template::read_conf(&template_id).await?;
+                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
+                match device_type {
+                    DeviceType::Modbus => modbus::new_by_template_conf(
+                        db_device.id.clone(),
+                        device_conf,
+                        template_conf,
+                    ),
+                    DeviceType::Opcua => todo!(),
+                    DeviceType::Coap => todo!(),
+                }
+            }
+            None => unreachable!(),
+        },
+        ConfType::Customize => match device_type {
+            DeviceType::Modbus => modbus::new_by_customize_conf(db_device.id.clone(), device_conf),
+            DeviceType::Opcua => todo!(),
+            DeviceType::Coap => todo!(),
+        },
     };
 
     let db_sources = storage::device::source_sink::read_sources_by_device_id(&device_id).await?;

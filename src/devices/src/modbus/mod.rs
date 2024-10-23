@@ -30,9 +30,10 @@ use tracing::{trace, warn};
 use types::{
     devices::{
         device::{
-            modbus::{Conf, SinkConf, SourceConf},
+            modbus::{Conf, Ethernet, Serial, SinkConf, SourceConf},
             RunningInfo,
         },
+        device_template::modbus::{CustomizeConf, TemplateConf},
         modbus::{Area, DataType, Encode, Type},
         source_sink_template::modbus::{
             SinkCustomizeConf, SinkTemplateConf, SourceCustomizeConf, SourceTemplateConf,
@@ -92,9 +93,21 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
+pub fn new_by_customize_conf(id: String, conf: serde_json::Value) -> Box<dyn Device> {
     let conf: Conf = serde_json::from_value(conf).unwrap();
+    new(id, conf)
+}
 
+pub fn new_by_template_conf(
+    id: String,
+    customize_conf: serde_json::Value,
+    template_conf: serde_json::Value,
+) -> Box<dyn Device> {
+    let conf = get_conf(customize_conf, template_conf).unwrap();
+    new(id, conf)
+}
+
+fn new(id: String, conf: Conf) -> Box<dyn Device> {
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     let (read_tx, read_rx) = mpsc::channel::<String>(CHANNEL_SIZE);
     let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(CHANNEL_SIZE);
@@ -608,6 +621,51 @@ impl Device for Modbus {
         match self.sinks.get(sink_id) {
             Some(sink) => Ok(sink.mb_tx.clone()),
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
+    }
+}
+
+fn get_conf(
+    customize_conf: serde_json::Value,
+    template_conf: serde_json::Value,
+) -> HaliaResult<Conf> {
+    let customize_conf: CustomizeConf = serde_json::from_value(customize_conf)?;
+    let template_conf: TemplateConf = serde_json::from_value(template_conf)?;
+    match &template_conf.link_type {
+        types::devices::modbus::LinkType::Ethernet => {
+            match (customize_conf.ethernet, template_conf.ethernet) {
+                (Some(ethernet_customize_conf), Some(ethernet_template_conf)) => Ok(Conf {
+                    link_type: template_conf.link_type,
+                    reconnect: template_conf.reconnect,
+                    interval: template_conf.interval,
+                    ethernet: Some(Ethernet {
+                        mode: ethernet_template_conf.mode,
+                        encode: ethernet_template_conf.encode,
+                        host: ethernet_customize_conf.host,
+                        port: ethernet_customize_conf.port,
+                    }),
+                    serial: None,
+                }),
+                _ => unreachable!(),
+            }
+        }
+        types::devices::modbus::LinkType::Serial => {
+            match (customize_conf.serial, template_conf.serial) {
+                (Some(serial_customize_conf), Some(serial_template_conf)) => Ok(Conf {
+                    link_type: template_conf.link_type,
+                    reconnect: template_conf.reconnect,
+                    interval: template_conf.interval,
+                    ethernet: None,
+                    serial: Some(Serial {
+                        path: serial_customize_conf.path,
+                        stop_bits: serial_template_conf.stop_bits,
+                        baud_rate: serial_template_conf.baud_rate,
+                        data_bits: serial_template_conf.data_bits,
+                        parity: serial_template_conf.parity,
+                    }),
+                }),
+                _ => unreachable!(),
+            }
         }
     }
 }

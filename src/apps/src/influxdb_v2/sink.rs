@@ -180,9 +180,13 @@ impl Sink {
                         debug!("Failed to write to influxdb http: {}, {}", status, text);
                     }
                     // TODO sink err
-                    influxdb2::RequestError::Serializing { source } => {}
+                    influxdb2::RequestError::Serializing { source } => {
+                        debug!("{}", source);
+                    }
                     // TODO sink err
-                    influxdb2::RequestError::Deserializing { text } => {}
+                    influxdb2::RequestError::Deserializing { text } => {
+                        debug!("{}", text);
+                    }
                 }
             }
         }
