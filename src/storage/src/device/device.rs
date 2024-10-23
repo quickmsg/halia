@@ -7,7 +7,7 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::{device::CreateUpdateReq, QueryParams},
+    devices::device::{CreateUpdateReq, QueryParams},
     Pagination,
 };
 

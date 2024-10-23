@@ -8,10 +8,7 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::{
-        device_template::{CreateUpdateReq, QueryParams},
-        CreateUpdateDeviceReq,
-    },
+    devices::device_template::{CreateUpdateReq, QueryParams},
     Pagination,
 };
 
@@ -46,19 +43,19 @@ CREATE TABLE IF NOT EXISTS {} (
 }
 
 pub async fn insert(id: &String, req: CreateUpdateReq) -> HaliaResult<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
+    let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis();
-    let typ: i32 = req.typ.into();
+    let device_type: i32 = req.device_type.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, device_type, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
-    .bind(typ)
+    .bind(device_type)
     .bind(req.base.name)
     .bind(desc)
     .bind(conf)
@@ -188,11 +185,11 @@ pub async fn count_all() -> Result<usize> {
     Ok(count as usize)
 }
 
-pub async fn update_conf(id: &String, req: CreateUpdateDeviceReq) -> HaliaResult<()> {
-    let conf = serde_json::to_vec(&req.conf.ext)?;
-    let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
+pub async fn update_conf(id: &String, req: CreateUpdateReq) -> HaliaResult<()> {
+    let conf = serde_json::to_vec(&req.conf)?;
+    let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query("UPDATE devices SET name = ?, des = ?, conf = ? WHERE id = ?")
-        .bind(req.conf.base.name)
+        .bind(req.base.name)
         .bind(desc)
         .bind(conf)
         .bind(id)

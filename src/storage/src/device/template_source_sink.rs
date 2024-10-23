@@ -2,7 +2,9 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
-use types::{devices::CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
+use types::{
+    devices::source_sink_template::CreateUpdateReq, Pagination, QuerySourcesOrSinksParams,
+};
 
 use crate::{SourceSinkType, POOL};
 
@@ -41,19 +43,11 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert_source(
-    id: &String,
-    device_id: &String,
-    req: CreateUpdateSourceOrSinkReq,
-) -> Result<()> {
+pub async fn insert_source(id: &String, device_id: &String, req: CreateUpdateReq) -> Result<()> {
     insert(SourceSinkType::Source, id, device_id, req).await
 }
 
-pub async fn insert_sink(
-    id: &String,
-    device_id: &String,
-    req: CreateUpdateSourceOrSinkReq,
-) -> Result<()> {
+pub async fn insert_sink(id: &String, device_id: &String, req: CreateUpdateReq) -> Result<()> {
     insert(SourceSinkType::Sink, id, device_id, req).await
 }
 
@@ -61,12 +55,12 @@ async fn insert(
     typ: SourceSinkType,
     id: &String,
     device_id: &String,
-    req: CreateUpdateSourceOrSinkReq,
+    req: CreateUpdateReq,
 ) -> Result<()> {
     let typ: i32 = typ.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf_type: i32 = req.conf_type.into();
-    let conf = serde_json::to_vec(&req.ext)?;
+    let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis();
 
     sqlx::query(
@@ -263,8 +257,8 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
+pub async fn update(id: &String, req: CreateUpdateReq) -> Result<()> {
+    let conf = serde_json::to_vec(&req.conf)?;
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
         format!(
