@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::prelude::FromRow;
+use sqlx::{prelude::FromRow, query_builder};
 
 use super::POOL;
 
@@ -96,6 +96,20 @@ pub async fn count_cnt_by_resource_id(resource_id: &String) -> Result<usize> {
         .await?;
 
     Ok(cnt as usize)
+}
+
+pub async fn count_cnt_by_many_resource_ids(resource_ids: &Vec<String>) -> Result<usize> {
+    let mut clause = format!("SELECT COUNT(*) FROM {} WHERE resource_id IN (", TABLE_NAME,);
+    for resource_id in resource_ids {
+        clause.push_str(format!("{},", resource_id).as_str());
+    }
+    clause.push_str(")");
+
+    let count: i64 = sqlx::query_scalar(clause.as_str())
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    Ok(count as usize)
 }
 
 pub async fn count_active_cnt_by_resource_id(resource_id: &String) -> Result<usize> {

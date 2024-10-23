@@ -129,7 +129,7 @@ async fn create_source(
     Path(device_id): Path<String>,
     Json(req): Json<types::devices::device::source_sink::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_source(device_id, req).await?;
+    devices::create_source(device_id, None, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -169,7 +169,7 @@ async fn create_sink(
     Path(device_id): Path<String>,
     Json(req): Json<types::devices::device::source_sink::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_sink(device_id, req).await?;
+    devices::create_sink(device_id, None, req).await?;
     Ok(AppSuccess::empty())
 }
 

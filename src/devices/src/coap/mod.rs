@@ -80,23 +80,39 @@ impl Device for Coap {
         }
     }
 
-    async fn update(
-        &mut self,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let _old_conf: CoapConf = serde_json::from_value(old_conf)?;
-        let new_conf: CoapConf = serde_json::from_value(new_conf)?;
-        let coap_client =
-            Arc::new(UdpCoAPClient::new_udp((new_conf.host.clone(), new_conf.port)).await?);
-        for mut source in self.sources.iter_mut() {
-            _ = source.update_coap_client(coap_client.clone());
-        }
-        for mut sink in self.sinks.iter_mut() {
-            _ = sink.update_coap_client(coap_client.clone());
-        }
-        self.coap_client = coap_client;
+    async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
+        // let _old_conf: CoapConf = serde_json::from_value(old_conf)?;
+        // let new_conf: CoapConf = serde_json::from_value(new_conf)?;
+        // let coap_client =
+        //     Arc::new(UdpCoAPClient::new_udp((new_conf.host.clone(), new_conf.port)).await?);
+        // for mut source in self.sources.iter_mut() {
+        //     _ = source.update_coap_client(coap_client.clone());
+        // }
+        // for mut sink in self.sinks.iter_mut() {
+        //     _ = sink.update_coap_client(coap_client.clone());
+        // }
+        // self.coap_client = coap_client;
         Ok(())
+    }
+
+    async fn update_template_conf(
+        &mut self,
+        _conf: serde_json::Value,
+        _23: serde_json::Value,
+    ) -> HaliaResult<()> {
+        todo!()
+        // let old_conf: CoapConf = serde_json::from_value(old_conf)?;
+        // let new_conf: CoapConf = serde_json::from_value(new_conf)?;
+        // let coap_client =
+        //     Arc::new(UdpCoAPClient::new_udp((new_conf.host.clone(), new_conf.port)).await?);
+        // for mut source in self.sources.iter_mut() {
+        //     _ = source.update_coap_client(coap_client.clone());
+        // }
+        // for mut sink in self.sinks.iter_mut() {
+        //     _ = sink.update_coap_client(coap_client.clone());
+        // }
+        // self.coap_client = coap_client;
+        // Ok(())
     }
 
     async fn stop(&mut self) {

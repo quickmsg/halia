@@ -71,10 +71,11 @@ pub(crate) fn sub_device_running_count() {
 #[async_trait]
 pub trait Device: Send + Sync {
     async fn read_running_info(&self) -> RunningInfo;
-    async fn update(
+    async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()>;
+    async fn update_template_conf(
         &mut self,
-        old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn stop(&mut self);
 
@@ -243,14 +244,24 @@ pub async fn search_devices(
 }
 
 pub async fn update_device(device_id: String, req: device::UpdateReq) -> HaliaResult<()> {
-    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-        let old_conf = storage::device::device::read_conf(&device_id).await?;
-        let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
-        if old_conf == req.conf {
-            return Ok(());
+    match &req.conf_type {
+        ConfType::Template => match &req.template_id {
+            Some(template_id) => {
+                let template_conf = storage::device::template::read_conf(&template_id).await?;
+                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
+                if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+                    device
+                        .update_template_conf(req.conf.clone(), template_conf)
+                        .await?;
+                }
+            }
+            None => return Err(HaliaError::Common("模板ID不能为空".to_string())),
+        },
+        ConfType::Customize => {
+            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+                device.update_customize_conf(req.conf.clone()).await?;
+            }
         }
-
-        device.update(old_conf, req.conf.clone()).await?;
     }
 
     events::insert_update(types::events::ResourceType::Device, &device_id).await;
@@ -384,6 +395,7 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
 
 pub async fn create_source(
     device_id: String,
+    device_template_source_id: Option<&String>,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
     if req.conf_type == ConfType::Template && req.template_id.is_none() {
@@ -422,7 +434,13 @@ pub async fn create_source(
         }
     }
 
-    storage::device::source_sink::insert_source(&source_id, &device_id, req).await?;
+    storage::device::source_sink::insert_source(
+        &source_id,
+        &device_id,
+        device_template_source_id,
+        req,
+    )
+    .await?;
 
     Ok(())
 }
@@ -537,7 +555,11 @@ pub async fn get_source_rx(
     }
 }
 
-pub async fn create_sink(device_id: String, req: source_sink::CreateUpdateReq) -> HaliaResult<()> {
+pub async fn create_sink(
+    device_id: String,
+    device_template_sink_id: Option<&String>,
+    req: source_sink::CreateUpdateReq,
+) -> HaliaResult<()> {
     if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
@@ -572,7 +594,8 @@ pub async fn create_sink(device_id: String, req: source_sink::CreateUpdateReq) -
         }
     }
 
-    storage::device::source_sink::insert_sink(&device_id, &sink_id, req).await?;
+    storage::device::source_sink::insert_sink(&device_id, &sink_id, device_template_sink_id, req)
+        .await?;
 
     Ok(())
 }

@@ -11,6 +11,7 @@ static TABLE_NAME: &str = "device_sources_sinks";
 pub struct SourceSink {
     pub id: String,
     pub device_id: String,
+    pub device_template_source_sink_id: Option<String>,
     pub source_sink_type: i32,
     pub name: String,
     pub des: Option<Vec<u8>>,
@@ -26,6 +27,7 @@ pub(crate) fn create_table() -> String {
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     device_id CHAR(32) NOT NULL,
+    device_template_source_sink_id CHAR(32),
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     des BLOB,
@@ -40,18 +42,43 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert_source(id: &String, device_id: &String, req: CreateUpdateReq) -> Result<()> {
-    insert(SourceSinkType::Source, id, device_id, req).await
+pub async fn insert_source(
+    id: &String,
+    device_id: &String,
+    device_template_source_id: Option<&String>,
+    req: CreateUpdateReq,
+) -> Result<()> {
+    insert(
+        SourceSinkType::Source,
+        id,
+        device_id,
+        device_template_source_id,
+        req,
+    )
+    .await
 }
 
-pub async fn insert_sink(id: &String, device_id: &String, req: CreateUpdateReq) -> Result<()> {
-    insert(SourceSinkType::Sink, id, device_id, req).await
+pub async fn insert_sink(
+    id: &String,
+    device_id: &String,
+    device_template_sink_id: Option<&String>,
+    req: CreateUpdateReq,
+) -> Result<()> {
+    insert(
+        SourceSinkType::Sink,
+        id,
+        device_id,
+        device_template_sink_id,
+        req,
+    )
+    .await
 }
 
 async fn insert(
     source_sink_type: SourceSinkType,
     id: &String,
     device_id: &String,
+    device_template_source_sink_id: Option<&String>,
     req: CreateUpdateReq,
 ) -> Result<()> {
     let source_sink_type: i32 = source_sink_type.into();
@@ -63,14 +90,15 @@ async fn insert(
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, device_id, source_sink_type, name, des, conf_type, conf, template_id, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_id, device_template_source_sink_id, source_sink_type, name, des, conf_type, conf, template_id, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
     .bind(device_id)
+    .bind(device_template_source_sink_id)
     .bind(source_sink_type)
     .bind(req.base.name)
     .bind(desc)
@@ -92,6 +120,40 @@ pub async fn read_one(id: &String) -> Result<SourceSink> {
     .fetch_one(POOL.get().unwrap())
     .await?;
     Ok(source_or_sink)
+}
+
+pub async fn read_id_by_device_template_source_sink_id(
+    device_id: &String,
+    device_template_source_sink_id: &String,
+) -> Result<String> {
+    let id: String = sqlx::query_scalar(
+        format!(
+            "SELECT id FROM {} WHERE device_id = ? AND device_template_source_sink_id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(device_id)
+    .bind(device_template_source_sink_id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+    Ok(id)
+}
+
+pub async fn read_many_ids_by_device_template_source_sink_id(
+    device_template_source_sink_id: &String,
+) -> Result<Vec<String>> {
+    let ids: Vec<String> = sqlx::query_scalar(
+        format!(
+            "SELECT id FROM {} WHERE device_template_source_sink_id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(device_template_source_sink_id)
+    .fetch_all(POOL.get().unwrap())
+    .await?;
+    Ok(ids)
 }
 
 pub async fn read_sources_by_device_id(device_id: &String) -> Result<Vec<SourceSink>> {

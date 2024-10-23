@@ -188,17 +188,29 @@ impl Device for Opcua {
         }
     }
 
-    async fn update(
-        &mut self,
-        _old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let new_conf: Conf = serde_json::from_value(new_conf)?;
+    async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
+        let conf: Conf = serde_json::from_value(conf)?;
         self.stop_signal_tx.send(()).unwrap();
         let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
-        join_handle_data.conf = new_conf;
+        join_handle_data.conf = conf;
         let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
+
+        Ok(())
+    }
+
+    async fn update_template_conf(
+        &mut self,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        // let new_conf: Conf = serde_json::from_value(new_conf)?;
+        // let conf =
+        // self.stop_signal_tx.send(()).unwrap();
+        // let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
+        // join_handle_data.conf = new_conf;
+        // let join_handle = Self::event_loop(join_handle_data);
+        // self.join_handle = Some(join_handle);
 
         Ok(())
     }

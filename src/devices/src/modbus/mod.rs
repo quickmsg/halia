@@ -305,6 +305,49 @@ impl Modbus {
             }
         }
     }
+
+    async fn update_conf(&mut self, conf: Conf) {
+        self.stop_signal_tx.send(()).unwrap();
+        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
+        join_handle_data.conf = conf;
+        let join_handle = Self::event_loop(join_handle_data);
+        self.join_handle = Some(join_handle);
+    }
+
+    fn create_source(&mut self, source_id: String, conf: SourceConf) {
+        let source = Source::new(
+            source_id.clone(),
+            conf,
+            self.read_tx.clone(),
+            self.device_err_tx.subscribe(),
+        );
+        self.sources.insert(source_id, source);
+    }
+
+    async fn update_source(&mut self, source_id: &String, conf: SourceConf) -> HaliaResult<()> {
+        match self.sources.get_mut(source_id) {
+            Some(mut source) => {
+                source.update(conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
+    }
+
+    fn create_sink(&mut self, sink_id: String, conf: SinkConf) {
+        let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
+        self.sinks.insert(sink_id, sink);
+    }
+
+    async fn update_sink(&mut self, sink_id: &String, conf: SinkConf) -> HaliaResult<()> {
+        match self.sinks.get_mut(sink_id) {
+            Some(mut sink) => {
+                sink.update(conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -412,19 +455,19 @@ impl Device for Modbus {
         }
     }
 
-    async fn update(
+    async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
+        let conf: Conf = serde_json::from_value(conf)?;
+        self.update_conf(conf).await;
+        Ok(())
+    }
+
+    async fn update_template_conf(
         &mut self,
-        _old_conf: serde_json::Value,
-        new_conf: serde_json::Value,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let new_conf: Conf = serde_json::from_value(new_conf)?;
-
-        self.stop_signal_tx.send(()).unwrap();
-        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
-        join_handle_data.conf = new_conf;
-        let join_handle = Self::event_loop(join_handle_data);
-        self.join_handle = Some(join_handle);
-
+        let conf = get_conf(customize_conf, template_conf)?;
+        self.update_conf(conf).await;
         Ok(())
     }
 
@@ -446,17 +489,10 @@ impl Device for Modbus {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
-        let source = Source::new(
-            source_id.clone(),
-            conf,
-            self.read_tx.clone(),
-            self.device_err_tx.subscribe(),
-        );
-        self.sources.insert(source_id, source);
+        self.create_source(source_id, conf);
         Ok(())
     }
 
-    // TODO
     async fn create_template_source(
         &mut self,
         source_id: String,
@@ -464,13 +500,7 @@ impl Device for Modbus {
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf = get_source_conf(customize_conf, template_conf)?;
-        let source = Source::new(
-            source_id.clone(),
-            conf,
-            self.read_tx.clone(),
-            self.device_err_tx.subscribe(),
-        );
-        self.sources.insert(source_id, source);
+        self.create_source(source_id, conf);
         Ok(())
     }
 
@@ -480,13 +510,7 @@ impl Device for Modbus {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
-        match self.sources.get_mut(source_id) {
-            Some(mut source) => {
-                source.update(conf).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(source_id.to_owned())),
-        }
+        self.update_source(source_id, conf).await
     }
 
     async fn update_template_source(
@@ -496,13 +520,7 @@ impl Device for Modbus {
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf = get_source_conf(customize_conf, template_conf)?;
-        match self.sources.get_mut(source_id) {
-            Some(mut source) => {
-                source.update(conf).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(source_id.to_owned())),
-        }
+        self.update_source(source_id, conf).await
     }
 
     async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()> {
@@ -549,20 +567,18 @@ impl Device for Modbus {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
-        self.sinks.insert(sink_id, sink);
+        self.create_sink(sink_id, conf);
         Ok(())
     }
 
     async fn create_template_sink(
         &mut self,
         sink_id: String,
-        conf: serde_json::Value,
+        customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
-        self.sinks.insert(sink_id, sink);
+        let conf = get_sink_conf(customize_conf, template_conf)?;
+        self.create_sink(sink_id, conf);
         Ok(())
     }
 
@@ -572,13 +588,7 @@ impl Device for Modbus {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        match self.sinks.get_mut(sink_id) {
-            Some(mut sink) => {
-                sink.update(conf).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        }
+        self.update_sink(sink_id, conf).await
     }
 
     async fn update_template_sink(
@@ -588,13 +598,7 @@ impl Device for Modbus {
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf = get_sink_conf(customize_conf, template_conf)?;
-        match self.sinks.get_mut(sink_id) {
-            Some(mut sink) => {
-                sink.update(conf).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        }
+        self.update_sink(sink_id, conf).await
     }
 
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()> {
