@@ -103,7 +103,7 @@ pub fn new_by_template_conf(
     customize_conf: serde_json::Value,
     template_conf: serde_json::Value,
 ) -> Box<dyn Device> {
-    let conf = get_conf(customize_conf, template_conf).unwrap();
+    let conf = Modbus::get_conf(customize_conf, template_conf).unwrap();
     new(id, conf)
 }
 
@@ -306,6 +306,83 @@ impl Modbus {
         }
     }
 
+    fn get_conf(
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<Conf> {
+        let customize_conf: CustomizeConf = serde_json::from_value(customize_conf)?;
+        let template_conf: TemplateConf = serde_json::from_value(template_conf)?;
+        match &template_conf.link_type {
+            types::devices::modbus::LinkType::Ethernet => {
+                match (customize_conf.ethernet, template_conf.ethernet) {
+                    (Some(ethernet_customize_conf), Some(ethernet_template_conf)) => Ok(Conf {
+                        link_type: template_conf.link_type,
+                        reconnect: template_conf.reconnect,
+                        interval: template_conf.interval,
+                        ethernet: Some(Ethernet {
+                            mode: ethernet_template_conf.mode,
+                            encode: ethernet_template_conf.encode,
+                            host: ethernet_customize_conf.host,
+                            port: ethernet_customize_conf.port,
+                        }),
+                        serial: None,
+                    }),
+                    _ => unreachable!(),
+                }
+            }
+            types::devices::modbus::LinkType::Serial => {
+                match (customize_conf.serial, template_conf.serial) {
+                    (Some(serial_customize_conf), Some(serial_template_conf)) => Ok(Conf {
+                        link_type: template_conf.link_type,
+                        reconnect: template_conf.reconnect,
+                        interval: template_conf.interval,
+                        ethernet: None,
+                        serial: Some(Serial {
+                            path: serial_customize_conf.path,
+                            stop_bits: serial_template_conf.stop_bits,
+                            baud_rate: serial_template_conf.baud_rate,
+                            data_bits: serial_template_conf.data_bits,
+                            parity: serial_template_conf.parity,
+                        }),
+                    }),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    fn get_source_conf(
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<SourceConf> {
+        let customize_conf: SourceCustomizeConf = serde_json::from_value(customize_conf)?;
+        let template_conf: SourceTemplateConf = serde_json::from_value(template_conf)?;
+        Ok(SourceConf {
+            slave: customize_conf.slave,
+            field: template_conf.field,
+            data_type: template_conf.data_type,
+            area: template_conf.area,
+            address: template_conf.address,
+            interval: template_conf.interval,
+        })
+    }
+
+    fn get_sink_conf(
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<SinkConf> {
+        let customize_conf: SinkCustomizeConf = serde_json::from_value(customize_conf)?;
+        let template_conf: SinkTemplateConf = serde_json::from_value(template_conf)?;
+        Ok(SinkConf {
+            slave: customize_conf.slave,
+            data_type: template_conf.data_type,
+            area: template_conf.area,
+            address: template_conf.address,
+            value: template_conf.value,
+            message_retain: template_conf.message_retain,
+        })
+    }
+
     async fn update_conf(&mut self, conf: Conf) {
         self.stop_signal_tx.send(()).unwrap();
         let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
@@ -466,7 +543,7 @@ impl Device for Modbus {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf = get_conf(customize_conf, template_conf)?;
+        let conf = Self::get_conf(customize_conf, template_conf)?;
         self.update_conf(conf).await;
         Ok(())
     }
@@ -499,7 +576,7 @@ impl Device for Modbus {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf = get_source_conf(customize_conf, template_conf)?;
+        let conf = Self::get_source_conf(customize_conf, template_conf)?;
         self.create_source(source_id, conf);
         Ok(())
     }
@@ -519,7 +596,7 @@ impl Device for Modbus {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf = get_source_conf(customize_conf, template_conf)?;
+        let conf = Self::get_source_conf(customize_conf, template_conf)?;
         self.update_source(source_id, conf).await
     }
 
@@ -577,7 +654,7 @@ impl Device for Modbus {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf = get_sink_conf(customize_conf, template_conf)?;
+        let conf = Self::get_sink_conf(customize_conf, template_conf)?;
         self.create_sink(sink_id, conf);
         Ok(())
     }
@@ -597,7 +674,7 @@ impl Device for Modbus {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf = get_sink_conf(customize_conf, template_conf)?;
+        let conf = Self::get_sink_conf(customize_conf, template_conf)?;
         self.update_sink(sink_id, conf).await
     }
 
@@ -611,6 +688,15 @@ impl Device for Modbus {
         }
     }
 
+    // async fn get_source_rx(
+    //     &self,
+    //     source_id: &String,
+    // ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+    //     match self.sources.get(source_id) {
+    //         Some(source) => Ok(source.mb_tx.subscribe()),
+    //         None => Err(HaliaError::NotFound(source_id.to_owned())),
+    //     }
+    // }
     async fn get_source_rx(
         &self,
         source_id: &String,
@@ -627,81 +713,4 @@ impl Device for Modbus {
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }
-}
-
-fn get_conf(
-    customize_conf: serde_json::Value,
-    template_conf: serde_json::Value,
-) -> HaliaResult<Conf> {
-    let customize_conf: CustomizeConf = serde_json::from_value(customize_conf)?;
-    let template_conf: TemplateConf = serde_json::from_value(template_conf)?;
-    match &template_conf.link_type {
-        types::devices::modbus::LinkType::Ethernet => {
-            match (customize_conf.ethernet, template_conf.ethernet) {
-                (Some(ethernet_customize_conf), Some(ethernet_template_conf)) => Ok(Conf {
-                    link_type: template_conf.link_type,
-                    reconnect: template_conf.reconnect,
-                    interval: template_conf.interval,
-                    ethernet: Some(Ethernet {
-                        mode: ethernet_template_conf.mode,
-                        encode: ethernet_template_conf.encode,
-                        host: ethernet_customize_conf.host,
-                        port: ethernet_customize_conf.port,
-                    }),
-                    serial: None,
-                }),
-                _ => unreachable!(),
-            }
-        }
-        types::devices::modbus::LinkType::Serial => {
-            match (customize_conf.serial, template_conf.serial) {
-                (Some(serial_customize_conf), Some(serial_template_conf)) => Ok(Conf {
-                    link_type: template_conf.link_type,
-                    reconnect: template_conf.reconnect,
-                    interval: template_conf.interval,
-                    ethernet: None,
-                    serial: Some(Serial {
-                        path: serial_customize_conf.path,
-                        stop_bits: serial_template_conf.stop_bits,
-                        baud_rate: serial_template_conf.baud_rate,
-                        data_bits: serial_template_conf.data_bits,
-                        parity: serial_template_conf.parity,
-                    }),
-                }),
-                _ => unreachable!(),
-            }
-        }
-    }
-}
-
-fn get_source_conf(
-    customize_conf: serde_json::Value,
-    template_conf: serde_json::Value,
-) -> HaliaResult<SourceConf> {
-    let customize_conf: SourceCustomizeConf = serde_json::from_value(customize_conf)?;
-    let template_conf: SourceTemplateConf = serde_json::from_value(template_conf)?;
-    Ok(SourceConf {
-        slave: customize_conf.slave,
-        field: template_conf.field,
-        data_type: template_conf.data_type,
-        area: template_conf.area,
-        address: template_conf.address,
-        interval: template_conf.interval,
-    })
-}
-
-fn get_sink_conf(
-    customize_conf: serde_json::Value,
-    template_conf: serde_json::Value,
-) -> HaliaResult<SinkConf> {
-    let customize_conf: SinkCustomizeConf = serde_json::from_value(customize_conf)?;
-    let template_conf: SinkTemplateConf = serde_json::from_value(template_conf)?;
-    Ok(SinkConf {
-        slave: customize_conf.slave,
-        data_type: template_conf.data_type,
-        area: template_conf.area,
-        address: template_conf.address,
-        value: template_conf.value,
-        message_retain: template_conf.message_retain,
-    })
 }
