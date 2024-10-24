@@ -7,10 +7,10 @@ pub struct Conf {
 }
 
 pub enum AuthMethod {
-
+    Anonymous,
+    Username,
+    X509,
 }
-
-pub struct AuthAnonymous;
 
 pub struct AuthUsername {
     pub username: String,

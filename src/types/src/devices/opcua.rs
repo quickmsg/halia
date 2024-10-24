@@ -122,3 +122,11 @@ pub struct SinkConf {
     #[serde(flatten)]
     pub node_id: NodeId,
 }
+
+#[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq)]
+pub enum MessageSecurityMode {
+    Invalid,
+    None,
+    Sign,
+    SignAndEncrypt,
+}

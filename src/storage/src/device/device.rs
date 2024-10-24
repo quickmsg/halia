@@ -6,7 +6,6 @@ use sqlx::{
     query::{QueryAs, QueryScalar},
     Any,
 };
-use tracing::debug;
 use types::{
     devices::device::{CreateReq, QueryParams, UpdateReq},
     Pagination,
@@ -105,7 +104,6 @@ pub async fn search(
     pagination: Pagination,
     query_params: QueryParams,
 ) -> Result<(usize, Vec<Device>)> {
-    debug!("here");
     let (limit, offset) = pagination.to_sql();
     let (count, devices) = match (
         &query_params.name,

@@ -16,8 +16,9 @@ pub struct SourceSink {
     pub name: String,
     pub des: Option<Vec<u8>>,
     pub conf_type: i32,
-    pub template_id: Option<String>,
     pub conf: Vec<u8>,
+    pub template_id: Option<String>,
+    pub err: i32,
     pub ts: i64,
 }
 
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS {} (
     conf_type SMALLINT UNSIGNED NOT NULL,
     conf BLOB NOT NULL,
     template_id CHAR(32),
+    err SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
     UNIQUE (device_id, source_sink_type, name)
 );
@@ -90,7 +92,7 @@ async fn insert(
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, device_id, device_template_source_sink_id, source_sink_type, name, des, conf_type, conf, template_id, ts) 
+(id, device_id, device_template_source_sink_id, source_sink_type, name, des, conf_type, conf, template_id, err, ts) 
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
@@ -105,6 +107,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(conf_type)
     .bind(conf)
     .bind(req.template_id)
+    .bind(false as i32)
     .bind(ts)
     .execute(POOL.get().unwrap())
     .await?;
@@ -162,6 +165,16 @@ pub async fn read_sources_by_device_id(device_id: &String) -> Result<Vec<SourceS
 
 pub async fn read_sinks_by_device_id(device_id: &String) -> Result<Vec<SourceSink>> {
     read_by_device_id(SourceSinkType::Sink, device_id).await
+}
+
+pub async fn update_err(id: &String, err: bool) -> Result<()> {
+    let err: i32 = err.into();
+    sqlx::query(format!("UPDATE {} SET err = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(err as i32)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
+    Ok(())
 }
 
 async fn read_by_device_id(
