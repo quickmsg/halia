@@ -6,6 +6,7 @@ use super::{ConfType, DeviceType};
 
 pub mod modbus;
 pub mod source_sink;
+pub mod opcua;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {
