@@ -1,13 +1,13 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    LazyLock,
+    Arc, LazyLock,
 };
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
-use tokio::sync::{broadcast, mpsc};
+use message::{MessageBatch, RuleMessageBatch};
+use tokio::sync::mpsc;
 use types::{
     devices::{
         device::{
@@ -131,7 +131,7 @@ pub trait Device: Send + Sync {
     async fn get_source_rx(
         &self,
         source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>>;
+    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>>;
 
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>>;
 }
@@ -546,7 +546,7 @@ pub async fn delete_source(device_id: String, source_id: String) -> HaliaResult<
 pub async fn get_source_rx(
     device_id: &String,
     source_id: &String,
-) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
     if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
         device.get_source_rx(source_id).await
     } else {
@@ -687,13 +687,14 @@ pub async fn delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> 
 pub async fn get_sink_tx(
     device_id: &String,
     sink_id: &String,
-) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
-        device.get_sink_tx(sink_id).await
-    } else {
-        let device_name = storage::device::device::read_name(&device_id).await?;
-        Err(HaliaError::Stopped(format!("设备：{}", device_name)))
-    }
+) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+    // if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
+    //     device.get_sink_tx(sink_id).await
+    // } else {
+    //     let device_name = storage::device::device::read_name(&device_id).await?;
+    //     Err(HaliaError::Stopped(format!("设备：{}", device_name)))
+    // }
+    todo!()
 }
 
 async fn transer_db_device_to_resp(

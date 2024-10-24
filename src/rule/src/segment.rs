@@ -1,107 +1,58 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use functions::Function;
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use tokio::{
     select,
     sync::{broadcast, mpsc},
 };
-use tracing::{debug, warn};
+use tracing::debug;
 use types::rules::Node;
 
 pub fn start_segment(
-    mut rx: broadcast::Receiver<MessageBatch>,
+    mut rx: mpsc::UnboundedReceiver<RuleMessageBatch>,
     functions: Vec<Box<dyn Function>>,
-    mpsc_tx: Option<mpsc::Sender<MessageBatch>>,
-    broadcast_tx: Option<broadcast::Sender<MessageBatch>>,
+    txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
     mut stop_signal_rx: broadcast::Receiver<()>,
 ) {
-    let mut next = true;
-    if mpsc_tx.is_some() {
-        tokio::spawn(async move {
-            loop {
-                select! {
-                    mb = rx.recv() => {
-                        match mb {
-                            Ok(mut mb) => {
-                                for function in &functions {
-                                    next = function.call(&mut mb).await;
-                                    if !next {
-                                        break;
-                                    }
-                                }
-
-                                if next {
-                                    if let Err(e) = mpsc_tx.as_ref().unwrap().send(mb).await {
-                                        debug!("{:?}", e);
-                                    }
-                                }
-                            }
-                            Err(e) => panic!("{e:?}"),
-                        }
-
-                    }
-                    _ = stop_signal_rx.recv() => {
-                        return
-                    }
+    tokio::spawn(async move {
+        loop {
+            select! {
+                Some(mb) = rx.recv() => {
+                    handle_segment_mb(mb, &functions, &txs).await;
+                }
+                _ = stop_signal_rx.recv() => {
+                    return
                 }
             }
-        });
-        return;
-    } else if broadcast_tx.is_some() {
-        tokio::spawn(async move {
-            let mut next = true;
-            loop {
-                select! {
-                    mb = rx.recv() => {
-                        match mb {
-                            Ok(mut mb) => {
-                                for function in &functions {
-                                    next = function.call(&mut mb).await;
-                                    if !next {
-                                        break;
-                                    }
-                                }
-                                if next {
-                                    let _ = broadcast_tx.as_ref().unwrap().send(mb);
-                                }
-                            }
-                            Err(e) => warn!("{}", e),
-                        }
+        }
+    });
+}
 
-                    }
-                    _ = stop_signal_rx.recv() => {
-                        return
-                    }
-                }
-            }
-        });
-    } else {
-        tokio::spawn(async move {
-            loop {
-                select! {
-                    mb = rx.recv() => {
-                        match mb {
-                            Ok(mut mb) => {
-                                for function in &functions {
-                                    next = function.call(&mut mb).await;
-                                    if !next {
-                                        break;
-                                    }
-                                }
-                            }
-                            Err(e) => panic!("{e:?}"),
-                        }
+async fn handle_segment_mb(
+    mb: RuleMessageBatch,
+    functions: &Vec<Box<dyn Function>>,
+    txs: &Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
+) {
+    let mut mb = mb.take_mb();
+    for function in functions {
+        if !function.call(&mut mb).await {
+            return;
+        }
+    }
 
-                    }
-                    _ = stop_signal_rx.recv() => {
-                        return
-                    }
-                }
+    match txs.len() {
+        0 => {}
+        1 => {
+            let _ = txs[0].send(RuleMessageBatch::Owned(mb));
+        }
+        _ => {
+            let mb = Arc::new(mb);
+            for tx in txs.iter() {
+                let _ = tx.send(RuleMessageBatch::Arc(mb.clone()));
             }
-        });
-        return;
+        }
     }
 }
 

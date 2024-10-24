@@ -1,14 +1,16 @@
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 
 use futures::Stream;
-use message::{Message, MessageBatch};
-use tokio::{select, sync::broadcast};
+use message::{Message, MessageBatch, RuleMessageBatch};
+use tokio::{
+    select,
+    sync::{broadcast, mpsc},
+};
 use tokio_stream::{StreamExt, StreamMap};
-use tracing::debug;
 
 pub fn run(
-    mut rxs: Vec<broadcast::Receiver<MessageBatch>>,
-    tx: broadcast::Sender<MessageBatch>,
+    mut rxs: Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>,
+    txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
     mut stop_signal_rx: broadcast::Receiver<()>,
 ) {
     let mut msgs: Vec<Option<Message>> = vec![None; rxs.len()];
@@ -19,10 +21,10 @@ pub fn run(
         stream_map.insert(
             i,
             Box::pin(async_stream::stream! {
-                  while let Ok(item) = rx.recv().await {
+                  while let Some(item) = rx.recv().await {
                       yield item;
                   }
-            }) as Pin<Box<dyn Stream<Item = MessageBatch> + Send>>,
+            }) as Pin<Box<dyn Stream<Item = RuleMessageBatch> + Send>>,
         );
         i += 1;
     }
@@ -31,11 +33,10 @@ pub fn run(
         loop {
             select! {
                 Some((pos, mb)) = stream_map.next() => {
-                    handle_mb(&mut msgs, &tx, pos, mb);
+                    handle_mb(&mut msgs, &txs, pos, mb);
                 }
 
                 _ = stop_signal_rx.recv() => {
-                    debug!("stop signal received");
                     return;
                 }
             }
@@ -45,10 +46,11 @@ pub fn run(
 
 fn handle_mb(
     msgs: &mut Vec<Option<Message>>,
-    tx: &broadcast::Sender<MessageBatch>,
+    txs: &Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
     pos: u8,
-    mut mb: MessageBatch,
+    mb: RuleMessageBatch,
 ) {
+    let mut mb = mb.take_mb();
     let message = mb.take_one_message();
     msgs[pos as usize] = message;
 
@@ -59,6 +61,17 @@ fn handle_mb(
             merge_msg.merge(msg.take().unwrap());
         }
         merge_mb.push_message(merge_msg);
-        tx.send(merge_mb).unwrap();
+
+        match txs.len() {
+            1 => {
+                txs[0].send(RuleMessageBatch::Owned(merge_mb)).unwrap();
+            }
+            _ => {
+                let merge_mb = Arc::new(merge_mb);
+                for tx in txs.iter() {
+                    tx.send(RuleMessageBatch::Arc(merge_mb.clone())).unwrap();
+                }
+            }
+        }
     }
 }

@@ -1,10 +1,7 @@
-use std::{io, time::Duration};
+use std::{io, sync::Arc, time::Duration};
 
-use common::{
-    constants,
-    error::{HaliaError, HaliaResult},
-};
-use message::{Message, MessageBatch};
+use common::error::{HaliaError, HaliaResult};
+use message::{Message, MessageBatch, RuleMessageBatch};
 use protocol::modbus::Context;
 use tokio::{
     select,
@@ -23,7 +20,7 @@ pub struct Source {
     join_handle: Option<JoinHandle<JoinHandleData>>,
     err_info: Option<String>,
 
-    pub mb_tx: broadcast::Sender<MessageBatch>,
+    pub mb_txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
 }
 
 pub struct JoinHandleData {
@@ -41,7 +38,6 @@ impl Source {
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, _) = broadcast::channel(constants::CHANNEL_SIZE);
 
         let join_handle_data = JoinHandleData {
             id,
@@ -56,9 +52,9 @@ impl Source {
             conf,
             quantity,
             stop_signal_tx,
-            mb_tx,
             join_handle: Some(join_handle),
             err_info: None,
+            mb_txs: vec![],
         }
     }
 
@@ -187,15 +183,29 @@ impl Source {
         match res {
             Ok(mut data) => {
                 let value = self.conf.data_type.decode(&mut data);
-                if self.mb_tx.receiver_count() == 0 {
-                    return Ok(());
-                }
                 let mut message = Message::default();
                 // todo 考虑field的共享，避免clone
                 message.add(self.conf.field.clone(), value);
                 let mut message_batch = MessageBatch::default();
                 message_batch.push_message(message);
-                _ = self.mb_tx.send(message_batch);
+
+                // todo 没有receiver时不请求
+                // 删除关闭的channel
+                let mb;
+                match self.mb_txs.len() {
+                    0 => {}
+                    1 => {
+                        mb = RuleMessageBatch::Owned(message_batch);
+                        if let Err(_) = self.mb_txs[0].send(mb) {
+                            self.mb_txs.remove(0);
+                        }
+                    }
+                    _ => {
+                        mb = RuleMessageBatch::Arc(Arc::new(message_batch));
+                        self.mb_txs.retain(|tx| tx.send(mb.clone()).is_ok());
+                    }
+                }
+
                 Ok(())
             }
             Err(e) => match e {
@@ -212,5 +222,11 @@ impl Source {
                 }
             },
         }
+    }
+
+    pub fn get_rx(&mut self) -> mpsc::UnboundedReceiver<RuleMessageBatch> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.mb_txs.push(tx);
+        rx
     }
 }

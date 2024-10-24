@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
+use message::{MessageBatch, RuleMessageBatch};
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, Identifier, MonitoringMode, NodeId, StatusCode},
@@ -16,7 +16,7 @@ use sink::Sink;
 use source::Source;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, watch, RwLock},
+    sync::{mpsc, watch, RwLock},
     task::JoinHandle,
     time,
 };
@@ -353,11 +353,12 @@ impl Device for Opcua {
     async fn get_source_rx(
         &self,
         source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.sources.get(source_id) {
-            Some(source) => Ok(source.mb_tx.subscribe()),
-            None => Err(HaliaError::NotFound(source_id.to_string())),
-        }
+    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+        // match self.sources.get(source_id) {
+        //     Some(source) => Ok(source.mb_tx.subscribe()),
+        //     None => Err(HaliaError::NotFound(source_id.to_string())),
+        // }
+        todo!()
     }
 
     async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {

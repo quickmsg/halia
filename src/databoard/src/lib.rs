@@ -1,12 +1,12 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    LazyLock,
+    Arc, LazyLock,
 };
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use databoard_struct::Databoard;
-use message::MessageBatch;
+use message::{MessageBatch, RuleMessageBatch};
 use tokio::sync::mpsc;
 use types::{
     databoard::{
@@ -330,12 +330,13 @@ pub async fn delete_data(databoard_id: String, databoard_data_id: String) -> Hal
 pub async fn get_data_tx(
     databoard_id: &String,
     databoard_data_id: &String,
-) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-    match GLOBAL_DATABOARD_MANAGER.get(databoard_id) {
-        Some(databoard) => databoard.get_data_tx(databoard_data_id).await,
-        None => {
-            let name = storage::databoard::read_name(databoard_id).await?;
-            Err(HaliaError::Stopped(format!("看板：{}", name)))
-        }
-    }
+) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+    todo!()
+    // match GLOBAL_DATABOARD_MANAGER.get(databoard_id) {
+    //     Some(databoard) => databoard.get_data_tx(databoard_data_id).await,
+    //     None => {
+    //         let name = storage::databoard::read_name(databoard_id).await?;
+    //         Err(HaliaError::Stopped(format!("看板：{}", name)))
+    //     }
+    // }
 }

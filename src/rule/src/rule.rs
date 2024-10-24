@@ -1,12 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use common::error::{HaliaError, HaliaResult};
-use functions::{computes, filter, log, merge::merge, window};
-use message::MessageBatch;
+use functions::{computes, filter, log, merge::merge};
+use message::{MessageBatch, RuleMessageBatch};
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error};
 use types::rules::{
-    functions::{ComputerConf, FilterConf, WindowConf},
+    functions::{ComputerConf, FilterConf},
     AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, LogNode, Node,
     NodeType, ReadRuleNodeResp, RuleConf,
 };
@@ -37,7 +37,6 @@ impl Rule {
 
     async fn start(&mut self, conf: &RuleConf) -> HaliaResult<()> {
         let (incoming_edges, outgoing_edges) = conf.get_edges();
-        debug!("{:?}", incoming_edges);
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
@@ -122,9 +121,8 @@ impl Rule {
             for oned_ids in twod_ids {
                 let mut functions = vec![];
                 let mut ids = vec![];
-                let mut mpsc_tx: Option<mpsc::Sender<MessageBatch>> = None;
+                let mut txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>> = vec![];
                 let mut is_log = false;
-                // let mut broadcast_tx: Option<broadcast::Sender<MessageBatch>> = None;
 
                 for id in oned_ids {
                     let node = node_map.get(&id).unwrap();
@@ -136,33 +134,37 @@ impl Rule {
                             for source_id in source_ids {
                                 rxs.push(receivers.get_mut(source_id).unwrap().pop().unwrap());
                             }
-                            let (tx, _) = broadcast::channel::<MessageBatch>(16);
+                            // let (tx, _) = broadcast::channel::<MessageBatch>(16);
                             let mut n_rxs = vec![];
+                            let mut n_txs = vec![];
                             let cnt = outgoing_edges.get(&id).unwrap().len();
                             for _ in 0..cnt {
-                                n_rxs.push(tx.subscribe());
+                                let (tx, rx) = mpsc::unbounded_channel();
+                                n_rxs.push(rx);
+                                n_txs.push(tx);
                             }
+
                             receivers.insert(id, n_rxs);
-                            merge::run(rxs, tx, self.stop_signal_tx.subscribe());
+                            merge::run(rxs, n_txs, self.stop_signal_tx.subscribe());
                             debug!("here");
                             break;
                         }
-                        NodeType::Window => {
-                            let source_ids = incoming_edges.get(&id).unwrap();
-                            let source_id = source_ids[0];
-                            let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
-                            let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                            let mut rxs = vec![];
-                            let cnt = outgoing_edges.get(&id).unwrap().len();
-                            for _ in 0..cnt {
-                                rxs.push(tx.subscribe());
-                            }
-                            receivers.insert(id, rxs);
-                            let window_conf: WindowConf =
-                                serde_json::from_value(node.conf.clone())?;
-                            window::run(window_conf, rx, tx, self.stop_signal_tx.subscribe())
-                                .unwrap();
-                        }
+                        // NodeType::Window => {
+                        //     let source_ids = incoming_edges.get(&id).unwrap();
+                        //     let source_id = source_ids[0];
+                        //     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
+                        //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
+                        //     let mut rxs = vec![];
+                        //     let cnt = outgoing_edges.get(&id).unwrap().len();
+                        //     for _ in 0..cnt {
+                        //         rxs.push(tx.subscribe());
+                        //     }
+                        //     receivers.insert(id, rxs);
+                        //     let window_conf: WindowConf =
+                        //         serde_json::from_value(node.conf.clone())?;
+                        //     window::run(window_conf, rx, tx, self.stop_signal_tx.subscribe())
+                        //         .unwrap();
+                        // }
                         NodeType::Filter => {
                             let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
                             functions.push(filter::new(conf)?);
@@ -193,7 +195,7 @@ impl Rule {
                                     break;
                                 }
                             };
-                            mpsc_tx = Some(tx);
+                            txs.push(tx);
                         }
                         NodeType::AppSink => {
                             ids.push(id);
@@ -211,7 +213,7 @@ impl Rule {
                                     break;
                                 }
                             };
-                            mpsc_tx = Some(tx);
+                            txs.push(tx);
                         }
                         NodeType::Databoard => {
                             ids.push(id);
@@ -235,7 +237,7 @@ impl Rule {
                                     break;
                                 }
                             };
-                            mpsc_tx = Some(tx);
+                            txs.push(tx);
                         }
                         NodeType::Operator => todo!(),
                         NodeType::Log => {
@@ -255,6 +257,7 @@ impl Rule {
                             functions.push(log::new(log_node.name, tx));
                             is_log = true;
                         }
+                        _ => todo!(),
                     }
                 }
 
@@ -268,44 +271,7 @@ impl Rule {
                     let source_id = source_ids[0];
                     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
 
-                    match mpsc_tx {
-                        Some(mpsc_tx) => {
-                            start_segment(
-                                rx,
-                                functions,
-                                Some(mpsc_tx),
-                                None,
-                                self.stop_signal_tx.subscribe(),
-                            );
-                        }
-                        None => match is_log {
-                            true => {
-                                start_segment(
-                                    rx,
-                                    functions,
-                                    None,
-                                    None,
-                                    self.stop_signal_tx.subscribe(),
-                                );
-                            }
-                            false => {
-                                let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                                let mut rxs = vec![];
-                                let cnt = outgoing_edges.get(&ids.last().unwrap()).unwrap().len();
-                                for _ in 0..cnt {
-                                    rxs.push(tx.subscribe());
-                                }
-                                receivers.insert(*ids.last().unwrap(), rxs);
-                                start_segment(
-                                    rx,
-                                    functions,
-                                    None,
-                                    Some(tx),
-                                    self.stop_signal_tx.subscribe(),
-                                );
-                            }
-                        },
-                    }
+                    start_segment(rx, functions, txs, self.stop_signal_tx.subscribe());
                 }
             }
         }

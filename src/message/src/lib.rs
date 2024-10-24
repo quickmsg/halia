@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fmt,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -17,6 +18,21 @@ pub struct MessageBatch {
     name: String,
     metadata: HashMap<String, MessageValue>,
     messages: Vec<Message>,
+}
+
+#[derive(Clone)]
+pub enum RuleMessageBatch {
+    Owned(MessageBatch),
+    Arc(Arc<MessageBatch>),
+}
+
+impl RuleMessageBatch {
+    pub fn take_mb(self) -> MessageBatch {
+        match self {
+            RuleMessageBatch::Owned(mb) => mb,
+            RuleMessageBatch::Arc(mb) => (*mb).clone(),
+        }
+    }
 }
 
 impl MessageBatch {

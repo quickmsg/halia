@@ -14,7 +14,7 @@ use common::{
     error::{HaliaError, HaliaResult},
 };
 use dashmap::DashMap;
-use message::MessageBatch;
+use message::{MessageBatch, RuleMessageBatch};
 use protocol::modbus::{self, rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
@@ -688,21 +688,13 @@ impl Device for Modbus {
         }
     }
 
-    // async fn get_source_rx(
-    //     &self,
-    //     source_id: &String,
-    // ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-    //     match self.sources.get(source_id) {
-    //         Some(source) => Ok(source.mb_tx.subscribe()),
-    //         None => Err(HaliaError::NotFound(source_id.to_owned())),
-    //     }
-    // }
     async fn get_source_rx(
         &self,
         source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.sources.get(source_id) {
-            Some(source) => Ok(source.mb_tx.subscribe()),
+    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+        match self.sources.get_mut(source_id) {
+            // Some(source) => Ok(source.mb_tx.subscribe()),
+            Some(mut source) => Ok(source.get_rx()),
             None => Err(HaliaError::NotFound(source_id.to_owned())),
         }
     }
