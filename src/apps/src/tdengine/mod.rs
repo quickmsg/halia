@@ -6,7 +6,7 @@ use std::sync::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use sink::Sink;
 use taos::{AsyncQueryable, AsyncTBuilder, Taos, TaosBuilder};
 use tokio::sync::mpsc;
@@ -119,11 +119,15 @@ impl App for TDengine {
         }
     }
 
-    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.get(sink_id) {
-            Some(sink) => Ok(sink.mb_tx.clone()),
-            None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        }
+    async fn get_sink_tx(
+        &self,
+        sink_id: &String,
+    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+        // match self.sinks.get(sink_id) {
+        //     Some(sink) => Ok(sink.mb_tx.clone()),
+        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        // }
+        todo!()
     }
 }
 

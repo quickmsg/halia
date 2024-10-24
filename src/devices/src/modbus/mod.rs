@@ -14,7 +14,7 @@ use common::{
     error::{HaliaError, HaliaResult},
 };
 use dashmap::DashMap;
-use message::{MessageBatch, RuleMessageBatch};
+use message::RuleMessageBatch;
 use protocol::modbus::{self, rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
@@ -699,7 +699,10 @@ impl Device for Modbus {
         }
     }
 
-    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    async fn get_sink_tx(
+        &self,
+        sink_id: &String,
+    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
         match self.sinks.get(sink_id) {
             Some(sink) => Ok(sink.mb_tx.clone()),
             None => Err(HaliaError::NotFound(sink_id.to_owned())),

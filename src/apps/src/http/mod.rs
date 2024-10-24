@@ -6,11 +6,11 @@ use std::sync::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use reqwest::RequestBuilder;
 use sink::Sink;
 use source::Source;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::mpsc;
 use types::apps::{
     http_client::{BasicAuth, HttpClientConf, SinkConf, SourceConf},
     SearchAppsItemRunningInfo,
@@ -172,18 +172,23 @@ impl App for HttpClient {
     async fn get_source_rx(
         &self,
         source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.sources.get(source_id) {
-            Some(source) => Ok(source.mb_tx.subscribe()),
-            None => Err(HaliaError::NotFound(source_id.to_owned())),
-        }
+    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+        todo!()
+        // match self.sources.get(source_id) {
+        //     Some(source) => Ok(source.mb_tx.subscribe()),
+        //     None => Err(HaliaError::NotFound(source_id.to_owned())),
+        // }
     }
 
-    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.get(sink_id) {
-            Some(sink) => Ok(sink.mb_tx.clone()),
-            None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        }
+    async fn get_sink_tx(
+        &self,
+        sink_id: &String,
+    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+        todo!()
+        // match self.sinks.get(sink_id) {
+        //     Some(sink) => Ok(sink.mb_tx.clone()),
+        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        // }
     }
 }
 

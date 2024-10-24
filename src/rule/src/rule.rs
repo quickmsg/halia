@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use common::error::{HaliaError, HaliaResult};
 use functions::{computes, filter, log, merge::merge};
-use message::{MessageBatch, RuleMessageBatch};
+use message::RuleMessageBatch;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error};
 use types::rules::{
@@ -122,7 +122,6 @@ impl Rule {
                 let mut functions = vec![];
                 let mut ids = vec![];
                 let mut txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>> = vec![];
-                let mut is_log = false;
 
                 for id in oned_ids {
                     let node = node_map.get(&id).unwrap();
@@ -255,7 +254,6 @@ impl Rule {
                                 }
                             };
                             functions.push(log::new(log_node.name, tx));
-                            is_log = true;
                         }
                         _ => todo!(),
                     }
@@ -269,9 +267,8 @@ impl Rule {
                     let source_ids = incoming_edges.get(&ids[0]).unwrap();
                     debug!("{:?}", source_ids);
                     let source_id = source_ids[0];
-                    let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
-
-                    start_segment(rx, functions, txs, self.stop_signal_tx.subscribe());
+                    let rxs = receivers.remove(&source_id).unwrap();
+                    start_segment(rxs, functions, txs, self.stop_signal_tx.subscribe());
                 }
             }
         }

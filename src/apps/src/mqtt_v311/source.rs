@@ -1,16 +1,13 @@
-use common::{
-    constants::CHANNEL_SIZE,
-    error::{HaliaError, HaliaResult},
-};
-use message::MessageBatch;
+use common::error::{HaliaError, HaliaResult};
+use message::RuleMessageBatch;
 use rumqttc::valid_filter;
 use schema::Decoder;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use types::apps::mqtt_client_v311::SourceConf;
 
 pub struct Source {
     pub conf: SourceConf,
-    pub mb_tx: broadcast::Sender<MessageBatch>,
+    pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
     pub decoder: Box<dyn Decoder>,
 }
 
@@ -19,10 +16,9 @@ impl Source {
         let decoder = schema::new_decoder(&conf.decode_type, &conf.schema_id)
             .await
             .unwrap();
-        let (mb_tx, _) = broadcast::channel(CHANNEL_SIZE);
         Source {
             conf,
-            mb_tx,
+            mb_txs: vec![],
             decoder,
         }
     }
@@ -45,5 +41,11 @@ impl Source {
         }
 
         Ok(())
+    }
+
+    pub fn get_rx(&mut self) -> UnboundedReceiver<RuleMessageBatch> {
+        let (tx, rx) = unbounded_channel();
+        self.mb_txs.push(tx);
+        rx
     }
 }

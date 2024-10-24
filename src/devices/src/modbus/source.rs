@@ -191,17 +191,16 @@ impl Source {
 
                 // todo 没有receiver时不请求
                 // 删除关闭的channel
-                let mb;
                 match self.mb_txs.len() {
                     0 => {}
                     1 => {
-                        mb = RuleMessageBatch::Owned(message_batch);
+                        let mb = RuleMessageBatch::Owned(message_batch);
                         if let Err(_) = self.mb_txs[0].send(mb) {
                             self.mb_txs.remove(0);
                         }
                     }
                     _ => {
-                        mb = RuleMessageBatch::Arc(Arc::new(message_batch));
+                        let mb = RuleMessageBatch::Arc(Arc::new(message_batch));
                         self.mb_txs.retain(|tx| tx.send(mb.clone()).is_ok());
                     }
                 }

@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::{MessageBatch, RuleMessageBatch};
+use message::RuleMessageBatch;
 use opcua::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, Identifier, MonitoringMode, NodeId, StatusCode},
@@ -361,11 +361,15 @@ impl Device for Opcua {
         todo!()
     }
 
-    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.get(sink_id) {
-            Some(sink) => Ok(sink.mb_tx.clone()),
-            None => Err(HaliaError::NotFound(sink_id.to_string())),
-        }
+    async fn get_sink_tx(
+        &self,
+        sink_id: &String,
+    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+        // match self.sinks.get(sink_id) {
+        //     Some(sink) => Ok(sink.mb_tx.clone()),
+        //     None => Err(HaliaError::NotFound(sink_id.to_string())),
+        // }
+        todo!()
     }
 
     async fn stop(&mut self) {

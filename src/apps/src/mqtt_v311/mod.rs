@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use rumqttc::{mqttbytes, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS};
 use sink::Sink;
 use source::Source;
@@ -223,7 +223,7 @@ impl MqttClient {
                     _ = app_err_tx.send(false);
                     *device_err.write().await = None;
                 }
-                for source in sources.iter_mut() {
+                for mut source in sources.iter_mut() {
                     if matches(&p.topic, &source.conf.topic) {
                         debug!("matches");
                         // TODO remove clone
@@ -235,14 +235,17 @@ impl MqttClient {
                             }
                         };
 
-                        debug!("{:?}", mb);
-
-                        debug!("receiver_count:{}", source.mb_tx.receiver_count());
-
-                        if source.mb_tx.receiver_count() > 0 {
-                            debug!("here");
-                            if let Err(e) = source.mb_tx.send(mb) {
-                                warn!("{}", e);
+                        match source.mb_txs.len() {
+                            0 => {}
+                            1 => {
+                                let mb = RuleMessageBatch::Owned(mb);
+                                if let Err(_) = source.mb_txs[0].send(mb) {
+                                    source.mb_txs.remove(0);
+                                }
+                            }
+                            _ => {
+                                let mb = RuleMessageBatch::Arc(Arc::new(mb));
+                                source.mb_txs.retain(|tx| tx.send(mb.clone()).is_ok());
                             }
                         }
                     }
@@ -453,17 +456,22 @@ impl App for MqttClient {
     async fn get_source_rx(
         &self,
         source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
-        match self.sources.get(source_id) {
-            Some(source) => Ok(source.mb_tx.subscribe()),
-            None => Err(HaliaError::NotFound(source_id.to_owned())),
-        }
+    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+        todo!()
+        // match self.sources.get(source_id) {
+        //     Some(source) => Ok(source.mb_tx.subscribe()),
+        //     None => Err(HaliaError::NotFound(source_id.to_owned())),
+        // }
     }
 
-    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
-        match self.sinks.get(sink_id) {
-            Some(sink) => Ok(sink.mb_tx.clone()),
-            None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        }
+    async fn get_sink_tx(
+        &self,
+        sink_id: &String,
+    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+        // match self.sinks.get(sink_id) {
+        //     Some(sink) => Ok(sink.mb_tx.clone()),
+        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        // }
+        todo!()
     }
 }

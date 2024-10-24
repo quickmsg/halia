@@ -2,24 +2,33 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use functions::Function;
+use futures::StreamExt;
 use message::RuleMessageBatch;
 use tokio::{
     select,
     sync::{broadcast, mpsc},
 };
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::debug;
 use types::rules::Node;
 
 pub fn start_segment(
-    mut rx: mpsc::UnboundedReceiver<RuleMessageBatch>,
+    rxs: Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>,
     functions: Vec<Box<dyn Function>>,
     txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
     mut stop_signal_rx: broadcast::Receiver<()>,
 ) {
+    let streams: Vec<_> = rxs
+        .into_iter()
+        .map(|rx| UnboundedReceiverStream::new(rx))
+        .collect();
+
+    let mut stream = futures::stream::select_all(streams);
+
     tokio::spawn(async move {
         loop {
             select! {
-                Some(mb) = rx.recv() => {
+                Some(mb) = stream.next() => {
                     handle_segment_mb(mb, &functions, &txs).await;
                 }
                 _ = stop_signal_rx.recv() => {

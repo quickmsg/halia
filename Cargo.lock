@@ -4352,10 +4352,12 @@ dependencies = [
  "devices",
  "events",
  "functions",
+ "futures",
  "message",
  "serde_json",
  "storage",
  "tokio",
+ "tokio-stream",
  "tracing",
  "types",
 ]

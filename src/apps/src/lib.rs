@@ -1,13 +1,13 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, LazyLock,
+    LazyLock,
 };
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::{MessageBatch, RuleMessageBatch};
-use tokio::sync::{broadcast, mpsc};
+use message::RuleMessageBatch;
+use tokio::sync::mpsc;
 use types::{
     apps::{
         AppConf, AppType, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsItemCommon,
@@ -101,7 +101,7 @@ pub trait App: Send + Sync {
     async fn get_source_rx(
         &self,
         _source_id: &String,
-    ) -> HaliaResult<broadcast::Receiver<MessageBatch>> {
+    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
         Err(HaliaError::NotSupportResource)
     }
 
@@ -113,7 +113,10 @@ pub trait App: Send + Sync {
         new_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()>;
-    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>>;
+    async fn get_sink_tx(
+        &self,
+        sink_id: &String,
+    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>>;
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
@@ -427,13 +430,12 @@ pub async fn get_source_rx(
     app_id: &String,
     source_id: &String,
 ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
-    // if let Some(app) = GLOBAL_APP_MANAGER.get(app_id) {
-    //     app.get_source_rx(source_id).await
-    // } else {
-    //     let name = storage::app::read_name(app_id).await?;
-    //     Err(HaliaError::Stopped(name))
-    // }
-    todo!()
+    if let Some(app) = GLOBAL_APP_MANAGER.get(app_id) {
+        app.get_source_rx(source_id).await
+    } else {
+        let name = storage::app::read_name(app_id).await?;
+        Err(HaliaError::Stopped(name))
+    }
 }
 
 pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
@@ -541,13 +543,12 @@ pub async fn get_sink_tx(
     app_id: &String,
     sink_id: &String,
 ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
-    todo!()
-    // if let Some(app) = GLOBAL_APP_MANAGER.get(app_id) {
-    //     app.get_sink_tx(sink_id).await
-    // } else {
-    //     let name = storage::app::read_name(app_id).await?;
-    //     Err(HaliaError::Stopped(name))
-    // }
+    if let Some(app) = GLOBAL_APP_MANAGER.get(app_id) {
+        app.get_sink_tx(sink_id).await
+    } else {
+        let name = storage::app::read_name(app_id).await?;
+        Err(HaliaError::Stopped(name))
+    }
 }
 
 async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<SearchAppsItemResp> {

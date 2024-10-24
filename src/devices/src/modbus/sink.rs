@@ -1,10 +1,9 @@
 use common::{
-    constants,
     error::HaliaResult,
     get_dynamic_value_from_json,
     sink_message_retain::{self, SinkMessageRetain},
 };
-use message::MessageBatch;
+use message::{MessageBatch, RuleMessageBatch};
 use tokio::{
     select,
     sync::{broadcast, mpsc, watch},
@@ -18,14 +17,13 @@ use super::WritePointEvent;
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: mpsc::UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
     pub conf: SinkConf,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub mb_rx: mpsc::UnboundedReceiver<RuleMessageBatch>,
     pub write_tx: mpsc::Sender<WritePointEvent>,
     pub device_err_rx: broadcast::Receiver<bool>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
@@ -42,7 +40,7 @@ impl Sink {
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(constants::CHANNEL_SIZE);
+        let (mb_tx, mb_rx) = mpsc::unbounded_channel();
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
         let join_handle_data = JoinHandleData {
@@ -81,8 +79,8 @@ impl Sink {
                     }
 
                     mb = join_handle_data.mb_rx.recv() => {
-                        debug!("{:?}", mb);
                         if let Some(mb) = mb {
+                            let mb = mb.take_mb();
                             if !device_err {
                                 Self::send_write_point_event(mb, &join_handle_data.conf, &join_handle_data.write_tx).await;
                             } else {

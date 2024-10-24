@@ -1,12 +1,12 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, LazyLock,
+    LazyLock,
 };
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::{MessageBatch, RuleMessageBatch};
+use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     devices::{
@@ -133,7 +133,10 @@ pub trait Device: Send + Sync {
         source_id: &String,
     ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>>;
 
-    async fn get_sink_tx(&self, sink_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>>;
+    async fn get_sink_tx(
+        &self,
+        sink_id: &String,
+    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>>;
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
@@ -688,13 +691,12 @@ pub async fn get_sink_tx(
     device_id: &String,
     sink_id: &String,
 ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
-    // if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
-    //     device.get_sink_tx(sink_id).await
-    // } else {
-    //     let device_name = storage::device::device::read_name(&device_id).await?;
-    //     Err(HaliaError::Stopped(format!("设备：{}", device_name)))
-    // }
-    todo!()
+    if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
+        device.get_sink_tx(sink_id).await
+    } else {
+        let device_name = storage::device::device::read_name(&device_id).await?;
+        Err(HaliaError::Stopped(format!("设备：{}", device_name)))
+    }
 }
 
 async fn transer_db_device_to_resp(
