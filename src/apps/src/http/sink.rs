@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common::error::HaliaResult;
 use message::RuleMessageBatch;
-use reqwest::{Client, ClientBuilder};
+use reqwest::Client;
 use tokio::{
     select,
     sync::{
@@ -14,7 +14,7 @@ use tokio::{
 use tracing::{trace, warn};
 use types::apps::http_client::{HttpClientConf, SinkConf};
 
-use super::build_headers;
+use super::{build_headers, build_http_client};
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -34,11 +34,12 @@ impl Sink {
     pub fn new(http_client_conf: Arc<HttpClientConf>, conf: SinkConf) -> Sink {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = unbounded_channel();
+        let client = build_http_client(&http_client_conf);
         let join_handle_data = JoinHandleData {
             stop_signal_rx,
             http_client_conf,
             conf,
-            client: Client::new(),
+            client,
             mb_rx,
         };
         let join_handle = Self::event_loop(join_handle_data);
@@ -62,6 +63,17 @@ impl Sink {
     }
 
     fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+        let schema = match join_handle_data.http_client_conf.ssl_enable {
+            true => "https",
+            false => "http",
+        };
+        let url = format!(
+            "{}://{}:{}{}",
+            schema,
+            &join_handle_data.http_client_conf.host,
+            join_handle_data.http_client_conf.port,
+            &join_handle_data.conf.path
+        );
         tokio::spawn(async move {
             loop {
                 select! {
@@ -71,7 +83,7 @@ impl Sink {
 
                     mb = join_handle_data.mb_rx.recv() => {
                         match mb {
-                            Some(mb) => Sink::send_request(&join_handle_data.client, &join_handle_data.http_client_conf, &join_handle_data.conf, mb).await,
+                            Some(mb) => Sink::send_request(&join_handle_data.client, &url, &join_handle_data.http_client_conf, &join_handle_data.conf, mb).await,
                             None => warn!("http客户端收到空消息"),
                         }
                     }
@@ -82,17 +94,12 @@ impl Sink {
 
     async fn send_request(
         client: &Client,
+        url: &String,
         http_client_conf: &Arc<HttpClientConf>,
         conf: &SinkConf,
         _mb: RuleMessageBatch,
     ) {
         // todo 重复使用
-        let url = format!("{}{}", &http_client_conf.host, &conf.path);
-
-        let client_builder = ClientBuilder::new()
-            // .timeout(Duration::from_secs(http_client_conf.timeout))
-            .build()
-            .unwrap();
 
         let mut builder = match conf.method {
             types::apps::http_client::SinkMethod::Get => client.get(url),

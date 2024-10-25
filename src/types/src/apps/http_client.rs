@@ -8,8 +8,7 @@ pub struct HttpClientConf {
     pub port: u16,
 
     pub ssl_enable: bool,
-    pub ssl: Option<SslConf>,
-    // pub certifacte_verfication: bool,
+    pub ssl_conf: Option<SslConf>,
     pub basic_auth: Option<BasicAuth>,
     pub headers: Option<Vec<(String, String)>>,
     pub query_params: Option<Vec<(String, String)>>,

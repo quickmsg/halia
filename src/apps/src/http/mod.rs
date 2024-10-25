@@ -190,12 +190,25 @@ impl App for HttpClient {
     }
 }
 
-fn build_client(ca: Vec<u8>) -> Client {
+fn build_http_client(http_client_conf: &HttpClientConf) -> Client {
     let mut builder = ClientBuilder::new();
-    builder = builder.add_root_certificate(Certificate::from_pem(&ca).unwrap());
-    builder = builder.identity(Identity::from_pem(todo!()).unwrap());
-    let client = builder.build().unwrap();
-    client
+    if let Some(ssl_conf) = &http_client_conf.ssl_conf {
+        if let Some(ca_cert) = &ssl_conf.ca_cert {
+            builder =
+                builder.add_root_certificate(Certificate::from_pem(ca_cert.as_bytes()).unwrap());
+        }
+
+        match (&ssl_conf.client_cert, &ssl_conf.client_key) {
+            (Some(client_cert), Some(client_key)) => {
+                builder = builder.identity(
+                    Identity::from_pem(format!("{}{}", client_cert, client_key).as_bytes())
+                        .unwrap(),
+                );
+            }
+            _ => {}
+        }
+    }
+    builder.build().unwrap()
 }
 
 fn build_basic_auth(
