@@ -144,13 +144,6 @@ async fn new_tdengine_client(td_engine_conf: &Arc<TDengineConf>, sink_conf: &Sin
                 td_engine_conf.host,
                 td_engine_conf.port
             )
-            // format!(
-            //     "taos://{}:{}@{}:{}",
-            //     auth_password.username,
-            //     auth_password.password,
-            //     td_engine_conf.host,
-            //     td_engine_conf.port
-            // )
         }
     };
     let taos = TaosBuilder::from_dsn(dsn).unwrap().build().await.unwrap();

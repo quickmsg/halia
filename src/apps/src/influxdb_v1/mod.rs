@@ -8,7 +8,7 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use sink::Sink;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedSender;
 use types::apps::{
     influxdb_v1::{Conf, SinkConf},
     SearchAppsItemRunningInfo,
@@ -130,11 +130,10 @@ impl App for Influxdb {
     async fn get_sink_tx(
         &self,
         sink_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
-        todo!()
-        // match self.sinks.get(sink_id) {
-        //     Some(sink) => Ok(sink.mb_tx.clone()),
-        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        // }
+    ) -> HaliaResult<UnboundedSender<RuleMessageBatch>> {
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }

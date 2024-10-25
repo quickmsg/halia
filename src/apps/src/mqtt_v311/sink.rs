@@ -34,7 +34,7 @@ pub struct JoinHandleData {
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
     pub mqtt_client: Arc<AsyncClient>,
-    pub app_err_rx: broadcast::Receiver<bool>,
+    pub _app_err_rx: broadcast::Receiver<bool>,
 }
 
 impl Sink {
@@ -65,7 +65,7 @@ impl Sink {
             stop_signal_rx,
             mb_rx,
             mqtt_client,
-            app_err_rx,
+            _app_err_rx: app_err_rx,
         };
 
         let join_handle = Self::event_loop(join_handle_data);
@@ -94,6 +94,7 @@ impl Sink {
                                 Ok(data) => {
                                     if let Err(e) = &join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, data).await {
                                         warn!("{:?}", e);
+                                        err = true;
                                     }
                                 }
                                 Err(e) => warn!("{:?}", e),

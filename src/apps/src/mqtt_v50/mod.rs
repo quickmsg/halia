@@ -54,13 +54,13 @@ pub struct MqttClient {
     rtt: AtomicU16,
 }
 
-struct JoinHandleData {
-    conf: MqttClientConf,
-    stop_signal_rx: mpsc::Receiver<()>,
-    app_err_tx: broadcast::Sender<bool>,
-    sources: Arc<DashMap<String, Source>>,
-    app_err: Arc<RwLock<Option<String>>>,
-}
+// struct JoinHandleData {
+//     conf: MqttClientConf,
+//     stop_signal_rx: mpsc::Receiver<()>,
+//     app_err_tx: broadcast::Sender<bool>,
+//     sources: Arc<DashMap<String, Source>>,
+//     app_err: Arc<RwLock<Option<String>>>,
+// }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: MqttClientConf = serde_json::from_value(conf).unwrap();
@@ -471,7 +471,7 @@ impl App for MqttClient {
 
     async fn get_source_rx(
         &self,
-        source_id: &String,
+        _source_id: &String,
     ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
         todo!()
         // match self.sources.get(source_id) {
@@ -482,7 +482,7 @@ impl App for MqttClient {
 
     async fn get_sink_tx(
         &self,
-        sink_id: &String,
+        _sink_id: &String,
     ) -> HaliaResult<UnboundedSender<RuleMessageBatch>> {
         todo!()
         // match self.sinks.get(sink_id) {

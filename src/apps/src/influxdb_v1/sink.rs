@@ -6,10 +6,13 @@ use common::{
     sink_message_retain::{self, SinkMessageRetain},
 };
 use influxdb::{Client, InfluxDbWriteable as _, Timestamp, Type};
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use tokio::{
     select,
-    sync::{mpsc, watch},
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::debug;
@@ -18,7 +21,7 @@ use types::apps::influxdb_v1::{Conf, SinkConf};
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
@@ -26,7 +29,7 @@ pub struct JoinHandleData {
     pub influxdb_conf: Arc<Conf>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
 }
 
 impl Sink {
@@ -36,7 +39,7 @@ impl Sink {
 
     pub fn new(conf: SinkConf, influxdb_conf: Arc<Conf>) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = unbounded_channel();
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
         let join_handle_data = JoinHandleData {
@@ -67,11 +70,11 @@ impl Sink {
                         return join_handle_data;
                     }
 
-                    Some(mb) = join_handle_data.mb_rx.recv() => {
+                    Some(rmb) = join_handle_data.mb_rx.recv() => {
                         if !app_err {
-                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, mb).await;
+                            Self::send_msg_to_influxdb(&influxdb_client, &join_handle_data.conf, rmb).await;
                         } else {
-                            join_handle_data.message_retainer.push(mb);
+                            join_handle_data.message_retainer.push(rmb.take_mb());
                         }
                     }
                 }
@@ -79,7 +82,12 @@ impl Sink {
         })
     }
 
-    async fn send_msg_to_influxdb(influxdb_client: &Client, conf: &SinkConf, mb: MessageBatch) {
+    async fn send_msg_to_influxdb(
+        influxdb_client: &Client,
+        conf: &SinkConf,
+        rmb: RuleMessageBatch,
+    ) {
+        let mb = rmb.take_mb();
         let mut querys = vec![];
         for msg in mb.get_messages() {
             let timestamp = match &conf.precision {
