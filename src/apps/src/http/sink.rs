@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use common::error::HaliaResult;
 use message::RuleMessageBatch;
-use reqwest::Client;
+use reqwest::{Client, ClientBuilder};
 use tokio::{
     select,
     sync::{
@@ -88,6 +88,11 @@ impl Sink {
     ) {
         // todo 重复使用
         let url = format!("{}{}", &http_client_conf.host, &conf.path);
+
+        let client_builder = ClientBuilder::new()
+            // .timeout(Duration::from_secs(http_client_conf.timeout))
+            .build()
+            .unwrap();
 
         let mut builder = match conf.method {
             types::apps::http_client::SinkMethod::Get => client.get(url),

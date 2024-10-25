@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{schema::{DecodeType, EncodeType}, MessageRetain, PlainOrBase64Value, Ssl};
+use crate::{
+    schema::{DecodeType, EncodeType},
+    MessageRetain, PlainOrBase64Value, SslConf,
+};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct Conf {
@@ -19,7 +22,7 @@ pub struct Conf {
     pub clean_session: bool,
 
     pub ssl_enable: bool,
-    pub ssl: Option<Ssl>,
+    pub ssl_conf: Option<SslConf>,
 
     pub last_will_enable: bool,
     pub last_will: Option<LastWill>,

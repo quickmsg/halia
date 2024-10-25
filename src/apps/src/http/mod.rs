@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
-use reqwest::RequestBuilder;
+use reqwest::{Certificate, Client, ClientBuilder, Identity, RequestBuilder};
 use sink::Sink;
 use source::Source;
 use tokio::sync::mpsc;
@@ -188,6 +188,14 @@ impl App for HttpClient {
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }
+}
+
+fn build_client(ca: Vec<u8>) -> Client {
+    let mut builder = ClientBuilder::new();
+    builder = builder.add_root_certificate(Certificate::from_pem(&ca).unwrap());
+    builder = builder.identity(Identity::from_pem(todo!()).unwrap());
+    let client = builder.build().unwrap();
+    client
 }
 
 fn build_basic_auth(

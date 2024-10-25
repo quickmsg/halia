@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{MessageRetain, Ssl};
+use crate::{MessageRetain, SslConf};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct Conf {
@@ -12,7 +12,7 @@ pub struct Conf {
     pub auth_api_token: Option<AuthApiToken>,
 
     pub ssl_enable: bool,
-    pub ssl: Option<Ssl>,
+    pub ssl_conf: Option<SslConf>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

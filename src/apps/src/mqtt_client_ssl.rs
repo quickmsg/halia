@@ -8,12 +8,12 @@ use rumqttc::tokio_rustls::rustls::{
     ClientConfig, RootCertStore, SignatureScheme,
 };
 use rustls_pemfile::Item;
-use types::Ssl;
+use types::SslConf;
 
-pub(crate) fn get_ssl_config(ssl: &Ssl) -> ClientConfig {
-    let builder = match &ssl.verify {
+pub(crate) fn get_ssl_config(ssl_conf: &SslConf) -> ClientConfig {
+    let builder = match &ssl_conf.verify {
         true => {
-            let root_cert_store = match &ssl.ca_cert {
+            let root_cert_store = match &ssl_conf.ca_cert {
                 Some(ca_cert) => {
                     let mut root_cert_store = RootCertStore::empty();
                     let certs = rustls_pemfile::certs(&mut BufReader::new(Cursor::new(ca_cert)))
@@ -35,7 +35,7 @@ pub(crate) fn get_ssl_config(ssl: &Ssl) -> ClientConfig {
             .with_custom_certificate_verifier(Arc::new(ServerCertVerifierNo {})),
     };
 
-    match (&ssl.client_cert, &ssl.client_key) {
+    match (&ssl_conf.client_cert, &ssl_conf.client_key) {
         (Some(client_cert), Some(client_key)) => {
             let client_cert = client_cert.clone().into_bytes();
             let client_key = client_key.clone().into_bytes();

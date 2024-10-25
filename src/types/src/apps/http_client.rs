@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-// TODO 证书
+use crate::SslConf;
+
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct HttpClientConf {
     pub host: String,
     pub port: u16,
 
-    // pub ssl: bool,
+    pub ssl_enable: bool,
+    pub ssl: Option<SslConf>,
     // pub certifacte_verfication: bool,
     pub basic_auth: Option<BasicAuth>,
     pub headers: Option<Vec<(String, String)>>,

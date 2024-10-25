@@ -23,7 +23,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::{debug, error, warn};
+use tracing::{error, warn};
 use types::apps::{
     mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf},
     SearchAppsItemRunningInfo,
@@ -164,7 +164,7 @@ impl MqttClient {
         }
 
         if join_handle_data.conf.ssl_enable {
-            let config = get_ssl_config(&join_handle_data.conf.ssl.as_ref().unwrap());
+            let config = get_ssl_config(&join_handle_data.conf.ssl_conf.as_ref().unwrap());
             let transport =
                 rumqttc::Transport::Tls(rumqttc::TlsConfiguration::Rustls(Arc::new(config)));
             mqtt_options.set_transport(transport);
@@ -229,8 +229,6 @@ impl MqttClient {
                 }
                 for mut source in sources.iter_mut() {
                     if matches(&p.topic, &source.conf.topic) {
-                        debug!("matches");
-                        // TODO remove clone
                         let mb = match source.decoder.decode(p.payload.clone()) {
                             Ok(mb) => mb,
                             Err(e) => {
@@ -256,8 +254,6 @@ impl MqttClient {
                 }
             }
             Ok(_event) => {
-                // debug!("{:?}", event);
-                // debug!("v311 event ok null");
                 if *err {
                     *err = false;
                     _ = app_err_tx.send(false);

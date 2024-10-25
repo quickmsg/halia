@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{MessageRetain, PlainOrBase64Value, Ssl};
+use crate::{MessageRetain, PlainOrBase64Value, SslConf};
 
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct MqttClientConf {
@@ -25,7 +25,8 @@ pub struct MqttClientConf {
     pub authentication_method: Option<String>,
     pub authentication_data: Option<PlainOrBase64Value>,
 
-    pub ssl: Ssl,
+    pub ssl_enable: bool,
+    pub ssl_conf: SslConf,
     pub last_will: Option<LastWill>,
 }
 
