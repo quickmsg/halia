@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use coap::{
+use coap_protocol::{
     client::UdpCoAPClient,
     request::{Method, RequestBuilder},
 };

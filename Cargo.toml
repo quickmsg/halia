@@ -7,7 +7,6 @@ members = [
     "src/devices",
     "src/common",
     "src/functions",
-    "src/protocol",
     "src/rule",
     "src/apps",
     "src/databoard",
@@ -29,7 +28,6 @@ types = { path = "src/types" }
 message = { path = "src/message" }
 devices = { path = "src/devices" }
 common = { path = "src/common" }
-protocol = { path = "src/protocol" }
 functions = { path = "src/functions" }
 rule = { path = "src/rule" }
 apps = { path = "src/apps" }

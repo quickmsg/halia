@@ -1528,7 +1528,6 @@ dependencies = [
  "message",
  "modbus",
  "opcua",
- "protocol",
  "rand",
  "serde",
  "serde_json",
@@ -3855,30 +3854,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "protocol"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "byteorder",
- "bytes",
- "coap-lite",
- "futures",
- "futures-util",
- "rand",
- "regex",
- "smallvec",
- "thiserror",
- "tokio",
- "tokio-serial",
- "tokio-stream",
- "tokio-util",
- "tracing",
- "url 2.5.2",
- "webrtc-dtls",
- "webrtc-util",
-]
-
-[[package]]
 name = "ptr_meta"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4939,7 +4914,6 @@ dependencies = [
  "common",
  "databoard",
  "devices",
- "protocol",
  "rule",
  "sqlx",
  "storage",

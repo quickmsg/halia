@@ -15,7 +15,7 @@ use common::{
 };
 use dashmap::DashMap;
 use message::RuleMessageBatch;
-use protocol::modbus::{self, rtu, tcp, Context};
+use modbus_protocol::{self, rtu, tcp, Context};
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -468,7 +468,10 @@ impl WritePointEvent {
     }
 }
 
-async fn write_value(ctx: &mut Box<dyn modbus::Context>, wpe: WritePointEvent) -> HaliaResult<()> {
+async fn write_value(
+    ctx: &mut Box<dyn modbus_protocol::Context>,
+    wpe: WritePointEvent,
+) -> HaliaResult<()> {
     let resp = match (wpe.area, wpe.data_type.typ) {
         (Area::Coils, Type::Bool) => {
             ctx.write_single_coil(wpe.slave, wpe.address, wpe.data)
@@ -510,12 +513,12 @@ async fn write_value(ctx: &mut Box<dyn modbus::Context>, wpe: WritePointEvent) -
     match resp {
         Ok(_) => Ok(()),
         Err(e) => match e {
-            protocol::modbus::ModbusError::Transport(t) => Err(HaliaError::Io(t)),
-            protocol::modbus::ModbusError::Protocol(e) => {
+            modbus_protocol::ModbusError::Transport(t) => Err(HaliaError::Io(t)),
+            modbus_protocol::ModbusError::Protocol(e) => {
                 warn!("modbus device_type err :{:?}", e);
                 Ok(())
             }
-            protocol::modbus::ModbusError::Exception(e) => {
+            modbus_protocol::ModbusError::Exception(e) => {
                 warn!("modbus exception err :{:?}", e);
                 Ok(())
             }

@@ -1,7 +1,7 @@
 use std::io::Result as IoResult;
 use std::{sync::Arc, time::Duration};
 
-use coap::{
+use coap_protocol::{
     client::{ObserveMessage, UdpCoAPClient},
     request::{Method, RequestBuilder},
 };

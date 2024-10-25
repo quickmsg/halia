@@ -2,7 +2,7 @@ use std::{io, sync::Arc, time::Duration};
 
 use common::error::{HaliaError, HaliaResult};
 use message::{Message, MessageBatch, RuleMessageBatch};
-use protocol::modbus::Context;
+use modbus_protocol::Context;
 use tokio::{
     select,
     sync::{broadcast, mpsc, watch},
@@ -208,13 +208,13 @@ impl Source {
                 Ok(())
             }
             Err(e) => match e {
-                protocol::modbus::ModbusError::Transport(e) => Err(e),
-                protocol::modbus::ModbusError::Protocol(e) => {
+                modbus_protocol::ModbusError::Transport(e) => Err(e),
+                modbus_protocol::ModbusError::Protocol(e) => {
                     warn!("{}", e);
                     self.err_info = Some(e.to_string());
                     Ok(())
                 }
-                protocol::modbus::ModbusError::Exception(e) => {
+                modbus_protocol::ModbusError::Exception(e) => {
                     self.err_info = Some(e.to_string());
                     warn!("{}", e);
                     Ok(())

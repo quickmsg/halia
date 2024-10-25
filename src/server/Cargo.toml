@@ -8,7 +8,6 @@ api = { workspace = true }
 devices = { workspace = true }
 rule = { workspace = true }
 apps = { workspace = true }
-protocol = { workspace = true }
 common = { workspace = true }
 databoard = { workspace = true }
 storage = { workspace = true }
