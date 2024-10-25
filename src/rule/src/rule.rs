@@ -1,19 +1,22 @@
 use std::collections::HashMap;
 
 use common::error::{HaliaError, HaliaResult};
-use functions::{computes, filter, log, merge::merge};
+use functions::{computes, filter, merge::merge};
 use message::RuleMessageBatch;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{
+    broadcast,
+    mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+};
 use tracing::{debug, error};
 use types::rules::{
     functions::{ComputerConf, FilterConf},
-    AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, LogNode, Node,
-    NodeType, ReadRuleNodeResp, RuleConf,
+    AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node, NodeType,
+    ReadRuleNodeResp, RuleConf,
 };
 
 use crate::{
     log::Logger,
-    segment::{get_3d_ids, start_segment, take_source_ids},
+    segment::{get_segments, start_segment, take_sink_ids, take_source_ids},
 };
 
 pub struct Rule {
@@ -40,249 +43,309 @@ impl Rule {
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
-        let mut node_map = HashMap::<usize, Node>::new();
+        let mut node_map = HashMap::new();
         for node in conf.nodes.iter() {
             node_map.insert(node.index, node.clone());
         }
 
         let mut ids: Vec<usize> = conf.nodes.iter().map(|node| node.index).collect();
 
-        let mut receivers = HashMap::new();
-
         let source_ids =
             take_source_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
+        let mut receivers =
+            Self::get_source_rxs(source_ids, &node_map, &tmp_outgoing_edges).await?;
 
-        let mut error = None;
-        let mut device_sink_active_ref_nodes = vec![];
-        let mut app_sink_active_ref_nodes = vec![];
-        let mut databoard_active_ref_nodes = vec![];
+        let sink_ids = take_sink_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
+        let mut senders = self
+            .get_sink_txs(sink_ids, &node_map, &incoming_edges)
+            .await?;
 
-        // 最初的源rx获取
-        for source_id in source_ids {
-            let node = node_map.get(&source_id).unwrap();
-            match node.node_type {
-                NodeType::DeviceSource => {
-                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
-                    let mut rxs = vec![];
-                    for _ in 0..cnt {
-                        rxs.push(
-                            match devices::get_source_rx(
-                                &source_node.device_id,
-                                &source_node.source_id,
-                            )
-                            .await
-                            {
-                                Ok(rx) => rx,
-                                Err(e) => {
-                                    error = Some(e);
-                                    break;
-                                }
-                            },
-                        )
-                    }
-                    receivers.insert(source_id, rxs);
-                }
-                NodeType::AppSource => {
-                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let cnt = tmp_outgoing_edges.get(&source_id).unwrap().len();
-                    let mut rxs = vec![];
-                    for _ in 0..cnt {
-                        rxs.push(
-                            match apps::get_source_rx(&source_node.app_id, &source_node.source_id)
-                                .await
-                            {
-                                Ok(rx) => rx,
-                                Err(e) => return Err(e.into()),
-                            },
-                        )
-                    }
-                    receivers.insert(source_id, rxs);
-                }
-                _ => unreachable!(),
-            }
-        }
+        // if let Some(e) = error {
+        //     storage::rule::reference::deactive(&self.id).await?;
+        //     return Err(e.into());
+        // } else {
+        //     storage::rule::reference::active(&self.id).await?;
+        // }
 
-        if let Some(e) = error {
-            storage::rule::reference::deactive(&self.id).await?;
-            return Err(e.into());
-        } else {
-            storage::rule::reference::active(&self.id).await?;
-        }
-
-        let threed_ids = get_3d_ids(
+        let segments = get_segments(
             &mut ids,
             &node_map,
             &mut tmp_incoming_edges,
             &mut tmp_outgoing_edges,
-        )?;
+        );
 
-        for twod_ids in threed_ids {
-            for oned_ids in twod_ids {
-                let mut functions = vec![];
-                let mut ids = vec![];
-                let mut txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>> = vec![];
+        for segment in segments {
+            let mut functions = vec![];
+            let mut indexes = vec![];
+            for index in segment {
+                let node = node_map.get(&index).unwrap();
+                match node.node_type {
+                    NodeType::Merge => {
+                        let source_ids = incoming_edges.get(&index).unwrap();
+                        let mut rxs = vec![];
+                        for source_id in source_ids {
+                            rxs.push(receivers.get_mut(source_id).unwrap().pop().unwrap());
+                        }
+                        // let (tx, _) = broadcast::channel::<MessageBatch>(16);
+                        let mut n_rxs = vec![];
+                        let mut n_txs = vec![];
+                        let cnt = outgoing_edges.get(&index).unwrap().len();
+                        for _ in 0..cnt {
+                            let (tx, rx) = mpsc::unbounded_channel();
+                            n_rxs.push(rx);
+                            n_txs.push(tx);
+                        }
 
-                for id in oned_ids {
-                    let node = node_map.get(&id).unwrap();
-                    match node.node_type {
-                        NodeType::DeviceSource | NodeType::AppSource => {}
-                        NodeType::Merge => {
-                            let source_ids = incoming_edges.get(&id).unwrap();
-                            let mut rxs = vec![];
-                            for source_id in source_ids {
-                                rxs.push(receivers.get_mut(source_id).unwrap().pop().unwrap());
+                        receivers.insert(index, n_rxs);
+                        merge::run(rxs, n_txs, self.stop_signal_tx.subscribe());
+                        debug!("here");
+                        break;
+                    }
+                    // NodeType::Window => {
+                    //     let source_ids = incoming_edges.get(&id).unwrap();
+                    //     let source_id = source_ids[0];
+                    //     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
+                    //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
+                    //     let mut rxs = vec![];
+                    //     let cnt = outgoing_edges.get(&id).unwrap().len();
+                    //     for _ in 0..cnt {
+                    //         rxs.push(tx.subscribe());
+                    //     }
+                    //     receivers.insert(id, rxs);
+                    //     let window_conf: WindowConf =
+                    //         serde_json::from_value(node.conf.clone())?;
+                    //     window::run(window_conf, rx, tx, self.stop_signal_tx.subscribe())
+                    //         .unwrap();
+                    // }
+                    NodeType::Filter => {
+                        let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
+                        functions.push(filter::new(conf)?);
+                        indexes.push(index);
+                    }
+                    NodeType::Computer => {
+                        let conf: ComputerConf = serde_json::from_value(node.conf.clone())?;
+                        functions.push(computes::new(conf)?);
+                        indexes.push(index);
+                    }
+                    NodeType::Operator => todo!(),
+
+                    _ => unreachable!(),
+                }
+            }
+
+            let mut segment_rxs = vec![];
+            let mut segment_txs = vec![];
+            let source_ids = incoming_edges.get(&indexes.first().unwrap()).unwrap();
+            for source_id in source_ids {
+                match receivers.get_mut(source_id) {
+                    Some(receiver_rxs) => {
+                        segment_rxs.push(receiver_rxs.pop().unwrap());
+                    }
+                    None => {
+                        let (tx, rx) = unbounded_channel::<RuleMessageBatch>();
+                        match senders.get_mut(source_id) {
+                            Some(sender_txs) => {
+                                sender_txs.push(tx);
                             }
-                            // let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                            let mut n_rxs = vec![];
-                            let mut n_txs = vec![];
-                            let cnt = outgoing_edges.get(&id).unwrap().len();
-                            for _ in 0..cnt {
-                                let (tx, rx) = mpsc::unbounded_channel();
-                                n_rxs.push(rx);
-                                n_txs.push(tx);
+                            None => {
+                                senders.insert(*source_id, vec![tx]);
                             }
-
-                            receivers.insert(id, n_rxs);
-                            merge::run(rxs, n_txs, self.stop_signal_tx.subscribe());
-                            debug!("here");
-                            break;
                         }
-                        // NodeType::Window => {
-                        //     let source_ids = incoming_edges.get(&id).unwrap();
-                        //     let source_id = source_ids[0];
-                        //     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
-                        //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                        //     let mut rxs = vec![];
-                        //     let cnt = outgoing_edges.get(&id).unwrap().len();
-                        //     for _ in 0..cnt {
-                        //         rxs.push(tx.subscribe());
-                        //     }
-                        //     receivers.insert(id, rxs);
-                        //     let window_conf: WindowConf =
-                        //         serde_json::from_value(node.conf.clone())?;
-                        //     window::run(window_conf, rx, tx, self.stop_signal_tx.subscribe())
-                        //         .unwrap();
-                        // }
-                        NodeType::Filter => {
-                            let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
-                            functions.push(filter::new(conf)?);
-                            ids.push(id);
-                        }
-                        NodeType::Computer => {
-                            let conf: ComputerConf = serde_json::from_value(node.conf.clone())?;
-                            functions.push(computes::new(conf)?);
-                            ids.push(id);
-                        }
-                        NodeType::DeviceSink => {
-                            ids.push(id);
-                            let sink_node: DeviceSinkNode =
-                                serde_json::from_value(node.conf.clone())?;
-                            let tx = match devices::get_sink_tx(
-                                &sink_node.device_id,
-                                &sink_node.sink_id,
-                            )
-                            .await
-                            {
-                                Ok(tx) => {
-                                    device_sink_active_ref_nodes
-                                        .push((sink_node.device_id, sink_node.sink_id));
-                                    tx
-                                }
-                                Err(e) => {
-                                    error = Some(e);
-                                    break;
-                                }
-                            };
-                            txs.push(tx);
-                        }
-                        NodeType::AppSink => {
-                            ids.push(id);
-                            let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match apps::get_sink_tx(&sink_node.app_id, &sink_node.sink_id)
-                                .await
-                            {
-                                Ok(tx) => {
-                                    app_sink_active_ref_nodes
-                                        .push((sink_node.app_id, sink_node.sink_id));
-                                    tx
-                                }
-                                Err(e) => {
-                                    error = Some(e);
-                                    break;
-                                }
-                            };
-                            txs.push(tx);
-                        }
-                        NodeType::Databoard => {
-                            ids.push(id);
-                            let databoard_node: DataboardNode =
-                                serde_json::from_value(node.conf.clone())?;
-                            let tx = match databoard::get_data_tx(
-                                &databoard_node.databoard_id,
-                                &databoard_node.data_id,
-                            )
-                            .await
-                            {
-                                Ok(tx) => {
-                                    databoard_active_ref_nodes.push((
-                                        databoard_node.databoard_id,
-                                        databoard_node.data_id,
-                                    ));
-                                    tx
-                                }
-                                Err(e) => {
-                                    error = Some(e);
-                                    break;
-                                }
-                            };
-                            txs.push(tx);
-                        }
-                        NodeType::Operator => todo!(),
-                        NodeType::Log => {
-                            ids.push(id);
-                            let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
-                            let tx = match &self.logger {
-                                Some(logger) => logger.get_tx(),
-                                None => {
-                                    let logger =
-                                        Logger::new(&self.id, self.stop_signal_tx.subscribe())
-                                            .await?;
-                                    let tx = logger.get_tx();
-                                    self.logger = Some(logger);
-                                    tx
-                                }
-                            };
-                            functions.push(log::new(log_node.name, tx));
-                        }
-                        _ => todo!(),
+                        segment_rxs.push(rx);
                     }
                 }
+            }
 
-                if let Some(err) = error {
-                    return Err(err);
-                }
-
-                if ids.len() > 0 {
-                    let source_ids = incoming_edges.get(&ids[0]).unwrap();
-                    debug!("{:?}", source_ids);
-                    let source_id = source_ids[0];
-                    let rxs = receivers.remove(&source_id).unwrap();
-                    start_segment(rxs, functions, txs, self.stop_signal_tx.subscribe());
+            let sink_ids = outgoing_edges.get(&indexes.last().unwrap()).unwrap();
+            for sink_id in sink_ids {
+                match senders.get_mut(sink_id) {
+                    Some(sender_txs) => {
+                        segment_txs.push(sender_txs.pop().unwrap());
+                    }
+                    None => {
+                        let (tx, rx) = unbounded_channel::<RuleMessageBatch>();
+                        match receivers.get_mut(sink_id) {
+                            Some(receiver_rxs) => {
+                                receiver_rxs.push(rx);
+                            }
+                            None => {
+                                receivers.insert(*sink_id, vec![rx]);
+                            }
+                        }
+                        segment_txs.push(tx);
+                    }
                 }
             }
+            start_segment(
+                segment_rxs,
+                functions,
+                segment_txs,
+                self.stop_signal_tx.subscribe(),
+            );
         }
 
-        match error {
-            Some(error) => {
-                storage::rule::reference::deactive(&self.id).await?;
-                return Err(error);
-            }
-            None => {}
-        }
-
-        Ok(())
+        todo!()
     }
+
+    // let threed_ids = get_3d_ids(
+    //     &mut ids,
+    //     &node_map,
+    //     &mut tmp_incoming_edges,
+    //     &mut tmp_outgoing_edges,
+    // )?;
+
+    //     for twod_ids in threed_ids {
+    //         for oned_ids in twod_ids {
+    //             let mut functions = vec![];
+    //             let mut ids = vec![];
+    //             let mut txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>> = vec![];
+
+    //             for id in oned_ids {
+    //                 let node = node_map.get(&id).unwrap();
+    //                 match node.node_type {
+    //                     NodeType::DeviceSource | NodeType::AppSource => {}
+    //                     NodeType::Merge => {
+    //                         let source_ids = incoming_edges.get(&id).unwrap();
+    //                         let mut rxs = vec![];
+    //                         for source_id in source_ids {
+    //                             rxs.push(receivers.get_mut(source_id).unwrap().pop().unwrap());
+    //                         }
+    //                         // let (tx, _) = broadcast::channel::<MessageBatch>(16);
+    //                         let mut n_rxs = vec![];
+    //                         let mut n_txs = vec![];
+    //                         let cnt = outgoing_edges.get(&id).unwrap().len();
+    //                         for _ in 0..cnt {
+    //                             let (tx, rx) = mpsc::unbounded_channel();
+    //                             n_rxs.push(rx);
+    //                             n_txs.push(tx);
+    //                         }
+
+    //                         receivers.insert(id, n_rxs);
+    //                         merge::run(rxs, n_txs, self.stop_signal_tx.subscribe());
+    //                         debug!("here");
+    //                         break;
+    //                     }
+    //                     // NodeType::Window => {
+    //                     //     let source_ids = incoming_edges.get(&id).unwrap();
+    //                     //     let source_id = source_ids[0];
+    //                     //     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
+    //                     //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
+    //                     //     let mut rxs = vec![];
+    //                     //     let cnt = outgoing_edges.get(&id).unwrap().len();
+    //                     //     for _ in 0..cnt {
+    //                     //         rxs.push(tx.subscribe());
+    //                     //     }
+    //                     //     receivers.insert(id, rxs);
+    //                     //     let window_conf: WindowConf =
+    //                     //         serde_json::from_value(node.conf.clone())?;
+    //                     //     window::run(window_conf, rx, tx, self.stop_signal_tx.subscribe())
+    //                     //         .unwrap();
+    //                     // }
+    //                     NodeType::Filter => {
+    //                         let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
+    //                         functions.push(filter::new(conf)?);
+    //                         ids.push(id);
+    //                     }
+    //                     NodeType::Computer => {
+    //                         let conf: ComputerConf = serde_json::from_value(node.conf.clone())?;
+    //                         functions.push(computes::new(conf)?);
+    //                         ids.push(id);
+    //                     }
+    //                     NodeType::DeviceSink => {
+    //                         ids.push(id);
+    //                         let sink_node: DeviceSinkNode =
+    //                             serde_json::from_value(node.conf.clone())?;
+    //                         let tx = match devices::get_sink_tx(
+    //                             &sink_node.device_id,
+    //                             &sink_node.sink_id,
+    //                         )
+    //                         .await
+    //                         {
+    //                             Ok(tx) => tx,
+    //                             Err(e) => {
+    //                                 error = Some(e);
+    //                                 break;
+    //                             }
+    //                         };
+    //                         txs.push(tx);
+    //                     }
+    //                     NodeType::AppSink => {
+    //                         ids.push(id);
+    //                         let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+    //                         let tx = match apps::get_sink_tx(&sink_node.app_id, &sink_node.sink_id)
+    //                             .await
+    //                         {
+    //                             Ok(tx) => tx,
+    //                             Err(e) => {
+    //                                 error = Some(e);
+    //                                 break;
+    //                             }
+    //                         };
+    //                         txs.push(tx);
+    //                     }
+    //                     NodeType::Databoard => {
+    //                         ids.push(id);
+    //                         let databoard_node: DataboardNode =
+    //                             serde_json::from_value(node.conf.clone())?;
+    //                         let tx = match databoard::get_data_tx(
+    //                             &databoard_node.databoard_id,
+    //                             &databoard_node.data_id,
+    //                         )
+    //                         .await
+    //                         {
+    //                             Ok(tx) => tx,
+    //                             Err(e) => {
+    //                                 error = Some(e);
+    //                                 break;
+    //                             }
+    //                         };
+    //                         txs.push(tx);
+    //                     }
+    //                     NodeType::Operator => todo!(),
+    //                     NodeType::Log => {
+    //                         ids.push(id);
+    //                         let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
+    //                         let tx = match &self.logger {
+    //                             Some(logger) => logger.get_tx(),
+    //                             None => {
+    //                                 let logger =
+    //                                     Logger::new(&self.id, self.stop_signal_tx.subscribe())
+    //                                         .await?;
+    //                                 let tx = logger.get_tx();
+    //                                 self.logger = Some(logger);
+    //                                 tx
+    //                             }
+    //                         };
+    //                         functions.push(log::new(log_node.name, tx));
+    //                     }
+    //                     _ => todo!(),
+    //                 }
+    //             }
+
+    //             if let Some(err) = error {
+    //                 return Err(err);
+    //             }
+
+    //             if ids.len() > 0 {
+    //                 let source_ids = incoming_edges.get(&ids[0]).unwrap();
+    //                 debug!("{:?}", source_ids);
+    //                 let source_id = source_ids[0];
+    //                 let rxs = receivers.remove(&source_id).unwrap();
+    //                 start_segment(rxs, functions, txs, self.stop_signal_tx.subscribe());
+    //             }
+    //         }
+    //     }
+
+    //     match error {
+    //         Some(error) => {
+    //             storage::rule::reference::deactive(&self.id).await?;
+    //             return Err(error);
+    //         }
+    //         None => {}
+    //     }
+
+    //     Ok(())
+    // }
 
     pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
         let mut read_rule_node_resp = vec![];
@@ -451,4 +514,117 @@ impl Rule {
     }
 
     pub async fn delete_log(&self) {}
+
+    // 获取所有输入源的rx
+    async fn get_source_rxs(
+        source_ids: Vec<usize>,
+        node_map: &HashMap<usize, Node>,
+        outgoing_edges: &HashMap<usize, Vec<usize>>,
+    ) -> HaliaResult<HashMap<usize, Vec<UnboundedReceiver<RuleMessageBatch>>>> {
+        let mut receivers = HashMap::new();
+        for source_id in source_ids {
+            let node = node_map.get(&source_id).unwrap();
+            match node.node_type {
+                NodeType::DeviceSource => {
+                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                    let cnt = outgoing_edges.get(&source_id).unwrap().len();
+                    let mut rxs = vec![];
+                    for _ in 0..cnt {
+                        rxs.push(
+                            devices::get_source_rx(&source_node.device_id, &source_node.source_id)
+                                .await?,
+                        )
+                    }
+                    receivers.insert(source_id, rxs);
+                }
+                NodeType::AppSource => {
+                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                    let cnt = outgoing_edges.get(&source_id).unwrap().len();
+                    let mut rxs = vec![];
+                    for _ in 0..cnt {
+                        rxs.push(
+                            apps::get_source_rx(&source_node.app_id, &source_node.source_id)
+                                .await?,
+                        )
+                    }
+                    receivers.insert(source_id, rxs);
+                }
+                _ => return Err(HaliaError::Common(format!("{:?} 不是源节点", node))),
+            }
+        }
+        Ok(receivers)
+    }
+
+    // 获取所有输出动作的tx
+    async fn get_sink_txs(
+        &mut self,
+        sink_ids: Vec<usize>,
+        node_map: &HashMap<usize, Node>,
+        incoming_edges: &HashMap<usize, Vec<usize>>,
+    ) -> HaliaResult<HashMap<usize, Vec<UnboundedSender<RuleMessageBatch>>>> {
+        let mut senders = HashMap::new();
+        for sink_id in sink_ids {
+            let node = node_map.get(&sink_id).unwrap();
+            let txs = match node.node_type {
+                NodeType::DeviceSink => {
+                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
+                    let mut txs = vec![];
+                    for _ in 0..cnt {
+                        txs.push(
+                            devices::get_sink_tx(&sink_node.device_id, &sink_node.sink_id).await?,
+                        )
+                    }
+                    txs
+                }
+                NodeType::AppSink => {
+                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
+                    let mut txs = vec![];
+                    for _ in 0..cnt {
+                        txs.push(apps::get_sink_tx(&sink_node.app_id, &sink_node.sink_id).await?)
+                    }
+                    txs
+                }
+                NodeType::Databoard => {
+                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
+                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
+                    let mut txs = vec![];
+                    for _ in 0..cnt {
+                        txs.push(
+                            databoard::get_data_tx(
+                                &databoard_node.databoard_id,
+                                &databoard_node.data_id,
+                            )
+                            .await?,
+                        )
+                    }
+                    txs
+                }
+                // NodeType::Log => {
+                //     let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
+                //     let cnt = incoming_edges.get(&sink_id).unwrap().len();
+                //     let mut txs = vec![];
+                //     for _ in 0..cnt {
+                //         txs.push(
+                //              match &self.logger {
+                //                 Some(logger) => logger.get_tx(),
+                //                 None => {
+                //                     let logger =
+                //                         Logger::new(&self.id, self.stop_signal_tx.subscribe()).await?;
+                //                     let tx = logger.get_tx();
+                //                     self.logger = Some(logger);
+                //                     tx
+                //                 }
+                //             }
+                //         )
+                //     }
+                //     txs
+                // functions.push(log::new(log_node.name, tx));
+                _ => unreachable!(),
+            };
+            senders.insert(node.index, txs);
+        }
+        Ok(senders)
+    }
 }

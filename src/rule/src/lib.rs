@@ -5,7 +5,6 @@ use std::sync::{
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
 use rule::Rule;
 use tokio::sync::broadcast;
 use types::{
