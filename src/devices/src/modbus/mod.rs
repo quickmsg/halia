@@ -9,10 +9,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::{
-    constants::CHANNEL_SIZE,
-    error::{HaliaError, HaliaResult},
-};
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use modbus_protocol::{self, rtu, tcp, Context};
@@ -21,7 +18,11 @@ use source::Source;
 use tokio::{
     net::{lookup_host, TcpStream},
     select,
-    sync::{broadcast, mpsc, watch, RwLock},
+    sync::{
+        broadcast,
+        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch, RwLock,
+    },
     task::JoinHandle,
     time,
 };
@@ -57,8 +58,8 @@ struct Modbus {
     err: Arc<RwLock<Option<String>>>,
     rtt: Arc<AtomicU16>,
 
-    write_tx: mpsc::Sender<WritePointEvent>,
-    read_tx: mpsc::Sender<String>,
+    write_tx: UnboundedSender<WritePointEvent>,
+    read_tx: UnboundedSender<String>,
 
     join_handle: Option<JoinHandle<JoinHandleData>>,
 }
@@ -68,8 +69,8 @@ struct JoinHandleData {
     pub conf: Conf,
     pub sources: Arc<DashMap<String, Source>>,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub write_rx: mpsc::Receiver<WritePointEvent>,
-    pub read_rx: mpsc::Receiver<String>,
+    pub write_rx: UnboundedReceiver<WritePointEvent>,
+    pub read_rx: UnboundedReceiver<String>,
     pub err: Arc<RwLock<Option<String>>>,
     pub rtt: Arc<AtomicU16>,
 }
@@ -109,9 +110,9 @@ pub fn new_by_template_conf(
 
 fn new(id: String, conf: Conf) -> Box<dyn Device> {
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-    let (read_tx, read_rx) = mpsc::channel::<String>(CHANNEL_SIZE);
-    let (write_tx, write_rx) = mpsc::channel::<WritePointEvent>(CHANNEL_SIZE);
-    let (device_err_tx, _) = broadcast::channel(CHANNEL_SIZE);
+    let (read_tx, read_rx) = unbounded_channel();
+    let (write_tx, write_rx) = unbounded_channel();
+    let (device_err_tx, _) = broadcast::channel(16);
 
     let sources = Arc::new(DashMap::new());
     let err = Arc::new(RwLock::new(None));
@@ -618,7 +619,7 @@ impl Device for Modbus {
                     req.value,
                 ) {
                     Ok(wpe) => {
-                        match self.write_tx.send(wpe).await {
+                        match self.write_tx.send(wpe) {
                             Ok(_) => trace!("send write value success"),
                             Err(e) => warn!("send write value err:{:?}", e),
                         }

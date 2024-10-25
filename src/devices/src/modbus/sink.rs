@@ -6,7 +6,11 @@ use common::{
 use message::{MessageBatch, RuleMessageBatch};
 use tokio::{
     select,
-    sync::{broadcast, mpsc, watch},
+    sync::{
+        broadcast,
+        mpsc::{self, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::{debug, warn};
@@ -24,7 +28,7 @@ pub struct JoinHandleData {
     pub conf: SinkConf,
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: mpsc::UnboundedReceiver<RuleMessageBatch>,
-    pub write_tx: mpsc::Sender<WritePointEvent>,
+    pub write_tx: UnboundedSender<WritePointEvent>,
     pub device_err_rx: broadcast::Receiver<bool>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
 }
@@ -36,7 +40,7 @@ impl Sink {
 
     pub fn new(
         conf: SinkConf,
-        write_tx: mpsc::Sender<WritePointEvent>,
+        write_tx: UnboundedSender<WritePointEvent>,
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
@@ -118,7 +122,7 @@ impl Sink {
     async fn send_write_point_event(
         mut mb: MessageBatch,
         sink_conf: &SinkConf,
-        tx: &mpsc::Sender<WritePointEvent>,
+        tx: &UnboundedSender<WritePointEvent>,
     ) {
         let message = match mb.take_one_message() {
             Some(message) => message,
@@ -141,7 +145,7 @@ impl Sink {
             value,
         ) {
             Ok(wpe) => {
-                tx.send(wpe).await.unwrap();
+                _ = tx.send(wpe);
             }
             Err(e) => {
                 debug!("value is err :{e}");

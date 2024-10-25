@@ -7,16 +7,16 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::{
-    constants::CHANNEL_SIZE,
-    error::{HaliaError, HaliaResult},
-};
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use sink::Sink;
 use tokio::{
     select,
-    sync::{mpsc, watch, RwLock},
+    sync::{
+        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch, RwLock,
+    },
 };
 use tracing::warn;
 use types::apps::{
@@ -33,7 +33,7 @@ pub struct Influxdb {
     sinks: DashMap<String, Sink>,
     conf: Arc<Conf>,
     rtt: AtomicU16,
-    app_err_tx: mpsc::Sender<Option<String>>,
+    app_err_tx: UnboundedSender<Option<String>>,
     stop_signal_tx: watch::Sender<()>,
 }
 
@@ -41,7 +41,7 @@ struct JoinHandleData {
     id: String,
     err: Arc<RwLock<Option<Arc<String>>>>,
     stop_signal_rx: watch::Receiver<()>,
-    app_err_rx: mpsc::Receiver<Option<String>>,
+    app_err_rx: UnboundedReceiver<Option<String>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -49,7 +49,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     let err = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-    let (app_err_tx, app_err_rx) = mpsc::channel(CHANNEL_SIZE);
+    let (app_err_tx, app_err_rx) = unbounded_channel();
     let join_handle_data = JoinHandleData {
         id,
         err: err.clone(),
@@ -215,10 +215,9 @@ impl App for Influxdb {
         &self,
         sink_id: &String,
     ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
-        todo!()
-        // match self.sinks.get(sink_id) {
-        //     Some(sink) => Ok(sink.mb_tx.clone()),
-        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        // }
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }

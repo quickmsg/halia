@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
 use common::error::HaliaResult;
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use reqwest::Client;
 use tokio::{
     select,
-    sync::{mpsc, watch},
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::{trace, warn};
@@ -16,7 +19,7 @@ use super::build_headers;
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
@@ -24,13 +27,13 @@ pub struct JoinHandleData {
     pub http_client_conf: Arc<HttpClientConf>,
     pub conf: SinkConf,
     pub client: Client,
-    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
 }
 
 impl Sink {
     pub fn new(http_client_conf: Arc<HttpClientConf>, conf: SinkConf) -> Sink {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = unbounded_channel();
         let join_handle_data = JoinHandleData {
             stop_signal_rx,
             http_client_conf,
@@ -81,7 +84,7 @@ impl Sink {
         client: &Client,
         http_client_conf: &Arc<HttpClientConf>,
         conf: &SinkConf,
-        _mb: MessageBatch,
+        _mb: RuleMessageBatch,
     ) {
         // todo 重复使用
         let url = format!("{}{}", &http_client_conf.host, &conf.path);

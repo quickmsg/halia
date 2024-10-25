@@ -1,11 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
 use common::error::HaliaResult;
-use message::MessageBatch;
+use message::{MessageBatch, RuleMessageBatch};
 use reqwest::{Client, Request};
 use tokio::{
     select,
-    sync::{broadcast, mpsc},
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
     time,
 };
@@ -15,36 +18,34 @@ use types::apps::http_client::{HttpClientConf, SourceConf};
 use super::{build_basic_auth, build_headers};
 
 pub struct Source {
-    stop_signal_tx: mpsc::Sender<()>,
+    stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_tx: broadcast::Sender<MessageBatch>,
 }
 
 pub struct JoinHandleData {
-    pub stop_signal_rx: mpsc::Receiver<()>,
+    pub stop_signal_rx: watch::Receiver<()>,
     pub http_client_conf: Arc<HttpClientConf>,
     pub conf: SourceConf,
     pub client: Client,
-    pub mb_tx: broadcast::Sender<MessageBatch>,
+    pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
 }
 
 impl Source {
     pub async fn new(http_client_conf: Arc<HttpClientConf>, conf: SourceConf) -> Self {
-        let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
-        let (mb_tx, _) = broadcast::channel(16);
+        let (stop_signal_tx, stop_signal_rx) = watch::channel(());
+
         let http_client = Client::new();
         let join_handle_data = JoinHandleData {
             stop_signal_rx,
             http_client_conf,
             conf,
             client: http_client.clone(),
-            mb_tx: mb_tx.clone(),
+            mb_txs: vec![],
         };
         let join_handle = Self::event_loop(join_handle_data).await;
         Self {
             stop_signal_tx,
             join_handle: Some(join_handle),
-            mb_tx,
         }
     }
 
@@ -91,12 +92,12 @@ impl Source {
 
             loop {
                 select! {
-                    _ = join_handle_data.stop_signal_rx.recv() => {
+                    _ = join_handle_data.stop_signal_rx.changed() => {
                         return join_handle_data;
                     }
 
                     _ = interval.tick() => {
-                        Self::do_request(&join_handle_data.client, request.try_clone().unwrap(), &join_handle_data.mb_tx).await;
+                        Self::do_request(&join_handle_data.client, request.try_clone().unwrap(), &mut join_handle_data.mb_txs).await;
                     }
                 }
             }
@@ -106,15 +107,27 @@ impl Source {
     async fn do_request(
         client: &Client,
         request: Request,
-        mb_tx: &broadcast::Sender<MessageBatch>,
+        mb_txs: &mut Vec<UnboundedSender<RuleMessageBatch>>,
     ) {
+        if mb_txs.len() == 0 {
+            return;
+        }
+
         match client.execute(request).await {
             Ok(resp) => {
                 if resp.status().is_success() {
                     match resp.bytes().await {
                         Ok(body) => match MessageBatch::from_json(body) {
                             Ok(mb) => {
-                                mb_tx.send(mb).unwrap();
+                                if mb_txs.len() == 1 {
+                                    let rmb = RuleMessageBatch::Owned(mb);
+                                    if let Err(_) = mb_txs[0].send(rmb) {
+                                        mb_txs.remove(0);
+                                    }
+                                } else {
+                                    let rmb = RuleMessageBatch::Arc(Arc::new(mb));
+                                    mb_txs.retain(|tx| tx.send(rmb.clone()).is_ok());
+                                }
                             }
                             Err(e) => warn!("{}", e),
                         },
@@ -130,7 +143,14 @@ impl Source {
     }
 
     pub async fn stop(&mut self) -> JoinHandleData {
-        self.stop_signal_tx.send(()).await.unwrap();
+        self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
+    }
+
+    pub async fn get_rx(&mut self) -> UnboundedReceiver<RuleMessageBatch> {
+        let mut join_handle_data = self.stop().await;
+        let (tx, rx) = unbounded_channel();
+        join_handle_data.mb_txs.push(tx);
+        rx
     }
 }

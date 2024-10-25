@@ -265,10 +265,9 @@ impl App for Kafka {
         &self,
         sink_id: &String,
     ) -> HaliaResult<UnboundedSender<RuleMessageBatch>> {
-        todo!()
-        // match self.sinks.get(sink_id) {
-        //     Some(sink) => Ok(sink.mb_tx.clone()),
-        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        // }
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }

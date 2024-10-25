@@ -4,24 +4,25 @@ use std::{
 };
 
 use anyhow::Result;
-use common::constants::CHANNEL_SIZE;
 use tokio::{
     select,
-    sync::{broadcast, mpsc},
+    sync::{
+        broadcast,
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    },
 };
 use tracing::{debug, warn};
 
 pub struct Logger {
-    tx: mpsc::Sender<String>,
+    tx: UnboundedSender<String>,
     broadcast_tx: broadcast::Sender<String>,
 }
 
 impl Logger {
     // 新建即启动
     pub async fn new(rule_id: &String, stop_signal_rx: broadcast::Receiver<()>) -> Result<Self> {
-        let (tx, rx) = mpsc::channel(CHANNEL_SIZE);
-
-        let (broadcast_tx, _) = broadcast::channel(CHANNEL_SIZE);
+        let (tx, rx) = unbounded_channel();
+        let (broadcast_tx, _) = broadcast::channel(16);
         Self::handle_message(rule_id, rx, stop_signal_rx, broadcast_tx.clone()).await?;
 
         Ok(Logger { tx, broadcast_tx })
@@ -29,7 +30,7 @@ impl Logger {
 
     pub async fn handle_message(
         rule_id: &String,
-        mut rx: mpsc::Receiver<String>,
+        mut rx: UnboundedReceiver<String>,
         mut stop_signal_rx: broadcast::Receiver<()>,
         broadcast_tx: broadcast::Sender<String>,
     ) -> Result<()> {
@@ -68,7 +69,7 @@ impl Logger {
         }
     }
 
-    pub fn get_tx(&self) -> mpsc::Sender<String> {
+    pub fn get_tx(&self) -> UnboundedSender<String> {
         self.tx.clone()
     }
 

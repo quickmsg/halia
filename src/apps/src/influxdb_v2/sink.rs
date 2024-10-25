@@ -11,10 +11,13 @@ use influxdb2::{
     models::{DataPoint, FieldValue},
     Client,
 };
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use tokio::{
     select,
-    sync::{mpsc, watch},
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::{debug, warn};
@@ -23,16 +26,16 @@ use types::apps::influxdb_v2::{Conf, SinkConf};
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
-    pub app_err_tx: mpsc::Sender<Option<String>>,
+    pub app_err_tx: UnboundedSender<Option<String>>,
     pub conf: SinkConf,
     pub influxdb_conf: Arc<Conf>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
 }
 
 impl Sink {
@@ -43,10 +46,10 @@ impl Sink {
     pub fn new(
         conf: SinkConf,
         influxdb_conf: Arc<Conf>,
-        app_err_tx: mpsc::Sender<Option<String>>,
+        app_err_tx: UnboundedSender<Option<String>>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = unbounded_channel();
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
         let join_handle_data = JoinHandleData {
@@ -98,14 +101,15 @@ impl Sink {
     }
 
     async fn send_msg_to_influxdb(
-        app_err_tx: &mpsc::Sender<Option<String>>,
+        app_err_tx: &UnboundedSender<Option<String>>,
         err: &mut Option<String>,
         influxdb_client: &Client,
         conf: &SinkConf,
         timestamp_precision: TimestampPrecision,
-        mb: MessageBatch,
+        rmb: RuleMessageBatch,
         message_retainer: &mut Box<dyn SinkMessageRetain>,
     ) {
+        let mb = rmb.take_mb();
         let mut data_points = Vec::with_capacity(mb.len());
         for msg in mb.get_messages() {
             let mut data_point_builder = DataPoint::builder(&conf.mesaurement);
@@ -153,7 +157,7 @@ impl Sink {
         {
             Ok(_) => match err {
                 Some(_) => {
-                    app_err_tx.send(None).await.unwrap();
+                    app_err_tx.send(None).unwrap();
                     *err = None;
                 }
                 None => {}
@@ -165,12 +169,12 @@ impl Sink {
                         match err {
                             Some(err) => {
                                 if *err != source.to_string() {
-                                    app_err_tx.send(Some(source.to_string())).await.unwrap();
+                                    app_err_tx.send(Some(source.to_string())).unwrap();
                                     *err = source.to_string();
                                 }
                             }
                             None => {
-                                app_err_tx.send(Some(source.to_string())).await.unwrap();
+                                app_err_tx.send(Some(source.to_string())).unwrap();
                                 *err = Some(source.to_string());
                             }
                         };

@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use common::constants::CHANNEL_SIZE;
-use message::MessageBatch;
+use message::{MessageBatch, RuleMessageBatch};
 use opcua::{
     client::Session,
     types::{DataValue, UAString, WriteValue},
 };
 use tokio::{
     select,
-    sync::{mpsc, watch, RwLock},
+    sync::{
+        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch, RwLock,
+    },
 };
 use tracing::warn;
 use types::devices::opcua::SinkConf;
@@ -18,7 +20,7 @@ use super::transfer_node_id;
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 impl Sink {
@@ -28,7 +30,7 @@ impl Sink {
 
     pub fn new(opcua_client: Arc<RwLock<Option<Arc<Session>>>>, conf: SinkConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(CHANNEL_SIZE);
+        let (mb_tx, mb_rx) = unbounded_channel();
         Self::event_loop(conf, stop_signal_rx, mb_rx);
         Self {
             stop_signal_tx,
@@ -39,7 +41,7 @@ impl Sink {
     fn event_loop(
         conf: SinkConf,
         mut stop_signal_rx: watch::Receiver<()>,
-        mut mb_rx: mpsc::Receiver<MessageBatch>,
+        mut mb_rx: UnboundedReceiver<RuleMessageBatch>,
     ) {
         tokio::spawn(async move {
             loop {

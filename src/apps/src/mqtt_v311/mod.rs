@@ -16,7 +16,11 @@ use sink::Sink;
 use source::Source;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, watch, RwLock},
+    sync::{
+        broadcast,
+        mpsc::{self, UnboundedSender},
+        watch, RwLock,
+    },
     task::JoinHandle,
 };
 use tracing::{debug, error, warn};
@@ -457,21 +461,19 @@ impl App for MqttClient {
         &self,
         source_id: &String,
     ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
-        todo!()
-        // match self.sources.get(source_id) {
-        //     Some(source) => Ok(source.mb_tx.subscribe()),
-        //     None => Err(HaliaError::NotFound(source_id.to_owned())),
-        // }
+        match self.sources.get_mut(source_id) {
+            Some(mut source) => Ok(source.get_rx()),
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
     }
 
     async fn get_sink_tx(
         &self,
         sink_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
-        // match self.sinks.get(sink_id) {
-        //     Some(sink) => Ok(sink.mb_tx.clone()),
-        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        // }
-        todo!()
+    ) -> HaliaResult<UnboundedSender<RuleMessageBatch>> {
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }

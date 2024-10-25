@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common::{constants::CHANNEL_SIZE, get_dynamic_value_from_json};
-use message::MessageBatch;
+use common::get_dynamic_value_from_json;
+use message::RuleMessageBatch;
 use taos::{AsyncQueryable, Taos};
 use tokio::{
     select,
-    sync::{mpsc, watch},
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::warn;
@@ -17,20 +20,20 @@ use super::new_tdengine_client;
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
     conf: SinkConf,
     taos: Taos,
     stop_signal_rx: watch::Receiver<()>,
-    mb_rx: mpsc::Receiver<MessageBatch>,
+    mb_rx: UnboundedReceiver<RuleMessageBatch>,
 }
 
 impl Sink {
     pub async fn new(conf: SinkConf, tdengine_conf: Arc<TDengineConf>) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(CHANNEL_SIZE);
+        let (mb_tx, mb_rx) = unbounded_channel();
         let taos = new_tdengine_client(&tdengine_conf, &conf).await;
         let join_handle_data = JoinHandleData {
             conf,
@@ -64,7 +67,8 @@ impl Sink {
     }
 
     // INSERT INTO d1001 VALUES (1538548685000, 10.3, 219, 0.31);
-    async fn handle_message_batch(conf: &SinkConf, taos: &Taos, mut mb: MessageBatch) {
+    async fn handle_message_batch(conf: &SinkConf, taos: &Taos, rmb: RuleMessageBatch) {
+        let mut mb = rmb.take_mb();
         let mut values = vec![];
         let msg = mb.take_one_message().unwrap();
         for value in conf.values.iter() {

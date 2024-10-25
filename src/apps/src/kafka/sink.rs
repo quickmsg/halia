@@ -7,7 +7,7 @@ use common::{
     error::HaliaResult,
     sink_message_retain::{self, SinkMessageRetain},
 };
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use rskafka::{
     client::{
         partition::{Compression, PartitionClient, UnknownTopicHandling},
@@ -17,16 +17,19 @@ use rskafka::{
 };
 use tokio::{
     select,
-    sync::{mpsc, watch},
+    sync::{
+        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use types::apps::kafka::SinkConf;
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
@@ -34,7 +37,7 @@ pub struct JoinHandleData {
     pub kafka_err_tx: mpsc::Sender<String>,
     pub conf: SinkConf,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
 }
 
@@ -49,7 +52,7 @@ impl Sink {
         conf: SinkConf,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = unbounded_channel();
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
         let partition_client = new_partition_client(kafka_client, &conf).await;
@@ -88,6 +91,7 @@ impl Sink {
                                 }
                             }
                             None => {
+                                let mb = mb.take_mb();
                                 join_handle_data.message_retainer.push(mb);
                             }
                         }
@@ -101,9 +105,10 @@ impl Sink {
     async fn send_msg_to_kafka(
         conf: &SinkConf,
         partition_client: &PartitionClient,
-        mb: MessageBatch,
+        rmb: RuleMessageBatch,
         compression: Compression,
     ) -> Result<()> {
+        let mb = rmb.take_mb();
         let key = match &conf.key {
             Some(key) => match key.typ {
                 types::PlainOrBase64ValueType::Plain => {

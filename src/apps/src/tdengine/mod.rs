@@ -123,11 +123,10 @@ impl App for TDengine {
         &self,
         sink_id: &String,
     ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
-        // match self.sinks.get(sink_id) {
-        //     Some(sink) => Ok(sink.mb_tx.clone()),
-        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        // }
-        todo!()
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }
 

@@ -27,6 +27,14 @@ pub enum RuleMessageBatch {
 }
 
 impl RuleMessageBatch {
+    pub fn new_by_len(len: usize, mb: MessageBatch) -> RuleMessageBatch {
+        if len == 1 {
+            RuleMessageBatch::Owned(mb)
+        } else {
+            RuleMessageBatch::Arc(Arc::new(mb))
+        }
+    }
+
     pub fn take_mb(self) -> MessageBatch {
         match self {
             RuleMessageBatch::Owned(mb) => mb,

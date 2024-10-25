@@ -5,7 +5,11 @@ use message::{Message, MessageBatch, RuleMessageBatch};
 use modbus_protocol::Context;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, watch},
+    sync::{
+        broadcast,
+        mpsc::{self, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
     time,
 };
@@ -26,7 +30,7 @@ pub struct Source {
 pub struct JoinHandleData {
     pub id: String,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub read_tx: mpsc::Sender<String>,
+    pub read_tx: UnboundedSender<String>,
     pub device_err_rx: broadcast::Receiver<bool>,
 }
 
@@ -34,7 +38,7 @@ impl Source {
     pub fn new(
         id: String,
         conf: SourceConf,
-        read_tx: mpsc::Sender<String>,
+        read_tx: UnboundedSender<String>,
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
@@ -133,7 +137,7 @@ impl Source {
 
                     _ = interval.tick() => {
                         if !device_err {
-                            _ = join_handle_data.read_tx.send(join_handle_data.id.clone()).await;
+                            _ = join_handle_data.read_tx.send(join_handle_data.id.clone());
                         }
                     }
 

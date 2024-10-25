@@ -1,16 +1,19 @@
 use std::sync::Arc;
 
 use common::{
-    constants::CHANNEL_SIZE,
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use rumqttc::{valid_topic, AsyncClient};
 use schema::Encoder;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, watch},
+    sync::{
+        broadcast,
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::warn;
@@ -21,7 +24,7 @@ use super::transfer_qos;
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
@@ -29,7 +32,7 @@ pub struct JoinHandleData {
     pub encoder: Box<dyn Encoder>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
     pub mqtt_client: Arc<AsyncClient>,
     pub app_err_rx: broadcast::Receiver<bool>,
 }
@@ -49,7 +52,7 @@ impl Sink {
         app_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(CHANNEL_SIZE);
+        let (mb_tx, mb_rx) = unbounded_channel();
         let encoder = schema::new_encoder(&conf.encode_type, &conf.schema_id)
             .await
             .unwrap();
@@ -85,6 +88,7 @@ impl Sink {
                     }
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
+                        let mb = mb.take_mb();
                         if !err {
                             match join_handle_data.encoder.encode(mb) {
                                 Ok(data) => {
