@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
-use opcua::{
+use opcua_protocol::{
     client::{ClientBuilder, IdentityToken, Session},
     types::{EndpointDescription, Identifier, MonitoringMode, NodeId, StatusCode},
 };
@@ -403,15 +403,15 @@ fn transfer_node_id(node_id: &types::devices::opcua::NodeId) -> NodeId {
             Identifier::Numeric(num)
         }
         types::devices::opcua::IdentifierType::String => {
-            let s: opcua::types::UAString = serde_json::from_value(value).unwrap();
+            let s: opcua_protocol::types::UAString = serde_json::from_value(value).unwrap();
             Identifier::String(s)
         }
         types::devices::opcua::IdentifierType::Guid => {
-            let guid: opcua::types::Guid = serde_json::from_value(value).unwrap();
+            let guid: opcua_protocol::types::Guid = serde_json::from_value(value).unwrap();
             Identifier::Guid(guid)
         }
         types::devices::opcua::IdentifierType::ByteString => {
-            let bs: opcua::types::ByteString = serde_json::from_value(value).unwrap();
+            let bs: opcua_protocol::types::ByteString = serde_json::from_value(value).unwrap();
             Identifier::ByteString(bs)
         }
     };

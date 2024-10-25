@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use message::{MessageBatch, RuleMessageBatch};
-use opcua::{
+use opcua_protocol::{
     client::Session,
     types::{DataValue, UAString, WriteValue},
 };
 use tokio::{
     select,
     sync::{
-        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         watch, RwLock,
     },
 };

@@ -17,13 +17,13 @@ dashmap = { workspace = true }
 message = { workspace = true }
 modbus_protocol = { package = "modbus", path = "../../../modbus" }
 coap_protocol = { package = "coap", path = "../../../coap" }
+opcua_protocol = { package = "opcua", path = "../../../opcua" }
 byteorder = "1.5.0"
 bytes = "1.6.0"
 smallvec = "1.13.2"
 tokio-util = { version = "0.7.11", features = ["codec"] }
 thiserror = "1.0.61"
 tokio-serial = { version = "5.4.4" }
-opcua = { git = "https://github.com/locka99/opcua.git", features = ["client"] }
 
 base64 = { workspace = true }
 anyhow = { workspace = true }

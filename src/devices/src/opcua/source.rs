@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
 use message::{Message, MessageBatch, MessageValue};
-use opcua::{
+use opcua_protocol::{
     client::{DataChangeCallback, MonitoredItem, Session},
     types::{
         DataValue, ExtensionObject, MonitoredItemCreateRequest, MonitoringParameters,
@@ -243,39 +243,61 @@ impl Source {
                         let name = unsafe { need_read_variable_names.get_unchecked(index) };
                         let value = match data_value.value {
                             Some(variant) => match variant {
-                                opcua::types::Variant::Empty => MessageValue::Null,
-                                opcua::types::Variant::Boolean(bool) => MessageValue::Boolean(bool),
-                                opcua::types::Variant::SByte(i) => MessageValue::Int64(i as i64),
-                                opcua::types::Variant::Byte(u) => MessageValue::Int64(u as i64),
-                                opcua::types::Variant::Int16(i) => MessageValue::Int64(i as i64),
-                                opcua::types::Variant::UInt16(u) => MessageValue::Int64(u as i64),
-                                opcua::types::Variant::Int32(i) => MessageValue::Int64(i as i64),
-                                opcua::types::Variant::UInt32(u) => MessageValue::Int64(u as i64),
-                                opcua::types::Variant::Int64(i) => MessageValue::Int64(i as i64),
-                                opcua::types::Variant::UInt64(u) => MessageValue::Int64(u as i64),
-                                opcua::types::Variant::Float(f) => MessageValue::Float64(f as f64),
-                                opcua::types::Variant::Double(f) => MessageValue::Float64(f),
-                                opcua::types::Variant::String(s) => {
+                                opcua_protocol::types::Variant::Empty => MessageValue::Null,
+                                opcua_protocol::types::Variant::Boolean(bool) => {
+                                    MessageValue::Boolean(bool)
+                                }
+                                opcua_protocol::types::Variant::SByte(i) => {
+                                    MessageValue::Int64(i as i64)
+                                }
+                                opcua_protocol::types::Variant::Byte(u) => {
+                                    MessageValue::Int64(u as i64)
+                                }
+                                opcua_protocol::types::Variant::Int16(i) => {
+                                    MessageValue::Int64(i as i64)
+                                }
+                                opcua_protocol::types::Variant::UInt16(u) => {
+                                    MessageValue::Int64(u as i64)
+                                }
+                                opcua_protocol::types::Variant::Int32(i) => {
+                                    MessageValue::Int64(i as i64)
+                                }
+                                opcua_protocol::types::Variant::UInt32(u) => {
+                                    MessageValue::Int64(u as i64)
+                                }
+                                opcua_protocol::types::Variant::Int64(i) => {
+                                    MessageValue::Int64(i as i64)
+                                }
+                                opcua_protocol::types::Variant::UInt64(u) => {
+                                    MessageValue::Int64(u as i64)
+                                }
+                                opcua_protocol::types::Variant::Float(f) => {
+                                    MessageValue::Float64(f as f64)
+                                }
+                                opcua_protocol::types::Variant::Double(f) => {
+                                    MessageValue::Float64(f)
+                                }
+                                opcua_protocol::types::Variant::String(s) => {
                                     MessageValue::String(s.to_string())
                                 }
-                                opcua::types::Variant::DateTime(_) => todo!(),
-                                opcua::types::Variant::Guid(guid) => {
+                                opcua_protocol::types::Variant::DateTime(_) => todo!(),
+                                opcua_protocol::types::Variant::Guid(guid) => {
                                     MessageValue::String(guid.to_string())
                                 }
-                                opcua::types::Variant::StatusCode(s) => {
+                                opcua_protocol::types::Variant::StatusCode(s) => {
                                     MessageValue::String(s.name().to_owned())
                                 }
-                                opcua::types::Variant::ByteString(_) => todo!(),
-                                opcua::types::Variant::XmlElement(_) => todo!(),
-                                opcua::types::Variant::QualifiedName(_) => todo!(),
-                                opcua::types::Variant::LocalizedText(_) => todo!(),
-                                opcua::types::Variant::NodeId(_) => todo!(),
-                                opcua::types::Variant::ExpandedNodeId(_) => todo!(),
-                                opcua::types::Variant::ExtensionObject(_) => todo!(),
-                                opcua::types::Variant::Variant(_) => todo!(),
-                                opcua::types::Variant::DataValue(_) => todo!(),
-                                opcua::types::Variant::DiagnosticInfo(_) => todo!(),
-                                opcua::types::Variant::Array(_) => todo!(),
+                                opcua_protocol::types::Variant::ByteString(_) => todo!(),
+                                opcua_protocol::types::Variant::XmlElement(_) => todo!(),
+                                opcua_protocol::types::Variant::QualifiedName(_) => todo!(),
+                                opcua_protocol::types::Variant::LocalizedText(_) => todo!(),
+                                opcua_protocol::types::Variant::NodeId(_) => todo!(),
+                                opcua_protocol::types::Variant::ExpandedNodeId(_) => todo!(),
+                                opcua_protocol::types::Variant::ExtensionObject(_) => todo!(),
+                                opcua_protocol::types::Variant::Variant(_) => todo!(),
+                                opcua_protocol::types::Variant::DataValue(_) => todo!(),
+                                opcua_protocol::types::Variant::DiagnosticInfo(_) => todo!(),
+                                opcua_protocol::types::Variant::Array(_) => todo!(),
                             },
                             None => MessageValue::Null,
                         };
