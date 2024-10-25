@@ -35,10 +35,11 @@ CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     device_type SMALLINT UNSIGNED NOT NULL,
-    name VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
     des BLOB,
     conf BLOB NOT NULL,
-    ts BIGINT UNSIGNED NOT NULL
+    ts BIGINT UNSIGNED NOT NULL,
+    UNIQUE (source_sink_type, name)
 );
 "#,
         TABLE_NAME

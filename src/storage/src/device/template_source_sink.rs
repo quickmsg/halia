@@ -145,16 +145,19 @@ pub async fn read_sinks_by_template_id(template_id: &String) -> Result<Vec<Sourc
     read_by_template_id(SourceSinkType::Sink, template_id).await
 }
 
-async fn read_by_template_id(typ: SourceSinkType, template_id: &String) -> Result<Vec<SourceSink>> {
-    let typ: i32 = typ.into();
+async fn read_by_template_id(
+    source_sink_type: SourceSinkType,
+    template_id: &String,
+) -> Result<Vec<SourceSink>> {
+    let source_sink_type: i32 = source_sink_type.into();
     let sources_sinks = sqlx::query_as::<_, SourceSink>(
         format!(
-            "SELECT * FROM {} WHERE typ = ? AND template_id = ?",
+            "SELECT * FROM {} WHERE source_sink_type = ? AND template_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(typ)
+    .bind(source_sink_type)
     .bind(template_id)
     .fetch_all(POOL.get().unwrap())
     .await?;

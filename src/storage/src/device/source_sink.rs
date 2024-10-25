@@ -204,16 +204,19 @@ pub async fn read_sinks_by_template_id(template_id: &String) -> Result<Vec<Sourc
     read_by_template_id(SourceSinkType::Sink, template_id).await
 }
 
-async fn read_by_template_id(typ: SourceSinkType, template_id: &String) -> Result<Vec<SourceSink>> {
-    let typ: i32 = typ.into();
+async fn read_by_template_id(
+    source_sink_type: SourceSinkType,
+    template_id: &String,
+) -> Result<Vec<SourceSink>> {
+    let source_sink_type: i32 = source_sink_type.into();
     let sources_sinks = sqlx::query_as::<_, SourceSink>(
         format!(
-            "SELECT * FROM {} WHERE typ = ? AND template_id = ?",
+            "SELECT * FROM {} WHERE source_sink_type = ? AND template_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(typ)
+    .bind(source_sink_type)
     .bind(template_id)
     .fetch_all(POOL.get().unwrap())
     .await?;
@@ -237,32 +240,32 @@ pub async fn search_sinks(
 }
 
 async fn search(
-    typ: SourceSinkType,
+    source_sink_type: SourceSinkType,
     device_id: &String,
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
-    let typ: i32 = typ.into();
+    let source_sink_type: i32 = source_sink_type.into();
     let (limit, offset) = pagination.to_sql();
     let (count, sources_or_sinks) = match query.name {
         Some(name) => {
             let count: i64 = sqlx::query_scalar(
                 format!(
-                    "SELECT COUNT(*) FROM {} WHERE typ = ? AND device_id = ? AND name LIKE ?",
+                    "SELECT COUNT(*) FROM {} WHERE source_sink_type = ? AND device_id = ? AND name LIKE ?",
                     TABLE_NAME
                 )
                 .as_str(),
             )
-            .bind(typ)
+            .bind(source_sink_type)
             .bind(device_id)
             .bind(format!("%{}%", name))
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let sources_or_sinks = sqlx::query_as::<_, SourceSink>(
-                format!("SELECT * FROM {} WHERE typ = ? AND device_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
+                format!("SELECT * FROM {} WHERE source_sink_type = ? AND device_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
-            .bind(typ)
+            .bind(source_sink_type)
             .bind(device_id)
             .bind(format!("%{}%", name))
             .bind(limit)
@@ -274,20 +277,20 @@ async fn search(
         None => {
             let count: i64 = sqlx::query_scalar(
                 format!(
-                    "SELECT COUNT(*) FROM {} WHERE typ = ? AND device_id = ?",
+                    "SELECT COUNT(*) FROM {} WHERE source_sink_type = ? AND device_id = ?",
                     TABLE_NAME
                 )
                 .as_str(),
             )
-            .bind(typ)
+            .bind(source_sink_type)
             .bind(device_id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let sources_or_sinks = sqlx::query_as::<_, SourceSink>(
-                format!("SELECT * FROM {} WHERE typ = ? AND device_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
+                format!("SELECT * FROM {} WHERE source_sink_type = ? AND device_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
-            .bind(typ)
+            .bind(source_sink_type)
             .bind(device_id)
             .bind(limit)
             .bind(offset)
