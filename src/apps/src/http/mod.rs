@@ -193,6 +193,11 @@ impl App for HttpClient {
 fn build_http_client(http_client_conf: &HttpClientConf) -> Client {
     let mut builder = ClientBuilder::new();
     if let Some(ssl_conf) = &http_client_conf.ssl_conf {
+        match ssl_conf.verify {
+            true => builder = builder.danger_accept_invalid_certs(true),
+            false => builder = builder.danger_accept_invalid_certs(false),
+        }
+
         if let Some(ca_cert) = &ssl_conf.ca_cert {
             builder =
                 builder.add_root_certificate(Certificate::from_pem(ca_cert.as_bytes()).unwrap());
