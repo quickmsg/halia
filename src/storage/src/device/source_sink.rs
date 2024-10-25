@@ -93,7 +93,7 @@ async fn insert(
         format!(
             r#"INSERT INTO {} 
 (id, device_id, device_template_source_sink_id, source_sink_type, name, des, conf_type, conf, template_id, err, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),

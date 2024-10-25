@@ -8,6 +8,7 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
+use tracing::debug;
 use types::{
     devices::{
         device::{
@@ -207,11 +208,109 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
 }
 
 pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaResult<()> {
+    add_device_count();
+    storage::device::device::insert(&device_id, req.clone()).await?;
+    events::insert_create(types::events::ResourceType::Device, &device_id).await;
+
     match &req.conf_type {
         ConfType::Template => match &req.template_id {
-            Some(template_id) => {
-                if !storage::device::template::check_exists(&template_id).await? {
+            Some(device_template_id) => {
+                if !storage::device::template::check_exists(&device_template_id).await? {
                     return Err(HaliaError::Common("模板不存在".to_owned()));
+                }
+
+                debug!("here");
+                let device_template_sources =
+                    storage::device::template_source_sink::read_sources_by_device_template_id(
+                        device_template_id,
+                    )
+                    .await?;
+                debug!("here");
+                let mut source_reqs = vec![];
+                for device_template_source in device_template_sources {
+                    let conf_type: ConfType = device_template_source.conf_type.try_into()?;
+                    match conf_type {
+                        ConfType::Template => {
+                            let req = types::devices::device::source_sink::CreateUpdateReq {
+                                conf_type,
+                                template_id: device_template_source.template_id,
+                                base: BaseConf {
+                                    name: device_template_source.name,
+                                    desc: device_template_source
+                                        .des
+                                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                                },
+                                conf: serde_json::from_slice(&device_template_source.conf)?,
+                            };
+                            source_reqs.push(req);
+                        }
+                        ConfType::Customize => {
+                            let req = types::devices::device::source_sink::CreateUpdateReq {
+                                conf_type,
+                                template_id: None,
+                                base: BaseConf {
+                                    name: device_template_source.name,
+                                    desc: device_template_source
+                                        .des
+                                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                                },
+                                conf: serde_json::from_slice(&device_template_source.conf)?,
+                            };
+                            source_reqs.push(req);
+                        }
+                    }
+                }
+
+                let device_template_sinks =
+                    storage::device::template_source_sink::read_sinks_by_device_template_id(
+                        device_template_id,
+                    )
+                    .await?;
+                let mut sink_reqs = vec![];
+                for device_template_sink in device_template_sinks {
+                    let conf_type: ConfType = device_template_sink.conf_type.try_into()?;
+                    match conf_type {
+                        ConfType::Template => {
+                            let req = types::devices::device::source_sink::CreateUpdateReq {
+                                conf_type,
+                                template_id: device_template_sink.template_id,
+                                base: BaseConf {
+                                    name: device_template_sink.name,
+                                    desc: device_template_sink
+                                        .des
+                                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                                },
+                                conf: serde_json::from_slice(&device_template_sink.conf)?,
+                            };
+                            sink_reqs.push(req);
+                        }
+                        ConfType::Customize => {
+                            let req = types::devices::device::source_sink::CreateUpdateReq {
+                                conf_type,
+                                template_id: None,
+                                base: BaseConf {
+                                    name: device_template_sink.name,
+                                    desc: device_template_sink
+                                        .des
+                                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                                },
+                                conf: serde_json::from_slice(&device_template_sink.conf)?,
+                            };
+                            sink_reqs.push(req);
+                        }
+                    }
+                }
+
+                debug!("here");
+
+                for source_req in source_reqs {
+                    create_source(device_id.clone(), Some(&device_template_id), source_req).await?;
+                }
+
+                debug!("here");
+
+                for sink_req in sink_reqs {
+                    create_sink(device_id.clone(), Some(&device_template_id), sink_req).await?;
                 }
             }
             None => return Err(HaliaError::Common("必须提供模板ID".to_owned())),
@@ -222,10 +321,6 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
             DeviceType::Coap => coap::validate_conf(&req.conf)?,
         },
     }
-
-    add_device_count();
-    storage::device::device::insert(&device_id, req).await?;
-    events::insert_create(types::events::ResourceType::Device, &device_id).await;
 
     Ok(())
 }
@@ -437,6 +532,8 @@ pub async fn create_source(
         }
     }
 
+    debug!("here");
+
     storage::device::source_sink::insert_source(
         &source_id,
         &device_id,
@@ -444,6 +541,8 @@ pub async fn create_source(
         req,
     )
     .await?;
+
+    debug!("here");
 
     Ok(())
 }
