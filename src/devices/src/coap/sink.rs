@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use common::error::HaliaResult;
-use message::MessageBatch;
-use protocol::coap::{
+use coap::{
     client::UdpCoAPClient,
     request::{Method, RequestBuilder},
 };
+use common::error::HaliaResult;
+use message::MessageBatch;
 use tokio::{
     select,
     sync::{mpsc, Mutex},

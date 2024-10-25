@@ -1,12 +1,12 @@
 use std::io::Result as IoResult;
 use std::{sync::Arc, time::Duration};
 
-use common::error::{HaliaError, HaliaResult};
-use message::MessageBatch;
-use protocol::coap::{
+use coap::{
     client::{ObserveMessage, UdpCoAPClient},
     request::{Method, RequestBuilder},
 };
+use common::error::{HaliaError, HaliaResult};
+use message::MessageBatch;
 use tokio::{
     select,
     sync::{broadcast, mpsc, oneshot, Mutex},

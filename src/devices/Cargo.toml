@@ -16,6 +16,8 @@ tokio = { workspace = true }
 dashmap = { workspace = true }
 message = { workspace = true }
 protocol = { workspace = true }
+modbus = { path = "../../../modbus" }
+coap = { path = "../../../coap" }
 byteorder = "1.5.0"
 bytes = "1.6.0"
 smallvec = "1.13.2"
