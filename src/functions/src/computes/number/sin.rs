@@ -1,6 +1,6 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ComputerConfItem;
+use types::rules::functions::computer::ItemConf;
 
 use super::Computer;
 
@@ -9,7 +9,7 @@ struct Sin {
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Sin {
         field: conf.field,
         target_field: conf.target_field,

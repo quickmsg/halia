@@ -1,4 +1,5 @@
 use message::{MessageBatch, MessageValue};
+use types::rules::functions::aggregate::ItemConf;
 
 use super::Aggregater;
 
@@ -6,14 +7,12 @@ struct Sum {
     field: String,
 }
 
-pub const TYPE: &str = "sum";
-
-pub fn new(field: String) -> Box<dyn Aggregater> {
-    Box::new(Sum { field })
+pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
+    Box::new(Sum { field: conf.field })
 }
 
 impl Aggregater for Sum {
-    fn aggregate(&self, mb: &MessageBatch) -> MessageValue {
+    fn aggregate(&self, mb: &MessageBatch) -> (String, MessageValue) {
         let mut sum: f64 = 0.0;
         let messages = mb.get_messages();
         for message in messages {
@@ -31,6 +30,6 @@ impl Aggregater for Sum {
             }
         }
 
-        MessageValue::Float64(sum)
+        (self.field.clone(), MessageValue::Float64(sum))
     }
 }

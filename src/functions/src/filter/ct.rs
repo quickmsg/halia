@@ -1,6 +1,7 @@
 use anyhow::Result;
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
+use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
 
@@ -10,19 +11,17 @@ struct Ct {
     target_field: Option<String>,
 }
 
-pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
-    match get_dynamic_value_from_json(&value) {
-        common::DynamicValue::Const(value) => Ok(Box::new(Ct {
-            field,
-            const_value: Some(MessageValue::from(value)),
-            target_field: None,
-        })),
-        common::DynamicValue::Field(s) => Ok(Box::new(Ct {
-            field,
-            target_field: Some(s),
-            const_value: None,
-        })),
-    }
+pub fn new(conf: ItemConf) -> Result<Box<dyn Filter>> {
+    let (const_value, target_field) = match get_dynamic_value_from_json(&conf.value) {
+        common::DynamicValue::Const(value) => (Some(MessageValue::from(value)), None),
+        common::DynamicValue::Field(s) => (None, Some(s)),
+    };
+
+    Ok(Box::new(Ct {
+        field: conf.field,
+        const_value,
+        target_field,
+    }))
 }
 
 impl Filter for Ct {

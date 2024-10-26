@@ -1,13 +1,13 @@
 use anyhow::{bail, Result};
 use message::MessageBatch;
 use tokio::sync::broadcast::{Receiver, Sender};
-use types::rules::functions::WindowConf;
+use types::rules::functions::window::Conf;
 
 mod count;
 mod time;
 
 pub fn run(
-    conf: WindowConf,
+    conf: Conf,
     rx: Receiver<MessageBatch>,
     tx: Sender<MessageBatch>,
     stop_signal_rx: Receiver<()>,

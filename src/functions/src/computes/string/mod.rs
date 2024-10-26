@@ -9,11 +9,12 @@ mod split;
 mod trim;
 
 use anyhow::{bail, Result};
-use types::rules::functions::ComputerConfItem;
+
+use types::rules::functions::computer::ItemConf;
 
 use super::Computer;
 
-pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     match conf.name.as_str() {
         "length" => length::new(conf),
         "lower" => lower::new(conf),

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
+use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
 
@@ -10,8 +11,8 @@ struct Eq {
     target_field: Option<String>,
 }
 
-pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
-    match get_dynamic_value_from_json(&value) {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Filter>> {
+    let (const_value, target_field) = match get_dynamic_value_from_json(&conf.value) {
         common::DynamicValue::Const(value) => {
             let const_value = match value {
                 serde_json::Value::Null => MessageValue::Null,
@@ -22,18 +23,16 @@ pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
                 serde_json::Value::Object(_map) => todo!(),
             };
 
-            Ok(Box::new(Eq {
-                field,
-                const_value: Some(const_value),
-                target_field: None,
-            }))
+            (Some(const_value), None)
         }
-        common::DynamicValue::Field(s) => Ok(Box::new(Eq {
-            field,
-            target_field: Some(s),
-            const_value: None,
-        })),
-    }
+        common::DynamicValue::Field(s) => (None, Some(s)),
+    };
+
+    Ok(Box::new(Eq {
+        field: conf.field,
+        const_value,
+        target_field,
+    }))
 }
 
 impl Filter for Eq {

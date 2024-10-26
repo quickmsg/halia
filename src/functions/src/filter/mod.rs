@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use message::Message;
-use types::rules::functions::FilterConf;
+use types::rules::functions::filter::Conf;
 
 use crate::Function;
 
@@ -22,18 +22,18 @@ pub struct Node {
     filters: Vec<Box<dyn Filter>>,
 }
 
-pub fn new(conf: FilterConf) -> Result<Box<dyn Function>> {
-    let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(conf.filters.len());
-    for conf_item in conf.filters {
-        let filter = match conf_item.typ {
-            types::rules::functions::FilterType::Eq => eq::new(conf_item.field, conf_item.value)?,
-            types::rules::functions::FilterType::Gt => gt::new(conf_item.field, conf_item.value)?,
-            types::rules::functions::FilterType::Gte => gte::new(conf_item.field, conf_item.value)?,
-            types::rules::functions::FilterType::Lt => lt::new(conf_item.field, conf_item.value)?,
-            types::rules::functions::FilterType::Lte => lte::new(conf_item.field, conf_item.value)?,
-            types::rules::functions::FilterType::Neq => neq::new(conf_item.field, conf_item.value)?,
-            types::rules::functions::FilterType::Ct => ct::new(conf_item.field, conf_item.value)?,
-            types::rules::functions::FilterType::Reg => reg::new(conf_item.field, conf_item.value)?,
+pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
+    let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(conf.items.len());
+    for item_conf in conf.items {
+        let filter = match item_conf.typ {
+            types::rules::functions::filter::Type::Ct => ct::new(item_conf)?,
+            types::rules::functions::filter::Type::Eq => eq::new(item_conf)?,
+            types::rules::functions::filter::Type::Gt => gt::new(item_conf)?,
+            types::rules::functions::filter::Type::Gte => gte::new(item_conf)?,
+            types::rules::functions::filter::Type::Lt => lt::new(item_conf)?,
+            types::rules::functions::filter::Type::Lte => lte::new(item_conf)?,
+            types::rules::functions::filter::Type::Neq => neq::new(item_conf)?,
+            types::rules::functions::filter::Type::Reg => reg::new(item_conf)?,
         };
         filters.push(filter);
     }

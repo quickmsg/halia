@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use tracing::debug;
+use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
 
@@ -11,8 +11,8 @@ struct Gt {
     target_field: Option<String>,
 }
 
-pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
-    match get_dynamic_value_from_json(&value) {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Filter>> {
+    match get_dynamic_value_from_json(&conf.value) {
         common::DynamicValue::Const(value) => {
             let const_value = match value {
                 serde_json::Value::Number(v) => MessageValue::from_json_number(v)?,
@@ -20,13 +20,13 @@ pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
             };
 
             Ok(Box::new(Gt {
-                field,
+                field: conf.field,
                 const_value: Some(const_value),
                 target_field: None,
             }))
         }
         common::DynamicValue::Field(s) => Ok(Box::new(Gt {
-            field,
+            field: conf.field,
             target_field: Some(s),
             const_value: None,
         })),

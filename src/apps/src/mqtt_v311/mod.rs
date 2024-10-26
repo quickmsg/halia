@@ -18,7 +18,7 @@ use tokio::{
     select,
     sync::{
         broadcast,
-        mpsc::{self, UnboundedSender},
+        mpsc::{UnboundedReceiver, UnboundedSender},
         watch, RwLock,
     },
     task::JoinHandle,
@@ -456,7 +456,7 @@ impl App for MqttClient {
     async fn get_source_rx(
         &self,
         source_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+    ) -> HaliaResult<UnboundedReceiver<RuleMessageBatch>> {
         match self.sources.get_mut(source_id) {
             Some(mut source) => Ok(source.get_rx()),
             None => Err(HaliaError::NotFound(source_id.to_owned())),

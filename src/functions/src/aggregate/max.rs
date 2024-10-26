@@ -1,18 +1,17 @@
 use super::Aggregater;
 use message::{MessageBatch, MessageValue};
+use types::rules::functions::aggregate::ItemConf;
 
 struct Max {
     field: String,
 }
 
-pub const TYPE: &str = "max";
-
-pub fn new(field: String) -> Box<dyn Aggregater> {
-    Box::new(Max { field })
+pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
+    Box::new(Max { field: conf.field })
 }
 
 impl Aggregater for Max {
-    fn aggregate(&self, mb: &MessageBatch) -> MessageValue {
+    fn aggregate(&self, mb: &MessageBatch) -> (String, MessageValue) {
         let mut max = std::f64::MIN;
         let messages = mb.get_messages();
         for message in messages {
@@ -34,6 +33,6 @@ impl Aggregater for Max {
             }
         }
 
-        MessageValue::Float64(max)
+        (self.field.clone(), MessageValue::Float64(max))
     }
 }

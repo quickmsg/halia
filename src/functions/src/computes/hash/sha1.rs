@@ -1,7 +1,7 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
 use sha1::{Digest, Sha1 as crate_Sha1};
-use types::rules::functions::ComputerConfItem;
+use types::rules::functions::computer::ItemConf;
 
 use crate::add_or_set_message_value;
 
@@ -13,7 +13,7 @@ struct Sha1 {
     target_field: Option<String>,
 }
 
-pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Sha1 {
         field: conf.field,
         target_field: conf.target_field,

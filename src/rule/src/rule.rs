@@ -7,9 +7,8 @@ use tokio::sync::{
     broadcast,
     mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
 };
-use tracing::{debug, error};
+use tracing::error;
 use types::rules::{
-    functions::{ComputerConf, FilterConf},
     AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node, NodeType,
     ReadRuleNodeResp, RuleConf,
 };
@@ -86,7 +85,6 @@ impl Rule {
                         for source_id in source_ids {
                             rxs.push(receivers.get_mut(source_id).unwrap().pop().unwrap());
                         }
-                        // let (tx, _) = broadcast::channel::<MessageBatch>(16);
                         let mut n_rxs = vec![];
                         let mut n_txs = vec![];
                         let cnt = outgoing_edges.get(&index).unwrap().len();
@@ -98,7 +96,6 @@ impl Rule {
 
                         receivers.insert(index, n_rxs);
                         merge::run(rxs, n_txs, self.stop_signal_tx.subscribe());
-                        debug!("here");
                         break;
                     }
                     // NodeType::Window => {
@@ -118,12 +115,14 @@ impl Rule {
                     //         .unwrap();
                     // }
                     NodeType::Filter => {
-                        let conf: FilterConf = serde_json::from_value(node.conf.clone())?;
+                        let conf: types::rules::functions::filter::Conf =
+                            serde_json::from_value(node.conf.clone())?;
                         functions.push(filter::new(conf)?);
                         indexes.push(index);
                     }
                     NodeType::Computer => {
-                        let conf: ComputerConf = serde_json::from_value(node.conf.clone())?;
+                        let conf: types::rules::functions::computer::Conf =
+                            serde_json::from_value(node.conf.clone())?;
                         functions.push(computes::new(conf)?);
                         indexes.push(index);
                     }

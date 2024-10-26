@@ -3,6 +3,7 @@ use common::get_dynamic_value_from_json;
 use message::MessageValue;
 use regex::Regex;
 use tracing::warn;
+use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
 
@@ -12,12 +13,12 @@ struct Reg {
     target_field: Option<String>,
 }
 
-pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
-    match get_dynamic_value_from_json(&value) {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Filter>> {
+    match get_dynamic_value_from_json(&conf.value) {
         common::DynamicValue::Const(value) => match value {
             serde_json::Value::String(s) => match Regex::new(&s) {
                 Ok(reg) => Ok(Box::new(Reg {
-                    field,
+                    field: conf.field,
                     reg: Some(reg),
                     target_field: None,
                 })),
@@ -26,7 +27,7 @@ pub fn new(field: String, value: serde_json::Value) -> Result<Box<dyn Filter>> {
             _ => bail!("不支持该类型"),
         },
         common::DynamicValue::Field(s) => Ok(Box::new(Reg {
-            field,
+            field: conf.field,
             reg: None,
             target_field: Some(s),
         })),

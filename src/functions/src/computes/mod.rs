@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use message::Message;
-use types::rules::functions::ComputerConf;
+use types::rules::functions::computer::Conf;
 
 use crate::Function;
 
@@ -17,14 +17,15 @@ pub struct Node {
     computers: Vec<Box<dyn Computer>>,
 }
 
-pub fn new(conf: ComputerConf) -> Result<Box<dyn Function>> {
-    let mut computers: Vec<Box<dyn Computer>> = Vec::with_capacity(conf.computers.len());
-    for item_conf in conf.computers {
+pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
+    let mut computers: Vec<Box<dyn Computer>> = Vec::with_capacity(conf.items.len());
+    for item_conf in conf.items {
         let computer = match item_conf.typ {
-            types::rules::functions::ComputerType::Number => number::new(item_conf)?,
-            types::rules::functions::ComputerType::String => string::new(item_conf)?,
-            types::rules::functions::ComputerType::Hash => hash::new(item_conf)?,
-            types::rules::functions::ComputerType::Date => todo!(),
+            types::rules::functions::computer::Type::Number => number::new(item_conf)?,
+            types::rules::functions::computer::Type::String => string::new(item_conf)?,
+            types::rules::functions::computer::Type::Hash => hash::new(item_conf)?,
+            // types::rules::functions::computer::Type::Date => date::new(item_conf)?,
+            _ => todo!(),
         };
         computers.push(computer);
     }
