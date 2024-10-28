@@ -46,7 +46,15 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert(
+pub async fn insert_source(id: &String, req: CreateReq) -> HaliaResult<()> {
+    insert(id, SourceSinkType::Source, req).await
+}
+
+pub async fn insert_sink(id: &String, req: CreateReq) -> HaliaResult<()> {
+    insert(id, SourceSinkType::Sink, req).await
+}
+
+async fn insert(
     id: &String,
     source_sink_type: SourceSinkType,
     req: CreateReq,

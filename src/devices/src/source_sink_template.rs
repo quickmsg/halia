@@ -17,8 +17,7 @@ pub async fn create_source_template(req: CreateReq) -> HaliaResult<()> {
     }
 
     let id = common::get_id();
-    storage::device::source_sink_template::insert(&id, storage::SourceSinkType::Source, req)
-        .await?;
+    storage::device::source_sink_template::insert_source(&id, req).await?;
 
     Ok(())
 }
@@ -76,7 +75,7 @@ pub async fn create_sink_template(req: CreateReq) -> HaliaResult<()> {
     }
 
     let id = common::get_id();
-    storage::device::source_sink_template::insert(&id, storage::SourceSinkType::Sink, req).await?;
+    storage::device::source_sink_template::insert_sink(&id, req).await?;
     Ok(())
 }
 
