@@ -219,13 +219,11 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
                     return Err(HaliaError::Common("模板不存在".to_owned()));
                 }
 
-                debug!("here");
                 let device_template_sources =
                     storage::device::template_source_sink::read_sources_by_device_template_id(
                         device_template_id,
                     )
                     .await?;
-                debug!("here");
                 let mut source_reqs = vec![];
                 for device_template_source in device_template_sources {
                     let conf_type: ConfType = device_template_source.conf_type.try_into()?;
@@ -301,13 +299,9 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
                     }
                 }
 
-                debug!("here");
-
                 for source_req in source_reqs {
                     create_source(device_id.clone(), Some(&device_template_id), source_req).await?;
                 }
-
-                debug!("here");
 
                 for sink_req in sink_reqs {
                     create_sink(device_id.clone(), Some(&device_template_id), sink_req).await?;
@@ -532,8 +526,6 @@ pub async fn create_source(
         }
     }
 
-    debug!("here");
-
     storage::device::source_sink::insert_source(
         &source_id,
         &device_id,
@@ -541,8 +533,6 @@ pub async fn create_source(
         req,
     )
     .await?;
-
-    debug!("here");
 
     Ok(())
 }
