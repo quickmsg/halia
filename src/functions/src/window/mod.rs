@@ -5,6 +5,10 @@ use types::rules::functions::window::Conf;
 
 mod count;
 mod time;
+mod time_hopping;
+mod time_sliding;
+mod time_thmbling;
+mod time_session;
 
 pub fn run(
     conf: Conf,

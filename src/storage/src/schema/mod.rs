@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS {} (
 
 pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.ext)?;
-    let ts = common::timestamp_millis();
+    let ts = common::timestamp_millis() as i64;
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let schema_type: i32 = req.schema_type.into();
     sqlx::query(

@@ -8,3 +8,20 @@ pub struct Conf {
     // s
     pub interval: Option<u64>,
 }
+
+pub struct TimeThmbling {
+    // ms
+    pub interval: u64,
+}
+
+pub struct TimeHopping {
+    // ms
+    pub interval: u64,
+    // ms
+    pub hopping: u64,
+}
+
+pub struct TimeSession {
+    pub timeout: u64,
+    pub max: u64,
+}

@@ -54,16 +54,12 @@ pub async fn insert_sink(id: &String, req: CreateReq) -> HaliaResult<()> {
     insert(id, SourceSinkType::Sink, req).await
 }
 
-async fn insert(
-    id: &String,
-    source_sink_type: SourceSinkType,
-    req: CreateReq,
-) -> HaliaResult<()> {
+async fn insert(id: &String, source_sink_type: SourceSinkType, req: CreateReq) -> HaliaResult<()> {
     let source_sink_type: i32 = source_sink_type.into();
     let device_type: i32 = req.device_type.into();
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.conf)?;
-    let ts = common::timestamp_millis();
+    let ts = common::timestamp_millis() as i64;
     sqlx::query(
         format!(
             r#"INSERT INTO {} 

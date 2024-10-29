@@ -68,7 +68,7 @@ pub async fn insert(
 ) -> Result<()> {
     let typ: i32 = typ.into();
     let conf = serde_json::to_vec(&req.ext)?;
-    let ts = common::timestamp_millis();
+    let ts = common::timestamp_millis() as i64;
     let desc = match req.base.desc {
         Some(desc) => Some(desc.as_bytes().to_vec()),
         None => None,

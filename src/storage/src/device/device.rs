@@ -54,7 +54,7 @@ pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf_type: i32 = req.conf_type.into();
     let conf = serde_json::to_vec(&req.conf)?;
-    let ts = common::timestamp_millis();
+    let ts = common::timestamp_millis() as i64;
     sqlx::query(
         format!(
             r#"INSERT INTO {} 

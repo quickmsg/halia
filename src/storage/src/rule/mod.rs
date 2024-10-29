@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS {} (
 pub async fn insert(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;
-    let ts = common::timestamp_millis();
+    let ts = common::timestamp_millis() as i64;
     sqlx::query("INSERT INTO rules (id, status, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(id)
         .bind(false as i32)

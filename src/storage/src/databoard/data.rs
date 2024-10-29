@@ -43,7 +43,7 @@ pub async fn insert(
 ) -> Result<()> {
     let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;
-    let ts = common::timestamp_millis();
+    let ts = common::timestamp_millis() as i64;
     sqlx::query("INSERT INTO databoard_datas (id, parent_id, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(databoard_data_id)
         .bind(databoard_id)

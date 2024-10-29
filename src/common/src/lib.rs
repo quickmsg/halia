@@ -34,11 +34,11 @@ pub fn get_id() -> String {
     Uuid::new_v4().simple().to_string()
 }
 
-pub fn timestamp_millis() -> i64 {
+pub fn timestamp_millis() -> u64 {
     let now = std::time::SystemTime::now();
     now.duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_millis() as i64
+        .as_millis() as u64
 }
 
 pub fn vec_to_string(v: Option<Vec<u8>>) -> Option<String> {
