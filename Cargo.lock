@@ -4353,6 +4353,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "apps",
+ "async-trait",
  "bytes",
  "common",
  "dashmap 6.0.1",

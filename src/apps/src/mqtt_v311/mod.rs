@@ -23,7 +23,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use types::apps::{
     mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf},
     SearchAppsItemRunningInfo,
@@ -241,9 +241,12 @@ impl MqttClient {
                             0 => {}
                             1 => {
                                 let mb = RuleMessageBatch::Owned(mb);
-                                if let Err(_) = source.mb_txs[0].send(mb) {
+                                if let Err(e) = source.mb_txs[0].send(mb) {
+                                    warn!("send err :{}", e);
+                                    debug!("here");
                                     source.mb_txs.remove(0);
                                 }
+                                debug!("here");
                             }
                             _ => {
                                 let mb = RuleMessageBatch::Arc(Arc::new(mb));

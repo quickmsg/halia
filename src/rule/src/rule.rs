@@ -7,14 +7,14 @@ use tokio::sync::{
     broadcast,
     mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
 };
-use tracing::error;
+use tracing::{debug, error};
 use types::rules::{
-    AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node, NodeType,
-    ReadRuleNodeResp, RuleConf,
+    AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, LogNode, Node,
+    NodeType, ReadRuleNodeResp, RuleConf,
 };
 
 use crate::{
-    log::Logger,
+    log::{LogFunction, Logger},
     segment::{get_segments, start_segment, take_sink_ids, take_source_ids},
 };
 
@@ -127,6 +127,12 @@ impl Rule {
                         indexes.push(index);
                     }
                     NodeType::Operator => todo!(),
+                    NodeType::Log => {
+                        debug!("here");
+                        let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
+                        functions.push(LogFunction::new(log_node.name));
+                        indexes.push(index);
+                    }
 
                     _ => unreachable!(),
                 }
@@ -183,7 +189,7 @@ impl Rule {
             );
         }
 
-        todo!()
+        Ok(())
     }
 
     pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
@@ -294,7 +300,10 @@ impl Rule {
 
     pub fn tail_log(&self) -> HaliaResult<broadcast::Receiver<String>> {
         match &self.logger {
-            Some(logger) => Ok(logger.get_broadcast_rx()),
+            Some(logger) => {
+                todo!()
+                // Ok(logger.get_broadcast_rx()),
+            }
             None => Err(HaliaError::Common("logger为空".to_owned())),
         }
     }
@@ -440,26 +449,25 @@ impl Rule {
                     }
                     txs
                 }
-                // NodeType::Log => {
-                //     let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
-                //     let cnt = incoming_edges.get(&sink_id).unwrap().len();
-                //     let mut txs = vec![];
-                //     for _ in 0..cnt {
-                //         txs.push(
-                //              match &self.logger {
-                //                 Some(logger) => logger.get_tx(),
-                //                 None => {
-                //                     let logger =
-                //                         Logger::new(&self.id, self.stop_signal_tx.subscribe()).await?;
-                //                     let tx = logger.get_tx();
-                //                     self.logger = Some(logger);
-                //                     tx
-                //                 }
-                //             }
-                //         )
-                //     }
-                //     txs
-                // functions.push(log::new(log_node.name, tx));
+                NodeType::Log => {
+                    debug!("here");
+                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
+                    let mut txs = vec![];
+                    for _ in 0..cnt {
+                        txs.push(match &self.logger {
+                            Some(logger) => logger.get_tx(),
+                            None => {
+                                let logger =
+                                    Logger::new(&self.id, self.stop_signal_tx.subscribe()).await?;
+                                let tx = logger.get_tx();
+                                self.logger = Some(logger);
+                                tx
+                            }
+                        })
+                    }
+                    txs
+                }
+
                 _ => unreachable!(),
             };
             senders.insert(node.index, txs);
