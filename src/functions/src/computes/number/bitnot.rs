@@ -1,25 +1,26 @@
-use crate::computes::Computer;
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::StringItemConf;
+use types::rules::functions::computer::NumberItemConf;
 
-struct Reverse {
+use super::Computer;
+
+struct Bitnot {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
-    Ok(Box::new(Reverse {
+pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
+    Ok(Box::new(Bitnot {
         field: conf.field,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Reverse {
+impl Computer for Bitnot {
     fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                message::MessageValue::String(s) => MessageValue::Int64(s.len() as i64),
+                MessageValue::Int64(mv) => MessageValue::Int64(!mv),
                 _ => MessageValue::Null,
             },
             None => MessageValue::Null,

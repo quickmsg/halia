@@ -9,10 +9,10 @@ pub struct Conf {
 pub struct ItemConf {
     #[serde(rename = "type")]
     pub typ: Type,
-    pub name: String,
-    pub field: String,
-    pub target_field: Option<String>,
-    pub arg: Option<Vec<serde_json::Value>>,
+    pub number: Option<NumberItemConf>,
+    // TODO
+    pub string: Option<StringItemConf>,
+    pub hash: Option<HashItemConf>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -22,4 +22,85 @@ pub enum Type {
     String,
     Hash,
     Date,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct NumberItemConf {
+    #[serde(rename = "type")]
+    pub typ: NumberType,
+    pub field: String,
+    pub target_field: Option<String>,
+    pub args: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NumberType {
+    Abs,
+    Acos,
+    Acosh,
+    Add,
+    Asin,
+    Asinh,
+    Atan,
+    Atan2,
+    Atanh,
+    Bitand,
+    Bitnot,
+    Bitor,
+    Bitxor,
+    Cbrt,
+    Ceil,
+    Cos,
+    Cosh,
+    Degrees,
+    Exp,
+    Exp2,
+    Floor,
+    Ln,
+    Log,
+    Power,
+    Sin,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct HashItemConf {
+    #[serde(rename = "type")]
+    pub typ: HashType,
+    pub field: String,
+    pub target_field: Option<String>,
+    pub args: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HashType {
+    Md5,
+    Sha1,
+    Sha256,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct StringItemConf {
+    pub typ: StringType,
+    pub field: String,
+    pub target_field: Option<String>,
+    pub args: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StringType {
+    Base64,
+    Hex,
+    Length,
+    Lower,
+    Upper,
+    Ltrim,
+    Reverse,
+    Rtrim,
+    Split,
+    Trim,
 }

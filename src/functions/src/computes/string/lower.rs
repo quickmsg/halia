@@ -1,14 +1,14 @@
 use crate::computes::Computer;
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::computer::StringItemConf;
 
 struct Lower {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Lower {
         field: conf.field,
         target_field: conf.target_field,

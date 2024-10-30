@@ -40,105 +40,72 @@ impl Filter for Ct {
             _ => unreachable!(),
         };
 
-        match (value, target_value) {
-            (MessageValue::String(mv), MessageValue::String(tv)) => mv.contains(tv),
-            (MessageValue::Array(mv), MessageValue::Null) => {
-                for v in mv {
-                    match v {
-                        MessageValue::Null => return true,
-                        _ => {}
-                    }
+        match value {
+            MessageValue::String(mv) => match target_value {
+                MessageValue::String(tv) => mv.contains(tv),
+                _ => false,
+            },
+            MessageValue::Bytes(mv) => match target_value {
+                // TODO
+                MessageValue::Bytes(tv) => {
+                    //  mv.contains(tv);
+                    true
                 }
-                false
-            }
-            (MessageValue::Array(mv), MessageValue::Boolean(tv)) => {
-                for v in mv {
-                    match v {
-                        MessageValue::Boolean(value) => {
-                            if value == tv {
-                                return true;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                false
-            }
-            (MessageValue::Array(mv), MessageValue::Int64(tv)) => {
-                for v in mv {
-                    match v {
-                        MessageValue::Int64(value) => {
-                            if value == tv {
-                                return true;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                false
-            }
-            (MessageValue::Array(mv), MessageValue::Float64(tv)) => {
-                for v in mv {
-                    match v {
-                        MessageValue::Float64(value) => {
-                            if (value - tv).abs() < 1e-10 {
-                                return true;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                false
-            }
-            (MessageValue::Array(mv), MessageValue::String(tv)) => {
-                for v in mv {
-                    match v {
-                        MessageValue::String(value) => {
-                            if value == tv {
-                                return true;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                false
-            }
-            (MessageValue::Array(mv), MessageValue::Bytes(tv)) => {
-                for v in mv {
-                    match v {
-                        MessageValue::Bytes(value) => {
-                            if value == tv {
-                                return true;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                false
-            }
-            (MessageValue::Array(_mv), MessageValue::Array(_tv)) => {
-                // for v in mv {
-                //     match v {
-                //         MessageValue::Array(value) => {
-                //             if value == tv {
-                //                 return true;
-                //             }
-                //         }
-                //         _ => {}
-                //     }
-                // }
-                // false
-                false
-            }
-            (MessageValue::Array(_), MessageValue::Object(_)) => todo!(),
-            (MessageValue::Object(_), MessageValue::Null) => todo!(),
-            (MessageValue::Object(_), MessageValue::Boolean(_)) => todo!(),
-            (MessageValue::Object(_), MessageValue::Int64(_)) => todo!(),
-            (MessageValue::Object(_), MessageValue::Float64(_)) => todo!(),
-            (MessageValue::Object(_), MessageValue::String(_)) => todo!(),
-            (MessageValue::Object(_), MessageValue::Bytes(_)) => todo!(),
-            (MessageValue::Object(_), MessageValue::Array(_)) => todo!(),
-            (MessageValue::Object(_), MessageValue::Object(_)) => todo!(),
+                _ => false,
+            },
+            MessageValue::Array(mv) => match target_value {
+                MessageValue::Null => mv.iter().find(|v| **v == MessageValue::Null).is_some(),
+                MessageValue::Boolean(b) => mv
+                    .iter()
+                    .find(|v| match v {
+                        MessageValue::Boolean(v) => v == b,
+                        _ => false,
+                    })
+                    .is_some(),
+                MessageValue::Int64(i) => mv
+                    .iter()
+                    .find(|v| match v {
+                        MessageValue::Int64(v) => v == i,
+                        _ => false,
+                    })
+                    .is_some(),
+                MessageValue::Float64(f) => mv
+                    .iter()
+                    .find(|v| match v {
+                        MessageValue::Float64(v) => v == f,
+                        _ => false,
+                    })
+                    .is_some(),
+                MessageValue::String(s) => mv
+                    .iter()
+                    .find(|v| match v {
+                        MessageValue::String(v) => v == s,
+                        _ => false,
+                    })
+                    .is_some(),
+                MessageValue::Bytes(vec) => mv
+                    .iter()
+                    .find(|v| match v {
+                        MessageValue::Bytes(v) => v == vec,
+                        _ => false,
+                    })
+                    .is_some(),
+                MessageValue::Array(vec) => mv
+                    .iter()
+                    .find(|v| match v {
+                        MessageValue::Array(v) => v == vec,
+                        _ => false,
+                    })
+                    .is_some(),
+                MessageValue::Object(hash_map) => mv
+                    .iter()
+                    .find(|v| match v {
+                        MessageValue::Object(v) => v == hash_map,
+                        _ => false,
+                    })
+                    .is_some(),
+            },
+            MessageValue::Object(hash_map) => todo!(),
             _ => false,
         }
     }

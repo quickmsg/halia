@@ -1,6 +1,6 @@
 use anyhow::Result;
 use message::MessageValue;
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::computer::NumberItemConf;
 
 use super::Computer;
 
@@ -10,7 +10,7 @@ struct Degrees {
     target_field: Option<String>,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Degrees {
         field: conf.field,
         target_field: conf.target_field,

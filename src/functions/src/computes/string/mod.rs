@@ -8,18 +8,23 @@ mod rtrim;
 mod split;
 mod trim;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::computer::StringItemConf;
 
 use super::Computer;
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    match conf.name.as_str() {
-        "length" => length::new(conf),
-        "lower" => lower::new(conf),
-        "upper" => upper::new(conf),
-        "reverse" => reverse::new(conf),
-        _ => bail!("不支持该函数"),
+pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
+    match conf.typ {
+        types::rules::functions::computer::StringType::Base64 => todo!(),
+        types::rules::functions::computer::StringType::Hex => todo!(),
+        types::rules::functions::computer::StringType::Length => length::new(conf),
+        types::rules::functions::computer::StringType::Lower => lower::new(conf),
+        types::rules::functions::computer::StringType::Upper => upper::new(conf),
+        types::rules::functions::computer::StringType::Ltrim => ltrim::new(conf),
+        types::rules::functions::computer::StringType::Reverse => reverse::new(conf),
+        types::rules::functions::computer::StringType::Rtrim => rtrim::new(conf),
+        types::rules::functions::computer::StringType::Split => todo!(),
+        types::rules::functions::computer::StringType::Trim => trim::new(conf),
     }
 }

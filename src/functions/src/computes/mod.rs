@@ -21,9 +21,14 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
     let mut computers: Vec<Box<dyn Computer>> = Vec::with_capacity(conf.items.len());
     for item_conf in conf.items {
         let computer = match item_conf.typ {
-            types::rules::functions::computer::Type::Number => number::new(item_conf)?,
-            types::rules::functions::computer::Type::String => string::new(item_conf)?,
-            types::rules::functions::computer::Type::Hash => hash::new(item_conf)?,
+            types::rules::functions::computer::Type::Number => {
+                // TODO remove unwrap
+                number::new(item_conf.number.unwrap())?
+            }
+            types::rules::functions::computer::Type::String => {
+                string::new(item_conf.string.unwrap())?
+            }
+            types::rules::functions::computer::Type::Hash => hash::new(item_conf.hash.unwrap())?,
             // types::rules::functions::computer::Type::Date => date::new(item_conf)?,
             _ => todo!(),
         };
