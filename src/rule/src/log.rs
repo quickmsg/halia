@@ -4,9 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use async_trait::async_trait;
-use functions::Function;
-use message::{MessageBatch, MessageValue, RuleMessageBatch};
+use message::{MessageValue, RuleMessageBatch};
 use tokio::{
     select,
     sync::{
@@ -16,43 +14,56 @@ use tokio::{
 };
 use tracing::{debug, warn};
 
-pub(crate) struct LogFunction {
+pub(crate) fn run_log(
     name: String,
+    log_tx: UnboundedSender<String>,
+    mut stop_signal_rx: broadcast::Receiver<()>,
+) -> UnboundedSender<RuleMessageBatch> {
+    let (tx, mut rx) = unbounded_channel();
+    tokio::spawn(async move {
+        loop {
+            select! {
+                Some(rmb) = rx.recv() => {
+                    log_send_rule_message_batch(&name, rmb, &log_tx);
+                }
+
+                _ = stop_signal_rx.recv() => {
+                    debug!("log quit.");
+                    return
+                }
+            }
+        }
+    });
+    tx
 }
 
-impl LogFunction {
-    pub fn new(name: String) -> Box<dyn Function> {
-        Box::new(LogFunction { name })
-    }
-}
-
-#[async_trait]
-impl Function for LogFunction {
-    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
-        message_batch.add_metadata(
-            "log_name".to_owned(),
-            MessageValue::String(self.name.clone()),
-        );
-        true
-    }
+fn log_send_rule_message_batch(name: &String, rmb: RuleMessageBatch, tx: &UnboundedSender<String>) {
+    let mut mb = rmb.take_mb();
+    mb.add_metadata("log_name".to_owned(), MessageValue::String(name.clone()));
+    tx.send(format!("{:?}\n", mb)).unwrap();
 }
 
 pub struct Logger {
-    tx: UnboundedSender<RuleMessageBatch>,
+    tx: UnboundedSender<String>,
+
+    web_tx: broadcast::Sender<String>,
 }
 
 impl Logger {
     // 新建即启动
     pub async fn new(rule_id: &String, stop_signal_rx: broadcast::Receiver<()>) -> Result<Self> {
         let (tx, rx) = unbounded_channel();
-        Self::handle_message(rule_id, rx, stop_signal_rx).await?;
+        let (web_tx, _) = broadcast::channel(16);
 
-        Ok(Logger { tx })
+        Self::handle_message(rule_id, rx, web_tx.clone(), stop_signal_rx).await?;
+
+        Ok(Logger { tx, web_tx })
     }
 
     pub async fn handle_message(
         rule_id: &String,
-        mut rx: UnboundedReceiver<RuleMessageBatch>,
+        mut rx: UnboundedReceiver<String>,
+        web_tx: broadcast::Sender<String>,
         mut stop_signal_rx: broadcast::Receiver<()>,
     ) -> Result<()> {
         let mut file = OpenOptions::new()
@@ -63,7 +74,7 @@ impl Logger {
             loop {
                 select! {
                     Some(data) = rx.recv() => {
-                        Self::log(&mut file, data);
+                        Self::log(&mut file, data, &web_tx);
                     }
 
                     _ = stop_signal_rx.recv() => {
@@ -77,22 +88,25 @@ impl Logger {
         Ok(())
     }
 
-    fn log(file: &mut File, data: RuleMessageBatch) {
-        debug!("log data: {:?}", data.take_mb());
-        // if let Err(e) = file.write_all(data.as_bytes()) {
-        //     warn!("write log to file err {}", e);
-        // }
+    fn log(file: &mut File, data: String, web_tx: &broadcast::Sender<String>) {
+        if web_tx.receiver_count() > 0 {
+            web_tx.send(data.clone());
+        }
+
+        if let Err(e) = file.write_all(data.as_bytes()) {
+            warn!("write log to file err {}", e);
+        }
 
         if let Err(e) = file.flush() {
             warn!("flush log err {}", e);
         }
     }
 
-    pub fn get_tx(&self) -> UnboundedSender<RuleMessageBatch> {
+    pub fn get_tx(&self) -> UnboundedSender<String> {
         self.tx.clone()
     }
 
-    // pub fn get_broadcast_rx(&self) -> broadcast::Receiver<String> {
-    //     self.broadcast_tx.subscribe()
-    // }
+    pub fn get_web_rx(&self) -> broadcast::Receiver<String> {
+        self.web_tx.subscribe()
+    }
 }

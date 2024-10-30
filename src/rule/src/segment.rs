@@ -83,6 +83,7 @@ pub(crate) fn take_source_ids(
     source_ids
 }
 
+// 不要去除log的id
 pub(crate) fn take_sink_ids(
     ids: &mut Vec<usize>,
     incoming_edges: &mut HashMap<usize, Vec<usize>>,

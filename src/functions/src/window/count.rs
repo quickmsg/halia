@@ -44,7 +44,6 @@ pub fn run(
                 .into_iter()
                 .map(|rx| UnboundedReceiverStream::new(rx))
                 .collect();
-
             let mut stream = futures::stream::select_all(streams);
             loop {
                 select! {

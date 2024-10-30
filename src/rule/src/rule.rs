@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use common::error::{HaliaError, HaliaResult};
 use functions::{computes, filter, merge::merge};
 use message::RuleMessageBatch;
-use tokio::sync::{
-    broadcast,
-    mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+use tokio::{
+    select,
+    sync::{
+        broadcast,
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    },
 };
 use tracing::{debug, error};
 use types::rules::{
@@ -14,7 +17,7 @@ use types::rules::{
 };
 
 use crate::{
-    log::{LogFunction, Logger},
+    log::{run_log, Logger},
     segment::{get_segments, start_segment, take_sink_ids, take_source_ids},
 };
 
@@ -38,7 +41,7 @@ impl Rule {
     }
 
     async fn start(&mut self, conf: &RuleConf) -> HaliaResult<()> {
-        let (incoming_edges, outgoing_edges) = conf.get_edges();
+        let (mut incoming_edges, outgoing_edges) = conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
@@ -73,6 +76,10 @@ impl Rule {
             &mut tmp_outgoing_edges,
         );
 
+        debug!("{:?}", receivers);
+        debug!("segments:{:?}", segments);
+        debug!("{:?}", senders);
+
         for segment in segments {
             let mut functions = vec![];
             let mut indexes = vec![];
@@ -89,7 +96,7 @@ impl Rule {
                         let mut n_txs = vec![];
                         let cnt = outgoing_edges.get(&index).unwrap().len();
                         for _ in 0..cnt {
-                            let (tx, rx) = mpsc::unbounded_channel();
+                            let (tx, rx) = unbounded_channel();
                             n_rxs.push(rx);
                             n_txs.push(tx);
                         }
@@ -127,12 +134,6 @@ impl Rule {
                         indexes.push(index);
                     }
                     NodeType::Operator => todo!(),
-                    NodeType::Log => {
-                        debug!("here");
-                        let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
-                        functions.push(LogFunction::new(log_node.name));
-                        indexes.push(index);
-                    }
 
                     _ => unreachable!(),
                 }
@@ -187,6 +188,12 @@ impl Rule {
                 segment_txs,
                 self.stop_signal_tx.subscribe(),
             );
+        }
+
+        for (index, mut senders) in senders {
+            let index = incoming_edges.get_mut(&index).unwrap().pop().unwrap();
+            let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
+            run_direct_link(senders.pop().unwrap(), rx, self.stop_signal_tx.subscribe());
         }
 
         Ok(())
@@ -300,10 +307,7 @@ impl Rule {
 
     pub fn tail_log(&self) -> HaliaResult<broadcast::Receiver<String>> {
         match &self.logger {
-            Some(logger) => {
-                todo!()
-                // Ok(logger.get_broadcast_rx()),
-            }
+            Some(logger) => Ok(logger.get_web_rx()),
             None => Err(HaliaError::Common("logger为空".to_owned())),
         }
     }
@@ -450,20 +454,27 @@ impl Rule {
                     txs
                 }
                 NodeType::Log => {
-                    debug!("here");
+                    let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
                     let cnt = incoming_edges.get(&sink_id).unwrap().len();
                     let mut txs = vec![];
+
+                    let log_tx = match &self.logger {
+                        Some(logger) => logger.get_tx(),
+                        None => {
+                            let logger =
+                                Logger::new(&self.id, self.stop_signal_tx.subscribe()).await?;
+                            let tx = logger.get_tx();
+                            self.logger = Some(logger);
+
+                            tx
+                        }
+                    };
+
+                    debug!("here");
+
+                    let tx = run_log(log_node.name, log_tx, self.stop_signal_tx.subscribe());
                     for _ in 0..cnt {
-                        txs.push(match &self.logger {
-                            Some(logger) => logger.get_tx(),
-                            None => {
-                                let logger =
-                                    Logger::new(&self.id, self.stop_signal_tx.subscribe()).await?;
-                                let tx = logger.get_tx();
-                                self.logger = Some(logger);
-                                tx
-                            }
-                        })
+                        txs.push(tx.clone());
                     }
                     txs
                 }
@@ -474,4 +485,24 @@ impl Rule {
         }
         Ok(senders)
     }
+}
+
+fn run_direct_link(
+    tx: UnboundedSender<RuleMessageBatch>,
+    mut rx: UnboundedReceiver<RuleMessageBatch>,
+    mut stop_signal_rx: broadcast::Receiver<()>,
+) {
+    tokio::spawn(async move {
+        loop {
+            select! {
+                Some(rmb) = rx.recv() => {
+                    _ = tx.send(rmb);
+                }
+
+                _ = stop_signal_rx.recv() => {
+                    return
+                }
+            }
+        }
+    });
 }
