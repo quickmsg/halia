@@ -17,39 +17,59 @@ use types::rules::functions::window::TimeHopping;
 
 pub fn run(
     conf: TimeHopping,
-    rxs: Vec<UnboundedReceiver<RuleMessageBatch>>,
+    mut rxs: Vec<UnboundedReceiver<RuleMessageBatch>>,
     txs: Vec<UnboundedSender<RuleMessageBatch>>,
     mut stop_signal_rx: Receiver<()>,
 ) -> Result<()> {
-    let streams: Vec<_> = rxs
-        .into_iter()
-        .map(|rx| UnboundedReceiverStream::new(rx))
-        .collect();
+    let mut mbs = VecDeque::new();
+    let start = Instant::now()
+        .checked_add(Duration::from_micros(conf.interval))
+        .unwrap();
+    let mut interval = time::interval_at(start, Duration::from_micros(conf.interval));
 
-    let mut stream = futures::stream::select_all(streams);
+    if rxs.len() == 1 {
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    Some(rmb) = rxs[0].recv() => {
+                        mbs.push_back((timestamp_millis(), rmb.take_mb()));
+                    }
 
-    tokio::spawn(async move {
-        let mut mbs = VecDeque::new();
-        let start = Instant::now()
-            .checked_add(Duration::from_micros(conf.interval))
-            .unwrap();
-        let mut interval = time::interval_at(start, Duration::from_micros(conf.interval));
-        loop {
-            select! {
-                Some(rmb) = stream.next() => {
-                    mbs.push_back((timestamp_millis(), rmb.take_mb()));
-                }
+                    _ = interval.tick() => {
+                        send_rule_message(conf.hopping, &txs, &mut mbs);
+                    }
 
-                _ = interval.tick() => {
-                    send_rule_message(conf.hopping, &txs, &mut mbs);
-                }
-
-                _ = stop_signal_rx.recv() => {
-                    return
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
                 }
             }
-        }
-    });
+        });
+    } else {
+        let streams: Vec<_> = rxs
+            .into_iter()
+            .map(|rx| UnboundedReceiverStream::new(rx))
+            .collect();
+        let mut stream = futures::stream::select_all(streams);
+
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    Some(rmb) = stream.next() => {
+                        mbs.push_back((timestamp_millis(), rmb.take_mb()));
+                    }
+
+                    _ = interval.tick() => {
+                        send_rule_message(conf.hopping, &txs, &mut mbs);
+                    }
+
+                    _ = stop_signal_rx.recv() => {
+                        return
+                    }
+                }
+            }
+        });
+    }
 
     Ok(())
 }

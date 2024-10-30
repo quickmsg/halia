@@ -8,7 +8,6 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
-use tracing::debug;
 use types::{
     devices::{
         device::{
@@ -554,6 +553,7 @@ pub async fn search_sources(
             .await?,
         };
         data.push(source_sink::SearchItemResp {
+            id: db_source.id,
             rule_ref,
             req: source_sink::CreateUpdateReq {
                 conf_type: db_source.conf_type.try_into()?,
@@ -709,6 +709,7 @@ pub async fn search_sinks(
             .await?,
         };
         data.push(source_sink::SearchItemResp {
+            id: db_sink.id,
             req: source_sink::CreateUpdateReq {
                 conf_type: db_sink.conf_type.try_into()?,
                 template_id: db_sink.template_id,

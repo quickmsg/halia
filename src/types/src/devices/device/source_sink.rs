@@ -18,6 +18,7 @@ pub struct SearchResp {
 
 #[derive(Serialize)]
 pub struct SearchItemResp {
+    pub id: String,
     pub req: CreateUpdateReq,
     pub rule_ref: RuleRef,
 }
