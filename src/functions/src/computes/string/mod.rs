@@ -3,6 +3,9 @@ mod lower;
 mod reverse;
 mod upper;
 // mod hex;
+mod endswith;
+mod indexof;
+mod lpad;
 mod ltrim;
 mod rtrim;
 mod split;
@@ -26,5 +29,8 @@ pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
         types::rules::functions::computer::StringType::Rtrim => rtrim::new(conf),
         types::rules::functions::computer::StringType::Split => todo!(),
         types::rules::functions::computer::StringType::Trim => trim::new(conf),
+        types::rules::functions::computer::StringType::Endswith => endswith::new(conf),
+        types::rules::functions::computer::StringType::Indexof => indexof::new(conf),
+        types::rules::functions::computer::StringType::Lpad => lpad::new(conf),
     }
 }

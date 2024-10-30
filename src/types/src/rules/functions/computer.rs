@@ -99,8 +99,11 @@ pub enum StringType {
     Lower,
     Upper,
     Ltrim,
+    Lpad,
     Reverse,
     Rtrim,
     Split,
     Trim,
+    Endswith,
+    Indexof,
 }
