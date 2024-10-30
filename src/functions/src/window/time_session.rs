@@ -1,7 +1,6 @@
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
-use common::timestamp_millis;
 use message::{MessageBatch, RuleMessageBatch};
 use tokio::{
     select,
@@ -29,19 +28,31 @@ pub fn run(
     let mut stream = futures::stream::select_all(streams);
 
     tokio::spawn(async move {
-        let mut mbs = VecDeque::new();
-        let start = Instant::now()
-            .checked_add(Duration::from_micros(conf.timeout))
-            .unwrap();
-        let mut interval = time::interval_at(start, Duration::from_micros(conf.timeout));
+        let mut mbs = vec![];
         loop {
+            let timeout = time::sleep(Duration::from_micros(conf.timeout));
+            let mut empty = true;
+            tokio::pin!(timeout);
+            let max = time::sleep(Duration::from_micros(conf.max));
+            tokio::pin!(max);
             select! {
                 Some(rmb) = stream.next() => {
-                    mbs.push_back((timestamp_millis(), rmb.take_mb()));
+                    if empty {
+                        empty = false;
+                        max.as_mut().reset(Instant::now() + Duration::from_micros(conf.max));
+                    }
+                    mbs.push(rmb.take_mb());
+                    timeout.as_mut().reset(Instant::now() + Duration::from_micros(conf.timeout));
                 }
 
-                _ = interval.tick() => {
+                _ = &mut timeout =>  {
                     send_rule_message(conf.timeout, &txs, &mut mbs);
+                    empty = true;
+                }
+
+                _ = &mut max => {
+                    send_rule_message(conf.max, &txs, &mut mbs);
+                    empty = true;
                 }
 
                 _ = stop_signal_rx.recv() => {
@@ -57,19 +68,11 @@ pub fn run(
 fn send_rule_message(
     hopping: u64,
     txs: &Vec<UnboundedSender<RuleMessageBatch>>,
-    mbs: &mut VecDeque<(u64, MessageBatch)>,
+    mbs: &mut Vec<MessageBatch>,
 ) {
     let mut send_mb = MessageBatch::default();
-    loop {
-        if let Some((ts, mb)) = mbs.front() {
-            if timestamp_millis() - ts > hopping {
-                send_mb.extend(mbs.pop_front().unwrap().1);
-            } else {
-                send_mb.extend(mb.clone());
-            }
-        } else {
-            break;
-        }
+    for mb in mbs.iter() {
+        send_mb.extend(mb.clone());
     }
 
     match txs.len() {

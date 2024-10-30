@@ -1,34 +1,38 @@
-use anyhow::{bail, Result};
-use message::MessageBatch;
+use anyhow::Result;
+use message::{MessageBatch, RuleMessageBatch};
 use tokio::{
     select,
-    sync::broadcast::{Receiver, Sender},
+    sync::{
+        broadcast,
+        mpsc::{UnboundedReceiver, UnboundedSender},
+    },
 };
-use types::rules::functions::window::Conf;
-
-pub const TYPE: &str = "count";
+use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+use types::rules::functions::window::Count;
 
 pub fn run(
-    conf: Conf,
-    mut rx: Receiver<MessageBatch>,
-    tx: Sender<MessageBatch>,
-    mut stop_signal_rx: Receiver<()>,
+    conf: Count,
+    rxs: Vec<UnboundedReceiver<RuleMessageBatch>>,
+    txs: Vec<UnboundedSender<RuleMessageBatch>>,
+    mut stop_signal_rx: broadcast::Receiver<()>,
 ) -> Result<()> {
-    let conf_cnt = match conf.count {
-        Some(count) => count,
-        None => bail!("未填写count"),
-    };
     tokio::spawn(async move {
         let mut mb = MessageBatch::default();
         let mut cnt: u64 = 0;
+        let streams: Vec<_> = rxs
+            .into_iter()
+            .map(|rx| UnboundedReceiverStream::new(rx))
+            .collect();
+
+        let mut stream = futures::stream::select_all(streams);
         loop {
             select! {
-                in_mb = rx.recv() => {
+                in_mb = stream.next() => {
                     match in_mb {
                         Ok(in_mb) => {
                             mb.extend(in_mb);
                             cnt += 1;
-                            if cnt == conf_cnt {
+                            if cnt == conf.count {
                                 tx.send(mb).unwrap();
                             }
                             mb = MessageBatch::default();

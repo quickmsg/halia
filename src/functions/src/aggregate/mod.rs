@@ -10,6 +10,8 @@ mod count;
 mod max;
 mod min;
 mod sum;
+mod collect;
+mod merge;
 
 pub trait Aggregater: Sync + Send {
     fn aggregate(&self, mb: &MessageBatch) -> (String, MessageValue);
