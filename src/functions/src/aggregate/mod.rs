@@ -1,27 +1,20 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use message::{Message, MessageBatch, MessageValue};
-use serde::Deserialize;
 use types::rules::functions::aggregate::{self, Conf};
 
 use crate::Function;
 mod avg;
+mod collect;
 mod count;
+mod deduplicate;
 mod max;
+mod merge;
 mod min;
 mod sum;
-mod collect;
-mod merge;
 
 pub trait Aggregater: Sync + Send {
     fn aggregate(&self, mb: &MessageBatch) -> (String, MessageValue);
-}
-
-#[derive(Deserialize)]
-pub struct Rule {
-    r#type: String,
-    in_field: String,
-    out_field: String,
 }
 
 pub struct Aggregate {
@@ -38,6 +31,9 @@ impl Aggregate {
                 aggregate::Type::Max => max::new(item_conf),
                 aggregate::Type::Min => min::new(item_conf),
                 aggregate::Type::Count => count::new(item_conf),
+                aggregate::Type::Collect => collect::new(item_conf),
+                aggregate::Type::Merge => merge::new(item_conf),
+                aggregate::Type::Deduplicate => deduplicate::new(item_conf),
             };
 
             aggregaters.push(aggregater);

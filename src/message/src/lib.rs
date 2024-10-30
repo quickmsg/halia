@@ -113,6 +113,13 @@ pub struct Message {
 }
 
 impl Message {
+    pub fn get_obj(&self) -> Option<&HashMap<String, MessageValue>> {
+        match &self.value {
+            MessageValue::Object(map) => Some(map),
+            _ => None,
+        }
+    }
+
     pub fn get(&self, field: &str) -> Option<&MessageValue> {
         self.value.get(field)
     }
@@ -207,7 +214,7 @@ impl Default for Message {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MessageValue {
     Null,
     Boolean(bool),
@@ -218,6 +225,8 @@ pub enum MessageValue {
     Array(Vec<MessageValue>),
     Object(HashMap<String, MessageValue>),
 }
+
+impl Eq for MessageValue {}
 
 impl MessageValue {
     pub fn from_json_number(number: serde_json::Number) -> Result<MessageValue> {

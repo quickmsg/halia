@@ -21,4 +21,7 @@ pub enum Type {
     Max,
     Min,
     Count,
+    Collect,
+    Merge,
+    Deduplicate,
 }

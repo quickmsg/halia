@@ -1,27 +1,51 @@
+use std::collections::HashMap;
+
 use message::{MessageBatch, MessageValue};
 use types::rules::functions::aggregate::ItemConf;
 
 use super::Aggregater;
 
-// TODO
 struct Merge {
     field: String,
+    all: bool,
 }
 
 pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
-    Box::new(Merge { field: conf.field })
+    let all = match conf.field.as_str() {
+        "*" => true,
+        _ => false,
+    };
+    Box::new(Merge {
+        field: conf.field,
+        all,
+    })
 }
 
 impl Aggregater for Merge {
     fn aggregate(&self, mb: &MessageBatch) -> (String, MessageValue) {
-        let mut values = vec![];
-        let messages = mb.get_messages();
-        for message in messages {
-            if let Some(value) = message.get(&self.field) {
-                values.push(value.clone());
+        let mut resp_value = HashMap::new();
+        for message in mb.get_messages() {
+            match &self.all {
+                true => {
+                    if let Some(obj) = message.get_obj() {
+                        for (key, value) in obj.iter() {
+                            resp_value.insert(key.clone(), value.clone());
+                        }
+                    }
+                }
+                false => {
+                    message.get(&self.field).map(|value| match value {
+                        MessageValue::Object(hash_map) => {
+                            for (key, value) in hash_map.iter() {
+                                resp_value.insert(key.clone(), value.clone());
+                            }
+                        }
+                        _ => {}
+                    });
+                }
             }
         }
 
-        (self.field.clone(), MessageValue::Array(values))
+        (self.field.clone(), MessageValue::Object(resp_value))
     }
 }

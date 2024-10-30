@@ -14,8 +14,7 @@ pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
 impl Aggregater for Count {
     fn aggregate(&self, mb: &MessageBatch) -> (String, MessageValue) {
         let mut count = 0;
-        let messages = mb.get_messages();
-        for message in messages {
+        for message in mb.get_messages() {
             if let Some(_) = message.get(&self.field) {
                 count += 1;
             }

@@ -49,15 +49,6 @@ impl Filter for Neq {
             _ => unreachable!(),
         };
 
-        match (value, target_value) {
-            (MessageValue::Boolean(mv), MessageValue::Boolean(tv)) => mv != tv,
-            (MessageValue::Int64(mv), MessageValue::Int64(tv)) => mv != tv,
-            (MessageValue::Float64(v), MessageValue::Float64(tv)) => (v - tv).abs() > 1e-10,
-            (MessageValue::String(v), MessageValue::String(tv)) => v != tv,
-            (MessageValue::Bytes(mv), MessageValue::Bytes(tv)) => mv != tv,
-            (MessageValue::Array(_v), MessageValue::Array(_tv)) => todo!(),
-            (MessageValue::Object(_), MessageValue::Object(_)) => todo!(),
-            _ => false,
-        }
+        value != target_value
     }
 }
