@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use log::debug;
 use rumqttc::tokio_rustls::rustls::{
     client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
     ClientConfig, RootCertStore, SignatureScheme,
@@ -19,6 +20,7 @@ pub(crate) fn get_ssl_config(ssl_conf: &SslConf) -> ClientConfig {
                     let certs = rustls_pemfile::certs(&mut BufReader::new(Cursor::new(ca_cert)))
                         .collect::<Result<Vec<_>, _>>()
                         .unwrap();
+                    debug!("{}", certs.len());
                     for cert in certs {
                         root_cert_store.add(cert).unwrap();
                     }
