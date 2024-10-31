@@ -12,7 +12,7 @@ use types::{
     devices::{
         device::{
             self, source_sink, QueryParams, QueryRuleInfoParams, RunningInfo, SearchResp,
-            SearchRuleInfo,
+            SearchRuleInfo, SearchRuleSourceSinkResp,
         },
         ConfType, DeviceType, Summary,
     },
@@ -168,16 +168,19 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
             let db_source = storage::device::source_sink::read_one(&source_id).await?;
             Ok(SearchRuleInfo {
                 device: device_resp,
-                source: Some(source_sink::CreateUpdateReq {
-                    conf_type: db_source.conf_type.try_into()?,
-                    template_id: db_source.template_id,
-                    base: BaseConf {
-                        name: db_source.name,
-                        desc: db_source
-                            .des
-                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                source: Some(SearchRuleSourceSinkResp {
+                    id: source_id,
+                    req: source_sink::CreateUpdateReq {
+                        conf_type: db_source.conf_type.try_into()?,
+                        template_id: db_source.template_id,
+                        base: BaseConf {
+                            name: db_source.name,
+                            desc: db_source
+                                .des
+                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                        },
+                        conf: serde_json::from_slice(&db_source.conf)?,
                     },
-                    conf: serde_json::from_slice(&db_source.conf)?,
                 }),
                 sink: None,
             })
@@ -187,16 +190,19 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
             Ok(SearchRuleInfo {
                 device: device_resp,
                 source: None,
-                sink: Some(source_sink::CreateUpdateReq {
-                    conf_type: db_sink.conf_type.try_into()?,
-                    template_id: db_sink.template_id,
-                    base: BaseConf {
-                        name: db_sink.name,
-                        desc: db_sink
-                            .des
-                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                sink: Some(SearchRuleSourceSinkResp {
+                    id: db_sink.id,
+                    req: source_sink::CreateUpdateReq {
+                        conf_type: db_sink.conf_type.try_into()?,
+                        template_id: db_sink.template_id,
+                        base: BaseConf {
+                            name: db_sink.name,
+                            desc: db_sink
+                                .des
+                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
+                        },
+                        conf: serde_json::from_slice(&db_sink.conf)?,
                     },
-                    conf: serde_json::from_slice(&db_sink.conf)?,
                 }),
             })
         }

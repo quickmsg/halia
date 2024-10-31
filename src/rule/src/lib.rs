@@ -212,7 +212,7 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
             }
             types::rules::NodeType::DeviceSink => {
                 let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                if !storage::source_or_sink::check_exists(&sink_node.sink_id).await? {
+                if !storage::device::source_sink::check_exists(&sink_node.sink_id).await? {
                     err = Some(format!("设备动作 {} 不存在！", sink_node.sink_id));
                     break;
                 }

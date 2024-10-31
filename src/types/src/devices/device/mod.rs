@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use source_sink::CreateUpdateReq;
 
 use crate::BaseConf;
 
@@ -67,7 +68,14 @@ pub struct QueryRuleInfoParams {
 pub struct SearchRuleInfo {
     pub device: SearchItemResp,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<source_sink::CreateUpdateReq>,
+    pub source: Option<SearchRuleSourceSinkResp>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sink: Option<source_sink::CreateUpdateReq>,
+    pub sink: Option<SearchRuleSourceSinkResp>,
+}
+
+
+#[derive(Serialize)]
+pub struct SearchRuleSourceSinkResp {
+    pub id: String,
+    pub req: CreateUpdateReq,
 }

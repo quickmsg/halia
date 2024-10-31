@@ -90,7 +90,7 @@ impl Logger {
 
     fn log(file: &mut File, data: String, web_tx: &broadcast::Sender<String>) {
         if web_tx.receiver_count() > 0 {
-            web_tx.send(data.clone());
+            web_tx.send(data.clone()).unwrap();
         }
 
         if let Err(e) = file.write_all(data.as_bytes()) {

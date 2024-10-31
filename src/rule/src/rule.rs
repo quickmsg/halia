@@ -139,55 +139,61 @@ impl Rule {
                 }
             }
 
-            let mut segment_rxs = vec![];
-            let mut segment_txs = vec![];
-            let source_ids = incoming_edges.get(&indexes.first().unwrap()).unwrap();
-            for source_id in source_ids {
-                match receivers.get_mut(source_id) {
-                    Some(receiver_rxs) => {
-                        segment_rxs.push(receiver_rxs.pop().unwrap());
-                    }
-                    None => {
-                        let (tx, rx) = unbounded_channel::<RuleMessageBatch>();
-                        match senders.get_mut(source_id) {
-                            Some(sender_txs) => {
-                                sender_txs.push(tx);
-                            }
-                            None => {
-                                senders.insert(*source_id, vec![tx]);
-                            }
+            // merge 节点的indexes长度为0
+            if indexes.len() > 0 {
+                let mut segment_rxs = vec![];
+                let mut segment_txs = vec![];
+                debug!("{:?}", indexes);
+                let source_ids = incoming_edges.get(&indexes.first().unwrap()).unwrap();
+                for source_id in source_ids {
+                    debug!("{}", source_id);
+                    match receivers.get_mut(source_id) {
+                        Some(receiver_rxs) => {
+                            debug!("{:?}", receiver_rxs);
+                            segment_rxs.push(receiver_rxs.pop().unwrap());
                         }
-                        segment_rxs.push(rx);
+                        None => {
+                            let (tx, rx) = unbounded_channel::<RuleMessageBatch>();
+                            match senders.get_mut(source_id) {
+                                Some(sender_txs) => {
+                                    sender_txs.push(tx);
+                                }
+                                None => {
+                                    senders.insert(*source_id, vec![tx]);
+                                }
+                            }
+                            segment_rxs.push(rx);
+                        }
                     }
                 }
-            }
 
-            let sink_ids = outgoing_edges.get(&indexes.last().unwrap()).unwrap();
-            for sink_id in sink_ids {
-                match senders.get_mut(sink_id) {
-                    Some(sender_txs) => {
-                        segment_txs.push(sender_txs.pop().unwrap());
-                    }
-                    None => {
-                        let (tx, rx) = unbounded_channel::<RuleMessageBatch>();
-                        match receivers.get_mut(sink_id) {
-                            Some(receiver_rxs) => {
-                                receiver_rxs.push(rx);
-                            }
-                            None => {
-                                receivers.insert(*sink_id, vec![rx]);
-                            }
+                let sink_ids = outgoing_edges.get(&indexes.last().unwrap()).unwrap();
+                for sink_id in sink_ids {
+                    match senders.get_mut(sink_id) {
+                        Some(sender_txs) => {
+                            segment_txs.push(sender_txs.pop().unwrap());
                         }
-                        segment_txs.push(tx);
+                        None => {
+                            let (tx, rx) = unbounded_channel::<RuleMessageBatch>();
+                            match receivers.get_mut(sink_id) {
+                                Some(receiver_rxs) => {
+                                    receiver_rxs.push(rx);
+                                }
+                                None => {
+                                    receivers.insert(*sink_id, vec![rx]);
+                                }
+                            }
+                            segment_txs.push(tx);
+                        }
                     }
                 }
+                start_segment(
+                    segment_rxs,
+                    functions,
+                    segment_txs,
+                    self.stop_signal_tx.subscribe(),
+                );
             }
-            start_segment(
-                segment_rxs,
-                functions,
-                segment_txs,
-                self.stop_signal_tx.subscribe(),
-            );
         }
 
         for (index, mut senders) in senders {
