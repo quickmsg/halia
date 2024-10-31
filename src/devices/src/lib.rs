@@ -453,6 +453,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     add_device_on_count();
     storage::device::device::update_status(&device_id, true).await?;
+    storage::device::device::update_err(&device_id, true).await?;
     Ok(())
 }
 

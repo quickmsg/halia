@@ -27,7 +27,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use types::{
     devices::{
         device::{
@@ -115,7 +115,7 @@ fn new(id: String, conf: Conf) -> Box<dyn Device> {
     let (device_err_tx, _) = broadcast::channel(16);
 
     let sources = Arc::new(DashMap::new());
-    let err = Arc::new(RwLock::new(None));
+    let err = Arc::new(RwLock::new(Some("连接中。。。".to_owned())));
     let rtt = Arc::new(AtomicU16::new(0));
     let join_handle_data = JoinHandleData {
         id,
@@ -261,7 +261,9 @@ impl Modbus {
                 if socket_addrs.len() == 0 {
                     return Err(io::Error::new(io::ErrorKind::Other, "no address found"));
                 }
+                debug!("{:?}", socket_addrs[0]);
                 let stream = TcpStream::connect(socket_addrs[0]).await?;
+                debug!("here");
 
                 match ethernet.encode {
                     Encode::Tcp => tcp::new(stream),
