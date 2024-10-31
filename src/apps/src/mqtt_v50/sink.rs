@@ -5,27 +5,30 @@ use common::{
     sink_message_retain::{self, SinkMessageRetain},
 };
 use log::warn;
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use rumqttc::v5::{
-    mqttbytes::{self, v5::PublishProperties},
+    mqttbytes::{self, v5},
     AsyncClient,
 };
 use tokio::{
     select,
-    sync::{broadcast, mpsc},
+    sync::{
+        broadcast,
+        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+    },
     task::JoinHandle,
 };
-use types::apps::mqtt_client_v50::SinkConf;
+use types::apps::mqtt_client_v50::{PublishProperties, SinkConf};
 
 use super::transfer_qos;
 
 pub struct Sink {
     stop_signal_tx: mpsc::Sender<()>,
 
-    pub publish_properties: Option<PublishProperties>,
+    pub publish_properties: Option<v5::PublishProperties>,
 
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
@@ -33,7 +36,7 @@ pub struct JoinHandleData {
     pub conf: SinkConf,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: mpsc::Receiver<()>,
-    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
     pub app_err_rx: broadcast::Receiver<bool>,
 }
 
@@ -43,8 +46,8 @@ impl Sink {
         mqtt_client: Arc<AsyncClient>,
         app_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
-        let publish_properties = get_publish_properties(&conf);
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let publish_properties = get_publish_properties(&conf.properties);
+        let (mb_tx, mb_rx) = unbounded_channel();
         let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
@@ -79,11 +82,11 @@ impl Sink {
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
                         if !err {
-                            if let Err(e) = join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, mb.to_json()).await {
+                            if let Err(e) = join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, mb.take_mb().to_json()).await {
                                 warn!("{:?}", e);
                             }
                         } else {
-                            join_handle_data.message_retainer.push(mb);
+                            join_handle_data.message_retainer.push(mb.take_mb());
                         }
                     }
                 }
@@ -119,9 +122,13 @@ impl Sink {
     }
 }
 
-fn get_publish_properties(conf: &SinkConf) -> Option<PublishProperties> {
+fn get_publish_properties(conf: &Option<PublishProperties>) -> Option<v5::PublishProperties> {
+    let conf = match conf {
+        Some(conf) => conf,
+        None => return None,
+    };
     let mut some = false;
-    let mut pp = PublishProperties {
+    let mut pp = v5::PublishProperties {
         payload_format_indicator: None,
         message_expiry_interval: None,
         topic_alias: None,

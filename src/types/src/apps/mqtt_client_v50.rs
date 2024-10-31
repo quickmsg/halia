@@ -14,20 +14,24 @@ pub struct MqttClientConf {
     pub keep_alive: u64,
     pub clean_start: bool,
 
-    // s
+    pub connect_properties: Option<ConnectProperties>,
+
+    pub ssl_enable: bool,
+    pub ssl_conf: Option<SslConf>,
+    pub last_will: Option<LastWill>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct ConnectProperties {
     pub session_expire_interval: Option<u32>,
     pub receive_maximum: Option<u16>,
     pub max_packet_size: Option<u32>,
     pub topic_alias_max: Option<u16>,
     pub request_response_info: Option<u8>,
     pub request_problem_info: Option<u8>,
-    pub user_properties: Option<Vec<(String, String)>>,
+    pub user_properties: Vec<(String, String)>,
     pub authentication_method: Option<String>,
     pub authentication_data: Option<PlainOrBase64Value>,
-
-    pub ssl_enable: bool,
-    pub ssl_conf: SslConf,
-    pub last_will: Option<LastWill>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
@@ -82,7 +86,13 @@ pub struct SinkConf {
     pub qos: Qos,
     pub retain: bool,
 
-    // for v5
+    pub properties: Option<PublishProperties>,
+
+    pub message_retain: MessageRetain,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct PublishProperties {
     // 1 开启 0关闭
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_properties: Option<Vec<(String, String)>>,
@@ -100,6 +110,4 @@ pub struct SinkConf {
     pub correlation_data: Option<Vec<u8>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription_identifiers: Option<Vec<usize>>,
-
-    pub message_retain: MessageRetain,
 }

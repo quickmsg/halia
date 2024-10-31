@@ -147,39 +147,44 @@ impl MqttClient {
         };
 
         mqtt_options.set_clean_start(conf.clean_start);
-        let mut connect_properties = ConnectProperties::new();
-        connect_properties.session_expiry_interval = conf.session_expire_interval;
-        connect_properties.receive_maximum = conf.receive_maximum;
-        connect_properties.max_packet_size = conf.max_packet_size;
-        connect_properties.topic_alias_max = conf.topic_alias_max;
-        connect_properties.request_response_info = conf.request_response_info;
-        connect_properties.request_problem_info = conf.request_problem_info;
-        if let Some(user_properties) = &conf.user_properties {
-            for (k, v) in user_properties {
-                connect_properties
-                    .user_properties
-                    .push((k.clone(), v.clone()));
-            }
+
+        if let Some(conf_connect_properties) = conf.connect_properties {
+            let mut connect_properties = ConnectProperties::new();
+            connect_properties.session_expiry_interval =
+                conf_connect_properties.session_expire_interval;
+            connect_properties.receive_maximum = conf_connect_properties.receive_maximum;
+            connect_properties.max_packet_size = conf_connect_properties.max_packet_size;
+            connect_properties.topic_alias_max = conf_connect_properties.topic_alias_max;
+            connect_properties.request_response_info =
+                conf_connect_properties.request_response_info;
+            connect_properties.request_problem_info = conf_connect_properties.request_problem_info;
+            connect_properties.user_properties = conf_connect_properties.user_properties;
+            connect_properties.authentication_method =
+                conf_connect_properties.authentication_method;
+            // TODO
+            // connect_properties.authentication_data = conf_connect_properties.authentication_data;
+
+            mqtt_options.set_connect_properties(connect_properties);
         }
-        connect_properties.authentication_method = conf.authentication_method;
-        if let Some(authehtication_data) = &conf.authentication_data {
-            match authehtication_data.typ {
-                types::PlainOrBase64ValueType::Plain => {
-                    connect_properties.authentication_data = Some(
-                        serde_json::to_vec(&authehtication_data.value)
-                            .unwrap()
-                            .into(),
-                    );
-                }
-                types::PlainOrBase64ValueType::Base64 => {
-                    let b = BASE64_STANDARD
-                        .decode(authehtication_data.value.as_str().unwrap())
-                        .unwrap();
-                    connect_properties.authentication_data = Some(b.into());
-                }
-            }
-        }
-        mqtt_options.set_connect_properties(connect_properties);
+
+        // connect_properties.authentication_method = conf.authentication_method;
+        // if let Some(authehtication_data) = &conf.authentication_data {
+        //     match authehtication_data.typ {
+        //         types::PlainOrBase64ValueType::Plain => {
+        //             connect_properties.authentication_data = Some(
+        //                 serde_json::to_vec(&authehtication_data.value)
+        //                     .unwrap()
+        //                     .into(),
+        //             );
+        //         }
+        //         types::PlainOrBase64ValueType::Base64 => {
+        //             let b = BASE64_STANDARD
+        //                 .decode(authehtication_data.value.as_str().unwrap())
+        //                 .unwrap();
+        //             connect_properties.authentication_data = Some(b.into());
+        //         }
+        //     }
+        // }
 
         // match (conf.ssl.enable, conf.ssl.client_cert_enable) {
         //     (true, true) => {
@@ -234,10 +239,25 @@ impl MqttClient {
                         if p.topic.len() > 0 {
                             match String::from_utf8(p.topic.into()) {
                                 Ok(topic) => {
-                                    for source in sources.iter_mut() {
+                                    for mut source in sources.iter_mut() {
                                         if matches(&source.conf.topic, &topic) {
-                                            if source.mb_tx.receiver_count() > 0 {
-                                                source.mb_tx.send(msg.clone()).unwrap();
+                                            match source.mb_txs.len() {
+                                                0 => {}
+                                                1 => {
+                                                    let mb = RuleMessageBatch::Owned(msg.clone());
+                                                    if let Err(e) = source.mb_txs[0].send(mb) {
+                                                        warn!("{}", e);
+                                                        source.mb_txs.remove(0);
+                                                    }
+                                                }
+                                                _ => {
+                                                    let rmb = RuleMessageBatch::Arc(Arc::new(
+                                                        msg.clone(),
+                                                    ));
+                                                    source
+                                                        .mb_txs
+                                                        .retain(|tx| tx.send(rmb.clone()).is_ok());
+                                                }
                                             }
                                         }
                                     }
@@ -248,11 +268,32 @@ impl MqttClient {
                             match p.properties {
                                 Some(properties) => match properties.topic_alias {
                                     Some(msg_topic_alias) => {
-                                        for source in sources.iter_mut() {
+                                        for mut source in sources.iter_mut() {
                                             match source.conf.topic_alias {
                                                 Some(source_topic_alias) => {
                                                     if source_topic_alias == msg_topic_alias {
-                                                        _ = source.mb_tx.send(msg.clone());
+                                                        match source.mb_txs.len() {
+                                                            0 => {}
+                                                            1 => {
+                                                                let mb = RuleMessageBatch::Owned(
+                                                                    msg.clone(),
+                                                                );
+                                                                if let Err(e) =
+                                                                    source.mb_txs[0].send(mb)
+                                                                {
+                                                                    warn!("{}", e);
+                                                                    source.mb_txs.remove(0);
+                                                                }
+                                                            }
+                                                            _ => {
+                                                                let rmb = RuleMessageBatch::Arc(
+                                                                    Arc::new(msg.clone()),
+                                                                );
+                                                                source.mb_txs.retain(|tx| {
+                                                                    tx.send(rmb.clone()).is_ok()
+                                                                });
+                                                            }
+                                                        }
                                                     }
                                                 }
                                                 None => {}
@@ -435,10 +476,6 @@ impl App for MqttClient {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        // for sink in self.sinks.iter() {
-        // sink.check_duplicate(&req.base, &ext_conf)?;
-        // }
-
         let sink = Sink::new(conf, self.mqtt_client.clone(), self.app_err_tx.subscribe()).await;
         self.sinks.insert(sink_id, sink);
         Ok(())
@@ -471,23 +508,21 @@ impl App for MqttClient {
 
     async fn get_source_rx(
         &self,
-        _source_id: &String,
+        source_id: &String,
     ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
-        todo!()
-        // match self.sources.get(source_id) {
-        //     Some(source) => Ok(source.mb_tx.subscribe()),
-        //     None => Err(HaliaError::NotFound(source_id.to_owned())),
-        // }
+        match self.sources.get_mut(source_id) {
+            Some(mut source) => Ok(source.get_rx()),
+            None => Err(HaliaError::NotFound(source_id.to_owned())),
+        }
     }
 
     async fn get_sink_tx(
         &self,
-        _sink_id: &String,
+        sink_id: &String,
     ) -> HaliaResult<UnboundedSender<RuleMessageBatch>> {
-        todo!()
-        // match self.sinks.get(sink_id) {
-        //     Some(sink) => Ok(sink.mb_tx.clone()),
-        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        // }
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.mb_tx.clone()),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 }

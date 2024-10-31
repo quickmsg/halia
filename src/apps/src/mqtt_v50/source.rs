@@ -1,18 +1,20 @@
 use common::error::{HaliaError, HaliaResult};
-use message::MessageBatch;
+use message::RuleMessageBatch;
 use rumqttc::valid_filter;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use types::apps::mqtt_client_v50::SourceConf;
 
 pub struct Source {
     pub conf: SourceConf,
-    pub mb_tx: broadcast::Sender<MessageBatch>,
+    pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
 }
 
 impl Source {
     pub fn new(conf: SourceConf) -> Self {
-        let (mb_tx, _) = broadcast::channel(16);
-        Source { conf, mb_tx }
+        Source {
+            conf,
+            mb_txs: vec![],
+        }
     }
 
     pub fn validate_conf(conf: &SourceConf) -> HaliaResult<()> {
@@ -21,5 +23,11 @@ impl Source {
         }
 
         Ok(())
+    }
+
+    pub fn get_rx(&mut self) -> UnboundedReceiver<RuleMessageBatch> {
+        let (tx, rx) = unbounded_channel();
+        self.mb_txs.push(tx);
+        rx
     }
 }
