@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use log::{error, warn};
 use message::{MessageBatch, RuleMessageBatch};
 use rumqttc::v5::{self, mqttbytes::v5::ConnectProperties, AsyncClient};
 use sink::Sink;
@@ -23,7 +24,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::{error, warn};
 use types::apps::{
     mqtt_client_v50::{MqttClientConf, Qos, SinkConf, SourceConf},
     SearchAppsItemRunningInfo,

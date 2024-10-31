@@ -229,6 +229,7 @@ dependencies = [
  "events",
  "futures-util",
  "jsonwebtoken",
+ "log",
  "rule",
  "schema",
  "serde",
@@ -239,7 +240,6 @@ dependencies = [
  "tokio-util",
  "tower 0.5.0",
  "tower-http",
- "tracing",
  "types",
 ]
 
@@ -258,6 +258,7 @@ dependencies = [
  "futures",
  "influxdb",
  "influxdb2",
+ "log",
  "message",
  "reqwest 0.12.7",
  "rskafka",
@@ -273,7 +274,6 @@ dependencies = [
  "taos",
  "thiserror",
  "tokio",
- "tracing",
  "types",
  "webpki-roots 0.26.6",
 ]

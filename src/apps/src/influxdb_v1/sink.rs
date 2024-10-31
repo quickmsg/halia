@@ -6,6 +6,7 @@ use common::{
     sink_message_retain::{self, SinkMessageRetain},
 };
 use influxdb::{Client, InfluxDbWriteable as _, Timestamp, Type};
+use log::debug;
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -15,7 +16,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::debug;
 use types::apps::influxdb_v1::{Conf, SinkConf};
 
 pub struct Sink {

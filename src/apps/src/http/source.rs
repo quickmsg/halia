@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use common::error::HaliaResult;
+use log::warn;
 use message::{MessageBatch, RuleMessageBatch};
 use reqwest::{Client, Request};
 use tokio::{
@@ -12,7 +13,6 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::warn;
 use types::apps::http_client::{HttpClientConf, SourceConf};
 
 use super::{build_basic_auth, build_headers};

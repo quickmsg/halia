@@ -4,6 +4,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
+use log::warn;
 use message::MessageBatch;
 use rumqttc::v5::{
     mqttbytes::{self, v5::PublishProperties},
@@ -14,7 +15,6 @@ use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
-use tracing::warn;
 use types::apps::mqtt_client_v50::SinkConf;
 
 use super::transfer_qos;

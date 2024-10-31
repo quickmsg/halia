@@ -11,6 +11,7 @@ use influxdb2::{
     models::{DataPoint, FieldValue},
     Client,
 };
+use log::{debug, warn};
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -20,7 +21,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::{debug, warn};
 use types::apps::influxdb_v2::{Conf, SinkConf};
 
 pub struct Sink {

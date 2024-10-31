@@ -9,6 +9,7 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use log::debug;
 use message::RuleMessageBatch;
 use rskafka::client::{Client, ClientBuilder};
 use sink::Sink;
@@ -21,7 +22,6 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tracing::debug;
 use types::apps::{
     kafka::{Conf, SinkConf},
     SearchAppsItemRunningInfo,

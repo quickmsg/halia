@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common::get_dynamic_value_from_json;
+use log::warn;
 use message::RuleMessageBatch;
 use taos::{AsyncQueryable, Taos};
 use tokio::{
@@ -12,7 +13,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::warn;
 use types::apps::tdengine::{SinkConf, TDengineConf};
 
 use super::new_tdengine_client;

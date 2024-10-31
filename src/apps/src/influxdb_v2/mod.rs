@@ -9,6 +9,7 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use log::warn;
 use message::RuleMessageBatch;
 use sink::Sink;
 use tokio::{
@@ -18,7 +19,6 @@ use tokio::{
         watch, RwLock,
     },
 };
-use tracing::warn;
 use types::apps::{
     influxdb_v2::{Conf, SinkConf},
     SearchAppsItemRunningInfo,

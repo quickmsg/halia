@@ -7,6 +7,7 @@ use common::{
     error::HaliaResult,
     sink_message_retain::{self, SinkMessageRetain},
 };
+use log::warn;
 use message::RuleMessageBatch;
 use rskafka::{
     client::{
@@ -23,7 +24,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::warn;
 use types::apps::kafka::SinkConf;
 
 pub struct Sink {

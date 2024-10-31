@@ -21,8 +21,8 @@ events = { workspace = true }
 storage = { workspace = true }
 schema = { workspace = true }
 
+log = { workspace = true }
 anyhow = { workspace = true }
-tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 bytes = { workspace = true }
