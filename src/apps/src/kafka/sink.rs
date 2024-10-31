@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use base64::{engine::general_purpose, Engine};
 use chrono::{TimeZone, Utc};
 use common::{
     error::HaliaResult,
@@ -109,20 +108,10 @@ impl Sink {
         compression: Compression,
     ) -> Result<()> {
         let mb = rmb.take_mb();
-        let key = match &conf.key {
-            Some(key) => match key.typ {
-                types::PlainOrBase64ValueType::Plain => {
-                    Some(serde_json::to_vec(&key.value).unwrap())
-                }
-                types::PlainOrBase64ValueType::Base64 => {
-                    let bytes = general_purpose::STANDARD
-                        .decode(&key.value.as_str().unwrap())
-                        .unwrap();
-                    Some(bytes)
-                }
-            },
-            None => None,
-        };
+        let key = conf.key.clone().map(|value| {
+            let value: Vec<u8> = value.into();
+            value
+        });
         let mut headers = BTreeMap::new();
         if let Some(conf_headers) = &conf.headers {
             for (k, v) in conf_headers.iter() {

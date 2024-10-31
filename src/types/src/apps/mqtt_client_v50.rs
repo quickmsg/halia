@@ -107,7 +107,7 @@ pub struct PublishProperties {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_topic: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub correlation_data: Option<Vec<u8>>,
+    pub correlation_data: Option<PlainOrBase64Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription_identifiers: Option<Vec<usize>>,
 }

@@ -1,4 +1,5 @@
 use base64::{prelude::BASE64_STANDARD, Engine as _};
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 pub mod apps;
@@ -125,7 +126,7 @@ pub enum MessageRetainType {
 pub struct PlainOrBase64Value {
     #[serde(rename = "type")]
     pub typ: PlainOrBase64ValueType,
-    pub value: serde_json::Value,
+    pub value: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
@@ -138,10 +139,19 @@ pub enum PlainOrBase64ValueType {
 impl Into<Vec<u8>> for PlainOrBase64Value {
     fn into(self) -> Vec<u8> {
         match self.typ {
-            PlainOrBase64ValueType::Plain => serde_json::to_vec(&self.value).unwrap(),
-            PlainOrBase64ValueType::Base64 => BASE64_STANDARD
-                .decode(self.value.as_str().unwrap())
-                .unwrap(),
+            PlainOrBase64ValueType::Plain => self.value.into_bytes(),
+            PlainOrBase64ValueType::Base64 => BASE64_STANDARD.decode(&self.value).unwrap(),
+        }
+    }
+}
+
+impl Into<Bytes> for PlainOrBase64Value {
+    fn into(self) -> Bytes {
+        match self.typ {
+            PlainOrBase64ValueType::Plain => Bytes::from(self.value.into_bytes()),
+            PlainOrBase64ValueType::Base64 => {
+                Bytes::from(BASE64_STANDARD.decode(&self.value).unwrap())
+            }
         }
     }
 }

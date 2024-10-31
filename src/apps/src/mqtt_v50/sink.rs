@@ -25,19 +25,18 @@ use super::transfer_qos;
 pub struct Sink {
     stop_signal_tx: mpsc::Sender<()>,
 
-    pub publish_properties: Option<v5::PublishProperties>,
-
     join_handle: Option<JoinHandle<JoinHandleData>>,
     pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
-    mqtt_client: Arc<AsyncClient>,
+    pub mqtt_client: Arc<AsyncClient>,
     pub conf: SinkConf,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: mpsc::Receiver<()>,
     pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
     pub app_err_rx: broadcast::Receiver<bool>,
+    pub publish_properties: Option<v5::PublishProperties>,
 }
 
 impl Sink {
@@ -58,6 +57,7 @@ impl Sink {
             stop_signal_rx,
             mb_rx,
             app_err_rx,
+            publish_properties,
         };
 
         let join_handle = Self::event_loop(join_handle_data);
@@ -65,7 +65,6 @@ impl Sink {
         Self {
             mb_tx,
             stop_signal_tx,
-            publish_properties,
             join_handle: Some(join_handle),
         }
     }
@@ -82,8 +81,19 @@ impl Sink {
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
                         if !err {
-                            if let Err(e) = join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, mb.take_mb().to_json()).await {
-                                warn!("{:?}", e);
+                            match &join_handle_data.publish_properties {
+                                Some(pp) => {
+                                    if let Err(e) = join_handle_data.mqtt_client.publish_with_properties(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, mb.take_mb().to_json(), pp.clone()).await {
+                                        warn!("{:?}", e);
+                                        err = true;
+                                    }
+                                }
+                                None => {
+                                    if let Err(e) = join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, mb.take_mb().to_json()).await {
+                                        warn!("{:?}", e);
+                                        err = true;
+                                    }
+                                }
                             }
                         } else {
                             join_handle_data.message_retainer.push(mb.take_mb());
@@ -153,7 +163,7 @@ fn get_publish_properties(conf: &Option<PublishProperties>) -> Option<v5::Publis
     }
     if let Some(cd) = &conf.correlation_data {
         some = true;
-        todo!()
+        pp.correlation_data = Some(cd.clone().into());
     }
     if let Some(up) = &conf.user_properties {
         some = true;

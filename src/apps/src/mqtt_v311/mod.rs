@@ -102,18 +102,11 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     if let Some(last_will) = &conf.last_will {
         match &last_will.message.typ {
             types::PlainOrBase64ValueType::Plain => {}
-            types::PlainOrBase64ValueType::Base64 => match &last_will.message.value {
-                serde_json::Value::String(s) => {
-                    BASE64_STANDARD.decode(s).map_err(|e| {
-                        HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e))
-                    })?;
-                }
-                _ => {
-                    return Err(HaliaError::Common(
-                        "遗嘱信息base64编码时，value必须是字符串".to_owned(),
-                    ));
-                }
-            },
+            types::PlainOrBase64ValueType::Base64 => {
+                BASE64_STANDARD
+                    .decode(&last_will.message.value)
+                    .map_err(|e| HaliaError::Common(format!("遗嘱信息base64解码错误: {}", e)))?;
+            }
         }
     }
 
