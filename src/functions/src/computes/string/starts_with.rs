@@ -1,39 +1,40 @@
-use crate::computes::Computer;
+use crate::{
+    add_or_set_message_value,
+    computes::{Arg, Computer},
+};
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
 use types::rules::functions::computer::StringItemConf;
 
-struct Endswith {
+struct StartsWith {
     field: String,
-    const_value: Option<String>,
-    dynamic_value: Option<String>,
+    arg: Arg,
     target_field: Option<String>,
 }
 
 pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
-    let (const_value, dynamic_value) = match conf.args {
+    let arg = match conf.args {
         Some(mut args) => match args.pop() {
             Some(arg) => match get_dynamic_value_from_json(&arg) {
                 common::DynamicValue::Const(value) => match value {
-                    serde_json::Value::String(s) => (Some(s), None),
+                    serde_json::Value::String(s) => Arg::Const(s),
                     _ => bail!("只支持字符串常量"),
                 },
-                common::DynamicValue::Field(s) => (None, Some(s)),
+                common::DynamicValue::Field(s) => Arg::Field(s),
             },
             None => bail!("Endswith function requires arguments"),
         },
         None => bail!("Endswith function requires arguments"),
     };
-    Ok(Box::new(Endswith {
+    Ok(Box::new(StartsWith {
         field: conf.field,
-        const_value,
-        dynamic_value,
+        arg,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Endswith {
+impl Computer for StartsWith {
     fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
@@ -43,22 +44,18 @@ impl Computer for Endswith {
             None => return,
         };
 
-        let target_value = match (&self.const_value, &self.dynamic_value) {
-            (Some(value), None) => value,
-            (None, Some(field)) => match message.get(field) {
+        let arg = match &self.arg {
+            Arg::Const(s) => s,
+            Arg::Field(f) => match message.get(f) {
                 Some(mv) => match mv {
                     MessageValue::String(s) => s,
                     _ => return,
                 },
                 None => return,
             },
-            _ => unreachable!(),
         };
 
-        let resp_value = MessageValue::Boolean(value.ends_with(target_value));
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), resp_value),
-            None => message.set(&self.field, resp_value),
-        }
+        let result = MessageValue::Boolean(value.starts_with(arg));
+        add_or_set_message_value!(self, message, result);
     }
 }

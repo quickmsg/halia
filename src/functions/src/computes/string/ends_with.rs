@@ -7,7 +7,7 @@ use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
 use types::rules::functions::computer::StringItemConf;
 
-struct Split {
+struct EndsWith {
     field: String,
     arg: Arg,
     target_field: Option<String>,
@@ -27,14 +27,14 @@ pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
         },
         None => bail!("Endswith function requires arguments"),
     };
-    Ok(Box::new(Split {
+    Ok(Box::new(EndsWith {
         field: conf.field,
         arg,
         target_field: conf.target_field,
     }))
 }
 
-impl Computer for Split {
+impl Computer for EndsWith {
     fn compute(&self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
@@ -55,12 +55,7 @@ impl Computer for Split {
             },
         };
 
-        let result = value
-            .split(arg)
-            .map(|s| MessageValue::String(s.to_string()))
-            .collect::<Vec<MessageValue>>();
-
-        let result = MessageValue::Array(result);
+        let result = MessageValue::Boolean(value.ends_with(arg));
         add_or_set_message_value!(self, message, result);
     }
 }

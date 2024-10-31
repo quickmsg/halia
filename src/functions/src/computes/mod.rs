@@ -5,10 +5,10 @@ use types::rules::functions::computer::Conf;
 
 use crate::Function;
 
+mod array;
 mod hash;
 mod number;
 mod string;
-mod array;
 
 pub trait Computer: Sync + Send {
     fn compute(&self, message: &mut Message);
@@ -50,4 +50,9 @@ impl Function for Node {
 
         true
     }
+}
+
+enum Arg {
+    Const(String),
+    Field(String),
 }

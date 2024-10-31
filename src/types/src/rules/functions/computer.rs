@@ -106,9 +106,11 @@ pub enum StringType {
     Split,
     Trim,
     Endswith,
+    StartsWith,
     Indexof,
     Numbytes,
     RegexMatch,
+    Concat,
 }
 
 #[derive(Deserialize, Serialize)]
