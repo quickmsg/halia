@@ -686,7 +686,7 @@ pub async fn create_sink(
         }
     }
 
-    storage::device::source_sink::insert_sink(&device_id, &sink_id, device_template_sink_id, req)
+    storage::device::source_sink::insert_sink(&sink_id, &device_id, device_template_sink_id, req)
         .await?;
 
     Ok(())

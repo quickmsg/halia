@@ -117,6 +117,12 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
         }
     }
 
+    if conf.ssl_enable {
+        if conf.ssl_conf.is_none() {
+            return Err(HaliaError::Common("ssl_conf is required".to_owned()));
+        }
+    }
+
     Ok(())
 }
 

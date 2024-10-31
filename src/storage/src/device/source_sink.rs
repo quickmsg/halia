@@ -369,10 +369,16 @@ pub async fn delete_many_by_device_id(device_id: &String) -> Result<()> {
 }
 
 pub async fn check_exists(id: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sources_or_sinks WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
+    let count: i64 = sqlx::query_scalar(
+        format!(
+            "SELECT COUNT(*) FROM {} WHERE id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
 
     Ok(count == 1)
 }
