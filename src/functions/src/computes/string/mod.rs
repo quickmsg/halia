@@ -7,6 +7,10 @@ mod endswith;
 mod indexof;
 mod lpad;
 mod ltrim;
+mod numbytes;
+mod regex_match;
+mod regex_replace;
+mod regex_substr;
 mod rtrim;
 mod split;
 mod trim;
@@ -32,5 +36,7 @@ pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
         types::rules::functions::computer::StringType::Endswith => endswith::new(conf),
         types::rules::functions::computer::StringType::Indexof => indexof::new(conf),
         types::rules::functions::computer::StringType::Lpad => lpad::new(conf),
+        types::rules::functions::computer::StringType::Numbytes => numbytes::new(conf),
+        types::rules::functions::computer::StringType::RegexMatch => regex_match::new(conf),
     }
 }

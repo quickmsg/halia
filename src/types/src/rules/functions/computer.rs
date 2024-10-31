@@ -10,9 +10,9 @@ pub struct ItemConf {
     #[serde(rename = "type")]
     pub typ: Type,
     pub number: Option<NumberItemConf>,
-    // TODO
     pub string: Option<StringItemConf>,
     pub hash: Option<HashItemConf>,
+    pub array: Option<ArrayItemConf>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -22,6 +22,7 @@ pub enum Type {
     String,
     Hash,
     Date,
+    Array,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -106,4 +107,22 @@ pub enum StringType {
     Trim,
     Endswith,
     Indexof,
+    Numbytes,
+    RegexMatch,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ArrayItemConf {
+    #[serde(rename = "type")]
+    pub typ: ArrayType,
+    pub field: String,
+    pub target_field: Option<String>,
+    pub args: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArrayType {
+    Cardinality,
 }

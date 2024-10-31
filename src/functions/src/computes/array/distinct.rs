@@ -14,10 +14,10 @@ impl Distinct {
     pub fn operate(&self, mb: &mut MessageBatch) {
         let messages = mb.get_messages_mut();
         for message in messages {
-            message.get_array_mut(&self.field).map(|array| {
+            // message.get_array_mut(&self.field).map(|array| {
                 // TODO maybe arc
                 // array.extend(self.values.clone());
-            });
+            // });
         }
     }
 }

@@ -8,6 +8,7 @@ use crate::Function;
 mod hash;
 mod number;
 mod string;
+mod array;
 
 pub trait Computer: Sync + Send {
     fn compute(&self, message: &mut Message);
@@ -29,8 +30,8 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
                 string::new(item_conf.string.unwrap())?
             }
             types::rules::functions::computer::Type::Hash => hash::new(item_conf.hash.unwrap())?,
-            // types::rules::functions::computer::Type::Date => date::new(item_conf)?,
-            _ => todo!(),
+            types::rules::functions::computer::Type::Date => todo!(),
+            types::rules::functions::computer::Type::Array => array::new(item_conf.array.unwrap())?,
         };
         computers.push(computer);
     }

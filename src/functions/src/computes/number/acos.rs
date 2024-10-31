@@ -2,6 +2,8 @@ use anyhow::Result;
 use message::{Message, MessageValue};
 use types::rules::functions::computer::NumberItemConf;
 
+use crate::add_or_set_message_value;
+
 use super::Computer;
 
 // 反余弦函数
@@ -19,7 +21,7 @@ pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
 
 impl Computer for Acos {
     fn compute(&self, message: &mut Message) {
-        let compute_value = match message.get(&self.field) {
+        let result = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => {
                     if *mv < -1 || *mv > 1 {
@@ -40,9 +42,6 @@ impl Computer for Acos {
             None => MessageValue::Null,
         };
 
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), compute_value),
-            None => message.set(&self.field, compute_value),
-        }
+        add_or_set_message_value!(self, message, result);
     }
 }
