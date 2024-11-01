@@ -584,6 +584,12 @@ pub async fn update_source(
     source_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
+    let device_conf_type = storage::device::device::read_conf_type(&device_id).await?;
+    let device_conf_type: ConfType = device_conf_type.try_into()?;
+    if device_conf_type == ConfType::Template {
+        return Err(HaliaError::Common("模板设备不能修改源。".to_string()));
+    }
+
     if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }

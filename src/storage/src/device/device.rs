@@ -233,6 +233,16 @@ pub async fn read_device_type(id: &String) -> Result<i32> {
     Ok(device_type)
 }
 
+pub async fn read_conf_type(id: &String) -> Result<i32> {
+    let conf_type: i32 =
+        sqlx::query_scalar(format!("SELECT conf_type FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+    Ok(conf_type)
+}
+
 pub async fn count_all() -> Result<usize> {
     let count: i64 = sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
         .fetch_one(POOL.get().unwrap())
