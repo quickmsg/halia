@@ -6,6 +6,7 @@ use super::Computer;
 mod append;
 mod distinct;
 mod cardinality;
+mod concat;
 
 pub fn new(conf: ArrayItemConf) -> Result<Box<dyn Computer>> {
     match conf.typ {

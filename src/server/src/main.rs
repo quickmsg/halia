@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, fs, path::Path};
 
 use anyhow::Result;
 use common::{config, sys};
@@ -35,6 +35,11 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     sys::init();
+
+    let path = Path::new("logs");
+    if !path.exists() {
+        fs::create_dir(path)?;
+    }
 
     let sched = JobScheduler::new().await?;
     let event_retain_days = config.event_retain_days;
