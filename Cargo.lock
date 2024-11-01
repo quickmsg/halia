@@ -229,7 +229,6 @@ dependencies = [
  "events",
  "futures-util",
  "jsonwebtoken",
- "log",
  "rule",
  "schema",
  "serde",
@@ -240,6 +239,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.0",
  "tower-http",
+ "tracing",
  "types",
 ]
 
@@ -1023,6 +1023,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "futures",
  "message",
  "notify",
  "serde",

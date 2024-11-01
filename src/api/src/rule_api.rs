@@ -4,12 +4,16 @@ use axum::{
     body::Body,
     extract::{Path, Query},
     http::{header, StatusCode},
-    response::{sse::{Event, KeepAlive}, IntoResponse, Sse},
+    response::{
+        sse::{Event, KeepAlive},
+        IntoResponse, Sse,
+    },
     routing::{self, get, post, put},
     Json, Router,
 };
 use futures_util::Stream;
 use tokio_util::io::ReaderStream;
+use tracing::debug;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
@@ -67,11 +71,17 @@ async fn stop(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
 async fn sse_log(
     Path(id): Path<String>,
 ) -> AppResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
-    let mut rx = rule::sse_log(&id).await?;
+    debug!("here");
+    let mut rx = match common::log::tail_log_file(&id).await {
+        Ok(rx) => rx,
+        Err(e) => panic!("tail log file error: {}", e),
+    };
     let stream = async_stream::stream! {
         while let Some(item) = rx.recv().await {
+            debug!("here");
             yield Ok(Event::default().data(item));
         }
+        debug!("end");
     };
     Ok(Sse::new(stream))
 }

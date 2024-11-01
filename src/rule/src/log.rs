@@ -46,25 +46,20 @@ fn log_send_rule_message_batch(name: &String, rmb: RuleMessageBatch, tx: &Unboun
 
 pub struct Logger {
     tx: UnboundedSender<String>,
-
-    web_tx: broadcast::Sender<String>,
 }
 
 impl Logger {
     // 新建即启动
     pub async fn new(rule_id: &String, stop_signal_rx: broadcast::Receiver<()>) -> Result<Self> {
         let (tx, rx) = unbounded_channel();
-        let (web_tx, _) = broadcast::channel(16);
+        Self::handle_message(rule_id, rx, stop_signal_rx).await?;
 
-        Self::handle_message(rule_id, rx, web_tx.clone(), stop_signal_rx).await?;
-
-        Ok(Logger { tx, web_tx })
+        Ok(Logger { tx })
     }
 
     pub async fn handle_message(
         rule_id: &String,
         mut rx: UnboundedReceiver<String>,
-        web_tx: broadcast::Sender<String>,
         mut stop_signal_rx: broadcast::Receiver<()>,
     ) -> Result<()> {
         let mut file = OpenOptions::new()
@@ -75,7 +70,7 @@ impl Logger {
             loop {
                 select! {
                     Some(data) = rx.recv() => {
-                        Self::log(&mut file, data, &web_tx);
+                        Self::log(&mut file, data);
                     }
 
                     _ = stop_signal_rx.recv() => {
@@ -89,13 +84,8 @@ impl Logger {
         Ok(())
     }
 
-    fn log(file: &mut File, data: String, web_tx: &broadcast::Sender<String>) {
-        println!("{}:      {}", Local::now(), data);
+    fn log(file: &mut File, data: String) {
         let log = format!("{}:      {}", Local::now(), data);
-        if web_tx.receiver_count() > 0 {
-            web_tx.send(log.clone()).unwrap();
-        }
-
         file.write_all(log.as_bytes()).unwrap();
 
         if let Err(e) = file.flush() {
@@ -105,9 +95,5 @@ impl Logger {
 
     pub fn get_tx(&self) -> UnboundedSender<String> {
         self.tx.clone()
-    }
-
-    pub fn get_web_rx(&self) -> broadcast::Receiver<String> {
-        self.web_tx.subscribe()
     }
 }

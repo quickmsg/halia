@@ -19,3 +19,4 @@ sysinfo = { workspace = true }
 toml = { workspace = true }
 uuid = { workspace = true }
 notify = { workspace = true }
+futures = { workspace = true }

@@ -311,13 +311,6 @@ impl Rule {
         Ok(())
     }
 
-    pub fn tail_log(&self) -> HaliaResult<broadcast::Receiver<String>> {
-        match &self.logger {
-            Some(logger) => Ok(logger.get_web_rx()),
-            None => Err(HaliaError::Common("logger为空".to_owned())),
-        }
-    }
-
     // pub async fn download_log(&self) {
     //     let file = File::open("xxx").await.unwrap();
     //     let (mut tx, rx) = mpsc::channel(16);

@@ -15,7 +15,6 @@ schema = { workspace = true }
 storage = { workspace = true }
 
 axum = { version = "0.7.5", features = ["macros", "query", "multipart"] }
-log = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -28,3 +27,4 @@ time = "0.3.36"
 tokio-util = "0.7.12"
 dashmap = { workspace = true }
 async-stream = "0.3.6"
+tracing = { workspace = true }

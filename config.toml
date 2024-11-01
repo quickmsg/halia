@@ -2,7 +2,7 @@
 # port = 13000
 
 # 日志等级，支持：error, warn, info, debug, trace
-log_level = "warn"
+log_level = "debug"
 
 # 事件保留天数，默认为 7 天
 event_retain_days = 10
