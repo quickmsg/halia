@@ -7,6 +7,7 @@ pub mod json;
 pub mod ref_info;
 pub mod sink_message_retain;
 pub mod sys;
+pub mod log;
 
 pub enum DynamicValue {
     Const(serde_json::Value),

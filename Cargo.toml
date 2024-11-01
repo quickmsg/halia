@@ -85,6 +85,7 @@ toml = "0.8.19"
 chrono = "0.4.38"
 log = "0.4.22"
 tokio-tungstenite = "0.24.0"
+notify = "7.0.0"
 
 [profile.release]
 strip = true

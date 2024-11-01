@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
+use chrono::Local;
 use message::{MessageValue, RuleMessageBatch};
 use tokio::{
     select,
@@ -89,13 +90,13 @@ impl Logger {
     }
 
     fn log(file: &mut File, data: String, web_tx: &broadcast::Sender<String>) {
+        println!("{}:      {}", Local::now(), data);
+        let log = format!("{}:      {}", Local::now(), data);
         if web_tx.receiver_count() > 0 {
-            web_tx.send(data.clone()).unwrap();
+            web_tx.send(log.clone()).unwrap();
         }
 
-        if let Err(e) = file.write_all(data.as_bytes()) {
-            warn!("write log to file err {}", e);
-        }
+        file.write_all(log.as_bytes()).unwrap();
 
         if let Err(e) = file.flush() {
             warn!("flush log err {}", e);
