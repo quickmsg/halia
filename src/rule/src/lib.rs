@@ -6,7 +6,7 @@ use std::sync::{
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use rule::Rule;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc::UnboundedReceiver};
 use types::{
     rules::{
         AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
@@ -255,9 +255,7 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
     }
 }
 
-pub fn sse_log(id: &String) -> HaliaResult<broadcast::Receiver<String>> {
-    match GLOBAL_RULE_MANAGER.get(id) {
-        Some(rule) => rule.tail_log(),
-        None => Err(HaliaError::Common("规则未运行。".to_string())),
-    }
+pub async fn sse_log(id: &String) -> HaliaResult<UnboundedReceiver<String>> {
+    let rx = common::log::tail_log_file(id).await?;
+    Ok(rx)
 }

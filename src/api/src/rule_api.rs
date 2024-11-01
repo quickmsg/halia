@@ -4,7 +4,7 @@ use axum::{
     body::Body,
     extract::{Path, Query},
     http::{header, StatusCode},
-    response::{sse::Event, IntoResponse, Sse},
+    response::{sse::{Event, KeepAlive}, IntoResponse, Sse},
     routing::{self, get, post, put},
     Json, Router,
 };
@@ -67,9 +67,9 @@ async fn stop(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
 async fn sse_log(
     Path(id): Path<String>,
 ) -> AppResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
-    let mut rx = rule::sse_log(&id)?;
+    let mut rx = rule::sse_log(&id).await?;
     let stream = async_stream::stream! {
-        while let Ok(item) = rx.recv().await {
+        while let Some(item) = rx.recv().await {
             yield Ok(Event::default().data(item));
         }
     };
