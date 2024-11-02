@@ -256,6 +256,7 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
 }
 
 pub async fn sse_log(id: &String) -> HaliaResult<UnboundedReceiver<String>> {
-    let rx = common::log::tail_log_file(id).await?;
-    Ok(rx)
+    todo!()
+    // let rx = common::log::tail_log_file(id).await?;
+    // Ok(rx)
 }

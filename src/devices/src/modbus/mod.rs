@@ -261,9 +261,7 @@ impl Modbus {
                 if socket_addrs.len() == 0 {
                     return Err(io::Error::new(io::ErrorKind::Other, "no address found"));
                 }
-                debug!("{:?}", socket_addrs[0]);
                 let stream = TcpStream::connect(socket_addrs[0]).await?;
-                debug!("here");
 
                 match ethernet.encode {
                     Encode::Tcp => tcp::new(stream),
