@@ -1,7 +1,7 @@
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use message::MessageBatch;
-use tokio::sync::mpsc;
+use message::{MessageBatch, RuleMessageBatch};
+use tokio::sync::mpsc::{self, UnboundedSender};
 use types::databoard::{DataConf, DataboardConf, SearchDatasRuntimeResp};
 
 use crate::data::Data;
@@ -64,7 +64,10 @@ impl Databoard {
         }
     }
 
-    pub async fn get_data_tx(&self, data_id: &String) -> HaliaResult<mpsc::Sender<MessageBatch>> {
+    pub async fn get_data_tx(
+        &self,
+        data_id: &String,
+    ) -> HaliaResult<UnboundedSender<RuleMessageBatch>> {
         match self.datas.get(data_id) {
             Some(data) => Ok(data.mb_tx.clone()),
             None => Err(HaliaError::NotFound(data_id.to_string())),

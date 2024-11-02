@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use common::error::{HaliaError, HaliaResult};
 use functions::{computes, filter, merge::merge};
@@ -8,23 +11,24 @@ use tokio::{
     sync::{
         broadcast,
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        Mutex,
     },
 };
-use tracing::{debug, error};
+use tracing::{debug, error, Dispatch};
+use tracing_appender::rolling;
 use types::rules::{
-    AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, LogNode, Node,
-    NodeType, ReadRuleNodeResp, RuleConf,
+    AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node, NodeType,
+    ReadRuleNodeResp, RuleConf,
 };
 
-use crate::{
-    log::{run_log, Logger},
-    segment::{get_segments, start_segment, take_sink_ids, take_source_ids},
-};
+use crate::segment::{get_segments, start_segment, take_sink_ids, take_source_ids};
 
 pub struct Rule {
     id: String,
     stop_signal_tx: broadcast::Sender<()>,
-    logger: Option<Logger>,
+
+    logger_enable: Arc<AtomicBool>,
+    logger: Arc<Mutex<Option<Dispatch>>>,
 }
 
 impl Rule {
@@ -33,7 +37,8 @@ impl Rule {
         let mut rule = Self {
             id: id,
             stop_signal_tx: stop_signal_tx.clone(),
-            logger: None,
+            logger_enable: Arc::new(AtomicBool::new(false)),
+            logger: Arc::new(Mutex::new(None)),
         };
         rule.start(conf).await?;
 
@@ -54,13 +59,17 @@ impl Rule {
 
         let source_ids =
             take_source_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
+        debug!("{:?}", source_ids);
         let mut receivers =
             Self::get_source_rxs(source_ids, &node_map, &tmp_outgoing_edges).await?;
 
         let sink_ids = take_sink_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
+        debug!("{:?}", sink_ids);
         let mut senders = self
             .get_sink_txs(sink_ids, &node_map, &incoming_edges)
             .await?;
+
+        debug!("{:?}", ids);
 
         // if let Some(e) = error {
         //     storage::rule::reference::deactive(&self.id).await?;
@@ -124,7 +133,11 @@ impl Rule {
                     NodeType::Filter => {
                         let conf: types::rules::functions::filter::Conf =
                             serde_json::from_value(node.conf.clone())?;
-                        functions.push(filter::new(conf)?);
+                        functions.push(filter::new(
+                            conf,
+                            self.logger_enable.clone(),
+                            self.logger.clone(),
+                        )?);
                         indexes.push(index);
                     }
                     NodeType::Computer => {
@@ -134,8 +147,9 @@ impl Rule {
                         indexes.push(index);
                     }
                     NodeType::Operator => todo!(),
-
-                    _ => unreachable!(),
+                    _ => {
+                        debug!("{:?}", node);
+                    }
                 }
             }
 
@@ -196,13 +210,39 @@ impl Rule {
             }
         }
 
-        for (index, mut senders) in senders {
-            let index = incoming_edges.get_mut(&index).unwrap().pop().unwrap();
-            let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
-            run_direct_link(senders.pop().unwrap(), rx, self.stop_signal_tx.subscribe());
-        }
+        // for (index, mut senders) in senders {
+        //     let index = incoming_edges.get_mut(&index).unwrap().pop().unwrap();
+        //     let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
+        //     run_direct_link(senders.pop().unwrap(), rx, self.stop_signal_tx.subscribe());
+        // }
 
         Ok(())
+    }
+
+    pub async fn enable_log(&mut self) {
+        if self
+            .logger_enable
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return;
+        }
+
+        let file = rolling::never("logs", format!("{}.log", self.id));
+        let subscriber = tracing_subscriber::fmt().with_writer(file).finish();
+        let logger = tracing::dispatcher::Dispatch::new(subscriber);
+        *self.logger.lock().await = Some(logger);
+    }
+
+    pub async fn disable_log(&mut self) {
+        if !self
+            .logger_enable
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return;
+        }
+        self.logger_enable
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        *self.logger.lock().await = None;
     }
 
     pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
@@ -291,8 +331,6 @@ impl Rule {
         if let Err(e) = self.stop_signal_tx.send(()) {
             error!("rule stop send signal err:{}", e);
         }
-
-        self.logger = None;
 
         storage::rule::reference::deactive(&self.id).await?;
 
@@ -453,29 +491,30 @@ impl Rule {
                     txs
                 }
                 NodeType::Log => {
-                    let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
-                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
-                    let mut txs = vec![];
+                    // let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
+                    // let cnt = incoming_edges.get(&sink_id).unwrap().len();
+                    // let mut txs = vec![];
 
-                    let log_tx = match &self.logger {
-                        Some(logger) => logger.get_tx(),
-                        None => {
-                            let logger =
-                                Logger::new(&self.id, self.stop_signal_tx.subscribe()).await?;
-                            let tx = logger.get_tx();
-                            self.logger = Some(logger);
+                    // let log_tx = match &self.logger {
+                    //     Some(logger) => logger.get_tx(),
+                    //     None => {
+                    //         let logger =
+                    //             Logger::new(&self.id, self.stop_signal_tx.subscribe()).await?;
+                    //         let tx = logger.get_tx();
+                    //         self.logger = Some(logger);
 
-                            tx
-                        }
-                    };
+                    //         tx
+                    //     }
+                    // };
 
-                    debug!("here");
+                    // debug!("here");
 
-                    let tx = run_log(log_node.name, log_tx, self.stop_signal_tx.subscribe());
-                    for _ in 0..cnt {
-                        txs.push(tx.clone());
-                    }
-                    txs
+                    // let tx = run_log(log_node.name, log_tx, self.stop_signal_tx.subscribe());
+                    // for _ in 0..cnt {
+                    //     txs.push(tx.clone());
+                    // }
+                    // txs
+                    todo!()
                 }
 
                 _ => unreachable!(),

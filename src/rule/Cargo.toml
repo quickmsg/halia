@@ -25,3 +25,5 @@ futures = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 notify = { workspace = true }
+tracing-subscriber = "0.3.0"
+tracing-appender = "0.2.3"

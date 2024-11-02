@@ -7,10 +7,13 @@ use std::{
 };
 
 use common::error::HaliaResult;
-use message::MessageBatch;
+use message::{MessageBatch, RuleMessageBatch};
 use tokio::{
     select,
-    sync::{mpsc, watch, RwLock},
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        watch, RwLock,
+    },
     task::JoinHandle,
 };
 use tracing::error;
@@ -21,13 +24,13 @@ pub struct Data {
     join_handle: Option<JoinHandle<JoinHandleData>>,
     pub value: Arc<RwLock<serde_json::Value>>,
     ts: Arc<AtomicU64>,
-    pub mb_tx: mpsc::Sender<MessageBatch>,
+    pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct JoinHandleData {
     pub conf: DataConf,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub mb_rx: mpsc::Receiver<MessageBatch>,
+    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
     pub value: Arc<RwLock<serde_json::Value>>,
     pub ts: Arc<AtomicU64>,
 }
@@ -35,7 +38,7 @@ pub struct JoinHandleData {
 impl Data {
     pub fn new(conf: DataConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = mpsc::channel(16);
+        let (mb_tx, mb_rx) = unbounded_channel();
 
         let value = Arc::new(RwLock::new(serde_json::Value::Null));
         let ts = Arc::new(AtomicU64::new(0));
@@ -70,7 +73,7 @@ impl Data {
                     }
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
-                        Self::handle_messsage_batch(mb, &join_handle_data.conf, &join_handle_data.value, &join_handle_data.ts).await;
+                        Self::handle_messsage_batch(mb.take_mb(), &join_handle_data.conf, &join_handle_data.value, &join_handle_data.ts).await;
                     }
                 }
             }

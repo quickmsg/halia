@@ -6,7 +6,6 @@ use std::sync::{
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use rule::Rule;
-use tokio::sync::{broadcast, mpsc::UnboundedReceiver};
 use types::{
     rules::{
         AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
@@ -253,10 +252,4 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
         }
         None => Ok(()),
     }
-}
-
-pub async fn sse_log(id: &String) -> HaliaResult<UnboundedReceiver<String>> {
-    todo!()
-    // let rx = common::log::tail_log_file(id).await?;
-    // Ok(rx)
 }

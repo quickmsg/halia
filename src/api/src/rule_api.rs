@@ -1,18 +1,14 @@
-use std::{convert::Infallible, time::Duration};
+use std::convert::Infallible;
 
 use axum::{
     body::Body,
     extract::{Path, Query},
     http::{header, StatusCode},
-    response::{
-        sse::{Event, KeepAlive},
-        IntoResponse, Sse,
-    },
+    response::{sse::Event, IntoResponse, Sse},
     routing::{self, get, post, put},
     Json, Router,
 };
 use futures_util::Stream;
-use tokio::{select, sync::mpsc::UnboundedReceiver, time::interval};
 use tokio_util::io::ReaderStream;
 use tracing::debug;
 use types::{

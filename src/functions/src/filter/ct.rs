@@ -1,6 +1,11 @@
+use std::sync::{atomic::AtomicBool, Arc};
+
 use anyhow::Result;
+use async_trait::async_trait;
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
+use tokio::sync::Mutex;
+use tracing::{debug, info, Dispatch};
 use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
@@ -9,9 +14,10 @@ struct Ct {
     field: String,
     const_value: Option<MessageValue>,
     target_field: Option<String>,
+    logger: Arc<Mutex<Option<Dispatch>>>,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Filter>> {
+pub fn new(conf: ItemConf, logger: Arc<Mutex<Option<Dispatch>>>) -> Result<Box<dyn Filter>> {
     let (const_value, target_field) = match get_dynamic_value_from_json(&conf.value) {
         common::DynamicValue::Const(value) => (Some(MessageValue::from(value)), None),
         common::DynamicValue::Field(s) => (None, Some(s)),
@@ -21,11 +27,33 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Filter>> {
         field: conf.field,
         const_value,
         target_field,
+        logger,
     }))
 }
 
+#[async_trait]
 impl Filter for Ct {
-    fn filter(&self, msg: &Message) -> bool {
+    async fn filter(&self, msg: &Message) -> bool {
+        match &self.logger.lock().await.as_ref() {
+            Some(logger) => {
+                tracing::dispatcher::with_default(logger, || {
+                    info!("Task  started");
+                    debug!("Debugging task");
+                });
+            }
+            None => {}
+        }
+
+        match &self.logger.lock().await.as_ref() {
+            Some(logger) => {
+                tracing::dispatcher::with_default(logger, || {
+                    info!("Task  started");
+                    debug!("Debugging task");
+                });
+            }
+            None => {}
+        }
+
         let value = match msg.get(&self.field) {
             Some(value) => value,
             None => return false,

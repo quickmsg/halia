@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use async_trait::async_trait;
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
 use types::rules::functions::filter::ItemConf;
@@ -33,8 +34,9 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Filter>> {
     }
 }
 
+#[async_trait]
 impl Filter for Lt {
-    fn filter(&self, msg: &Message) -> bool {
+    async fn filter(&self, msg: &Message) -> bool {
         let value = match msg.get(&self.field) {
             Some(value) => value,
             None => return false,

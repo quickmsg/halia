@@ -8,6 +8,7 @@ use tokio::{
     sync::{broadcast, mpsc},
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tracing::debug;
 use types::rules::Node;
 
 pub(crate) fn start_segment(
@@ -109,6 +110,8 @@ pub(crate) fn get_segments(
     incoming_edges: &mut HashMap<usize, Vec<usize>>,
     outgoing_edges: &mut HashMap<usize, Vec<usize>>,
 ) -> Vec<Vec<usize>> {
+    debug!("{:?}", incoming_edges);
+    debug!("{:?}", outgoing_edges);
     let mut segments = vec![];
     let mut i = 0;
     while ids.len() > 0 {
@@ -121,6 +124,7 @@ pub(crate) fn get_segments(
             .filter(|node_id| !incoming_edges.contains_key(*node_id))
             .copied()
             .collect();
+        debug!("source_ids: {:?}", source_ids);
         for source_id in source_ids.iter() {
             let segment_ids =
                 get_segment_ids(*source_id, node_map, &incoming_edges, &outgoing_edges);
@@ -128,6 +132,7 @@ pub(crate) fn get_segments(
             remove_incoming_edge(&segment_ids.last().unwrap(), incoming_edges, outgoing_edges);
             segments.push(segment_ids);
         }
+        debug!("here");
     }
 
     segments
@@ -155,7 +160,8 @@ fn get_segment_ids(
                                 let node = node_map.get(&current_id).unwrap();
                                 match node.node_type {
                                     types::rules::NodeType::Merge
-                                    | types::rules::NodeType::Window => break,
+                                    | types::rules::NodeType::Window
+                                    | types::rules::NodeType::Databoard => break,
                                     _ => {}
                                 }
                                 ids.push(current_id);
@@ -164,6 +170,8 @@ fn get_segment_ids(
                             }
                         }
                     }
+                } else {
+                    break;
                 }
             }
             ids

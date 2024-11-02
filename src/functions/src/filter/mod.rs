@@ -1,6 +1,10 @@
+use std::sync::{atomic::AtomicBool, Arc};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use message::Message;
+use tokio::sync::Mutex;
+use tracing::{debug, Dispatch};
 use types::rules::functions::filter::Conf;
 
 use crate::Function;
@@ -14,19 +18,24 @@ mod lte;
 mod neq;
 mod reg;
 
+#[async_trait]
 pub(crate) trait Filter: Sync + Send {
-    fn filter(&self, msg: &Message) -> bool;
+    async fn filter(&self, msg: &Message) -> bool;
 }
 
 pub struct Node {
     filters: Vec<Box<dyn Filter>>,
 }
 
-pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
+pub fn new(
+    conf: Conf,
+    logger_enable: Arc<AtomicBool>,
+    logger: Arc<Mutex<Option<Dispatch>>>,
+) -> Result<Box<dyn Function>> {
     let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(conf.items.len());
     for item_conf in conf.items {
         let filter = match item_conf.typ {
-            types::rules::functions::filter::Type::Ct => ct::new(item_conf)?,
+            types::rules::functions::filter::Type::Ct => ct::new(item_conf, logger.clone())?,
             types::rules::functions::filter::Type::Eq => eq::new(item_conf)?,
             types::rules::functions::filter::Type::Gt => gt::new(item_conf)?,
             types::rules::functions::filter::Type::Gte => gte::new(item_conf)?,
@@ -44,14 +53,18 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
 impl Function for Node {
     async fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
         let messages = message_batch.get_messages_mut();
-        messages.retain(|message| {
+        // messages.retain(|message| {
+        for message in messages {
             for filter in &self.filters {
-                if filter.filter(message) {
-                    return true;
+                if filter.filter(message).await {
+                    debug!("Filter passed");
+                    // return true;
                 }
             }
-            false
-        });
+        }
+
+        // false
+        // });
 
         message_batch.len() != 0
     }

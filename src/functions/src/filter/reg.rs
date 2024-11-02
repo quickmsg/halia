@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use async_trait::async_trait;
 use common::get_dynamic_value_from_json;
 use message::MessageValue;
 use regex::Regex;
@@ -34,8 +35,9 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Filter>> {
     }
 }
 
+#[async_trait]
 impl Filter for Reg {
-    fn filter(&self, message: &message::Message) -> bool {
+    async fn filter(&self, message: &message::Message) -> bool {
         match (&self.reg, &self.target_field) {
             (Some(reg), None) => match message.get(&self.field) {
                 Some(value) => match value {
