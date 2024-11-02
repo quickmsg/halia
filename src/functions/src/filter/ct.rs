@@ -1,10 +1,7 @@
-use std::sync::{atomic::AtomicBool, Arc};
-
 use anyhow::Result;
 use async_trait::async_trait;
-use common::get_dynamic_value_from_json;
+use common::{get_dynamic_value_from_json, log::LoggerItem};
 use message::{Message, MessageValue};
-use tokio::sync::mpsc::UnboundedSender;
 use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
@@ -13,15 +10,10 @@ struct Ct {
     field: String,
     const_value: Option<MessageValue>,
     target_field: Option<String>,
-    logger_enable: Arc<AtomicBool>,
-    logger_tx: UnboundedSender<String>,
+    logger: LoggerItem,
 }
 
-pub fn new(
-    conf: ItemConf,
-    logger_enable: Arc<AtomicBool>,
-    logger_tx: UnboundedSender<String>,
-) -> Result<Box<dyn Filter>> {
+pub fn new(conf: ItemConf, logger: LoggerItem) -> Result<Box<dyn Filter>> {
     let (const_value, target_field) = match get_dynamic_value_from_json(&conf.value) {
         common::DynamicValue::Const(value) => (Some(MessageValue::from(value)), None),
         common::DynamicValue::Field(s) => (None, Some(s)),
@@ -31,19 +23,15 @@ pub fn new(
         field: conf.field,
         const_value,
         target_field,
-        logger_enable,
-        logger_tx,
+        logger,
     }))
 }
 
 #[async_trait]
 impl Filter for Ct {
     async fn filter(&self, msg: &Message) -> bool {
-        if self
-            .logger_enable
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            let _ = self.logger_tx.send("Ct".to_string());
+        if self.logger.is_enable() {
+            self.logger.log(format!("Ct filter"));
         }
 
         let value = match msg.get(&self.field) {

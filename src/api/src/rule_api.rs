@@ -1,16 +1,12 @@
 use std::convert::Infallible;
 
 use axum::{
-    body::Body,
     extract::{Path, Query},
-    http::{header, StatusCode},
     response::{sse::Event, IntoResponse, Sse},
     routing::{self, get, post, put},
     Json, Router,
 };
 use futures_util::Stream;
-use tokio_util::io::ReaderStream;
-use tracing::debug;
 use types::{
     rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
     Pagination,
@@ -27,11 +23,11 @@ pub fn routes() -> Router {
         .route("/:id", put(update))
         .route("/:id/start", put(start))
         .route("/:id/stop", put(stop))
+        .route("/:id", routing::delete(delete))
         .route("/:id/log/sse", get(sse_log))
         .route("/:id/log/download", get(download_log))
         .route("/:id/log/start", put(start_log))
         .route("/:id/log/stop", put(stop_log))
-        .route("/:id", routing::delete(delete))
 }
 
 async fn get_rules_summary() -> AppSuccess<Summary> {
@@ -70,54 +66,17 @@ async fn stop(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
 async fn sse_log(
     Path(id): Path<String>,
 ) -> AppResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
-    debug!("here");
-    let mut rx = match common::log::tail_log_file(&id).await {
-        Ok(rx) => rx,
-        Err(e) => panic!("tail log file error: {}", e),
-    };
-
-    let stream = async_stream::stream! {
-        loop {
-            match rx.recv().await {
-                Some(item) => {
-                    debug!("::: {:?}", item);
-                    debug!("here");
-                    yield Ok(Event::default().data(item));
-                }
-                None => {
-                    debug!("quit");
-                    break;
-                }
-            }
-        }
-        debug!("quit");
-    };
-    Ok(Sse::new(stream))
+    match common::log::tail_log(&id).await {
+        Ok(sse) => Ok(sse),
+        Err(e) => Err(crate::AppError {
+            code: 1,
+            data: e.to_string(),
+        }),
+    }
 }
 
 async fn download_log(Path(id): Path<String>) -> impl IntoResponse {
-    let filename = match rule::get_log_filename(id).await {
-        Ok(filename) => filename,
-        Err(_) => return Err((StatusCode::NOT_FOUND, format!("规则 not found"))),
-    };
-
-    let file = match tokio::fs::File::open(filename).await {
-        Ok(file) => file,
-        Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
-    };
-
-    let stream = ReaderStream::new(file);
-    let body = Body::from_stream(stream);
-
-    let headers = [
-        (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
-        (
-            header::CONTENT_DISPOSITION,
-            "attachment; filename=\"download_file.txt\"",
-        ),
-    ];
-
-    Ok((headers, body))
+    common::log::download_log(&id).await
 }
 
 async fn update(

@@ -20,3 +20,8 @@ toml = { workspace = true }
 uuid = { workspace = true }
 notify = { workspace = true }
 futures = { workspace = true }
+chrono = { workspace = true }
+axum = { workspace = true }
+async-stream = "0.3.6"
+futures-util = { workspace = true }
+tokio-util = "0.7.12"

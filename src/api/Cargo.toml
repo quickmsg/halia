@@ -14,12 +14,7 @@ events = { workspace = true }
 schema = { workspace = true }
 storage = { workspace = true }
 
-axum = { version = "0.7.5", features = [
-    "macros",
-    "query",
-    "multipart",
-    "tokio",
-] }
+axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

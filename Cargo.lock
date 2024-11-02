@@ -1022,8 +1022,12 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
+ "axum 0.7.5",
  "bytes",
+ "chrono",
  "futures",
+ "futures-util",
  "message",
  "notify",
  "serde",
@@ -1032,6 +1036,7 @@ dependencies = [
  "sysinfo",
  "thiserror",
  "tokio",
+ "tokio-util",
  "toml 0.8.19",
  "tracing",
  "types",

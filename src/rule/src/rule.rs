@@ -1,9 +1,9 @@
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::collections::HashMap;
 
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    log::Logger,
+};
 use functions::{computes, filter, merge::merge};
 use message::RuleMessageBatch;
 use tokio::{
@@ -11,9 +11,7 @@ use tokio::{
     sync::{
         broadcast,
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-        watch,
     },
-    task::JoinHandle,
 };
 use tracing::{debug, error};
 use types::rules::{
@@ -27,24 +25,16 @@ pub struct Rule {
     id: String,
     stop_signal_tx: broadcast::Sender<()>,
 
-    logger_enable: Arc<AtomicBool>,
-    logger_stop_signal: (watch::Sender<()>, Option<watch::Receiver<()>>),
-    logger: (UnboundedSender<String>, Option<UnboundedReceiver<String>>),
-    join_handle: Option<JoinHandle<(watch::Receiver<()>, UnboundedReceiver<String>)>>,
+    logger: Logger,
 }
 
 impl Rule {
     pub async fn new(id: String, conf: &RuleConf) -> HaliaResult<Self> {
         let (stop_signal_tx, _) = broadcast::channel(1);
-        let (logger_signal_tx, logger_signal_rx) = watch::channel(());
-        let (logger_tx, logger_rx) = unbounded_channel();
         let mut rule = Self {
             id: id,
             stop_signal_tx: stop_signal_tx.clone(),
-            logger_enable: Arc::new(AtomicBool::new(false)),
-            logger_stop_signal: (logger_signal_tx, Some(logger_signal_rx)),
-            logger: (logger_tx, Some(logger_rx)),
-            join_handle: None,
+            logger: Logger::new(),
         };
         rule.start(conf).await?;
 
@@ -139,11 +129,7 @@ impl Rule {
                     NodeType::Filter => {
                         let conf: types::rules::functions::filter::Conf =
                             serde_json::from_value(node.conf.clone())?;
-                        functions.push(filter::new(
-                            conf,
-                            self.logger_enable.clone(),
-                            self.logger.0.clone(),
-                        )?);
+                        functions.push(filter::new(conf, self.logger.get_logger_item())?);
                         indexes.push(index);
                     }
                     NodeType::Computer => {
@@ -226,45 +212,11 @@ impl Rule {
     }
 
     pub async fn start_log(&mut self) {
-        if self
-            .logger_enable
-            .swap(true, std::sync::atomic::Ordering::Relaxed)
-        {
-            return;
-        }
-
-        let mut logger_rx = self.logger.1.take().unwrap();
-        let mut logger_stop_signal_rx = self.logger_stop_signal.1.take().unwrap();
-        let join_handle = tokio::spawn(async move {
-            loop {
-                select! {
-                    _ = logger_stop_signal_rx.changed() => {
-                        debug!("logger stop");
-                        return (logger_stop_signal_rx, logger_rx);
-                    }
-                    Some(msg) = logger_rx.recv() => {
-                        debug!("{}", msg);
-                    }
-                }
-            }
-        });
-        self.join_handle = Some(join_handle);
+        self.logger.start(&self.id).await;
     }
 
     pub async fn stop_log(&mut self) {
-        if !self
-            .logger_enable
-            .swap(false, std::sync::atomic::Ordering::Relaxed)
-        {
-            return;
-        }
-
-        debug!("here");
-
-        self.logger_stop_signal.0.send(()).unwrap();
-        let join_handle = self.join_handle.take().unwrap().await.unwrap();
-        self.logger_stop_signal.1 = Some(join_handle.0);
-        self.logger.1 = Some(join_handle.1);
+        self.logger.stop().await;
     }
 
     pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
