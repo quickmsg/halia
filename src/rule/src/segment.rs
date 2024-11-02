@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use common::log::LoggerItem;
 use functions::Function;
 use futures::StreamExt;
 use message::RuleMessageBatch;
@@ -274,11 +275,15 @@ mod tests {
 
 pub struct BlackHole {
     rxs: Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>,
+    logger: LoggerItem,
 }
 
 impl BlackHole {
-    pub fn new() -> Self {
-        BlackHole { rxs: vec![] }
+    pub fn new(logger: LoggerItem) -> Self {
+        BlackHole {
+            rxs: vec![],
+            logger,
+        }
     }
 
     pub fn get_tx(&mut self) -> mpsc::UnboundedSender<RuleMessageBatch> {
@@ -296,7 +301,11 @@ impl BlackHole {
                     tokio::spawn(async move {
                         loop {
                             select! {
-                                Some(_) = rx.recv() => {}
+                                Some(rmb) = rx.recv() => {
+                                    if self.logger.is_enable() {
+                                        self.logger.log(format!("black hole received msg: {:?}", rmb.take_mb()));
+                                    }
+                                }
                                 _ = stop_signal_rx.recv() => {
                                     return
                                 }
@@ -314,7 +323,11 @@ impl BlackHole {
                     tokio::spawn(async move {
                         loop {
                             select! {
-                                Some(_) = stream.next() => {}
+                                Some(rmb) = stream.next() => {
+                                    if self.logger.is_enable() {
+                                        self.logger.log(format!("black hole received msg: {:?}", rmb.take_mb()));
+                                    }
+                                }
                                 _ = stop_signal_rx.recv() => {
                                     return
                                 }

@@ -410,7 +410,7 @@ impl Rule {
                     txs
                 }
                 NodeType::BlackHole => {
-                    let mut black_hole = BlackHole::new();
+                    let mut black_hole = BlackHole::new(self.logger.get_logger_item());
                     let cnt = incoming_edges.get(&sink_id).unwrap().len();
                     let mut txs = vec![];
                     for _ in 0..cnt {
