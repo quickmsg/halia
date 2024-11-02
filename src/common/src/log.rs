@@ -64,6 +64,10 @@ pub async fn tail_log_file(id: &String) -> Result<UnboundedReceiver<String>> {
                                     continue;
                                 }
                                 start_pos += read_byte as u64;
+                                if log_tx.is_closed() {
+                                    error!("log_tx closed, quit tailing log");
+                                    return;
+                                }
                                 debug!("{}", log_tx.is_closed());
                                 if let Err(e) =
                                     log_tx.send(String::from_utf8_lossy(&buf).to_string())
