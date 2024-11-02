@@ -19,7 +19,7 @@ use types::rules::{
     ReadRuleNodeResp, RuleConf,
 };
 
-use crate::segment::{get_segments, start_segment, take_sink_ids, take_source_ids};
+use crate::segment::{get_segments, start_segment, take_sink_ids, take_source_ids, BlackHole};
 
 pub struct Rule {
     id: String,
@@ -323,61 +323,6 @@ impl Rule {
         Ok(())
     }
 
-    // pub async fn download_log(&self) {
-    //     let file = File::open("xxx").await.unwrap();
-    //     let (mut tx, rx) = mpsc::channel(16);
-
-    //     tokio::spawn(async move {
-    //         let mut reader = BufReader::new(file).lines();
-    //         while let Some(line) = reader.next_line().await.unwrap() {
-    //             if tx.send(Ok(line)).await.is_err() {
-    //                 break;
-    //             }
-    //         }
-    //         drop(tx);
-    //     });
-
-    //     let mut response = HttpResponse::build(StatusCode::OK)
-    //         .content_type("text/plain")
-    //         .streaming(rx.map(|result| match result {
-    //             Ok(line) => Ok(Bytes::from(line + "\n")),
-    //             Err(_) => Err(error::ErrorInternalServerError("Error reading log file")),
-    //         }));
-
-    //     response.headers_mut().insert(
-    //         header::TRANSFER_ENCODING,
-    //         header::HeaderValue::from_static("chunked"),
-    //     );
-
-    //     Ok(response)
-    // }
-
-    pub async fn get_log_filename(&self) -> String {
-        // let file = match tokio::fs::File::open("download_file.txt").await {
-        //     Ok(file) => file,
-        //     Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
-        // };
-        // let stream = ReaderStream::new(file);
-        // let body = Body::from_stream(stream);
-
-        // let mut headers = HeaderMap::new();
-        // headers.insert(
-        //     header::CONTENT_TYPE,
-        //     "text/plain; charset=utf-8".parse().unwrap(),
-        // );
-        // headers.insert(
-        //     header::CONTENT_DISPOSITION,
-        //     "attachment; filename=\"download_file.txt\""
-        //         .parse()
-        //         .unwrap(),
-        // );
-
-        // Ok((headers, body))
-        todo!()
-    }
-
-    pub async fn delete_log(&self) {}
-
     // 获取所有输入源的rx
     async fn get_source_rxs(
         source_ids: Vec<usize>,
@@ -462,6 +407,16 @@ impl Rule {
                             .await?,
                         )
                     }
+                    txs
+                }
+                NodeType::BlackHole => {
+                    let mut black_hole = BlackHole::new();
+                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
+                    let mut txs = vec![];
+                    for _ in 0..cnt {
+                        txs.push(black_hole.get_tx());
+                    }
+                    black_hole.run(self.stop_signal_tx.subscribe());
                     txs
                 }
 

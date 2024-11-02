@@ -173,16 +173,6 @@ pub async fn delete(id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn get_log_filename(id: String) -> HaliaResult<String> {
-    match GLOBAL_RULE_MANAGER.get(&id) {
-        Some(rule) => {
-            let filename = rule.get_log_filename().await;
-            Ok(filename)
-        }
-        None => Err(HaliaError::NotFound(id)),
-    }
-}
-
 async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
     let mut err = None;
     for node in nodes {

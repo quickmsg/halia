@@ -271,3 +271,58 @@ mod tests {
         assert_eq!(segments, vec![vec![0, 1], vec![3], vec![2]]);
     }
 }
+
+pub struct BlackHole {
+    rxs: Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>,
+}
+
+impl BlackHole {
+    pub fn new() -> Self {
+        BlackHole { rxs: vec![] }
+    }
+
+    pub fn get_tx(&mut self) -> mpsc::UnboundedSender<RuleMessageBatch> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.rxs.push(rx);
+        tx
+    }
+
+    pub fn run(mut self, mut stop_signal_rx: broadcast::Receiver<()>) {
+        tokio::spawn(async move {
+            match self.rxs.len() {
+                0 => unreachable!(),
+                1 => {
+                    let mut rx = self.rxs.pop().unwrap();
+                    tokio::spawn(async move {
+                        loop {
+                            select! {
+                                Some(_) = rx.recv() => {}
+                                _ = stop_signal_rx.recv() => {
+                                    return
+                                }
+                            }
+                        }
+                    });
+                }
+                _ => {
+                    let streams: Vec<_> = self
+                        .rxs
+                        .into_iter()
+                        .map(|rx| UnboundedReceiverStream::new(rx))
+                        .collect();
+                    let mut stream = futures::stream::select_all(streams);
+                    tokio::spawn(async move {
+                        loop {
+                            select! {
+                                Some(_) = stream.next() => {}
+                                _ = stop_signal_rx.recv() => {
+                                    return
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    }
+}

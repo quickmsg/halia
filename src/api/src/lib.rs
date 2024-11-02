@@ -100,7 +100,7 @@ pub async fn start(port: u16) {
                 .nest("/rule", rule_api::routes())
                 .nest("/event", event_api::routes())
                 .nest("/schema", schema_api::routes())
-                // .route_layer(middleware::from_fn(auth)),
+                .route_layer(middleware::from_fn(auth)),
         )
         .fallback_service(
             ServeDir::new("./dist").not_found_service(ServeFile::new("./dist/index.html")),
