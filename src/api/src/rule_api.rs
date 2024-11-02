@@ -29,6 +29,8 @@ pub fn routes() -> Router {
         .route("/:id/stop", put(stop))
         .route("/:id/log/sse", get(sse_log))
         .route("/:id/log/download", get(download_log))
+        .route("/:id/log/start", put(start_log))
+        .route("/:id/log/stop", put(stop_log))
         .route("/:id", routing::delete(delete))
 }
 
@@ -123,6 +125,16 @@ async fn update(
     Json(req): Json<CreateUpdateRuleReq>,
 ) -> AppResult<AppSuccess<()>> {
     rule::update(id, req).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn start_log(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    rule::start_log(id).await?;
+    Ok(AppSuccess::empty())
+}
+
+async fn stop_log(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    rule::stop_log(id).await?;
     Ok(AppSuccess::empty())
 }
 

@@ -3,7 +3,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use message::Message;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
 use tracing::{debug, Dispatch};
 use types::rules::functions::filter::Conf;
 
@@ -30,12 +30,14 @@ pub struct Node {
 pub fn new(
     conf: Conf,
     logger_enable: Arc<AtomicBool>,
-    logger: Arc<Mutex<Option<Dispatch>>>,
+    logger_tx: UnboundedSender<String>,
 ) -> Result<Box<dyn Function>> {
     let mut filters: Vec<Box<dyn Filter>> = Vec::with_capacity(conf.items.len());
     for item_conf in conf.items {
         let filter = match item_conf.typ {
-            types::rules::functions::filter::Type::Ct => ct::new(item_conf, logger.clone())?,
+            types::rules::functions::filter::Type::Ct => {
+                ct::new(item_conf, logger_enable.clone(), logger_tx.clone())?
+            }
             types::rules::functions::filter::Type::Eq => eq::new(item_conf)?,
             types::rules::functions::filter::Type::Gt => gt::new(item_conf)?,
             types::rules::functions::filter::Type::Gte => gte::new(item_conf)?,

@@ -15,7 +15,6 @@ use types::{
     BaseConf, Pagination,
 };
 
-mod log;
 pub mod rule;
 mod segment;
 
@@ -251,5 +250,25 @@ async fn create_rule_refs(id: &String, nodes: &Vec<Node>) -> HaliaResult<()> {
             return Err(HaliaError::NotFound(e));
         }
         None => Ok(()),
+    }
+}
+
+pub async fn start_log(id: String) -> HaliaResult<()> {
+    match GLOBAL_RULE_MANAGER.get_mut(&id) {
+        Some(mut rule) => {
+            rule.start_log().await;
+            Ok(())
+        }
+        None => Err(HaliaError::NotFound(id)),
+    }
+}
+
+pub async fn stop_log(id: String) -> HaliaResult<()> {
+    match GLOBAL_RULE_MANAGER.get_mut(&id) {
+        Some(mut rule) => {
+            rule.stop_log().await;
+            Ok(())
+        }
+        None => Err(HaliaError::NotFound(id)),
     }
 }

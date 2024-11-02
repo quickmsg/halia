@@ -61,7 +61,7 @@ pub enum NodeType {
     DeviceSink,
     AppSink,
     Databoard,
-    Log,
+    BlackHole,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

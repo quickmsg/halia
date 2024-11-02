@@ -4,8 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use tokio::sync::Mutex;
-use tracing::{debug, info, Dispatch};
+use tokio::sync::mpsc::UnboundedSender;
 use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
@@ -14,10 +13,15 @@ struct Ct {
     field: String,
     const_value: Option<MessageValue>,
     target_field: Option<String>,
-    logger: Arc<Mutex<Option<Dispatch>>>,
+    logger_enable: Arc<AtomicBool>,
+    logger_tx: UnboundedSender<String>,
 }
 
-pub fn new(conf: ItemConf, logger: Arc<Mutex<Option<Dispatch>>>) -> Result<Box<dyn Filter>> {
+pub fn new(
+    conf: ItemConf,
+    logger_enable: Arc<AtomicBool>,
+    logger_tx: UnboundedSender<String>,
+) -> Result<Box<dyn Filter>> {
     let (const_value, target_field) = match get_dynamic_value_from_json(&conf.value) {
         common::DynamicValue::Const(value) => (Some(MessageValue::from(value)), None),
         common::DynamicValue::Field(s) => (None, Some(s)),
@@ -27,31 +31,19 @@ pub fn new(conf: ItemConf, logger: Arc<Mutex<Option<Dispatch>>>) -> Result<Box<d
         field: conf.field,
         const_value,
         target_field,
-        logger,
+        logger_enable,
+        logger_tx,
     }))
 }
 
 #[async_trait]
 impl Filter for Ct {
     async fn filter(&self, msg: &Message) -> bool {
-        match &self.logger.lock().await.as_ref() {
-            Some(logger) => {
-                tracing::dispatcher::with_default(logger, || {
-                    info!("Task  started");
-                    debug!("Debugging task");
-                });
-            }
-            None => {}
-        }
-
-        match &self.logger.lock().await.as_ref() {
-            Some(logger) => {
-                tracing::dispatcher::with_default(logger, || {
-                    info!("Task  started");
-                    debug!("Debugging task");
-                });
-            }
-            None => {}
+        if self
+            .logger_enable
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let _ = self.logger_tx.send("Ct".to_string());
         }
 
         let value = match msg.get(&self.field) {

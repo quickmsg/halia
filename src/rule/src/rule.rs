@@ -11,11 +11,11 @@ use tokio::{
     sync::{
         broadcast,
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-        Mutex,
+        watch,
     },
+    task::JoinHandle,
 };
-use tracing::{debug, error, Dispatch};
-use tracing_appender::rolling;
+use tracing::{debug, error};
 use types::rules::{
     AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node, NodeType,
     ReadRuleNodeResp, RuleConf,
@@ -28,17 +28,23 @@ pub struct Rule {
     stop_signal_tx: broadcast::Sender<()>,
 
     logger_enable: Arc<AtomicBool>,
-    logger: Arc<Mutex<Option<Dispatch>>>,
+    logger_stop_signal: (watch::Sender<()>, Option<watch::Receiver<()>>),
+    logger: (UnboundedSender<String>, Option<UnboundedReceiver<String>>),
+    join_handle: Option<JoinHandle<(watch::Receiver<()>, UnboundedReceiver<String>)>>,
 }
 
 impl Rule {
     pub async fn new(id: String, conf: &RuleConf) -> HaliaResult<Self> {
         let (stop_signal_tx, _) = broadcast::channel(1);
+        let (logger_signal_tx, logger_signal_rx) = watch::channel(());
+        let (logger_tx, logger_rx) = unbounded_channel();
         let mut rule = Self {
             id: id,
             stop_signal_tx: stop_signal_tx.clone(),
             logger_enable: Arc::new(AtomicBool::new(false)),
-            logger: Arc::new(Mutex::new(None)),
+            logger_stop_signal: (logger_signal_tx, Some(logger_signal_rx)),
+            logger: (logger_tx, Some(logger_rx)),
+            join_handle: None,
         };
         rule.start(conf).await?;
 
@@ -46,7 +52,7 @@ impl Rule {
     }
 
     async fn start(&mut self, conf: &RuleConf) -> HaliaResult<()> {
-        let (mut incoming_edges, outgoing_edges) = conf.get_edges();
+        let (incoming_edges, outgoing_edges) = conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
@@ -136,7 +142,7 @@ impl Rule {
                         functions.push(filter::new(
                             conf,
                             self.logger_enable.clone(),
-                            self.logger.clone(),
+                            self.logger.0.clone(),
                         )?);
                         indexes.push(index);
                     }
@@ -219,30 +225,46 @@ impl Rule {
         Ok(())
     }
 
-    pub async fn enable_log(&mut self) {
+    pub async fn start_log(&mut self) {
         if self
             .logger_enable
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .swap(true, std::sync::atomic::Ordering::Relaxed)
         {
             return;
         }
 
-        let file = rolling::never("logs", format!("{}.log", self.id));
-        let subscriber = tracing_subscriber::fmt().with_writer(file).finish();
-        let logger = tracing::dispatcher::Dispatch::new(subscriber);
-        *self.logger.lock().await = Some(logger);
+        let mut logger_rx = self.logger.1.take().unwrap();
+        let mut logger_stop_signal_rx = self.logger_stop_signal.1.take().unwrap();
+        let join_handle = tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = logger_stop_signal_rx.changed() => {
+                        debug!("logger stop");
+                        return (logger_stop_signal_rx, logger_rx);
+                    }
+                    Some(msg) = logger_rx.recv() => {
+                        debug!("{}", msg);
+                    }
+                }
+            }
+        });
+        self.join_handle = Some(join_handle);
     }
 
-    pub async fn disable_log(&mut self) {
+    pub async fn stop_log(&mut self) {
         if !self
             .logger_enable
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
         {
             return;
         }
-        self.logger_enable
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-        *self.logger.lock().await = None;
+
+        debug!("here");
+
+        self.logger_stop_signal.0.send(()).unwrap();
+        let join_handle = self.join_handle.take().unwrap().await.unwrap();
+        self.logger_stop_signal.1 = Some(join_handle.0);
+        self.logger.1 = Some(join_handle.1);
     }
 
     pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
@@ -320,7 +342,7 @@ impl Rule {
                 | NodeType::Filter
                 | NodeType::Operator
                 | NodeType::Computer
-                | NodeType::Log => {}
+                | NodeType::BlackHole => {}
             }
         }
 
@@ -489,32 +511,6 @@ impl Rule {
                         )
                     }
                     txs
-                }
-                NodeType::Log => {
-                    // let log_node: LogNode = serde_json::from_value(node.conf.clone())?;
-                    // let cnt = incoming_edges.get(&sink_id).unwrap().len();
-                    // let mut txs = vec![];
-
-                    // let log_tx = match &self.logger {
-                    //     Some(logger) => logger.get_tx(),
-                    //     None => {
-                    //         let logger =
-                    //             Logger::new(&self.id, self.stop_signal_tx.subscribe()).await?;
-                    //         let tx = logger.get_tx();
-                    //         self.logger = Some(logger);
-
-                    //         tx
-                    //     }
-                    // };
-
-                    // debug!("here");
-
-                    // let tx = run_log(log_node.name, log_tx, self.stop_signal_tx.subscribe());
-                    // for _ in 0..cnt {
-                    //     txs.push(tx.clone());
-                    // }
-                    // txs
-                    todo!()
                 }
 
                 _ => unreachable!(),
