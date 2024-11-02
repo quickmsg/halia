@@ -53,8 +53,9 @@ pub async fn tail_log_file(id: &String) -> Result<UnboundedReceiver<String>> {
             .unwrap();
 
         loop {
-            match notify_rx.recv().await {
-                Some(event) => match event.kind {
+            select! {
+                Some(event) = notify_rx.recv() => {
+                    match event.kind {
                     notify::EventKind::Modify(modify_kind) => match modify_kind {
                         notify::event::ModifyKind::Data(data_change) => match data_change {
                             notify::event::DataChange::Any => {
@@ -81,9 +82,11 @@ pub async fn tail_log_file(id: &String) -> Result<UnboundedReceiver<String>> {
                         _ => {}
                     },
                     _ => {}
-                },
-                None => {
-                    debug!("notify_rx closed");
+                }
+                }
+
+                _ = log_tx.closed() => {
+                    debug!("log_tx closed, quit tailing log");
                     return;
                 }
             }

@@ -12,7 +12,7 @@ use axum::{
     Json, Router,
 };
 use futures_util::Stream;
-use tokio::{select, time::interval};
+use tokio::{select, sync::mpsc::UnboundedReceiver, time::interval};
 use tokio_util::io::ReaderStream;
 use tracing::debug;
 use types::{
@@ -77,11 +77,20 @@ async fn sse_log(
         Ok(rx) => rx,
         Err(e) => panic!("tail log file error: {}", e),
     };
+
     let stream = async_stream::stream! {
-        while let Some(item) = rx.recv().await {
-            debug!("::: {:?}", item);
-            debug!("here");
-            yield Ok(Event::default().data(item));
+        loop {
+            match rx.recv().await {
+                Some(item) => {
+                    debug!("::: {:?}", item);
+                    debug!("here");
+                    yield Ok(Event::default().data(item));
+                }
+                None => {
+                    debug!("quit");
+                    break;
+                }
+            }
         }
         debug!("quit");
     };
