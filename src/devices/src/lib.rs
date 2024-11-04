@@ -16,7 +16,7 @@ use types::{
         },
         ConfType, DeviceType, Summary,
     },
-    BaseConf, Pagination, QuerySourcesOrSinksParams, RuleRef, Value,
+    Pagination, QuerySourcesOrSinksParams, RuleRef, Value,
 };
 
 pub mod coap;
@@ -171,14 +171,9 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
                 source: Some(SearchRuleSourceSinkResp {
                     id: source_id,
                     req: source_sink::CreateUpdateReq {
+                        name: db_source.name,
                         conf_type: db_source.conf_type.try_into()?,
                         template_id: db_source.template_id,
-                        base: BaseConf {
-                            name: db_source.name,
-                            desc: db_source
-                                .des
-                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                        },
                         conf: serde_json::from_slice(&db_source.conf)?,
                     },
                 }),
@@ -193,14 +188,9 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
                 sink: Some(SearchRuleSourceSinkResp {
                     id: db_sink.id,
                     req: source_sink::CreateUpdateReq {
+                        name: db_sink.name,
                         conf_type: db_sink.conf_type.try_into()?,
                         template_id: db_sink.template_id,
-                        base: BaseConf {
-                            name: db_sink.name,
-                            desc: db_sink
-                                .des
-                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                        },
                         conf: serde_json::from_slice(&db_sink.conf)?,
                     },
                 }),
@@ -235,28 +225,18 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
                     match conf_type {
                         ConfType::Template => {
                             let req = types::devices::device::source_sink::CreateUpdateReq {
+                                name: device_template_source.name,
                                 conf_type,
                                 template_id: device_template_source.template_id,
-                                base: BaseConf {
-                                    name: device_template_source.name,
-                                    desc: device_template_source
-                                        .des
-                                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                                },
                                 conf: serde_json::from_slice(&device_template_source.conf)?,
                             };
                             source_reqs.push(req);
                         }
                         ConfType::Customize => {
                             let req = types::devices::device::source_sink::CreateUpdateReq {
+                                name: device_template_source.name,
                                 conf_type,
                                 template_id: None,
-                                base: BaseConf {
-                                    name: device_template_source.name,
-                                    desc: device_template_source
-                                        .des
-                                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                                },
                                 conf: serde_json::from_slice(&device_template_source.conf)?,
                             };
                             source_reqs.push(req);
@@ -275,28 +255,18 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
                     match conf_type {
                         ConfType::Template => {
                             let req = types::devices::device::source_sink::CreateUpdateReq {
+                                name: device_template_sink.name,
                                 conf_type,
                                 template_id: device_template_sink.template_id,
-                                base: BaseConf {
-                                    name: device_template_sink.name,
-                                    desc: device_template_sink
-                                        .des
-                                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                                },
                                 conf: serde_json::from_slice(&device_template_sink.conf)?,
                             };
                             sink_reqs.push(req);
                         }
                         ConfType::Customize => {
                             let req = types::devices::device::source_sink::CreateUpdateReq {
+                                name: device_template_sink.name,
                                 conf_type,
                                 template_id: None,
-                                base: BaseConf {
-                                    name: device_template_sink.name,
-                                    desc: device_template_sink
-                                        .des
-                                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                                },
                                 conf: serde_json::from_slice(&device_template_sink.conf)?,
                             };
                             sink_reqs.push(req);
@@ -563,14 +533,9 @@ pub async fn search_sources(
             id: db_source.id,
             rule_ref,
             req: source_sink::CreateUpdateReq {
+                name: db_source.name,
                 conf_type: db_source.conf_type.try_into()?,
                 template_id: db_source.template_id,
-                base: BaseConf {
-                    name: db_source.name,
-                    desc: db_source
-                        .des
-                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                },
                 conf: serde_json::from_slice(&db_source.conf)?,
             },
         });
@@ -724,14 +689,9 @@ pub async fn search_sinks(
         data.push(source_sink::SearchItemResp {
             id: db_sink.id,
             req: source_sink::CreateUpdateReq {
+                name: db_sink.name,
                 conf_type: db_sink.conf_type.try_into()?,
                 template_id: db_sink.template_id,
-                base: BaseConf {
-                    name: db_sink.name,
-                    desc: db_sink
-                        .des
-                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                },
                 conf: serde_json::from_slice(&db_sink.conf)?,
             },
             rule_ref,
@@ -824,15 +784,10 @@ async fn transer_db_device_to_resp(
     Ok(device::SearchItemResp {
         id: db_device.id,
         req: device::CreateReq {
+            name: db_device.name,
             device_type: db_device.device_type.try_into()?,
             conf_type: db_device.conf_type.try_into()?,
             template_id: db_device.template_id,
-            base: BaseConf {
-                name: db_device.name,
-                desc: db_device
-                    .des
-                    .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-            },
             conf: serde_json::from_slice(&db_device.conf)?,
         },
         running_info,

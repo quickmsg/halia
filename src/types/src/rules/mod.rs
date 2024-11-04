@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::BaseConf;
-
 pub mod apps;
 pub mod databoard;
 pub mod devices;
@@ -24,7 +22,7 @@ pub struct QueryParams {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateUpdateRuleReq {
-    pub base: BaseConf,
+    pub name: String,
     pub ext: RuleConf,
 }
 

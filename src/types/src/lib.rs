@@ -30,13 +30,6 @@ pub struct MachineInfo {
     pub disks: Vec<(String, u64, u64)>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct BaseConf {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub desc: Option<String>,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct Pagination {
     #[serde(rename = "p")]
@@ -68,7 +61,7 @@ pub struct RuleRef {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSourceOrSinkReq {
-    pub base: BaseConf,
+    pub name: String,
     pub ext: serde_json::Value,
 }
 

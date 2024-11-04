@@ -15,7 +15,6 @@ pub struct Data {
     pub id: String,
     pub parent_id: String,
     pub name: String,
-    pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,
 }
@@ -27,7 +26,6 @@ CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     parent_id CHAR(32) NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
-    des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
@@ -41,18 +39,18 @@ pub async fn insert(
     databoard_data_id: &String,
     req: CreateUpdateDataReq,
 ) -> Result<()> {
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis() as i64;
-    sqlx::query("INSERT INTO databoard_datas (id, parent_id, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(databoard_data_id)
-        .bind(databoard_id)
-        .bind(req.base.name)
-        .bind(desc)
-        .bind(conf)
-        .bind(ts)
-        .execute(POOL.get().unwrap())
-        .await?;
+    sqlx::query(
+        "INSERT INTO databoard_datas (id, parent_id, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(databoard_data_id)
+    .bind(databoard_id)
+    .bind(req.name)
+    .bind(conf)
+    .bind(ts)
+    .execute(POOL.get().unwrap())
+    .await?;
     Ok(())
 }
 
@@ -123,11 +121,9 @@ pub async fn read_one(databoard_data_id: &String) -> Result<Data> {
 }
 
 pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;
-    sqlx::query("UPDATE databoard_datas SET name = ?, des = ?, conf = ? WHERE id = ?")
-        .bind(req.base.name)
-        .bind(desc)
+    sqlx::query("UPDATE databoard_datas SET name = ?, conf = ? WHERE id = ?")
+        .bind(req.name)
         .bind(conf)
         .bind(id)
         .execute(POOL.get().unwrap())

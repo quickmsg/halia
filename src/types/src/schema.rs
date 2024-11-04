@@ -1,13 +1,11 @@
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::BaseConf;
-
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateSchemaReq {
+    pub name: String,
     pub schema_type: SchemaType,
     pub protocol_type: ProtocolType,
-    pub base: BaseConf,
     pub ext: serde_json::Value,
 }
 

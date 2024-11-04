@@ -24,7 +24,7 @@ pub fn routes() -> Router {
         .route("/:id/start", put(start))
         .route("/:id/stop", put(stop))
         .route("/:id", routing::delete(delete))
-        .route("/:id/log/sse", get(sse_log))
+        .route("/:id/log", get(sse_log))
         .route("/:id/log/download", get(download_log))
         .route("/:id/log/start", put(start_log))
         .route("/:id/log/stop", put(stop_log))

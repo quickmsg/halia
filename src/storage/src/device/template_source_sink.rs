@@ -32,7 +32,6 @@ CREATE TABLE IF NOT EXISTS {} (
     device_template_id CHAR(32) NOT NULL,
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
-    des BLOB,
     conf_type SMALLINT UNSIGNED NOT NULL,
     template_id CHAR(32),
     conf BLOB NOT NULL,
@@ -67,7 +66,6 @@ async fn insert(
     req: CreateUpdateReq,
 ) -> Result<()> {
     let source_sink_type: i32 = source_sink_type.into();
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf_type: i32 = req.conf_type.into();
     let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis() as i64;
@@ -75,7 +73,7 @@ async fn insert(
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-            (id, device_template_id, source_sink_type, name, des, conf_type, template_id, conf, ts) 
+            (id, device_template_id, source_sink_type, name, conf_type, template_id, conf, ts) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
@@ -84,8 +82,7 @@ async fn insert(
     .bind(id)
     .bind(device_template_id)
     .bind(source_sink_type)
-    .bind(req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf_type)
     .bind(req.template_id)
     .bind(conf)
@@ -289,7 +286,6 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
 
 pub async fn update(id: &String, req: CreateUpdateReq) -> Result<()> {
     let conf = serde_json::to_vec(&req.conf)?;
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
         format!(
             "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
@@ -297,8 +293,7 @@ pub async fn update(id: &String, req: CreateUpdateReq) -> Result<()> {
         )
         .as_str(),
     )
-    .bind(req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf)
     .bind(id)
     .execute(POOL.get().unwrap())

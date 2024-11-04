@@ -23,7 +23,6 @@ pub struct SourceSinkTemplate {
     pub source_sink_type: i32,
     pub device_type: i32,
     pub name: String,
-    pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,
 }
@@ -36,7 +35,6 @@ CREATE TABLE IF NOT EXISTS {} (
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     device_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
-    des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
     UNIQUE (source_sink_type, name)
@@ -57,14 +55,13 @@ pub async fn insert_sink(id: &String, req: CreateReq) -> HaliaResult<()> {
 async fn insert(id: &String, source_sink_type: SourceSinkType, req: CreateReq) -> HaliaResult<()> {
     let source_sink_type: i32 = source_sink_type.into();
     let device_type: i32 = req.device_type.into();
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis() as i64;
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, source_sink_type, device_type, name, des, conf, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?)"#,
+(id, source_sink_type, device_type, name, conf, ts) 
+VALUES (?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
@@ -72,8 +69,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?)"#,
     .bind(id)
     .bind(source_sink_type)
     .bind(device_type)
-    .bind(req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf)
     .bind(ts)
     .execute(POOL.get().unwrap())
@@ -200,17 +196,15 @@ pub async fn read_name(id: &String) -> Result<String> {
 }
 
 pub async fn update(id: &String, req: UpdateReq) -> HaliaResult<()> {
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.conf)?;
     sqlx::query(
         format!(
-            "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
+            "UPDATE {} SET name = ?, conf = ? WHERE id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf)
     .bind(id)
     .execute(POOL.get().unwrap())

@@ -23,7 +23,6 @@ pub struct Schema {
     pub schema_type: i32,
     pub protocol_type: i32,
     pub name: String,
-    pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,
 }
@@ -37,7 +36,6 @@ CREATE TABLE IF NOT EXISTS {} (
     protocol_type SMALLINT NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     device_type SMALLINT NOT NULL,
-    des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
@@ -49,19 +47,17 @@ CREATE TABLE IF NOT EXISTS {} (
 pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis() as i64;
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let schema_type: i32 = req.schema_type.into();
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, schema_type name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, schema_type name, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
     .bind(schema_type)
-    .bind(&req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf)
     .bind(ts)
     .execute(POOL.get().unwrap())
@@ -154,14 +150,18 @@ pub async fn search(
 // TODO 更新运行中的源和动作
 pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.ext)?;
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
-    sqlx::query("UPDATE devices SET name = ?, des = ?, conf = ? WHERE id = ?")
-        .bind(req.base.name)
-        .bind(desc)
-        .bind(conf)
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
+    sqlx::query(
+        format!(
+            "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(req.name)
+    .bind(conf)
+    .bind(id)
+    .execute(POOL.get().unwrap())
+    .await?;
 
     Ok(())
 }

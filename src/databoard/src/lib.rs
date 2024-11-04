@@ -1,12 +1,12 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, LazyLock,
+    LazyLock,
 };
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use databoard_struct::Databoard;
-use message::{MessageBatch, RuleMessageBatch};
+use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     databoard::{
@@ -14,7 +14,7 @@ use types::{
         QueryParams, QueryRuleInfo, SearchDataboardsItemResp, SearchDataboardsResp,
         SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp, SearchRuleInfo, Summary,
     },
-    BaseConf, Pagination, RuleRef,
+    Pagination, RuleRef,
 };
 
 pub mod data;
@@ -91,24 +91,14 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
             id: db_databoard.id,
             on: db_databoard.status == 1,
             conf: CreateUpdateDataboardReq {
-                base: BaseConf {
-                    name: db_databoard.name,
-                    desc: db_databoard
-                        .des
-                        .map(|des| unsafe { String::from_utf8_unchecked(des) }),
-                },
+                name: db_databoard.name,
                 ext: serde_json::from_slice(&db_databoard.conf)?,
             },
         },
         data: SearchDatasInfoResp {
             id: db_databoard_data.id,
             conf: CreateUpdateDataReq {
-                base: BaseConf {
-                    name: db_databoard_data.name,
-                    desc: db_databoard_data
-                        .des
-                        .map(|des| unsafe { String::from_utf8_unchecked(des) }),
-                },
+                name: db_databoard_data.name,
                 ext: serde_json::from_slice(&db_databoard_data.conf)?,
             },
             value: None,
@@ -136,12 +126,7 @@ pub async fn search_databoards(
             id: db_databoard.id,
             on: db_databoard.status == 1,
             conf: CreateUpdateDataboardReq {
-                base: BaseConf {
-                    name: db_databoard.name,
-                    desc: db_databoard
-                        .des
-                        .map(|des| unsafe { String::from_utf8_unchecked(des) }),
-                },
+                name: db_databoard.name,
                 ext: serde_json::from_slice(&db_databoard.conf)?,
             },
         });
@@ -276,12 +261,7 @@ pub async fn search_datas(
             info: SearchDatasInfoResp {
                 id: db_data.id,
                 conf: CreateUpdateDataReq {
-                    base: BaseConf {
-                        name: db_data.name,
-                        desc: db_data
-                            .des
-                            .map(|des| unsafe { String::from_utf8_unchecked(des) }),
-                    },
+                    name: db_data.name,
                     ext: serde_json::from_slice(&db_data.conf)?,
                 },
                 value,

@@ -21,7 +21,6 @@ pub struct DeviceTemplate {
     pub id: String,
     pub device_type: i32,
     pub name: String,
-    pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,
 }
@@ -33,7 +32,6 @@ CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     device_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
-    des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
@@ -46,18 +44,16 @@ pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis() as i64;
     let device_type: i32 = req.device_type.into();
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, device_type, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, device_type, name, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
     .bind(device_type)
-    .bind(req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf)
     .bind(ts)
     .execute(POOL.get().unwrap())
@@ -187,16 +183,14 @@ pub async fn search(
 
 pub async fn update(id: &String, req: UpdateReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.conf)?;
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     sqlx::query(
         format!(
-            "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
+            "UPDATE {} SET name = ?, conf = ? WHERE id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf)
     .bind(id)
     .execute(POOL.get().unwrap())

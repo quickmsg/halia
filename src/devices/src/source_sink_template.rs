@@ -4,7 +4,7 @@ use types::{
         source_sink_template::{CreateReq, QueryParams, SearchItemResp, SearchResp, UpdateReq},
         DeviceType,
     },
-    BaseConf, Pagination,
+    Pagination,
 };
 
 use crate::{modbus, GLOBAL_DEVICE_MANAGER};
@@ -130,11 +130,8 @@ fn transer_db_source_sink_template_to_resp(
     Ok(SearchItemResp {
         id: db_template.id,
         req: CreateReq {
+            name: db_template.name,
             device_type: db_template.device_type.try_into()?,
-            base: BaseConf {
-                name: db_template.name,
-                desc: db_template.des.map(|desc| String::from_utf8(desc).unwrap()),
-            },
             conf: serde_json::from_slice(&db_template.conf)?,
         },
     })

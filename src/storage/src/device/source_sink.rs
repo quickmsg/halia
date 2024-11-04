@@ -14,7 +14,6 @@ pub struct SourceSink {
     pub device_template_source_sink_id: Option<String>,
     pub source_sink_type: i32,
     pub name: String,
-    pub des: Option<Vec<u8>>,
     pub conf_type: i32,
     pub conf: Vec<u8>,
     pub template_id: Option<String>,
@@ -31,7 +30,6 @@ CREATE TABLE IF NOT EXISTS {} (
     device_template_source_sink_id CHAR(32),
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
-    des BLOB,
     conf_type SMALLINT UNSIGNED NOT NULL,
     conf BLOB NOT NULL,
     template_id CHAR(32),
@@ -84,7 +82,6 @@ async fn insert(
     req: CreateUpdateReq,
 ) -> Result<()> {
     let source_sink_type: i32 = source_sink_type.into();
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf_type: i32 = req.conf_type.into();
     let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis() as i64;
@@ -92,8 +89,8 @@ async fn insert(
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, device_id, device_template_source_sink_id, source_sink_type, name, des, conf_type, conf, template_id, err, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_id, device_template_source_sink_id, source_sink_type, name, conf_type, conf, template_id, err, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
@@ -102,8 +99,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(device_id)
     .bind(device_template_source_sink_id)
     .bind(source_sink_type)
-    .bind(req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf_type)
     .bind(conf)
     .bind(req.template_id)
@@ -339,17 +335,15 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
 
 pub async fn update(id: &String, req: CreateUpdateReq) -> Result<()> {
     let conf_type: i32 = req.conf_type.into();
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.conf)?;
     sqlx::query(
         format!(
-            "UPDATE {} SET name = ?, des = ?, conf_type = ?, conf = ?, template_id = ? WHERE id = ?",
+            "UPDATE {} SET name = ?, conf_type = ?, conf = ?, template_id = ? WHERE id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(req.base.name)
-    .bind(desc)
+    .bind(req.name)
     .bind(conf_type)
     .bind(conf)
     .bind(req.template_id)

@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{devices::ConfType, BaseConf, RuleRef};
+use crate::{devices::ConfType, RuleRef};
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct CreateUpdateReq {
+    pub name: String,
     pub conf_type: ConfType,
     pub template_id: Option<String>,
-    pub base: BaseConf,
     pub conf: serde_json::Value,
 }
 

@@ -12,7 +12,7 @@ use types::{
         DeviceSourceNode, Node, QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp,
         SearchRulesResp, Summary,
     },
-    BaseConf, Pagination,
+    Pagination,
 };
 
 pub mod rule;
@@ -84,12 +84,7 @@ pub async fn search(
             id: db_rule.id,
             on: db_rule.status == 1,
             conf: CreateUpdateRuleReq {
-                base: BaseConf {
-                    name: db_rule.name,
-                    desc: db_rule
-                        .des
-                        .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                },
+                name: db_rule.name,
                 ext: serde_json::from_slice(&db_rule.conf).unwrap(),
             },
         })

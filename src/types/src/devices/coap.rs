@@ -1,13 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{BaseConf, RuleRef};
+use crate::RuleRef;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateCoapReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
-    #[serde(flatten)]
-    pub ext: CoapConf,
+    pub name: String,
+    pub conf: CoapConf,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -18,8 +16,7 @@ pub struct CoapConf {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateUpdateAPIReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
+    pub name: String,
     #[serde(flatten)]
     pub ext: APIConf,
 }
@@ -79,16 +76,14 @@ pub struct SearchAPIsItemResp {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateUpdateObserveReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
+    pub name: String,
     #[serde(flatten)]
     pub ext: ObserveConf,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateUpdateSourceReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
+    pub name: String,
     #[serde(flatten)]
     pub ext: SourceConf,
 }
@@ -151,8 +146,7 @@ pub struct SearchObservesItemResp {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSinkReq {
-    #[serde(flatten)]
-    pub base: BaseConf,
+    pub name: String,
     #[serde(flatten)]
     pub ext: SinkConf,
 }

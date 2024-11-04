@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{BaseConf, RuleRef};
+use crate::RuleRef;
 
 #[derive(Serialize)]
 pub struct Summary {
@@ -16,7 +16,7 @@ pub struct QueryParams {
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateUpdateDataboardReq {
-    pub base: BaseConf,
+    pub name: String,
     pub ext: DataboardConf,
 }
 
@@ -38,7 +38,7 @@ pub struct SearchDataboardsItemResp {
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateDataReq {
-    pub base: BaseConf,
+    pub name: String,
     pub ext: DataConf,
 }
 

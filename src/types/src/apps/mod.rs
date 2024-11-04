@@ -3,7 +3,7 @@ use std::fmt;
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::{BaseConf, SearchSourcesOrSinksInfoResp};
+use crate::SearchSourcesOrSinksInfoResp;
 
 pub mod http_client;
 pub mod influxdb_v1;
@@ -67,7 +67,7 @@ impl TryFrom<i32> for AppType {
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct AppConf {
-    pub base: BaseConf,
+    pub name: String,
     pub ext: serde_json::Value,
 }
 
@@ -151,7 +151,7 @@ pub struct SearchAppsItemRunningInfo {
 
 #[derive(Serialize)]
 pub struct SearchAppsItemConf {
-    pub base: BaseConf,
+    pub name: String,
     pub ext: serde_json::Value,
 }
 

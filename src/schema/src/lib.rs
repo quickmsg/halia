@@ -2,7 +2,7 @@ use anyhow::Result;
 use bytes::Bytes;
 use common::{
     error::{HaliaError, HaliaResult},
-    get_id, vec_to_string,
+    get_id,
 };
 use message::MessageBatch;
 use types::{
@@ -10,7 +10,7 @@ use types::{
         AvroDecodeConf, CreateUpdateSchemaReq, CsvDecodeConf, DecodeType, EncodeType, QueryParams,
         SearchSchemasItemResp, SearchSchemasResp, TemplateEncodeConf,
     },
-    BaseConf, Pagination,
+    Pagination,
 };
 
 pub mod decoders;
@@ -102,12 +102,9 @@ fn transfer_db_schema_to_resp(
 ) -> HaliaResult<SearchSchemasItemResp> {
     Ok(SearchSchemasItemResp {
         conf: CreateUpdateSchemaReq {
+            name: db_schema.name,
             schema_type: db_schema.schema_type.try_into()?,
             protocol_type: db_schema.protocol_type.try_into()?,
-            base: BaseConf {
-                name: db_schema.name,
-                desc: vec_to_string(db_schema.des),
-            },
             ext: serde_json::from_slice(&db_schema.conf)?,
         },
     })

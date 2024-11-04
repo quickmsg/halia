@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use source_sink::CreateUpdateReq;
 
-use crate::BaseConf;
-
 use super::{ConfType, DeviceType};
 
 pub mod modbus;
@@ -11,18 +9,18 @@ pub mod opcua;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {
+    pub name: String,
     pub device_type: DeviceType,
     pub conf_type: ConfType,
     pub template_id: Option<String>,
-    pub base: BaseConf,
     pub conf: serde_json::Value,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct UpdateReq {
+    pub name: String,
     pub conf_type: ConfType,
     pub template_id: Option<String>,
-    pub base: BaseConf,
     pub conf: serde_json::Value,
 }
 

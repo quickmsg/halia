@@ -4,7 +4,7 @@ use types::{
         device_template::{self, source_sink, CreateReq, QueryParams, SearchResp},
         DeviceType,
     },
-    BaseConf, Pagination,
+    Pagination,
 };
 
 use crate::{modbus, GLOBAL_DEVICE_MANAGER};
@@ -35,13 +35,8 @@ pub async fn search_device_templates(
         resp_device_templates.push(device_template::SearchItemResp {
             id: db_device_template.id,
             req: CreateReq {
+                name: db_device_template.name,
                 device_type: db_device_template.device_type.try_into()?,
-                base: BaseConf {
-                    name: db_device_template.name,
-                    desc: db_device_template
-                        .des
-                        .map(|des| String::from_utf8(des).unwrap()),
-                },
                 conf: serde_json::from_slice(&db_device_template.conf)?,
             },
         });
@@ -86,9 +81,9 @@ pub async fn create_source(
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
     let device_source_req = types::devices::device::source_sink::CreateUpdateReq {
+        name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),
-        base: req.base.clone(),
         conf: req.conf.clone(),
     };
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
@@ -121,12 +116,9 @@ pub async fn search_sources(
         .map(|x| source_sink::SearchItemResp {
             id: x.id.clone(),
             req: source_sink::CreateUpdateReq {
+                name: x.name,
                 conf_type: x.conf_type.try_into().unwrap(),
                 template_id: x.template_id,
-                base: BaseConf {
-                    name: x.name,
-                    desc: x.des.map(|desc| String::from_utf8(desc).unwrap()),
-                },
                 conf: serde_json::from_slice(&x.conf).unwrap(),
             },
         })
@@ -144,9 +136,9 @@ pub async fn update_source(
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
     let device_source_req = types::devices::device::source_sink::CreateUpdateReq {
+        name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),
-        base: req.base.clone(),
         conf: req.conf.clone(),
     };
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
@@ -190,9 +182,9 @@ pub async fn create_sink(
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
     let device_sink_req = types::devices::device::source_sink::CreateUpdateReq {
+        name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),
-        base: req.base.clone(),
         conf: req.conf.clone(),
     };
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
@@ -221,12 +213,9 @@ pub async fn search_sinks(
         .map(|x| source_sink::SearchItemResp {
             id: x.id.clone(),
             req: source_sink::CreateUpdateReq {
+                name: x.name,
                 conf_type: x.conf_type.try_into().unwrap(),
                 template_id: x.template_id,
-                base: BaseConf {
-                    name: x.name,
-                    desc: x.des.map(|desc| String::from_utf8(desc).unwrap()),
-                },
                 conf: serde_json::from_slice(&x.conf).unwrap(),
             },
         })
@@ -244,9 +233,9 @@ pub async fn update_sink(
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
     let device_sink_req = types::devices::device::source_sink::CreateUpdateReq {
+        name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),
-        base: req.base.clone(),
         conf: req.conf.clone(),
     };
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;

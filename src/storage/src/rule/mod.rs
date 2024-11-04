@@ -17,7 +17,6 @@ pub struct Rule {
     pub id: String,
     pub status: i32,
     pub name: String,
-    pub des: Option<Vec<u8>>,
     pub conf: Vec<u8>,
     pub ts: i64,
 }
@@ -29,7 +28,6 @@ CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     status SMALLINT NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
-    des BLOB,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
@@ -39,18 +37,22 @@ CREATE TABLE IF NOT EXISTS {} (
 }
 
 pub async fn insert(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis() as i64;
-    sqlx::query("INSERT INTO rules (id, status, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(id)
-        .bind(false as i32)
-        .bind(req.base.name)
-        .bind(desc)
-        .bind(conf)
-        .bind(ts)
-        .execute(POOL.get().unwrap())
-        .await?;
+    sqlx::query(
+        format!(
+            "INSERT INTO {} (id, status, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(id)
+    .bind(false as i32)
+    .bind(req.name)
+    .bind(conf)
+    .bind(ts)
+    .execute(POOL.get().unwrap())
+    .await?;
     Ok(())
 }
 
@@ -157,7 +159,7 @@ pub async fn query(pagination: Pagination, query: QueryParams) -> Result<(usize,
 }
 
 pub async fn update_status(id: &String, status: bool) -> Result<()> {
-    sqlx::query("UPDATE rules SET status = ? WHERE id = ?")
+    sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(status as i32)
         .bind(id)
         .execute(POOL.get().unwrap())
@@ -166,11 +168,9 @@ pub async fn update_status(id: &String, status: bool) -> Result<()> {
 }
 
 pub async fn update(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
-    let desc = req.base.desc.map(|desc| desc.into_bytes());
     let conf = serde_json::to_vec(&req.ext)?;
-    sqlx::query("UPDATE rules SET name = ?, des = ?, conf = ? WHERE id = ?")
-        .bind(req.base.name)
-        .bind(desc)
+    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(req.name)
         .bind(conf)
         .bind(id)
         .execute(POOL.get().unwrap())

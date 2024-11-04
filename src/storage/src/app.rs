@@ -49,15 +49,19 @@ pub async fn insert(id: &String, req: CreateUpdateAppReq) -> HaliaResult<()> {
     let typ: i32 = req.typ.into();
     let ts = common::timestamp_millis() as i64;
     let conf = serde_json::to_vec(&req.conf.ext)?;
-    let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
 
-    sqlx::query("INSERT INTO apps (id, status, err, typ, name, des, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(id)
+    sqlx::query(
+        format!(
+            "INSERT INTO {} (id, status, err, typ, name, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(id)
     .bind(false as i32)
     .bind(false as i32)
     .bind(typ)
-    .bind(req.conf.base.name)
-    .bind(desc)
+    .bind(req.conf.name)
     .bind(conf)
     .bind(ts)
     .execute(POOL.get().unwrap())
@@ -233,10 +237,8 @@ pub async fn update_err(id: &String, err: bool) -> Result<()> {
 
 pub async fn update_conf(id: String, req: CreateUpdateAppReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.conf.ext)?;
-    let desc = req.conf.base.desc.map(|desc| desc.into_bytes());
-    sqlx::query("UPDATE apps SET name = ?, des = ?, conf = ? WHERE id = ?")
-        .bind(req.conf.base.name)
-        .bind(desc)
+    sqlx::query("UPDATE apps SET name = ?, conf = ? WHERE id = ?")
+        .bind(req.conf.name)
         .bind(conf)
         .bind(id)
         .execute(POOL.get().unwrap())

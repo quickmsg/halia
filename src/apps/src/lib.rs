@@ -14,7 +14,7 @@ use types::{
         SearchAppsItemConf, SearchAppsItemResp, SearchAppsItemRunningInfo, SearchAppsResp,
         SearchRuleInfo, Summary,
     },
-    BaseConf, CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
+    CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
     SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
 };
 
@@ -153,12 +153,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
                 source: Some(SearchSourcesOrSinksInfoResp {
                     id: db_source.id,
                     conf: CreateUpdateSourceOrSinkReq {
-                        base: BaseConf {
-                            name: db_source.name,
-                            desc: db_source
-                                .des
-                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                        },
+                        name: db_source.name,
                         ext: serde_json::from_slice(&db_source.conf)?,
                     },
                 }),
@@ -173,12 +168,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
                 sink: Some(SearchSourcesOrSinksInfoResp {
                     id: db_sink.id,
                     conf: CreateUpdateSourceOrSinkReq {
-                        base: BaseConf {
-                            name: db_sink.name,
-                            desc: db_sink
-                                .des
-                                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                        },
+                        name: db_sink.name,
                         ext: serde_json::from_slice(&db_sink.conf)?,
                     },
                 }),
@@ -248,12 +238,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     let db_app = storage::app::read_one(&app_id).await?;
     let app_type = AppType::try_from(db_app.typ)?;
     let app_conf = AppConf {
-        base: BaseConf {
-            name: db_app.name,
-            desc: db_app
-                .des
-                .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-        },
+        name: db_app.name,
         ext: serde_json::from_slice(&db_app.conf)?,
     };
 
@@ -381,12 +366,7 @@ pub async fn search_sources(
             info: SearchSourcesOrSinksInfoResp {
                 id: db_source.id,
                 conf: CreateUpdateSourceOrSinkReq {
-                    base: BaseConf {
-                        name: db_source.name,
-                        desc: db_source
-                            .des
-                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                    },
+                    name: db_source.name,
                     ext: serde_json::from_slice(&db_source.conf).unwrap(),
                 },
             },
@@ -493,12 +473,7 @@ pub async fn search_sinks(
             info: SearchSourcesOrSinksInfoResp {
                 id: db_sink.id,
                 conf: CreateUpdateSourceOrSinkReq {
-                    base: BaseConf {
-                        name: db_sink.name,
-                        desc: db_sink
-                            .des
-                            .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-                    },
+                    name: db_sink.name,
                     ext: serde_json::from_slice(&db_sink.conf).unwrap(),
                 },
             },
@@ -587,12 +562,7 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<Search
             sink_cnt,
         },
         conf: SearchAppsItemConf {
-            base: BaseConf {
-                name: db_app.name,
-                desc: db_app
-                    .des
-                    .map(|desc| unsafe { String::from_utf8_unchecked(desc) }),
-            },
+            name: db_app.name,
             ext: serde_json::from_slice(&db_app.conf)?,
         },
         running_info,

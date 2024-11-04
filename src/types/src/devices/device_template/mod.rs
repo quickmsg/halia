@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::BaseConf;
-
 use super::DeviceType;
 
 pub mod source_sink;
@@ -10,14 +8,14 @@ pub mod modbus;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {
+    pub name: String,
     pub device_type: DeviceType,
-    pub base: BaseConf,
     pub conf: serde_json::Value,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct UpdateReq {
-    pub base: BaseConf,
+    pub name: String,
     pub conf: serde_json::Value,
 }
 
