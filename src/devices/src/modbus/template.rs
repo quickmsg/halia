@@ -1,5 +1,4 @@
 use common::error::{HaliaError, HaliaResult};
-use tracing::debug;
 use types::devices::{
     device_template::modbus::TemplateConf,
     source_sink_template::modbus::{SinkTemplateConf, SourceTemplateConf},
@@ -7,7 +6,6 @@ use types::devices::{
 
 pub fn validate_device_template_conf(conf: serde_json::Value) -> HaliaResult<()> {
     let conf: TemplateConf = serde_json::from_value(conf)?;
-    debug!("{:?}", conf);
     match conf.link_type {
         types::devices::modbus::LinkType::Ethernet => {
             if conf.ethernet.is_none() {

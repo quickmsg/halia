@@ -46,7 +46,7 @@ pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
     let device_type: i32 = req.device_type.into();
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, device_type, name, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, device_type, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
