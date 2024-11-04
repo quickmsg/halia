@@ -22,9 +22,12 @@ use tokio::{
 };
 use tracing::{debug, warn};
 use types::{
-    devices::device::{
-        opcua::{OpcuaConf, SinkConf, SourceConf},
-        RunningInfo,
+    devices::{
+        device::{
+            opcua::{OpcuaConf, SinkConf, SourceConf},
+            RunningInfo,
+        },
+        device_template::opcua::{CustomizeConf, TemplateConf},
     },
     Value,
 };
@@ -48,14 +51,27 @@ struct Opcua {
 
 struct JoinHandleData {
     pub id: String,
-    pub conf: OpcuaConf,
+    pub opcua_conf: OpcuaConf,
     pub opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub err: Arc<RwLock<Option<String>>>,
 }
 
-pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
-    let conf: OpcuaConf = serde_json::from_value(conf).unwrap();
+pub fn new_by_customize_conf(id: String, conf: serde_json::Value) -> Box<dyn Device> {
+    let opcua_conf: OpcuaConf = serde_json::from_value(conf).unwrap();
+    new(id, opcua_conf)
+}
+
+pub fn new_by_template_conf(
+    id: String,
+    customize_conf: serde_json::Value,
+    template_conf: serde_json::Value,
+) -> Box<dyn Device> {
+    let opcua_conf = Opcua::get_device_conf(customize_conf, template_conf).unwrap();
+    new(id, opcua_conf)
+}
+
+fn new(id: String, opcua_conf: OpcuaConf) -> Box<dyn Device> {
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
     let opcua_client: Arc<RwLock<Option<Arc<Session>>>> = Arc::new(RwLock::new(None));
@@ -63,7 +79,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
     let err = Arc::new(RwLock::new(None));
     let join_handle_data = JoinHandleData {
         id,
-        conf,
+        opcua_conf,
         opcua_client: opcua_client.clone(),
         stop_signal_rx,
         err: err.clone(),
@@ -131,7 +147,7 @@ impl Opcua {
         tokio::spawn(async move {
             let mut task_err: Option<String> = Some("not connectd.".to_owned());
             loop {
-                match Opcua::connect(&join_handle_data.conf).await {
+                match Opcua::connect(&join_handle_data.opcua_conf).await {
                     Ok((session, join_handle)) => {
                         debug!("opcua connect success");
                         task_err = None;
@@ -163,7 +179,7 @@ impl Opcua {
                         .await;
                         warn!("connect error: {}", e);
                         let sleep =
-                            time::sleep(Duration::from_secs(join_handle_data.conf.reconnect));
+                            time::sleep(Duration::from_secs(join_handle_data.opcua_conf.reconnect));
                         tokio::pin!(sleep);
                         select! {
                             _ = join_handle_data.stop_signal_rx.changed() => {
@@ -178,6 +194,32 @@ impl Opcua {
             }
         })
     }
+
+    fn get_device_conf(
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<OpcuaConf> {
+        let customize_conf: CustomizeConf = serde_json::from_value(customize_conf)?;
+        let template_conf: TemplateConf = serde_json::from_value(template_conf)?;
+
+        Ok(OpcuaConf {
+            host: customize_conf.host,
+            port: customize_conf.port,
+            path: template_conf.path,
+            reconnect: template_conf.reconnect,
+            auth_method: template_conf.auth_method,
+            auth_username: template_conf.auth_username,
+            auth_certificate: template_conf.auth_certificate,
+        })
+    }
+
+    async fn update_conf(&mut self, opcua_conf: OpcuaConf) {
+        self.stop_signal_tx.send(()).unwrap();
+        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
+        join_handle_data.opcua_conf = opcua_conf;
+        let join_handle = Self::event_loop(join_handle_data);
+        self.join_handle = Some(join_handle);
+    }
 }
 
 #[async_trait]
@@ -190,13 +232,8 @@ impl Device for Opcua {
     }
 
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
-        let conf: OpcuaConf = serde_json::from_value(conf)?;
-        self.stop_signal_tx.send(()).unwrap();
-        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
-        join_handle_data.conf = conf;
-        let join_handle = Self::event_loop(join_handle_data);
-        self.join_handle = Some(join_handle);
-
+        let opcua_conf: OpcuaConf = serde_json::from_value(conf)?;
+        Self::update_conf(&mut self, opcua_conf).await;
         Ok(())
     }
 
@@ -205,13 +242,8 @@ impl Device for Opcua {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        // let new_conf: Conf = serde_json::from_value(new_conf)?;
-        // let conf =
-        // self.stop_signal_tx.send(()).unwrap();
-        // let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
-        // join_handle_data.conf = new_conf;
-        // let join_handle = Self::event_loop(join_handle_data);
-        // self.join_handle = Some(join_handle);
+        let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
+        Self::update_conf(&mut self, opcua_conf).await;
 
         Ok(())
     }

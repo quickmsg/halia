@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::DeviceType;
 
 pub mod modbus;
+pub mod opcua;
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateReq {
