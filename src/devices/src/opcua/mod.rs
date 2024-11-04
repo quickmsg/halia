@@ -22,9 +22,9 @@ use tokio::{
 };
 use tracing::{debug, warn};
 use types::{
-    devices::{
-        device::RunningInfo,
-        opcua::{Conf, SinkConf, SourceConf},
+    devices::device::{
+        opcua::{OpcuaConf, SinkConf, SourceConf},
+        RunningInfo,
     },
     Value,
 };
@@ -33,6 +33,7 @@ use crate::{add_device_running_count, sub_device_running_count, Device};
 
 mod sink;
 mod source;
+pub(crate) mod template;
 
 struct Opcua {
     err: Arc<RwLock<Option<String>>>,
@@ -47,14 +48,14 @@ struct Opcua {
 
 struct JoinHandleData {
     pub id: String,
-    pub conf: Conf,
+    pub conf: OpcuaConf,
     pub opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub err: Arc<RwLock<Option<String>>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn Device> {
-    let conf: Conf = serde_json::from_value(conf).unwrap();
+    let conf: OpcuaConf = serde_json::from_value(conf).unwrap();
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
     let opcua_client: Arc<RwLock<Option<Arc<Session>>>> = Arc::new(RwLock::new(None));
@@ -98,8 +99,7 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl Opcua {
-    async fn connect(conf: &Conf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
-        debug!("{}", conf.addr);
+    async fn connect(conf: &OpcuaConf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
         let mut client = ClientBuilder::new()
             .application_name("test")
             .application_uri("aasda")
@@ -110,7 +110,8 @@ impl Opcua {
             .client()
             .unwrap();
 
-        let endpoint: EndpointDescription = EndpointDescription::from(conf.addr.as_ref());
+        // TODO
+        let endpoint: EndpointDescription = EndpointDescription::from(conf.host.as_ref());
 
         let (session, event_loop) = match client
             .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
@@ -189,7 +190,7 @@ impl Device for Opcua {
     }
 
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
-        let conf: Conf = serde_json::from_value(conf)?;
+        let conf: OpcuaConf = serde_json::from_value(conf)?;
         self.stop_signal_tx.send(()).unwrap();
         let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
         join_handle_data.conf = conf;
@@ -395,22 +396,22 @@ impl Device for Opcua {
     }
 }
 
-fn transfer_node_id(node_id: &types::devices::opcua::NodeId) -> NodeId {
+fn transfer_node_id(node_id: &types::devices::device::opcua::NodeId) -> NodeId {
     let value = node_id.identifier.value.clone();
     let identifier = match node_id.identifier.typ {
-        types::devices::opcua::IdentifierType::Numeric => {
+        types::devices::device::opcua::IdentifierType::Numeric => {
             let num: u32 = serde_json::from_value(value).unwrap();
             Identifier::Numeric(num)
         }
-        types::devices::opcua::IdentifierType::String => {
+        types::devices::device::opcua::IdentifierType::String => {
             let s: opcua_protocol::types::UAString = serde_json::from_value(value).unwrap();
             Identifier::String(s)
         }
-        types::devices::opcua::IdentifierType::Guid => {
+        types::devices::device::opcua::IdentifierType::Guid => {
             let guid: opcua_protocol::types::Guid = serde_json::from_value(value).unwrap();
             Identifier::Guid(guid)
         }
-        types::devices::opcua::IdentifierType::ByteString => {
+        types::devices::device::opcua::IdentifierType::ByteString => {
             let bs: opcua_protocol::types::ByteString = serde_json::from_value(value).unwrap();
             Identifier::ByteString(bs)
         }
@@ -422,10 +423,12 @@ fn transfer_node_id(node_id: &types::devices::opcua::NodeId) -> NodeId {
     }
 }
 
-fn transfer_monitoring_node(mode: &types::devices::opcua::MonitoringMode) -> MonitoringMode {
+fn transfer_monitoring_node(
+    mode: &types::devices::device::opcua::MonitoringMode,
+) -> MonitoringMode {
     match mode {
-        types::devices::opcua::MonitoringMode::Disabled => MonitoringMode::Disabled,
-        types::devices::opcua::MonitoringMode::Sampling => MonitoringMode::Sampling,
-        types::devices::opcua::MonitoringMode::Reporting => MonitoringMode::Reporting,
+        types::devices::device::opcua::MonitoringMode::Disabled => MonitoringMode::Disabled,
+        types::devices::device::opcua::MonitoringMode::Sampling => MonitoringMode::Sampling,
+        types::devices::device::opcua::MonitoringMode::Reporting => MonitoringMode::Reporting,
     }
 }

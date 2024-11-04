@@ -4,7 +4,9 @@ use super::DeviceType;
 
 pub mod source_sink;
 
+pub mod coap;
 pub mod modbus;
+pub mod opcua;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {

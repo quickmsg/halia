@@ -7,13 +7,12 @@ use types::{
     Pagination,
 };
 
-use crate::{modbus, GLOBAL_DEVICE_MANAGER};
+use crate::{modbus, opcua, GLOBAL_DEVICE_MANAGER};
 
 pub async fn create_device_template(req: CreateReq) -> HaliaResult<()> {
     match &req.device_type {
         DeviceType::Modbus => modbus::template::validate_device_template_conf(req.conf.clone())?,
-        // DeviceType::Opcua => opcua::validate_conf(&req.conf.ext)?,
-        DeviceType::Opcua => todo!(),
+        DeviceType::Opcua => opcua::template::validate_device_template_conf(req.conf.clone())?,
         // DeviceType::Coap => coap::validate_conf(&req.conf.ext)?,
         DeviceType::Coap => todo!(),
     }

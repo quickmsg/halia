@@ -14,7 +14,7 @@ use tokio::{
     time,
 };
 use tracing::warn;
-use types::devices::{device::modbus::SourceConf, modbus::Area};
+use types::devices::device::modbus::{Area, SourceConf};
 
 pub struct Source {
     pub conf: SourceConf,
@@ -68,7 +68,7 @@ impl Source {
         }
 
         match &conf.data_type.typ {
-            types::devices::modbus::Type::Bool => match &conf.area {
+            types::devices::device::modbus::Type::Bool => match &conf.area {
                 Area::InputRegisters | Area::HoldingRegisters => {
                     if conf.data_type.pos.is_none() {
                         return Err(HaliaError::Common("必须填写位置！".to_owned()));
@@ -76,20 +76,20 @@ impl Source {
                 }
                 _ => {}
             },
-            types::devices::modbus::Type::Int8
-            | types::devices::modbus::Type::Uint8
-            | types::devices::modbus::Type::Int16
-            | types::devices::modbus::Type::Uint16 => {
+            types::devices::device::modbus::Type::Int8
+            | types::devices::device::modbus::Type::Uint8
+            | types::devices::device::modbus::Type::Int16
+            | types::devices::device::modbus::Type::Uint16 => {
                 if conf.data_type.single_endian.is_none() {
                     return Err(HaliaError::Common("必须填写单字节序配置！".to_owned()));
                 }
             }
-            types::devices::modbus::Type::Int32
-            | types::devices::modbus::Type::Uint32
-            | types::devices::modbus::Type::Int64
-            | types::devices::modbus::Type::Uint64
-            | types::devices::modbus::Type::Float32
-            | types::devices::modbus::Type::Float64 => {
+            types::devices::device::modbus::Type::Int32
+            | types::devices::device::modbus::Type::Uint32
+            | types::devices::device::modbus::Type::Int64
+            | types::devices::device::modbus::Type::Uint64
+            | types::devices::device::modbus::Type::Float32
+            | types::devices::device::modbus::Type::Float64 => {
                 if conf.data_type.single_endian.is_none() {
                     return Err(HaliaError::Common("必须填写单字节序配置！".to_owned()));
                 }
@@ -99,7 +99,7 @@ impl Source {
                 }
             }
 
-            types::devices::modbus::Type::String => {
+            types::devices::device::modbus::Type::String => {
                 if conf.data_type.single_endian.is_none() {
                     return Err(HaliaError::Common("必须填写单字节序配置！".to_owned()));
                 }
@@ -112,7 +112,7 @@ impl Source {
                     return Err(HaliaError::Common("必须填写长度配置！".to_owned()));
                 }
             }
-            types::devices::modbus::Type::Bytes => {
+            types::devices::device::modbus::Type::Bytes => {
                 if conf.data_type.len.is_none() {
                     return Err(HaliaError::Common("必须填写长度配置！".to_owned()));
                 }

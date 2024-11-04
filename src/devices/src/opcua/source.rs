@@ -16,7 +16,7 @@ use tokio::{
     time,
 };
 use tracing::warn;
-use types::devices::opcua::{GroupConf, SourceConf, Subscriptionconf, VariableConf};
+use types::devices::device::opcua::{GroupConf, SourceConf, Subscriptionconf, VariableConf};
 
 use super::{transfer_monitoring_node, transfer_node_id};
 
@@ -48,7 +48,7 @@ impl Source {
         };
 
         match conf.typ {
-            types::devices::opcua::SourceType::Group => {
+            types::devices::device::opcua::SourceType::Group => {
                 let (group_stop_signal_tx, group_stop_signal_rx) = watch::channel(());
                 let join_handle_data = GroupJoinHandleData {
                     opcua_client: opcua_client.clone(),
@@ -60,8 +60,8 @@ impl Source {
                 source.group_stop_signal_tx = Some(group_stop_signal_tx);
                 source.group_join_handle = Some(join_handle);
             }
-            types::devices::opcua::SourceType::Subscription => {}
-            types::devices::opcua::SourceType::MonitoredItem => todo!(),
+            types::devices::device::opcua::SourceType::Subscription => {}
+            types::devices::device::opcua::SourceType::MonitoredItem => todo!(),
         }
 
         source
@@ -69,11 +69,11 @@ impl Source {
 
     pub fn validate_conf(conf: SourceConf) -> Result<()> {
         match conf.typ {
-            types::devices::opcua::SourceType::Group => match conf.group {
+            types::devices::device::opcua::SourceType::Group => match conf.group {
                 Some(_group) => Ok(()),
                 None => bail!("类型为组类型，配置为空"),
             },
-            types::devices::opcua::SourceType::Subscription => match conf.subscription {
+            types::devices::device::opcua::SourceType::Subscription => match conf.subscription {
                 Some(subscription) => {
                     if subscription.publishing_interval == 0 {
                         bail!("发布间隔必须大于0");
@@ -82,7 +82,7 @@ impl Source {
                 }
                 None => bail!("类型为订阅类型，配置为空"),
             },
-            types::devices::opcua::SourceType::MonitoredItem => match conf.monitored_item {
+            types::devices::device::opcua::SourceType::MonitoredItem => match conf.monitored_item {
                 Some(_monitored_item) => Ok(()),
                 None => bail!("类型为监控类型，配置为空"),
             },

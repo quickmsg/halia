@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::devices::modbus::{DataBits, Encode, LinkType, Mode, Parity, StopBits};
+use crate::devices::device::modbus::{DataBits, Encode, LinkType, Mode, Parity, StopBits};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct CustomizeConf {

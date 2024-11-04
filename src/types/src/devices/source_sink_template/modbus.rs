@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    devices::modbus::{Area, DataType},
+    devices::device::modbus::{Area, DataType},
     MessageRetain,
 };
 

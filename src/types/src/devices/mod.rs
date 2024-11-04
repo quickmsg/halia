@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 pub mod coap;
 pub mod device;
 pub mod device_template;
-pub mod modbus;
-pub mod opcua;
 pub mod source_sink_template;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]

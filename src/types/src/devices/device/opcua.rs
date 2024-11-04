@@ -1,22 +1,30 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct Conf {
-    pub addr: String,
+pub struct OpcuaConf {
+    pub host: String,
+    pub port: u16,
+    pub path: String,
     pub reconnect: u64, // 秒
+    pub auth_method: AuthMethod,
+    pub auth_username: Option<AuthUsername>,
+    pub auth_certificate: Option<AuthCertificate>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub enum AuthMethod {
     Anonymous,
     Username,
     X509,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct AuthUsername {
     pub username: String,
     pub password: String,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct AuthCertificate {
     pub cert: String,
     pub key: String,
@@ -33,7 +41,8 @@ pub struct IssuedToken {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct SourceConf {
-    pub source_type: SourceType,
+    #[serde(rename = "type")]
+    pub typ: SourceType,
     pub group: Option<GroupConf>,
     pub subscription: Option<Subscriptionconf>,
     pub monitored_item: Option<MonitoredItemconf>,
@@ -81,8 +90,8 @@ pub struct NodeId {
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct Identifer {
-    pub identifier_type: IdentifierType,
-    pub identifier_value: serde_json::Value,
+    pub typ: IdentifierType,
+    pub value: serde_json::Value,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

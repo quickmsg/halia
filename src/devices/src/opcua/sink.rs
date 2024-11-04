@@ -14,7 +14,7 @@ use tokio::{
     },
 };
 use tracing::warn;
-use types::devices::opcua::SinkConf;
+use types::devices::device::opcua::SinkConf;
 
 use super::transfer_node_id;
 
