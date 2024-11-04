@@ -100,7 +100,7 @@ pub enum IdentifierType {
     Numeric,
     String,
     Guid,
-    ByteString,
+    Opaque,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

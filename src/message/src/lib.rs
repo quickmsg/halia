@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fmt,
+    fmt::Debug,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -12,12 +13,21 @@ mod csv;
 mod json;
 mod ptorobuf;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MessageBatch {
     ts: u64,
     name: String,
     metadata: HashMap<String, MessageValue>,
     messages: Vec<Message>,
+}
+
+impl Debug for MessageBatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MessageBatch")
+            .field("ts", &self.ts)
+            .field("messages", &self.messages)
+            .finish()
+    }
 }
 
 #[derive(Clone)]
@@ -107,10 +117,18 @@ impl Default for MessageBatch {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Message {
     metadata: HashMap<String, MessageValue>,
     value: MessageValue,
+}
+
+impl Debug for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Message")
+            .field("value", &self.value)
+            .finish()
+    }
 }
 
 impl Message {

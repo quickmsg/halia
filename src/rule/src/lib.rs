@@ -65,7 +65,7 @@ pub async fn load_from_storage() -> HaliaResult<()> {
 
 pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
     let id = common::get_id();
-    create_rule_refs(&id, &req.ext.nodes).await?;
+    create_rule_refs(&id, &req.conf.nodes).await?;
 
     storage::rule::insert(&id, req).await?;
     events::insert_create(types::events::ResourceType::Rule, &id).await;
@@ -85,7 +85,7 @@ pub async fn search(
             on: db_rule.status == 1,
             conf: CreateUpdateRuleReq {
                 name: db_rule.name,
-                ext: serde_json::from_slice(&db_rule.conf).unwrap(),
+                conf: serde_json::from_slice(&db_rule.conf).unwrap(),
             },
         })
         .collect::<Vec<_>>();
@@ -140,11 +140,11 @@ pub async fn stop(id: String) -> HaliaResult<()> {
 
 pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
     storage::rule::reference::delete_many_by_rule_id(&id).await?;
-    create_rule_refs(&id, &req.ext.nodes).await?;
+    create_rule_refs(&id, &req.conf.nodes).await?;
 
     if let Some(mut rule) = GLOBAL_RULE_MANAGER.get_mut(&id) {
         let old_conf: RuleConf = serde_json::from_slice(&storage::rule::read_conf(&id).await?)?;
-        let new_conf = req.ext.clone();
+        let new_conf = req.conf.clone();
         if old_conf != new_conf {
             rule.update(old_conf, new_conf).await?;
         }

@@ -126,8 +126,8 @@ impl Opcua {
             .client()
             .unwrap();
 
-        // TODO
-        let endpoint: EndpointDescription = EndpointDescription::from(conf.host.as_ref());
+        let url = format!("opc.tcp://{}:{}{}", conf.host, conf.port, conf.path);
+        let endpoint: EndpointDescription = EndpointDescription::from(url.as_ref());
 
         let (session, event_loop) = match client
             .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
@@ -443,7 +443,7 @@ fn transfer_node_id(node_id: &types::devices::device::opcua::NodeId) -> NodeId {
             let guid: opcua_protocol::types::Guid = serde_json::from_value(value).unwrap();
             Identifier::Guid(guid)
         }
-        types::devices::device::opcua::IdentifierType::ByteString => {
+        types::devices::device::opcua::IdentifierType::Opaque => {
             let bs: opcua_protocol::types::ByteString = serde_json::from_value(value).unwrap();
             Identifier::ByteString(bs)
         }

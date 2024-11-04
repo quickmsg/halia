@@ -42,7 +42,7 @@ impl Rule {
     }
 
     async fn start(&mut self, conf: &RuleConf) -> HaliaResult<()> {
-        let (incoming_edges, outgoing_edges) = conf.get_edges();
+        let (mut incoming_edges, outgoing_edges) = conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
 
@@ -202,11 +202,14 @@ impl Rule {
             }
         }
 
-        // for (index, mut senders) in senders {
-        //     let index = incoming_edges.get_mut(&index).unwrap().pop().unwrap();
-        //     let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
-        //     run_direct_link(senders.pop().unwrap(), rx, self.stop_signal_tx.subscribe());
-        // }
+        debug!("{:?}", senders);
+        for (index, senders) in senders {
+            for sender in senders {
+                let index = incoming_edges.get_mut(&index).unwrap().pop().unwrap();
+                let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
+                run_direct_link(sender, rx, self.stop_signal_tx.subscribe());
+            }
+        }
 
         Ok(())
     }

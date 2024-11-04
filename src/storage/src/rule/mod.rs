@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS {} (
 }
 
 pub async fn insert(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
+    let conf = serde_json::to_vec(&req.conf)?;
     let ts = common::timestamp_millis() as i64;
     sqlx::query(
         format!(
@@ -168,7 +168,7 @@ pub async fn update_status(id: &String, status: bool) -> Result<()> {
 }
 
 pub async fn update(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
+    let conf = serde_json::to_vec(&req.conf)?;
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
         .bind(conf)

@@ -30,7 +30,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::io::ReaderStream;
-use tracing::{debug, error};
+use tracing::{error, warn};
 
 fn get_log_filename(id: &String) -> String {
     format!("logs/{}.log", id)
@@ -90,11 +90,10 @@ pub async fn tail_log(
                                     error!("log_tx closed, quit tailing log");
                                     return;
                                 }
-                                debug!("{}", log_tx.is_closed());
                                 if let Err(e) =
                                     log_tx.send(String::from_utf8_lossy(&buf).to_string())
                                 {
-                                    debug!("log_tx closed: {}", e);
+                                    warn!("log_tx closed: {}", e);
                                 }
                                 buf.clear();
                             }
@@ -107,7 +106,6 @@ pub async fn tail_log(
                 }
 
                 _ = log_tx.closed() => {
-                    debug!("log_tx closed, quit tailing log");
                     return;
                 }
             }
@@ -118,17 +116,13 @@ pub async fn tail_log(
         loop {
             match log_rx.recv().await {
                 Some(item) => {
-                    debug!("::: {:?}", item);
-                    debug!("here");
                     yield Ok(sse::Event::default().data(item));
                 }
                 None => {
-                    debug!("quit");
                     break;
                 }
             }
         }
-        debug!("quit");
     };
 
     Ok(Sse::new(stream))
@@ -199,7 +193,6 @@ impl Logger {
                         file.flush().await.unwrap();
                     }
                     _ = stop_signal_rx.changed() => {
-                        debug!("logger stop");
                         file.flush().await.unwrap();
                         return (stop_signal_rx, log_rx);
                     }
