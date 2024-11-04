@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{Message, MessageBatch, MessageValue};
 use anyhow::{bail, Result};
 use bytes::Bytes;
@@ -42,6 +44,7 @@ impl MessageBatch {
 impl From<serde_json::Value> for Message {
     fn from(value: serde_json::Value) -> Self {
         Self {
+            metadata: HashMap::new(),
             value: MessageValue::from(value),
         }
     }

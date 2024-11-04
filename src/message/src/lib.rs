@@ -109,10 +109,23 @@ impl Default for MessageBatch {
 
 #[derive(Clone, Debug)]
 pub struct Message {
+    metadata: HashMap<String, MessageValue>,
     value: MessageValue,
 }
 
 impl Message {
+    pub fn add_metadata(&mut self, key: String, value: MessageValue) {
+        self.metadata.insert(key, value);
+    }
+
+    pub fn remove_metadate(&mut self, key: &str) {
+        self.metadata.remove(key);
+    }
+
+    pub fn get_metadata(&self, key: &str) -> Option<&MessageValue> {
+        self.metadata.get(key)
+    }
+
     pub fn get_obj(&self) -> Option<&HashMap<String, MessageValue>> {
         match &self.value {
             MessageValue::Object(map) => Some(map),
@@ -209,6 +222,7 @@ impl Message {
 impl Default for Message {
     fn default() -> Self {
         Self {
+            metadata: HashMap::new(),
             value: MessageValue::Object(HashMap::new()),
         }
     }

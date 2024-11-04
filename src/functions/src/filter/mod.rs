@@ -1,11 +1,7 @@
-use std::sync::{atomic::AtomicBool, Arc};
-
 use anyhow::Result;
 use async_trait::async_trait;
 use common::log::LoggerItem;
 use message::Message;
-use tokio::sync::{mpsc::UnboundedSender, Mutex};
-use tracing::{debug, Dispatch};
 use types::rules::functions::filter::Conf;
 
 use crate::Function;
@@ -50,18 +46,28 @@ pub fn new(conf: Conf, logger: LoggerItem) -> Result<Box<dyn Function>> {
 impl Function for Node {
     async fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
         let messages = message_batch.get_messages_mut();
-        // messages.retain(|message| {
-        for message in messages {
+        for message in messages.iter_mut() {
+            let mut passed = false;
             for filter in &self.filters {
                 if filter.filter(message).await {
-                    debug!("Filter passed");
-                    // return true;
+                    passed = true;
+                    break;
                 }
+            }
+            if !passed {
+                message.add_metadata("keep".to_owned(), message::MessageValue::Boolean(true));
             }
         }
 
-        // false
-        // });
+        messages.retain_mut(|message| {
+            if let Some(value) = message.get_metadata("keep") {
+                match value {
+                    message::MessageValue::Boolean(b) => return *b,
+                    _ => todo!(),
+                }
+            }
+            true
+        });
 
         message_batch.len() != 0
     }

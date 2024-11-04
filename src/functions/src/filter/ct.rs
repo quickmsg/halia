@@ -1,10 +1,12 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{get_dynamic_value_from_json, log::LoggerItem};
+use common::{get_dynamic_value_from_json, halia_log, log::LoggerItem};
 use message::{Message, MessageValue};
 use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
+
+static NAME: &str = "过滤->包含";
 
 struct Ct {
     field: String,
@@ -30,13 +32,18 @@ pub fn new(conf: ItemConf, logger: LoggerItem) -> Result<Box<dyn Filter>> {
 #[async_trait]
 impl Filter for Ct {
     async fn filter(&self, msg: &Message) -> bool {
-        if self.logger.is_enable() {
-            self.logger.log(format!("Ct filter"));
-        }
-
         let value = match msg.get(&self.field) {
-            Some(value) => value,
-            None => return false,
+            Some(value) => {
+                halia_log!(
+                    self,
+                    format!("{}:    字段: {}, 值: {:?}", NAME, self.field, value)
+                );
+                value
+            }
+            None => {
+                halia_log!(self, format!("{}:    字段: {}不存在。", NAME, self.field));
+                return false;
+            }
         };
 
         let target_value = match (&self.const_value, &self.target_field) {
@@ -113,7 +120,6 @@ impl Filter for Ct {
                     })
                     .is_some(),
             },
-            MessageValue::Object(hash_map) => todo!(),
             _ => false,
         }
     }

@@ -247,3 +247,12 @@ impl LoggerItem {
         _ = self.tx.send(log);
     }
 }
+
+#[macro_export]
+macro_rules! halia_log {
+    ($self:expr, $msg:expr) => {
+        if $self.logger.is_enable() {
+            $self.logger.log($msg);
+        }
+    };
+}
