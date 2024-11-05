@@ -117,20 +117,32 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 impl Opcua {
     async fn connect(conf: &OpcuaConf) -> Result<(Arc<Session>, JoinHandle<StatusCode>)> {
         let mut client = ClientBuilder::new()
-            .application_name("test")
-            .application_uri("aasda")
+            .application_name("Halia")
+            .application_uri("https://halia.com")
+            .product_uri("https://halia.com")
             .trust_server_certs(true)
             .session_retry_limit(3)
             .create_sample_keypair(true)
-            .keep_alive_interval(Duration::from_millis(100))
             .client()
             .unwrap();
 
         let url = format!("opc.tcp://{}:{}{}", conf.host, conf.port, conf.path);
         let endpoint: EndpointDescription = EndpointDescription::from(url.as_ref());
 
+        let user_identity_token = match conf.auth_method {
+            types::devices::device::opcua::AuthMethod::Anonymous => IdentityToken::Anonymous,
+            types::devices::device::opcua::AuthMethod::Username => {
+                let username = conf.auth_username.as_ref().unwrap();
+                IdentityToken::UserName(username.username.clone(), username.password.clone())
+            }
+            types::devices::device::opcua::AuthMethod::X509 => {
+                let certificate = conf.auth_certificate.as_ref().unwrap();
+                // 将内容写入内存
+                IdentityToken::X509(todo!(), todo!())
+            }
+        };
         let (session, event_loop) = match client
-            .new_session_from_endpoint(endpoint, IdentityToken::Anonymous)
+            .new_session_from_endpoint(endpoint, user_identity_token)
             .await
         {
             Ok((session, event_loop)) => (session, event_loop),
@@ -219,6 +231,22 @@ impl Opcua {
         join_handle_data.opcua_conf = opcua_conf;
         let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
+    }
+
+    fn get_source_conf(
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<SourceConf> {
+        let customize_conf: SourceConf = serde_json::from_value(customize_conf).unwrap();
+        let template_conf: SourceConf = serde_json::from_value(template_conf).unwrap();
+        Ok(SourceConf {
+            typ: customize_conf.typ,
+            group: customize_conf.group.or(template_conf.group),
+            subscription: customize_conf.subscription.or(template_conf.subscription),
+            monitored_item: customize_conf
+                .monitored_item
+                .or(template_conf.monitored_item),
+        })
     }
 }
 

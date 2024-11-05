@@ -9,6 +9,8 @@ pub struct OpcuaConf {
     pub auth_method: AuthMethod,
     pub auth_username: Option<AuthUsername>,
     pub auth_certificate: Option<AuthCertificate>,
+
+    // pub use_security: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

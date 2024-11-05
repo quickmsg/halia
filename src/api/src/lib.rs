@@ -13,6 +13,7 @@ use tokio::net::TcpListener;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::{ServeDir, ServeFile},
+    trace::TraceLayer,
 };
 use types::Dashboard;
 use user_api::auth;
@@ -110,7 +111,8 @@ pub async fn start(port: u16) {
                 .allow_origin(Any)
                 .allow_methods(Any)
                 .allow_headers(Any),
-        );
+        )
+        .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
