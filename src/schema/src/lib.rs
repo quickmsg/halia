@@ -146,15 +146,18 @@ pub async fn new_encoder(
     schema_id: &Option<String>,
 ) -> HaliaResult<Box<dyn Encoder>> {
     match encode_type {
-        EncodeType::Template => match schema_id {
-            Some(schema_id) => {
-                let conf = storage::schema::read_conf(schema_id).await?;
-                let conf: TemplateEncodeConf = serde_json::from_slice(&conf)?;
-                encoders::template::new(conf.template)
-            }
-            None => return Err(HaliaError::Common("必须提供schema_id".to_owned())),
-        },
+        // EncodeType::Template => match schema_id {
+        //     Some(schema_id) => {
+        //         let conf = storage::schema::read_conf(schema_id).await?;
+        //         let conf: TemplateEncodeConf = serde_json::from_slice(&conf)?;
+        //         encoders::template::new(conf.template)
+        //     }
+        //     None => return Err(HaliaError::Common("必须提供schema_id".to_owned())),
+        // },
+        EncodeType::Json => {}
     }
+
+    todo!()
 }
 
 pub enum ResourceType {

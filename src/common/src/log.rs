@@ -171,6 +171,10 @@ impl Logger {
         }
     }
 
+    pub fn status(&self) -> bool {
+        self.enable.load(Ordering::Relaxed)
+    }
+
     pub async fn start(&mut self, id: &String) {
         if self.enable.swap(true, std::sync::atomic::Ordering::Relaxed) {
             return;

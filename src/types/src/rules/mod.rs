@@ -161,6 +161,7 @@ pub struct SearchRulesResp {
 pub struct SearchRulesItemResp {
     pub id: String,
     pub on: bool,
+    pub log_enable: bool,
     pub conf: CreateUpdateRuleReq,
 }
 

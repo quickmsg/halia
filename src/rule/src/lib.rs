@@ -80,13 +80,20 @@ pub async fn search(
     let (count, db_rules) = storage::rule::query(pagination, query_params).await?;
     let rules = db_rules
         .into_iter()
-        .map(|db_rule| SearchRulesItemResp {
-            id: db_rule.id,
-            on: db_rule.status == 1,
-            conf: CreateUpdateRuleReq {
-                name: db_rule.name,
-                conf: serde_json::from_slice(&db_rule.conf).unwrap(),
-            },
+        .map(|db_rule| {
+            let log_enable = match GLOBAL_RULE_MANAGER.get(&db_rule.id) {
+                Some(rule) => rule.get_log_status(),
+                None => false,
+            };
+            SearchRulesItemResp {
+                id: db_rule.id,
+                on: db_rule.status == 1,
+                conf: CreateUpdateRuleReq {
+                    name: db_rule.name,
+                    conf: serde_json::from_slice(&db_rule.conf).unwrap(),
+                },
+                log_enable,
+            }
         })
         .collect::<Vec<_>>();
 

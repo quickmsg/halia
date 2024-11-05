@@ -24,7 +24,6 @@ use crate::segment::{get_segments, start_segment, take_sink_ids, take_source_ids
 pub struct Rule {
     id: String,
     stop_signal_tx: broadcast::Sender<()>,
-
     logger: Logger,
 }
 
@@ -39,6 +38,10 @@ impl Rule {
         rule.start(conf).await?;
 
         Ok(rule)
+    }
+
+    pub fn get_log_status(&self) -> bool {
+        self.logger.status()
     }
 
     async fn start(&mut self, conf: &RuleConf) -> HaliaResult<()> {
