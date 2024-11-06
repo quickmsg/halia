@@ -2,6 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
+use tracing::debug;
 use types::rules::functions::filter::ItemConf;
 
 use super::Filter;
@@ -43,6 +44,8 @@ impl Filter for Eq {
             Some(value) => value,
             None => return false,
         };
+
+        debug!("value: {:?}", value);
         let target_value = match (&self.const_value, &self.target_field) {
             (Some(const_value), None) => const_value,
             (None, Some(target_field)) => match msg.get(&target_field) {
@@ -51,6 +54,9 @@ impl Filter for Eq {
             },
             _ => unreachable!(),
         };
+
+        debug!("target_value: {:?}", target_value);
+
 
         value == target_value
     }

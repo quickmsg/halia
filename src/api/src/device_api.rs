@@ -129,7 +129,7 @@ async fn create_source(
     Path(device_id): Path<String>,
     Json(req): Json<types::devices::device::source_sink::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_source(device_id, None, req).await?;
+    devices::device_create_source(device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -161,7 +161,7 @@ async fn write_source_value(
 async fn delete_source(
     Path((device_id, source_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_source(device_id, source_id).await?;
+    devices::device_delete_source(device_id, source_id).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -169,7 +169,7 @@ async fn create_sink(
     Path(device_id): Path<String>,
     Json(req): Json<types::devices::device::source_sink::CreateUpdateReq>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::create_sink(device_id, None, req).await?;
+    devices::device_create_sink(device_id, req).await?;
     Ok(AppSuccess::empty())
 }
 
@@ -193,7 +193,7 @@ async fn update_sink(
 async fn delete_sink(
     Path((device_id, sink_id)): Path<(String, String)>,
 ) -> AppResult<AppSuccess<()>> {
-    devices::delete_sink(device_id, sink_id).await?;
+    devices::device_delete_sink(device_id, sink_id).await?;
     Ok(AppSuccess::empty())
 }
 

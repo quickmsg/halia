@@ -17,7 +17,6 @@ pub struct SourceSink {
     pub device_template_id: String,
     pub source_sink_type: i32,
     pub name: String,
-    pub des: Option<Vec<u8>>,
     pub conf_type: i32,
     pub template_id: Option<String>,
     pub conf: Vec<u8>,
@@ -74,7 +73,7 @@ async fn insert(
         format!(
             r#"INSERT INTO {} 
             (id, device_template_id, source_sink_type, name, conf_type, template_id, conf, ts) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),

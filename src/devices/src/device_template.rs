@@ -193,7 +193,7 @@ pub async fn create_sink(
         super::create_sink(device_id, Some(&sink_id), device_sink_req.clone()).await?;
     }
 
-    storage::device::template_source_sink::insert_source(&sink_id, &device_template_id, req)
+    storage::device::template_source_sink::insert_sink(&sink_id, &device_template_id, req)
         .await?;
     Ok(())
 }

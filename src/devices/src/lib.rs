@@ -461,7 +461,20 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn create_source(
+pub async fn device_create_source(
+    device_id: String,
+    req: source_sink::CreateUpdateReq,
+) -> HaliaResult<()> {
+    let conf_type: ConfType = storage::device::device::read_conf_type(&device_id)
+        .await?
+        .try_into()?;
+    if conf_type == ConfType::Template {
+        return Err(HaliaError::Common("模板设备不能创建源".to_string()));
+    }
+    create_source(device_id, None, req).await
+}
+
+pub(crate) async fn create_source(
     device_id: String,
     device_template_source_id: Option<&String>,
     req: source_sink::CreateUpdateReq,
@@ -598,7 +611,16 @@ pub async fn write_source_value(
         .await
 }
 
-pub async fn delete_source(device_id: String, source_id: String) -> HaliaResult<()> {
+pub async fn device_delete_source(device_id: String, source_id: String) -> HaliaResult<()> {
+    let conf_type = storage::device::device::read_conf_type(&device_id).await?;
+    let conf_type: ConfType = conf_type.try_into()?;
+    if conf_type == ConfType::Template {
+        return Err(HaliaError::Common("模板设备不能删除源".to_string()));
+    }
+    delete_source(device_id, source_id).await
+}
+
+pub(crate) async fn delete_source(device_id: String, source_id: String) -> HaliaResult<()> {
     let rule_ref_cnt = storage::rule::reference::count_cnt_by_resource_id(&source_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
@@ -625,7 +647,20 @@ pub async fn get_source_rx(
     }
 }
 
-pub async fn create_sink(
+pub async fn device_create_sink(
+    device_id: String,
+    req: source_sink::CreateUpdateReq,
+) -> HaliaResult<()> {
+    let conf_type: ConfType = storage::device::device::read_conf_type(&device_id)
+        .await?
+        .try_into()?;
+    if conf_type == ConfType::Template {
+        return Err(HaliaError::Common("模板设备不能创建动作。".to_string()));
+    }
+    create_sink(device_id, None, req).await
+}
+
+pub(crate) async fn create_sink(
     device_id: String,
     device_template_sink_id: Option<&String>,
     req: source_sink::CreateUpdateReq,
@@ -735,7 +770,16 @@ pub async fn update_sink(
     Ok(())
 }
 
-pub async fn delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> {
+pub async fn device_delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> {
+    let conf_type = storage::device::device::read_conf_type(&device_id).await?;
+    let conf_type: ConfType = conf_type.try_into()?;
+    if conf_type == ConfType::Template {
+        return Err(HaliaError::Common("模板设备不能删除源".to_string()));
+    }
+    delete_sink(device_id, sink_id).await
+}
+
+pub(crate) async fn delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> {
     let rule_ref_cnt = storage::rule::reference::count_cnt_by_resource_id(&sink_id).await?;
     if rule_ref_cnt > 0 {
         return Err(HaliaError::DeleteRefing);
