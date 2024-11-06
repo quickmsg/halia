@@ -2,28 +2,53 @@ use std::collections::HashMap;
 
 use message::RuleMessageBatch;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use types::rules::Conf;
+use tracing::debug;
+use types::rules::{Conf, NodeType};
 
 pub struct Graph {
-    source_ids: Vec<usize>,
-    sink_ids: Vec<usize>,
-    conf: Conf,
+    ids: Vec<usize>,
+    mut_ids: Vec<usize>,
+    mut_incoming_edges: HashMap<usize, Vec<usize>>,
+    incoming_edges: HashMap<usize, Vec<usize>>,
+    mut_outgoing_edges: HashMap<usize, Vec<usize>>,
+    outgoing_edges: HashMap<usize, Vec<usize>>,
+    node_types: HashMap<usize, NodeType>,
 }
 
 impl Graph {
-    pub fn new(conf: Conf) -> Self {
+    pub fn new(conf: &Conf) -> Self {
+        let (incoming_edges, outgoing_edges) = Self::get_edges(&conf);
+        let mut_incoming_edges = incoming_edges.clone();
+        let mut_outgoing_edges = outgoing_edges.clone();
+        let ids = Self::get_ids(&conf);
+        let mut_ids = ids.clone();
+
+        let node_types = conf
+            .nodes
+            .iter()
+            .map(|node| (node.index, node.node_type.clone()))
+            .collect();
+
         Self {
-            source_ids: vec![],
-            sink_ids: vec![],
-            conf,
+            ids,
+            mut_ids,
+            incoming_edges,
+            mut_incoming_edges,
+            outgoing_edges,
+            mut_outgoing_edges,
+            node_types,
         }
     }
 
-    fn get_edges(&self) {
+    pub fn validate(&self) -> bool {
+        todo!()
+    }
+
+    fn get_edges(conf: &Conf) -> (HashMap<usize, Vec<usize>>, HashMap<usize, Vec<usize>>) {
         let mut incoming_edges = HashMap::new();
         let mut outgoing_edges = HashMap::new();
 
-        for edge in self.conf.edges.iter() {
+        for edge in conf.edges.iter() {
             incoming_edges
                 .entry(edge.target)
                 .or_insert_with(Vec::new)
@@ -34,57 +59,58 @@ impl Graph {
                 .push(edge.target);
         }
 
-        // (incoming_edges, outgoing_edges)
+        (incoming_edges, outgoing_edges)
+    }
+
+    fn get_ids(conf: &Conf) -> Vec<usize> {
+        conf.nodes.iter().map(|node| node.index).collect()
+    }
+
+    pub fn get_outgoing_edges(&self) -> &HashMap<usize, Vec<usize>> {
+        &self.outgoing_edges
+    }
+
+    pub fn get_incoming_edges(&self) -> &HashMap<usize, Vec<usize>> {
+        &self.incoming_edges
     }
 
     /// 将最开始的节点取出，并从ids里面删除
-    pub(crate) fn take_source_ids(
-        ids: &mut Vec<usize>,
-        incoming_edges: &mut HashMap<usize, Vec<usize>>,
-        outgoing_edges: &mut HashMap<usize, Vec<usize>>,
-    ) -> Vec<usize> {
-        let source_ids: Vec<_> = ids
+    pub fn take_source_ids(&mut self) -> Vec<usize> {
+        let source_ids: Vec<_> = self
+            .mut_ids
             .iter()
-            .filter(|node_id| !incoming_edges.contains_key(*node_id))
+            .filter(|node_id| !self.mut_incoming_edges.contains_key(*node_id))
             .copied()
             .collect();
 
-        ids.retain(|id| !source_ids.contains(id));
+        self.mut_ids.retain(|id| !source_ids.contains(id));
         for source_id in &source_ids {
-            // remove_incoming_edge(source_id, incoming_edges, outgoing_edges);
+            self.remove_incoming_edge(source_id);
         }
 
         source_ids
     }
 
-    // 不要去除log的id
-    pub(crate) fn take_sink_ids(
-        ids: &mut Vec<usize>,
-        incoming_edges: &mut HashMap<usize, Vec<usize>>,
-        outgoing_edges: &mut HashMap<usize, Vec<usize>>,
-    ) -> Vec<usize> {
-        let sink_ids: Vec<_> = ids
+    pub fn take_sink_ids(&mut self) -> Vec<usize> {
+        let sink_ids: Vec<_> = self
+            .mut_ids
             .iter()
-            .filter(|node_id| !outgoing_edges.contains_key(*node_id))
+            .filter(|node_id| !self.outgoing_edges.contains_key(*node_id))
             .copied()
             .collect();
 
-        ids.retain(|id| !sink_ids.contains(id));
+        self.mut_ids.retain(|id| !sink_ids.contains(id));
         for sink_id in &sink_ids {
-            // remove_incoming_edge(sink_id, incoming_edges, outgoing_edges);
+            self.remove_incoming_edge(sink_id);
         }
 
         sink_ids
     }
 
-    fn remove_incoming_edge(
-        last_id: &usize,
-        incoming_edges: &mut HashMap<usize, Vec<usize>>,
-        outgoing_edges: &HashMap<usize, Vec<usize>>,
-    ) {
-        if let Some(target_ids) = outgoing_edges.get(&last_id) {
+    pub fn remove_incoming_edge(&mut self, last_id: &usize) {
+        if let Some(target_ids) = self.mut_outgoing_edges.get(&last_id) {
             for target_id in target_ids {
-                incoming_edges.remove(target_id);
+                self.mut_incoming_edges.remove(target_id);
             }
         }
     }
@@ -126,5 +152,185 @@ impl Graph {
             }
         }
         txs
+    }
+
+    pub fn get_segments(&mut self) -> Vec<Vec<usize>> {
+        let mut segments = vec![];
+        while self.mut_ids.len() > 0 {
+            let source_ids: Vec<_> = self
+                .mut_ids
+                .iter()
+                .filter(|node_id| !self.mut_incoming_edges.contains_key(*node_id))
+                .copied()
+                .collect();
+            debug!("source_ids: {:?}", source_ids);
+            for source_id in source_ids.iter() {
+                let segment_ids = self.get_segment_ids(*source_id);
+                self.mut_ids.retain(|id| !segment_ids.contains(id));
+                self.remove_incoming_edge(&segment_ids.last().unwrap());
+                segments.push(segment_ids);
+            }
+        }
+
+        segments
+    }
+
+    fn get_segment_ids(&self, source_id: usize) -> Vec<usize> {
+        let mut ids = vec![source_id];
+
+        match self.node_types.get(&source_id).unwrap() {
+            types::rules::NodeType::Merge | types::rules::NodeType::Window => ids,
+            _ => {
+                let mut current_id = source_id;
+                loop {
+                    if let Some(outgoing_nodes) = self.mut_outgoing_edges.get(&current_id) {
+                        if outgoing_nodes.len() == 1 {
+                            current_id = outgoing_nodes[0];
+                            if let Some(incoming_nodes) = self.mut_incoming_edges.get(&current_id) {
+                                if incoming_nodes.len() == 1 {
+                                    match self.node_types.get(&current_id).unwrap() {
+                                        types::rules::NodeType::Merge
+                                        | types::rules::NodeType::Window
+                                        | types::rules::NodeType::Databoard => break,
+                                        _ => {}
+                                    }
+                                    ids.push(current_id);
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                ids
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_graph() {
+        let conf = Conf {
+            nodes: vec![
+                types::rules::Node {
+                    index: 0,
+                    node_type: types::rules::NodeType::DeviceSource,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 1,
+                    node_type: types::rules::NodeType::AppSource,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 2,
+                    node_type: types::rules::NodeType::DeviceSink,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 3,
+                    node_type: types::rules::NodeType::AppSink,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 4,
+                    node_type: types::rules::NodeType::Databoard,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 5,
+                    node_type: types::rules::NodeType::BlackHole,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 6,
+                    node_type: types::rules::NodeType::Merge,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 7,
+                    node_type: types::rules::NodeType::Window,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 8,
+                    node_type: types::rules::NodeType::Filter,
+                    conf: serde_json::json!({}),
+                },
+                types::rules::Node {
+                    index: 9,
+                    node_type: types::rules::NodeType::Computer,
+                    conf: serde_json::json!({}),
+                },
+            ],
+            edges: vec![
+                types::rules::Edge {
+                    source: 0,
+                    target: 6,
+                },
+                types::rules::Edge {
+                    source: 1,
+                    target: 6,
+                },
+                types::rules::Edge {
+                    source: 6,
+                    target: 7,
+                },
+                types::rules::Edge {
+                    source: 7,
+                    target: 8,
+                },
+                types::rules::Edge {
+                    source: 8,
+                    target: 9,
+                },
+                types::rules::Edge {
+                    source: 9,
+                    target: 2,
+                },
+                types::rules::Edge {
+                    source: 9,
+                    target: 3,
+                },
+                types::rules::Edge {
+                    source: 9,
+                    target: 4,
+                },
+                types::rules::Edge {
+                    source: 9,
+                    target: 5,
+                },
+            ],
+        };
+
+        let mut graph = Graph::new(&conf);
+
+        let mut source_ids = graph.take_source_ids();
+        source_ids.sort();
+        assert_eq!(source_ids, vec![0, 1]);
+
+        let mut sink_ids = graph.take_sink_ids();
+        sink_ids.sort();
+        assert_eq!(sink_ids, vec![2, 3, 4, 5]);
+
+        return;
+
+        let mut segments = graph.get_segments();
+        segments.iter_mut().for_each(|segment| segment.sort());
+
+        let segment = segments.iter().find(|segment| segment.contains(&6));
+        assert_eq!(segment, Some(&vec![6]));
+
+        let segment = segments.iter().find(|segment| segment.contains(&7));
+        assert_eq!(segment, Some(&vec![7]));
+
+        let segment = segments.iter().find(|segment| segment.contains(&8));
+        assert_eq!(segment, Some(&vec![8, 9]));
     }
 }

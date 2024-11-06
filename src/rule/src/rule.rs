@@ -19,7 +19,10 @@ use types::rules::{
     NodeType, ReadRuleNodeResp,
 };
 
-use crate::segment::{get_segments, start_segment, take_sink_ids, take_source_ids, BlackHole};
+use crate::{
+    graph::Graph,
+    segment::{get_segments, start_segment, take_sink_ids, take_source_ids, BlackHole},
+};
 
 pub struct Rule {
     id: String,
@@ -52,6 +55,21 @@ impl Rule {
         let mut node_map = HashMap::new();
         for node in conf.nodes.iter() {
             node_map.insert(node.index, node.clone());
+        }
+
+        {
+            let mut graph = Graph::new(&conf);
+            let source_ids = graph.take_source_ids();
+            let outgoing_edges = graph.get_outgoing_edges();
+            let mut receivers = Self::get_source_rxs(source_ids, &node_map, outgoing_edges).await?;
+
+            let sink_ids = graph.take_sink_ids();
+            let incoming_edges = graph.get_incoming_edges();
+            let mut senders = self
+                .get_sink_txs(sink_ids, &node_map, &incoming_edges)
+                .await?;
+
+            let segments = graph.get_segments();
         }
 
         let mut ids: Vec<usize> = conf.nodes.iter().map(|node| node.index).collect();
