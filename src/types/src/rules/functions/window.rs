@@ -11,6 +11,7 @@ pub struct Conf {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "snake_case")]
 pub enum Type {
     TimeThmbling,
     TimeHopping,

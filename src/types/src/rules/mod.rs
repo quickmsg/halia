@@ -23,11 +23,11 @@ pub struct QueryParams {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateUpdateRuleReq {
     pub name: String,
-    pub conf: RuleConf,
+    pub conf: Conf,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct RuleConf {
+pub struct Conf {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
 }
@@ -54,7 +54,6 @@ pub enum NodeType {
     Merge,
     Window,
     Filter,
-    Operator,
     Computer,
     DeviceSink,
     AppSink,
@@ -117,7 +116,7 @@ pub struct ListRuleResp {
     pub name: String,
 }
 
-impl RuleConf {
+impl Conf {
     pub fn get_edges(&self) -> (HashMap<usize, Vec<usize>>, HashMap<usize, Vec<usize>>) {
         let mut incoming_edges = HashMap::new();
         let mut outgoing_edges = HashMap::new();

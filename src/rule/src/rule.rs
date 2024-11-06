@@ -15,8 +15,8 @@ use tokio::{
 };
 use tracing::{debug, error};
 use types::rules::{
-    AppSinkNode, AppSourceNode, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node, NodeType,
-    ReadRuleNodeResp, RuleConf,
+    AppSinkNode, AppSourceNode, Conf, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node,
+    NodeType, ReadRuleNodeResp,
 };
 
 use crate::segment::{get_segments, start_segment, take_sink_ids, take_source_ids, BlackHole};
@@ -28,7 +28,7 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub async fn new(id: String, conf: &RuleConf) -> HaliaResult<Self> {
+    pub async fn new(id: String, conf: &Conf) -> HaliaResult<Self> {
         let (stop_signal_tx, _) = broadcast::channel(1);
         let mut rule = Self {
             id: id,
@@ -44,7 +44,7 @@ impl Rule {
         self.logger.status()
     }
 
-    async fn start(&mut self, conf: &RuleConf) -> HaliaResult<()> {
+    async fn start(&mut self, conf: &Conf) -> HaliaResult<()> {
         let (mut incoming_edges, outgoing_edges) = conf.get_edges();
         let mut tmp_incoming_edges = incoming_edges.clone();
         let mut tmp_outgoing_edges = outgoing_edges.clone();
@@ -113,22 +113,27 @@ impl Rule {
                         merge::run(rxs, n_txs, self.stop_signal_tx.subscribe());
                         break;
                     }
-                    // NodeType::Window => {
-                    //     let source_ids = incoming_edges.get(&id).unwrap();
-                    //     let source_id = source_ids[0];
-                    //     let rx = receivers.get_mut(&source_id).unwrap().pop().unwrap();
-                    //     let (tx, _) = broadcast::channel::<MessageBatch>(16);
-                    //     let mut rxs = vec![];
-                    //     let cnt = outgoing_edges.get(&id).unwrap().len();
-                    //     for _ in 0..cnt {
-                    //         rxs.push(tx.subscribe());
-                    //     }
-                    //     receivers.insert(id, rxs);
-                    //     let window_conf: WindowConf =
-                    //         serde_json::from_value(node.conf.clone())?;
-                    //     window::run(window_conf, rx, tx, self.stop_signal_tx.subscribe())
-                    //         .unwrap();
-                    // }
+                    NodeType::Window => {
+                        let source_ids = incoming_edges.get(&index).unwrap();
+                        let mut rxs = vec![];
+                        for source_id in source_ids {
+                            rxs.push(receivers.get_mut(source_id).unwrap().pop().unwrap());
+                        }
+                        let mut n_rxs = vec![];
+                        let mut n_txs = vec![];
+                        let cnt = outgoing_edges.get(&index).unwrap().len();
+                        for _ in 0..cnt {
+                            let (tx, rx) = unbounded_channel();
+                            n_rxs.push(rx);
+                            n_txs.push(tx);
+                        }
+                        receivers.insert(index, n_rxs);
+
+                        let conf: types::rules::functions::window::Conf =
+                            serde_json::from_value(node.conf.clone())?;
+                        // window::run(conf, n_rxs, n_txs, self.stop_signal_tx.subscribe()).unwrap();
+                        break;
+                    }
                     NodeType::Filter => {
                         let conf: types::rules::functions::filter::Conf =
                             serde_json::from_value(node.conf.clone())?;
@@ -141,14 +146,13 @@ impl Rule {
                         functions.push(computes::new(conf)?);
                         indexes.push(index);
                     }
-                    NodeType::Operator => todo!(),
                     _ => {
                         debug!("{:?}", node);
                     }
                 }
             }
 
-            // merge 节点的indexes长度为0
+            // merge、window 节点的indexes长度为0
             if indexes.len() > 0 {
                 let mut segment_rxs = vec![];
                 let mut segment_txs = vec![];
@@ -225,7 +229,7 @@ impl Rule {
         self.logger.stop().await;
     }
 
-    pub async fn read(conf: RuleConf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
+    pub async fn read(conf: Conf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
         let mut read_rule_node_resp = vec![];
         for node in conf.nodes.iter() {
             match node.node_type {
@@ -298,7 +302,6 @@ impl Rule {
                 NodeType::Merge
                 | NodeType::Window
                 | NodeType::Filter
-                | NodeType::Operator
                 | NodeType::Computer
                 | NodeType::BlackHole => {}
             }
@@ -317,7 +320,7 @@ impl Rule {
         Ok(())
     }
 
-    pub async fn update(&mut self, _old_conf: RuleConf, new_conf: RuleConf) -> HaliaResult<()> {
+    pub async fn update(&mut self, _old_conf: Conf, new_conf: Conf) -> HaliaResult<()> {
         self.stop().await?;
         self.start(&new_conf).await?;
         Ok(())
@@ -452,4 +455,42 @@ fn run_direct_link(
             }
         }
     });
+}
+
+fn get_rxs(
+    index: &usize,
+    incoming_edges: &HashMap<usize, Vec<usize>>,
+    receivers: &mut HashMap<usize, Vec<UnboundedReceiver<RuleMessageBatch>>>,
+    senders: &HashMap<usize, Vec<UnboundedSender<RuleMessageBatch>>>,
+) -> Vec<UnboundedReceiver<RuleMessageBatch>> {
+    let mut rxs = vec![];
+
+    let source_ids = incoming_edges.get(index).unwrap();
+    for source_id in source_ids {
+        if let Some(exist_rxs) = receivers.get_mut(source_id) {
+            if let Some(rx) = exist_rxs.pop() {
+                rxs.push(rx);
+            }
+        } else {
+            let (tx, rx) = unbounded_channel();
+            rxs.push(rx);
+            todo!()
+        }
+    }
+
+    rxs
+}
+
+fn get_txs(
+    outgoing_edges: &HashMap<usize, Vec<usize>>,
+    senders: &mut HashMap<usize, Vec<UnboundedSender<RuleMessageBatch>>>,
+) -> Vec<UnboundedSender<RuleMessageBatch>> {
+    let mut txs = vec![];
+    for (_, tx) in outgoing_edges {
+        for _ in tx {
+            let (tx, rx) = unbounded_channel();
+            txs.push(tx);
+        }
+    }
+    txs
 }

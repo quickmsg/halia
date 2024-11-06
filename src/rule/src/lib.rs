@@ -8,13 +8,14 @@ use dashmap::DashMap;
 use rule::Rule;
 use types::{
     rules::{
-        AppSinkNode, AppSourceNode, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
-        DeviceSourceNode, Node, QueryParams, ReadRuleNodeResp, RuleConf, SearchRulesItemResp,
+        AppSinkNode, AppSourceNode, Conf, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
+        DeviceSourceNode, Node, QueryParams, ReadRuleNodeResp, SearchRulesItemResp,
         SearchRulesResp, Summary,
     },
     Pagination,
 };
 
+mod graph;
 pub mod rule;
 mod segment;
 
@@ -118,7 +119,7 @@ pub async fn start(id: String) -> HaliaResult<()> {
     add_rule_on_count();
     events::insert_update(types::events::ResourceType::Rule, &id).await;
     let db_conf = storage::rule::read_conf(&id).await?;
-    let conf: RuleConf = serde_json::from_slice(&db_conf)?;
+    let conf: Conf = serde_json::from_slice(&db_conf)?;
 
     let rule = Rule::new(id.clone(), &conf).await?;
     GLOBAL_RULE_MANAGER.insert(id.clone(), rule);
@@ -150,7 +151,7 @@ pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
     create_rule_refs(&id, &req.conf.nodes).await?;
 
     if let Some(mut rule) = GLOBAL_RULE_MANAGER.get_mut(&id) {
-        let old_conf: RuleConf = serde_json::from_slice(&storage::rule::read_conf(&id).await?)?;
+        let old_conf: Conf = serde_json::from_slice(&storage::rule::read_conf(&id).await?)?;
         let new_conf = req.conf.clone();
         if old_conf != new_conf {
             rule.update(old_conf, new_conf).await?;
