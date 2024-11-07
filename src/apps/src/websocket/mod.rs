@@ -126,10 +126,11 @@ impl App for Websocket {
     }
 
     // TODO
-    async fn get_source_rx(
+    async fn get_source_rxs(
         &self,
         source_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+        cnt: usize,
+    ) -> HaliaResult<Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>> {
         todo!()
         // match self.sinks.get(source_id) {
         //     Some(sink) => Ok(sink.mb_tx.clone()),
@@ -171,12 +172,13 @@ impl App for Websocket {
         }
     }
 
-    async fn get_sink_tx(
+    async fn get_sink_txs(
         &self,
         sink_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+        cnt: usize,
+    ) -> HaliaResult<Vec<mpsc::UnboundedSender<RuleMessageBatch>>> {
         match self.sinks.get(sink_id) {
-            Some(sink) => Ok(sink.mb_tx.clone()),
+            Some(sink) => Ok(sink.get_txs(cnt)),
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }

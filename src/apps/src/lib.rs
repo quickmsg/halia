@@ -99,10 +99,11 @@ pub trait App: Send + Sync {
     async fn delete_source(&mut self, _source_id: String) -> HaliaResult<()> {
         Err(HaliaError::NotSupportResource)
     }
-    async fn get_source_rx(
+    async fn get_source_rxs(
         &self,
         _source_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+        _cnt: usize,
+    ) -> HaliaResult<Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>> {
         Err(HaliaError::NotSupportResource)
     }
 
@@ -114,10 +115,11 @@ pub trait App: Send + Sync {
         new_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: String) -> HaliaResult<()>;
-    async fn get_sink_tx(
+    async fn get_sink_txs(
         &self,
         sink_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>>;
+        cnt: usize,
+    ) -> HaliaResult<Vec<mpsc::UnboundedSender<RuleMessageBatch>>>;
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
@@ -407,12 +409,13 @@ pub async fn delete_source(app_id: String, source_id: String) -> HaliaResult<()>
     Ok(())
 }
 
-pub async fn get_source_rx(
+pub async fn get_source_rxs(
     app_id: &String,
     source_id: &String,
-) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+    cnt: usize,
+) -> HaliaResult<Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>> {
     if let Some(app) = GLOBAL_APP_MANAGER.get(app_id) {
-        app.get_source_rx(source_id).await
+        app.get_source_rxs(source_id, cnt).await
     } else {
         let name = storage::app::read_name(app_id).await?;
         Err(HaliaError::Stopped(name))
@@ -515,12 +518,13 @@ pub async fn delete_sink(app_id: String, sink_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn get_sink_tx(
+pub async fn get_sink_txs(
     app_id: &String,
     sink_id: &String,
-) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+    cnt: usize,
+) -> HaliaResult<Vec<mpsc::UnboundedSender<RuleMessageBatch>>> {
     if let Some(app) = GLOBAL_APP_MANAGER.get(app_id) {
-        app.get_sink_tx(sink_id).await
+        app.get_sink_txs(sink_id, cnt).await
     } else {
         let name = storage::app::read_name(app_id).await?;
         Err(HaliaError::Stopped(name))

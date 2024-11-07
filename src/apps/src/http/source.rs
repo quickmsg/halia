@@ -20,6 +20,7 @@ use super::{build_basic_auth, build_headers};
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
+    pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
 }
 
 pub struct JoinHandleData {
@@ -46,6 +47,7 @@ impl Source {
         Self {
             stop_signal_tx,
             join_handle: Some(join_handle),
+            mb_txs: vec![],
         }
     }
 
@@ -147,10 +149,13 @@ impl Source {
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn get_rx(&mut self) -> UnboundedReceiver<RuleMessageBatch> {
-        let mut join_handle_data = self.stop().await;
-        let (tx, rx) = unbounded_channel();
-        join_handle_data.mb_txs.push(tx);
-        rx
+    pub async fn get_rxs(&mut self, cnt: usize) -> Vec<UnboundedReceiver<RuleMessageBatch>> {
+        let mut rxs = vec![];
+        for _ in 0..cnt {
+            let (tx, rx) = unbounded_channel();
+            self.mb_txs.push(tx);
+            rxs.push(rx);
+        }
+        rxs
     }
 }

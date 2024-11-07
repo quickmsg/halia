@@ -227,9 +227,13 @@ impl Source {
         }
     }
 
-    pub fn get_rx(&mut self) -> mpsc::UnboundedReceiver<RuleMessageBatch> {
-        let (tx, rx) = mpsc::unbounded_channel();
-        self.mb_txs.push(tx);
-        rx
+    pub fn get_rxs(&mut self, cnt: usize) -> Vec<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+        let mut rxs = vec![];
+        for _ in 0..cnt {
+            let (tx, rx) = mpsc::unbounded_channel();
+            self.mb_txs.push(tx);
+            rxs.push(rx);
+        }
+        rxs
     }
 }

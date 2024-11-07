@@ -75,23 +75,31 @@ impl Graph {
     }
 
     /// 将最开始的节点取出，并从ids里面删除
-    pub fn take_source_ids(&mut self) -> Vec<usize> {
-        let source_ids: Vec<_> = self
+    pub fn take_source_indexes(&mut self) -> Vec<usize> {
+        let indexes: Vec<_> = self
             .mut_ids
             .iter()
-            .filter(|node_id| !self.mut_incoming_edges.contains_key(*node_id))
+            .filter(|index| !self.mut_incoming_edges.contains_key(*index))
             .copied()
             .collect();
 
-        self.mut_ids.retain(|id| !source_ids.contains(id));
-        for source_id in &source_ids {
-            self.remove_incoming_edge(source_id);
+        self.mut_ids.retain(|index| !indexes.contains(index));
+        for index in &indexes {
+            self.remove_incoming_edge(index);
         }
 
-        source_ids
+        indexes
     }
 
-    pub fn take_sink_ids(&mut self) -> Vec<usize> {
+    pub fn get_output_cnt_by_index(&self, index: usize) -> usize {
+        self.outgoing_edges.get(&index).unwrap().len()
+    }
+
+    pub fn get_input_cnt_by_index(&self, index: usize) -> usize {
+        self.incoming_edges.get(&index).unwrap().len()
+    }
+
+    pub fn take_sink_indexes(&mut self) -> Vec<usize> {
         let sink_ids: Vec<_> = self
             .mut_ids
             .iter()
@@ -191,18 +199,20 @@ impl Graph {
                                     match self.node_types.get(&current_id).unwrap() {
                                         types::rules::NodeType::Merge
                                         | types::rules::NodeType::Window
-                                        | types::rules::NodeType::Databoard => break,
+                                        | types::rules::NodeType::Databoard
+                                        | types::rules::NodeType::BlackHole
+                                        | types::rules::NodeType::DeviceSink
+                                        | types::rules::NodeType::AppSink => break,
                                         _ => {}
                                     }
                                     ids.push(current_id);
-                                } else {
-                                    break;
+                                    continue;
                                 }
                             }
                         }
-                    } else {
-                        break;
                     }
+
+                    break;
                 }
                 ids
             }
@@ -311,15 +321,13 @@ mod tests {
 
         let mut graph = Graph::new(&conf);
 
-        let mut source_ids = graph.take_source_ids();
-        source_ids.sort();
-        assert_eq!(source_ids, vec![0, 1]);
+        let mut source_indexes = graph.take_source_indexes();
+        source_indexes.sort();
+        assert_eq!(source_indexes, vec![0, 1]);
 
-        let mut sink_ids = graph.take_sink_ids();
-        sink_ids.sort();
-        assert_eq!(sink_ids, vec![2, 3, 4, 5]);
-
-        return;
+        let mut sink_indexes = graph.take_sink_indexes();
+        sink_indexes.sort();
+        assert_eq!(sink_indexes, vec![2, 3, 4, 5]);
 
         let mut segments = graph.get_segments();
         segments.iter_mut().for_each(|segment| segment.sort());

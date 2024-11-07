@@ -48,64 +48,77 @@ impl Rule {
     }
 
     async fn start(&mut self, conf: &Conf) -> HaliaResult<()> {
-        let (mut incoming_edges, outgoing_edges) = conf.get_edges();
-        let mut tmp_incoming_edges = incoming_edges.clone();
-        let mut tmp_outgoing_edges = outgoing_edges.clone();
-
         let mut node_map = HashMap::new();
         for node in conf.nodes.iter() {
             node_map.insert(node.index, node.clone());
         }
 
-        {
-            let mut graph = Graph::new(&conf);
-            let source_ids = graph.take_source_ids();
-            let outgoing_edges = graph.get_outgoing_edges();
-            let mut receivers = Self::get_source_rxs(source_ids, &node_map, outgoing_edges).await?;
+        let mut graph = Graph::new(&conf);
 
-            let sink_ids = graph.take_sink_ids();
-            let incoming_edges = graph.get_incoming_edges();
-            let mut senders = self
-                .get_sink_txs(sink_ids, &node_map, &incoming_edges)
-                .await?;
-
-            let segments = graph.get_segments();
+        let source_indexes = graph.take_source_indexes();
+        let mut receivers = HashMap::new();
+        for index in source_indexes {
+            let node = conf.nodes.iter().find(|node| node.index == index).unwrap();
+            let cnt = graph.get_output_cnt_by_index(index);
+            let rxs = match node.node_type {
+                NodeType::DeviceSource => {
+                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
+                    devices::get_source_rxs(&source_node.device_id, &source_node.source_id, cnt)
+                        .await?
+                }
+                NodeType::AppSource => {
+                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
+                    apps::get_source_rxs(&source_node.app_id, &source_node.source_id, cnt).await?
+                }
+                _ => return Err(HaliaError::Common(format!("{:?} 不是源节点", node))),
+            };
+            receivers.insert(index, rxs);
         }
 
-        let mut ids: Vec<usize> = conf.nodes.iter().map(|node| node.index).collect();
+        let sink_indexes = graph.take_sink_indexes();
+        let mut senders = HashMap::new();
+        for index in sink_indexes {
+            let node = conf.nodes.iter().find(|node| node.index == index).unwrap();
+            let cnt = graph.get_input_cnt_by_index(index);
+            let txs = match node.node_type {
+                NodeType::DeviceSink => {
+                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
+                    devices::get_sink_txs(&sink_node.device_id, &sink_node.sink_id, cnt).await?
+                }
+                NodeType::AppSink => {
+                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
+                    apps::get_sink_txs(&sink_node.app_id, &sink_node.sink_id, cnt).await?
+                }
+                NodeType::Databoard => {
+                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
+                    let mut txs = vec![];
+                    for _ in 0..cnt {
+                        txs.push(
+                            databoard::get_data_tx(
+                                &databoard_node.databoard_id,
+                                &databoard_node.data_id,
+                            )
+                            .await?,
+                        )
+                    }
+                    txs
+                }
+                NodeType::BlackHole => {
+                    let mut black_hole = BlackHole::new(self.logger.get_logger_item());
+                    let mut txs = vec![];
+                    for _ in 0..cnt {
+                        txs.push(black_hole.get_tx());
+                    }
+                    black_hole.run(self.stop_signal_tx.subscribe());
+                    txs
+                }
 
-        let source_ids =
-            take_source_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
-        debug!("{:?}", source_ids);
-        let mut receivers =
-            Self::get_source_rxs(source_ids, &node_map, &tmp_outgoing_edges).await?;
+                _ => unreachable!(),
+            };
+            senders.insert(node.index, txs);
+        }
 
-        let sink_ids = take_sink_ids(&mut ids, &mut tmp_incoming_edges, &mut tmp_outgoing_edges);
-        debug!("{:?}", sink_ids);
-        let mut senders = self
-            .get_sink_txs(sink_ids, &node_map, &incoming_edges)
-            .await?;
-
-        debug!("{:?}", ids);
-
-        // if let Some(e) = error {
-        //     storage::rule::reference::deactive(&self.id).await?;
-        //     return Err(e.into());
-        // } else {
-        //     storage::rule::reference::active(&self.id).await?;
-        // }
-
-        let segments = get_segments(
-            &mut ids,
-            &node_map,
-            &mut tmp_incoming_edges,
-            &mut tmp_outgoing_edges,
-        );
-
-        debug!("{:?}", receivers);
-        debug!("segments:{:?}", segments);
-        debug!("{:?}", senders);
-
+        let segments = graph.get_segments();
         for segment in segments {
             let mut functions = vec![];
             let mut indexes = vec![];
@@ -348,110 +361,6 @@ impl Rule {
         storage::rule::reference::delete_many_by_rule_id(&self.id).await?;
 
         Ok(())
-    }
-
-    // 获取所有输入源的rx
-    async fn get_source_rxs(
-        source_ids: Vec<usize>,
-        node_map: &HashMap<usize, Node>,
-        outgoing_edges: &HashMap<usize, Vec<usize>>,
-    ) -> HaliaResult<HashMap<usize, Vec<UnboundedReceiver<RuleMessageBatch>>>> {
-        let mut receivers = HashMap::new();
-        for source_id in source_ids {
-            let node = node_map.get(&source_id).unwrap();
-            match node.node_type {
-                NodeType::DeviceSource => {
-                    let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let cnt = outgoing_edges.get(&source_id).unwrap().len();
-                    let mut rxs = vec![];
-                    for _ in 0..cnt {
-                        rxs.push(
-                            devices::get_source_rx(&source_node.device_id, &source_node.source_id)
-                                .await?,
-                        )
-                    }
-                    receivers.insert(source_id, rxs);
-                }
-                NodeType::AppSource => {
-                    let source_node: AppSourceNode = serde_json::from_value(node.conf.clone())?;
-                    let cnt = outgoing_edges.get(&source_id).unwrap().len();
-                    let mut rxs = vec![];
-                    for _ in 0..cnt {
-                        rxs.push(
-                            apps::get_source_rx(&source_node.app_id, &source_node.source_id)
-                                .await?,
-                        )
-                    }
-                    receivers.insert(source_id, rxs);
-                }
-                _ => return Err(HaliaError::Common(format!("{:?} 不是源节点", node))),
-            }
-        }
-        Ok(receivers)
-    }
-
-    // 获取所有输出动作的tx
-    async fn get_sink_txs(
-        &mut self,
-        sink_ids: Vec<usize>,
-        node_map: &HashMap<usize, Node>,
-        incoming_edges: &HashMap<usize, Vec<usize>>,
-    ) -> HaliaResult<HashMap<usize, Vec<UnboundedSender<RuleMessageBatch>>>> {
-        let mut senders = HashMap::new();
-        for sink_id in sink_ids {
-            let node = node_map.get(&sink_id).unwrap();
-            let txs = match node.node_type {
-                NodeType::DeviceSink => {
-                    let sink_node: DeviceSinkNode = serde_json::from_value(node.conf.clone())?;
-                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
-                    let mut txs = vec![];
-                    for _ in 0..cnt {
-                        txs.push(
-                            devices::get_sink_tx(&sink_node.device_id, &sink_node.sink_id).await?,
-                        )
-                    }
-                    txs
-                }
-                NodeType::AppSink => {
-                    let sink_node: AppSinkNode = serde_json::from_value(node.conf.clone())?;
-                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
-                    let mut txs = vec![];
-                    for _ in 0..cnt {
-                        txs.push(apps::get_sink_tx(&sink_node.app_id, &sink_node.sink_id).await?)
-                    }
-                    txs
-                }
-                NodeType::Databoard => {
-                    let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
-                    let mut txs = vec![];
-                    for _ in 0..cnt {
-                        txs.push(
-                            databoard::get_data_tx(
-                                &databoard_node.databoard_id,
-                                &databoard_node.data_id,
-                            )
-                            .await?,
-                        )
-                    }
-                    txs
-                }
-                NodeType::BlackHole => {
-                    let mut black_hole = BlackHole::new(self.logger.get_logger_item());
-                    let cnt = incoming_edges.get(&sink_id).unwrap().len();
-                    let mut txs = vec![];
-                    for _ in 0..cnt {
-                        txs.push(black_hole.get_tx());
-                    }
-                    black_hole.run(self.stop_signal_tx.subscribe());
-                    txs
-                }
-
-                _ => unreachable!(),
-            };
-            senders.insert(node.index, txs);
-        }
-        Ok(senders)
     }
 }
 

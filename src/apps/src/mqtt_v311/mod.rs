@@ -453,22 +453,24 @@ impl App for MqttClient {
         }
     }
 
-    async fn get_source_rx(
+    async fn get_source_rxs(
         &self,
         source_id: &String,
-    ) -> HaliaResult<UnboundedReceiver<RuleMessageBatch>> {
+        cnt: usize,
+    ) -> HaliaResult<Vec<UnboundedReceiver<RuleMessageBatch>>> {
         match self.sources.get_mut(source_id) {
-            Some(mut source) => Ok(source.get_rx()),
+            Some(mut source) => Ok(source.get_rxs(cnt)),
             None => Err(HaliaError::NotFound(source_id.to_owned())),
         }
     }
 
-    async fn get_sink_tx(
+    async fn get_sink_txs(
         &self,
         sink_id: &String,
-    ) -> HaliaResult<UnboundedSender<RuleMessageBatch>> {
+        cnt: usize,
+    ) -> HaliaResult<Vec<UnboundedSender<RuleMessageBatch>>> {
         match self.sinks.get(sink_id) {
-            Some(sink) => Ok(sink.mb_tx.clone()),
+            Some(sink) => Ok(sink.get_txs(cnt)),
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }

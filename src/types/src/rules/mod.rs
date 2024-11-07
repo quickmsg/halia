@@ -116,26 +116,6 @@ pub struct ListRuleResp {
     pub name: String,
 }
 
-impl Conf {
-    pub fn get_edges(&self) -> (HashMap<usize, Vec<usize>>, HashMap<usize, Vec<usize>>) {
-        let mut incoming_edges = HashMap::new();
-        let mut outgoing_edges = HashMap::new();
-
-        for edge in self.edges.iter() {
-            incoming_edges
-                .entry(edge.target)
-                .or_insert_with(Vec::new)
-                .push(edge.source);
-            outgoing_edges
-                .entry(edge.source)
-                .or_insert_with(Vec::new)
-                .push(edge.target);
-        }
-
-        (incoming_edges, outgoing_edges)
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateSource {
     pub r#type: String,

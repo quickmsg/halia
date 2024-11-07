@@ -133,4 +133,12 @@ impl Sink {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
+
+    pub fn get_txs(&self, cnt: usize) -> Vec<UnboundedSender<RuleMessageBatch>> {
+        let mut txs = vec![];
+        for _ in 0..cnt {
+            txs.push(self.mb_tx.clone());
+        }
+        txs
+    }
 }

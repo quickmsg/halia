@@ -130,6 +130,14 @@ impl Sink {
         join_handle_data.mqtt_client = mqtt_client;
         Self::event_loop(join_handle_data);
     }
+
+    pub fn get_txs(&self, cnt: usize) -> Vec<UnboundedSender<RuleMessageBatch>> {
+        let mut txs = vec![];
+        for _ in 0..cnt {
+            txs.push(self.mb_tx.clone());
+        }
+        txs
+    }
 }
 
 fn get_publish_properties(conf: &Option<PublishProperties>) -> Option<v5::PublishProperties> {

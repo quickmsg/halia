@@ -212,6 +212,14 @@ impl Sink {
         join_handle_data.influxdb_conf = influxdb_conf;
         self.join_handle = Some(Self::event_loop(join_handle_data));
     }
+
+    pub fn get_txs(&self, cnt: usize) -> Vec<UnboundedSender<RuleMessageBatch>> {
+        let mut txs = vec![];
+        for _ in 0..cnt {
+            txs.push(self.mb_tx.clone());
+        }
+        txs
+    }
 }
 
 fn new_influxdb_client(influxdb_conf: &Arc<Conf>, sink_conf: &SinkConf) -> Client {

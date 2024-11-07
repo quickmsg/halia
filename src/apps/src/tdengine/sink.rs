@@ -133,4 +133,12 @@ impl Sink {
         let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
     }
+
+    pub fn get_txs(&self, cnt: usize) -> Vec<UnboundedSender<RuleMessageBatch>> {
+        let mut txs = vec![];
+        for _ in 0..cnt {
+            txs.push(self.mb_tx.clone());
+        }
+        txs
+    }
 }

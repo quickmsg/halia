@@ -128,15 +128,17 @@ pub trait Device: Send + Sync {
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()>;
 
-    async fn get_source_rx(
+    async fn get_source_rxs(
         &self,
         source_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>>;
+        cnt: usize,
+    ) -> HaliaResult<Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>>;
 
-    async fn get_sink_tx(
+    async fn get_sink_txs(
         &self,
         sink_id: &String,
-    ) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>>;
+        cnt: usize,
+    ) -> HaliaResult<Vec<mpsc::UnboundedSender<RuleMessageBatch>>>;
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
@@ -635,12 +637,13 @@ pub(crate) async fn delete_source(device_id: String, source_id: String) -> Halia
     Ok(())
 }
 
-pub async fn get_source_rx(
+pub async fn get_source_rxs(
     device_id: &String,
     source_id: &String,
-) -> HaliaResult<mpsc::UnboundedReceiver<RuleMessageBatch>> {
+    cnt: usize,
+) -> HaliaResult<Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>> {
     if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
-        device.get_source_rx(source_id).await
+        device.get_source_rxs(source_id, cnt).await
     } else {
         let device_name = storage::device::device::read_name(&device_id).await?;
         Err(HaliaError::Stopped(format!("设备：{}", device_name)))
@@ -794,12 +797,13 @@ pub(crate) async fn delete_sink(device_id: String, sink_id: String) -> HaliaResu
     Ok(())
 }
 
-pub async fn get_sink_tx(
+pub async fn get_sink_txs(
     device_id: &String,
     sink_id: &String,
-) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+    cnt: usize,
+) -> HaliaResult<Vec<mpsc::UnboundedSender<RuleMessageBatch>>> {
     if let Some(device) = GLOBAL_DEVICE_MANAGER.get(device_id) {
-        device.get_sink_tx(sink_id).await
+        device.get_sink_txs(sink_id, cnt).await
     } else {
         let device_name = storage::device::device::read_name(&device_id).await?;
         Err(HaliaError::Stopped(format!("设备：{}", device_name)))

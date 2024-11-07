@@ -25,9 +25,13 @@ impl Source {
         Ok(())
     }
 
-    pub fn get_rx(&mut self) -> UnboundedReceiver<RuleMessageBatch> {
-        let (tx, rx) = unbounded_channel();
-        self.mb_txs.push(tx);
-        rx
+    pub fn get_rxs(&mut self, cnt: usize) -> Vec<UnboundedReceiver<RuleMessageBatch>> {
+        let mut rxs = vec![];
+        for _ in 0..cnt {
+            let (tx, rx) = unbounded_channel();
+            self.mb_txs.push(tx);
+            rxs.push(rx);
+        }
+        rxs
     }
 }
