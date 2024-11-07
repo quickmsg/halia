@@ -307,12 +307,13 @@ pub async fn delete_data(databoard_id: String, databoard_data_id: String) -> Hal
     Ok(())
 }
 
-pub async fn get_data_tx(
+pub async fn get_data_txs(
     databoard_id: &String,
     databoard_data_id: &String,
-) -> HaliaResult<mpsc::UnboundedSender<RuleMessageBatch>> {
+    cnt: usize,
+) -> HaliaResult<Vec<mpsc::UnboundedSender<RuleMessageBatch>>> {
     match GLOBAL_DATABOARD_MANAGER.get(databoard_id) {
-        Some(databoard) => databoard.get_data_tx(databoard_data_id).await,
+        Some(databoard) => databoard.get_data_txs(databoard_data_id, cnt).await,
         None => {
             let name = storage::databoard::read_name(databoard_id).await?;
             Err(HaliaError::Stopped(format!("看板：{}", name)))

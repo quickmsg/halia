@@ -4,7 +4,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     log::Logger,
 };
-use functions::{computes, filter, merge::merge};
+use functions::{computes, filter, merge::merge, window};
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -15,13 +15,13 @@ use tokio::{
 };
 use tracing::{debug, error};
 use types::rules::{
-    AppSinkNode, AppSourceNode, Conf, DataboardNode, DeviceSinkNode, DeviceSourceNode, Node,
-    NodeType, ReadRuleNodeResp,
+    AppSinkNode, AppSourceNode, Conf, DataboardNode, DeviceSinkNode, DeviceSourceNode, NodeType,
+    ReadRuleNodeResp,
 };
 
 use crate::{
     graph::Graph,
-    segment::{get_segments, start_segment, take_sink_ids, take_source_ids, BlackHole},
+    segment::{start_segment, BlackHole},
 };
 
 pub struct Rule {
@@ -91,24 +91,16 @@ impl Rule {
                 }
                 NodeType::Databoard => {
                     let databoard_node: DataboardNode = serde_json::from_value(node.conf.clone())?;
-                    let mut txs = vec![];
-                    for _ in 0..cnt {
-                        txs.push(
-                            databoard::get_data_tx(
-                                &databoard_node.databoard_id,
-                                &databoard_node.data_id,
-                            )
-                            .await?,
-                        )
-                    }
-                    txs
+                    databoard::get_data_txs(
+                        &databoard_node.databoard_id,
+                        &databoard_node.data_id,
+                        cnt,
+                    )
+                    .await?
                 }
                 NodeType::BlackHole => {
                     let mut black_hole = BlackHole::new(self.logger.get_logger_item());
-                    let mut txs = vec![];
-                    for _ in 0..cnt {
-                        txs.push(black_hole.get_tx());
-                    }
+                    let txs = black_hole.get_txs(cnt);
                     black_hole.run(self.stop_signal_tx.subscribe());
                     txs
                 }
@@ -126,43 +118,17 @@ impl Rule {
                 let node = node_map.get(&index).unwrap();
                 match node.node_type {
                     NodeType::Merge => {
-                        let source_ids = incoming_edges.get(&index).unwrap();
-                        let mut rxs = vec![];
-                        for source_id in source_ids {
-                            rxs.push(receivers.get_mut(source_id).unwrap().pop().unwrap());
-                        }
-                        let mut n_rxs = vec![];
-                        let mut n_txs = vec![];
-                        let cnt = outgoing_edges.get(&index).unwrap().len();
-                        for _ in 0..cnt {
-                            let (tx, rx) = unbounded_channel();
-                            n_rxs.push(rx);
-                            n_txs.push(tx);
-                        }
-
-                        receivers.insert(index, n_rxs);
-                        merge::run(rxs, n_txs, self.stop_signal_tx.subscribe());
+                        let rxs = graph.get_rxs(&index, &mut receivers, &mut senders);
+                        let txs = graph.get_txs(&index, &mut receivers, &mut senders);
+                        merge::run(rxs, txs, self.stop_signal_tx.subscribe());
                         break;
                     }
                     NodeType::Window => {
-                        let source_ids = incoming_edges.get(&index).unwrap();
-                        let mut rxs = vec![];
-                        for source_id in source_ids {
-                            rxs.push(receivers.get_mut(source_id).unwrap().pop().unwrap());
-                        }
-                        let mut n_rxs = vec![];
-                        let mut n_txs = vec![];
-                        let cnt = outgoing_edges.get(&index).unwrap().len();
-                        for _ in 0..cnt {
-                            let (tx, rx) = unbounded_channel();
-                            n_rxs.push(rx);
-                            n_txs.push(tx);
-                        }
-                        receivers.insert(index, n_rxs);
-
+                        let rxs = graph.get_rxs(&index, &mut receivers, &mut senders);
+                        let txs = graph.get_txs(&index, &mut receivers, &mut senders);
                         let conf: types::rules::functions::window::Conf =
                             serde_json::from_value(node.conf.clone())?;
-                        // window::run(conf, n_rxs, n_txs, self.stop_signal_tx.subscribe()).unwrap();
+                        window::run(conf, rxs, txs, self.stop_signal_tx.subscribe()).unwrap();
                         break;
                     }
                     NodeType::Filter => {
@@ -185,69 +151,21 @@ impl Rule {
 
             // merge、window 节点的indexes长度为0
             if indexes.len() > 0 {
-                let mut segment_rxs = vec![];
-                let mut segment_txs = vec![];
-                debug!("{:?}", indexes);
-                let source_ids = incoming_edges.get(&indexes.first().unwrap()).unwrap();
-                for source_id in source_ids {
-                    debug!("{}", source_id);
-                    match receivers.get_mut(source_id) {
-                        Some(receiver_rxs) => {
-                            debug!("{:?}", receiver_rxs);
-                            segment_rxs.push(receiver_rxs.pop().unwrap());
-                        }
-                        None => {
-                            let (tx, rx) = unbounded_channel::<RuleMessageBatch>();
-                            match senders.get_mut(source_id) {
-                                Some(sender_txs) => {
-                                    sender_txs.push(tx);
-                                }
-                                None => {
-                                    senders.insert(*source_id, vec![tx]);
-                                }
-                            }
-                            segment_rxs.push(rx);
-                        }
-                    }
-                }
+                let rxs = graph.get_rxs(&indexes.first().unwrap(), &mut receivers, &mut senders);
+                let txs = graph.get_txs(indexes.last().unwrap(), &mut receivers, &mut senders);
 
-                let sink_ids = outgoing_edges.get(&indexes.last().unwrap()).unwrap();
-                for sink_id in sink_ids {
-                    match senders.get_mut(sink_id) {
-                        Some(sender_txs) => {
-                            segment_txs.push(sender_txs.pop().unwrap());
-                        }
-                        None => {
-                            let (tx, rx) = unbounded_channel::<RuleMessageBatch>();
-                            match receivers.get_mut(sink_id) {
-                                Some(receiver_rxs) => {
-                                    receiver_rxs.push(rx);
-                                }
-                                None => {
-                                    receivers.insert(*sink_id, vec![rx]);
-                                }
-                            }
-                            segment_txs.push(tx);
-                        }
-                    }
-                }
-                start_segment(
-                    segment_rxs,
-                    functions,
-                    segment_txs,
-                    self.stop_signal_tx.subscribe(),
-                );
+                start_segment(rxs, functions, txs, self.stop_signal_tx.subscribe());
             }
         }
 
-        debug!("{:?}", senders);
-        for (index, senders) in senders {
-            for sender in senders {
-                let index = incoming_edges.get_mut(&index).unwrap().pop().unwrap();
-                let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
-                run_direct_link(sender, rx, self.stop_signal_tx.subscribe());
-            }
-        }
+        // TODO
+        // for (index, senders) in senders {
+        //     for sender in senders {
+        //         let index = incoming_edges.get_mut(&index).unwrap().pop().unwrap();
+        //         let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
+        //         run_direct_link(sender, rx, self.stop_signal_tx.subscribe());
+        //     }
+        // }
 
         Ok(())
     }

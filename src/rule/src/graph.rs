@@ -123,42 +123,52 @@ impl Graph {
         }
     }
 
-    fn get_rxs(
+    pub fn get_rxs(
+        &self,
         index: &usize,
-        incoming_edges: &HashMap<usize, Vec<usize>>,
         receivers: &mut HashMap<usize, Vec<UnboundedReceiver<RuleMessageBatch>>>,
         senders: &mut HashMap<usize, Vec<UnboundedSender<RuleMessageBatch>>>,
     ) -> Vec<UnboundedReceiver<RuleMessageBatch>> {
         let mut rxs = vec![];
 
-        let source_ids = incoming_edges.get(index).unwrap();
-        for source_id in source_ids {
-            if let Some(exist_rxs) = receivers.get_mut(source_id) {
+        let source_indexes = self.incoming_edges.get(index).unwrap();
+        for index in source_indexes {
+            if let Some(exist_rxs) = receivers.get_mut(index) {
                 if let Some(rx) = exist_rxs.pop() {
                     rxs.push(rx);
+                    continue;
                 }
-            } else {
-                let (tx, rx) = unbounded_channel();
-                rxs.push(rx);
-                todo!()
             }
+            let (tx, rx) = unbounded_channel();
+            senders.entry(*index).or_insert_with(Vec::new).push(tx);
+            rxs.push(rx);
         }
 
         rxs
     }
 
-    fn get_txs(
-        outgoing_edges: &HashMap<usize, Vec<usize>>,
+    pub fn get_txs(
+        &self,
+        index: &usize,
         receivers: &mut HashMap<usize, Vec<UnboundedReceiver<RuleMessageBatch>>>,
         senders: &mut HashMap<usize, Vec<UnboundedSender<RuleMessageBatch>>>,
     ) -> Vec<UnboundedSender<RuleMessageBatch>> {
         let mut txs = vec![];
-        for (_, tx) in outgoing_edges {
-            for _ in tx {
-                let (tx, rx) = unbounded_channel();
-                txs.push(tx);
+
+        let sink_indexes = self.outgoing_edges.get(index).unwrap();
+        for index in sink_indexes {
+            if let Some(exist_txs) = senders.get_mut(index) {
+                if let Some(tx) = exist_txs.pop() {
+                    txs.push(tx);
+                    continue;
+                }
             }
+
+            let (tx, rx) = unbounded_channel();
+            receivers.entry(*index).or_insert_with(Vec::new).push(rx);
+            txs.push(tx);
         }
+
         txs
     }
 
