@@ -7,7 +7,7 @@ use crate::add_or_set_message_value;
 
 use super::Computer;
 
-struct Add {
+struct Sub {
     field: String,
     target_field: Option<String>,
     args: Vec<Arg>,
@@ -44,14 +44,14 @@ pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
         None => bail!("add function needs a const value"),
     }
 
-    Ok(Box::new(Add {
+    Ok(Box::new(Sub {
         field: conf.field,
         target_field: conf.target_field,
         args,
     }))
 }
 
-impl Computer for Add {
+impl Computer for Sub {
     fn compute(&self, message: &mut Message) {
         let mut result = match message.get(&self.field) {
             Some(mv) => match mv {
@@ -65,27 +65,27 @@ impl Computer for Add {
         for arg in &self.args {
             match arg {
                 Arg::ConstInt(i) => match result {
-                    MessageValue::Int64(v) => result = MessageValue::Int64(v + i),
-                    MessageValue::Float64(v) => result = MessageValue::Float64(v + *i as f64),
+                    MessageValue::Int64(v) => result = MessageValue::Int64(v - i),
+                    MessageValue::Float64(v) => result = MessageValue::Float64(v - *i as f64),
                     _ => return,
                 },
                 Arg::ConstFloat(f) => match result {
-                    MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 + f),
-                    MessageValue::Float64(v) => result = MessageValue::Float64(v + f),
+                    MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 - f),
+                    MessageValue::Float64(v) => result = MessageValue::Float64(v - f),
                     _ => return,
                 },
                 Arg::DynamicValueField(field) => match message.get(field) {
                     Some(mv) => match mv {
                         MessageValue::Int64(i) => match result {
-                            MessageValue::Int64(v) => result = MessageValue::Int64(v + i),
+                            MessageValue::Int64(v) => result = MessageValue::Int64(v - i),
                             MessageValue::Float64(v) => {
-                                result = MessageValue::Float64(v + *i as f64)
+                                result = MessageValue::Float64(v - *i as f64)
                             }
                             _ => return,
                         },
                         MessageValue::Float64(f) => match result {
-                            MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 + f),
-                            MessageValue::Float64(v) => result = MessageValue::Float64(v + f),
+                            MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 - f),
+                            MessageValue::Float64(v) => result = MessageValue::Float64(v - f),
                             _ => return,
                         },
                         _ => return,

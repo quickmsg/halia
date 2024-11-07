@@ -9,6 +9,8 @@ mod array;
 mod hash;
 mod number;
 mod string;
+mod compress;
+mod aggregate;
 
 pub trait Computer: Sync + Send {
     fn compute(&self, message: &mut Message);

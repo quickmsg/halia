@@ -65,27 +65,27 @@ impl Computer for Add {
         for arg in &self.args {
             match arg {
                 Arg::ConstInt(i) => match result {
-                    MessageValue::Int64(v) => result = MessageValue::Int64(v + i),
-                    MessageValue::Float64(v) => result = MessageValue::Float64(v + *i as f64),
+                    MessageValue::Int64(v) => result = MessageValue::Int64(v * i),
+                    MessageValue::Float64(v) => result = MessageValue::Float64(v * *i as f64),
                     _ => return,
                 },
                 Arg::ConstFloat(f) => match result {
-                    MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 + f),
-                    MessageValue::Float64(v) => result = MessageValue::Float64(v + f),
+                    MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 * f),
+                    MessageValue::Float64(v) => result = MessageValue::Float64(v * f),
                     _ => return,
                 },
                 Arg::DynamicValueField(field) => match message.get(field) {
                     Some(mv) => match mv {
                         MessageValue::Int64(i) => match result {
-                            MessageValue::Int64(v) => result = MessageValue::Int64(v + i),
+                            MessageValue::Int64(v) => result = MessageValue::Int64(v * i),
                             MessageValue::Float64(v) => {
-                                result = MessageValue::Float64(v + *i as f64)
+                                result = MessageValue::Float64(v * *i as f64)
                             }
                             _ => return,
                         },
                         MessageValue::Float64(f) => match result {
-                            MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 + f),
-                            MessageValue::Float64(v) => result = MessageValue::Float64(v + f),
+                            MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 * f),
+                            MessageValue::Float64(v) => result = MessageValue::Float64(v * f),
                             _ => return,
                         },
                         _ => return,

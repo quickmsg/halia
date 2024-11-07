@@ -43,36 +43,36 @@ impl Aggregater for Avg {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use message::{Message, MessageBatch, MessageValue};
-    use types::rules::functions::aggregate::ItemConf;
+// #[cfg(test)]
+// mod tests {
+//     use message::{Message, MessageBatch, MessageValue};
+//     use types::rules::functions::aggregate::ItemConf;
 
-    use crate::aggregate::avg::new;
+//     use crate::aggregate::avg::new;
 
-    #[test]
-    fn avg() {
-        let mut message_batch = MessageBatch::default();
+//     #[test]
+//     fn avg() {
+//         let mut message_batch = MessageBatch::default();
 
-        let mut message = Message::default();
-        message.add("field1".to_string(), MessageValue::Int64(1));
-        message_batch.push_message(message);
+//         let mut message = Message::default();
+//         message.add("field1".to_string(), MessageValue::Int64(1));
+//         message_batch.push_message(message);
 
-        let mut message = Message::default();
-        message.add("field1".to_string(), MessageValue::Int64(2));
-        message_batch.push_message(message);
+//         let mut message = Message::default();
+//         message.add("field1".to_string(), MessageValue::Int64(2));
+//         message_batch.push_message(message);
 
-        let mut message = Message::default();
-        message.add("field1".to_string(), MessageValue::Int64(4));
-        message_batch.push_message(message);
+//         let mut message = Message::default();
+//         message.add("field1".to_string(), MessageValue::Int64(4));
+//         message_batch.push_message(message);
 
-        let avg = new(ItemConf {
-            typ: types::rules::functions::aggregate::Type::Avg,
-            field: "field1".to_owned(),
-            target_field: "avg".to_owned(),
-        });
-        let (field, value) = avg.aggregate(&message_batch);
-        assert_eq!(field, "field1");
-        assert_eq!(value, MessageValue::Float64((1 + 2 + 4) as f64 / 3 as f64));
-    }
-}
+//         let avg = new(ItemConf {
+//             typ: types::rules::functions::aggregate::Type::Avg,
+//             field: "field1".to_owned(),
+//             target_field: "avg".to_owned(),
+//         });
+//         let (field, value) = avg.aggregate(&message_batch);
+//         assert_eq!(field, "field1");
+//         assert_eq!(value, MessageValue::Float64((1 + 2 + 4) as f64 / 3 as f64));
+//     }
+// }

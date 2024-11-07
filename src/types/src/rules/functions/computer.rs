@@ -63,6 +63,10 @@ pub enum NumberType {
     Log,
     Power,
     Sin,
+    Sub,
+    Multi,
+    Division,
+    Modulo,
 }
 
 #[derive(Deserialize, Serialize)]

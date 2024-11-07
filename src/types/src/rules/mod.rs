@@ -1,7 +1,7 @@
 use message::MessageBatch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 pub mod apps;
 pub mod databoard;

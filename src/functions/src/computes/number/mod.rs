@@ -21,8 +21,13 @@ mod floor;
 mod ln;
 // mod log;
 // mod power;
-// mod add;
+mod add;
+mod division;
+mod modulo;
+mod multi;
 mod sin;
+mod sub;
+// mod division;
 
 use anyhow::Result;
 use types::rules::functions::computer::NumberItemConf;
@@ -34,7 +39,7 @@ pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
         types::rules::functions::computer::NumberType::Abs => abs::new(conf),
         types::rules::functions::computer::NumberType::Acos => acos::new(conf),
         types::rules::functions::computer::NumberType::Acosh => acosh::new(conf),
-        types::rules::functions::computer::NumberType::Add => todo!(),
+        types::rules::functions::computer::NumberType::Add => add::new(conf),
         types::rules::functions::computer::NumberType::Asin => asin::new(conf),
         types::rules::functions::computer::NumberType::Asinh => asinh::new(conf),
         types::rules::functions::computer::NumberType::Atan => atan::new(conf),
@@ -56,5 +61,9 @@ pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
         types::rules::functions::computer::NumberType::Log => todo!(),
         types::rules::functions::computer::NumberType::Power => todo!(),
         types::rules::functions::computer::NumberType::Sin => sin::new(conf),
+        types::rules::functions::computer::NumberType::Sub => sub::new(conf),
+        types::rules::functions::computer::NumberType::Multi => multi::new(conf),
+        types::rules::functions::computer::NumberType::Division => division::new(conf),
+        types::rules::functions::computer::NumberType::Modulo => modulo::new(conf),
     }
 }

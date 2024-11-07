@@ -1,12 +1,9 @@
 use async_trait::async_trait;
 use message::MessageBatch;
 
-pub mod aggregate;
-pub mod compress;
 pub mod computes;
 pub mod field;
 pub mod filter;
-pub mod log;
 pub mod merge;
 pub mod metadata;
 pub mod type_conversion;
