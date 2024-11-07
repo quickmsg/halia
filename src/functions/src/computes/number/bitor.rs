@@ -1,9 +1,9 @@
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::NumberItemConf;
+use types::rules::functions::computer::ItemConf;
 
-use super::Computer;
+use crate::computes::Computer;
 
 struct Bitand {
     field: String,
@@ -13,7 +13,7 @@ struct Bitand {
     target_field: Option<String>,
 }
 
-pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     let (const_value, target_value_field) = match conf.args {
         Some(args) => {
             if args.len() != 1 {

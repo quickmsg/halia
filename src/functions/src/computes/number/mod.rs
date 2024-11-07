@@ -1,69 +1,29 @@
-mod abs;
-mod acos;
-mod acosh;
-mod asin;
-mod asinh;
-mod atan;
+pub mod abs;
+pub mod acos;
+pub mod acosh;
+pub mod asin;
+pub mod asinh;
+pub mod atan;
 // mod atan2;
-mod atanh;
-mod bitand;
-mod bitnot;
-mod bitor;
-mod bitxor;
-mod cbrt;
-mod ceil;
-mod cos;
-mod cosh;
-mod degrees;
-mod exp;
-mod exp2;
-mod floor;
-mod ln;
+pub mod atanh;
+pub mod bitand;
+pub mod bitnot;
+pub mod bitor;
+pub mod bitxor;
+pub mod cbrt;
+pub mod ceil;
+pub mod cos;
+pub mod cosh;
+pub mod degrees;
+pub mod exp;
+pub mod exp2;
+pub mod floor;
+pub mod ln;
 // mod log;
 // mod power;
-mod add;
-mod division;
-mod modulo;
-mod multi;
-mod sin;
-mod sub;
-// mod division;
-
-use anyhow::Result;
-use types::rules::functions::computer::NumberItemConf;
-
-use super::Computer;
-
-pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
-    match conf.typ {
-        types::rules::functions::computer::NumberType::Abs => abs::new(conf),
-        types::rules::functions::computer::NumberType::Acos => acos::new(conf),
-        types::rules::functions::computer::NumberType::Acosh => acosh::new(conf),
-        types::rules::functions::computer::NumberType::Add => add::new(conf),
-        types::rules::functions::computer::NumberType::Asin => asin::new(conf),
-        types::rules::functions::computer::NumberType::Asinh => asinh::new(conf),
-        types::rules::functions::computer::NumberType::Atan => atan::new(conf),
-        types::rules::functions::computer::NumberType::Atan2 => todo!(),
-        types::rules::functions::computer::NumberType::Atanh => atanh::new(conf),
-        types::rules::functions::computer::NumberType::Bitand => bitand::new(conf),
-        types::rules::functions::computer::NumberType::Bitnot => bitnot::new(conf),
-        types::rules::functions::computer::NumberType::Bitor => bitor::new(conf),
-        types::rules::functions::computer::NumberType::Bitxor => bitxor::new(conf),
-        types::rules::functions::computer::NumberType::Cbrt => cbrt::new(conf),
-        types::rules::functions::computer::NumberType::Ceil => ceil::new(conf),
-        types::rules::functions::computer::NumberType::Cos => cos::new(conf),
-        types::rules::functions::computer::NumberType::Cosh => cosh::new(conf),
-        types::rules::functions::computer::NumberType::Degrees => degrees::new(conf),
-        types::rules::functions::computer::NumberType::Exp => exp::new(conf),
-        types::rules::functions::computer::NumberType::Exp2 => exp2::new(conf),
-        types::rules::functions::computer::NumberType::Floor => floor::new(conf),
-        types::rules::functions::computer::NumberType::Ln => ln::new(conf),
-        types::rules::functions::computer::NumberType::Log => todo!(),
-        types::rules::functions::computer::NumberType::Power => todo!(),
-        types::rules::functions::computer::NumberType::Sin => sin::new(conf),
-        types::rules::functions::computer::NumberType::Sub => sub::new(conf),
-        types::rules::functions::computer::NumberType::Multi => multi::new(conf),
-        types::rules::functions::computer::NumberType::Division => division::new(conf),
-        types::rules::functions::computer::NumberType::Modulo => modulo::new(conf),
-    }
-}
+pub mod add;
+pub mod division;
+pub mod modulo;
+pub mod multi;
+pub mod sin;
+pub mod sub;

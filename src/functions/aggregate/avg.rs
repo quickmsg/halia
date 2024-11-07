@@ -5,10 +5,14 @@ use super::Aggregater;
 
 struct Avg {
     field: String,
+    target_field: Option<String>,
 }
 
 pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
-    Box::new(Avg { field: conf.field })
+    Box::new(Avg {
+        field: conf.field,
+        target_field: todo!(),
+    })
 }
 
 impl Aggregater for Avg {

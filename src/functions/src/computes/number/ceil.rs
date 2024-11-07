@@ -1,8 +1,8 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::NumberItemConf;
+use types::rules::functions::computer::ItemConf;
 
-use super::Computer;
+use crate::computes::Computer;
 
 // 最小整数
 struct Ceil {
@@ -10,7 +10,7 @@ struct Ceil {
     target_field: Option<String>,
 }
 
-pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Ceil {
         field: conf.field,
         target_field: conf.target_field,

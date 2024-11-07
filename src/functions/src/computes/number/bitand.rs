@@ -1,20 +1,19 @@
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::NumberItemConf;
+use types::rules::functions::computer::ItemConf;
 
-use super::Computer;
+use crate::computes::Computer;
 
 struct Bitand {
     field: String,
-    const_value: Option<i64>,
-    // TODO rename
+    const_arg: Option<i64>,
     target_value_field: Option<String>,
     target_field: Option<String>,
 }
 
-pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
-    let (const_value, target_value_field) = match conf.args {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
+    let (const_arg, target_value_field) = match conf.args {
         Some(args) => {
             if args.len() != 1 {
                 bail!("bitand function needs 1 argument");
@@ -35,7 +34,7 @@ pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
 
     Ok(Box::new(Bitand {
         field: conf.field,
-        const_value,
+        const_arg,
         target_value_field,
         target_field: conf.target_field,
     }))
@@ -51,7 +50,7 @@ impl Computer for Bitand {
             None => return,
         };
 
-        let target_value = match (&self.const_value, &self.target_value_field) {
+        let target_value = match (&self.const_arg, &self.target_value_field) {
             (Some(const_value), None) => const_value,
             (None, Some(target_value_field)) => match message.get(&target_value_field) {
                 Some(target_value) => match target_value {

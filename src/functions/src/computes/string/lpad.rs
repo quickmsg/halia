@@ -2,7 +2,7 @@ use crate::computes::Computer;
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::StringItemConf;
+use types::rules::functions::computer::ItemConf;
 
 struct Lpad {
     field: String,
@@ -11,7 +11,7 @@ struct Lpad {
     target_field: Option<String>,
 }
 
-pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     let (const_value, dynamic_value) = match conf.args {
         Some(mut args) => match args.pop() {
             Some(arg) => match get_dynamic_value_from_json(&arg) {

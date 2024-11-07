@@ -1,7 +1,7 @@
 use crate::{add_or_set_message_value, computes::Computer};
 use anyhow::{bail, Result};
 use message::{Message, MessageValue};
-use types::rules::functions::computer::StringItemConf;
+use types::rules::functions::computer::ItemConf;
 
 struct Slice {
     field: String,
@@ -10,7 +10,7 @@ struct Slice {
     target_field: Option<String>,
 }
 
-pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     let (start, end) = match conf.args {
         Some(args) => {
             if args.len() == 0 {

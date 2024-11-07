@@ -1,11 +1,9 @@
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::NumberItemConf;
+use types::rules::functions::computer::ItemConf;
 
-use crate::add_or_set_message_value;
-
-use super::Computer;
+use crate::{add_or_set_message_value, computes::Computer};
 
 struct Division {
     field: String,
@@ -19,7 +17,7 @@ enum Arg {
     DynamicValueField(String),
 }
 
-pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     let mut args = vec![];
     match conf.args {
         Some(conf_args) => {

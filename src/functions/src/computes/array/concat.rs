@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{MessageBatch, MessageValue};
-use types::rules::functions::computer::ArrayItemConf;
+use types::rules::functions::computer::ItemConf;
 
 struct Concat {
     field: String,
@@ -15,7 +15,7 @@ enum Arg {
 }
 
 impl Concat {
-    pub fn new(conf: ArrayItemConf) -> Result<Concat> {
+    pub fn new(conf: ItemConf) -> Result<Concat> {
         let arg = match conf.args {
             Some(args) => {
                 if args.len() == 1 {

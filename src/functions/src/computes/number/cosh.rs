@@ -1,15 +1,15 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::NumberItemConf;
+use types::rules::functions::computer::ItemConf;
 
-use super::Computer;
+use crate::computes::Computer;
 
 struct Cosh {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Cosh {
         field: conf.field,
         target_field: conf.target_field,

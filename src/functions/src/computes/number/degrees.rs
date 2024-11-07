@@ -1,8 +1,8 @@
 use anyhow::Result;
 use message::MessageValue;
-use types::rules::functions::computer::NumberItemConf;
+use types::rules::functions::computer::ItemConf;
 
-use super::Computer;
+use crate::computes::Computer;
 
 // 弧度转为角度
 struct Degrees {
@@ -10,7 +10,7 @@ struct Degrees {
     target_field: Option<String>,
 }
 
-pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Degrees {
         field: conf.field,
         target_field: conf.target_field,

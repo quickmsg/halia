@@ -1,11 +1,9 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
 use sha1::{Digest, Sha1 as crate_Sha1};
-use types::rules::functions::computer::HashItemConf;
+use types::rules::functions::computer::ItemConf;
 
-use crate::add_or_set_message_value;
-
-use super::Computer;
+use crate::{add_or_set_message_value, computes::Computer};
 
 // 绝对值
 struct Sha1 {
@@ -13,7 +11,7 @@ struct Sha1 {
     target_field: Option<String>,
 }
 
-pub fn new(conf: HashItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Sha1 {
         field: conf.field,
         target_field: conf.target_field,

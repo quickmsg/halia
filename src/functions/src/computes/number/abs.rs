@@ -1,10 +1,8 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::NumberItemConf;
+use types::rules::functions::computer::ItemConf;
 
-use crate::add_or_set_message_value;
-
-use super::Computer;
+use crate::{add_or_set_message_value, computes::Computer};
 
 // 绝对值
 struct Abs {
@@ -12,7 +10,7 @@ struct Abs {
     target_field: Option<String>,
 }
 
-pub fn new(conf: NumberItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     Ok(Box::new(Abs {
         field: conf.field,
         target_field: conf.target_field,

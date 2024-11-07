@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::StringItemConf;
+use types::rules::functions::computer::ItemConf;
 
 struct EndsWith {
     field: String,
@@ -13,7 +13,7 @@ struct EndsWith {
     target_field: Option<String>,
 }
 
-pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     let arg = match conf.args {
         Some(mut args) => match args.pop() {
             Some(arg) => match get_dynamic_value_from_json(&arg) {
