@@ -36,7 +36,7 @@ pub fn new(conf: StringItemConf) -> Result<Box<dyn Computer>> {
         types::rules::functions::computer::StringType::Rtrim => rtrim::new(conf),
         types::rules::functions::computer::StringType::Split => split::new(conf),
         types::rules::functions::computer::StringType::Trim => trim::new(conf),
-        types::rules::functions::computer::StringType::Endswith => ends_with::new(conf),
+        types::rules::functions::computer::StringType::EndsWith => ends_with::new(conf),
         types::rules::functions::computer::StringType::IndexOf => index_of::new(conf),
         types::rules::functions::computer::StringType::Lpad => lpad::new(conf),
         types::rules::functions::computer::StringType::Numbytes => numbytes::new(conf),

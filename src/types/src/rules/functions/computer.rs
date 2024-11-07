@@ -105,7 +105,7 @@ pub enum StringType {
     Rtrim,
     Split,
     Trim,
-    Endswith,
+    EndsWith,
     StartsWith,
     IndexOf,
     Numbytes,
