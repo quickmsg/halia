@@ -1,14 +1,20 @@
 use message::{MessageBatch, MessageValue};
 use types::rules::functions::aggregate::ItemConf;
 
+use crate::aggregate_return;
+
 use super::Aggregater;
 
 struct Collect {
     field: String,
+    target_field: Option<String>,
 }
 
 pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
-    Box::new(Collect { field: conf.field })
+    Box::new(Collect {
+        field: conf.field,
+        target_field: conf.target_field,
+    })
 }
 
 impl Aggregater for Collect {
@@ -21,6 +27,6 @@ impl Aggregater for Collect {
             }
         }
 
-        (self.field.clone(), MessageValue::Array(values))
+        aggregate_return!(self, MessageValue::Array(values))
     }
 }

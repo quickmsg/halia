@@ -252,7 +252,8 @@ impl Rule {
                 | NodeType::Window
                 | NodeType::Filter
                 | NodeType::Computer
-                | NodeType::BlackHole => {}
+                | NodeType::BlackHole
+                | NodeType::Aggregation => {}
             }
         }
 
@@ -300,42 +301,4 @@ fn run_direct_link(
             }
         }
     });
-}
-
-fn get_rxs(
-    index: &usize,
-    incoming_edges: &HashMap<usize, Vec<usize>>,
-    receivers: &mut HashMap<usize, Vec<UnboundedReceiver<RuleMessageBatch>>>,
-    senders: &HashMap<usize, Vec<UnboundedSender<RuleMessageBatch>>>,
-) -> Vec<UnboundedReceiver<RuleMessageBatch>> {
-    let mut rxs = vec![];
-
-    let source_ids = incoming_edges.get(index).unwrap();
-    for source_id in source_ids {
-        if let Some(exist_rxs) = receivers.get_mut(source_id) {
-            if let Some(rx) = exist_rxs.pop() {
-                rxs.push(rx);
-            }
-        } else {
-            let (tx, rx) = unbounded_channel();
-            rxs.push(rx);
-            todo!()
-        }
-    }
-
-    rxs
-}
-
-fn get_txs(
-    outgoing_edges: &HashMap<usize, Vec<usize>>,
-    senders: &mut HashMap<usize, Vec<UnboundedSender<RuleMessageBatch>>>,
-) -> Vec<UnboundedSender<RuleMessageBatch>> {
-    let mut txs = vec![];
-    for (_, tx) in outgoing_edges {
-        for _ in tx {
-            let (tx, rx) = unbounded_channel();
-            txs.push(tx);
-        }
-    }
-    txs
 }

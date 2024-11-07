@@ -3,11 +3,14 @@ use std::collections::HashMap;
 use message::{MessageBatch, MessageValue};
 use types::rules::functions::aggregate::ItemConf;
 
+use crate::aggregate_return;
+
 use super::Aggregater;
 
 struct Merge {
     field: String,
     all: bool,
+    target_field: Option<String>,
 }
 
 pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
@@ -18,6 +21,7 @@ pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
     Box::new(Merge {
         field: conf.field,
         all,
+        target_field: conf.target_field,
     })
 }
 
@@ -46,6 +50,6 @@ impl Aggregater for Merge {
             }
         }
 
-        (self.field.clone(), MessageValue::Object(resp_value))
+        aggregate_return!(self, MessageValue::Object(resp_value))
     }
 }

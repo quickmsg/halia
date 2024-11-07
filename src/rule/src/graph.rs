@@ -66,14 +66,6 @@ impl Graph {
         conf.nodes.iter().map(|node| node.index).collect()
     }
 
-    pub fn get_outgoing_edges(&self) -> &HashMap<usize, Vec<usize>> {
-        &self.outgoing_edges
-    }
-
-    pub fn get_incoming_edges(&self) -> &HashMap<usize, Vec<usize>> {
-        &self.incoming_edges
-    }
-
     /// 将最开始的节点取出，并从ids里面删除
     pub fn take_source_indexes(&mut self) -> Vec<usize> {
         let indexes: Vec<_> = self
@@ -197,7 +189,9 @@ impl Graph {
         let mut ids = vec![source_id];
 
         match self.node_types.get(&source_id).unwrap() {
-            types::rules::NodeType::Merge | types::rules::NodeType::Window => ids,
+            types::rules::NodeType::Merge
+            | types::rules::NodeType::Window
+            | types::rules::NodeType::Aggregation => ids,
             _ => {
                 let mut current_id = source_id;
                 loop {

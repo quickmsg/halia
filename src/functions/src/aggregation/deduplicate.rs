@@ -1,15 +1,21 @@
 use message::{MessageBatch, MessageValue};
 use types::rules::functions::aggregate::ItemConf;
 
+use crate::aggregate_return;
+
 use super::Aggregater;
 
 // 去重
 struct Deduplicate {
     field: String,
+    target_field: Option<String>,
 }
 
 pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
-    Box::new(Deduplicate { field: conf.field })
+    Box::new(Deduplicate {
+        field: conf.field,
+        target_field: conf.target_field,
+    })
 }
 
 impl Aggregater for Deduplicate {
@@ -26,6 +32,6 @@ impl Aggregater for Deduplicate {
             }
         }
 
-        (self.field.clone(), MessageValue::Array(message_values))
+        aggregate_return!(self, MessageValue::Array(message_values))
     }
 }

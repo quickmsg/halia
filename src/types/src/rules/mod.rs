@@ -53,6 +53,7 @@ pub enum NodeType {
     AppSource,
     Merge,
     Window,
+    Aggregation,
     Filter,
     Computer,
     DeviceSink,

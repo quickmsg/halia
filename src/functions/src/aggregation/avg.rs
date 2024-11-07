@@ -1,6 +1,8 @@
 use message::{MessageBatch, MessageValue};
 use types::rules::functions::aggregate::ItemConf;
 
+use crate::aggregate_return;
+
 use super::Aggregater;
 
 struct Avg {
@@ -11,7 +13,7 @@ struct Avg {
 pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
     Box::new(Avg {
         field: conf.field,
-        target_field: todo!(),
+        target_field: conf.target_field,
     })
 }
 
@@ -37,13 +39,13 @@ impl Aggregater for Avg {
             }
         }
 
-        let value = if count > 0 {
+        let result = if count > 0 {
             MessageValue::Float64(sum / count as f64)
         } else {
             MessageValue::Float64(0.0)
         };
 
-        (self.field.clone(), value)
+        aggregate_return!(self, result)
     }
 }
 

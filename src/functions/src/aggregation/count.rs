@@ -1,14 +1,20 @@
 use message::{MessageBatch, MessageValue};
 use types::rules::functions::aggregate::ItemConf;
 
+use crate::aggregate_return;
+
 use super::Aggregater;
 
 struct Count {
     field: String,
+    target_field: Option<String>,
 }
 
 pub(crate) fn new(conf: ItemConf) -> Box<dyn Aggregater> {
-    Box::new(Count { field: conf.field })
+    Box::new(Count {
+        field: conf.field,
+        target_field: conf.target_field,
+    })
 }
 
 impl Aggregater for Count {
@@ -20,6 +26,6 @@ impl Aggregater for Count {
             }
         }
 
-        (self.field.clone(), MessageValue::Int64(count as i64))
+        aggregate_return!(self, MessageValue::Int64(count as i64))
     }
 }

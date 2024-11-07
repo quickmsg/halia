@@ -55,3 +55,13 @@ impl Function for Aggregate {
         true
     }
 }
+
+#[macro_export]
+macro_rules! aggregate_return {
+    ($self:expr, $result:expr) => {
+        match &$self.target_field {
+            Some(target_field) => (target_field.clone(), $result),
+            None => ($self.field.clone(), $result),
+        } 
+    };
+}
