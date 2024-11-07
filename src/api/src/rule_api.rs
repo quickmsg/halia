@@ -28,6 +28,7 @@ pub fn routes() -> Router {
         .route("/:id/log/download", get(download_log))
         .route("/:id/log/start", put(start_log))
         .route("/:id/log/stop", put(stop_log))
+        .route("/:id/log", routing::delete(delete_log))
 }
 
 async fn get_rules_summary() -> AppSuccess<Summary> {
@@ -73,6 +74,11 @@ async fn sse_log(
             data: e.to_string(),
         }),
     }
+}
+
+async fn delete_log(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+    common::log::delete_log(&id).await;
+    Ok(AppSuccess::empty())
 }
 
 async fn download_log(Path(id): Path<String>) -> impl IntoResponse {

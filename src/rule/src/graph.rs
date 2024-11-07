@@ -222,6 +222,10 @@ impl Graph {
             }
         }
     }
+
+    pub fn get_remain_previous_ids(&self, index: usize) -> Vec<usize> {
+        self.incoming_edges.get(&index).unwrap().clone()
+    }
 }
 
 #[cfg(test)]

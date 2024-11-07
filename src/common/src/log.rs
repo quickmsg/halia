@@ -152,6 +152,11 @@ pub async fn download_log(id: &String) -> Response {
     (headers, body).into_response()
 }
 
+pub async fn delete_log(id: &String) {
+    let filename = get_log_filename(id);
+    _ = tokio::fs::remove_file(filename).await;
+}
+
 pub struct Logger {
     enable: Arc<AtomicBool>,
     stop_signal: (watch::Sender<()>, Option<watch::Receiver<()>>),

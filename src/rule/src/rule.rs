@@ -10,7 +10,7 @@ use tokio::{
     select,
     sync::{
         broadcast,
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        mpsc::{UnboundedReceiver, UnboundedSender},
     },
 };
 use tracing::{debug, error};
@@ -158,14 +158,17 @@ impl Rule {
             }
         }
 
-        // TODO
-        // for (index, senders) in senders {
-        //     for sender in senders {
-        //         let index = incoming_edges.get_mut(&index).unwrap().pop().unwrap();
-        //         let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
-        //         run_direct_link(sender, rx, self.stop_signal_tx.subscribe());
-        //     }
-        // }
+        for (index, senders) in senders {
+            if senders.len() == 0 {
+                continue;
+            }
+
+            for sender in senders {
+                let index = graph.get_remain_previous_ids(index)[0];
+                let rx = receivers.get_mut(&index).unwrap().pop().unwrap();
+                run_direct_link(sender, rx, self.stop_signal_tx.subscribe());
+            }
+        }
 
         Ok(())
     }
