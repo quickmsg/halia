@@ -25,4 +25,5 @@ pub enum Type {
     Lte,
     Neq,
     Reg,
+    IsArray,
 }

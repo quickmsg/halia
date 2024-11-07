@@ -14,6 +14,7 @@ mod lt;
 mod lte;
 mod neq;
 mod reg;
+mod is_array;
 
 #[async_trait]
 pub(crate) trait Filter: Sync + Send {
@@ -36,6 +37,7 @@ pub fn new(conf: Conf, logger: LoggerItem) -> Result<Box<dyn Function>> {
             types::rules::functions::filter::Type::Lte => lte::new(item_conf)?,
             types::rules::functions::filter::Type::Neq => neq::new(item_conf)?,
             types::rules::functions::filter::Type::Reg => reg::new(item_conf)?,
+            types::rules::functions::filter::Type::IsArray => todo!(),
         };
         filters.push(filter);
     }

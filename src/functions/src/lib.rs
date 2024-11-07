@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use message::MessageBatch;
 
+pub mod aggregate;
 pub mod computes;
 pub mod field;
 pub mod filter;
