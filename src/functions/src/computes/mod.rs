@@ -147,7 +147,7 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::computer::Type::DecompressSnappy => {
                 compress::snappy::new_decoder(item_conf)
             }
-            types::rules::functions::computer::Type::ConpressZlib => {
+            types::rules::functions::computer::Type::CompressZlib => {
                 compress::zlib::new_encoder(item_conf)
             }
             types::rules::functions::computer::Type::DecompressZlib => {

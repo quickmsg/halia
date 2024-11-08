@@ -38,3 +38,4 @@ webpki-roots = { workspace = true }
 rustls-native-certs = "0.8.0"
 rustls-pemfile = "2.2.0"
 tokio-tungstenite = { workspace = true }
+tracing = { workspace = true }

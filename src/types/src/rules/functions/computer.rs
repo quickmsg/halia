@@ -90,6 +90,6 @@ pub enum Type {
     DecompressLz4,
     CompressSnappy,
     DecompressSnappy,
-    ConpressZlib,
+    CompressZlib,
     DecompressZlib,
 }

@@ -12,7 +12,11 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use log::{error, warn};
 use message::{MessageBatch, RuleMessageBatch};
-use rumqttc::v5::{self, mqttbytes::v5::ConnectProperties, AsyncClient};
+use rumqttc::v5::{
+    self,
+    mqttbytes::v5::{ConnectProperties, LastWill},
+    AsyncClient,
+};
 use sink::Sink;
 use source::Source;
 use tokio::{
@@ -20,7 +24,7 @@ use tokio::{
     sync::{
         broadcast,
         mpsc::{self, UnboundedSender},
-        RwLock,
+        watch, RwLock,
     },
     task::JoinHandle,
 };
@@ -29,7 +33,7 @@ use types::apps::{
     SearchAppsItemRunningInfo,
 };
 
-use crate::App;
+use crate::{mqtt_client_ssl::get_ssl_config, App};
 
 mod sink;
 mod source;
@@ -38,46 +42,41 @@ pub struct MqttClient {
     _id: String,
 
     err: Arc<RwLock<Option<String>>>,
-    stop_signal_tx: mpsc::Sender<()>,
+    stop_signal_tx: watch::Sender<()>,
     app_err_tx: broadcast::Sender<bool>,
 
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
     mqtt_client: Arc<AsyncClient>,
-    join_handle: Option<
-        JoinHandle<(
-            mpsc::Receiver<()>,
-            broadcast::Sender<bool>,
-            Arc<DashMap<String, Source>>,
-        )>,
-    >,
+    join_handle: Option<JoinHandle<JoinHandleData>>,
     rtt: AtomicU16,
 }
 
-// struct JoinHandleData {
-//     conf: MqttClientConf,
-//     stop_signal_rx: mpsc::Receiver<()>,
-//     app_err_tx: broadcast::Sender<bool>,
-//     sources: Arc<DashMap<String, Source>>,
-//     app_err: Arc<RwLock<Option<String>>>,
-// }
+struct JoinHandleData {
+    conf: MqttClientConf,
+    stop_signal_rx: watch::Receiver<()>,
+    app_err_tx: broadcast::Sender<bool>,
+    sources: Arc<DashMap<String, Source>>,
+    app_err: Arc<RwLock<Option<String>>>,
+}
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: MqttClientConf = serde_json::from_value(conf).unwrap();
-
     let (app_err_tx, _) = broadcast::channel(16);
-
-    let (stop_signal_tx, stop_signal_rx) = mpsc::channel(1);
+    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
     let sources = Arc::new(DashMap::new());
     let app_err = Arc::new(RwLock::new(None));
-    let (join_handle, mqtt_client) = MqttClient::event_loop(
+
+    let join_handle_data = JoinHandleData {
         conf,
-        sources.clone(),
         stop_signal_rx,
-        app_err_tx.clone(),
-        app_err.clone(),
-    );
+        app_err_tx: app_err_tx.clone(),
+        sources: sources.clone(),
+        app_err: app_err.clone(),
+    };
+
+    let (join_handle, mqtt_client) = MqttClient::event_loop(join_handle_data);
 
     Box::new(MqttClient {
         _id: id,
@@ -117,38 +116,38 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 impl MqttClient {
     fn event_loop(
-        conf: MqttClientConf,
-        sources: Arc<DashMap<String, Source>>,
-        mut stop_signal_rx: mpsc::Receiver<()>,
-        app_err_tx: broadcast::Sender<bool>,
-        _device_err: Arc<RwLock<Option<String>>>,
-    ) -> (
-        JoinHandle<(
-            mpsc::Receiver<()>,
-            broadcast::Sender<bool>,
-            Arc<DashMap<String, Source>>,
-        )>,
-        Arc<AsyncClient>,
-    ) {
-        let mut mqtt_options = v5::MqttOptions::new(&conf.client_id, &conf.host, conf.port);
-        mqtt_options.set_keep_alive(Duration::from_secs(conf.keep_alive));
+        mut join_handle_data: JoinHandleData,
+    ) -> (JoinHandle<JoinHandleData>, Arc<AsyncClient>) {
+        let mut mqtt_options = v5::MqttOptions::new(
+            &join_handle_data.conf.client_id,
+            &join_handle_data.conf.host,
+            join_handle_data.conf.port,
+        );
+        mqtt_options.set_keep_alive(Duration::from_secs(join_handle_data.conf.keep_alive));
 
-        match (&conf.auth.username, &conf.auth.password) {
-            (None, None) => {}
-            (None, Some(password)) => {
-                mqtt_options.set_credentials("", password);
+        match join_handle_data.conf.auth_method {
+            types::apps::mqtt_client_v50::AuthMethod::None => {}
+            types::apps::mqtt_client_v50::AuthMethod::Password => {
+                mqtt_options.set_credentials(
+                    &join_handle_data
+                        .conf
+                        .auth_password
+                        .as_ref()
+                        .unwrap()
+                        .username,
+                    &join_handle_data
+                        .conf
+                        .auth_password
+                        .as_ref()
+                        .unwrap()
+                        .password,
+                );
             }
-            (Some(username), None) => {
-                mqtt_options.set_credentials(username, "");
-            }
-            (Some(username), Some(password)) => {
-                mqtt_options.set_credentials(username, password);
-            }
-        };
+        }
 
-        mqtt_options.set_clean_start(conf.clean_start);
+        mqtt_options.set_clean_start(join_handle_data.conf.clean_start);
 
-        if let Some(conf_connect_properties) = conf.connect_properties {
+        if let Some(conf_connect_properties) = &join_handle_data.conf.connect_properties {
             let mut connect_properties = ConnectProperties::new();
             connect_properties.session_expiry_interval =
                 conf_connect_properties.session_expire_interval;
@@ -158,13 +157,31 @@ impl MqttClient {
             connect_properties.request_response_info =
                 conf_connect_properties.request_response_info;
             connect_properties.request_problem_info = conf_connect_properties.request_problem_info;
-            connect_properties.user_properties = conf_connect_properties.user_properties;
+            connect_properties.user_properties = conf_connect_properties.user_properties.clone();
             connect_properties.authentication_method =
-                conf_connect_properties.authentication_method;
+                conf_connect_properties.authentication_method.clone();
             // TODO
             // connect_properties.authentication_data = conf_connect_properties.authentication_data;
 
             mqtt_options.set_connect_properties(connect_properties);
+        }
+
+        if join_handle_data.conf.last_will_enable {
+            let last_will = join_handle_data.conf.last_will.as_ref().unwrap();
+            mqtt_options.set_last_will(LastWill {
+                topic: todo!(),
+                message: todo!(),
+                qos: todo!(),
+                retain: todo!(),
+                properties: todo!(),
+            });
+        }
+
+        if join_handle_data.conf.ssl_enable {
+            let config = get_ssl_config(&join_handle_data.conf.ssl_conf.as_ref().unwrap());
+            let transport =
+                rumqttc::Transport::Tls(rumqttc::TlsConfiguration::Rustls(Arc::new(config)));
+            mqtt_options.set_transport(transport);
         }
 
         // connect_properties.authentication_method = conf.authentication_method;
@@ -186,40 +203,17 @@ impl MqttClient {
         //     }
         // }
 
-        // match (conf.ssl.enable, conf.ssl.client_cert_enable) {
-        //     (true, true) => {
-        //         let transport = Transport::Tls(TlsConfiguration::Simple {
-        //             ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
-        //             alpn: None,
-        //             client_auth: Some((
-        //                 conf.ssl.client_cert.unwrap().clone().into_bytes(),
-        //                 conf.ssl.client_key.unwrap().clone().into_bytes(),
-        //             )),
-        //         });
-        //         mqtt_options.set_transport(transport);
-        //     }
-        //     (true, false) => {
-        //         let transport = Transport::Tls(TlsConfiguration::Simple {
-        //             ca: conf.ssl.ca_cert.unwrap().clone().into_bytes(),
-        //             alpn: None,
-        //             client_auth: None,
-        //         });
-        //         mqtt_options.set_transport(transport);
-        //     }
-        //     _ => {}
-        // }
-
         let (client, mut event_loop) = v5::AsyncClient::new(mqtt_options, 16);
 
         let join_handle = tokio::spawn(async move {
             loop {
                 select! {
-                    _ = stop_signal_rx.recv() => {
-                        return (stop_signal_rx, app_err_tx, sources)
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
                     }
 
                     event = event_loop.poll() => {
-                        Self::handle_event(event, &sources).await;
+                        Self::handle_event(event, &join_handle_data.sources).await;
                     }
                 }
             }
@@ -380,17 +374,14 @@ impl App for MqttClient {
         _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        self.stop_signal_tx.send(()).await.unwrap();
-
-        let (stop_signal_rx, app_err_tx, sources) = self.join_handle.take().unwrap().await.unwrap();
         let new_conf: MqttClientConf = serde_json::from_value(new_conf)?;
-        let (join_hanlde, mqtt_client) = MqttClient::event_loop(
-            new_conf,
-            sources,
-            stop_signal_rx,
-            app_err_tx,
-            self.err.clone(),
-        );
+
+        self.stop_signal_tx.send(()).unwrap();
+
+        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
+        join_handle_data.conf = new_conf;
+
+        let (join_hanlde, mqtt_client) = MqttClient::event_loop(join_handle_data);
         self.mqtt_client = mqtt_client;
         self.join_handle = Some(join_hanlde);
 
@@ -407,7 +398,7 @@ impl App for MqttClient {
         }
 
         let _ = self.mqtt_client.disconnect().await;
-        self.stop_signal_tx.send(()).await.unwrap();
+        self.stop_signal_tx.send(()).unwrap();
     }
 
     async fn create_source(

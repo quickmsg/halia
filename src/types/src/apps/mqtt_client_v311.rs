@@ -36,17 +36,17 @@ pub enum AuthMethod {
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
+pub struct AuthPassword {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
 pub struct LastWill {
     pub topic: String,
     pub qos: Qos,
     pub retain: bool,
     pub message: PlainOrBase64Value,
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-pub struct AuthPassword {
-    pub username: String,
-    pub password: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]

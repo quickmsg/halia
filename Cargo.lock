@@ -275,6 +275,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-tungstenite 0.24.0",
+ "tracing",
  "types",
  "webpki-roots 0.26.6",
 ]

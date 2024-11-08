@@ -8,8 +8,10 @@ pub struct MqttClientConf {
     pub client_id: String,
     pub host: String,
     pub port: u16,
-    #[serde(flatten)]
-    pub auth: MqttClientAuth,
+
+    pub auth_method: AuthMethod,
+    pub auth_password: Option<AuthPassword>,
+
     pub timeout: usize,
     pub keep_alive: u64,
     pub clean_start: bool,
@@ -18,7 +20,22 @@ pub struct MqttClientConf {
 
     pub ssl_enable: bool,
     pub ssl_conf: Option<SslConf>,
+
+    pub last_will_enable: bool,
     pub last_will: Option<LastWill>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthMethod {
+    None,
+    Password,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+pub struct AuthPassword {
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]

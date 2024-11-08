@@ -8,7 +8,7 @@ use message::MessageBatch;
 use types::{
     schema::{
         AvroDecodeConf, CreateUpdateSchemaReq, CsvDecodeConf, DecodeType, EncodeType, QueryParams,
-        SearchSchemasItemResp, SearchSchemasResp, TemplateEncodeConf,
+        SearchSchemasItemResp, SearchSchemasResp,
     },
     Pagination,
 };
