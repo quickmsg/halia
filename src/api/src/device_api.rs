@@ -3,7 +3,6 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
-use tracing::debug;
 use types::{devices::Summary, Pagination, QuerySourcesOrSinksParams, Value};
 
 use crate::{AppResult, AppSuccess};

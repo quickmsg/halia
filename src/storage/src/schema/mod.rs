@@ -20,9 +20,9 @@ const TABLE_NAME: &str = "halia_schemas";
 #[derive(FromRow)]
 pub struct Schema {
     pub id: String,
+    pub name: String,
     pub schema_type: i32,
     pub protocol_type: i32,
-    pub name: String,
     pub conf: Vec<u8>,
     pub ts: i64,
 }
@@ -32,10 +32,9 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
     schema_type SMALLINT NOT NULL,
     protocol_type SMALLINT NOT NULL,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    device_type SMALLINT NOT NULL,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
@@ -48,16 +47,18 @@ pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
     let conf = serde_json::to_vec(&req.ext)?;
     let ts = common::timestamp_millis() as i64;
     let schema_type: i32 = req.schema_type.into();
+    let protocol_type: i32 = req.protocol_type.into();
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, schema_type name, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, name, schema_type, protocol_type, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
-    .bind(schema_type)
     .bind(req.name)
+    .bind(schema_type)
+    .bind(protocol_type)
     .bind(conf)
     .bind(ts)
     .execute(POOL.get().unwrap())

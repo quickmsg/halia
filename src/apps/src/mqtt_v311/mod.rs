@@ -388,15 +388,26 @@ impl App for MqttClient {
             .get_mut(&source_id)
             .ok_or(HaliaError::NotFound(source_id.to_owned()))?;
 
-        if let Err(e) = self.mqtt_client.unsubscribe(old_conf.topic).await {
-            error!("unsubscribe err:{e}");
+        if old_conf.topic != new_conf.topic {
+            if let Err(e) = self.mqtt_client.unsubscribe(&old_conf.topic).await {
+                error!("unsubscribe err:{e}");
+            }
+            if let Err(e) = self
+                .mqtt_client
+                .subscribe(&new_conf.topic, transfer_qos(&new_conf.qos))
+                .await
+            {
+                error!("subscribe err:{e}");
+            }
         }
-        if let Err(e) = self
-            .mqtt_client
-            .subscribe(&new_conf.topic, transfer_qos(&new_conf.qos))
-            .await
+
+        // TODO schema的删除问题
+        if old_conf.decode_type != new_conf.decode_type || old_conf.schema_id != new_conf.schema_id
         {
-            error!("subscribe err:{e}");
+            let decoder = schema::new_decoder(&new_conf.decode_type, &new_conf.schema_id)
+                .await
+                .unwrap();
+            source.decoder = decoder;
         }
 
         source.conf = new_conf;

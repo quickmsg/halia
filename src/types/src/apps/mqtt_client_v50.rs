@@ -16,6 +16,7 @@ pub struct MqttClientConf {
     pub keep_alive: u64,
     pub clean_start: bool,
 
+    pub connect_properties_enable: bool,
     pub connect_properties: Option<ConnectProperties>,
 
     pub ssl_enable: bool,
@@ -87,6 +88,15 @@ pub struct SourceConf {
     pub subscribe_id: Option<usize>,
     // topic别名
     pub topic_alias: Option<u16>,
+
+    pub subscribe_properties_enable: bool,
+    pub subscribe_properties: Option<SubscribeProperties>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct SubscribeProperties {
+    pub id: Option<usize>,
+    pub user_properties: Vec<(String, String)>,
 }
 
 #[derive(Deserialize_repr, Serialize_repr, Clone, PartialEq, Copy)]

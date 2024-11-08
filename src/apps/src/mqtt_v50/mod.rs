@@ -28,6 +28,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
+use tracing::debug;
 use types::apps::{
     mqtt_client_v50::{MqttClientConf, Qos, SinkConf, SourceConf},
     SearchAppsItemRunningInfo,
@@ -125,6 +126,8 @@ impl MqttClient {
         );
         mqtt_options.set_keep_alive(Duration::from_secs(join_handle_data.conf.keep_alive));
 
+        mqtt_options.set_clean_start(join_handle_data.conf.clean_start);
+
         match join_handle_data.conf.auth_method {
             types::apps::mqtt_client_v50::AuthMethod::None => {}
             types::apps::mqtt_client_v50::AuthMethod::Password => {
@@ -147,23 +150,27 @@ impl MqttClient {
 
         mqtt_options.set_clean_start(join_handle_data.conf.clean_start);
 
-        if let Some(conf_connect_properties) = &join_handle_data.conf.connect_properties {
-            let mut connect_properties = ConnectProperties::new();
-            connect_properties.session_expiry_interval =
-                conf_connect_properties.session_expire_interval;
-            connect_properties.receive_maximum = conf_connect_properties.receive_maximum;
-            connect_properties.max_packet_size = conf_connect_properties.max_packet_size;
-            connect_properties.topic_alias_max = conf_connect_properties.topic_alias_max;
-            connect_properties.request_response_info =
-                conf_connect_properties.request_response_info;
-            connect_properties.request_problem_info = conf_connect_properties.request_problem_info;
-            connect_properties.user_properties = conf_connect_properties.user_properties.clone();
-            connect_properties.authentication_method =
-                conf_connect_properties.authentication_method.clone();
-            // TODO
-            // connect_properties.authentication_data = conf_connect_properties.authentication_data;
+        if join_handle_data.conf.connect_properties_enable {
+            if let Some(conf_connect_properties) = &join_handle_data.conf.connect_properties {
+                let mut connect_properties = ConnectProperties::new();
+                connect_properties.session_expiry_interval =
+                    conf_connect_properties.session_expire_interval;
+                connect_properties.receive_maximum = conf_connect_properties.receive_maximum;
+                connect_properties.max_packet_size = conf_connect_properties.max_packet_size;
+                connect_properties.topic_alias_max = conf_connect_properties.topic_alias_max;
+                connect_properties.request_response_info =
+                    conf_connect_properties.request_response_info;
+                connect_properties.request_problem_info =
+                    conf_connect_properties.request_problem_info;
+                connect_properties.user_properties =
+                    conf_connect_properties.user_properties.clone();
+                connect_properties.authentication_method =
+                    conf_connect_properties.authentication_method.clone();
+                // TODO
+                // connect_properties.authentication_data = conf_connect_properties.authentication_data;
 
-            mqtt_options.set_connect_properties(connect_properties);
+                mqtt_options.set_connect_properties(connect_properties);
+            }
         }
 
         if join_handle_data.conf.last_will_enable {
@@ -228,6 +235,7 @@ impl MqttClient {
     ) {
         match event {
             Ok(v5::Event::Incoming(v5::Incoming::Publish(p))) => {
+                debug!("Received: {:?}", p);
                 match MessageBatch::from_json(p.payload) {
                     Ok(msg) => {
                         if p.topic.len() > 0 {
