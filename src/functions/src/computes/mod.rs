@@ -116,6 +116,43 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::computer::Type::HashSha256 => todo!(),
             types::rules::functions::computer::Type::Date => todo!(),
             types::rules::functions::computer::Type::ArrayCardinality => todo!(),
+            // compress
+            types::rules::functions::computer::Type::CompressBrotli => {
+                compress::brotli::new_encoder(item_conf)
+            }
+            types::rules::functions::computer::Type::DecompressBrotli => {
+                compress::brotli::new_decoder(item_conf)
+            }
+            types::rules::functions::computer::Type::CompressDeflate => {
+                compress::deflate::new_encoder(item_conf)
+            }
+            types::rules::functions::computer::Type::DecompressDeflate => {
+                compress::deflate::new_decoder(item_conf)
+            }
+            types::rules::functions::computer::Type::CompressGzip => {
+                compress::gzip::new_encoder(item_conf)
+            }
+            types::rules::functions::computer::Type::DecompressGzip => {
+                compress::gzip::new_decoder(item_conf)
+            }
+            types::rules::functions::computer::Type::CompressLz4 => {
+                compress::lz4::new_encoder(item_conf)
+            }
+            types::rules::functions::computer::Type::DecompressLz4 => {
+                compress::lz4::new_decoder(item_conf)
+            }
+            types::rules::functions::computer::Type::CompressSnappy => {
+                compress::snappy::new_encoder(item_conf)
+            }
+            types::rules::functions::computer::Type::DecompressSnappy => {
+                compress::snappy::new_decoder(item_conf)
+            }
+            types::rules::functions::computer::Type::ConpressZlib => {
+                compress::zlib::new_encoder(item_conf)
+            }
+            types::rules::functions::computer::Type::DecompressZlib => {
+                compress::zlib::new_decoder(item_conf)
+            }
         };
         computers.push(computer);
     }

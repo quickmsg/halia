@@ -7,18 +7,19 @@ use flate2::{
 };
 use message::MessageValue;
 use tracing::warn;
+use types::rules::functions::computer::ItemConf;
 
-use super::Compresser;
+use crate::{add_or_set_message_value, computes::Computer};
 
 struct HaliaGzEncoder {
     field: String,
-    target_field: String,
+    target_field: Option<String>,
 }
 
-pub fn new_encoder(field: String, target_field: String) -> Box<dyn Compresser> {
+pub fn new_encoder(conf: ItemConf) -> Box<dyn Computer> {
     Box::new(HaliaGzEncoder {
-        field,
-        target_field,
+        field: conf.field,
+        target_field: conf.target_field,
     })
 }
 
@@ -31,36 +32,42 @@ impl HaliaGzEncoder {
     }
 }
 
-impl Compresser for HaliaGzEncoder {
-    fn code(&mut self, mb: &mut message::MessageBatch) {
-        for message in mb.get_messages_mut() {
-            match message.get(&self.field) {
-                Some(mv) => match mv {
-                    message::MessageValue::String(str) => match Self::encode(str.as_bytes()) {
-                        Ok(data) => message.add(self.field.clone(), MessageValue::Bytes(data)),
-                        Err(e) => warn!("{}", e),
-                    },
-                    message::MessageValue::Bytes(bytes) => match Self::encode(bytes) {
-                        Ok(data) => message.add(self.field.clone(), MessageValue::Bytes(data)),
-                        Err(e) => warn!("{}", e),
-                    },
-                    _ => {}
+impl Computer for HaliaGzEncoder {
+    fn compute(&self, message: &mut message::Message) {
+        let result = match message.get(&self.field) {
+            Some(mv) => match mv {
+                message::MessageValue::String(str) => match Self::encode(str.as_bytes()) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        warn!("{}", e);
+                        return;
+                    }
                 },
-                None => {}
-            }
-        }
+                message::MessageValue::Bytes(bytes) => match Self::encode(bytes) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        warn!("{}", e);
+                        return;
+                    }
+                },
+                _ => return,
+            },
+            None => return,
+        };
+
+        add_or_set_message_value!(self, message, MessageValue::Bytes(result));
     }
 }
 
 struct HaliaGzDecoder {
     field: String,
-    target_field: String,
+    target_field: Option<String>,
 }
 
-pub fn new_decoder(field: String, target_field: String) -> Box<dyn Compresser> {
+pub fn new_decoder(conf: ItemConf) -> Box<dyn Computer> {
     Box::new(HaliaGzDecoder {
-        field,
-        target_field,
+        field: conf.field,
+        target_field: conf.target_field,
     })
 }
 
@@ -73,23 +80,29 @@ impl HaliaGzDecoder {
     }
 }
 
-impl Compresser for HaliaGzDecoder {
-    fn code(&mut self, mb: &mut message::MessageBatch) {
-        for message in mb.get_messages_mut() {
-            match message.get(&self.field) {
-                Some(mv) => match mv {
-                    message::MessageValue::String(str) => match Self::decode(str.as_bytes()) {
-                        Ok(data) => message.add(self.field.clone(), MessageValue::Bytes(data)),
-                        Err(e) => warn!("{}", e),
-                    },
-                    message::MessageValue::Bytes(bytes) => match Self::decode(bytes) {
-                        Ok(data) => message.add(self.field.clone(), MessageValue::Bytes(data)),
-                        Err(e) => warn!("{}", e),
-                    },
-                    _ => {}
+impl Computer for HaliaGzDecoder {
+    fn compute(&self, message: &mut message::Message) {
+        let result = match message.get(&self.field) {
+            Some(mv) => match mv {
+                message::MessageValue::String(str) => match Self::decode(str.as_bytes()) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        warn!("{}", e);
+                        return;
+                    }
                 },
-                None => {}
-            }
-        }
+                message::MessageValue::Bytes(bytes) => match Self::decode(bytes) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        warn!("{}", e);
+                        return;
+                    }
+                },
+                _ => return,
+            },
+            None => return,
+        };
+
+        add_or_set_message_value!(self, message, MessageValue::Bytes(result));
     }
 }

@@ -78,4 +78,18 @@ pub enum Type {
 
     // 数组
     ArrayCardinality,
+
+    // compress
+    CompressBrotli,
+    DecompressBrotli,
+    CompressDeflate,
+    DecompressDeflate,
+    CompressGzip,
+    DecompressGzip,
+    CompressLz4,
+    DecompressLz4,
+    CompressSnappy,
+    DecompressSnappy,
+    ConpressZlib,
+    DecompressZlib,
 }

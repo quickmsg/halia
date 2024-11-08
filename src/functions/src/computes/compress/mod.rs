@@ -1,12 +1,6 @@
-use message::MessageBatch;
-
-mod deflate;
-mod gzip;
-mod zlib;
-mod snappy;
-mod brotli;
-mod lz4;
-
-pub(crate) trait Compresser {
-    fn code(&mut self, mb: &mut MessageBatch);
-}
+pub mod deflate;
+pub mod gzip;
+pub mod zlib;
+pub mod snappy;
+pub mod brotli;
+pub mod lz4;
