@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sqlx::{prelude::FromRow, query_builder};
+use tracing::debug;
 
 use super::POOL;
 
@@ -104,6 +105,8 @@ pub async fn count_cnt_by_many_resource_ids(resource_ids: &Vec<String>) -> Resul
         clause.push_str(format!("{},", resource_id).as_str());
     }
     clause.push_str(")");
+
+    debug!("clause: {}", clause);
 
     let count: i64 = sqlx::query_scalar(clause.as_str())
         .fetch_one(POOL.get().unwrap())

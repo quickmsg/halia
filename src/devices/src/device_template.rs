@@ -1,4 +1,5 @@
 use common::error::{HaliaError, HaliaResult};
+use tracing::debug;
 use types::{
     devices::{
         device_template::{self, source_sink, CreateReq, QueryParams, SearchResp},
@@ -193,8 +194,7 @@ pub async fn create_sink(
         super::create_sink(device_id, Some(&sink_id), device_sink_req.clone()).await?;
     }
 
-    storage::device::template_source_sink::insert_sink(&sink_id, &device_template_id, req)
-        .await?;
+    storage::device::template_source_sink::insert_sink(&sink_id, &device_template_id, req).await?;
     Ok(())
 }
 
@@ -255,9 +255,13 @@ pub async fn delete_sink(device_template_id: String, sink_id: String) -> HaliaRe
     let ids =
         storage::device::source_sink::read_many_ids_by_device_template_source_sink_id(&sink_id)
             .await?;
-    if storage::rule::reference::count_cnt_by_many_resource_ids(&ids).await? > 0 {
-        return Err(HaliaError::DeleteRefing);
+    if ids.len() > 0 {
+        if storage::rule::reference::count_cnt_by_many_resource_ids(&ids).await? > 0 {
+            return Err(HaliaError::DeleteRefing);
+        }
     }
+
+    debug!("here");
 
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
     for device_id in device_ids {
@@ -269,6 +273,7 @@ pub async fn delete_sink(device_template_id: String, sink_id: String) -> HaliaRe
         super::delete_sink(device_id, device_sink_id).await?;
     }
 
+    debug!("delete sink: {}", sink_id);
     storage::device::template_source_sink::delete_by_id(&sink_id).await?;
     Ok(())
 }

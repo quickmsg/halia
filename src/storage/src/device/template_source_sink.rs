@@ -301,7 +301,9 @@ pub async fn update(id: &String, req: CreateUpdateReq) -> Result<()> {
     Ok(())
 }
 
-pub async fn delete_many_by_device_template_id(device_template_id: &String) -> Result<()> {
+pub(crate) async fn delete_many_by_device_template_id(
+    device_template_id: &String,
+) -> HaliaResult<()> {
     sqlx::query(format!("DELETE FROM {} WHERE device_template_id = ?", TABLE_NAME).as_str())
         .bind(device_template_id)
         .execute(POOL.get().unwrap())

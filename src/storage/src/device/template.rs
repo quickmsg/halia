@@ -14,6 +14,8 @@ use types::{
 
 use crate::POOL;
 
+use super::template_source_sink;
+
 const TABLE_NAME: &str = "device_templates";
 
 #[derive(FromRow)]
@@ -183,22 +185,17 @@ pub async fn search(
 
 pub async fn update(id: &String, req: UpdateReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.conf)?;
-    sqlx::query(
-        format!(
-            "UPDATE {} SET name = ?, conf = ? WHERE id = ?",
-            TABLE_NAME
-        )
-        .as_str(),
-    )
-    .bind(req.name)
-    .bind(conf)
-    .bind(id)
-    .execute(POOL.get().unwrap())
-    .await?;
+    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(req.name)
+        .bind(conf)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
 
     Ok(())
 }
 
 pub async fn delete_by_id(id: &String) -> HaliaResult<()> {
-    crate::delete_by_id(id, TABLE_NAME).await
+    crate::delete_by_id(id, TABLE_NAME).await?;
+    template_source_sink::delete_many_by_device_template_id(id).await
 }
