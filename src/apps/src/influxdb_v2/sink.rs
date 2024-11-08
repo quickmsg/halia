@@ -11,7 +11,7 @@ use influxdb2::{
     models::{DataPoint, FieldValue},
     Client,
 };
-use log::{debug, warn};
+use tracing::{debug, warn};
 use message::RuleMessageBatch;
 use tokio::{
     select,

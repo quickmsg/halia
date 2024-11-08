@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use common::error::{HaliaError, HaliaResult};
-use log::debug;
 use message::RuleMessageBatch;
 use schema::Decoder;
 use taos::StreamExt;
@@ -14,6 +13,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_tungstenite::connect_async;
+use tracing::debug;
 use types::apps::websocket::{AppConf, SourceConf};
 
 use crate::websocket::connect_websocket;

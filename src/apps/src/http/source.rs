@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use common::error::HaliaResult;
-use log::warn;
+use tracing::warn;
 use message::{MessageBatch, RuleMessageBatch};
 use reqwest::{Client, Request};
 use tokio::{

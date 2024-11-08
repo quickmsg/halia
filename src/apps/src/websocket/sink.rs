@@ -4,7 +4,7 @@ use common::{
     error::HaliaResult,
     sink_message_retain::{self, SinkMessageRetain},
 };
-use log::{debug, warn};
+use tracing::{debug, warn};
 use message::RuleMessageBatch;
 use schema::Encoder;
 use tokio::{

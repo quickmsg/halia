@@ -258,7 +258,6 @@ dependencies = [
  "futures",
  "influxdb",
  "influxdb2",
- "log",
  "message",
  "reqwest 0.12.7",
  "rskafka",

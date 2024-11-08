@@ -6,7 +6,7 @@ use common::{
     sink_message_retain::{self, SinkMessageRetain},
 };
 use influxdb::{Client, InfluxDbWriteable as _, Timestamp, Type};
-use log::debug;
+use tracing::debug;
 use message::RuleMessageBatch;
 use tokio::{
     select,

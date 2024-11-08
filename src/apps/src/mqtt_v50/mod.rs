@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use log::{error, warn};
+use tracing::{error, warn};
 use message::{MessageBatch, RuleMessageBatch};
 use rumqttc::v5::{
     self,

@@ -9,7 +9,7 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use log::debug;
+use tracing::debug;
 use message::RuleMessageBatch;
 use rskafka::client::{Client, ClientBuilder};
 use sink::Sink;

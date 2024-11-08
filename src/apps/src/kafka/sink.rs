@@ -6,7 +6,7 @@ use common::{
     error::HaliaResult,
     sink_message_retain::{self, SinkMessageRetain},
 };
-use log::warn;
+use tracing::warn;
 use message::RuleMessageBatch;
 use rskafka::{
     client::{

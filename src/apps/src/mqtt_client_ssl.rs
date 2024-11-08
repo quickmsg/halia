@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use log::debug;
+use tracing::debug;
 use rumqttc::tokio_rustls::rustls::{
     client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
     ClientConfig, RootCertStore, SignatureScheme,

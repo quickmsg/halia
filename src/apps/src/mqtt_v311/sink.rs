@@ -4,7 +4,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
-use log::warn;
+use tracing::warn;
 use message::RuleMessageBatch;
 use rumqttc::{valid_topic, AsyncClient};
 use schema::Encoder;

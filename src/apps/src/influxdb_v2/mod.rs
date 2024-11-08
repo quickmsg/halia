@@ -9,7 +9,7 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use log::warn;
+use tracing::warn;
 use message::RuleMessageBatch;
 use sink::Sink;
 use tokio::{
