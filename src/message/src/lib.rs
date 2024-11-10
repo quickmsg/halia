@@ -54,6 +54,10 @@ impl RuleMessageBatch {
 }
 
 impl MessageBatch {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     pub fn add_metadata(&mut self, key: String, value: MessageValue) {
         self.metadata.insert(key, value);
     }
@@ -132,6 +136,13 @@ impl Debug for Message {
 }
 
 impl Message {
+    pub fn new() -> Self {
+        Self {
+            metadata: HashMap::new(),
+            value: MessageValue::Object(HashMap::new()),
+        }
+    }
+
     pub fn add_metadata(&mut self, key: String, value: MessageValue) {
         self.metadata.insert(key, value);
     }
@@ -319,9 +330,9 @@ impl fmt::Display for MessageValue {
             MessageValue::Null => write!(f, "null"),
             MessageValue::Boolean(b) => write!(f, "{}", b),
             MessageValue::Int64(i) => write!(f, "{}", i),
-            MessageValue::Float64(fl) => write!(f, "{}", fl),
-            MessageValue::String(s) => write!(f, "\"{}\"", s),
-            MessageValue::Bytes(bytes) => write!(f, "{:?}", bytes), // 用 `{:?}` 打印字节数组为 `Vec<u8>` 格式
+            MessageValue::Float64(fl) => write!(f, "{:?}", fl),
+            MessageValue::String(s) => write!(f, "{}", s),
+            MessageValue::Bytes(bytes) => write!(f, "{:?}", bytes),
             MessageValue::Array(arr) => {
                 let mut result = String::from("[");
                 let mut first = true;

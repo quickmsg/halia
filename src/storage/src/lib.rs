@@ -142,3 +142,17 @@ impl Into<i32> for SourceSinkType {
         }
     }
 }
+
+pub enum Status {
+    True,
+    False,
+}
+
+impl Into<i32> for Status {
+    fn into(self) -> i32 {
+        match self {
+            Status::True => 1,
+            Status::False => 2,
+        }
+    }
+}

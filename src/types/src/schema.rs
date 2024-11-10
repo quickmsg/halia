@@ -53,6 +53,7 @@ pub enum DecodeType {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub enum EncodeType {
+    Template,
     Json,
 }
 

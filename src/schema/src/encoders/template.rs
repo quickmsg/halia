@@ -20,7 +20,7 @@ pub(crate) fn new(template: String) -> HaliaResult<Box<dyn Encoder>> {
     let re = Regex::new(r"\$\{(.*?)\}").unwrap();
     let mut fields = HashSet::new();
     for cap in re.captures_iter(&template) {
-        fields.insert(cap[1].to_owned());
+        fields.insert(cap[0][2..cap[0].len() - 1].to_owned());
     }
     Ok(Box::new(Template {
         template,
@@ -43,5 +43,27 @@ impl Encoder for Template {
         }
 
         return Ok(template_rendered.into_bytes().into());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+    use message::{Message, MessageBatch, MessageValue};
+
+    use crate::encoders::template::new;
+
+    #[test]
+    fn test_template_encode() {
+        let template = new("hello ${name} ${age} ${f}".to_owned()).unwrap();
+        let mut message = Message::new();
+        message.add("name".to_owned(), MessageValue::String("world".to_owned()));
+        message.add("age".to_owned(), MessageValue::Int64(18));
+        message.add("f".to_owned(), MessageValue::Float64(5.0));
+        let mut mb = MessageBatch::new();
+        mb.push_message(message);
+
+        let encoded = template.encode(mb).unwrap();
+        assert_eq!(encoded, Bytes::from("hello world 18 5.0"));
     }
 }

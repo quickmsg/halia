@@ -11,7 +11,7 @@ use types::{
     Pagination,
 };
 
-use crate::POOL;
+use crate::{Status, POOL};
 
 const TABLE_NAME: &str = "devices";
 
@@ -23,8 +23,8 @@ pub struct Device {
     pub conf_type: i32,
     pub conf: Vec<u8>,
     pub template_id: Option<String>,
-    pub status: i32, // 0:close 1:open
-    pub err: i32,    // 0:错误中 1:正常中
+    pub status: i32,
+    pub err: i32,
     pub ts: i64,
 }
 
@@ -48,10 +48,6 @@ CREATE TABLE IF NOT EXISTS {} (
 }
 
 pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
-    let device_type: i32 = req.device_type.into();
-    let conf_type: i32 = req.conf_type.into();
-    let conf = serde_json::to_vec(&req.conf)?;
-    let ts = common::timestamp_millis() as i64;
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
@@ -62,14 +58,14 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
         .as_str(),
     )
     .bind(id)
-    .bind(device_type)
+    .bind(Into::<i32>::into(req.device_type))
     .bind(req.name)
-    .bind(conf_type)
-    .bind(conf)
+    .bind(Into::<i32>::into(req.conf_type))
+    .bind(serde_json::to_vec(&req.conf)?)
     .bind(req.template_id)
-    .bind(false as i32)
-    .bind(false as i32)
-    .bind(ts)
+    .bind(Into::<i32>::into(Status::False))
+    .bind(Into::<i32>::into(Status::False))
+    .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
 

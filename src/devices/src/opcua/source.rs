@@ -297,7 +297,7 @@ impl Source {
                                 opcua_protocol::types::Variant::Variant(_) => todo!(),
                                 opcua_protocol::types::Variant::DataValue(_) => todo!(),
                                 opcua_protocol::types::Variant::DiagnosticInfo(_) => todo!(),
-                                opcua_protocol::types::Variant::Array(_) => todo!(),
+                                opcua_protocol::types::Variant::Array(array) => todo!(),
                             },
                             None => MessageValue::Null,
                         };

@@ -71,6 +71,15 @@ pub enum ConfType {
     Customize,
 }
 
+// impl From<ConfType> for i32 {
+//     fn from(value: ConfType) -> Self {
+//         match value {
+//             ConfType::Template => 1,
+//             ConfType::Customize => 2,
+//         }
+//     }
+// }
+
 impl Into<i32> for ConfType {
     fn into(self) -> i32 {
         match self {
