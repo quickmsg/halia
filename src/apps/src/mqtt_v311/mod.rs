@@ -253,7 +253,7 @@ impl MqttClient {
                     }
                 }
             }
-            Ok(event) => {
+            Ok(_) => {
                 if *err {
                     *err = false;
                     _ = app_err_tx.send(false);

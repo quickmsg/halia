@@ -154,7 +154,7 @@ pub async fn new_encoder(
             }
             None => return Err(HaliaError::Common("必须提供schema_id".to_owned())),
         },
-        EncodeType::Json => todo!(),
+        EncodeType::Json => encoders::json::new(),
     }
 }
 
