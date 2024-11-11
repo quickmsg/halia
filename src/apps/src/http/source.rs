@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
 use common::error::HaliaResult;
-use tracing::warn;
 use message::{MessageBatch, RuleMessageBatch};
 use reqwest::{Client, Request};
+use taos::StreamExt as _;
 use tokio::{
     select,
     sync::{
@@ -13,6 +13,8 @@ use tokio::{
     task::JoinHandle,
     time,
 };
+use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest as _};
+use tracing::{debug, warn};
 use types::apps::http_client::{HttpClientConf, SourceConf};
 
 use super::{build_basic_auth, build_headers};
@@ -26,20 +28,20 @@ pub struct Source {
 pub struct JoinHandleData {
     pub stop_signal_rx: watch::Receiver<()>,
     pub http_client_conf: Arc<HttpClientConf>,
-    pub conf: SourceConf,
+    pub source_conf: SourceConf,
     pub client: Client,
     pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
 }
 
 impl Source {
-    pub async fn new(http_client_conf: Arc<HttpClientConf>, conf: SourceConf) -> Self {
+    pub async fn new(http_client_conf: Arc<HttpClientConf>, source_conf: SourceConf) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
         let http_client = Client::new();
         let join_handle_data = JoinHandleData {
             stop_signal_rx,
             http_client_conf,
-            conf,
+            source_conf,
             client: http_client.clone(),
             mb_txs: vec![],
         };
@@ -57,7 +59,7 @@ impl Source {
 
     pub async fn update_conf(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
         let mut join_handle_data = self.stop().await;
-        join_handle_data.conf = new_conf;
+        join_handle_data.source_conf = new_conf;
         let join_handle = Self::event_loop(join_handle_data).await;
         self.join_handle = Some(join_handle);
     }
@@ -69,27 +71,39 @@ impl Source {
         self.join_handle = Some(join_hdnale);
     }
 
-    async fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+    async fn event_loop(join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+        match join_handle_data.source_conf.typ {
+            types::apps::http_client::SourceType::Http => {
+                Self::http_event_loop(join_handle_data).await
+            }
+            types::apps::http_client::SourceType::Websocket => {
+                Self::ws_event_loop(join_handle_data).await
+            }
+        }
+    }
+
+    async fn http_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
-            let mut interval =
-                time::interval(Duration::from_millis(join_handle_data.conf.interval));
+            let mut interval = time::interval(Duration::from_millis(
+                join_handle_data.source_conf.interval.unwrap(),
+            ));
             let mut builder = join_handle_data.client.get(format!(
                 "{}:{}{}",
                 &join_handle_data.http_client_conf.host,
                 &join_handle_data.http_client_conf.port,
-                join_handle_data.conf.path
+                join_handle_data.source_conf.path
             ));
             builder = build_basic_auth(
                 builder,
-                &join_handle_data.conf.basic_auth,
+                &join_handle_data.source_conf.basic_auth,
                 &join_handle_data.http_client_conf.basic_auth,
             );
             builder = build_headers(
                 builder,
-                &join_handle_data.conf.headers,
+                &join_handle_data.source_conf.headers,
                 &join_handle_data.http_client_conf.headers,
             );
-            builder = builder.query(&join_handle_data.conf.query_params);
+            builder = builder.query(&join_handle_data.source_conf.query_params);
             let request = builder.build().unwrap();
 
             loop {
@@ -100,6 +114,28 @@ impl Source {
 
                     _ = interval.tick() => {
                         Self::do_request(&join_handle_data.client, request.try_clone().unwrap(), &mut join_handle_data.mb_txs).await;
+                    }
+                }
+            }
+        })
+    }
+
+    async fn ws_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+        let request = connect_websocket(
+            &join_handle_data.http_client_conf,
+            &join_handle_data.source_conf.path,
+            &join_handle_data.source_conf.headers,
+        );
+        let (mut stream, response) = connect_async(request).await.unwrap();
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    msg = stream.next() => {
+                        debug!("msg: {:?}", msg);
+                    }
+
+                    _ = join_handle_data.stop_signal_rx.changed() => {
+                        return join_handle_data;
                     }
                 }
             }
@@ -157,5 +193,29 @@ impl Source {
             rxs.push(rx);
         }
         rxs
+    }
+}
+
+fn connect_websocket(
+    conf: &Arc<HttpClientConf>,
+    path: &String,
+    headers: &Option<Vec<(String, String)>>,
+) -> tokio_tungstenite::tungstenite::handshake::client::Request {
+    match conf.ssl_enable {
+        true => todo!(),
+        false => {
+            let mut request = format!("ws://{}:{}/{}", conf.host, conf.port, path)
+                .into_client_request()
+                .unwrap();
+
+            if let Some(headers) = headers {
+                for (key, value) in headers {
+                    // TODO
+                    request.headers_mut().insert("todo", value.parse().unwrap());
+                }
+            }
+
+            request
+        }
     }
 }

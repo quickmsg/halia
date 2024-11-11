@@ -18,12 +18,20 @@ pub struct HttpClientConf {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SourceConf {
-    // 间隔 毫秒
-    pub interval: u64,
+    #[serde(rename = "type")]
+    pub typ: SourceType,
+    // 间隔 毫秒 当类型为http时必须存在
+    pub interval: Option<u64>,
     pub path: String,
     pub basic_auth: Option<BasicAuth>,
     pub headers: Option<Vec<(String, String)>>,
     pub query_params: Option<Vec<(String, String)>>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub enum SourceType {
+    Http,
+    Websocket,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]

@@ -12,7 +12,6 @@ pub mod kafka;
 pub mod mqtt_client_v311;
 pub mod mqtt_client_v50;
 pub mod tdengine;
-pub mod websocket;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateAppReq {

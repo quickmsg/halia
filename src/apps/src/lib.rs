@@ -26,7 +26,6 @@ mod mqtt_client_ssl;
 mod mqtt_v311;
 mod mqtt_v50;
 mod tdengine;
-mod websocket;
 
 static GLOBAL_APP_MANAGER: LazyLock<DashMap<String, Box<dyn App>>> =
     LazyLock::new(|| DashMap::new());
