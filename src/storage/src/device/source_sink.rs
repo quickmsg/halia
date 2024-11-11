@@ -1,14 +1,17 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
-use types::{devices::device::source_sink::CreateUpdateReq, Pagination, QuerySourcesOrSinksParams};
+use types::{
+    devices::{device::source_sink::CreateUpdateReq, ConfType},
+    Boolean, Pagination, QuerySourcesOrSinksParams,
+};
 
 use crate::{SourceSinkType, POOL};
 
 static TABLE_NAME: &str = "device_sources_sinks";
 
 #[derive(FromRow)]
-pub struct SourceSink {
+struct DbSourceSink {
     pub id: String,
     pub device_id: String,
     pub device_template_source_sink_id: Option<String>,
@@ -18,6 +21,36 @@ pub struct SourceSink {
     pub conf: Vec<u8>,
     pub template_id: Option<String>,
     pub err: i32,
+    pub ts: i64,
+}
+
+impl DbSourceSink {
+    pub fn transfer(self) -> Result<SourceSink> {
+        Ok(SourceSink {
+            id: self.id,
+            device_id: self.device_id,
+            device_template_source_sink_id: self.device_template_source_sink_id,
+            source_sink_type: self.source_sink_type.try_into()?,
+            name: self.name,
+            conf_type: self.conf_type.try_into()?,
+            conf: serde_json::from_slice(&self.conf)?,
+            template_id: self.template_id,
+            err: self.err.try_into()?,
+            ts: self.ts,
+        })
+    }
+}
+
+pub struct SourceSink {
+    pub id: String,
+    pub device_id: String,
+    pub device_template_source_sink_id: Option<String>,
+    pub source_sink_type: SourceSinkType,
+    pub name: String,
+    pub conf_type: ConfType,
+    pub conf: serde_json::Value,
+    pub template_id: Option<String>,
+    pub err: Boolean,
     pub ts: i64,
 }
 
@@ -112,13 +145,14 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
 }
 
 pub async fn read_one(id: &String) -> Result<SourceSink> {
-    let source_or_sink = sqlx::query_as::<_, SourceSink>(
+    let source_or_sink = sqlx::query_as::<_, DbSourceSink>(
         format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
     )
     .bind(id)
     .fetch_one(POOL.get().unwrap())
     .await?;
-    Ok(source_or_sink)
+
+    source_or_sink.transfer()
 }
 
 pub async fn read_id_by_device_template_source_sink_id(
@@ -163,10 +197,9 @@ pub async fn read_sinks_by_device_id(device_id: &String) -> Result<Vec<SourceSin
     read_by_device_id(SourceSinkType::Sink, device_id).await
 }
 
-pub async fn update_err(id: &String, err: bool) -> Result<()> {
-    let err: i32 = err.into();
+pub async fn update_err(id: &String, err: Boolean) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET err = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(err as i32)
+        .bind(Into::<i32>::into(err))
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -177,18 +210,22 @@ async fn read_by_device_id(
     source_sink_type: SourceSinkType,
     device_id: &String,
 ) -> Result<Vec<SourceSink>> {
-    let source_sink_type: i32 = source_sink_type.into();
-    let sources_sinks = sqlx::query_as::<_, SourceSink>(
+    let db_sources_sinks = sqlx::query_as::<_, DbSourceSink>(
         format!(
             "SELECT * FROM {} WHERE source_sink_type = ? AND device_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(source_sink_type)
+    .bind(Into::<i32>::into(source_sink_type))
     .bind(device_id)
     .fetch_all(POOL.get().unwrap())
     .await?;
+
+    let sources_sinks = db_sources_sinks
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<SourceSink>>>()?;
     Ok(sources_sinks)
 }
 
@@ -204,18 +241,22 @@ async fn read_by_template_id(
     source_sink_type: SourceSinkType,
     template_id: &String,
 ) -> Result<Vec<SourceSink>> {
-    let source_sink_type: i32 = source_sink_type.into();
-    let sources_sinks = sqlx::query_as::<_, SourceSink>(
+    let db_sources_sinks = sqlx::query_as::<_, DbSourceSink>(
         format!(
             "SELECT * FROM {} WHERE source_sink_type = ? AND template_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(source_sink_type)
+    .bind(Into::<i32>::into(source_sink_type))
     .bind(template_id)
     .fetch_all(POOL.get().unwrap())
     .await?;
+
+    let sources_sinks = db_sources_sinks
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<SourceSink>>>()?;
     Ok(sources_sinks)
 }
 
@@ -243,7 +284,7 @@ async fn search(
 ) -> Result<(usize, Vec<SourceSink>)> {
     let source_sink_type: i32 = source_sink_type.into();
     let (limit, offset) = pagination.to_sql();
-    let (count, sources_or_sinks) = match query.name {
+    let (count, db_sources_or_sinks) = match query.name {
         Some(name) => {
             let count: i64 = sqlx::query_scalar(
                 format!(
@@ -258,7 +299,7 @@ async fn search(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let sources_or_sinks = sqlx::query_as::<_, SourceSink>(
+            let sources_or_sinks = sqlx::query_as::<_, DbSourceSink>(
                 format!("SELECT * FROM {} WHERE source_sink_type = ? AND device_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
             .bind(source_sink_type)
@@ -283,7 +324,7 @@ async fn search(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let sources_or_sinks = sqlx::query_as::<_, SourceSink>(
+            let sources_or_sinks = sqlx::query_as::<_, DbSourceSink>(
                 format!("SELECT * FROM {} WHERE source_sink_type = ? AND device_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
             .bind(source_sink_type)
@@ -297,6 +338,10 @@ async fn search(
         }
     };
 
+    let sources_or_sinks = db_sources_or_sinks
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<SourceSink>>>()?;
     Ok((count as usize, sources_or_sinks))
 }
 
@@ -363,16 +408,11 @@ pub async fn delete_many_by_device_id(device_id: &String) -> Result<()> {
 }
 
 pub async fn check_exists(id: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar(
-        format!(
-            "SELECT COUNT(*) FROM {} WHERE id = ?",
-            TABLE_NAME
-        )
-        .as_str(),
-    )
-    .bind(id)
-    .fetch_one(POOL.get().unwrap())
-    .await?;
+    let count: i64 =
+        sqlx::query_scalar(format!("SELECT COUNT(*) FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
     Ok(count == 1)
 }

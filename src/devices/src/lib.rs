@@ -174,9 +174,9 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
                     id: source_id,
                     req: source_sink::CreateUpdateReq {
                         name: db_source.name,
-                        conf_type: db_source.conf_type.try_into()?,
+                        conf_type: db_source.conf_type,
                         template_id: db_source.template_id,
-                        conf: serde_json::from_slice(&db_source.conf)?,
+                        conf: db_source.conf,
                     },
                 }),
                 sink: None,
@@ -191,9 +191,9 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRule
                     id: db_sink.id,
                     req: source_sink::CreateUpdateReq {
                         name: db_sink.name,
-                        conf_type: db_sink.conf_type.try_into()?,
+                        conf_type: db_sink.conf_type,
                         template_id: db_sink.template_id,
-                        conf: serde_json::from_slice(&db_sink.conf)?,
+                        conf: db_sink.conf,
                     },
                 }),
             })
@@ -375,47 +375,42 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     let db_sources = storage::device::source_sink::read_sources_by_device_id(&device_id).await?;
     for db_source in db_sources {
-        let conf_type: types::devices::ConfType = db_source.conf_type.try_into()?;
-        match conf_type {
+        match db_source.conf_type {
             types::devices::ConfType::Template => match db_source.template_id {
                 Some(template_id) => {
-                    let customize_conf: serde_json::Value =
-                        serde_json::from_slice(&db_source.conf)?;
                     let template_conf =
                         storage::device::source_sink_template::read_conf(&template_id).await?;
-                    let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                     device
-                        .create_template_source(db_source.id, customize_conf, template_conf)
+                        .create_template_source(db_source.id, db_source.conf, template_conf)
                         .await?;
                 }
                 None => panic!("数据库数据损坏"),
             },
             types::devices::ConfType::Customize => {
-                let conf: serde_json::Value = serde_json::from_slice(&db_source.conf).unwrap();
-                device.create_customize_source(db_source.id, conf).await?;
+                device
+                    .create_customize_source(db_source.id, db_source.conf)
+                    .await?;
             }
         }
     }
 
     let db_sinks = storage::device::source_sink::read_sinks_by_device_id(&device_id).await?;
     for db_sink in db_sinks {
-        let conf_type: types::devices::ConfType = db_sink.conf_type.try_into()?;
-        match conf_type {
+        match db_sink.conf_type {
             types::devices::ConfType::Template => match db_sink.template_id {
                 Some(template_id) => {
-                    let customize_conf: serde_json::Value = serde_json::from_slice(&db_sink.conf)?;
                     let template_conf =
                         storage::device::source_sink_template::read_conf(&template_id).await?;
-                    let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                     device
-                        .create_template_sink(db_sink.id, customize_conf, template_conf)
+                        .create_template_sink(db_sink.id, db_sink.conf, template_conf)
                         .await?;
                 }
                 None => panic!("数据库数据损坏"),
             },
             types::devices::ConfType::Customize => {
-                let conf: serde_json::Value = serde_json::from_slice(&db_sink.conf).unwrap();
-                device.create_customize_sink(db_sink.id, conf).await?;
+                device
+                    .create_customize_sink(db_sink.id, db_sink.conf)
+                    .await?;
             }
         }
     }
@@ -501,7 +496,6 @@ pub(crate) async fn create_source(
                     req.template_id.as_ref().unwrap(),
                 )
                 .await?;
-                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                 device
                     .create_template_source(source_id.clone(), conf, template_conf)
                     .await?
@@ -546,9 +540,9 @@ pub async fn search_sources(
             rule_ref,
             req: source_sink::CreateUpdateReq {
                 name: db_source.name,
-                conf_type: db_source.conf_type.try_into()?,
+                conf_type: db_source.conf_type,
                 template_id: db_source.template_id,
-                conf: serde_json::from_slice(&db_source.conf)?,
+                conf: db_source.conf,
             },
         });
     }
@@ -580,7 +574,6 @@ pub async fn update_source(
                     req.template_id.as_ref().unwrap(),
                 )
                 .await?;
-                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                 device
                     .update_template_source(&source_id, req.conf.clone(), template_conf)
                     .await?;
@@ -682,7 +675,6 @@ pub(crate) async fn create_sink(
                     req.template_id.as_ref().unwrap(),
                 )
                 .await?;
-                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                 device
                     .create_template_sink(sink_id.clone(), conf, template_conf)
                     .await?
@@ -719,9 +711,9 @@ pub async fn search_sinks(
             id: db_sink.id,
             req: source_sink::CreateUpdateReq {
                 name: db_sink.name,
-                conf_type: db_sink.conf_type.try_into()?,
+                conf_type: db_sink.conf_type,
                 template_id: db_sink.template_id,
-                conf: serde_json::from_slice(&db_sink.conf)?,
+                conf: db_sink.conf,
             },
             rule_ref,
         });
@@ -746,7 +738,6 @@ pub async fn update_sink(
                     req.template_id.as_ref().unwrap(),
                 )
                 .await?;
-                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                 device
                     .update_template_sink(&sink_id, req.conf.clone(), template_conf)
                     .await?;

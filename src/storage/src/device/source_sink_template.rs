@@ -7,7 +7,10 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::source_sink_template::{CreateReq, QueryParams, UpdateReq},
+    devices::{
+        source_sink_template::{CreateReq, QueryParams, UpdateReq},
+        DeviceType,
+    },
     Pagination,
 };
 
@@ -18,12 +21,34 @@ use crate::POOL;
 const TABLE_NAME: &str = "device_source_sink_templates";
 
 #[derive(FromRow)]
-pub struct SourceSinkTemplate {
+struct DbSourceSinkTemplate {
     pub id: String,
     pub source_sink_type: i32,
     pub device_type: i32,
     pub name: String,
     pub conf: Vec<u8>,
+    pub ts: i64,
+}
+
+impl DbSourceSinkTemplate {
+    pub fn transfer(self) -> Result<SourceSinkTemplate> {
+        Ok(SourceSinkTemplate {
+            id: self.id,
+            source_sink_type: self.source_sink_type.try_into()?,
+            device_type: self.device_type.try_into()?,
+            name: self.name,
+            conf: serde_json::from_slice(&self.conf)?,
+            ts: self.ts,
+        })
+    }
+}
+
+pub struct SourceSinkTemplate {
+    pub id: String,
+    pub source_sink_type: SourceSinkType,
+    pub device_type: DeviceType,
+    pub name: String,
+    pub conf: serde_json::Value,
     pub ts: i64,
 }
 
@@ -53,10 +78,6 @@ pub async fn insert_sink(id: &String, req: CreateReq) -> HaliaResult<()> {
 }
 
 async fn insert(id: &String, source_sink_type: SourceSinkType, req: CreateReq) -> HaliaResult<()> {
-    let source_sink_type: i32 = source_sink_type.into();
-    let device_type: i32 = req.device_type.into();
-    let conf = serde_json::to_vec(&req.conf)?;
-    let ts = common::timestamp_millis() as i64;
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
@@ -67,24 +88,24 @@ VALUES (?, ?, ?, ?, ?, ?)"#,
         .as_str(),
     )
     .bind(id)
-    .bind(source_sink_type)
-    .bind(device_type)
+    .bind(Into::<i32>::into(source_sink_type))
+    .bind(Into::<i32>::into(req.device_type))
     .bind(req.name)
-    .bind(conf)
-    .bind(ts)
+    .bind(serde_json::to_vec(&req.conf)?)
+    .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
 
     Ok(())
 }
 
-pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
+pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     let conf: Vec<u8> =
         sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;
-
+    let conf = serde_json::from_slice(&conf)?;
     Ok(conf)
 }
 
@@ -109,7 +130,7 @@ async fn search(
 ) -> Result<(usize, Vec<SourceSinkTemplate>)> {
     let (limit, offset) = pagination.to_sql();
     let source_sink_type: i32 = source_sink_type.into();
-    let (count, templates) = match (&query.name, &query.device_type) {
+    let (count, db_templates) = match (&query.name, &query.device_type) {
         (None, None) => {
             let count: i64 = sqlx::query_scalar(
                 format!(
@@ -122,7 +143,7 @@ async fn search(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let devices = sqlx::query_as::<_, SourceSinkTemplate>(
+            let devices = sqlx::query_as::<_, DbSourceSinkTemplate>(
                 format!(
                     "SELECT * FROM {} WHERE source_sink_type = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
@@ -155,8 +176,8 @@ async fn search(
                 "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
                 TABLE_NAME, where_clause
             );
-            let mut query_schemas_builder: QueryAs<'_, Any, SourceSinkTemplate, AnyArguments> =
-                sqlx::query_as::<_, SourceSinkTemplate>(&query_schemas_str);
+            let mut query_schemas_builder: QueryAs<'_, Any, DbSourceSinkTemplate, AnyArguments> =
+                sqlx::query_as::<_, DbSourceSinkTemplate>(&query_schemas_str);
 
             query_count_builder = query_count_builder.bind(source_sink_type);
             query_schemas_builder = query_schemas_builder.bind(source_sink_type);
@@ -183,6 +204,11 @@ async fn search(
         }
     };
 
+    let templates = db_templates
+        .into_iter()
+        .map(|db| db.transfer())
+        .collect::<Result<Vec<_>>>()?;
+
     Ok((count as usize, templates))
 }
 
@@ -197,18 +223,12 @@ pub async fn read_name(id: &String) -> Result<String> {
 
 pub async fn update(id: &String, req: UpdateReq) -> HaliaResult<()> {
     let conf = serde_json::to_vec(&req.conf)?;
-    sqlx::query(
-        format!(
-            "UPDATE {} SET name = ?, conf = ? WHERE id = ?",
-            TABLE_NAME
-        )
-        .as_str(),
-    )
-    .bind(req.name)
-    .bind(conf)
-    .bind(id)
-    .execute(POOL.get().unwrap())
-    .await?;
+    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(req.name)
+        .bind(conf)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
 
     Ok(())
 }

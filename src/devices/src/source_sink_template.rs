@@ -31,7 +31,14 @@ pub async fn search_source_templates(
 
     let mut source_templates = vec![];
     for db_source_template in db_sources {
-        source_templates.push(transer_db_source_sink_template_to_resp(db_source_template)?);
+        source_templates.push(SearchItemResp {
+            id: db_source_template.id,
+            req: CreateReq {
+                name: db_source_template.name,
+                device_type: db_source_template.device_type,
+                conf: db_source_template.conf,
+            },
+        });
     }
 
     Ok(SearchResp {
@@ -42,14 +49,12 @@ pub async fn search_source_templates(
 
 pub async fn update_source_template(id: String, req: UpdateReq) -> HaliaResult<()> {
     let old_conf = storage::device::source_sink_template::read_conf(&id).await?;
-    let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
     if old_conf != req.conf {
         let sources = storage::device::source_sink::read_sources_by_template_id(&id).await?;
         for source in sources {
             if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&source.device_id) {
-                let customize_conf: serde_json::Value = serde_json::from_slice(&source.conf)?;
                 device
-                    .update_template_source(&source.id, customize_conf, req.conf.clone())
+                    .update_template_source(&source.id, source.conf, req.conf.clone())
                     .await?;
             }
         }
@@ -88,7 +93,14 @@ pub async fn search_sink_templates(
 
     let mut sink_templates = vec![];
     for db_sink_template in db_sinks {
-        sink_templates.push(transer_db_source_sink_template_to_resp(db_sink_template)?);
+        sink_templates.push(SearchItemResp {
+            id: db_sink_template.id,
+            req: CreateReq {
+                name: db_sink_template.name,
+                device_type: db_sink_template.device_type,
+                conf: db_sink_template.conf,
+            },
+        });
     }
 
     Ok(SearchResp {
@@ -99,14 +111,12 @@ pub async fn search_sink_templates(
 
 pub async fn update_sink_template(id: String, req: UpdateReq) -> HaliaResult<()> {
     let old_conf = storage::device::source_sink_template::read_conf(&id).await?;
-    let old_conf: serde_json::Value = serde_json::from_slice(&old_conf)?;
     if old_conf != req.conf {
         let sinks = storage::device::source_sink::read_sinks_by_template_id(&id).await?;
         for sink in sinks {
             if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&sink.device_id) {
-                let customize_conf: serde_json::Value = serde_json::from_slice(&sink.conf)?;
                 device
-                    .update_template_sink(&sink.id, customize_conf, req.conf.clone())
+                    .update_template_sink(&sink.id, sink.conf, req.conf.clone())
                     .await?;
             }
         }
@@ -122,17 +132,4 @@ pub async fn delete_sink_template(id: String) -> HaliaResult<()> {
     }
     storage::device::source_sink_template::delete_by_id(&id).await?;
     Ok(())
-}
-
-fn transer_db_source_sink_template_to_resp(
-    db_template: storage::device::source_sink_template::SourceSinkTemplate,
-) -> HaliaResult<SearchItemResp> {
-    Ok(SearchItemResp {
-        id: db_template.id,
-        req: CreateReq {
-            name: db_template.name,
-            device_type: db_template.device_type.try_into()?,
-            conf: serde_json::from_slice(&db_template.conf)?,
-        },
-    })
 }
