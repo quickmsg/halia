@@ -1,3 +1,4 @@
+use anyhow::bail;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -145,6 +146,32 @@ impl Into<Bytes> for PlainOrBase64Value {
             PlainOrBase64ValueType::Base64 => {
                 Bytes::from(BASE64_STANDARD.decode(&self.value).unwrap())
             }
+        }
+    }
+}
+
+pub enum Boolean {
+    True,
+    False,
+}
+
+impl Into<i32> for Boolean {
+    fn into(self) -> i32 {
+        match self {
+            Boolean::True => 1,
+            Boolean::False => 2,
+        }
+    }
+}
+
+impl TryFrom<i32> for Boolean {
+    type Error = anyhow::Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Boolean::True),
+            2 => Ok(Boolean::False),
+            _ => Err(bail!("invalid value: {}", value)),
         }
     }
 }

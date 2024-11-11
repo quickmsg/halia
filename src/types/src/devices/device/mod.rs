@@ -13,6 +13,7 @@ pub struct CreateReq {
     pub name: String,
     pub device_type: DeviceType,
     pub conf_type: ConfType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub template_id: Option<String>,
     pub conf: serde_json::Value,
 }

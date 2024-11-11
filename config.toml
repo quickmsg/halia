@@ -7,9 +7,9 @@ log_level = "debug"
 # 事件保留天数，默认为 7 天
 event_retain_days = 10
 
-# [storage.mysql]
-# host = "192.168.124.37"
-# port = 3306
-# username = "root"
-# password = "my-secret-pw"
-# db_name = "halia"
+[storage.mysql]
+host = "192.168.124.37"
+port = 3306
+username = "root"
+password = "my-secret-pw"
+db_name = "halia"

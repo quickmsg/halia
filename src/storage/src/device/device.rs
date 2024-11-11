@@ -7,16 +7,19 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::device::{CreateReq, QueryParams, UpdateReq},
-    Pagination,
+    devices::{
+        device::{CreateReq, QueryParams, UpdateReq},
+        ConfType, DeviceType,
+    },
+    Boolean, Pagination,
 };
 
-use crate::{Status, POOL};
+use crate::POOL;
 
 const TABLE_NAME: &str = "devices";
 
 #[derive(FromRow)]
-pub struct Device {
+struct DbDevice {
     pub id: String,
     pub device_type: i32,
     pub name: String,
@@ -25,6 +28,18 @@ pub struct Device {
     pub template_id: Option<String>,
     pub status: i32,
     pub err: i32,
+    pub ts: i64,
+}
+
+pub struct Device {
+    pub id: String,
+    pub device_type: DeviceType,
+    pub name: String,
+    pub conf_type: ConfType,
+    pub conf: serde_json::Value,
+    pub template_id: Option<String>,
+    pub status: Boolean,
+    pub err: Boolean,
     pub ts: i64,
 }
 
@@ -63,8 +78,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(Into::<i32>::into(req.conf_type))
     .bind(serde_json::to_vec(&req.conf)?)
     .bind(req.template_id)
-    .bind(Into::<i32>::into(Status::False))
-    .bind(Into::<i32>::into(Status::False))
+    .bind(Into::<i32>::into(Boolean::False))
+    .bind(Into::<i32>::into(Boolean::False))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
@@ -73,22 +88,24 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
 }
 
 pub async fn read_one(id: &String) -> Result<Device> {
-    let device =
-        sqlx::query_as::<_, Device>(format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str())
-            .bind(id)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
+    let db_device = sqlx::query_as::<_, DbDevice>(
+        format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
 
-    Ok(device)
+    db_device.transfer()
 }
 
-pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
+pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     let conf: Vec<u8> =
         sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
+    let conf = serde_json::from_slice::<serde_json::Value>(&conf)?;
     Ok(conf)
 }
 
@@ -97,7 +114,7 @@ pub async fn search(
     query_params: QueryParams,
 ) -> Result<(usize, Vec<Device>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, devices) = match (
+    let (count, db_devices) = match (
         &query_params.name,
         &query_params.device_type,
         &query_params.on,
@@ -109,7 +126,7 @@ pub async fn search(
                     .fetch_one(POOL.get().unwrap())
                     .await?;
 
-            let devices = sqlx::query_as::<_, Device>(
+            let devices = sqlx::query_as::<_, DbDevice>(
                 format!(
                     "SELECT * FROM {} ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
@@ -159,8 +176,8 @@ pub async fn search(
                 "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
                 TABLE_NAME, where_clause
             );
-            let mut query_schemas_builder: QueryAs<'_, Any, Device, AnyArguments> =
-                sqlx::query_as::<_, Device>(&query_schemas_str);
+            let mut query_schemas_builder: QueryAs<'_, Any, DbDevice, AnyArguments> =
+                sqlx::query_as::<_, DbDevice>(&query_schemas_str);
 
             if let Some(name) = query_params.name {
                 let name = format!("%{}%", name);
@@ -192,15 +209,25 @@ pub async fn search(
         }
     };
 
+    let devices = db_devices
+        .into_iter()
+        // todo unwrap
+        .map(|db_device| db_device.transfer().unwrap())
+        .collect();
     Ok((count as usize, devices))
 }
 
 pub async fn read_many_on() -> Result<Vec<Device>> {
-    let devices = sqlx::query_as::<_, Device>(
+    let db_devices = sqlx::query_as::<_, DbDevice>(
         format!("SELECT * FROM {} WHERE status = 1", TABLE_NAME).as_str(),
     )
     .fetch_all(POOL.get().unwrap())
     .await?;
+    let devices = db_devices
+        .into_iter()
+        // todo unwrap
+        .map(|db_device| db_device.transfer().unwrap())
+        .collect();
 
     Ok(devices)
 }
@@ -225,13 +252,14 @@ pub async fn read_device_type(id: &String) -> Result<i32> {
     Ok(device_type)
 }
 
-pub async fn read_conf_type(id: &String) -> Result<i32> {
+pub async fn read_conf_type(id: &String) -> Result<ConfType> {
     let conf_type: i32 =
         sqlx::query_scalar(format!("SELECT conf_type FROM {} WHERE id = ?", TABLE_NAME).as_str())
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
+    let conf_type: ConfType = conf_type.try_into()?;
     Ok(conf_type)
 }
 
@@ -253,9 +281,9 @@ pub async fn read_ids_by_template_id(template_id: &String) -> Result<Vec<String>
     Ok(ids)
 }
 
-pub async fn update_status(id: &String, status: bool) -> Result<()> {
+pub async fn update_status(id: &String, status: Boolean) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(status as i32)
+        .bind(Into::<i32>::into(status))
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -263,9 +291,9 @@ pub async fn update_status(id: &String, status: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn update_err(id: &String, err: bool) -> Result<()> {
+pub async fn update_err(id: &String, status: Boolean) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET err = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(err as i32)
+        .bind(Into::<i32>::into(status))
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -306,4 +334,20 @@ pub async fn count_by_template_id(template_id: &String) -> Result<usize> {
     .fetch_one(POOL.get().unwrap())
     .await?;
     Ok(count as usize)
+}
+
+impl DbDevice {
+    pub fn transfer(self) -> Result<Device> {
+        Ok(Device {
+            id: self.id,
+            device_type: self.device_type.try_into()?,
+            name: self.name,
+            conf_type: self.conf_type.try_into()?,
+            conf: serde_json::from_slice(&self.conf)?,
+            template_id: self.template_id,
+            status: self.status.try_into()?,
+            err: self.err.try_into()?,
+            ts: self.ts,
+        })
+    }
 }

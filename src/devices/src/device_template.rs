@@ -55,7 +55,6 @@ pub async fn update_device_template(
     let device_ids = storage::device::device::read_ids_by_template_id(&id).await?;
     for device_id in device_ids {
         let customize_conf = storage::device::device::read_conf(&device_id).await?;
-        let customize_conf: serde_json::Value = serde_json::from_slice(&customize_conf)?;
         if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
             device
                 .update_template_conf(customize_conf, req.conf.clone())

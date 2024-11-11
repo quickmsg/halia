@@ -347,18 +347,15 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     events::insert_start(types::events::ResourceType::Device, &device_id).await;
 
     let db_device = storage::device::device::read_one(&device_id).await?;
-    let device_type: DeviceType = db_device.device_type.try_into()?;
-    let conf_type: ConfType = db_device.conf_type.try_into()?;
-    let device_conf: serde_json::Value = serde_json::from_slice(&db_device.conf)?;
-    let mut device = match conf_type {
+    let mut device = match db_device.conf_type {
         ConfType::Template => match db_device.template_id {
             Some(template_id) => {
                 let template_conf = storage::device::template::read_conf(&template_id).await?;
                 let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
-                match device_type {
+                match db_device.device_type {
                     DeviceType::Modbus => modbus::new_by_template_conf(
                         db_device.id.clone(),
-                        device_conf,
+                        db_device.conf,
                         template_conf,
                     ),
                     DeviceType::Opcua => todo!(),
@@ -367,8 +364,10 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
             }
             None => unreachable!(),
         },
-        ConfType::Customize => match device_type {
-            DeviceType::Modbus => modbus::new_by_customize_conf(db_device.id.clone(), device_conf),
+        ConfType::Customize => match db_device.device_type {
+            DeviceType::Modbus => {
+                modbus::new_by_customize_conf(db_device.id.clone(), db_device.conf)
+            }
             DeviceType::Opcua => todo!(),
             DeviceType::Coap => todo!(),
         },
@@ -424,8 +423,8 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);
 
     add_device_on_count();
-    storage::device::device::update_status(&device_id, true).await?;
-    storage::device::device::update_err(&device_id, true).await?;
+    storage::device::device::update_status(&device_id, types::Boolean::True).await?;
+    storage::device::device::update_err(&device_id, types::Boolean::False).await?;
     Ok(())
 }
 
@@ -438,8 +437,8 @@ pub async fn stop_device(device_id: String) -> HaliaResult<()> {
         device.stop().await;
         sub_device_on_count();
         events::insert_stop(types::events::ResourceType::Device, &device_id).await;
-        storage::device::device::update_status(&device_id, false).await?;
-        storage::device::device::update_err(&device_id, false).await?;
+        storage::device::device::update_status(&device_id, types::Boolean::False).await?;
+        storage::device::device::update_err(&device_id, types::Boolean::False).await?;
     }
 
     Ok(())
@@ -467,9 +466,7 @@ pub async fn device_create_source(
     device_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
-    let conf_type: ConfType = storage::device::device::read_conf_type(&device_id)
-        .await?
-        .try_into()?;
+    let conf_type = storage::device::device::read_conf_type(&device_id).await?;
     if conf_type == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建源".to_string()));
     }
@@ -565,7 +562,6 @@ pub async fn update_source(
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
     let device_conf_type = storage::device::device::read_conf_type(&device_id).await?;
-    let device_conf_type: ConfType = device_conf_type.try_into()?;
     if device_conf_type == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能修改源。".to_string()));
     }
@@ -614,9 +610,7 @@ pub async fn write_source_value(
 }
 
 pub async fn device_delete_source(device_id: String, source_id: String) -> HaliaResult<()> {
-    let conf_type = storage::device::device::read_conf_type(&device_id).await?;
-    let conf_type: ConfType = conf_type.try_into()?;
-    if conf_type == ConfType::Template {
+    if storage::device::device::read_conf_type(&device_id).await? == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能删除源".to_string()));
     }
     delete_source(device_id, source_id).await
@@ -654,10 +648,7 @@ pub async fn device_create_sink(
     device_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
-    let conf_type: ConfType = storage::device::device::read_conf_type(&device_id)
-        .await?
-        .try_into()?;
-    if conf_type == ConfType::Template {
+    if storage::device::device::read_conf_type(&device_id).await? == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建动作。".to_string()));
     }
     create_sink(device_id, None, req).await
@@ -774,9 +765,7 @@ pub async fn update_sink(
 }
 
 pub async fn device_delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> {
-    let conf_type = storage::device::device::read_conf_type(&device_id).await?;
-    let conf_type: ConfType = conf_type.try_into()?;
-    if conf_type == ConfType::Template {
+    if storage::device::device::read_conf_type(&device_id).await? == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能删除源".to_string()));
     }
     delete_sink(device_id, sink_id).await
@@ -818,25 +807,24 @@ async fn transer_db_device_to_resp(
     let sink_cnt = storage::device::source_sink::count_sinks_by_device_id(&db_device.id).await?;
 
     let running_info = match db_device.status {
-        0 => None,
-        1 => Some(
+        types::Boolean::True => Some(
             GLOBAL_DEVICE_MANAGER
                 .get(&db_device.id)
                 .unwrap()
                 .read_running_info()
                 .await,
         ),
-        _ => unreachable!(),
+        types::Boolean::False => None,
     };
 
     Ok(device::SearchItemResp {
         id: db_device.id,
         req: device::CreateReq {
             name: db_device.name,
-            device_type: db_device.device_type.try_into()?,
-            conf_type: db_device.conf_type.try_into()?,
+            device_type: db_device.device_type,
+            conf_type: db_device.conf_type,
             template_id: db_device.template_id,
-            conf: serde_json::from_slice(&db_device.conf)?,
+            conf: db_device.conf,
         },
         running_info,
         source_cnt,
