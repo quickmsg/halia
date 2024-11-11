@@ -150,6 +150,7 @@ impl Into<Bytes> for PlainOrBase64Value {
     }
 }
 
+#[derive(PartialEq)]
 pub enum Boolean {
     True,
     False,

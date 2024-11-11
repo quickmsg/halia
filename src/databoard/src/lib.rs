@@ -66,13 +66,13 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     DATABOARD_ON_COUNT.store(on_count, Ordering::SeqCst);
 
     for db_on_databoard in db_on_databoards {
-        let conf: DataboardConf = serde_json::from_slice(&db_on_databoard.conf)?;
+        let conf: DataboardConf = serde_json::from_value(db_on_databoard.conf)?;
         let mut databoard = Databoard::new(conf);
 
         // todo start
         let db_datas = storage::databoard::data::read_all_by_parent_id(&db_on_databoard.id).await?;
         for db_data in db_datas {
-            let data_conf: DataConf = serde_json::from_slice(&db_data.conf)?;
+            let data_conf: DataConf = serde_json::from_value(db_data.conf)?;
             databoard.create_data(db_data.id, data_conf).await?;
         }
 
@@ -89,17 +89,17 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
     Ok(SearchRuleInfo {
         databoard: SearchDataboardsItemResp {
             id: db_databoard.id,
-            on: db_databoard.status == 1,
+            on: db_databoard.status == types::Boolean::True,
             conf: CreateUpdateDataboardReq {
                 name: db_databoard.name,
-                ext: serde_json::from_slice(&db_databoard.conf)?,
+                ext: serde_json::from_value(db_databoard.conf)?,
             },
         },
         data: SearchDatasInfoResp {
             id: db_databoard_data.id,
             conf: CreateUpdateDataReq {
                 name: db_databoard_data.name,
-                ext: serde_json::from_slice(&db_databoard_data.conf)?,
+                ext: serde_json::from_value(db_databoard_data.conf)?,
             },
             value: None,
             ts: Some(0),
@@ -124,10 +124,10 @@ pub async fn search_databoards(
     for db_databoard in db_databoards {
         resp_databoards.push(SearchDataboardsItemResp {
             id: db_databoard.id,
-            on: db_databoard.status == 1,
+            on: db_databoard.status == types::Boolean::True,
             conf: CreateUpdateDataboardReq {
                 name: db_databoard.name,
-                ext: serde_json::from_slice(&db_databoard.conf)?,
+                ext: serde_json::from_value(db_databoard.conf)?,
             },
         });
     }
@@ -158,20 +158,20 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
 
     let db_databoard = storage::databoard::read_one(&databoard_id).await?;
 
-    let databoard_conf: DataboardConf = serde_json::from_slice(&db_databoard.conf)?;
+    let databoard_conf: DataboardConf = serde_json::from_value(db_databoard.conf)?;
     let databoard = Databoard::new(databoard_conf);
     GLOBAL_DATABOARD_MANAGER.insert(databoard_id.clone(), databoard);
 
     let mut databoard = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id).unwrap();
     let db_datas = storage::databoard::data::read_all_by_parent_id(&databoard_id).await?;
     for db_data in db_datas {
-        let data_conf: DataConf = serde_json::from_slice(&db_data.conf)?;
+        let data_conf: DataConf = serde_json::from_value(db_data.conf)?;
         databoard.create_data(db_data.id, data_conf).await?;
     }
 
     add_databoard_on_count();
 
-    storage::databoard::update_status(&databoard_id, true).await?;
+    storage::databoard::update_status(&databoard_id, types::Boolean::True).await?;
 
     Ok(())
 }
@@ -191,7 +191,7 @@ pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
         Some((_, mut databoard)) => {
             databoard.stop().await;
             sub_databoard_on_count();
-            storage::databoard::update_status(&databoard_id, false).await?;
+            storage::databoard::update_status(&databoard_id, types::Boolean::False).await?;
             Ok(())
         }
         None => Err(HaliaError::NotFound(databoard_id)),
@@ -262,7 +262,7 @@ pub async fn search_datas(
                 id: db_data.id,
                 conf: CreateUpdateDataReq {
                     name: db_data.name,
-                    ext: serde_json::from_slice(&db_data.conf)?,
+                    ext: serde_json::from_value(db_data.conf)?,
                 },
                 value,
                 ts,

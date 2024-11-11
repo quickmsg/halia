@@ -3,7 +3,10 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    devices::device_template::source_sink::{CreateUpdateReq, QueryParams},
+    devices::{
+        device_template::source_sink::{CreateUpdateReq, QueryParams},
+        ConfType,
+    },
     Pagination,
 };
 
@@ -12,7 +15,7 @@ use crate::{SourceSinkType, POOL};
 static TABLE_NAME: &str = "device_template_sources_sinks";
 
 #[derive(FromRow)]
-pub struct SourceSink {
+struct DbSourceSink {
     pub id: String,
     pub device_template_id: String,
     pub source_sink_type: i32,
@@ -20,6 +23,32 @@ pub struct SourceSink {
     pub conf_type: i32,
     pub template_id: Option<String>,
     pub conf: Vec<u8>,
+    pub ts: i64,
+}
+
+impl DbSourceSink {
+    pub fn transfer(self) -> Result<SourceSink> {
+        Ok(SourceSink {
+            id: self.id,
+            device_template_id: self.device_template_id,
+            source_sink_type: self.source_sink_type.try_into()?,
+            name: self.name,
+            conf_type: self.conf_type.try_into()?,
+            template_id: self.template_id,
+            conf: serde_json::from_slice(&self.conf)?,
+            ts: self.ts,
+        })
+    }
+}
+
+pub struct SourceSink {
+    pub id: String,
+    pub device_template_id: String,
+    pub source_sink_type: SourceSinkType,
+    pub name: String,
+    pub conf_type: ConfType,
+    pub template_id: Option<String>,
+    pub conf: serde_json::Value,
     pub ts: i64,
 }
 
@@ -64,11 +93,6 @@ async fn insert(
     device_template_id: &String,
     req: CreateUpdateReq,
 ) -> Result<()> {
-    let source_sink_type: i32 = source_sink_type.into();
-    let conf_type: i32 = req.conf_type.into();
-    let conf = serde_json::to_vec(&req.conf)?;
-    let ts = common::timestamp_millis() as i64;
-
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
@@ -80,12 +104,12 @@ async fn insert(
     )
     .bind(id)
     .bind(device_template_id)
-    .bind(source_sink_type)
+    .bind(Into::<i32>::into(source_sink_type))
     .bind(req.name)
-    .bind(conf_type)
+    .bind(Into::<i32>::into(req.conf_type))
     .bind(req.template_id)
-    .bind(conf)
-    .bind(ts)
+    .bind(serde_json::to_vec(&req.conf)?)
+    .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
 
@@ -93,13 +117,14 @@ async fn insert(
 }
 
 pub async fn read_one(id: &String) -> Result<SourceSink> {
-    let source_or_sink = sqlx::query_as::<_, SourceSink>(
+    let db_source_or_sink = sqlx::query_as::<_, DbSourceSink>(
         format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
     )
     .bind(id)
     .fetch_one(POOL.get().unwrap())
     .await?;
-    Ok(source_or_sink)
+
+    db_source_or_sink.transfer()
 }
 
 pub async fn read_sources_by_device_template_id(
@@ -118,19 +143,22 @@ async fn read_by_device_template_id(
     source_sink_type: SourceSinkType,
     device_template_id: &String,
 ) -> Result<Vec<SourceSink>> {
-    let source_sink_type: i32 = source_sink_type.into();
-    let sources_sinks = sqlx::query_as::<_, SourceSink>(
+    let db_sources_sinks = sqlx::query_as::<_, DbSourceSink>(
         format!(
             "SELECT * FROM {} WHERE source_sink_type = ? AND device_template_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(source_sink_type)
+    .bind(Into::<i32>::into(source_sink_type))
     .bind(device_template_id)
     .fetch_all(POOL.get().unwrap())
     .await?;
-    Ok(sources_sinks)
+
+    db_sources_sinks
+        .into_iter()
+        .map(|db| db.transfer())
+        .collect()
 }
 
 pub async fn read_sources_by_template_id(template_id: &String) -> Result<Vec<SourceSink>> {
@@ -145,19 +173,21 @@ async fn read_by_template_id(
     source_sink_type: SourceSinkType,
     template_id: &String,
 ) -> Result<Vec<SourceSink>> {
-    let source_sink_type: i32 = source_sink_type.into();
-    let sources_sinks = sqlx::query_as::<_, SourceSink>(
+    let db_sources_sinks = sqlx::query_as::<_, DbSourceSink>(
         format!(
             "SELECT * FROM {} WHERE source_sink_type = ? AND template_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(source_sink_type)
+    .bind(Into::<i32>::into(source_sink_type))
     .bind(template_id)
     .fetch_all(POOL.get().unwrap())
     .await?;
-    Ok(sources_sinks)
+    db_sources_sinks
+        .into_iter()
+        .map(|db| db.transfer())
+        .collect()
 }
 
 pub async fn search_sources(
@@ -190,7 +220,7 @@ async fn search(
 ) -> Result<(usize, Vec<SourceSink>)> {
     let source_sink_type: i32 = source_sink_type.into();
     let (limit, offset) = pagination.to_sql();
-    let (count, sources_or_sinks) = match query.name {
+    let (count, db_sources_sinks) = match query.name {
         Some(name) => {
             let count: i64 = sqlx::query_scalar(
                 format!(
@@ -205,7 +235,7 @@ async fn search(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let sources_or_sinks = sqlx::query_as::<_, SourceSink>(
+            let sources_or_sinks = sqlx::query_as::<_, DbSourceSink>(
                 format!("SELECT * FROM {} WHERE source_sink_type = ? AND device_template_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
             .bind(source_sink_type)
@@ -230,7 +260,7 @@ async fn search(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let sources_or_sinks = sqlx::query_as::<_, SourceSink>(
+            let sources_or_sinks = sqlx::query_as::<_, DbSourceSink>(
                 format!("SELECT * FROM {} WHERE source_sink_type = ? AND device_template_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
             .bind(source_sink_type)
@@ -244,7 +274,12 @@ async fn search(
         }
     };
 
-    Ok((count as usize, sources_or_sinks))
+    let sources_sinks = db_sources_sinks
+        .into_iter()
+        .map(|db| db.transfer())
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok((count as usize, sources_sinks))
 }
 
 pub async fn count_sources_by_device_template_id(device_template_id: &String) -> Result<usize> {

@@ -9,7 +9,6 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use tracing::debug;
 use message::RuleMessageBatch;
 use rskafka::client::{Client, ClientBuilder};
 use sink::Sink;
@@ -22,6 +21,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
+use tracing::debug;
 use types::apps::{
     kafka::{Conf, SinkConf},
     SearchAppsItemRunningInfo,
@@ -134,7 +134,11 @@ impl Kafka {
                             }
                         }
                         None => {
-                            let _ = storage::app::update_err(&join_handle_data.id, true).await;
+                            let _ = storage::app::update_err(
+                                &join_handle_data.id,
+                                types::Boolean::True,
+                            )
+                            .await;
                             let err = Arc::new(e.to_string());
                             task_err = Some(err.clone());
                             join_handle_data.err.write().await.replace(err);

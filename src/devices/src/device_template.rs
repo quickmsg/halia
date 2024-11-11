@@ -36,8 +36,8 @@ pub async fn search_device_templates(
             id: db_device_template.id,
             req: CreateReq {
                 name: db_device_template.name,
-                device_type: db_device_template.device_type.try_into()?,
-                conf: serde_json::from_slice(&db_device_template.conf)?,
+                device_type: db_device_template.device_type,
+                conf: db_device_template.conf,
             },
         });
     }
@@ -116,9 +116,9 @@ pub async fn search_sources(
             id: x.id.clone(),
             req: source_sink::CreateUpdateReq {
                 name: x.name,
-                conf_type: x.conf_type.try_into().unwrap(),
+                conf_type: x.conf_type,
                 template_id: x.template_id,
-                conf: serde_json::from_slice(&x.conf).unwrap(),
+                conf: x.conf,
             },
         })
         .collect();
@@ -209,12 +209,12 @@ pub async fn search_sinks(
     let sinks: Vec<_> = db_sinks
         .into_iter()
         .map(|x| source_sink::SearchItemResp {
-            id: x.id.clone(),
+            id: x.id,
             req: source_sink::CreateUpdateReq {
                 name: x.name,
-                conf_type: x.conf_type.try_into().unwrap(),
+                conf_type: x.conf_type,
                 template_id: x.template_id,
-                conf: serde_json::from_slice(&x.conf).unwrap(),
+                conf: x.conf,
             },
         })
         .collect();

@@ -9,7 +9,6 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use tracing::warn;
 use message::RuleMessageBatch;
 use sink::Sink;
 use tokio::{
@@ -19,6 +18,7 @@ use tokio::{
         watch, RwLock,
     },
 };
+use tracing::warn;
 use types::apps::{
     influxdb_v2::{Conf, SinkConf},
     SearchAppsItemRunningInfo,
@@ -112,7 +112,9 @@ impl Influxdb {
 
                 if task_err.is_none() {
                     sub_app_running_count();
-                    if let Err(e) = storage::app::update_err(&join_handle_data.id, true).await {
+                    if let Err(e) =
+                        storage::app::update_err(&join_handle_data.id, types::Boolean::True).await
+                    {
                         warn!("{}", e);
                     }
                     let err = Arc::new(err);
@@ -133,7 +135,9 @@ impl Influxdb {
                 )
                 .await;
                 if task_err.is_some() {
-                    if let Err(e) = storage::app::update_err(&join_handle_data.id, false).await {
+                    if let Err(e) =
+                        storage::app::update_err(&join_handle_data.id, types::Boolean::False).await
+                    {
                         warn!("{}", e);
                     }
                     *task_err = None;

@@ -8,7 +8,10 @@ use sqlx::{
     Any,
 };
 use types::{
-    devices::device_template::{CreateReq, QueryParams, UpdateReq},
+    devices::{
+        device_template::{CreateReq, QueryParams, UpdateReq},
+        DeviceType,
+    },
     Pagination,
 };
 
@@ -19,11 +22,31 @@ use super::template_source_sink;
 const TABLE_NAME: &str = "device_templates";
 
 #[derive(FromRow)]
-pub struct DeviceTemplate {
+struct DbDeviceTemplate {
     pub id: String,
     pub device_type: i32,
     pub name: String,
     pub conf: Vec<u8>,
+    pub ts: i64,
+}
+
+impl DbDeviceTemplate {
+    pub fn transfer(self) -> Result<DeviceTemplate> {
+        Ok(DeviceTemplate {
+            id: self.id,
+            device_type: self.device_type.try_into()?,
+            name: self.name,
+            conf: serde_json::from_slice(&self.conf)?,
+            ts: self.ts,
+        })
+    }
+}
+
+pub struct DeviceTemplate {
+    pub id: String,
+    pub device_type: DeviceType,
+    pub name: String,
+    pub conf: serde_json::Value,
     pub ts: i64,
 }
 
@@ -65,14 +88,14 @@ pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
 }
 
 pub async fn read_one(id: &String) -> Result<DeviceTemplate> {
-    let device = sqlx::query_as::<_, DeviceTemplate>(
+    let db_device_tempalte = sqlx::query_as::<_, DbDeviceTemplate>(
         format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
     )
     .bind(id)
     .fetch_one(POOL.get().unwrap())
     .await?;
 
-    Ok(device)
+    db_device_tempalte.transfer()
 }
 
 pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
@@ -110,14 +133,14 @@ pub async fn search(
     query_params: QueryParams,
 ) -> Result<(usize, Vec<DeviceTemplate>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, devices) = match (&query_params.name, &query_params.device_type) {
+    let (count, db_device_templates) = match (&query_params.name, &query_params.device_type) {
         (None, None) => {
             let count: i64 =
                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
                     .fetch_one(POOL.get().unwrap())
                     .await?;
 
-            let devices = sqlx::query_as::<_, DeviceTemplate>(
+            let devices = sqlx::query_as::<_, DbDeviceTemplate>(
                 format!(
                     "SELECT * FROM {} ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
@@ -155,8 +178,8 @@ pub async fn search(
                 "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
                 TABLE_NAME, where_clause
             );
-            let mut query_schemas_builder: QueryAs<'_, Any, DeviceTemplate, AnyArguments> =
-                sqlx::query_as::<_, DeviceTemplate>(&query_schemas_str);
+            let mut query_schemas_builder: QueryAs<'_, Any, DbDeviceTemplate, AnyArguments> =
+                sqlx::query_as::<_, DbDeviceTemplate>(&query_schemas_str);
 
             if let Some(name) = query_params.name {
                 let name = format!("%{}%", name);
@@ -180,7 +203,12 @@ pub async fn search(
         }
     };
 
-    Ok((count as usize, devices))
+    let device_templates = db_device_templates
+        .into_iter()
+        .map(|db_device_template| db_device_template.transfer())
+        .collect::<Result<Vec<DeviceTemplate>>>()?;
+
+    Ok((count as usize, device_templates))
 }
 
 pub async fn update(id: &String, req: UpdateReq) -> HaliaResult<()> {

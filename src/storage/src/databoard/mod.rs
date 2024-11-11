@@ -2,7 +2,7 @@ use anyhow::Result;
 use sqlx::prelude::FromRow;
 use types::{
     databoard::{CreateUpdateDataboardReq, QueryParams},
-    Pagination,
+    Boolean, Pagination,
 };
 
 pub mod data;
@@ -12,11 +12,31 @@ use super::POOL;
 static TABLE_NAME: &str = "databoards";
 
 #[derive(FromRow)]
-pub struct Databoard {
+struct DbDataboard {
     pub id: String,
     pub status: i32,
     pub name: String,
     pub conf: Vec<u8>,
+    pub ts: i64,
+}
+
+impl DbDataboard {
+    pub fn transfer(self) -> Result<Databoard> {
+        Ok(Databoard {
+            id: self.id,
+            status: self.status.try_into()?,
+            name: self.name,
+            conf: serde_json::from_slice(&self.conf)?,
+            ts: self.ts,
+        })
+    }
+}
+
+pub struct Databoard {
+    pub id: String,
+    pub status: Boolean,
+    pub name: String,
+    pub conf: serde_json::Value,
     pub ts: i64,
 }
 
@@ -36,8 +56,6 @@ CREATE TABLE IF NOT EXISTS {} (
 }
 
 pub async fn insert(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
-    let ts = common::timestamp_millis() as i64;
     sqlx::query(
         format!(
             "INSERT INTO {} (id, status, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
@@ -46,10 +64,10 @@ pub async fn insert(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
         .as_str(),
     )
     .bind(id)
-    .bind(false as i32)
+    .bind(Into::<i32>::into(Boolean::False))
     .bind(req.name)
-    .bind(conf)
-    .bind(ts)
+    .bind(serde_json::to_vec(&req.ext)?)
+    .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
     Ok(())
@@ -60,14 +78,14 @@ pub async fn query(
     query_params: QueryParams,
 ) -> Result<(usize, Vec<Databoard>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, databoards) = match (query_params.name, query_params.on) {
+    let (count, db_databoards) = match (query_params.name, query_params.on) {
         (None, None) => {
             let count: i64 =
                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
                     .fetch_one(POOL.get().unwrap())
                     .await?;
 
-            let databoards = sqlx::query_as::<_, Databoard>(
+            let databoards = sqlx::query_as::<_, DbDataboard>(
                 format!(
                     "SELECT * FROM {} ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
@@ -89,7 +107,7 @@ pub async fn query(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let databoards = sqlx::query_as::<_, Databoard>(
+            let databoards = sqlx::query_as::<_, DbDataboard>(
                 format!(
                     "SELECT * FROM {} WHERE status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
@@ -112,7 +130,7 @@ pub async fn query(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let databoards = sqlx::query_as::<_, Databoard>(
+            let databoards = sqlx::query_as::<_, DbDataboard>(
                 format!(
                     "SELECT * FROM {} WHERE name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
@@ -140,7 +158,7 @@ pub async fn query(
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let databoards = sqlx::query_as::<_, Databoard>(
+            let databoards = sqlx::query_as::<_, DbDataboard>(
             format!("SELECT * FROM {} WHERE name LIKE ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
             .bind(format!("%{}%", name))
@@ -154,18 +172,23 @@ pub async fn query(
         }
     };
 
+    let databoards = db_databoards
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<_>>>()?;
+
     Ok((count, databoards))
 }
 
 pub async fn read_one(id: &String) -> Result<Databoard> {
-    let databoard = sqlx::query_as::<_, Databoard>(
+    let db_databoard = sqlx::query_as::<_, DbDataboard>(
         format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
     )
     .bind(id)
     .fetch_one(POOL.get().unwrap())
     .await?;
 
-    Ok(databoard)
+    db_databoard.transfer()
 }
 
 pub async fn read_name(id: &String) -> Result<String> {
@@ -179,13 +202,14 @@ pub async fn read_name(id: &String) -> Result<String> {
 }
 
 pub async fn read_many_on() -> Result<Vec<Databoard>> {
-    let databoards = sqlx::query_as::<_, Databoard>(
-        format!("SELECT * FROM {} WHERE status = 1", TABLE_NAME).as_str(),
+    let db_databoards = sqlx::query_as::<_, DbDataboard>(
+        format!("SELECT * FROM {} WHERE status = ?", TABLE_NAME).as_str(),
     )
+    .bind(Into::<i32>::into(Boolean::True))
     .fetch_all(POOL.get().unwrap())
     .await?;
 
-    Ok(databoards)
+    db_databoards.into_iter().map(|x| x.transfer()).collect()
 }
 
 pub async fn count() -> Result<usize> {
@@ -206,9 +230,9 @@ pub async fn update_conf(id: &String, req: CreateUpdateDataboardReq) -> Result<(
     Ok(())
 }
 
-pub async fn update_status(id: &String, status: bool) -> Result<()> {
+pub async fn update_status(id: &String, status: Boolean) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(status as i32)
+        .bind(Into::<i32>::into(status))
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;

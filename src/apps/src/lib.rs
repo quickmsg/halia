@@ -223,8 +223,7 @@ pub async fn search_apps(
 pub async fn update_app(app_id: String, req: CreateUpdateAppReq) -> HaliaResult<()> {
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         let db_conf = storage::app::read_conf(&app_id).await?;
-        let old_conf: serde_json::Value = serde_json::from_slice(&db_conf)?;
-        app.update(old_conf, req.conf.ext.clone()).await?;
+        app.update(db_conf, req.conf.ext.clone()).await?;
     }
 
     storage::app::update_conf(app_id, req).await?;
@@ -238,13 +237,12 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     }
 
     let db_app = storage::app::read_one(&app_id).await?;
-    let app_type = AppType::try_from(db_app.typ)?;
     let app_conf = AppConf {
         name: db_app.name,
-        ext: serde_json::from_slice(&db_app.conf)?,
+        ext: db_app.conf,
     };
 
-    let app = match app_type {
+    let app = match db_app.typ {
         AppType::MqttV311 => mqtt_v311::new(app_id.clone(), app_conf.ext),
         AppType::MqttV50 => mqtt_v50::new(app_id.clone(), app_conf.ext),
         AppType::Http => http::new(app_id.clone(), app_conf.ext),
@@ -276,7 +274,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
         app.create_sink(db_sink.id, conf).await?;
     }
 
-    storage::app::update_status(&app_id, true).await?;
+    storage::app::update_status(&app_id, types::Boolean::True).await?;
     add_app_on_count();
 
     Ok(())
@@ -291,8 +289,8 @@ pub async fn stop_app(app_id: String) -> HaliaResult<()> {
         app.stop().await;
         sub_app_on_count();
         events::insert_stop(types::events::ResourceType::App, &app_id).await;
-        storage::app::update_status(&app_id, false).await?;
-        storage::app::update_err(&app_id, false).await?;
+        storage::app::update_status(&app_id, types::Boolean::False).await?;
+        storage::app::update_err(&app_id, types::Boolean::False).await?;
     }
 
     Ok(())
@@ -545,29 +543,27 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<Search
     .await?;
 
     let running_info = match db_app.status {
-        0 => None,
-        1 => Some(
+        types::Boolean::True => Some(
             GLOBAL_APP_MANAGER
                 .get(&db_app.id)
                 .unwrap()
                 .read_running_info()
                 .await,
         ),
-        _ => unreachable!(),
+        types::Boolean::False => None,
     };
 
-    let typ = AppType::try_from(db_app.typ)?;
     Ok(SearchAppsItemResp {
         common: SearchAppsItemCommon {
             id: db_app.id,
-            typ,
-            on: db_app.status == 1,
+            typ: db_app.typ,
+            on: db_app.status == types::Boolean::True,
             source_cnt,
             sink_cnt,
         },
         conf: SearchAppsItemConf {
             name: db_app.name,
-            ext: serde_json::from_slice(&db_app.conf)?,
+            ext: db_app.conf,
         },
         running_info,
     })

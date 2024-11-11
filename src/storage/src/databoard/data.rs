@@ -11,11 +11,31 @@ use super::POOL;
 static TABLE_NAME: &str = "databoard_datas";
 
 #[derive(FromRow)]
-pub struct Data {
+struct DbData {
     pub id: String,
     pub parent_id: String,
     pub name: String,
     pub conf: Vec<u8>,
+    pub ts: i64,
+}
+
+impl DbData {
+    pub fn transfer(self) -> Result<Data> {
+        Ok(Data {
+            id: self.id,
+            parent_id: self.parent_id,
+            name: self.name,
+            conf: serde_json::from_slice(&self.conf)?,
+            ts: self.ts,
+        })
+    }
+}
+
+pub struct Data {
+    pub id: String,
+    pub parent_id: String,
+    pub name: String,
+    pub conf: serde_json::Value,
     pub ts: i64,
 }
 
@@ -39,16 +59,18 @@ pub async fn insert(
     databoard_data_id: &String,
     req: CreateUpdateDataReq,
 ) -> Result<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
-    let ts = common::timestamp_millis() as i64;
     sqlx::query(
-        "INSERT INTO databoard_datas (id, parent_id, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
+        format!(
+            "INSERT INTO {} (id, parent_id, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
+            TABLE_NAME
+        )
+        .as_str(),
     )
     .bind(databoard_data_id)
     .bind(databoard_id)
     .bind(req.name)
-    .bind(conf)
-    .bind(ts)
+    .bind(serde_json::to_vec(&req.ext)?)
+    .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
     Ok(())
@@ -60,18 +82,22 @@ pub async fn search(
     query_params: QueryDatasParams,
 ) -> Result<(usize, Vec<Data>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, databoard_datas) = match query_params.name {
+    let (count, db_databoard_datas) = match query_params.name {
         Some(name) => {
             let count: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM databoard_datas WHERE parent_id = ? AND name LIKE ?",
+                format!(
+                    "SELECT COUNT(*) FROM {} WHERE parent_id = ? AND name LIKE ?",
+                    TABLE_NAME
+                )
+                .as_str(),
             )
             .bind(databoard_id)
             .bind(format!("%{}%", name))
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-            let databoard_datas = sqlx::query_as::<_, Data>(
-                "SELECT * FROM databoard_datas WHERE parent_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            let databoard_datas = sqlx::query_as::<_, DbData>(
+                format!("SELECT * FROM {} WHERE parent_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
             .bind(databoard_id)
             .bind(format!("%{}%", name))
@@ -82,13 +108,18 @@ pub async fn search(
             (count, databoard_datas)
         }
         None => {
-            let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM databoard_datas WHERE parent_id = ?")
-                    .bind(databoard_id)
-                    .fetch_one(POOL.get().unwrap())
-                    .await?;
-            let databoard_datas = sqlx::query_as::<_, Data>(
-                "SELECT * FROM databoard_datas WHERE parent_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            let count: i64 = sqlx::query_scalar(
+                format!("SELECT COUNT(*) FROM {} WHERE parent_id = ?", TABLE_NAME).as_str(),
+            )
+            .bind(databoard_id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+            let databoard_datas = sqlx::query_as::<_, DbData>(
+                format!(
+                    "SELECT * FROM {} WHERE parent_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    TABLE_NAME
+                )
+                .as_str(),
             )
             .bind(databoard_id)
             .bind(limit)
@@ -98,33 +129,41 @@ pub async fn search(
             (count, databoard_datas)
         }
     };
+
+    let databoard_datas = db_databoard_datas
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<_>>>()?;
     Ok((count as usize, databoard_datas))
 }
 
 pub async fn read_all_by_parent_id(databoard_id: &String) -> Result<Vec<Data>> {
-    let databoard_datas =
-        sqlx::query_as::<_, Data>("SELECT * FROM databoard_datas WHERE parent_id = ?")
-            .bind(databoard_id)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
+    let db_databoard_datas = sqlx::query_as::<_, DbData>(
+        format!("SELECT * FROM {} WHERE parent_id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(databoard_id)
+    .fetch_all(POOL.get().unwrap())
+    .await?;
 
-    Ok(databoard_datas)
+    db_databoard_datas
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect()
 }
 
 pub async fn read_one(databoard_data_id: &String) -> Result<Data> {
-    let databoard_data = sqlx::query_as::<_, Data>("SELECT * FROM databoard_datas WHERE id = ?")
-        .bind(databoard_data_id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(databoard_data)
+    let db_databoard_data =
+        sqlx::query_as::<_, DbData>(format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(databoard_data_id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+    db_databoard_data.transfer()
 }
 
 pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
-    sqlx::query("UPDATE databoard_datas SET name = ?, conf = ? WHERE id = ?")
+    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
-        .bind(conf)
+        .bind(serde_json::to_vec(&req.ext)?)
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -132,7 +171,7 @@ pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {
 }
 
 pub(crate) async fn delete_many(databoard_id: &String) -> Result<()> {
-    sqlx::query("DELETE FROM databoard_datas WHERE parent_id = ?")
+    sqlx::query(format!("DELETE FROM {} WHERE parent_id = ?", TABLE_NAME).as_str())
         .bind(databoard_id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -140,10 +179,11 @@ pub(crate) async fn delete_many(databoard_id: &String) -> Result<()> {
 }
 
 pub async fn check_exists(id: &String) -> Result<bool> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM databoard_datas WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
+    let count: i64 =
+        sqlx::query_scalar(format!("SELECT COUNT(*) FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
     Ok(count == 1)
 }

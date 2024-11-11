@@ -223,23 +223,22 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
                     .await?;
                 let mut source_reqs = vec![];
                 for device_template_source in device_template_sources {
-                    let conf_type: ConfType = device_template_source.conf_type.try_into()?;
-                    match conf_type {
+                    match device_template_source.conf_type {
                         ConfType::Template => {
                             let req = types::devices::device::source_sink::CreateUpdateReq {
                                 name: device_template_source.name,
-                                conf_type,
+                                conf_type: device_template_source.conf_type,
                                 template_id: device_template_source.template_id,
-                                conf: serde_json::from_slice(&device_template_source.conf)?,
+                                conf: device_template_source.conf,
                             };
                             source_reqs.push(req);
                         }
                         ConfType::Customize => {
                             let req = types::devices::device::source_sink::CreateUpdateReq {
                                 name: device_template_source.name,
-                                conf_type,
+                                conf_type: device_template_source.conf_type,
                                 template_id: None,
-                                conf: serde_json::from_slice(&device_template_source.conf)?,
+                                conf: device_template_source.conf,
                             };
                             source_reqs.push(req);
                         }
@@ -253,23 +252,22 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
                     .await?;
                 let mut sink_reqs = vec![];
                 for device_template_sink in device_template_sinks {
-                    let conf_type: ConfType = device_template_sink.conf_type.try_into()?;
-                    match conf_type {
+                    match device_template_sink.conf_type {
                         ConfType::Template => {
                             let req = types::devices::device::source_sink::CreateUpdateReq {
                                 name: device_template_sink.name,
-                                conf_type,
+                                conf_type: device_template_sink.conf_type,
                                 template_id: device_template_sink.template_id,
-                                conf: serde_json::from_slice(&device_template_sink.conf)?,
+                                conf: device_template_sink.conf,
                             };
                             sink_reqs.push(req);
                         }
                         ConfType::Customize => {
                             let req = types::devices::device::source_sink::CreateUpdateReq {
                                 name: device_template_sink.name,
-                                conf_type,
+                                conf_type: device_template_sink.conf_type,
                                 template_id: None,
-                                conf: serde_json::from_slice(&device_template_sink.conf)?,
+                                conf: device_template_sink.conf,
                             };
                             sink_reqs.push(req);
                         }
