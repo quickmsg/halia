@@ -6,7 +6,6 @@ use common::{
     sink_message_retain::{self, SinkMessageRetain},
 };
 use influxdb::{Client, InfluxDbWriteable as _, Timestamp, Type};
-use tracing::debug;
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -16,7 +15,8 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use types::apps::influxdb_v1::{Conf, SinkConf};
+use tracing::debug;
+use types::apps::influxdb_v1::{InfluxdbConf, SinkConf};
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -26,7 +26,7 @@ pub struct Sink {
 
 pub struct JoinHandleData {
     pub conf: SinkConf,
-    pub influxdb_conf: Arc<Conf>,
+    pub influxdb_conf: Arc<InfluxdbConf>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
@@ -37,7 +37,7 @@ impl Sink {
         Ok(())
     }
 
-    pub fn new(conf: SinkConf, influxdb_conf: Arc<Conf>) -> Self {
+    pub fn new(conf: SinkConf, influxdb_conf: Arc<InfluxdbConf>) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = unbounded_channel();
 
@@ -172,7 +172,7 @@ impl Sink {
         self.join_handle = Some(Self::event_loop(join_handle_data));
     }
 
-    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<Conf>) {
+    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
         let mut join_handle_data = self.stop().await;
         join_handle_data.influxdb_conf = influxdb_conf;
         self.join_handle = Some(Self::event_loop(join_handle_data));
@@ -187,7 +187,7 @@ impl Sink {
     }
 }
 
-fn new_influxdb_client(influxdb_conf: &Arc<Conf>, sink_conf: &SinkConf) -> Client {
+fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) -> Client {
     let schema = match &influxdb_conf.ssl_enable {
         true => "https",
         false => "http",

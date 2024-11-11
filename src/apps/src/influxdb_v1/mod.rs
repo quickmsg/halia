@@ -10,7 +10,7 @@ use message::RuleMessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc::UnboundedSender;
 use types::apps::{
-    influxdb_v1::{Conf, SinkConf},
+    influxdb_v1::{InfluxdbConf, SinkConf},
     SearchAppsItemRunningInfo,
 };
 
@@ -22,24 +22,24 @@ pub struct Influxdb {
     _id: String,
     err: Option<String>,
     sinks: DashMap<String, Sink>,
-    conf: Arc<Conf>,
+    influxdb_conf: Arc<InfluxdbConf>,
     rtt: AtomicU16,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let conf: Conf = serde_json::from_value(conf).unwrap();
+    let influxdb_conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
 
     Box::new(Influxdb {
         _id: id,
         err: None,
         sinks: DashMap::new(),
-        conf: Arc::new(conf),
+        influxdb_conf: Arc::new(influxdb_conf),
         rtt: AtomicU16::new(0),
     })
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let conf: Conf = serde_json::from_value(conf.clone())?;
+    let conf: InfluxdbConf = serde_json::from_value(conf.clone())?;
     match conf.auth_method {
         types::apps::influxdb_v1::AuthMethod::None => {}
         types::apps::influxdb_v1::AuthMethod::Password => {
@@ -79,10 +79,11 @@ impl App for Influxdb {
         _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let new_conf: Conf = serde_json::from_value(new_conf)?;
-        self.conf = Arc::new(new_conf);
+        let new_conf: InfluxdbConf = serde_json::from_value(new_conf)?;
+        self.influxdb_conf = Arc::new(new_conf);
         for mut sink in self.sinks.iter_mut() {
-            sink.update_influxdb_client(self.conf.clone()).await;
+            sink.update_influxdb_client(self.influxdb_conf.clone())
+                .await;
         }
 
         Ok(())
@@ -96,7 +97,7 @@ impl App for Influxdb {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(conf, self.conf.clone());
+        let sink = Sink::new(conf, self.influxdb_conf.clone());
         self.sinks.insert(sink_id, sink);
         Ok(())
     }

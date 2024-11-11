@@ -73,16 +73,14 @@ impl Source {
 
     async fn event_loop(join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         match join_handle_data.source_conf.typ {
-            types::apps::http_client::SourceType::Http => {
-                Self::http_event_loop(join_handle_data).await
-            }
+            types::apps::http_client::SourceType::Http => Self::http_event_loop(join_handle_data),
             types::apps::http_client::SourceType::Websocket => {
                 Self::ws_event_loop(join_handle_data).await
             }
         }
     }
 
-    async fn http_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+    fn http_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(
                 join_handle_data.source_conf.interval.unwrap(),
@@ -127,6 +125,10 @@ impl Source {
             &join_handle_data.source_conf.headers,
         );
         let (mut stream, response) = connect_async(request).await.unwrap();
+        if !response.status().is_success() {
+            warn!("websocket 连接失败，状态码：{}", response.status());
+            warn!("response: {:?}", response);
+        }
         tokio::spawn(async move {
             loop {
                 select! {

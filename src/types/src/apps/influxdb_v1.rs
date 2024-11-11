@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{MessageRetain, SslConf};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
-pub struct Conf {
+pub struct InfluxdbConf {
     pub host: String,
     pub port: u16,
 
@@ -37,7 +37,6 @@ pub struct AuthApiToken {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
     pub database: String,
-    // pub auth: InfluxdbV1Auth,
     pub gizp: bool,
     pub mesaurement: String,
     pub fields: Vec<(String, serde_json::Value)>,
