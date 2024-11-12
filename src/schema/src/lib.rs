@@ -101,6 +101,7 @@ fn transfer_db_schema_to_resp(
     db_schema: storage::schema::Schema,
 ) -> HaliaResult<SearchSchemasItemResp> {
     Ok(SearchSchemasItemResp {
+        id: db_schema.id,
         conf: CreateUpdateSchemaReq {
             name: db_schema.name,
             schema_type: db_schema.schema_type.try_into()?,

@@ -132,5 +132,6 @@ pub struct SearchSchemasResp {
 
 #[derive(Serialize)]
 pub struct SearchSchemasItemResp {
+    pub id: String,
     pub conf: CreateUpdateSchemaReq,
 }
