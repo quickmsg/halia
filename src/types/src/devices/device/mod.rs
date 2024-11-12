@@ -7,6 +7,7 @@ pub mod modbus;
 pub mod source_sink;
 pub mod opcua;
 pub mod coap;
+pub mod s7;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {

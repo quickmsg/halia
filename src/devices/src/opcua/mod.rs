@@ -121,7 +121,6 @@ impl Opcua {
             .application_uri("https://halia.com")
             .product_uri("https://halia.com")
             .trust_server_certs(true)
-            .session_retry_limit(3)
             .create_sample_keypair(true)
             .client()
             .unwrap();
