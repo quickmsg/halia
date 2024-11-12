@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use message::{Message, MessageBatch, MessageValue};
-use types::rules::functions::aggregate::{self, Conf};
+use types::rules::functions::aggregation::{self, Conf};
 
 use crate::Function;
 mod avg;
@@ -21,25 +21,23 @@ pub struct Aggregate {
     aggregaters: Vec<Box<dyn Aggregater>>,
 }
 
-impl Aggregate {
-    pub fn new(conf: Conf) -> Result<Self> {
-        let mut aggregaters = Vec::with_capacity(conf.items.len());
-        for item_conf in conf.items {
-            let aggregater = match item_conf.typ {
-                aggregate::Type::Sum => sum::new(item_conf),
-                aggregate::Type::Avg => avg::new(item_conf),
-                aggregate::Type::Max => max::new(item_conf),
-                aggregate::Type::Min => min::new(item_conf),
-                aggregate::Type::Count => count::new(item_conf),
-                aggregate::Type::Collect => collect::new(item_conf),
-                aggregate::Type::Merge => merge::new(item_conf),
-                aggregate::Type::Deduplicate => deduplicate::new(item_conf),
-            };
+pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
+    let mut aggregaters = Vec::with_capacity(conf.items.len());
+    for item_conf in conf.items {
+        let aggregater = match item_conf.typ {
+            aggregation::Type::Sum => sum::new(item_conf),
+            aggregation::Type::Avg => avg::new(item_conf),
+            aggregation::Type::Max => max::new(item_conf),
+            aggregation::Type::Min => min::new(item_conf),
+            aggregation::Type::Count => count::new(item_conf),
+            aggregation::Type::Collect => collect::new(item_conf),
+            aggregation::Type::Merge => merge::new(item_conf),
+            aggregation::Type::Deduplicate => deduplicate::new(item_conf),
+        };
 
-            aggregaters.push(aggregater);
-        }
-        Ok(Aggregate { aggregaters })
+        aggregaters.push(aggregater);
     }
+    Ok(Box::new(Aggregate { aggregaters }))
 }
 
 #[async_trait]
@@ -62,6 +60,6 @@ macro_rules! aggregate_return {
         match &$self.target_field {
             Some(target_field) => (target_field.clone(), $result),
             None => ($self.field.clone(), $result),
-        } 
+        }
     };
 }

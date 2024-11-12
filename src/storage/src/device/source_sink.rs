@@ -1,6 +1,7 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
+use tracing::debug;
 use types::{
     devices::{device::source_sink::CreateUpdateReq, ConfType},
     Boolean, Pagination, QuerySourcesOrSinksParams,
@@ -10,7 +11,7 @@ use crate::{SourceSinkType, POOL};
 
 static TABLE_NAME: &str = "device_sources_sinks";
 
-#[derive(FromRow)]
+#[derive(FromRow, Debug)]
 struct DbSourceSink {
     pub id: String,
     pub device_id: String,
@@ -26,6 +27,7 @@ struct DbSourceSink {
 
 impl DbSourceSink {
     pub fn transfer(self) -> Result<SourceSink> {
+        debug!("conf: {:?}", self);
         Ok(SourceSink {
             id: self.id,
             device_id: self.device_id,
@@ -136,7 +138,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(conf_type)
     .bind(conf)
     .bind(req.template_id)
-    .bind(false as i32)
+    .bind(Into::<i32>::into(Boolean::False))
     .bind(ts)
     .execute(POOL.get().unwrap())
     .await?;
@@ -338,10 +340,14 @@ async fn search(
         }
     };
 
+    debug!("count: {}", count);
+
     let sources_or_sinks = db_sources_or_sinks
         .into_iter()
         .map(|x| x.transfer())
         .collect::<Result<Vec<SourceSink>>>()?;
+
+    debug!("here");
     Ok((count as usize, sources_or_sinks))
 }
 

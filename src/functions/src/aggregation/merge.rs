@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use message::{MessageBatch, MessageValue};
-use types::rules::functions::aggregate::ItemConf;
+use types::rules::functions::aggregation::ItemConf;
 
 use crate::aggregate_return;
 

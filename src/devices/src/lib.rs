@@ -8,6 +8,7 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
+use tracing::debug;
 use types::{
     devices::{
         device::{
@@ -524,6 +525,7 @@ pub async fn search_sources(
 ) -> HaliaResult<source_sink::SearchResp> {
     let (count, db_sources) =
         storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
+    debug!("here");
     let mut data = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
         let rule_ref = RuleRef {

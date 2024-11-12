@@ -2,7 +2,7 @@ use crate::aggregate_return;
 
 use super::Aggregater;
 use message::{MessageBatch, MessageValue};
-use types::rules::functions::aggregate::ItemConf;
+use types::rules::functions::aggregation::ItemConf;
 
 struct Max {
     field: String,
