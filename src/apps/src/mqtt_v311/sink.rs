@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use common::{
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
-use message::RuleMessageBatch;
+use message::{Message, MessageBatch, RuleMessageBatch};
+use regex::Regex;
 use rumqttc::{valid_topic, AsyncClient};
 use schema::Encoder;
 use tokio::{
@@ -28,6 +29,7 @@ pub struct Sink {
 }
 
 pub struct JoinHandleData {
+    pub topic: Topic,
     pub conf: SinkConf,
     pub encoder: Box<dyn Encoder>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
@@ -58,7 +60,9 @@ impl Sink {
             .unwrap();
 
         let message_retainer = sink_message_retain::new(&conf.message_retain);
+        let topic = Topic::new(&conf.topic);
         let join_handle_data = JoinHandleData {
+            topic,
             conf,
             encoder,
             message_retainer,
@@ -89,24 +93,43 @@ impl Sink {
 
                     Some(mb) = join_handle_data.mb_rx.recv() => {
                         let mb = mb.take_mb();
-                        if !err {
-                            match join_handle_data.encoder.encode(mb) {
-                                Ok(data) => {
-                                    if let Err(e) = &join_handle_data.mqtt_client.publish(&join_handle_data.conf.topic, qos, join_handle_data.conf.retain, data).await {
-                                        warn!("{:?}", e);
-                                        err = true;
-                                    }
-                                }
-                                Err(e) => warn!("{:?}", e),
-                            }
-
-                        } else {
-                            join_handle_data.message_retainer.push(mb);
-                        }
+                        Self::handle_data(mb, &join_handle_data, qos).await;
                     }
+                        // } else {
+                        //     join_handle_data.message_retainer.push(mb);
+                        // }
+                    // }
                 }
             }
         })
+    }
+
+    async fn handle_data(mut mb: MessageBatch, join_handle_data: &JoinHandleData, qos: rumqttc::QoS) {
+        let topic = {
+            let messages = mb.get_messages();
+            if messages.len() == 0 {
+                return;
+            }
+            join_handle_data.topic.get_topic(&messages[0])
+        };
+
+        let payload = {
+            match join_handle_data.encoder.encode(mb) {
+                Ok(data) => data,
+                Err(e) => {
+                    warn!("{:?}", e);
+                    return;
+                }
+            }
+        };
+
+        if let Err(e) = join_handle_data
+            .mqtt_client
+            .publish_bytes(topic, qos, join_handle_data.conf.retain, payload)
+            .await
+        {
+            warn!("{:?}", e);
+        }
     }
 
     pub async fn update_conf(
@@ -138,5 +161,95 @@ impl Sink {
             txs.push(self.mb_tx.clone());
         }
         txs
+    }
+}
+
+enum Topic {
+    Const(ConstTopic),
+    Dynamic(DynamicTopic),
+}
+
+struct ConstTopic(String);
+
+struct DynamicTopic {
+    template: String,
+    fields: Vec<String>,
+}
+
+impl DynamicTopic {}
+
+impl Topic {
+    fn new(topic: &str) -> Self {
+        let re = Regex::new(r"\$\{(.*?)\}").unwrap();
+        let mut fields = HashSet::new();
+        for cap in re.captures_iter(topic) {
+            fields.insert(cap[0][2..cap[0].len() - 1].to_owned());
+        }
+
+        if fields.is_empty() {
+            Self::Const(ConstTopic(topic.to_owned()))
+        } else {
+            Self::Dynamic(DynamicTopic {
+                template: topic.to_owned(),
+                fields: fields.into_iter().collect(),
+            })
+        }
+    }
+
+    fn get_topic(&self, msg: &Message) -> String {
+        match self {
+            Self::Const(ConstTopic(topic)) => topic.clone(),
+            Self::Dynamic(DynamicTopic { template, fields }) => {
+                let mut topic = template.clone();
+                for field in fields {
+                    match msg.get(field) {
+                        Some(value) => {
+                            topic = topic.replace(&format!("${{{}}}", field), &value.to_string());
+                        }
+                        None => panic!("todo"),
+                    };
+                }
+                topic
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_topic() {
+        let mut msg = Message::default();
+        msg.add(
+            "a".to_owned(),
+            message::MessageValue::String("hello".to_owned()),
+        );
+        msg.add(
+            "b".to_owned(),
+            message::MessageValue::String("world".to_owned()),
+        );
+
+        let topic = "hello/world";
+        let topic = Topic::new(topic);
+        match &topic {
+            Topic::Const(ConstTopic(topic)) => assert_eq!(topic, "hello/world"),
+            _ => panic!("todo"),
+        }
+        assert_eq!(topic.get_topic(&msg), "hello/world");
+
+        let topic = "${a}/${b}";
+        let topic = Topic::new(topic);
+        match &topic {
+            Topic::Dynamic(dynamic_topic) => {
+                assert_eq!(dynamic_topic.template, "${a}/${b}");
+                assert_eq!(dynamic_topic.fields.len(), 2);
+                assert!(dynamic_topic.fields.contains(&"a".to_owned()));
+                assert!(dynamic_topic.fields.contains(&"b".to_owned()));
+            }
+            _ => panic!("not right"),
+        }
+        assert_eq!(topic.get_topic(&msg), "hello/world");
     }
 }

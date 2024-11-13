@@ -20,6 +20,7 @@ pub struct InfluxdbConf {
 pub enum AuthMethod {
     None,
     Password,
+    // JwtToken
     ApiToken,
 }
 

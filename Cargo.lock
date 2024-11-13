@@ -259,6 +259,7 @@ dependencies = [
  "influxdb",
  "influxdb2",
  "message",
+ "regex",
  "reqwest 0.12.7",
  "rskafka",
  "rumqttc",

@@ -6,6 +6,7 @@ use std::sync::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use influxdb::Client;
 use message::RuleMessageBatch;
 use sink::Sink;
 use tokio::sync::mpsc::UnboundedSender;
@@ -138,4 +139,50 @@ impl App for Influxdb {
             None => Err(HaliaError::NotFound(sink_id.to_owned())),
         }
     }
+}
+
+fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>, sink_conf: &SinkConf) -> Client {
+    let schema = match &influxdb_conf.ssl_enable {
+        true => "https",
+        false => "http",
+    };
+    let mut client = Client::new(
+        format!(
+            "{}://{}:{}",
+            schema, &influxdb_conf.host, influxdb_conf.port
+        ),
+        &sink_conf.database,
+    );
+
+    match influxdb_conf.auth_method {
+        types::apps::influxdb_v1::AuthMethod::None => {}
+        types::apps::influxdb_v1::AuthMethod::Password => {
+            client = client.with_auth(
+                influxdb_conf
+                    .auth_password
+                    .as_ref()
+                    .unwrap()
+                    .username
+                    .clone(),
+                influxdb_conf
+                    .auth_password
+                    .as_ref()
+                    .unwrap()
+                    .password
+                    .clone(),
+            )
+        }
+        types::apps::influxdb_v1::AuthMethod::ApiToken => {
+            client = client.with_token(
+                influxdb_conf
+                    .auth_api_token
+                    .as_ref()
+                    .unwrap()
+                    .api_token
+                    .clone(),
+            )
+        }
+    }
+
+    client
 }
