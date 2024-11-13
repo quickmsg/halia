@@ -37,7 +37,7 @@ pub struct AuthApiToken {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
     pub database: String,
-    pub gizp: bool,
+    pub gzip: bool,
     pub mesaurement: String,
     pub fields: Vec<(String, serde_json::Value)>,
     pub tags: Option<Vec<(String, serde_json::Value)>>,
@@ -46,6 +46,7 @@ pub struct SinkConf {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum Precision {
     Nanoseconds,
     Microseconds,
