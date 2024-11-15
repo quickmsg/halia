@@ -5,6 +5,7 @@ use axum::{
 };
 use types::{
     apps::{CreateAppReq, ListAppsResp, QueryParams, Summary, UpdateAppReq},
+    rules::ListRulesResp,
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, SearchSourcesOrSinksResp,
 };
 
@@ -15,7 +16,8 @@ pub fn routes() -> Router {
         .route("/summary", get(get_apps_summary))
         // .route("/rule", get(get_rule_info))
         .route("/", post(create_app))
-        .route("/", get(list_apps))
+        .route("/list", get(list_apps))
+        .route("/:app_id", get(read_app))
         .route("/:app_id", put(update_app))
         .route("/:app_id/start", put(start_app))
         .route("/:app_id/stop", put(stop_app))
@@ -66,6 +68,10 @@ async fn list_apps(
     Ok(Json(resp))
 }
 
+async fn read_app() -> AppResult<()> {
+    todo!()
+}
+
 async fn update_app(Path(app_id): Path<String>, Json(req): Json<UpdateAppReq>) -> AppResult<()> {
     apps::update_app(app_id, req).await?;
     Ok(())
@@ -86,8 +92,13 @@ async fn delete_app(Path(app_id): Path<String>) -> AppResult<()> {
     Ok(())
 }
 
-async fn list_rules(Path(app_id): Path<String>) -> AppResult<()> {
-    todo!()
+async fn list_rules(
+    Path(app_id): Path<String>,
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<types::rules::QueryParams>,
+) -> AppResult<Json<ListRulesResp>> {
+    let resp = apps::list_rules(app_id, pagination, query).await?;
+    Ok(Json(resp))
 }
 
 async fn create_source(

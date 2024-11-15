@@ -13,7 +13,7 @@ use types::{
         AppType, CreateAppReq, ListAppsItem, ListAppsResp, QueryParams, QueryRuleInfo,
         SearchRuleInfo, Summary, UpdateAppReq,
     },
-    rules::ListRulesResp,
+    rules::{ListRulesItem, ListRulesResp},
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
     SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
 };
@@ -292,8 +292,21 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn list_rules(app_id: String) -> HaliaResult<ListRulesResp> {
-    todo!()
+pub async fn list_rules(
+    app_id: String,
+    pagination: Pagination,
+    query: types::rules::QueryParams,
+) -> HaliaResult<ListRulesResp> {
+    let (count, db_rules) = storage::rule::search(pagination, query, Some(&app_id)).await?;
+    let list = db_rules
+        .into_iter()
+        .map(|x| ListRulesItem {
+            id: x.id,
+            name: x.name,
+            status: x.status,
+        })
+        .collect();
+    Ok(ListRulesResp { count, list })
 }
 
 pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
