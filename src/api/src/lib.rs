@@ -30,8 +30,6 @@ pub static EMPTY_USER_CODE: u16 = 2;
 pub static WRONG_PASSWORD_CODE: u16 = 3;
 pub static JWT_EXPIRED_CODE: u16 = 4;
 
-pub static SUCCESS_RETURN: &str = "SUCCESS";
-
 pub(crate) type AppResult<T, E = AppError> = result::Result<T, E>;
 
 #[derive(Serialize, Debug)]
@@ -94,9 +92,10 @@ impl From<HaliaError> for AppError {
             HaliaError::NameExists => todo!(),
             HaliaError::AddressExists => todo!(),
             HaliaError::Disconnect => todo!(),
-            HaliaError::Error(error) => todo!(),
+            HaliaError::Error(e) => AppError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
             HaliaError::NotSupportResource => todo!(),
             HaliaError::Base64DecodeErr(_) => todo!(),
+            HaliaError::Form(e) => AppError::new(StatusCode::BAD_REQUEST, e),
         }
     }
 }

@@ -451,7 +451,7 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
     sub_device_count();
     events::insert_delete(types::events::ResourceType::Device, &device_id).await;
     storage::device::device::delete_by_id(&device_id).await?;
-    storage::source_or_sink::delete_by_parent_id(&device_id).await?;
+    storage::device::source_sink::delete_many_by_device_id(&device_id).await?;
 
     Ok(())
 }
@@ -772,7 +772,7 @@ pub(crate) async fn delete_sink(device_id: String, sink_id: String) -> HaliaResu
         device.delete_sink(&sink_id).await?;
     }
 
-    storage::source_or_sink::delete_by_id(&sink_id).await?;
+    storage::device::source_sink::delete_by_id(&sink_id).await?;
 
     Ok(())
 }

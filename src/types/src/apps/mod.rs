@@ -141,8 +141,8 @@ pub struct SearchRuleInfo {
 
 #[derive(Serialize)]
 pub struct ListAppsResp {
-    pub list: Vec<ListAppsItem>,
     pub count: usize,
+    pub list: Vec<ListAppsItem>,
 }
 
 #[derive(Serialize)]
@@ -156,4 +156,17 @@ pub struct ListAppsItem {
     pub err: Option<String>,
     pub can_stop: bool,
     pub can_delete: bool,
+}
+
+#[derive(Serialize)]
+pub struct ListRulesResp {
+    pub count: usize,
+    pub list: Vec<ListRulesItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListRulesItem {
+    pub id: String,
+    pub name: String,
+    pub status: Status,
 }

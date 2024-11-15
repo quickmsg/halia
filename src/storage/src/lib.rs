@@ -14,7 +14,6 @@ pub mod device;
 pub mod event;
 pub mod rule;
 pub mod schema;
-pub mod source_or_sink;
 pub mod user;
 
 pub async fn init(config: &StorageConfig) -> Result<()> {
@@ -78,7 +77,7 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
         .execute(POOL.get().unwrap())
         .await
         .unwrap();
-    sqlx::query(&source_or_sink::create_table())
+    sqlx::query(&app::source_sink::create_table())
         .execute(POOL.get().unwrap())
         .await
         .unwrap();

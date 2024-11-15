@@ -63,7 +63,7 @@ pub struct RuleRef {
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSourceOrSinkReq {
     pub name: String,
-    pub ext: serde_json::Value,
+    pub conf: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize)]

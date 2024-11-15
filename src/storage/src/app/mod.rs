@@ -13,6 +13,8 @@ use types::{
 
 use super::POOL;
 
+pub mod source_sink;
+
 static TABLE_NAME: &str = "apps";
 
 #[derive(FromRow)]

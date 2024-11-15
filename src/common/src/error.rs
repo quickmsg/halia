@@ -1,8 +1,5 @@
 use std::{io, result};
 
-use axum::{http::Response, response::IntoResponse};
-use serde::Serialize;
-
 pub type HaliaResult<T, E = HaliaError> = result::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]
@@ -13,6 +10,8 @@ pub enum HaliaError {
     StorageErr(#[from] sqlx::Error),
     #[error("{0}")]
     JsonErr(#[from] serde_json::Error),
+    #[error("表单错误：{0}")]
+    Form(String),
     #[error("{0}")]
     Common(String),
     #[error("I/O: {0}")]

@@ -13,6 +13,7 @@ use types::{
         AppType, CreateAppReq, ListAppsItem, ListAppsResp, QueryParams, QueryRuleInfo,
         SearchRuleInfo, Summary, UpdateAppReq,
     },
+    rules::ListRuleResp,
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
     SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
 };
@@ -143,33 +144,32 @@ pub async fn get_summary() -> Summary {
 
 pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
     let db_app = storage::app::read_one(&query.app_id).await?;
-
-    let app_resp = transer_db_app_to_resp(db_app).await?;
+    let app = transer_db_app_to_resp(db_app).await?;
     match (query.source_id, query.sink_id) {
         (Some(source_id), None) => {
-            let db_source = storage::source_or_sink::read_one(&source_id).await?;
+            let db_source = storage::app::source_sink::read_one(&source_id).await?;
             Ok(SearchRuleInfo {
-                app: todo!(),
+                app,
                 source: Some(SearchSourcesOrSinksInfoResp {
                     id: db_source.id,
                     conf: CreateUpdateSourceOrSinkReq {
                         name: db_source.name,
-                        ext: serde_json::from_slice(&db_source.conf)?,
+                        conf: db_source.conf,
                     },
                 }),
                 sink: None,
             })
         }
         (None, Some(sink_id)) => {
-            let db_sink = storage::source_or_sink::read_one(&sink_id).await?;
+            let db_sink = storage::app::source_sink::read_one(&sink_id).await?;
             Ok(SearchRuleInfo {
-                app: todo!(),
+                app,
                 source: None,
                 sink: Some(SearchSourcesOrSinksInfoResp {
                     id: db_sink.id,
                     conf: CreateUpdateSourceOrSinkReq {
                         name: db_sink.name,
-                        ext: serde_json::from_slice(&db_sink.conf)?,
+                        conf: db_sink.conf,
                     },
                 }),
             })
@@ -210,8 +210,8 @@ pub async fn list_apps(pagination: Pagination, query: QueryParams) -> HaliaResul
     }
 
     Ok(ListAppsResp {
-        list: apps_resp,
         count,
+        list: apps_resp,
     })
 }
 
@@ -244,24 +244,14 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     GLOBAL_APP_MANAGER.insert(app_id.clone(), app);
 
     let mut app = GLOBAL_APP_MANAGER.get_mut(&app_id).unwrap();
-    let db_sources = storage::source_or_sink::read_all_by_parent_id(
-        &app_id,
-        storage::source_or_sink::Type::Source,
-    )
-    .await?;
+    let db_sources = storage::app::source_sink::read_all_sources_by_app_id(&app_id).await?;
     for db_source in db_sources {
-        let conf: serde_json::Value = serde_json::from_slice(&db_source.conf).unwrap();
-        app.create_source(db_source.id, conf).await?;
+        app.create_source(db_source.id, db_source.conf).await?;
     }
 
-    let db_sinks = storage::source_or_sink::read_all_by_parent_id(
-        &app_id,
-        storage::source_or_sink::Type::Sink,
-    )
-    .await?;
+    let db_sinks = storage::app::source_sink::read_all_sinks_by_app_id(&app_id).await?;
     for db_sink in db_sinks {
-        let conf: serde_json::Value = serde_json::from_slice(&db_sink.conf).unwrap();
-        app.create_sink(db_sink.id, conf).await?;
+        app.create_sink(db_sink.id, db_sink.conf).await?;
     }
 
     storage::app::update_status(&app_id, types::Status::Running).await?;
@@ -302,30 +292,28 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
+pub async fn list_rules(app_id: String) -> HaliaResult<ListRuleResp> {
+    todo!()
+}
+
 pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
     let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
     let source_id = common::get_id();
     match typ {
-        AppType::MqttV311 => mqtt_v311::process_source_conf(&source_id, &req.ext).await?,
-        AppType::MqttV50 => mqtt_v50::validate_source_conf(&req.ext)?,
-        AppType::Http => http::validate_source_conf(&req.ext)?,
+        AppType::MqttV311 => mqtt_v311::process_source_conf(&source_id, &req.conf).await?,
+        AppType::MqttV50 => mqtt_v50::validate_source_conf(&req.conf)?,
+        AppType::Http => http::validate_source_conf(&req.conf)?,
         AppType::Kafka | AppType::InfluxdbV1 | AppType::InfluxdbV2 | AppType::Tdengine => {
             return Err(HaliaError::NotSupportResource)
         }
     }
 
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
-        let conf = req.ext.clone();
+        let conf = req.conf.clone();
         app.create_source(source_id.clone(), conf).await?;
     }
 
-    storage::source_or_sink::insert(
-        &app_id,
-        &source_id,
-        storage::source_or_sink::Type::Source,
-        req,
-    )
-    .await?;
+    storage::app::source_sink::insert_source(&app_id, &source_id, req).await?;
 
     Ok(())
 }
@@ -335,13 +323,8 @@ pub async fn search_sources(
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    let (count, db_sources) = storage::source_or_sink::query_by_parent_id(
-        &app_id,
-        storage::source_or_sink::Type::Source,
-        pagination,
-        query,
-    )
-    .await?;
+    let (count, db_sources) =
+        storage::app::source_sink::query_sources_by_app_id(&app_id, pagination, query).await?;
     let mut data = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
         let rule_ref = RuleRef {
@@ -356,7 +339,7 @@ pub async fn search_sources(
                 id: db_source.id,
                 conf: CreateUpdateSourceOrSinkReq {
                     name: db_source.name,
-                    ext: serde_json::from_slice(&db_source.conf).unwrap(),
+                    conf: db_source.conf,
                 },
             },
             rule_ref,
@@ -372,12 +355,12 @@ pub async fn update_source(
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
-        let old_conf = storage::source_or_sink::read_conf(&source_id).await?;
-        let new_conf = req.ext.clone();
+        let old_conf = storage::app::source_sink::read_conf(&source_id).await?;
+        let new_conf = req.conf.clone();
         app.update_source(source_id.clone(), old_conf, new_conf)
             .await?;
     }
-    storage::source_or_sink::update(&source_id, req).await?;
+    storage::app::source_sink::update(&source_id, req).await?;
 
     Ok(())
 }
@@ -388,7 +371,7 @@ pub async fn delete_source(app_id: String, source_id: String) -> HaliaResult<()>
         return Err(HaliaError::DeleteRefing);
     }
 
-    storage::source_or_sink::delete_by_id(&source_id).await?;
+    storage::app::source_sink::delete_by_id(&source_id).await?;
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         app.delete_source(source_id).await?;
     }
@@ -412,26 +395,20 @@ pub async fn get_source_rxs(
 pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
     let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
     match typ {
-        AppType::MqttV311 => mqtt_v311::validate_sink_conf(&req.ext)?,
-        AppType::MqttV50 => mqtt_v50::validate_sink_conf(&req.ext)?,
-        AppType::Http => http::validate_sink_conf(&req.ext)?,
-        AppType::Kafka => kafka::validate_sink_conf(&req.ext)?,
-        AppType::InfluxdbV1 => influxdb_v1::validate_sink_conf(&req.ext)?,
-        AppType::InfluxdbV2 => influxdb_v2::validate_sink_conf(&req.ext)?,
-        AppType::Tdengine => tdengine::validate_sink_conf(&req.ext)?,
+        AppType::MqttV311 => mqtt_v311::validate_sink_conf(&req.conf)?,
+        AppType::MqttV50 => mqtt_v50::validate_sink_conf(&req.conf)?,
+        AppType::Http => http::validate_sink_conf(&req.conf)?,
+        AppType::Kafka => kafka::validate_sink_conf(&req.conf)?,
+        AppType::InfluxdbV1 => influxdb_v1::validate_sink_conf(&req.conf)?,
+        AppType::InfluxdbV2 => influxdb_v2::validate_sink_conf(&req.conf)?,
+        AppType::Tdengine => tdengine::validate_sink_conf(&req.conf)?,
     }
 
     let sink_id = common::get_id();
-    storage::source_or_sink::insert(
-        &app_id,
-        &sink_id,
-        storage::source_or_sink::Type::Sink,
-        req.clone(),
-    )
-    .await?;
+    storage::app::source_sink::insert_sink(&app_id, &sink_id, req.clone()).await?;
 
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
-        let conf = req.ext.clone();
+        let conf = req.conf.clone();
         app.create_sink(sink_id, conf).await?;
     }
 
@@ -443,13 +420,8 @@ pub async fn search_sinks(
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
 ) -> HaliaResult<SearchSourcesOrSinksResp> {
-    let (count, db_sinks) = storage::source_or_sink::query_by_parent_id(
-        &app_id,
-        storage::source_or_sink::Type::Sink,
-        pagination,
-        query,
-    )
-    .await?;
+    let (count, db_sinks) =
+        storage::app::source_sink::query_sinks_by_app_id(&app_id, pagination, query).await?;
     let mut data = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
         let rule_ref = RuleRef {
@@ -464,7 +436,7 @@ pub async fn search_sinks(
                 id: db_sink.id,
                 conf: CreateUpdateSourceOrSinkReq {
                     name: db_sink.name,
-                    ext: serde_json::from_slice(&db_sink.conf).unwrap(),
+                    conf: db_sink.conf,
                 },
             },
             rule_ref,
@@ -480,12 +452,12 @@ pub async fn update_sink(
     req: CreateUpdateSourceOrSinkReq,
 ) -> HaliaResult<()> {
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
-        let old_conf = storage::source_or_sink::read_conf(&sink_id).await?;
-        let new_conf = req.ext.clone();
+        let old_conf = storage::app::source_sink::read_conf(&sink_id).await?;
+        let new_conf = req.conf.clone();
         app.update_sink(sink_id.clone(), old_conf, new_conf).await?;
     }
 
-    storage::source_or_sink::update(&sink_id, req.clone()).await?;
+    storage::app::source_sink::update(&sink_id, req.clone()).await?;
 
     Ok(())
 }
@@ -496,7 +468,7 @@ pub async fn delete_sink(app_id: String, sink_id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRefing);
     }
 
-    storage::source_or_sink::delete_by_id(&sink_id).await?;
+    storage::app::source_sink::delete_by_id(&sink_id).await?;
 
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         app.delete_sink(sink_id).await?;
