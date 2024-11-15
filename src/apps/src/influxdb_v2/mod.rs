@@ -20,7 +20,7 @@ use tokio::{
 };
 use tracing::warn;
 use types::apps::{
-    influxdb_v2::{Conf, SinkConf},
+    influxdb_v2::{InfluxdbConf, SinkConf},
     SearchAppsItemRunningInfo,
 };
 
@@ -31,7 +31,7 @@ mod sink;
 pub struct Influxdb {
     err: Arc<RwLock<Option<Arc<String>>>>,
     sinks: DashMap<String, Sink>,
-    conf: Arc<Conf>,
+    conf: Arc<InfluxdbConf>,
     rtt: AtomicU16,
     app_err_tx: UnboundedSender<Option<String>>,
     stop_signal_tx: watch::Sender<()>,
@@ -45,7 +45,7 @@ struct JoinHandleData {
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let conf: Conf = serde_json::from_value(conf).unwrap();
+    let conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
 
     let err = Arc::new(RwLock::new(None));
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
@@ -68,7 +68,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let _conf: Conf = serde_json::from_value(conf.clone())?;
+    let _conf: InfluxdbConf = serde_json::from_value(conf.clone())?;
     Ok(())
 }
 
@@ -166,7 +166,7 @@ impl App for Influxdb {
         _old_conf: serde_json::Value,
         new_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let new_conf: Conf = serde_json::from_value(new_conf)?;
+        let new_conf: InfluxdbConf = serde_json::from_value(new_conf)?;
         self.conf = Arc::new(new_conf);
         for mut sink in self.sinks.iter_mut() {
             sink.update_influxdb_client(self.conf.clone()).await;

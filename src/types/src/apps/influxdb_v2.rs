@@ -3,16 +3,16 @@ use serde::{Deserialize, Serialize};
 use crate::MessageRetain;
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
-pub struct Conf {
+pub struct InfluxdbConf {
     pub host: String,
     pub port: u16,
+    pub org: String,
+    pub api_token: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SinkConf {
-    pub org: String,
     pub bucket: String,
-    pub api_token: String,
     pub mesaurement: String,
     pub fields: Vec<(String, serde_json::Value)>,
     pub tags: Option<Vec<(String, serde_json::Value)>>,

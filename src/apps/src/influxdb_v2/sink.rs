@@ -11,7 +11,6 @@ use influxdb2::{
     models::{DataPoint, FieldValue},
     Client,
 };
-use tracing::{debug, warn};
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -21,7 +20,8 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use types::apps::influxdb_v2::{Conf, SinkConf};
+use tracing::{debug, warn};
+use types::apps::influxdb_v2::{InfluxdbConf, SinkConf};
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -32,7 +32,7 @@ pub struct Sink {
 pub struct JoinHandleData {
     pub app_err_tx: UnboundedSender<Option<String>>,
     pub conf: SinkConf,
-    pub influxdb_conf: Arc<Conf>,
+    pub influxdb_conf: Arc<InfluxdbConf>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
@@ -45,7 +45,7 @@ impl Sink {
 
     pub fn new(
         conf: SinkConf,
-        influxdb_conf: Arc<Conf>,
+        influxdb_conf: Arc<InfluxdbConf>,
         app_err_tx: UnboundedSender<Option<String>>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
@@ -70,8 +70,7 @@ impl Sink {
     }
 
     fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        let influxdb_client =
-            new_influxdb_client(&join_handle_data.influxdb_conf, &join_handle_data.conf);
+        let influxdb_client = new_influxdb_client(&join_handle_data.influxdb_conf);
 
         let timestamp_precision = match &join_handle_data.conf.precision {
             types::apps::influxdb_v2::Precision::Seconds => TimestampPrecision::Seconds,
@@ -207,7 +206,7 @@ impl Sink {
         self.join_handle = Some(Self::event_loop(join_handle_data));
     }
 
-    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<Conf>) {
+    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
         let mut join_handle_data = self.stop().await;
         join_handle_data.influxdb_conf = influxdb_conf;
         self.join_handle = Some(Self::event_loop(join_handle_data));
@@ -222,10 +221,10 @@ impl Sink {
     }
 }
 
-fn new_influxdb_client(influxdb_conf: &Arc<Conf>, sink_conf: &SinkConf) -> Client {
+fn new_influxdb_client(influxdb_conf: &Arc<InfluxdbConf>) -> Client {
     Client::new(
         format!("http://{}:{}", &influxdb_conf.host, influxdb_conf.port),
-        &sink_conf.org,
-        &sink_conf.api_token,
+        &influxdb_conf.org,
+        &influxdb_conf.api_token,
     )
 }
