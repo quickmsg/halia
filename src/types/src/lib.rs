@@ -176,3 +176,34 @@ impl TryFrom<i32> for Boolean {
         }
     }
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Status {
+    Running,
+    Stopped,
+    Error,
+}
+
+impl Into<i32> for Status {
+    fn into(self) -> i32 {
+        match self {
+            Status::Running => 1,
+            Status::Stopped => 2,
+            Status::Error => 3,
+        }
+    }
+}
+
+impl TryFrom<i32> for Status {
+    type Error = anyhow::Error;
+
+    fn try_from(value: i32) -> Result<Self, anyhow::Error> {
+        match value {
+            1 => Ok(Status::Running),
+            2 => Ok(Status::Stopped),
+            3 => Ok(Status::Error),
+            _ => bail!("invalid value: {}", value),
+        }
+    }
+}

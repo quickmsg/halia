@@ -7,8 +7,8 @@ use sqlx::{
     Any,
 };
 use types::{
-    apps::{AppType, CreateUpdateAppReq, QueryParams},
-    Boolean, Pagination,
+    apps::{AppType, CreateAppReq, QueryParams, UpdateAppReq},
+    Boolean, Pagination, Status,
 };
 
 use super::POOL;
@@ -18,11 +18,10 @@ static TABLE_NAME: &str = "apps";
 #[derive(FromRow)]
 struct DbApp {
     pub id: String,
-    pub status: i32,
-    pub err: i32,
     pub typ: i32,
     pub name: String,
     pub conf: Vec<u8>,
+    pub status: i32,
     pub ts: i64,
 }
 
@@ -31,7 +30,6 @@ impl DbApp {
         Ok(App {
             id: self.id,
             status: self.status.try_into()?,
-            err: self.err.try_into()?,
             typ: self.typ.try_into()?,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
@@ -42,11 +40,10 @@ impl DbApp {
 
 pub struct App {
     pub id: String,
-    pub status: Boolean,
-    pub err: Boolean,
     pub typ: AppType,
     pub name: String,
     pub conf: serde_json::Value,
+    pub status: Status,
     pub ts: i64,
 }
 
@@ -55,11 +52,10 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
-    status SMALLINT UNSIGNED NOT NULL,
-    err SMALLINT UNSIGNED NOT NULL,
     typ SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     conf BLOB NOT NULL,
+    status SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
@@ -67,20 +63,19 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert(id: &String, req: CreateUpdateAppReq) -> HaliaResult<()> {
+pub async fn insert(id: &String, req: CreateAppReq) -> HaliaResult<()> {
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, status, err, typ, name, conf, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, typ, name, conf, status, ts) VALUES (?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
-    .bind(Into::<i32>::into(Boolean::False))
-    .bind(Into::<i32>::into(Boolean::False))
     .bind(Into::<i32>::into(req.typ))
-    .bind(req.conf.name)
-    .bind(serde_json::to_vec(&req.conf.ext)?)
+    .bind(req.name)
+    .bind(serde_json::to_vec(&req.conf)?)
+    .bind(Into::<i32>::into(Status::Stopped))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
@@ -254,7 +249,7 @@ pub async fn search(
     Ok((count as usize, apps))
 }
 
-pub async fn update_status(id: &String, status: Boolean) -> Result<()> {
+pub async fn update_status(id: &String, status: Status) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(Into::<i32>::into(status))
         .bind(id)
@@ -264,20 +259,10 @@ pub async fn update_status(id: &String, status: Boolean) -> Result<()> {
     Ok(())
 }
 
-pub async fn update_err(id: &String, err: Boolean) -> Result<()> {
-    sqlx::query(format!("UPDATE {} SET err = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(Into::<i32>::into(err))
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-
-    Ok(())
-}
-
-pub async fn update_conf(id: String, req: CreateUpdateAppReq) -> HaliaResult<()> {
+pub async fn update_conf(id: String, req: UpdateAppReq) -> HaliaResult<()> {
     sqlx::query("UPDATE apps SET name = ?, conf = ? WHERE id = ?")
-        .bind(req.conf.name)
-        .bind(serde_json::to_vec(&req.conf.ext)?)
+        .bind(req.name)
+        .bind(serde_json::to_vec(&req.conf)?)
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;

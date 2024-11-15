@@ -1,10 +1,4 @@
-use std::{
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
@@ -24,10 +18,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{error, warn};
-use types::apps::{
-    mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf},
-    SearchAppsItemRunningInfo,
-};
+use types::apps::mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf};
 
 use crate::{mqtt_client_ssl::get_ssl_config, App};
 
@@ -46,7 +37,6 @@ pub struct MqttClient {
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    rtt: AtomicU16,
 }
 
 struct JoinHandleData {
@@ -83,7 +73,6 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         app_err_tx,
         join_handle: Some(join_handle),
         mqtt_client,
-        rtt: AtomicU16::new(0),
     })
 }
 
@@ -316,11 +305,8 @@ fn transfer_qos(qos: &Qos) -> mqttbytes::QoS {
 
 #[async_trait]
 impl App for MqttClient {
-    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
-        SearchAppsItemRunningInfo {
-            err: self.err.read().await.clone(),
-            rtt: self.rtt.load(Ordering::SeqCst),
-        }
+    async fn read_err(&self) -> Option<String> {
+        self.err.read().await.clone()
     }
 
     async fn update(

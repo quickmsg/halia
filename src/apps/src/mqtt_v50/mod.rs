@@ -1,16 +1,9 @@
-use std::{
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
-use tracing::{error, warn};
 use message::{MessageBatch, RuleMessageBatch};
 use rumqttc::v5::{
     self,
@@ -29,10 +22,8 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::apps::{
-    mqtt_client_v50::{MqttClientConf, Qos, SinkConf, SourceConf},
-    SearchAppsItemRunningInfo,
-};
+use tracing::{error, warn};
+use types::apps::mqtt_client_v50::{MqttClientConf, Qos, SinkConf, SourceConf};
 
 use crate::{mqtt_client_ssl::get_ssl_config, App};
 
@@ -50,7 +41,6 @@ pub struct MqttClient {
     sinks: DashMap<String, Sink>,
     mqtt_client: Arc<AsyncClient>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    rtt: AtomicU16,
 }
 
 struct JoinHandleData {
@@ -88,7 +78,6 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         stop_signal_tx,
         app_err_tx,
         join_handle: Some(join_handle),
-        rtt: AtomicU16::new(0),
     })
 }
 
@@ -370,11 +359,8 @@ fn transfer_qos(qos: &Qos) -> v5::mqttbytes::QoS {
 
 #[async_trait]
 impl App for MqttClient {
-    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
-        SearchAppsItemRunningInfo {
-            err: self.err.read().await.clone(),
-            rtt: self.rtt.load(Ordering::SeqCst),
-        }
+    async fn read_err(&self) -> Option<String> {
+        self.err.read().await.clone()
     }
 
     async fn update(

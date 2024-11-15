@@ -22,10 +22,7 @@ use tokio::{
     time,
 };
 use tracing::debug;
-use types::apps::{
-    kafka::{Conf, SinkConf},
-    SearchAppsItemRunningInfo,
-};
+use types::apps::kafka::{Conf, SinkConf};
 
 use crate::{add_app_running_count, sub_app_running_count, App};
 
@@ -134,9 +131,9 @@ impl Kafka {
                             }
                         }
                         None => {
-                            let _ = storage::app::update_err(
+                            let _ = storage::app::update_status(
                                 &join_handle_data.id,
-                                types::Boolean::True,
+                                types::Status::Running,
                             )
                             .await;
                             let err = Arc::new(e.to_string());
@@ -193,14 +190,10 @@ impl Kafka {
 
 #[async_trait]
 impl App for Kafka {
-    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
-        let err = match self.err.read().await.as_ref() {
+    async fn read_err(&self) -> Option<String> {
+        match self.err.read().await.as_ref() {
             Some(err) => Some(err.as_ref().clone()),
             None => None,
-        };
-        SearchAppsItemRunningInfo {
-            err,
-            rtt: self.rtt.load(Ordering::SeqCst),
         }
     }
 

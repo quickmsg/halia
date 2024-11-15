@@ -2,6 +2,7 @@ use std::convert::Infallible;
 
 use axum::{
     extract::{Path, Query},
+    http::StatusCode,
     response::{sse::Event, IntoResponse, Sse},
     routing::{self, get, post, put},
     Json, Router,
@@ -70,7 +71,7 @@ async fn sse_log(
     match common::log::tail_log(&id).await {
         Ok(sse) => Ok(sse),
         Err(e) => Err(crate::AppError {
-            code: 1,
+            code: StatusCode::INTERNAL_SERVER_ERROR,
             data: e.to_string(),
         }),
     }

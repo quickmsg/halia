@@ -10,9 +10,8 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     apps::{
-        AppConf, AppType, CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsItemCommon,
-        SearchAppsItemConf, SearchAppsItemResp, SearchAppsItemRunningInfo, SearchAppsResp,
-        SearchRuleInfo, Summary,
+        AppType, CreateAppReq, ListAppsItem, ListAppsResp, QueryParams, QueryRuleInfo,
+        SearchRuleInfo, Summary, UpdateAppReq,
     },
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
     SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
@@ -72,7 +71,7 @@ pub(crate) fn sub_app_running_count() {
 
 #[async_trait]
 pub trait App: Send + Sync {
-    async fn read_running_info(&self) -> SearchAppsItemRunningInfo;
+    async fn read_err(&self) -> Option<String>;
     async fn update(
         &mut self,
         old_conf: serde_json::Value,
@@ -150,7 +149,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
         (Some(source_id), None) => {
             let db_source = storage::source_or_sink::read_one(&source_id).await?;
             Ok(SearchRuleInfo {
-                app: app_resp,
+                app: todo!(),
                 source: Some(SearchSourcesOrSinksInfoResp {
                     id: db_source.id,
                     conf: CreateUpdateSourceOrSinkReq {
@@ -164,7 +163,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
         (None, Some(sink_id)) => {
             let db_sink = storage::source_or_sink::read_one(&sink_id).await?;
             Ok(SearchRuleInfo {
-                app: app_resp,
+                app: todo!(),
                 source: None,
                 sink: Some(SearchSourcesOrSinksInfoResp {
                     id: db_sink.id,
@@ -183,15 +182,15 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
     }
 }
 
-pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
+pub async fn create_app(req: CreateAppReq) -> HaliaResult<()> {
     match req.typ {
-        AppType::MqttV311 => mqtt_v311::validate_conf(&req.conf.ext)?,
-        AppType::MqttV50 => mqtt_v50::validate_conf(&req.conf.ext)?,
-        AppType::Http => http::validate_conf(&req.conf.ext)?,
-        AppType::Kafka => kafka::validate_conf(&req.conf.ext)?,
-        AppType::InfluxdbV1 => influxdb_v1::validate_conf(&req.conf.ext)?,
-        AppType::InfluxdbV2 => influxdb_v2::validate_conf(&req.conf.ext)?,
-        AppType::Tdengine => tdengine::validate_conf(&req.conf.ext)?,
+        AppType::MqttV311 => mqtt_v311::validate_conf(&req.conf)?,
+        AppType::MqttV50 => mqtt_v50::validate_conf(&req.conf)?,
+        AppType::Http => http::validate_conf(&req.conf)?,
+        AppType::Kafka => kafka::validate_conf(&req.conf)?,
+        AppType::InfluxdbV1 => influxdb_v1::validate_conf(&req.conf)?,
+        AppType::InfluxdbV2 => influxdb_v2::validate_conf(&req.conf)?,
+        AppType::Tdengine => tdengine::validate_conf(&req.conf)?,
     }
 
     let app_id = common::get_id();
@@ -202,10 +201,7 @@ pub async fn create_app(req: CreateUpdateAppReq) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn search_apps(
-    pagination: Pagination,
-    query: QueryParams,
-) -> HaliaResult<SearchAppsResp> {
+pub async fn list_apps(pagination: Pagination, query: QueryParams) -> HaliaResult<ListAppsResp> {
     let (count, db_apps) = storage::app::search(pagination, query).await?;
 
     let mut apps_resp = Vec::with_capacity(db_apps.len());
@@ -213,16 +209,16 @@ pub async fn search_apps(
         apps_resp.push(transer_db_app_to_resp(db_app).await?);
     }
 
-    Ok(SearchAppsResp {
-        total: count,
-        data: apps_resp,
+    Ok(ListAppsResp {
+        list: apps_resp,
+        count,
     })
 }
 
-pub async fn update_app(app_id: String, req: CreateUpdateAppReq) -> HaliaResult<()> {
+pub async fn update_app(app_id: String, req: UpdateAppReq) -> HaliaResult<()> {
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         let db_conf = storage::app::read_conf(&app_id).await?;
-        app.update(db_conf, req.conf.ext.clone()).await?;
+        app.update(db_conf, req.conf.clone()).await?;
     }
 
     storage::app::update_conf(app_id, req).await?;
@@ -236,19 +232,14 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     }
 
     let db_app = storage::app::read_one(&app_id).await?;
-    let app_conf = AppConf {
-        name: db_app.name,
-        ext: db_app.conf,
-    };
-
     let app = match db_app.typ {
-        AppType::MqttV311 => mqtt_v311::new(app_id.clone(), app_conf.ext),
-        AppType::MqttV50 => mqtt_v50::new(app_id.clone(), app_conf.ext),
-        AppType::Http => http::new(app_id.clone(), app_conf.ext),
-        AppType::Kafka => kafka::new(app_id.clone(), app_conf.ext),
-        AppType::InfluxdbV1 => influxdb_v1::new(app_id.clone(), app_conf.ext),
-        AppType::InfluxdbV2 => influxdb_v2::new(app_id.clone(), app_conf.ext),
-        AppType::Tdengine => tdengine::new(app_id.clone(), app_conf.ext),
+        AppType::MqttV311 => mqtt_v311::new(app_id.clone(), db_app.conf),
+        AppType::MqttV50 => mqtt_v50::new(app_id.clone(), db_app.conf),
+        AppType::Http => http::new(app_id.clone(), db_app.conf),
+        AppType::Kafka => kafka::new(app_id.clone(), db_app.conf),
+        AppType::InfluxdbV1 => influxdb_v1::new(app_id.clone(), db_app.conf),
+        AppType::InfluxdbV2 => influxdb_v2::new(app_id.clone(), db_app.conf),
+        AppType::Tdengine => tdengine::new(app_id.clone(), db_app.conf),
     };
     GLOBAL_APP_MANAGER.insert(app_id.clone(), app);
 
@@ -273,7 +264,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
         app.create_sink(db_sink.id, conf).await?;
     }
 
-    storage::app::update_status(&app_id, types::Boolean::True).await?;
+    storage::app::update_status(&app_id, types::Status::Running).await?;
     add_app_on_count();
 
     Ok(())
@@ -288,8 +279,7 @@ pub async fn stop_app(app_id: String) -> HaliaResult<()> {
         app.stop().await;
         sub_app_on_count();
         events::insert_stop(types::events::ResourceType::App, &app_id).await;
-        storage::app::update_status(&app_id, types::Boolean::False).await?;
-        storage::app::update_err(&app_id, types::Boolean::False).await?;
+        storage::app::update_status(&app_id, types::Status::Stopped).await?;
     }
 
     Ok(())
@@ -528,42 +518,37 @@ pub async fn get_sink_txs(
     }
 }
 
-async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<SearchAppsItemResp> {
-    let source_cnt = storage::source_or_sink::count_by_parent_id(
-        &db_app.id,
-        storage::source_or_sink::Type::Source,
-    )
-    .await?;
-
-    let sink_cnt = storage::source_or_sink::count_by_parent_id(
-        &db_app.id,
-        storage::source_or_sink::Type::Sink,
-    )
-    .await?;
-
-    let running_info = match db_app.status {
-        types::Boolean::True => Some(
-            GLOBAL_APP_MANAGER
-                .get(&db_app.id)
-                .unwrap()
-                .read_running_info()
-                .await,
-        ),
-        types::Boolean::False => None,
+async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<ListAppsItem> {
+    let (can_stop, can_delete, err) = match db_app.status {
+        types::Status::Running => {
+            let can_stop =
+                storage::rule::reference::count_active_cnt_by_parent_id(&db_app.id).await? > 0;
+            (can_stop, false, None)
+        }
+        types::Status::Stopped => {
+            let can_delete =
+                storage::rule::reference::count_cnt_by_parent_id(&db_app.id).await? > 0;
+            (false, can_delete, None)
+        }
+        types::Status::Error => {
+            let can_stop =
+                storage::rule::reference::count_active_cnt_by_parent_id(&db_app.id).await? > 0;
+            let app = match GLOBAL_APP_MANAGER.get(&db_app.id) {
+                Some(app) => app,
+                None => return Err(HaliaError::Common("App未启动！".to_string())),
+            };
+            let err = app.read_err().await;
+            (can_stop, false, err)
+        }
     };
 
-    Ok(SearchAppsItemResp {
-        common: SearchAppsItemCommon {
-            id: db_app.id,
-            typ: db_app.typ,
-            on: db_app.status == types::Boolean::True,
-            source_cnt,
-            sink_cnt,
-        },
-        conf: SearchAppsItemConf {
-            name: db_app.name,
-            ext: db_app.conf,
-        },
-        running_info,
+    Ok(ListAppsItem {
+        id: db_app.id,
+        name: db_app.name,
+        typ: db_app.typ,
+        status: db_app.status,
+        err,
+        can_stop,
+        can_delete,
     })
 }

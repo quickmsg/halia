@@ -3,7 +3,7 @@ use std::fmt;
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::SearchSourcesOrSinksInfoResp;
+use crate::{SearchSourcesOrSinksInfoResp, Status};
 
 pub mod http_client;
 pub mod influxdb_v1;
@@ -14,11 +14,17 @@ pub mod mqtt_client_v50;
 pub mod tdengine;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
-pub struct CreateUpdateAppReq {
+pub struct CreateAppReq {
     #[serde(rename = "type")]
     pub typ: AppType,
-    #[serde(flatten)]
-    pub conf: AppConf,
+    pub name: String,
+    pub conf: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub struct UpdateAppReq {
+    pub name: String,
+    pub conf: serde_json::Value,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -62,12 +68,6 @@ impl TryFrom<i32> for AppType {
             _ => bail!("未知应用类型: {}", value),
         }
     }
-}
-
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
-pub struct AppConf {
-    pub name: String,
-    pub ext: serde_json::Value,
 }
 
 impl fmt::Display for AppType {
@@ -118,37 +118,6 @@ pub struct QueryParams {
 }
 
 #[derive(Serialize)]
-pub struct SearchAppsResp {
-    pub total: usize,
-    pub data: Vec<SearchAppsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchAppsItemResp {
-    pub common: SearchAppsItemCommon,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub running_info: Option<SearchAppsItemRunningInfo>,
-    pub conf: SearchAppsItemConf,
-}
-
-#[derive(Serialize)]
-pub struct SearchAppsItemCommon {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub typ: AppType,
-    pub on: bool,
-    pub source_cnt: usize,
-    pub sink_cnt: usize,
-}
-
-#[derive(Serialize)]
-pub struct SearchAppsItemRunningInfo {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub err: Option<String>,
-    pub rtt: u16,
-}
-
-#[derive(Serialize)]
 pub struct SearchAppsItemConf {
     pub name: String,
     pub ext: serde_json::Value,
@@ -163,9 +132,28 @@ pub struct QueryRuleInfo {
 
 #[derive(Serialize)]
 pub struct SearchRuleInfo {
-    pub app: SearchAppsItemResp,
+    pub app: ListAppsItem,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SearchSourcesOrSinksInfoResp>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sink: Option<SearchSourcesOrSinksInfoResp>,
+}
+
+#[derive(Serialize)]
+pub struct ListAppsResp {
+    pub list: Vec<ListAppsItem>,
+    pub count: usize,
+}
+
+#[derive(Serialize)]
+pub struct ListAppsItem {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub typ: AppType,
+    pub status: Status,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+    pub can_stop: bool,
+    pub can_delete: bool,
 }

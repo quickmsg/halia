@@ -30,6 +30,8 @@ pub static EMPTY_USER_CODE: u16 = 2;
 pub static WRONG_PASSWORD_CODE: u16 = 3;
 pub static JWT_EXPIRED_CODE: u16 = 4;
 
+pub static SUCCESS_RETURN: &str = "SUCCESS";
+
 pub(crate) type AppResult<T, E = AppError> = result::Result<T, E>;
 
 #[derive(Serialize, Debug)]
@@ -61,30 +63,47 @@ impl<T: Serialize> IntoResponse for AppSuccess<T> {
     }
 }
 
-#[derive(Serialize)]
 pub(crate) struct AppError {
-    code: u16,
+    code: StatusCode,
     data: String,
 }
 
 impl AppError {
-    pub fn new(code: u16, e: String) -> Self {
+    pub fn new(code: StatusCode, e: String) -> Self {
         AppError { code, data: e }
     }
 }
 
 impl From<HaliaError> for AppError {
-    fn from(value: HaliaError) -> Self {
-        Self {
-            code: 1,
-            data: value.to_string(),
+    fn from(err: HaliaError) -> Self {
+        match err {
+            HaliaError::NotFound(_) => todo!(),
+            HaliaError::StorageErr(e) => {
+                AppError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+            }
+            HaliaError::JsonErr(e) => {
+                AppError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string())
+            }
+            HaliaError::Common(e) => AppError::new(StatusCode::INTERNAL_SERVER_ERROR, e),
+            HaliaError::Io(error) => todo!(),
+            HaliaError::Running => todo!(),
+            HaliaError::Stopped(_) => todo!(),
+            HaliaError::DeleteRefing => todo!(),
+            HaliaError::DeleteRunning => todo!(),
+            HaliaError::StopActiveRefing => todo!(),
+            HaliaError::NameExists => todo!(),
+            HaliaError::AddressExists => todo!(),
+            HaliaError::Disconnect => todo!(),
+            HaliaError::Error(error) => todo!(),
+            HaliaError::NotSupportResource => todo!(),
+            HaliaError::Base64DecodeErr(_) => todo!(),
         }
     }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        (StatusCode::OK, Json(self)).into_response()
+        (self.code, self.data).into_response()
     }
 }
 

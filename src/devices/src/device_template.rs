@@ -48,7 +48,7 @@ pub async fn search_device_templates(
     })
 }
 
-pub async fn read_device_template(id: String) -> HaliaResult<ReadResp> {
+pub async fn read_device_template(_id: String) -> HaliaResult<ReadResp> {
     todo!()
 }
 

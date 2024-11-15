@@ -19,10 +19,7 @@ use tokio::{
     },
 };
 use tracing::warn;
-use types::apps::{
-    influxdb_v2::{InfluxdbConf, SinkConf},
-    SearchAppsItemRunningInfo,
-};
+use types::apps::influxdb_v2::{InfluxdbConf, SinkConf};
 
 use crate::{add_app_running_count, sub_app_running_count, App};
 
@@ -113,7 +110,8 @@ impl Influxdb {
                 if task_err.is_none() {
                     sub_app_running_count();
                     if let Err(e) =
-                        storage::app::update_err(&join_handle_data.id, types::Boolean::True).await
+                        storage::app::update_status(&join_handle_data.id, types::Status::Error)
+                            .await
                     {
                         warn!("{}", e);
                     }
@@ -136,7 +134,8 @@ impl Influxdb {
                 .await;
                 if task_err.is_some() {
                     if let Err(e) =
-                        storage::app::update_err(&join_handle_data.id, types::Boolean::False).await
+                        storage::app::update_status(&join_handle_data.id, types::Status::Running)
+                            .await
                     {
                         warn!("{}", e);
                     }
@@ -150,14 +149,10 @@ impl Influxdb {
 
 #[async_trait]
 impl App for Influxdb {
-    async fn read_running_info(&self) -> SearchAppsItemRunningInfo {
-        let err = match self.err.read().await.as_ref() {
+    async fn read_err(&self) -> Option<String> {
+        match self.err.read().await.as_ref() {
             Some(err) => Some(err.as_ref().clone()),
             None => None,
-        };
-        SearchAppsItemRunningInfo {
-            err,
-            rtt: self.rtt.load(Ordering::SeqCst),
         }
     }
 

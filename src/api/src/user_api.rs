@@ -90,7 +90,10 @@ async fn registration(Json(password): Json<Password>) -> AppResult<AppSuccess<St
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
     if exists {
-        return Err(AppError::new(1, "管理员账户已存在！".to_string()));
+        return Err(AppError::new(
+            StatusCode::UNAUTHORIZED,
+            "管理员账户已存在！".to_string(),
+        ));
     }
 
     storage::user::create_user("admin".to_string(), &password.password)
@@ -111,17 +114,17 @@ async fn login(Json(user): Json<User>) -> AppResult<AppSuccess<AuthInfo>> {
             Some(user) => user,
             None => {
                 return Err(AppError::new(
-                    EMPTY_USER_CODE,
+                    StatusCode::UNAUTHORIZED,
                     "数据库无账户，请注册！".to_string(),
                 ))
             }
         },
-        Err(e) => return Err(AppError::new(1, e.to_string())),
+        Err(e) => return Err(AppError::new(StatusCode::UNAUTHORIZED, e.to_string())),
     };
 
     if db_user.username != user.username || db_user.password != user.password {
         return Err(AppError::new(
-            WRONG_PASSWORD_CODE,
+            StatusCode::UNAUTHORIZED,
             "账户或密码错误！".to_string(),
         ));
     }
@@ -158,7 +161,10 @@ async fn password(Json(update_password): Json<UpdatePassword>) -> AppResult<AppS
         Ok(_) => Ok(AppSuccess::empty()),
         Err(e) => {
             warn!("{}", e);
-            return Err(AppError::new(1, "密码错误".to_owned()));
+            return Err(AppError::new(
+                StatusCode::UNAUTHORIZED,
+                "密码错误".to_owned(),
+            ));
         }
     }
 }

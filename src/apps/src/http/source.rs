@@ -211,7 +211,7 @@ fn connect_websocket(
                 .unwrap();
 
             if let Some(headers) = headers {
-                for (key, value) in headers {
+                for (_key, value) in headers {
                     // TODO
                     request.headers_mut().insert("todo", value.parse().unwrap());
                 }

@@ -5,19 +5,20 @@ use axum::{
 };
 use types::{
     apps::{
-        CreateUpdateAppReq, QueryParams, QueryRuleInfo, SearchAppsResp, SearchRuleInfo, Summary,
+        CreateAppReq, ListAppsResp, QueryParams, QueryRuleInfo, SearchRuleInfo, Summary,
+        UpdateAppReq,
     },
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, SearchSourcesOrSinksResp,
 };
 
-use crate::{AppResult, AppSuccess};
+use crate::{AppResult, AppSuccess, SUCCESS_RETURN};
 
 pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_apps_summary))
         .route("/rule", get(get_rule_info))
         .route("/", post(create_app))
-        .route("/", get(search_apps))
+        .route("/", get(list_apps))
         .route("/:app_id", put(update_app))
         .route("/:app_id/start", put(start_app))
         .route("/:app_id/stop", put(stop_app))
@@ -55,22 +56,22 @@ async fn get_rule_info(
     Ok(AppSuccess::data(rule_info))
 }
 
-async fn create_app(Json(req): Json<CreateUpdateAppReq>) -> AppResult<AppSuccess<()>> {
+async fn create_app(Json(req): Json<CreateAppReq>) -> AppResult<&'static str> {
     apps::create_app(req).await?;
-    Ok(AppSuccess::empty())
+    Ok(&SUCCESS_RETURN)
 }
 
-async fn search_apps(
+async fn list_apps(
     Query(pagination): Query<Pagination>,
     Query(query): Query<QueryParams>,
-) -> AppResult<AppSuccess<SearchAppsResp>> {
-    let apps = apps::search_apps(pagination, query).await?;
-    Ok(AppSuccess::data(apps))
+) -> AppResult<Json<ListAppsResp>> {
+    let resp = apps::list_apps(pagination, query).await?;
+    Ok(Json(resp))
 }
 
 async fn update_app(
     Path(app_id): Path<String>,
-    Json(req): Json<CreateUpdateAppReq>,
+    Json(req): Json<UpdateAppReq>,
 ) -> AppResult<AppSuccess<()>> {
     apps::update_app(app_id, req).await?;
     Ok(AppSuccess::empty())
