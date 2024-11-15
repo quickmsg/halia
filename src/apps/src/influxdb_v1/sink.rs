@@ -5,7 +5,7 @@ use common::{
     get_dynamic_value_from_json,
     sink_message_retain::{self, SinkMessageRetain},
 };
-use influxdb::{ Client, InfluxDbWriteable as _, Timestamp, Type};
+use influxdb::{Client, InfluxDbWriteable as _, Timestamp, Type};
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -15,7 +15,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 use types::apps::influxdb_v1::{InfluxdbConf, SinkConf};
 
 use super::new_influxdb_client;
@@ -89,17 +89,19 @@ impl Sink {
         conf: &SinkConf,
         rmb: RuleMessageBatch,
     ) {
+        debug!("{:?}", rmb);
         let mb = rmb.take_mb();
         let mut querys = vec![];
+        let ts = chrono::Local::now().timestamp() as u128;
+        let timestamp = match &conf.precision {
+            types::apps::influxdb_v1::Precision::Nanoseconds => Timestamp::Nanoseconds(ts),
+            types::apps::influxdb_v1::Precision::Microseconds => Timestamp::Microseconds(ts),
+            types::apps::influxdb_v1::Precision::Milliseconds => Timestamp::Milliseconds(ts),
+            types::apps::influxdb_v1::Precision::Seconds => Timestamp::Seconds(ts),
+            types::apps::influxdb_v1::Precision::Minutes => Timestamp::Minutes(ts),
+            types::apps::influxdb_v1::Precision::Hours => Timestamp::Hours(ts),
+        };
         for msg in mb.get_messages() {
-            let timestamp = match &conf.precision {
-                types::apps::influxdb_v1::Precision::Nanoseconds => Timestamp::Nanoseconds(0),
-                types::apps::influxdb_v1::Precision::Microseconds => Timestamp::Microseconds(0),
-                types::apps::influxdb_v1::Precision::Milliseconds => Timestamp::Milliseconds(0),
-                types::apps::influxdb_v1::Precision::Seconds => Timestamp::Seconds(0),
-                types::apps::influxdb_v1::Precision::Minutes => Timestamp::Minutes(0),
-                types::apps::influxdb_v1::Precision::Hours => Timestamp::Hours(0),
-            };
             let mut query = timestamp.into_query(&conf.mesaurement);
             for (field, field_value) in &conf.fields {
                 let value = match get_dynamic_value_from_json(field_value) {
@@ -159,7 +161,17 @@ impl Sink {
             querys.push(query);
         }
         if let Err(e) = influxdb_client.query(querys).await {
-            debug!("{}", e);
+            // match e {
+            //     influxdb::Error::InvalidQueryError { error } => todo!(),
+            //     influxdb::Error::UrlConstructionError { error } => todo!(),
+            //     influxdb::Error::ProtocolError { error } => todo!(),
+            //     influxdb::Error::DeserializationError { error } => todo!(),
+            //     influxdb::Error::DatabaseError { error } => todo!(),
+            //     influxdb::Error::AuthenticationError => todo!(),
+            //     influxdb::Error::AuthorizationError => todo!(),
+            //     influxdb::Error::ConnectionError { error } => todo!(),
+            // }
+            warn!("{}", e);
         }
     }
 

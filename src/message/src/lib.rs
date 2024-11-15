@@ -30,7 +30,7 @@ impl Debug for MessageBatch {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RuleMessageBatch {
     Owned(MessageBatch),
     Arc(Arc<MessageBatch>),
