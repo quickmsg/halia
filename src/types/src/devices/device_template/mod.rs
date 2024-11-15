@@ -38,3 +38,18 @@ pub struct SearchItemResp {
     pub id: String,
     pub req: CreateReq,
 }
+
+#[derive(Serialize)]
+pub struct ReadResp {
+    pub id: String,
+    pub req: CreateReq,
+    pub devices: Vec<ReadRespDeviceItem>,
+}
+
+// TODO
+#[derive(Serialize)]
+pub struct ReadRespDeviceItem {
+    pub id: String,
+    pub name: String,
+    pub address: String,
+}

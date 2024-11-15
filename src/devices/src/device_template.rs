@@ -2,7 +2,7 @@ use common::error::{HaliaError, HaliaResult};
 use tracing::debug;
 use types::{
     devices::{
-        device_template::{self, source_sink, CreateReq, QueryParams, SearchResp},
+        device_template::{self, source_sink, CreateReq, QueryParams, ReadResp, SearchResp},
         DeviceType,
     },
     Pagination,
@@ -46,6 +46,10 @@ pub async fn search_device_templates(
         total: count,
         data: resp_device_templates,
     })
+}
+
+pub async fn read_device_template(id: String) -> HaliaResult<ReadResp> {
+    todo!()
 }
 
 pub async fn update_device_template(

@@ -104,7 +104,7 @@ impl Sink {
         })
     }
 
-    async fn handle_data(mut mb: MessageBatch, join_handle_data: &JoinHandleData, qos: rumqttc::QoS) {
+    async fn handle_data(mb: MessageBatch, join_handle_data: &JoinHandleData, qos: rumqttc::QoS) {
         let topic = {
             let messages = mb.get_messages();
             if messages.len() == 0 {

@@ -58,6 +58,7 @@ pub fn routes() -> Router {
             Router::new()
                 .route("/", post(create_device_template))
                 .route("/", get(search_device_templates))
+                .route("/:id", get(read_device_template))
                 .route("/:id", put(update_device_template))
                 .route("/:id", delete(delete_device_template))
                 .nest(
@@ -265,6 +266,13 @@ async fn search_device_templates(
     Query(query): Query<types::devices::device_template::QueryParams>,
 ) -> AppResult<AppSuccess<types::devices::device_template::SearchResp>> {
     let data = devices::device_template::search_device_templates(pagination, query).await?;
+    Ok(AppSuccess::data(data))
+}
+
+async fn read_device_template(
+    Path(id): Path<String>,
+) -> AppResult<AppSuccess<types::devices::device_template::ReadResp>> {
+    let data = devices::device_template::read_device_template(id).await?;
     Ok(AppSuccess::data(data))
 }
 
