@@ -1,9 +1,14 @@
 use anyhow::Result;
 use common::error::HaliaResult;
-use sqlx::prelude::FromRow;
+use sqlx::{
+    any::AnyArguments,
+    prelude::FromRow,
+    query::{QueryAs, QueryScalar},
+    Any,
+};
 use types::{
-    rules::{CreateUpdateRuleReq, QueryParams},
-    Pagination,
+    rules::{Conf, CreateUpdateRuleReq, QueryParams},
+    Pagination, Status,
 };
 
 use super::POOL;
@@ -13,11 +18,31 @@ pub mod reference;
 static TABLE_NAME: &str = "rules";
 
 #[derive(FromRow)]
-pub struct Rule {
+struct DbRule {
     pub id: String,
-    pub status: i32,
     pub name: String,
     pub conf: Vec<u8>,
+    pub status: i32,
+    pub ts: i64,
+}
+
+impl DbRule {
+    pub fn transfer(self) -> Result<Rule> {
+        Ok(Rule {
+            id: self.id,
+            name: self.name,
+            conf: serde_json::from_slice(&self.conf)?,
+            status: self.status.try_into()?,
+            ts: self.ts,
+        })
+    }
+}
+
+pub struct Rule {
+    pub id: String,
+    pub name: String,
+    pub conf: Conf,
+    pub status: Status,
     pub ts: i64,
 }
 
@@ -57,105 +82,136 @@ pub async fn insert(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
 }
 
 pub async fn read_one(id: &String) -> Result<Rule> {
-    let rule = sqlx::query_as::<_, Rule>("SELECT * FROM rules WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
-
-    Ok(rule)
+    let db_rule =
+        sqlx::query_as::<_, DbRule>(format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+    db_rule.transfer()
 }
 
-pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
-    let conf: Vec<u8> = sqlx::query_scalar("SELECT conf FROM rules WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
+pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
+    let conf: Vec<u8> =
+        sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
+    let conf = serde_json::from_slice(&conf)?;
     Ok(conf)
 }
 
 pub async fn read_all_on() -> Result<Vec<Rule>> {
-    let rules = sqlx::query_as::<_, Rule>("SELECT * FROM rules WHERE status = 1")
-        .fetch_all(POOL.get().unwrap())
-        .await?;
+    let db_rules = sqlx::query_as::<_, DbRule>(
+        format!("SELECT * FROM {} WHERE status = ?", TABLE_NAME).as_str(),
+    )
+    .bind(Into::<i32>::into(Status::Running))
+    .fetch_all(POOL.get().unwrap())
+    .await?;
+
+    let rules = db_rules
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<Rule>>>()?;
 
     Ok(rules)
 }
 
-pub async fn query(pagination: Pagination, query: QueryParams) -> Result<(usize, Vec<Rule>)> {
+pub async fn search(
+    pagination: Pagination,
+    query: QueryParams,
+    parent_id: Option<&String>,
+) -> Result<(usize, Vec<Rule>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, rules) = match (query.name, query.on) {
-        (None, None) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rules")
-                .fetch_one(POOL.get().unwrap())
-                .await?;
-
-            let rules =
-                sqlx::query_as::<_, Rule>("SELECT * FROM rules ORDER BY ts DESC LIMIT ? OFFSET ?")
-                    .bind(limit)
-                    .bind(offset)
-                    .fetch_all(POOL.get().unwrap())
-                    .await?;
-
-            (count as usize, rules)
-        }
-        (None, Some(on)) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rules WHERE status = ?")
-                .bind(on as i32)
-                .fetch_one(POOL.get().unwrap())
-                .await?;
-
-            let rules = sqlx::query_as::<_, Rule>(
-                "SELECT * FROM rules WHERE status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(on as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, rules)
-        }
-        (Some(name), None) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rules WHERE name LIKE ?")
-                .bind(format!("%{}%", name))
-                .fetch_one(POOL.get().unwrap())
-                .await?;
-
-            let rules = sqlx::query_as::<_, Rule>(
-                "SELECT * FROM rules WHERE name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-            )
-            .bind(format!("%{}%", name))
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, rules)
-        }
-        (Some(name), Some(on)) => {
+    let (count, db_rules) = match (&query.name, &query.status, &parent_id) {
+        (None, None, None) => {
             let count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM rules WHERE name LIKE ? AND status = ?")
-                    .bind(format!("%{}%", name))
-                    .bind(on as i32)
+                sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
                     .fetch_one(POOL.get().unwrap())
                     .await?;
 
-            let rules = sqlx::query_as::<_, Rule>(
-                "SELECT * FROM rules WHERE name LIKE ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            let db_rules = sqlx::query_as::<_, DbRule>(
+                format!(
+                    "SELECT * FROM {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    TABLE_NAME
+                )
+                .as_str(),
             )
-            .bind(format!("%{}%", name))
-            .bind(on as i32)
             .bind(limit)
             .bind(offset)
             .fetch_all(POOL.get().unwrap())
             .await?;
 
-            (count as usize, rules)
+            (count, db_rules)
+        }
+        _ => {
+            let mut where_clause = String::new();
+
+            if query.name.is_some() {
+                where_clause.push_str("WHERE name LIKE ?");
+            }
+
+            if query.status.is_some() {
+                if where_clause.is_empty() {
+                    where_clause.push_str("WHERE status = ?");
+                } else {
+                    where_clause.push_str(" AND status = ?");
+                }
+            }
+
+            if parent_id.is_some() {
+                if where_clause.is_empty() {
+                    where_clause.push_str("WHERE id IN (SELECT id FROM rule_refs WHERE id = ?)");
+                } else {
+                    where_clause.push_str(" AND id IN (SELECT id FROM rule_refs WHERE id = ?)");
+                }
+            }
+
+            let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_clause);
+            let mut query_count_builder: QueryScalar<'_, Any, i64, AnyArguments> =
+                sqlx::query_scalar(&query_count_str);
+
+            let query_data_str = format!(
+                "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+                TABLE_NAME, where_clause
+            );
+            let mut query_data_builder: QueryAs<'_, Any, DbRule, AnyArguments> =
+                sqlx::query_as::<_, DbRule>(&query_data_str);
+
+            if let Some(name) = query.name {
+                let name = format!("%{}%", name);
+                query_count_builder = query_count_builder.bind(name.clone());
+                query_data_builder = query_data_builder.bind(name);
+            }
+
+            if let Some(status) = query.status {
+                let status: i32 = status.into();
+                query_count_builder = query_count_builder.bind(status);
+                query_data_builder = query_data_builder.bind(status);
+            }
+
+            if let Some(parent_id) = parent_id {
+                query_count_builder = query_count_builder.bind(parent_id);
+                query_data_builder = query_data_builder.bind(parent_id);
+            }
+
+            let count = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
+            let db_rules = query_data_builder
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(POOL.get().unwrap())
+                .await?;
+
+            (count, db_rules)
         }
     };
 
-    Ok((count, rules))
+    let rules = db_rules
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<Rule>>>()?;
+
+    Ok((count as usize, rules))
 }
 
 pub async fn update_status(id: &String, status: bool) -> Result<()> {

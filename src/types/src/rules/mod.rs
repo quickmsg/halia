@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 
+use crate::Status;
+
 pub mod apps;
 pub mod databoard;
 pub mod devices;
@@ -14,10 +16,10 @@ pub struct Summary {
     pub on: usize,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    pub on: Option<bool>,
+    pub status: Option<Status>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -111,10 +113,17 @@ pub enum CreateRuleSinkType {
     App,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-pub struct ListRuleResp {
+#[derive(Serialize)]
+pub struct ListRulesResp {
+    pub count: usize,
+    pub list: Vec<ListRulesItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListRulesItem {
     pub id: String,
     pub name: String,
+    pub status: Status,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -123,26 +132,6 @@ pub struct CreateSource {
     pub name: String,
     pub format: String,
     pub conf: serde_json::Value,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Status {
-    Running,
-    Stopped,
-}
-
-#[derive(Serialize)]
-pub struct SearchRulesResp {
-    pub total: usize,
-    pub data: Vec<SearchRulesItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchRulesItemResp {
-    pub id: String,
-    pub on: bool,
-    pub log_enable: bool,
-    pub conf: CreateUpdateRuleReq,
 }
 
 #[derive(Serialize)]

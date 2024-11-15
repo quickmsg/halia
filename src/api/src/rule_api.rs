@@ -9,7 +9,7 @@ use axum::{
 };
 use futures_util::Stream;
 use types::{
-    rules::{CreateUpdateRuleReq, QueryParams, ReadRuleNodeResp, SearchRulesResp, Summary},
+    rules::{CreateUpdateRuleReq, ListRulesResp, QueryParams, ReadRuleNodeResp, Summary},
     Pagination,
 };
 
@@ -19,7 +19,7 @@ pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_rules_summary))
         .route("/", post(create))
-        .route("/", get(search))
+        .route("/list", get(list_rules))
         .route("/:id", get(read))
         .route("/:id", put(update))
         .route("/:id/start", put(start))
@@ -41,12 +41,12 @@ async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()
     Ok(AppSuccess::empty())
 }
 
-async fn search(
+async fn list_rules(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppResult<AppSuccess<SearchRulesResp>> {
-    let resp = rule::search(pagination, query_params).await?;
-    Ok(AppSuccess::data(resp))
+) -> AppResult<Json<ListRulesResp>> {
+    let resp = rule::list(pagination, query_params).await?;
+    Ok(Json(resp))
 }
 
 // TODO
@@ -55,14 +55,14 @@ async fn read(Path(id): Path<String>) -> AppResult<AppSuccess<Vec<ReadRuleNodeRe
     Ok(AppSuccess::data(resp))
 }
 
-async fn start(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn start(Path(id): Path<String>) -> AppResult<()> {
     rule::start(id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn stop(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn stop(Path(id): Path<String>) -> AppResult<()> {
     rule::stop(id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
 async fn sse_log(
@@ -77,34 +77,31 @@ async fn sse_log(
     }
 }
 
-async fn delete_log(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn delete_log(Path(id): Path<String>) -> AppResult<()> {
     common::log::delete_log(&id).await;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
 async fn download_log(Path(id): Path<String>) -> impl IntoResponse {
     common::log::download_log(&id).await
 }
 
-async fn update(
-    Path(id): Path<String>,
-    Json(req): Json<CreateUpdateRuleReq>,
-) -> AppResult<AppSuccess<()>> {
+async fn update(Path(id): Path<String>, Json(req): Json<CreateUpdateRuleReq>) -> AppResult<()> {
     rule::update(id, req).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn start_log(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn start_log(Path(id): Path<String>) -> AppResult<()> {
     rule::start_log(id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn stop_log(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn stop_log(Path(id): Path<String>) -> AppResult<()> {
     rule::stop_log(id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn delete(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn delete(Path(id): Path<String>) -> AppResult<()> {
     rule::delete(id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }

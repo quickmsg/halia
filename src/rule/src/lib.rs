@@ -9,8 +9,8 @@ use rule::Rule;
 use types::{
     rules::{
         AppSinkNode, AppSourceNode, Conf, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
-        DeviceSourceNode, Node, QueryParams, ReadRuleNodeResp, SearchRulesItemResp,
-        SearchRulesResp, Summary,
+        DeviceSourceNode, ListRulesItem, ListRulesResp, Node, QueryParams, ReadRuleNodeResp,
+        Summary,
     },
     Pagination,
 };
@@ -74,40 +74,23 @@ pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn search(
-    pagination: Pagination,
-    query_params: QueryParams,
-) -> HaliaResult<SearchRulesResp> {
-    let (count, db_rules) = storage::rule::query(pagination, query_params).await?;
-    let rules = db_rules
+pub async fn list(pagination: Pagination, query: QueryParams) -> HaliaResult<ListRulesResp> {
+    let (count, db_rules) = storage::rule::search(pagination, query, None).await?;
+    let list = db_rules
         .into_iter()
-        .map(|db_rule| {
-            let log_enable = match GLOBAL_RULE_MANAGER.get(&db_rule.id) {
-                Some(rule) => rule.get_log_status(),
-                None => false,
-            };
-            SearchRulesItemResp {
-                id: db_rule.id,
-                on: db_rule.status == 1,
-                conf: CreateUpdateRuleReq {
-                    name: db_rule.name,
-                    conf: serde_json::from_slice(&db_rule.conf).unwrap(),
-                },
-                log_enable,
-            }
+        .map(|db_rule| ListRulesItem {
+            id: db_rule.id,
+            name: db_rule.name,
+            status: db_rule.status,
         })
         .collect::<Vec<_>>();
 
-    Ok(SearchRulesResp {
-        total: count,
-        data: rules,
-    })
+    Ok(ListRulesResp { count, list })
 }
 
 pub async fn read(id: String) -> HaliaResult<Vec<ReadRuleNodeResp>> {
     let db_rule = storage::rule::read_one(&id).await?;
-    let conf = serde_json::from_slice(&db_rule.conf)?;
-    let detail = Rule::read(conf).await?;
+    let detail = Rule::read(db_rule.conf).await?;
     Ok(detail)
 }
 
@@ -118,10 +101,8 @@ pub async fn start(id: String) -> HaliaResult<()> {
 
     add_rule_on_count();
     events::insert_update(types::events::ResourceType::Rule, &id).await;
-    let db_conf = storage::rule::read_conf(&id).await?;
-    let conf: Conf = serde_json::from_slice(&db_conf)?;
-
-    let rule = Rule::new(id.clone(), &conf).await?;
+    let db_rule = storage::rule::read_one(&id).await?;
+    let rule = Rule::new(id.clone(), &db_rule.conf).await?;
     GLOBAL_RULE_MANAGER.insert(id.clone(), rule);
     storage::rule::reference::active(&id).await?;
     storage::rule::update_status(&id, true).await?;
@@ -151,7 +132,8 @@ pub async fn update(id: String, req: CreateUpdateRuleReq) -> HaliaResult<()> {
     create_rule_refs(&id, &req.conf.nodes).await?;
 
     if let Some(mut rule) = GLOBAL_RULE_MANAGER.get_mut(&id) {
-        let old_conf: Conf = serde_json::from_slice(&storage::rule::read_conf(&id).await?)?;
+        let old_conf = storage::rule::read_conf(&id).await?;
+        let old_conf: Conf = serde_json::from_value(old_conf)?;
         let new_conf = req.conf.clone();
         if old_conf != new_conf {
             rule.update(old_conf, new_conf).await?;

@@ -13,7 +13,7 @@ use types::{
         AppType, CreateAppReq, ListAppsItem, ListAppsResp, QueryParams, QueryRuleInfo,
         SearchRuleInfo, Summary, UpdateAppReq,
     },
-    rules::ListRuleResp,
+    rules::ListRulesResp,
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
     SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
 };
@@ -292,7 +292,7 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn list_rules(app_id: String) -> HaliaResult<ListRuleResp> {
+pub async fn list_rules(app_id: String) -> HaliaResult<ListRulesResp> {
     todo!()
 }
 
@@ -514,12 +514,23 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<ListAp
         }
     };
 
+    let rule_reference_running_cnt =
+        storage::rule::reference::count_running_cnt_by_parent_id(&db_app.id).await?;
+    let rule_reference_total_cnt =
+        storage::rule::reference::count_cnt_by_parent_id(&db_app.id).await?;
+    let source_cnt = storage::app::source_sink::count_sources_by_app_id(&db_app.id).await?;
+    let sink_cnt = storage::app::source_sink::count_sinks_by_app_id(&db_app.id).await?;
+
     Ok(ListAppsItem {
         id: db_app.id,
         name: db_app.name,
         typ: db_app.typ,
         status: db_app.status,
         err,
+        rule_reference_running_cnt,
+        rule_reference_total_cnt,
+        source_cnt,
+        sink_cnt,
         can_stop,
         can_delete,
     })

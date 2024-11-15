@@ -177,7 +177,7 @@ impl TryFrom<i32> for Boolean {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Running,

@@ -154,6 +154,10 @@ pub struct ListAppsItem {
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+    pub source_cnt: usize,
+    pub sink_cnt: usize,
     pub can_stop: bool,
     pub can_delete: bool,
 }
