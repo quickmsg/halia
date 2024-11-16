@@ -12,12 +12,12 @@ use tracing::debug;
 use types::{
     devices::{
         device::{
-            self, source_sink, QueryParams, QueryRuleInfoParams, RunningInfo, SearchResp,
-            SearchRuleInfo, SearchRuleSourceSinkResp,
+            self, source_sink, ListDevicesResp, QueryParams, QueryRuleInfoParams,
+            SearchRuleSourceSinkResp,
         },
         ConfType, DeviceType, Summary,
     },
-    Pagination, QuerySourcesOrSinksParams, RuleRef, Value,
+    Pagination, QuerySourcesOrSinksParams, RuleRef, Status, Value,
 };
 
 pub mod coap;
@@ -71,7 +71,7 @@ pub(crate) fn sub_device_running_count() {
 
 #[async_trait]
 pub trait Device: Send + Sync {
-    async fn read_running_info(&self) -> RunningInfo;
+    async fn read_err(&self) -> Option<String>;
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()>;
     async fn update_template_conf(
         &mut self,
@@ -162,48 +162,48 @@ pub fn get_summary() -> Summary {
     Summary { total, on, running }
 }
 
-pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRuleInfo> {
-    let db_device = storage::device::device::read_one(&query.device_id).await?;
+// pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<SearchRuleInfo> {
+//     let db_device = storage::device::device::read_one(&query.device_id).await?;
 
-    let device_resp = transer_db_device_to_resp(db_device).await?;
-    match (query.source_id, query.sink_id) {
-        (Some(source_id), None) => {
-            let db_source = storage::device::source_sink::read_one(&source_id).await?;
-            Ok(SearchRuleInfo {
-                device: device_resp,
-                source: Some(SearchRuleSourceSinkResp {
-                    id: source_id,
-                    req: source_sink::CreateUpdateReq {
-                        name: db_source.name,
-                        conf_type: db_source.conf_type,
-                        template_id: db_source.template_id,
-                        conf: db_source.conf,
-                    },
-                }),
-                sink: None,
-            })
-        }
-        (None, Some(sink_id)) => {
-            let db_sink = storage::device::source_sink::read_one(&sink_id).await?;
-            Ok(SearchRuleInfo {
-                device: device_resp,
-                source: None,
-                sink: Some(SearchRuleSourceSinkResp {
-                    id: db_sink.id,
-                    req: source_sink::CreateUpdateReq {
-                        name: db_sink.name,
-                        conf_type: db_sink.conf_type,
-                        template_id: db_sink.template_id,
-                        conf: db_sink.conf,
-                    },
-                }),
-            })
-        }
-        _ => Err(HaliaError::Common(
-            "查询source_id或sink_id参数错误！".to_string(),
-        )),
-    }
-}
+//     let device_resp = transer_db_device_to_resp(db_device).await?;
+//     match (query.source_id, query.sink_id) {
+//         (Some(source_id), None) => {
+//             let db_source = storage::device::source_sink::read_one(&source_id).await?;
+//             Ok(SearchRuleInfo {
+//                 device: device_resp,
+//                 source: Some(SearchRuleSourceSinkResp {
+//                     id: source_id,
+//                     req: source_sink::CreateUpdateReq {
+//                         name: db_source.name,
+//                         conf_type: db_source.conf_type,
+//                         template_id: db_source.template_id,
+//                         conf: db_source.conf,
+//                     },
+//                 }),
+//                 sink: None,
+//             })
+//         }
+//         (None, Some(sink_id)) => {
+//             let db_sink = storage::device::source_sink::read_one(&sink_id).await?;
+//             Ok(SearchRuleInfo {
+//                 device: device_resp,
+//                 source: None,
+//                 sink: Some(SearchRuleSourceSinkResp {
+//                     id: db_sink.id,
+//                     req: source_sink::CreateUpdateReq {
+//                         name: db_sink.name,
+//                         conf_type: db_sink.conf_type,
+//                         template_id: db_sink.template_id,
+//                         conf: db_sink.conf,
+//                     },
+//                 }),
+//             })
+//         }
+//         _ => Err(HaliaError::Common(
+//             "查询source_id或sink_id参数错误！".to_string(),
+//         )),
+//     }
+// }
 
 pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaResult<()> {
     add_device_count();
@@ -298,17 +298,14 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
 pub async fn list_devices(
     pagination: Pagination,
     query_params: QueryParams,
-) -> HaliaResult<SearchResp> {
+) -> HaliaResult<ListDevicesResp> {
     let (count, db_devices) = storage::device::device::search(pagination, query_params).await?;
-    let mut resp_devices = vec![];
+    let mut list = Vec::with_capacity(db_devices.len());
     for db_device in db_devices {
-        resp_devices.push(transer_db_device_to_resp(db_device).await?);
+        list.push(transer_db_device_to_resp(db_device).await?);
     }
 
-    Ok(SearchResp {
-        total: count,
-        data: resp_devices,
-    })
+    Ok(ListDevicesResp { count, list })
 }
 
 pub async fn update_device(device_id: String, req: device::UpdateReq) -> HaliaResult<()> {
@@ -792,33 +789,49 @@ pub async fn get_sink_txs(
 
 async fn transer_db_device_to_resp(
     db_device: storage::device::device::Device,
-) -> HaliaResult<device::SearchItemResp> {
+) -> HaliaResult<device::ListDevicesItem> {
     let source_cnt =
         storage::device::source_sink::count_sources_by_device_id(&db_device.id).await?;
     let sink_cnt = storage::device::source_sink::count_sinks_by_device_id(&db_device.id).await?;
 
-    let running_info = match db_device.status {
-        types::Boolean::True => Some(
-            GLOBAL_DEVICE_MANAGER
-                .get(&db_device.id)
-                .unwrap()
-                .read_running_info()
-                .await,
-        ),
-        types::Boolean::False => None,
-    };
-
-    Ok(device::SearchItemResp {
+    Ok(device::ListDevicesItem {
         id: db_device.id,
-        req: device::CreateReq {
-            name: db_device.name,
-            device_type: db_device.device_type,
-            conf_type: db_device.conf_type,
-            template_id: db_device.template_id,
-            conf: db_device.conf,
-        },
-        running_info,
+        name: db_device.name,
+        typ: db_device.device_type,
+        status: db_device.status,
+        err: todo!(),
+        rule_reference_running_cnt: todo!(),
+        rule_reference_total_cnt: todo!(),
         source_cnt,
         sink_cnt,
+        can_stop: todo!(),
+        can_delete: todo!(),
     })
+}
+
+async fn get_info_by_status(
+    device_id: &String,
+    status: &Status,
+) -> HaliaResult<(bool, bool, Option<String>)> {
+    match status {
+        types::Status::Running => {
+            let can_stop =
+                storage::rule::reference::count_active_cnt_by_parent_id(device_id).await? > 0;
+            Ok((can_stop, false, None))
+        }
+        types::Status::Stopped => {
+            let can_delete = storage::rule::reference::count_cnt_by_parent_id(device_id).await? > 0;
+            Ok((false, can_delete, None))
+        }
+        types::Status::Error => {
+            let can_stop =
+                storage::rule::reference::count_active_cnt_by_parent_id(device_id).await? > 0;
+            let device = match GLOBAL_DEVICE_MANAGER.get(device_id) {
+                Some(device) => device,
+                None => return Err(HaliaError::Common("应用未启动！".to_string())),
+            };
+            let err = device.read_err().await;
+            Ok((can_stop, false, err))
+        }
+    }
 }

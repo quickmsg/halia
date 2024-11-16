@@ -8,7 +8,7 @@ use sqlx::{
 };
 use types::{
     apps::{AppType, CreateAppReq, QueryParams, UpdateAppReq},
-    Boolean, Pagination, Status,
+    Pagination, Status,
 };
 
 use super::POOL;
@@ -134,11 +134,11 @@ pub async fn read_one(id: &String) -> Result<App> {
     db_app.transfer()
 }
 
-pub async fn read_on_all() -> Result<Vec<App>> {
+pub async fn read_all_running() -> Result<Vec<App>> {
     let db_apps = sqlx::query_as::<_, DbApp>(
         format!("SELECT * FROM {} WHERE status = ?", TABLE_NAME).as_str(),
     )
-    .bind(Into::<i32>::into(Boolean::True))
+    .bind(Into::<i32>::into(Status::Running))
     .fetch_all(POOL.get().unwrap())
     .await?;
 

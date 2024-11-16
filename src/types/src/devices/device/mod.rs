@@ -1,13 +1,15 @@
 use serde::{Deserialize, Serialize};
 use source_sink::CreateUpdateReq;
 
+use crate::Status;
+
 use super::{ConfType, DeviceType};
 
-pub mod modbus;
-pub mod source_sink;
-pub mod opcua;
 pub mod coap;
+pub mod modbus;
+pub mod opcua;
 pub mod s7;
+pub mod source_sink;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {
@@ -27,35 +29,32 @@ pub struct UpdateReq {
     pub conf: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
     pub device_type: Option<DeviceType>,
-    pub on: Option<bool>,
-    pub err: Option<bool>,
+    pub status: Option<Status>,
 }
 
 #[derive(Serialize)]
-pub struct SearchResp {
-    pub total: usize,
-    pub data: Vec<SearchItemResp>,
+pub struct ListDevicesResp {
+    pub count: usize,
+    pub list: Vec<ListDevicesItem>,
 }
 
 #[derive(Serialize)]
-pub struct SearchItemResp {
+pub struct ListDevicesItem {
     pub id: String,
-    pub req: CreateReq,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub running_info: Option<RunningInfo>,
+    pub device_type: DeviceType,
+    pub name: String,
+    pub status: Status,
+    pub err: Option<String>,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
     pub source_cnt: usize,
     pub sink_cnt: usize,
-}
-
-#[derive(Serialize)]
-pub struct RunningInfo {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub err: Option<String>,
-    pub rtt: u16,
+    pub can_stop: bool,
+    pub can_delete: bool,
 }
 
 #[derive(Deserialize)]
@@ -65,15 +64,14 @@ pub struct QueryRuleInfoParams {
     pub sink_id: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct SearchRuleInfo {
-    pub device: SearchItemResp,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<SearchRuleSourceSinkResp>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sink: Option<SearchRuleSourceSinkResp>,
-}
-
+// #[derive(Serialize)]
+// pub struct SearchRuleInfo {
+//     pub device: SearchItemResp,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub source: Option<SearchRuleSourceSinkResp>,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub sink: Option<SearchRuleSourceSinkResp>,
+// }
 
 #[derive(Serialize)]
 pub struct SearchRuleSourceSinkResp {

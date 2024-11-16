@@ -11,7 +11,7 @@ use types::{
         device::{CreateReq, QueryParams, UpdateReq},
         ConfType, DeviceType,
     },
-    Boolean, Pagination,
+    Boolean, Pagination, Status,
 };
 
 use crate::POOL;
@@ -27,7 +27,6 @@ struct DbDevice {
     pub conf: Vec<u8>,
     pub template_id: Option<String>,
     pub status: i32,
-    pub err: i32,
     pub ts: i64,
 }
 
@@ -38,8 +37,7 @@ pub struct Device {
     pub conf_type: ConfType,
     pub conf: serde_json::Value,
     pub template_id: Option<String>,
-    pub status: Boolean,
-    pub err: Boolean,
+    pub status: Status,
     pub ts: i64,
 }
 
@@ -54,7 +52,6 @@ CREATE TABLE IF NOT EXISTS {} (
     conf BLOB NOT NULL,
     template_id CHAR(32),
     status SMALLINT UNSIGNED NOT NULL,
-    err SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
@@ -66,8 +63,8 @@ pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, device_type, name, conf_type, conf, template_id, status, err, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_type, name, conf_type, conf, template_id, status, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
@@ -78,8 +75,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(Into::<i32>::into(req.conf_type))
     .bind(serde_json::to_vec(&req.conf)?)
     .bind(req.template_id)
-    .bind(Into::<i32>::into(Boolean::False))
-    .bind(Into::<i32>::into(Boolean::False))
+    .bind(Into::<i32>::into(Status::Stopped))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
@@ -109,18 +105,10 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(conf)
 }
 
-pub async fn search(
-    pagination: Pagination,
-    query_params: QueryParams,
-) -> Result<(usize, Vec<Device>)> {
+pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize, Vec<Device>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, db_devices) = match (
-        &query_params.name,
-        &query_params.device_type,
-        &query_params.on,
-        &query_params.err,
-    ) {
-        (None, None, None, None) => {
+    let (count, db_devices) = match (&query.name, &query.device_type, &query.status) {
+        (None, None, None) => {
             let count: i64 =
                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
                     .fetch_one(POOL.get().unwrap())
@@ -143,28 +131,19 @@ pub async fn search(
         _ => {
             let mut where_clause = String::new();
 
-            if query_params.name.is_some() {
-                match where_clause.is_empty() {
-                    true => where_clause.push_str("WHERE name LIKE ?"),
-                    false => where_clause.push_str(" AND name LIKE ?"),
-                }
+            if query.name.is_some() {
+                where_clause.push_str("WHERE name LIKE ?")
             }
-            if query_params.device_type.is_some() {
+            if query.device_type.is_some() {
                 match where_clause.is_empty() {
                     true => where_clause.push_str("WHERE device_type = ?"),
                     false => where_clause.push_str(" AND device_type = ?"),
                 }
             }
-            if query_params.on.is_some() {
+            if query.status.is_some() {
                 match where_clause.is_empty() {
                     true => where_clause.push_str("WHERE status = ?"),
                     false => where_clause.push_str(" AND status = ?"),
-                }
-            }
-            if query_params.err.is_some() {
-                match where_clause.is_empty() {
-                    true => where_clause.push_str("WHERE err = ?"),
-                    false => where_clause.push_str(" AND err = ?"),
                 }
             }
 
@@ -179,23 +158,20 @@ pub async fn search(
             let mut query_schemas_builder: QueryAs<'_, Any, DbDevice, AnyArguments> =
                 sqlx::query_as::<_, DbDevice>(&query_schemas_str);
 
-            if let Some(name) = query_params.name {
+            if let Some(name) = query.name {
                 let name = format!("%{}%", name);
                 query_count_builder = query_count_builder.bind(name.clone());
                 query_schemas_builder = query_schemas_builder.bind(name);
             }
-            if let Some(device_type) = query_params.device_type {
+            if let Some(device_type) = query.device_type {
                 let device_type: i32 = device_type.into();
                 query_count_builder = query_count_builder.bind(device_type);
                 query_schemas_builder = query_schemas_builder.bind(device_type);
             }
-            if let Some(on) = query_params.on {
-                query_count_builder = query_count_builder.bind(on as i32);
-                query_schemas_builder = query_schemas_builder.bind(on as i32);
-            }
-            if let Some(err) = query_params.err {
-                query_count_builder = query_count_builder.bind(err as i32);
-                query_schemas_builder = query_schemas_builder.bind(err as i32);
+            if let Some(status) = query.status {
+                let status: i32 = status.into();
+                query_count_builder = query_count_builder.bind(status);
+                query_schemas_builder = query_schemas_builder.bind(status);
             }
 
             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
@@ -211,23 +187,22 @@ pub async fn search(
 
     let devices = db_devices
         .into_iter()
-        // todo unwrap
-        .map(|db_device| db_device.transfer().unwrap())
-        .collect();
+        .map(|db_device| db_device.transfer())
+        .collect::<Result<Vec<_>>>()?;
     Ok((count as usize, devices))
 }
 
 pub async fn read_many_on() -> Result<Vec<Device>> {
     let db_devices = sqlx::query_as::<_, DbDevice>(
-        format!("SELECT * FROM {} WHERE status = 1", TABLE_NAME).as_str(),
+        format!("SELECT * FROM {} WHERE status = ?", TABLE_NAME).as_str(),
     )
+    .bind(Into::<i32>::into(Status::Running))
     .fetch_all(POOL.get().unwrap())
     .await?;
     let devices = db_devices
         .into_iter()
-        // todo unwrap
-        .map(|db_device| db_device.transfer().unwrap())
-        .collect();
+        .map(|db_device| db_device.transfer())
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(devices)
 }
