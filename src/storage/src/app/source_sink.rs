@@ -15,7 +15,7 @@ struct DbSourceSink {
     pub app_id: String,
     pub name: String,
     pub conf: Vec<u8>,
-    pub stauts: i32,
+    pub status: i32,
     pub ts: i64,
 }
 
@@ -26,7 +26,7 @@ impl DbSourceSink {
             app_id: self.app_id,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
-            status: self.stauts.try_into()?,
+            status: self.status.try_into()?,
             ts: self.ts,
         })
     }
