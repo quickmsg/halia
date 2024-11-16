@@ -84,8 +84,8 @@ pub struct QueryRuleInfo {
     pub data_id: String,
 }
 
-// #[derive(Serialize)]
-// pub struct SearchRuleInfo {
-//     pub databoard: SearchDataboardsItemResp,
-//     pub data: SearchDatasInfoResp,
-// }
+#[derive(Serialize)]
+pub struct RuleInfoResp {
+    pub databoard: SearchDatasItemResp,
+    pub data: SearchDatasInfoResp,
+}

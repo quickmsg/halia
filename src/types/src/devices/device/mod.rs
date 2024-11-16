@@ -36,27 +36,6 @@ pub struct QueryParams {
     pub status: Option<Status>,
 }
 
-#[derive(Serialize)]
-pub struct ListDevicesResp {
-    pub count: usize,
-    pub list: Vec<ListDevicesItem>,
-}
-
-#[derive(Serialize)]
-pub struct ListDevicesItem {
-    pub id: String,
-    pub device_type: DeviceType,
-    pub name: String,
-    pub status: Status,
-    pub err: Option<String>,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
-    pub source_cnt: usize,
-    pub sink_cnt: usize,
-    pub can_stop: bool,
-    pub can_delete: bool,
-}
-
 #[derive(Deserialize)]
 pub struct QueryRuleInfoParams {
     pub device_id: String,

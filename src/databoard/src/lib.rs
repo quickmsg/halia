@@ -11,8 +11,8 @@ use tokio::sync::mpsc;
 use types::{
     databoard::{
         CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, DataboardConf, ListDataboardsItem,
-        ListDataboardsResp, QueryDatasParams, QueryParams, SearchDatasInfoResp,
-        SearchDatasItemResp, SearchDatasResp, Summary,
+        ListDataboardsResp, QueryDatasParams, QueryParams, QueryRuleInfo, RuleInfoResp,
+        SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp, Summary,
     },
     Pagination, RuleRef,
 };
@@ -82,30 +82,31 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     Ok(())
 }
 
-// pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
-//     let db_databoard = storage::databoard::read_one(&query.databoard_id).await?;
-//     let db_databoard_data = storage::databoard::data::read_one(&query.data_id).await?;
+pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
+    let db_databoard = storage::databoard::read_one(&query.databoard_id).await?;
+    let db_databoard_data = storage::databoard::data::read_one(&query.data_id).await?;
 
-//     Ok(SearchRuleInfo {
-//         databoard: SearchDataboardsItemResp {
-//             id: db_databoard.id,
-//             on: db_databoard.status == types::Boolean::True,
-//             conf: CreateUpdateDataboardReq {
-//                 name: db_databoard.name,
-//                 ext: serde_json::from_value(db_databoard.conf)?,
-//             },
-//         },
-//         data: SearchDatasInfoResp {
-//             id: db_databoard_data.id,
-//             conf: CreateUpdateDataReq {
-//                 name: db_databoard_data.name,
-//                 ext: serde_json::from_value(db_databoard_data.conf)?,
-//             },
-//             value: None,
-//             ts: Some(0),
-//         },
-//     })
-// }
+    // Ok(RuleInfoResp {
+    //     databoard: SearchDatasItemResp {
+    //         id: db_databoard.id,
+    //         on: db_databoard.status == types::Boolean::True,
+    //         conf: CreateUpdateDataboardReq {
+    //             name: db_databoard.name,
+    //             ext: serde_json::from_value(db_databoard.conf)?,
+    //         },
+    //     },
+    //     data: SearchDatasInfoResp {
+    //         id: db_databoard_data.id,
+    //         conf: CreateUpdateDataReq {
+    //             name: db_databoard_data.name,
+    //             ext: serde_json::from_value(db_databoard_data.conf)?,
+    //         },
+    //         value: None,
+    //         ts: Some(0),
+    //     },
+    // })
+    todo!()
+}
 
 pub async fn create_databoard(req: CreateUpdateDataboardReq) -> HaliaResult<()> {
     let id = common::get_id();

@@ -3,6 +3,8 @@ use std::fmt;
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
+use crate::Status;
+
 pub mod coap;
 pub mod device;
 pub mod device_template;
@@ -70,15 +72,6 @@ pub enum ConfType {
     // 自定义
     Customize,
 }
-
-// impl From<ConfType> for i32 {
-//     fn from(value: ConfType) -> Self {
-//         match value {
-//             ConfType::Template => 1,
-//             ConfType::Customize => 2,
-//         }
-//     }
-// }
 
 impl Into<i32> for ConfType {
     fn into(self) -> i32 {
@@ -211,3 +204,46 @@ pub struct QueryParams {
 //     pub base: BaseConf,
 //     pub ext: serde_json::Value,
 // }
+
+#[derive(Serialize)]
+pub struct ListDevicesResp {
+    pub count: usize,
+    pub list: Vec<ListDevicesItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListDevicesItem {
+    pub id: String,
+    pub device_type: DeviceType,
+    pub name: String,
+    pub status: Status,
+    pub err: Option<String>,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+    pub source_cnt: usize,
+    pub sink_cnt: usize,
+    pub can_stop: bool,
+    pub can_delete: bool,
+}
+
+#[derive(Serialize)]
+pub struct RuleInfoResp {
+    pub device: ListDevicesItem,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<ListSourcesSinksItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sink: Option<ListSourcesSinksItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListSourcesSinksResp {
+    pub count: usize,
+    pub list: Vec<ListSourcesSinksItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListSourcesSinksItem {
+    pub id: String,
+    pub name: String,
+    pub status: Status,
+}

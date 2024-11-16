@@ -96,7 +96,7 @@ async fn create_device(Json(req): Json<types::devices::device::CreateReq>) -> Ap
 async fn list_devices(
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::device::QueryParams>,
-) -> AppResult<Json<types::devices::device::SearchResp>> {
+) -> AppResult<Json<types::devices::ListDevicesResp>> {
     let resp = devices::list_devices(pagination, query).await?;
     Ok(Json(resp))
 }

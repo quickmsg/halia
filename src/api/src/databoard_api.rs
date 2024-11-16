@@ -6,7 +6,7 @@ use axum::{
 use types::{
     databoard::{
         CreateUpdateDataReq, CreateUpdateDataboardReq, QueryDatasParams, QueryParams,
-        QueryRuleInfo, SearchDataboardsResp, SearchDatasResp, SearchRuleInfo, Summary,
+        SearchDatasResp, Summary,
     },
     Pagination,
 };
@@ -16,7 +16,6 @@ use crate::AppResult;
 pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_databoards_summary))
-        .route("/rule", get(get_rule_info))
         .route("/", post(create_databoard))
         .route("/list", get(list_databoards))
         .route("/:databoard_id", put(update_databoard))
@@ -37,11 +36,6 @@ async fn get_databoards_summary() -> AppResult<Json<Summary>> {
     Ok(Json(databoard::get_summary()))
 }
 
-async fn get_rule_info(Query(query): Query<QueryRuleInfo>) -> AppResult<Json<SearchRuleInfo>> {
-    let resp = databoard::get_rule_info(query).await?;
-    Ok(Json(resp))
-}
-
 async fn create_databoard(Json(req): Json<CreateUpdateDataboardReq>) -> AppResult<()> {
     databoard::create_databoard(req).await?;
     Ok(())
@@ -50,9 +44,10 @@ async fn create_databoard(Json(req): Json<CreateUpdateDataboardReq>) -> AppResul
 async fn list_databoards(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppResult<Json<SearchDataboardsResp>> {
-    let resp = databoard::search_databoards(pagination, query_params).await?;
-    Ok(Json(resp))
+) -> AppResult<Json<String>> {
+    todo!()
+    // let resp = databoard::search_databoards(pagination, query_params).await?;
+    // Ok(Json(resp))
 }
 
 async fn update_databoard(

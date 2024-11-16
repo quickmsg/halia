@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use types::{
     apps::{
         AppType, CreateAppReq, ListAppsItem, ListAppsResp, QueryParams, QueryRuleInfo, ReadAppResp,
-        SearchRuleInfo, Summary, UpdateAppReq,
+        RuleInfoResp, Summary, UpdateAppReq,
     },
     rules::{ListRulesItem, ListRulesResp},
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
@@ -142,13 +142,13 @@ pub async fn get_summary() -> Summary {
     }
 }
 
-pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
+pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
     let db_app = storage::app::read_one(&query.app_id).await?;
     let app = transer_db_app_to_resp(db_app).await?;
     match (query.source_id, query.sink_id) {
         (Some(source_id), None) => {
             let db_source = storage::app::source_sink::read_one(&source_id).await?;
-            Ok(SearchRuleInfo {
+            Ok(RuleInfoResp {
                 app,
                 source: Some(SearchSourcesOrSinksInfoResp {
                     id: db_source.id,
@@ -162,7 +162,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> 
         }
         (None, Some(sink_id)) => {
             let db_sink = storage::app::source_sink::read_one(&sink_id).await?;
-            Ok(SearchRuleInfo {
+            Ok(RuleInfoResp {
                 app,
                 source: None,
                 sink: Some(SearchSourcesOrSinksInfoResp {

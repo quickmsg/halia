@@ -130,7 +130,7 @@ pub struct QueryRuleInfo {
 }
 
 #[derive(Serialize)]
-pub struct SearchRuleInfo {
+pub struct RuleInfoResp {
     pub app: ListAppsItem,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SearchSourcesOrSinksInfoResp>,
