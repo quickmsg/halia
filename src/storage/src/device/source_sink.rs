@@ -4,7 +4,7 @@ use sqlx::FromRow;
 use tracing::debug;
 use types::{
     devices::{device::source_sink::CreateUpdateReq, ConfType},
-    Boolean, Pagination, QuerySourcesOrSinksParams,
+    Pagination, QuerySourcesOrSinksParams, Status,
 };
 
 use crate::{SourceSinkType, POOL};
@@ -21,7 +21,7 @@ struct DbSourceSink {
     pub conf_type: i32,
     pub conf: Vec<u8>,
     pub template_id: Option<String>,
-    pub err: i32,
+    pub status: i32,
     pub ts: i64,
 }
 
@@ -37,7 +37,7 @@ impl DbSourceSink {
             conf_type: self.conf_type.try_into()?,
             conf: serde_json::from_slice(&self.conf)?,
             template_id: self.template_id,
-            err: self.err.try_into()?,
+            status: self.status.try_into()?,
             ts: self.ts,
         })
     }
@@ -52,7 +52,7 @@ pub struct SourceSink {
     pub conf_type: ConfType,
     pub conf: serde_json::Value,
     pub template_id: Option<String>,
-    pub err: Boolean,
+    pub status: Status,
     pub ts: i64,
 }
 
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS {} (
     conf_type SMALLINT UNSIGNED NOT NULL,
     conf BLOB NOT NULL,
     template_id CHAR(32),
-    err SMALLINT UNSIGNED NOT NULL,
+    status SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
     UNIQUE (device_id, source_sink_type, name)
 );
@@ -138,7 +138,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(conf_type)
     .bind(conf)
     .bind(req.template_id)
-    .bind(Into::<i32>::into(Boolean::False))
+    .bind(Into::<i32>::into(Status::default()))
     .bind(ts)
     .execute(POOL.get().unwrap())
     .await?;
@@ -199,9 +199,9 @@ pub async fn read_sinks_by_device_id(device_id: &String) -> Result<Vec<SourceSin
     read_by_device_id(SourceSinkType::Sink, device_id).await
 }
 
-pub async fn update_err(id: &String, err: Boolean) -> Result<()> {
-    sqlx::query(format!("UPDATE {} SET err = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(Into::<i32>::into(err))
+pub async fn update_status(id: &String, status: Status) -> Result<()> {
+    sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(Into::<i32>::into(status))
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;

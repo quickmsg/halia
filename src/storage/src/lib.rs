@@ -118,7 +118,7 @@ async fn delete_by_id(id: &String, table_name: &str) -> HaliaResult<()> {
     Ok(())
 }
 
-pub enum SourceSinkType {
+enum SourceSinkType {
     Source,
     Sink,
 }

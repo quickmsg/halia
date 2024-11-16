@@ -158,6 +158,12 @@ pub enum Status {
     Error,
 }
 
+impl Default for Status {
+    fn default() -> Self {
+        Status::Stopped
+    }
+}
+
 impl Into<i32> for Status {
     fn into(self) -> i32 {
         match self {

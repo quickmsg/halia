@@ -10,9 +10,9 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, DataboardConf, QueryDatasParams,
-        QueryParams, QueryRuleInfo, SearchDataboardsItemResp, SearchDataboardsResp,
-        SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp, SearchRuleInfo, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, DataboardConf, ListDataboardsItem,
+        ListDataboardsResp, QueryDatasParams, QueryParams, SearchDatasInfoResp,
+        SearchDatasItemResp, SearchDatasResp, Summary,
     },
     Pagination, RuleRef,
 };
@@ -61,7 +61,7 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     let count = storage::databoard::count().await?;
     DATABOARD_COUNT.store(count, Ordering::SeqCst);
 
-    let db_on_databoards = storage::databoard::read_many_on().await?;
+    let db_on_databoards = storage::databoard::read_all_running().await?;
     let on_count = db_on_databoards.len();
     DATABOARD_ON_COUNT.store(on_count, Ordering::SeqCst);
 
@@ -82,30 +82,30 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
-    let db_databoard = storage::databoard::read_one(&query.databoard_id).await?;
-    let db_databoard_data = storage::databoard::data::read_one(&query.data_id).await?;
+// pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<SearchRuleInfo> {
+//     let db_databoard = storage::databoard::read_one(&query.databoard_id).await?;
+//     let db_databoard_data = storage::databoard::data::read_one(&query.data_id).await?;
 
-    Ok(SearchRuleInfo {
-        databoard: SearchDataboardsItemResp {
-            id: db_databoard.id,
-            on: db_databoard.status == types::Boolean::True,
-            conf: CreateUpdateDataboardReq {
-                name: db_databoard.name,
-                ext: serde_json::from_value(db_databoard.conf)?,
-            },
-        },
-        data: SearchDatasInfoResp {
-            id: db_databoard_data.id,
-            conf: CreateUpdateDataReq {
-                name: db_databoard_data.name,
-                ext: serde_json::from_value(db_databoard_data.conf)?,
-            },
-            value: None,
-            ts: Some(0),
-        },
-    })
-}
+//     Ok(SearchRuleInfo {
+//         databoard: SearchDataboardsItemResp {
+//             id: db_databoard.id,
+//             on: db_databoard.status == types::Boolean::True,
+//             conf: CreateUpdateDataboardReq {
+//                 name: db_databoard.name,
+//                 ext: serde_json::from_value(db_databoard.conf)?,
+//             },
+//         },
+//         data: SearchDatasInfoResp {
+//             id: db_databoard_data.id,
+//             conf: CreateUpdateDataReq {
+//                 name: db_databoard_data.name,
+//                 ext: serde_json::from_value(db_databoard_data.conf)?,
+//             },
+//             value: None,
+//             ts: Some(0),
+//         },
+//     })
+// }
 
 pub async fn create_databoard(req: CreateUpdateDataboardReq) -> HaliaResult<()> {
     let id = common::get_id();
@@ -114,28 +114,22 @@ pub async fn create_databoard(req: CreateUpdateDataboardReq) -> HaliaResult<()> 
     Ok(())
 }
 
-pub async fn search_databoards(
+pub async fn list_databoards(
     pagination: Pagination,
     query: QueryParams,
-) -> HaliaResult<SearchDataboardsResp> {
+) -> HaliaResult<ListDataboardsResp> {
     let (count, db_databoards) = storage::databoard::query(pagination, query).await?;
 
-    let mut resp_databoards = vec![];
-    for db_databoard in db_databoards {
-        resp_databoards.push(SearchDataboardsItemResp {
-            id: db_databoard.id,
-            on: db_databoard.status == types::Boolean::True,
-            conf: CreateUpdateDataboardReq {
-                name: db_databoard.name,
-                ext: serde_json::from_value(db_databoard.conf)?,
-            },
-        });
-    }
+    let list = db_databoards
+        .into_iter()
+        .map(|db_databard| ListDataboardsItem {
+            id: db_databard.id,
+            name: db_databard.name,
+            status: db_databard.status,
+        })
+        .collect::<Vec<_>>();
 
-    Ok(SearchDataboardsResp {
-        total: count,
-        data: resp_databoards,
-    })
+    Ok(ListDataboardsResp { count, list })
 }
 
 pub async fn update_databoard(
@@ -171,7 +165,7 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
 
     add_databoard_on_count();
 
-    storage::databoard::update_status(&databoard_id, types::Boolean::True).await?;
+    storage::databoard::update_status(&databoard_id, types::Status::Running).await?;
 
     Ok(())
 }
@@ -191,7 +185,7 @@ pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
         Some((_, mut databoard)) => {
             databoard.stop().await;
             sub_databoard_on_count();
-            storage::databoard::update_status(&databoard_id, types::Boolean::False).await?;
+            storage::databoard::update_status(&databoard_id, types::Status::Stopped).await?;
             Ok(())
         }
         None => Err(HaliaError::NotFound(databoard_id)),

@@ -30,11 +30,8 @@ use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
 use tracing::{trace, warn};
 use types::{
     devices::{
-        device::{
-            modbus::{
-                Area, DataType, Encode, Ethernet, ModbusConf, Serial, SinkConf, SourceConf, Type,
-            },
-            RunningInfo,
+        device::modbus::{
+            Area, DataType, Encode, Ethernet, ModbusConf, Serial, SinkConf, SourceConf, Type,
         },
         device_template::modbus::{CustomizeConf, TemplateConf},
         source_sink_template::modbus::{
@@ -166,9 +163,9 @@ impl Modbus {
                         add_device_running_count();
                         task_err = None;
                         *join_handle_data.err.write().await = None;
-                        if let Err(e) = storage::device::device::update_err(
+                        if let Err(e) = storage::device::device::update_status(
                             &join_handle_data.id,
-                            types::Boolean::False,
+                            types::Status::Running,
                         )
                         .await
                         {
@@ -228,9 +225,9 @@ impl Modbus {
                             None => {
                                 sub_device_running_count();
                                 *join_handle_data.err.write().await = Some(e.to_string());
-                                if let Err(storage_err) = storage::device::device::update_err(
+                                if let Err(storage_err) = storage::device::device::update_status(
                                     &join_handle_data.id,
-                                    types::Boolean::True,
+                                    types::Status::Error,
                                 )
                                 .await
                                 {
@@ -530,11 +527,8 @@ async fn write_value(
 
 #[async_trait]
 impl Device for Modbus {
-    async fn read_running_info(&self) -> RunningInfo {
-        RunningInfo {
-            err: self.err.read().await.clone(),
-            rtt: self.rtt.load(Ordering::SeqCst),
-        }
+    async fn read_err(&self) -> Option<String> {
+        self.err.read().await.clone()
     }
 
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {

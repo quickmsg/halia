@@ -11,10 +11,7 @@ use tokio::sync::mpsc;
 use tracing::debug;
 use types::{
     devices::{
-        device::{
-            self, source_sink, ListDevicesResp, QueryParams, QueryRuleInfoParams,
-            SearchRuleSourceSinkResp,
-        },
+        device::{self, source_sink, ListDevicesResp, QueryParams},
         ConfType, DeviceType, Summary,
     },
     Pagination, QuerySourcesOrSinksParams, RuleRef, Status, Value,
@@ -414,8 +411,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);
 
     add_device_on_count();
-    storage::device::device::update_status(&device_id, types::Boolean::True).await?;
-    storage::device::device::update_err(&device_id, types::Boolean::False).await?;
+    storage::device::device::update_status(&device_id, types::Status::Running).await?;
     Ok(())
 }
 
@@ -428,8 +424,7 @@ pub async fn stop_device(device_id: String) -> HaliaResult<()> {
         device.stop().await;
         sub_device_on_count();
         events::insert_stop(types::events::ResourceType::Device, &device_id).await;
-        storage::device::device::update_status(&device_id, types::Boolean::False).await?;
-        storage::device::device::update_err(&device_id, types::Boolean::False).await?;
+        storage::device::device::update_status(&device_id, types::Status::Stopped).await?;
     }
 
     Ok(())
@@ -794,18 +789,25 @@ async fn transer_db_device_to_resp(
         storage::device::source_sink::count_sources_by_device_id(&db_device.id).await?;
     let sink_cnt = storage::device::source_sink::count_sinks_by_device_id(&db_device.id).await?;
 
+    let rule_reference_running_cnt =
+        storage::rule::reference::count_running_cnt_by_parent_id(&db_device.id).await?;
+    let rule_reference_total_cnt =
+        storage::rule::reference::count_cnt_by_parent_id(&db_device.id).await?;
+
+    let (can_stop, can_delete, err) = get_info_by_status(&db_device.id, &db_device.status).await?;
+
     Ok(device::ListDevicesItem {
         id: db_device.id,
         name: db_device.name,
-        typ: db_device.device_type,
+        device_type: db_device.device_type,
         status: db_device.status,
-        err: todo!(),
-        rule_reference_running_cnt: todo!(),
-        rule_reference_total_cnt: todo!(),
+        err,
+        rule_reference_running_cnt,
+        rule_reference_total_cnt,
         source_cnt,
         sink_cnt,
-        can_stop: todo!(),
-        can_delete: todo!(),
+        can_stop,
+        can_delete,
     })
 }
 

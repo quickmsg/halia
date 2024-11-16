@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::RuleRef;
+use crate::{RuleRef, Status};
 
 #[derive(Serialize)]
 pub struct Summary {
@@ -24,16 +24,16 @@ pub struct CreateUpdateDataboardReq {
 pub struct DataboardConf {}
 
 #[derive(Serialize)]
-pub struct SearchDataboardsResp {
-    pub total: usize,
-    pub data: Vec<SearchDataboardsItemResp>,
+pub struct ListDataboardsResp {
+    pub count: usize,
+    pub list: Vec<ListDataboardsItem>,
 }
 
 #[derive(Serialize)]
-pub struct SearchDataboardsItemResp {
+pub struct ListDataboardsItem {
     pub id: String,
-    pub on: bool,
-    pub conf: CreateUpdateDataboardReq,
+    pub name: String,
+    pub status: Status,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -84,8 +84,8 @@ pub struct QueryRuleInfo {
     pub data_id: String,
 }
 
-#[derive(Serialize)]
-pub struct SearchRuleInfo {
-    pub databoard: SearchDataboardsItemResp,
-    pub data: SearchDatasInfoResp,
-}
+// #[derive(Serialize)]
+// pub struct SearchRuleInfo {
+//     pub databoard: SearchDataboardsItemResp,
+//     pub data: SearchDatasInfoResp,
+// }

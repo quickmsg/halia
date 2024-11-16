@@ -12,10 +12,7 @@ use sink::Sink;
 use source::Source;
 use tokio::sync::{mpsc, Mutex};
 use types::{
-    devices::{
-        coap::{CoapConf, SinkConf, SourceConf},
-        device::RunningInfo,
-    },
+    devices::coap::{CoapConf, SinkConf, SourceConf},
     Value,
 };
 
@@ -73,11 +70,8 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl Device for Coap {
-    async fn read_running_info(&self) -> RunningInfo {
-        RunningInfo {
-            err: self.err.clone(),
-            rtt: self.rtt,
-        }
+    async fn read_err(&self) -> Option<String> {
+        self.err.clone()
     }
 
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {

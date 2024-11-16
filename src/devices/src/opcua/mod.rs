@@ -23,10 +23,7 @@ use tokio::{
 use tracing::{debug, warn};
 use types::{
     devices::{
-        device::{
-            opcua::{OpcuaConf, SinkConf, SourceConf},
-            RunningInfo,
-        },
+        device::opcua::{OpcuaConf, SinkConf, SourceConf},
         device_template::opcua::{CustomizeConf, TemplateConf},
     },
     Value,
@@ -251,11 +248,8 @@ impl Opcua {
 
 #[async_trait]
 impl Device for Opcua {
-    async fn read_running_info(&self) -> RunningInfo {
-        RunningInfo {
-            err: self.err.read().await.clone(),
-            rtt: self.rtt.load(std::sync::atomic::Ordering::Relaxed),
-        }
+    async fn read_err(&self) -> Option<String> {
+        self.err.read().await.clone()
     }
 
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {

@@ -11,7 +11,7 @@ use types::{
         device::{CreateReq, QueryParams, UpdateReq},
         ConfType, DeviceType,
     },
-    Boolean, Pagination, Status,
+    Pagination, Status,
 };
 
 use crate::POOL;
@@ -28,6 +28,21 @@ struct DbDevice {
     pub template_id: Option<String>,
     pub status: i32,
     pub ts: i64,
+}
+
+impl DbDevice {
+    pub fn transfer(self) -> Result<Device> {
+        Ok(Device {
+            id: self.id,
+            device_type: self.device_type.try_into()?,
+            name: self.name,
+            conf_type: self.conf_type.try_into()?,
+            conf: serde_json::from_slice(&self.conf)?,
+            template_id: self.template_id,
+            status: self.status.try_into()?,
+            ts: self.ts,
+        })
+    }
 }
 
 pub struct Device {
@@ -256,18 +271,8 @@ pub async fn read_ids_by_template_id(template_id: &String) -> Result<Vec<String>
     Ok(ids)
 }
 
-pub async fn update_status(id: &String, status: Boolean) -> Result<()> {
+pub async fn update_status(id: &String, status: Status) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(Into::<i32>::into(status))
-        .bind(id)
-        .execute(POOL.get().unwrap())
-        .await?;
-
-    Ok(())
-}
-
-pub async fn update_err(id: &String, status: Boolean) -> Result<()> {
-    sqlx::query(format!("UPDATE {} SET err = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(Into::<i32>::into(status))
         .bind(id)
         .execute(POOL.get().unwrap())
@@ -309,20 +314,4 @@ pub async fn count_by_template_id(template_id: &String) -> Result<usize> {
     .fetch_one(POOL.get().unwrap())
     .await?;
     Ok(count as usize)
-}
-
-impl DbDevice {
-    pub fn transfer(self) -> Result<Device> {
-        Ok(Device {
-            id: self.id,
-            device_type: self.device_type.try_into()?,
-            name: self.name,
-            conf_type: self.conf_type.try_into()?,
-            conf: serde_json::from_slice(&self.conf)?,
-            template_id: self.template_id,
-            status: self.status.try_into()?,
-            err: self.err.try_into()?,
-            ts: self.ts,
-        })
-    }
 }

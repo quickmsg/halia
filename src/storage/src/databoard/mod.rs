@@ -2,7 +2,7 @@ use anyhow::Result;
 use sqlx::prelude::FromRow;
 use types::{
     databoard::{CreateUpdateDataboardReq, QueryParams},
-    Boolean, Pagination,
+    Pagination, Status,
 };
 
 pub mod data;
@@ -34,7 +34,7 @@ impl DbDataboard {
 
 pub struct Databoard {
     pub id: String,
-    pub status: Boolean,
+    pub status: Status,
     pub name: String,
     pub conf: serde_json::Value,
     pub ts: i64,
@@ -64,7 +64,7 @@ pub async fn insert(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
         .as_str(),
     )
     .bind(id)
-    .bind(Into::<i32>::into(Boolean::False))
+    .bind(Into::<i32>::into(Status::default()))
     .bind(req.name)
     .bind(serde_json::to_vec(&req.ext)?)
     .bind(common::timestamp_millis() as i64)
@@ -201,11 +201,11 @@ pub async fn read_name(id: &String) -> Result<String> {
     Ok(name)
 }
 
-pub async fn read_many_on() -> Result<Vec<Databoard>> {
+pub async fn read_all_running() -> Result<Vec<Databoard>> {
     let db_databoards = sqlx::query_as::<_, DbDataboard>(
         format!("SELECT * FROM {} WHERE status = ?", TABLE_NAME).as_str(),
     )
-    .bind(Into::<i32>::into(Boolean::True))
+    .bind(Into::<i32>::into(Status::Running))
     .fetch_all(POOL.get().unwrap())
     .await?;
 
@@ -230,7 +230,7 @@ pub async fn update_conf(id: &String, req: CreateUpdateDataboardReq) -> Result<(
     Ok(())
 }
 
-pub async fn update_status(id: &String, status: Boolean) -> Result<()> {
+pub async fn update_status(id: &String, status: Status) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(Into::<i32>::into(status))
         .bind(id)

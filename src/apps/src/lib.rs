@@ -1,9 +1,6 @@
-use std::{
-    result,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        LazyLock,
-    },
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    LazyLock,
 };
 
 use async_trait::async_trait;
@@ -128,7 +125,7 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     let count = storage::app::count().await?;
     APP_COUNT.store(count, Ordering::SeqCst);
 
-    let db_apps = storage::app::read_on_all().await?;
+    let db_apps = storage::app::read_all_running().await?;
 
     for db_app in db_apps {
         start_app(db_app.id).await.unwrap();
