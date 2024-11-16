@@ -12,8 +12,8 @@ use types::{
     apps::{
         AppType, CreateAppReq, CreateUpdateSourceSinkReq, ListAppsItem, ListAppsResp,
         ListSourcesSinksItem, ListSourcesSinksResp, QueryParams, QueryRuleInfo,
-        QuerySourcesSinksParams, ReadAppResp, ReadSourceSinkResp, RuleInfoResp, Summary,
-        UpdateAppReq,
+        QuerySourcesSinksParams, ReadAppResp, ReadSourceSinkResp, RuleInfoApp, RuleInfoResp,
+        RuleInfoSourceSink, Summary, UpdateAppReq,
     },
     Pagination, Status,
 };
@@ -150,20 +150,18 @@ pub async fn get_summary() -> Summary {
 
 pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
     let db_app = storage::app::read_one(&query.app_id).await?;
-    let app = transer_db_app_to_resp(db_app).await?;
+    let app = RuleInfoApp {
+        name: db_app.name,
+        status: db_app.status,
+    };
     match (query.source_id, query.sink_id) {
         (Some(source_id), None) => {
             let db_source = storage::app::source_sink::read_one(&source_id).await?;
             Ok(RuleInfoResp {
                 app,
-                source: Some(ListSourcesSinksItem {
-                    id: db_source.id,
+                source: Some(RuleInfoSourceSink {
                     name: db_source.name,
                     status: db_source.status,
-                    err: todo!(),
-                    rule_reference_running_cnt: todo!(),
-                    rule_reference_total_cnt: todo!(),
-                    can_delete: todo!(),
                 }),
                 sink: None,
             })
@@ -173,14 +171,9 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
             Ok(RuleInfoResp {
                 app,
                 source: None,
-                sink: Some(ListSourcesSinksItem {
-                    id: db_sink.id,
-                    name: todo!(),
-                    status: todo!(),
-                    err: todo!(),
-                    rule_reference_running_cnt: todo!(),
-                    rule_reference_total_cnt: todo!(),
-                    can_delete: todo!(),
+                sink: Some(RuleInfoSourceSink {
+                    name: db_sink.name,
+                    status: db_sink.status,
                 }),
             })
         }
@@ -353,12 +346,18 @@ pub async fn list_sources(
         let rule_reference_total_cnt =
             storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?;
         let can_delete = rule_reference_total_cnt == 0;
+        let err = match db_source.status {
+            Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
+                Some(app) => app.read_source_err(&db_source.id).await,
+                None => Some("App未启动！".to_string()),
+            },
+            _ => None,
+        };
         list.push(ListSourcesSinksItem {
             id: db_source.id,
             name: db_source.name,
             status: db_source.status,
-            // TODO
-            err: None,
+            err,
             rule_reference_running_cnt,
             rule_reference_total_cnt,
             can_delete,
@@ -499,15 +498,26 @@ pub async fn list_sinks(
         storage::app::source_sink::query_sinks_by_app_id(&app_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
+        let rule_reference_running_cnt =
+            storage::rule::reference::count_running_cnt_by_resource_id(&db_sink.id).await?;
+        let rule_reference_total_cnt =
+            storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?;
+        let can_delete = rule_reference_total_cnt == 0;
+        let err = match db_sink.status {
+            Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
+                Some(app) => app.read_sink_err(&db_sink.id).await,
+                None => Some("App未启动！".to_string()),
+            },
+            _ => None,
+        };
         list.push(ListSourcesSinksItem {
             id: db_sink.id,
             name: db_sink.name,
             status: db_sink.status,
-            // todo
-            err: None,
-            rule_reference_running_cnt: todo!(),
-            rule_reference_total_cnt: todo!(),
-            can_delete: todo!(),
+            err,
+            rule_reference_running_cnt,
+            rule_reference_total_cnt,
+            can_delete,
         });
     }
 

@@ -129,11 +129,23 @@ pub struct QueryRuleInfo {
 
 #[derive(Serialize)]
 pub struct RuleInfoResp {
-    pub app: ListAppsItem,
+    pub app: RuleInfoApp,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<ListSourcesSinksItem>,
+    pub source: Option<RuleInfoSourceSink>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sink: Option<ListSourcesSinksItem>,
+    pub sink: Option<RuleInfoSourceSink>,
+}
+
+#[derive(Serialize)]
+pub struct RuleInfoApp {
+    pub name: String,
+    pub status: Status,
+}
+
+#[derive(Serialize)]
+pub struct RuleInfoSourceSink {
+    pub name: String,
+    pub status: Status,
 }
 
 #[derive(Serialize)]
@@ -206,6 +218,7 @@ pub struct ReadSourceSinkResp {
     pub name: String,
     pub conf: serde_json::Value,
     pub status: Status,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     pub rule_reference_running_cnt: usize,
     pub rule_reference_total_cnt: usize,
