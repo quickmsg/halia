@@ -162,8 +162,10 @@ pub struct ListAppsItem {
 #[derive(Serialize)]
 pub struct ReadAppResp {
     pub id: String,
+    pub app_type: AppType,
     pub name: String,
     pub conf: serde_json::Value,
+    pub status: Status,
     pub can_stop: bool,
     pub can_delete: bool,
     pub err: Option<String>,

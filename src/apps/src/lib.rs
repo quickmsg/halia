@@ -227,8 +227,10 @@ pub async fn read_app(app_id: String) -> HaliaResult<ReadAppResp> {
     let (can_stop, can_delete, err) = get_info_by_status(&app_id, &db_app.status).await?;
     Ok(ReadAppResp {
         id: db_app.id,
+        app_type: db_app.app_type,
         name: db_app.name,
         conf: db_app.conf,
+        status: db_app.status,
         can_stop,
         can_delete,
         err,
@@ -645,16 +647,16 @@ async fn get_info_by_status(
     match status {
         types::Status::Running => {
             let can_stop =
-                storage::rule::reference::count_active_cnt_by_parent_id(app_id).await? > 0;
+                storage::rule::reference::count_active_cnt_by_parent_id(app_id).await? == 0;
             Ok((can_stop, false, None))
         }
         types::Status::Stopped => {
-            let can_delete = storage::rule::reference::count_cnt_by_parent_id(app_id).await? > 0;
+            let can_delete = storage::rule::reference::count_cnt_by_parent_id(app_id).await? == 0;
             Ok((false, can_delete, None))
         }
         types::Status::Error => {
             let can_stop =
-                storage::rule::reference::count_active_cnt_by_parent_id(app_id).await? > 0;
+                storage::rule::reference::count_active_cnt_by_parent_id(app_id).await? == 0;
             let app = match GLOBAL_APP_MANAGER.get(app_id) {
                 Some(app) => app,
                 None => return Err(HaliaError::Common("App未启动！".to_string())),
