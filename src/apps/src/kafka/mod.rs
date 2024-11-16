@@ -190,7 +190,7 @@ impl Kafka {
 
 #[async_trait]
 impl App for Kafka {
-    async fn read_err(&self) -> Option<String> {
+    async fn read_app_err(&self) -> Option<String> {
         match self.err.read().await.as_ref() {
             Some(err) => Some(err.as_ref().clone()),
             None => None,

@@ -51,7 +51,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
 #[async_trait]
 impl App for TDengine {
-    async fn read_err(&self) -> Option<String> {
+    async fn read_app_err(&self) -> Option<String> {
         self.err.clone()
     }
 

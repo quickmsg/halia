@@ -15,8 +15,7 @@ pub mod tdengine;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateAppReq {
-    #[serde(rename = "type")]
-    pub typ: AppType,
+    pub app_type: AppType,
     pub name: String,
     pub conf: serde_json::Value,
 }
@@ -147,9 +146,8 @@ pub struct ListAppsResp {
 #[derive(Serialize)]
 pub struct ListAppsItem {
     pub id: String,
+    pub app_type: AppType,
     pub name: String,
-    #[serde(rename = "type")]
-    pub typ: AppType,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
@@ -182,4 +180,39 @@ pub struct ListRulesItem {
     pub id: String,
     pub name: String,
     pub status: Status,
+}
+
+#[derive(Deserialize)]
+pub struct QuerySourcesSinksParams {
+    pub name: Option<String>,
+    pub status: Option<Status>,
+}
+
+#[derive(Serialize)]
+pub struct ListSourcesSinksResp {
+    pub count: usize,
+    pub list: Vec<ListSourcesSinksItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListSourcesSinksItem {
+    pub id: String,
+    pub name: String,
+    pub status: Status,
+    pub err: Option<String>,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+    pub can_delete: bool,
+}
+
+#[derive(Serialize)]
+pub struct ReadSourceSinkResp {
+    pub id: String,
+    pub name: String,
+    pub conf: serde_json::Value,
+    pub status: Status,
+    pub err: Option<String>,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+    pub can_delete: bool,
 }

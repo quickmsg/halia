@@ -1,7 +1,7 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
-use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams};
+use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, Status};
 
 use crate::SourceSinkType;
 
@@ -15,6 +15,7 @@ struct DbSourceSink {
     pub app_id: String,
     pub name: String,
     pub conf: Vec<u8>,
+    pub stauts: i32,
     pub ts: i64,
 }
 
@@ -25,6 +26,7 @@ impl DbSourceSink {
             app_id: self.app_id,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
+            status: self.stauts.try_into()?,
             ts: self.ts,
         })
     }
@@ -35,6 +37,7 @@ pub struct SourceSink {
     pub app_id: String,
     pub name: String,
     pub conf: serde_json::Value,
+    pub status: Status,
     pub ts: i64,
 }
 
@@ -47,6 +50,7 @@ CREATE TABLE IF NOT EXISTS {} (
     app_id CHAR(32) NOT NULL,
     name VARCHAR(255) NOT NULL,
     conf BLOB NOT NULL,
+    status SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
     UNIQUE (app_id, source_sink_type, name)
 );
@@ -79,7 +83,7 @@ async fn insert(
 ) -> Result<()> {
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, source_sink_type, app_id, name, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, source_sink_type, app_id, name, conf, status, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
@@ -89,6 +93,7 @@ async fn insert(
     .bind(app_id)
     .bind(req.name)
     .bind(serde_json::to_vec(&req.conf)?)
+    .bind(Into::<i32>::into(Status::default()))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;

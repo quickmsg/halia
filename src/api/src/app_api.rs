@@ -4,7 +4,10 @@ use axum::{
     Json, Router,
 };
 use types::{
-    apps::{CreateAppReq, ListAppsResp, QueryParams, ReadAppResp, Summary, UpdateAppReq},
+    apps::{
+        CreateAppReq, ListAppsResp, ListSourcesSinksResp, QueryParams, ReadAppResp,
+        ReadSourceSinkResp, Summary, UpdateAppReq,
+    },
     rules::ListRulesResp,
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, SearchSourcesOrSinksResp,
 };
@@ -14,7 +17,6 @@ use crate::AppResult;
 pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_apps_summary))
-        // .route("/rule", get(get_rule_info))
         .route("/", post(create_app))
         .route("/list", get(list_apps))
         .route("/:app_id", get(read_app))
@@ -25,22 +27,26 @@ pub fn routes() -> Router {
         .nest(
             "/:app_id",
             Router::new()
-                .route("/rule/list", get(list_rules))
+                .route("/rule/list", get(list_app_rules))
                 .nest(
                     "/source",
                     Router::new()
                         .route("/", post(create_source))
                         .route("/list", get(list_sources))
+                        .route("/:source_id", get(read_source))
                         .route("/:source_id", put(update_source))
-                        .route("/:source_id", delete(delete_source)),
+                        .route("/:source_id", delete(delete_source))
+                        .route("/:source_id/rule/list", get(list_source_rules)),
                 )
                 .nest(
                     "/sink",
                     Router::new()
                         .route("/", post(create_sink))
-                        .route("/", get(list_sinks))
+                        .route("/list", get(list_sinks))
+                        .route("/:sink_id", get(read_sink))
                         .route("/:sink_id", put(update_sink))
-                        .route("/:sink_id", delete(delete_sink)),
+                        .route("/:sink_id", delete(delete_sink))
+                        .route("/:sink_id/rule/list", get(list_sink_rules)),
                 ),
         )
 }
@@ -93,12 +99,12 @@ async fn delete_app(Path(app_id): Path<String>) -> AppResult<()> {
     Ok(())
 }
 
-async fn list_rules(
+async fn list_app_rules(
     Path(app_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::rules::QueryParams>,
 ) -> AppResult<Json<ListRulesResp>> {
-    let resp = apps::list_rules(app_id, pagination, query).await?;
+    let resp = apps::list_app_rules(app_id, pagination, query).await?;
     Ok(Json(resp))
 }
 
@@ -114,9 +120,16 @@ async fn list_sources(
     Path(app_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QuerySourcesOrSinksParams>,
-) -> AppResult<Json<SearchSourcesOrSinksResp>> {
-    let sources = apps::search_sources(app_id, pagination, query).await?;
-    Ok(Json(sources))
+) -> AppResult<Json<ListSourcesSinksResp>> {
+    let resp = apps::list_sources(app_id, pagination, query).await?;
+    Ok(Json(resp))
+}
+
+async fn read_source(
+    Path((app_id, source_id)): Path<(String, String)>,
+) -> AppResult<Json<ReadSourceSinkResp>> {
+    let resp = apps::read_source(app_id, source_id).await?;
+    Ok(Json(resp))
 }
 
 async fn update_source(
@@ -130,6 +143,15 @@ async fn update_source(
 async fn delete_source(Path((app_id, source_id)): Path<(String, String)>) -> AppResult<()> {
     apps::delete_source(app_id, source_id).await?;
     Ok(())
+}
+
+async fn list_source_rules(
+    Path((_app_id, source_id)): Path<(String, String)>,
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<types::rules::QueryParams>,
+) -> AppResult<Json<ListRulesResp>> {
+    let resp = apps::list_source_rules(source_id, pagination, query).await?;
+    Ok(Json(resp))
 }
 
 async fn create_sink(
@@ -149,6 +171,13 @@ async fn list_sinks(
     Ok(Json(sinks))
 }
 
+async fn read_sink(
+    Path((app_id, sink_id)): Path<(String, String)>,
+) -> AppResult<Json<ReadSourceSinkResp>> {
+    let resp = apps::read_sink(app_id, sink_id).await?;
+    Ok(Json(resp))
+}
+
 async fn update_sink(
     Path((app_id, sink_id)): Path<(String, String)>,
     Json(req): Json<CreateUpdateSourceOrSinkReq>,
@@ -160,4 +189,13 @@ async fn update_sink(
 async fn delete_sink(Path((app_id, sink_id)): Path<(String, String)>) -> AppResult<()> {
     apps::delete_sink(app_id, sink_id).await?;
     Ok(())
+}
+
+async fn list_sink_rules(
+    Path((_app_id, sink_id)): Path<(String, String)>,
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<types::rules::QueryParams>,
+) -> AppResult<Json<ListRulesResp>> {
+    let resp = apps::list_sink_rules(sink_id, pagination, query).await?;
+    Ok(Json(resp))
 }

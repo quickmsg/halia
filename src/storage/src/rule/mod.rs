@@ -117,14 +117,15 @@ pub async fn read_all_on() -> Result<Vec<Rule>> {
     Ok(rules)
 }
 
-pub async fn search(
-    pagination: Pagination,
-    query: QueryParams,
-    parent_id: Option<&String>,
-) -> Result<(usize, Vec<Rule>)> {
+pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize, Vec<Rule>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, db_rules) = match (&query.name, &query.status, &parent_id) {
-        (None, None, None) => {
+    let (count, db_rules) = match (
+        &query.name,
+        &query.status,
+        &query.parent_id,
+        &query.resource_id,
+    ) {
+        (None, None, None, None) => {
             let count: i64 =
                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
                     .fetch_one(POOL.get().unwrap())
@@ -150,7 +151,6 @@ pub async fn search(
             if query.name.is_some() {
                 where_clause.push_str("WHERE name LIKE ?");
             }
-
             if query.status.is_some() {
                 if where_clause.is_empty() {
                     where_clause.push_str("WHERE status = ?");
@@ -158,12 +158,45 @@ pub async fn search(
                     where_clause.push_str(" AND status = ?");
                 }
             }
-
-            if parent_id.is_some() {
+            if query.parent_id.is_some() {
                 if where_clause.is_empty() {
-                    where_clause.push_str("WHERE id IN (SELECT id FROM rule_refs WHERE id = ?)");
+                    where_clause.push_str(
+                        format!(
+                            "WHERE id IN (SELECT id FROM {} WHERE id = ?)",
+                            reference::TABLE_NAME
+                        )
+                        .as_str(),
+                    );
                 } else {
-                    where_clause.push_str(" AND id IN (SELECT id FROM rule_refs WHERE id = ?)");
+                    where_clause.push_str(
+                        format!(
+                            " AND id IN (SELECT id FROM {} WHERE id = ?)",
+                            reference::TABLE_NAME
+                        )
+                        .as_str(),
+                    );
+                }
+            }
+            if query.resource_id.is_some() {
+                match where_clause.is_empty() {
+                    true => {
+                        where_clause.push_str(
+                            format!(
+                                "WHERE id IN (SELECT id FROM {} WHERE resource_id = ?)",
+                                reference::TABLE_NAME
+                            )
+                            .as_str(),
+                        );
+                    }
+                    false => {
+                        where_clause.push_str(
+                            format!(
+                                " AND id IN (SELECT id FROM {} WHERE resource_id = ?)",
+                                reference::TABLE_NAME
+                            )
+                            .as_str(),
+                        );
+                    }
                 }
             }
 
@@ -183,16 +216,18 @@ pub async fn search(
                 query_count_builder = query_count_builder.bind(name.clone());
                 query_data_builder = query_data_builder.bind(name);
             }
-
             if let Some(status) = query.status {
                 let status: i32 = status.into();
                 query_count_builder = query_count_builder.bind(status);
                 query_data_builder = query_data_builder.bind(status);
             }
-
-            if let Some(parent_id) = parent_id {
-                query_count_builder = query_count_builder.bind(parent_id);
+            if let Some(parent_id) = query.parent_id {
+                query_count_builder = query_count_builder.bind(parent_id.clone());
                 query_data_builder = query_data_builder.bind(parent_id);
+            }
+            if let Some(resource_id) = query.resource_id {
+                query_count_builder = query_count_builder.bind(resource_id.clone());
+                query_data_builder = query_data_builder.bind(resource_id);
             }
 
             let count = query_count_builder.fetch_one(POOL.get().unwrap()).await?;

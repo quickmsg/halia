@@ -359,7 +359,7 @@ fn transfer_qos(qos: &Qos) -> v5::mqttbytes::QoS {
 
 #[async_trait]
 impl App for MqttClient {
-    async fn read_err(&self) -> Option<String> {
+    async fn read_app_err(&self) -> Option<String> {
         self.err.read().await.clone()
     }
 

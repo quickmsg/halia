@@ -4,7 +4,7 @@ use tracing::debug;
 
 use super::POOL;
 
-static TABLE_NAME: &str = "rule_refs";
+pub(crate) static TABLE_NAME: &str = "rule_refs";
 
 #[derive(FromRow)]
 pub struct RuleRef {
@@ -127,6 +127,17 @@ pub async fn count_cnt_by_many_resource_ids(resource_ids: &Vec<String>) -> Resul
 }
 
 pub async fn count_active_cnt_by_resource_id(resource_id: &String) -> Result<usize> {
+    let active_cnt: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = ? AND resource_id = ?")
+            .bind(true as i32)
+            .bind(resource_id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+    Ok(active_cnt as usize)
+}
+
+pub async fn count_running_cnt_by_resource_id(resource_id: &String) -> Result<usize> {
     let active_cnt: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM rule_refs WHERE active = ? AND resource_id = ?")
             .bind(true as i32)

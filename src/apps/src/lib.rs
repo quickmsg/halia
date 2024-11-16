@@ -10,7 +10,8 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     apps::{
-        AppType, CreateAppReq, ListAppsItem, ListAppsResp, QueryParams, QueryRuleInfo, ReadAppResp,
+        AppType, CreateAppReq, ListAppsItem, ListAppsResp, ListSourcesSinksItem,
+        ListSourcesSinksResp, QueryParams, QueryRuleInfo, ReadAppResp, ReadSourceSinkResp,
         RuleInfoResp, Summary, UpdateAppReq,
     },
     rules::{ListRulesItem, ListRulesResp},
@@ -72,7 +73,13 @@ pub(crate) fn sub_app_running_count() {
 
 #[async_trait]
 pub trait App: Send + Sync {
-    async fn read_err(&self) -> Option<String>;
+    async fn read_app_err(&self) -> Option<String>;
+    async fn read_source_err(&self, _source_id: &String) -> Option<String> {
+        Some("Not support".to_string())
+    }
+    async fn read_sink_err(&self, _sink_id: &String) -> Option<String> {
+        Some("Not support".to_string())
+    }
     async fn update(
         &mut self,
         old_conf: serde_json::Value,
@@ -183,7 +190,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
 }
 
 pub async fn create_app(req: CreateAppReq) -> HaliaResult<()> {
-    match req.typ {
+    match req.app_type {
         AppType::MqttV311 => mqtt_v311::validate_conf(&req.conf)?,
         AppType::MqttV50 => mqtt_v50::validate_conf(&req.conf)?,
         AppType::Http => http::validate_conf(&req.conf)?,
@@ -245,7 +252,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     }
 
     let db_app = storage::app::read_one(&app_id).await?;
-    let app = match db_app.typ {
+    let app = match db_app.app_type {
         AppType::MqttV311 => mqtt_v311::new(app_id.clone(), db_app.conf),
         AppType::MqttV50 => mqtt_v50::new(app_id.clone(), db_app.conf),
         AppType::Http => http::new(app_id.clone(), db_app.conf),
@@ -305,12 +312,13 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn list_rules(
+pub async fn list_app_rules(
     app_id: String,
     pagination: Pagination,
-    query: types::rules::QueryParams,
+    mut query: types::rules::QueryParams,
 ) -> HaliaResult<ListRulesResp> {
-    let (count, db_rules) = storage::rule::search(pagination, query, Some(&app_id)).await?;
+    query.parent_id = Some(app_id.clone());
+    let (count, db_rules) = storage::rule::search(pagination, query).await?;
     let list = db_rules
         .into_iter()
         .map(|x| ListRulesItem {
@@ -323,9 +331,9 @@ pub async fn list_rules(
 }
 
 pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-    let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
+    let app_type: AppType = storage::app::read_app_type(&app_id).await?;
     let source_id = common::get_id();
-    match typ {
+    match app_type {
         AppType::MqttV311 => mqtt_v311::process_source_conf(&source_id, &req.conf).await?,
         AppType::MqttV50 => mqtt_v50::validate_source_conf(&req.conf)?,
         AppType::Http => http::validate_source_conf(&req.conf)?,
@@ -344,35 +352,61 @@ pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> 
     Ok(())
 }
 
-pub async fn search_sources(
+pub async fn list_sources(
     app_id: String,
     pagination: Pagination,
     query: QuerySourcesOrSinksParams,
-) -> HaliaResult<SearchSourcesOrSinksResp> {
+) -> HaliaResult<ListSourcesSinksResp> {
     let (count, db_sources) =
         storage::app::source_sink::query_sources_by_app_id(&app_id, pagination, query).await?;
-    let mut data = Vec::with_capacity(db_sources.len());
+    let mut list = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
-        let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?,
-            rule_active_ref_cnt: storage::rule::reference::count_active_cnt_by_resource_id(
-                &db_source.id,
-            )
-            .await?,
-        };
-        data.push(SearchSourcesOrSinksItemResp {
-            info: SearchSourcesOrSinksInfoResp {
-                id: db_source.id,
-                conf: CreateUpdateSourceOrSinkReq {
-                    name: db_source.name,
-                    conf: db_source.conf,
-                },
-            },
-            rule_ref,
+        let rule_reference_running_cnt =
+            storage::rule::reference::count_running_cnt_by_resource_id(&db_source.id).await?;
+        let rule_reference_total_cnt =
+            storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?;
+        let can_delete = rule_reference_total_cnt == 0;
+        list.push(ListSourcesSinksItem {
+            id: db_source.id,
+            name: db_source.name,
+            status: db_source.status,
+            // TODO
+            err: None,
+            rule_reference_running_cnt,
+            rule_reference_total_cnt,
+            can_delete,
         });
     }
 
-    Ok(SearchSourcesOrSinksResp { total: count, data })
+    Ok(ListSourcesSinksResp { count, list })
+}
+
+pub async fn read_source(app_id: String, source_id: String) -> HaliaResult<ReadSourceSinkResp> {
+    let db_source = storage::app::source_sink::read_one(&source_id).await?;
+    let err = match db_source.status {
+        Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
+            Some(app) => app.read_source_err(&source_id).await,
+            None => Some("App未启动！".to_string()),
+        },
+        _ => None,
+    };
+
+    let rule_reference_running_cnt =
+        storage::rule::reference::count_running_cnt_by_resource_id(&db_source.id).await?;
+    let rule_reference_total_cnt =
+        storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?;
+    let can_delete = rule_reference_total_cnt == 0;
+
+    Ok(ReadSourceSinkResp {
+        id: db_source.id,
+        name: db_source.name,
+        conf: db_source.conf,
+        status: db_source.status,
+        err,
+        can_delete,
+        rule_reference_running_cnt,
+        rule_reference_total_cnt,
+    })
 }
 
 pub async fn update_source(
@@ -405,6 +439,24 @@ pub async fn delete_source(app_id: String, source_id: String) -> HaliaResult<()>
     Ok(())
 }
 
+pub async fn list_source_rules(
+    source_id: String,
+    pagination: Pagination,
+    mut query: types::rules::QueryParams,
+) -> HaliaResult<ListRulesResp> {
+    query.resource_id = Some(source_id);
+    let (count, db_rules) = storage::rule::search(pagination, query).await?;
+    let list = db_rules
+        .into_iter()
+        .map(|x| ListRulesItem {
+            id: x.id,
+            name: x.name,
+            status: x.status,
+        })
+        .collect();
+    Ok(ListRulesResp { count, list })
+}
+
 pub async fn get_source_rxs(
     app_id: &String,
     source_id: &String,
@@ -419,8 +471,8 @@ pub async fn get_source_rxs(
 }
 
 pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
-    let typ: AppType = storage::app::read_type(&app_id).await?.try_into()?;
-    match typ {
+    let app_type: AppType = storage::app::read_app_type(&app_id).await?;
+    match app_type {
         AppType::MqttV311 => mqtt_v311::validate_sink_conf(&req.conf)?,
         AppType::MqttV50 => mqtt_v50::validate_sink_conf(&req.conf)?,
         AppType::Http => http::validate_sink_conf(&req.conf)?,
@@ -439,6 +491,34 @@ pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> Ha
     }
 
     Ok(())
+}
+
+pub async fn read_sink(app_id: String, sink_id: String) -> HaliaResult<ReadSourceSinkResp> {
+    let db_sink = storage::app::source_sink::read_one(&sink_id).await?;
+    let err = match db_sink.status {
+        Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
+            Some(app) => app.read_sink_err(&sink_id).await,
+            None => Some("App未启动！".to_string()),
+        },
+        _ => None,
+    };
+
+    let rule_reference_running_cnt =
+        storage::rule::reference::count_running_cnt_by_resource_id(&db_sink.id).await?;
+    let rule_reference_total_cnt =
+        storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?;
+    let can_delete = rule_reference_total_cnt == 0;
+
+    Ok(ReadSourceSinkResp {
+        id: db_sink.id,
+        name: db_sink.name,
+        conf: db_sink.conf,
+        status: db_sink.status,
+        err,
+        can_delete,
+        rule_reference_running_cnt,
+        rule_reference_total_cnt,
+    })
 }
 
 pub async fn search_sinks(
@@ -503,6 +583,24 @@ pub async fn delete_sink(app_id: String, sink_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
+pub async fn list_sink_rules(
+    sink_id: String,
+    pagination: Pagination,
+    mut query: types::rules::QueryParams,
+) -> HaliaResult<ListRulesResp> {
+    query.resource_id = Some(sink_id);
+    let (count, db_rules) = storage::rule::search(pagination, query).await?;
+    let list = db_rules
+        .into_iter()
+        .map(|x| ListRulesItem {
+            id: x.id,
+            name: x.name,
+            status: x.status,
+        })
+        .collect();
+    Ok(ListRulesResp { count, list })
+}
+
 pub async fn get_sink_txs(
     app_id: &String,
     sink_id: &String,
@@ -527,8 +625,8 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<ListAp
 
     Ok(ListAppsItem {
         id: db_app.id,
+        app_type: db_app.app_type,
         name: db_app.name,
-        typ: db_app.typ,
         status: db_app.status,
         err,
         rule_reference_running_cnt,
@@ -561,7 +659,7 @@ async fn get_info_by_status(
                 Some(app) => app,
                 None => return Err(HaliaError::Common("App未启动！".to_string())),
             };
-            let err = app.read_err().await;
+            let err = app.read_app_err().await;
             Ok((can_stop, false, err))
         }
     }

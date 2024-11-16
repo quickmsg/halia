@@ -53,7 +53,7 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl App for HttpClient {
-    async fn read_err(&self) -> Option<String> {
+    async fn read_app_err(&self) -> Option<String> {
         self.err.clone()
     }
 

@@ -75,7 +75,7 @@ pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
 }
 
 pub async fn list(pagination: Pagination, query: QueryParams) -> HaliaResult<ListRulesResp> {
-    let (count, db_rules) = storage::rule::search(pagination, query, None).await?;
+    let (count, db_rules) = storage::rule::search(pagination, query).await?;
     let list = db_rules
         .into_iter()
         .map(|db_rule| ListRulesItem {

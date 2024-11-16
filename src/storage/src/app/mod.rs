@@ -20,7 +20,7 @@ static TABLE_NAME: &str = "apps";
 #[derive(FromRow)]
 struct DbApp {
     pub id: String,
-    pub typ: i32,
+    pub app_type: i32,
     pub name: String,
     pub conf: Vec<u8>,
     pub status: i32,
@@ -32,7 +32,7 @@ impl DbApp {
         Ok(App {
             id: self.id,
             status: self.status.try_into()?,
-            typ: self.typ.try_into()?,
+            app_type: self.app_type.try_into()?,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
             ts: self.ts,
@@ -42,7 +42,7 @@ impl DbApp {
 
 pub struct App {
     pub id: String,
-    pub typ: AppType,
+    pub app_type: AppType,
     pub name: String,
     pub conf: serde_json::Value,
     pub status: Status,
@@ -54,7 +54,7 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
-    typ SMALLINT UNSIGNED NOT NULL,
+    app_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     conf BLOB NOT NULL,
     status SMALLINT UNSIGNED NOT NULL,
@@ -68,16 +68,16 @@ CREATE TABLE IF NOT EXISTS {} (
 pub async fn insert(id: &String, req: CreateAppReq) -> HaliaResult<()> {
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, typ, name, conf, status, ts) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, app_type, name, conf, status, ts) VALUES (?, ?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
-    .bind(Into::<i32>::into(req.typ))
+    .bind(Into::<i32>::into(req.app_type))
     .bind(req.name)
     .bind(serde_json::to_vec(&req.conf)?)
-    .bind(Into::<i32>::into(Status::Stopped))
+    .bind(Into::<i32>::into(Status::default()))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
@@ -114,14 +114,16 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(conf)
 }
 
-pub async fn read_type(id: &String) -> Result<i32> {
-    let typ: i32 =
-        sqlx::query_scalar(format!("SELECT typ FROM {} WHERE id = ?", TABLE_NAME).as_str())
+pub async fn read_app_type(id: &String) -> Result<AppType> {
+    let app_type: i32 =
+        sqlx::query_scalar(format!("SELECT app_type FROM {} WHERE id = ?", TABLE_NAME).as_str())
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-    Ok(typ)
+    let app_type: AppType = app_type.try_into()?;
+
+    Ok(app_type)
 }
 
 pub async fn read_one(id: &String) -> Result<App> {

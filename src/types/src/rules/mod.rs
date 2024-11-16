@@ -20,6 +20,8 @@ pub struct Summary {
 pub struct QueryParams {
     pub name: Option<String>,
     pub status: Option<Status>,
+    pub parent_id: Option<String>,
+    pub resource_id: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
