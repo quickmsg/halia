@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
 };
 use types::{
-    apps::{CreateAppReq, ListAppsResp, QueryParams, Summary, UpdateAppReq},
+    apps::{CreateAppReq, ListAppsResp, QueryParams, ReadAppResp, Summary, UpdateAppReq},
     rules::ListRulesResp,
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, SearchSourcesOrSinksResp,
 };
@@ -68,8 +68,9 @@ async fn list_apps(
     Ok(Json(resp))
 }
 
-async fn read_app() -> AppResult<()> {
-    todo!()
+async fn read_app(Path(app_id): Path<String>) -> AppResult<Json<ReadAppResp>> {
+    let result = apps::read_app(app_id).await?;
+    Ok(Json(result))
 }
 
 async fn update_app(Path(app_id): Path<String>, Json(req): Json<UpdateAppReq>) -> AppResult<()> {

@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    LazyLock,
+use std::{
+    result,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        LazyLock,
+    },
 };
 
 use async_trait::async_trait;
@@ -10,12 +13,12 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     apps::{
-        AppType, CreateAppReq, ListAppsItem, ListAppsResp, QueryParams, QueryRuleInfo,
+        AppType, CreateAppReq, ListAppsItem, ListAppsResp, QueryParams, QueryRuleInfo, ReadAppResp,
         SearchRuleInfo, Summary, UpdateAppReq,
     },
     rules::{ListRulesItem, ListRulesResp},
     CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
-    SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp,
+    SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Status,
 };
 
 mod http;
@@ -212,6 +215,19 @@ pub async fn list_apps(pagination: Pagination, query: QueryParams) -> HaliaResul
     Ok(ListAppsResp {
         count,
         list: apps_resp,
+    })
+}
+
+pub async fn read_app(app_id: String) -> HaliaResult<ReadAppResp> {
+    let db_app = storage::app::read_one(&app_id).await?;
+    let (can_stop, can_delete, err) = get_info_by_status(&app_id, &db_app.status).await?;
+    Ok(ReadAppResp {
+        id: db_app.id,
+        name: db_app.name,
+        conf: db_app.conf,
+        can_stop,
+        can_delete,
+        err,
     })
 }
 
@@ -504,29 +520,7 @@ pub async fn get_sink_txs(
 }
 
 async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<ListAppsItem> {
-    let (can_stop, can_delete, err) = match db_app.status {
-        types::Status::Running => {
-            let can_stop =
-                storage::rule::reference::count_active_cnt_by_parent_id(&db_app.id).await? > 0;
-            (can_stop, false, None)
-        }
-        types::Status::Stopped => {
-            let can_delete =
-                storage::rule::reference::count_cnt_by_parent_id(&db_app.id).await? > 0;
-            (false, can_delete, None)
-        }
-        types::Status::Error => {
-            let can_stop =
-                storage::rule::reference::count_active_cnt_by_parent_id(&db_app.id).await? > 0;
-            let app = match GLOBAL_APP_MANAGER.get(&db_app.id) {
-                Some(app) => app,
-                None => return Err(HaliaError::Common("App未启动！".to_string())),
-            };
-            let err = app.read_err().await;
-            (can_stop, false, err)
-        }
-    };
-
+    let (can_stop, can_delete, err) = get_info_by_status(&db_app.id, &db_app.status).await?;
     let rule_reference_running_cnt =
         storage::rule::reference::count_running_cnt_by_parent_id(&db_app.id).await?;
     let rule_reference_total_cnt =
@@ -547,4 +541,31 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<ListAp
         can_stop,
         can_delete,
     })
+}
+
+async fn get_info_by_status(
+    app_id: &String,
+    status: &Status,
+) -> HaliaResult<(bool, bool, Option<String>)> {
+    match status {
+        types::Status::Running => {
+            let can_stop =
+                storage::rule::reference::count_active_cnt_by_parent_id(app_id).await? > 0;
+            Ok((can_stop, false, None))
+        }
+        types::Status::Stopped => {
+            let can_delete = storage::rule::reference::count_cnt_by_parent_id(app_id).await? > 0;
+            Ok((false, can_delete, None))
+        }
+        types::Status::Error => {
+            let can_stop =
+                storage::rule::reference::count_active_cnt_by_parent_id(app_id).await? > 0;
+            let app = match GLOBAL_APP_MANAGER.get(app_id) {
+                Some(app) => app,
+                None => return Err(HaliaError::Common("App未启动！".to_string())),
+            };
+            let err = app.read_err().await;
+            Ok((can_stop, false, err))
+        }
+    }
 }

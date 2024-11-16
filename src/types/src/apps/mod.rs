@@ -108,13 +108,12 @@ pub struct Summary {
     pub running: usize,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
     #[serde(rename = "type")]
     pub typ: Option<String>,
-    pub on: Option<bool>,
-    pub err: Option<bool>,
+    pub status: Option<Status>,
 }
 
 #[derive(Serialize)]
@@ -160,6 +159,16 @@ pub struct ListAppsItem {
     pub sink_cnt: usize,
     pub can_stop: bool,
     pub can_delete: bool,
+}
+
+#[derive(Serialize)]
+pub struct ReadAppResp {
+    pub id: String,
+    pub name: String,
+    pub conf: serde_json::Value,
+    pub can_stop: bool,
+    pub can_delete: bool,
+    pub err: Option<String>,
 }
 
 #[derive(Serialize)]

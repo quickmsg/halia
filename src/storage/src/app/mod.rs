@@ -151,23 +151,24 @@ pub async fn search(
 ) -> Result<(usize, Vec<App>)> {
     let (limit, offset) = pagination.to_sql();
 
-    let (count, db_apps) = match (
-        &query_params.name,
-        &query_params.typ,
-        &query_params.on,
-        &query_params.err,
-    ) {
-        (None, None, None, None) => {
-            let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM apps")
-                .fetch_one(POOL.get().unwrap())
-                .await?;
-
-            let apps =
-                sqlx::query_as::<_, DbApp>("SELECT * FROM apps ORDER BY ts DESC LIMIT ? OFFSET ?")
-                    .bind(limit)
-                    .bind(offset)
-                    .fetch_all(POOL.get().unwrap())
+    let (count, db_apps) = match (&query_params.name, &query_params.typ, &query_params.status) {
+        (None, None, None) => {
+            let count: i64 =
+                sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
+                    .fetch_one(POOL.get().unwrap())
                     .await?;
+
+            let apps = sqlx::query_as::<_, DbApp>(
+                format!(
+                    "SELECT * FROM {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    TABLE_NAME
+                )
+                .as_str(),
+            )
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
 
             (count, apps)
         }
@@ -186,16 +187,10 @@ pub async fn search(
                     false => where_clause.push_str(format!(" AND {}", typ).as_str()),
                 }
             }
-            if query_params.on.is_some() {
+            if query_params.status.is_some() {
                 match where_clause.is_empty() {
                     true => where_clause.push_str("WHERE status = ?"),
                     false => where_clause.push_str(" AND status = ?"),
-                }
-            }
-            if query_params.err.is_some() {
-                match where_clause.is_empty() {
-                    true => where_clause.push_str("WHERE err = ?"),
-                    false => where_clause.push_str(" AND err = ?"),
                 }
             }
 
@@ -215,21 +210,10 @@ pub async fn search(
                 query_count_builder = query_count_builder.bind(name.clone());
                 query_schemas_builder = query_schemas_builder.bind(name);
             }
-            if let Some(on) = query_params.on {
-                let status: i32 = match on {
-                    true => Boolean::True.into(),
-                    false => Boolean::False.into(),
-                };
+            if let Some(status) = query_params.status {
+                let status: i32 = status.into();
                 query_count_builder = query_count_builder.bind(status);
                 query_schemas_builder = query_schemas_builder.bind(status);
-            }
-            if let Some(err) = query_params.err {
-                let err: i32 = match err {
-                    true => Boolean::True.into(),
-                    false => Boolean::False.into(),
-                };
-                query_count_builder = query_count_builder.bind(err);
-                query_schemas_builder = query_schemas_builder.bind(err);
             }
 
             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
@@ -262,7 +246,7 @@ pub async fn update_status(id: &String, status: Status) -> Result<()> {
 }
 
 pub async fn update_conf(id: String, req: UpdateAppReq) -> HaliaResult<()> {
-    sqlx::query("UPDATE apps SET name = ?, conf = ? WHERE id = ?")
+    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
         .bind(serde_json::to_vec(&req.conf)?)
         .bind(id)
