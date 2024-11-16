@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::RuleRef;
-
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CreateUpdateCoapReq {
     pub name: String,
@@ -70,8 +68,6 @@ pub struct SearchAPIsResp {
 pub struct SearchAPIsItemResp {
     pub id: String,
     pub conf: CreateUpdateAPIReq,
-    #[serde(flatten)]
-    pub rule_ref: RuleRef,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -141,7 +137,6 @@ pub struct SearchObservesResp {
 pub struct SearchObservesItemResp {
     pub id: String,
     pub conf: CreateUpdateObserveReq,
-    pub rule_ref: RuleRef,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -179,5 +174,4 @@ pub struct SearchSinksResp {
 pub struct SearchSinksItemResp {
     pub id: String,
     pub conf: CreateUpdateSinkReq,
-    pub rule_ref: RuleRef,
 }

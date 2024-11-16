@@ -1,10 +1,9 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
-use tracing::debug;
 use types::{
-    devices::{device::source_sink::CreateUpdateReq, ConfType},
-    Pagination, QuerySourcesOrSinksParams, Status,
+    devices::{source_sink::CreateUpdateReq, ConfType, QuerySourcesSinksParams},
+    Pagination, Status,
 };
 
 use crate::{SourceSinkType, POOL};
@@ -16,7 +15,6 @@ struct DbSourceSink {
     pub id: String,
     pub device_id: String,
     pub device_template_source_sink_id: Option<String>,
-    pub source_sink_type: i32,
     pub name: String,
     pub conf_type: i32,
     pub conf: Vec<u8>,
@@ -27,12 +25,10 @@ struct DbSourceSink {
 
 impl DbSourceSink {
     pub fn transfer(self) -> Result<SourceSink> {
-        debug!("conf: {:?}", self);
         Ok(SourceSink {
             id: self.id,
             device_id: self.device_id,
             device_template_source_sink_id: self.device_template_source_sink_id,
-            source_sink_type: self.source_sink_type.try_into()?,
             name: self.name,
             conf_type: self.conf_type.try_into()?,
             conf: serde_json::from_slice(&self.conf)?,
@@ -47,7 +43,6 @@ pub struct SourceSink {
     pub id: String,
     pub device_id: String,
     pub device_template_source_sink_id: Option<String>,
-    pub source_sink_type: SourceSinkType,
     pub name: String,
     pub conf_type: ConfType,
     pub conf: serde_json::Value,
@@ -265,7 +260,7 @@ async fn read_by_template_id(
 pub async fn search_sources(
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QuerySourcesSinksParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     search(SourceSinkType::Source, device_id, pagination, query).await
 }
@@ -273,7 +268,7 @@ pub async fn search_sources(
 pub async fn search_sinks(
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QuerySourcesSinksParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     search(SourceSinkType::Sink, device_id, pagination, query).await
 }
@@ -282,7 +277,7 @@ async fn search(
     source_sink_type: SourceSinkType,
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QuerySourcesSinksParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     let source_sink_type: i32 = source_sink_type.into();
     let (limit, offset) = pagination.to_sql();
@@ -340,14 +335,11 @@ async fn search(
         }
     };
 
-    debug!("count: {}", count);
-
     let sources_or_sinks = db_sources_or_sinks
         .into_iter()
         .map(|x| x.transfer())
         .collect::<Result<Vec<SourceSink>>>()?;
 
-    debug!("here");
     Ok((count as usize, sources_or_sinks))
 }
 

@@ -12,7 +12,7 @@ use sink::Sink;
 use source::Source;
 use tokio::sync::{mpsc, Mutex};
 use types::{
-    devices::coap::{CoapConf, SinkConf, SourceConf},
+    devices::device::coap::{CoapConf, SinkConf, SourceConf},
     Value,
 };
 
@@ -282,43 +282,67 @@ impl Device for Coap {
 }
 
 pub(crate) fn transform_options(
-    input_options: &Vec<(types::devices::coap::CoapOption, String)>,
+    input_options: &Vec<(types::devices::device::coap::CoapOption, String)>,
 ) -> Result<Vec<(CoapOption, Vec<u8>)>> {
     let mut options = vec![];
     for (k, v) in input_options {
         let v = BASE64_STANDARD.decode(&v)?;
         match k {
-            types::devices::coap::CoapOption::IfMatch => options.push((CoapOption::IfMatch, v)),
-            types::devices::coap::CoapOption::UriHost => options.push((CoapOption::UriHost, v)),
-            types::devices::coap::CoapOption::ETag => options.push((CoapOption::ETag, v)),
-            types::devices::coap::CoapOption::IfNoneMatch => {
+            types::devices::device::coap::CoapOption::IfMatch => {
+                options.push((CoapOption::IfMatch, v))
+            }
+            types::devices::device::coap::CoapOption::UriHost => {
+                options.push((CoapOption::UriHost, v))
+            }
+            types::devices::device::coap::CoapOption::ETag => options.push((CoapOption::ETag, v)),
+            types::devices::device::coap::CoapOption::IfNoneMatch => {
                 options.push((CoapOption::IfNoneMatch, v))
             }
-            types::devices::coap::CoapOption::Observe => options.push((CoapOption::Observe, v)),
-            types::devices::coap::CoapOption::UriPort => options.push((CoapOption::UriPort, v)),
-            types::devices::coap::CoapOption::LocationPath => {
+            types::devices::device::coap::CoapOption::Observe => {
+                options.push((CoapOption::Observe, v))
+            }
+            types::devices::device::coap::CoapOption::UriPort => {
+                options.push((CoapOption::UriPort, v))
+            }
+            types::devices::device::coap::CoapOption::LocationPath => {
                 options.push((CoapOption::LocationPath, v))
             }
-            types::devices::coap::CoapOption::Oscore => options.push((CoapOption::Oscore, v)),
-            types::devices::coap::CoapOption::UriPath => options.push((CoapOption::UriPath, v)),
-            types::devices::coap::CoapOption::ContentFormat => {
+            types::devices::device::coap::CoapOption::Oscore => {
+                options.push((CoapOption::Oscore, v))
+            }
+            types::devices::device::coap::CoapOption::UriPath => {
+                options.push((CoapOption::UriPath, v))
+            }
+            types::devices::device::coap::CoapOption::ContentFormat => {
                 options.push((CoapOption::ContentFormat, v))
             }
-            types::devices::coap::CoapOption::MaxAge => options.push((CoapOption::MaxAge, v)),
-            types::devices::coap::CoapOption::UriQuery => options.push((CoapOption::UriQuery, v)),
-            types::devices::coap::CoapOption::Accept => options.push((CoapOption::Accept, v)),
-            types::devices::coap::CoapOption::LocationQuery => {
+            types::devices::device::coap::CoapOption::MaxAge => {
+                options.push((CoapOption::MaxAge, v))
+            }
+            types::devices::device::coap::CoapOption::UriQuery => {
+                options.push((CoapOption::UriQuery, v))
+            }
+            types::devices::device::coap::CoapOption::Accept => {
+                options.push((CoapOption::Accept, v))
+            }
+            types::devices::device::coap::CoapOption::LocationQuery => {
                 options.push((CoapOption::LocationQuery, v))
             }
-            types::devices::coap::CoapOption::Block2 => options.push((CoapOption::Block2, v)),
-            types::devices::coap::CoapOption::Block1 => options.push((CoapOption::Block1, v)),
-            types::devices::coap::CoapOption::ProxyUri => options.push((CoapOption::ProxyUri, v)),
-            types::devices::coap::CoapOption::ProxyScheme => {
+            types::devices::device::coap::CoapOption::Block2 => {
+                options.push((CoapOption::Block2, v))
+            }
+            types::devices::device::coap::CoapOption::Block1 => {
+                options.push((CoapOption::Block1, v))
+            }
+            types::devices::device::coap::CoapOption::ProxyUri => {
+                options.push((CoapOption::ProxyUri, v))
+            }
+            types::devices::device::coap::CoapOption::ProxyScheme => {
                 options.push((CoapOption::ProxyScheme, v))
             }
-            types::devices::coap::CoapOption::Size1 => options.push((CoapOption::Size1, v)),
-            types::devices::coap::CoapOption::Size2 => options.push((CoapOption::Size2, v)),
-            types::devices::coap::CoapOption::NoResponse => {
+            types::devices::device::coap::CoapOption::Size1 => options.push((CoapOption::Size1, v)),
+            types::devices::device::coap::CoapOption::Size2 => options.push((CoapOption::Size2, v)),
+            types::devices::device::coap::CoapOption::NoResponse => {
                 options.push((CoapOption::NoResponse, v))
             }
         }

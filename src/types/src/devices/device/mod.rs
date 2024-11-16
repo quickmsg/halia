@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use source_sink::CreateUpdateReq;
 
 use crate::Status;
 
@@ -9,7 +8,6 @@ pub mod coap;
 pub mod modbus;
 pub mod opcua;
 pub mod s7;
-pub mod source_sink;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateReq {
@@ -34,26 +32,4 @@ pub struct QueryParams {
     pub name: Option<String>,
     pub device_type: Option<DeviceType>,
     pub status: Option<Status>,
-}
-
-#[derive(Deserialize)]
-pub struct QueryRuleInfoParams {
-    pub device_id: String,
-    pub source_id: Option<String>,
-    pub sink_id: Option<String>,
-}
-
-// #[derive(Serialize)]
-// pub struct SearchRuleInfo {
-//     pub device: SearchItemResp,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub source: Option<SearchRuleSourceSinkResp>,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub sink: Option<SearchRuleSourceSinkResp>,
-// }
-
-#[derive(Serialize)]
-pub struct SearchRuleSourceSinkResp {
-    pub id: String,
-    pub req: CreateUpdateReq,
 }

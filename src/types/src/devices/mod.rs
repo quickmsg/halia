@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::Status;
 
-pub mod coap;
 pub mod device;
 pub mod device_template;
+pub mod source_sink;
 pub mod source_sink_template;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
@@ -110,101 +110,6 @@ pub struct QueryParams {
     pub err: Option<bool>,
 }
 
-// #[derive(Serialize)]
-// pub struct SearchDevicesResp {
-//     pub total: usize,
-//     pub data: Vec<SearchDevicesItemResp>,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchDevicesItemResp {
-//     pub common: SearchDevicesItemCommon,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub running_info: Option<SearchDevicesItemRunningInfo>,
-//     pub conf: SearchDevicesItemConf,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchDevicesItemCommon {
-//     pub id: String,
-//     #[serde(rename = "type")]
-//     pub typ: DeviceType,
-//     pub on: bool,
-//     pub source_cnt: usize,
-//     pub sink_cnt: usize,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchDevicesItemRunningInfo {
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub err: Option<String>,
-//     pub rtt: u16,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchDevicesItemConf {
-//     pub base: BaseConf,
-//     pub ext: serde_json::Value,
-// }
-
-// #[derive(Deserialize)]
-// pub struct QueryRuleInfo {
-//     pub device_id: String,
-//     pub source_id: Option<String>,
-//     pub sink_id: Option<String>,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchRuleInfo {
-//     pub device: SearchDevicesItemResp,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub source: Option<SearchSourcesOrSinksInfoResp>,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub sink: Option<SearchSourcesOrSinksInfoResp>,
-// }
-
-// #[derive(Debug, Deserialize)]
-// pub struct QuerySourceOrSinkTemplateParams {
-//     pub name: Option<String>,
-//     pub device_type: Option<DeviceType>,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchSourcesOrSinkTemplatesResp {
-//     pub total: usize,
-//     pub data: Vec<SearchSourcesOrSinkTemplatesItemResp>,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchSourcesOrSinkTemplatesItemResp {
-//     pub id: String,
-//     pub name: String,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub desc: Option<String>,
-//     pub device_type: DeviceType,
-//     pub conf: serde_json::Value,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchSourcesOrSinksResp {
-//     pub total: usize,
-//     pub data: Vec<SearchSourcesOrSinksItemResp>,
-// }
-
-// #[derive(Serialize)]
-// pub struct SearchSourcesOrSinksItemResp {
-//     #[serde(flatten)]
-//     pub info: SearchSourcesOrSinksInfoResp,
-//     pub rule_ref: RuleRef,
-// }
-
-// #[derive(Deserialize, Serialize, Clone)]
-// pub struct CreateUpdateSourceOrSinkTemplateReq {
-//     pub device_type: DeviceType,
-//     pub base: BaseConf,
-//     pub ext: serde_json::Value,
-// }
-
 #[derive(Serialize)]
 pub struct ListDevicesResp {
     pub count: usize,
@@ -226,13 +131,16 @@ pub struct ListDevicesItem {
     pub can_delete: bool,
 }
 
-#[derive(Serialize)]
-pub struct RuleInfoResp {
-    pub device: ListDevicesItem,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<ListSourcesSinksItem>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sink: Option<ListSourcesSinksItem>,
+#[derive(Deserialize, Serialize, Clone)]
+pub struct CreateUpdateSourceSinkReq {
+    pub name: String,
+    pub conf: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+pub struct QuerySourcesSinksParams {
+    pub name: Option<String>,
+    pub status: Option<Status>,
 }
 
 #[derive(Serialize)]
@@ -244,6 +152,51 @@ pub struct ListSourcesSinksResp {
 #[derive(Serialize)]
 pub struct ListSourcesSinksItem {
     pub id: String,
+    pub name: String,
+    pub status: Status,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+    pub can_delete: bool,
+}
+
+#[derive(Serialize)]
+pub struct ReadSourceSinkResp {
+    pub id: String,
+    pub name: String,
+    pub conf: serde_json::Value,
+    pub status: Status,
+    pub err: Option<String>,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+    pub can_delete: bool,
+}
+
+#[derive(Deserialize)]
+pub struct QueryRuleInfoParams {
+    pub device_id: String,
+    pub source_id: Option<String>,
+    pub sink_id: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct RuleInfoResp {
+    pub device: RuleInfoDevice,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<RuleInfoSourceSink>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sink: Option<RuleInfoSourceSink>,
+}
+
+#[derive(Serialize)]
+pub struct RuleInfoDevice {
+    pub name: String,
+    pub status: Status,
+}
+
+#[derive(Serialize)]
+pub struct RuleInfoSourceSink {
     pub name: String,
     pub status: Status,
 }

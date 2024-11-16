@@ -54,42 +54,6 @@ pub struct Value {
     pub value: serde_json::Value,
 }
 
-#[derive(Serialize)]
-pub struct RuleRef {
-    pub rule_ref_cnt: usize,
-    pub rule_active_ref_cnt: usize,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateSourceOrSinkReq {
-    pub name: String,
-    pub conf: serde_json::Value,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct QuerySourcesOrSinksParams {
-    pub name: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSourcesOrSinksResp {
-    pub total: usize,
-    pub data: Vec<SearchSourcesOrSinksItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchSourcesOrSinksItemResp {
-    #[serde(flatten)]
-    pub info: SearchSourcesOrSinksInfoResp,
-    pub rule_ref: RuleRef,
-}
-
-#[derive(Serialize)]
-pub struct SearchSourcesOrSinksInfoResp {
-    pub id: String,
-    pub conf: CreateUpdateSourceOrSinkReq,
-}
-
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct SslConf {
     pub verify: bool,

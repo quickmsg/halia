@@ -3,7 +3,7 @@ use std::fmt;
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::{SearchSourcesOrSinksInfoResp, Status};
+use crate::Status;
 
 pub mod http_client;
 pub mod influxdb_v1;
@@ -82,7 +82,6 @@ impl fmt::Display for AppType {
     }
 }
 
-// TODO
 impl TryFrom<String> for AppType {
     type Error = Error;
 
@@ -132,9 +131,9 @@ pub struct QueryRuleInfo {
 pub struct RuleInfoResp {
     pub app: ListAppsItem,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<SearchSourcesOrSinksInfoResp>,
+    pub source: Option<ListSourcesSinksItem>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sink: Option<SearchSourcesOrSinksInfoResp>,
+    pub sink: Option<ListSourcesSinksItem>,
 }
 
 #[derive(Serialize)]
@@ -171,17 +170,10 @@ pub struct ReadAppResp {
     pub err: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct ListRulesResp {
-    pub count: usize,
-    pub list: Vec<ListRulesItem>,
-}
-
-#[derive(Serialize)]
-pub struct ListRulesItem {
-    pub id: String,
+#[derive(Deserialize, Serialize, Clone)]
+pub struct CreateUpdateSourceSinkReq {
     pub name: String,
-    pub status: Status,
+    pub conf: serde_json::Value,
 }
 
 #[derive(Deserialize)]

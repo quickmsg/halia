@@ -14,7 +14,7 @@ use types::{
         ListDataboardsResp, QueryDatasParams, QueryParams, QueryRuleInfo, RuleInfoResp,
         SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp, Summary,
     },
-    Pagination, RuleRef,
+    Pagination,
 };
 
 pub mod data;
@@ -245,13 +245,6 @@ pub async fn search_datas(
             }
             None => (None, None),
         };
-        let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule::reference::count_cnt_by_resource_id(&db_data.id).await?,
-            rule_active_ref_cnt: storage::rule::reference::count_active_cnt_by_resource_id(
-                &db_data.id,
-            )
-            .await?,
-        };
         datas.push(SearchDatasItemResp {
             info: SearchDatasInfoResp {
                 id: db_data.id,
@@ -262,7 +255,6 @@ pub async fn search_datas(
                 value,
                 ts,
             },
-            rule_ref,
         });
     }
 

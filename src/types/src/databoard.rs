@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{RuleRef, Status};
+use crate::Status;
 
 #[derive(Serialize)]
 pub struct Summary {
@@ -62,7 +62,6 @@ pub struct SearchDatasResp {
 pub struct SearchDatasItemResp {
     #[serde(flatten)]
     pub info: SearchDatasInfoResp,
-    pub rule_ref: RuleRef,
 }
 
 #[derive(Serialize)]

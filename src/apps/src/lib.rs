@@ -10,13 +10,12 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     apps::{
-        AppType, CreateAppReq, ListAppsItem, ListAppsResp, ListSourcesSinksItem,
-        ListSourcesSinksResp, QueryParams, QueryRuleInfo, ReadAppResp, ReadSourceSinkResp,
-        RuleInfoResp, Summary, UpdateAppReq,
+        AppType, CreateAppReq, CreateUpdateSourceSinkReq, ListAppsItem, ListAppsResp,
+        ListSourcesSinksItem, ListSourcesSinksResp, QueryParams, QueryRuleInfo,
+        QuerySourcesSinksParams, ReadAppResp, ReadSourceSinkResp, RuleInfoResp, Summary,
+        UpdateAppReq,
     },
-    rules::{ListRulesItem, ListRulesResp},
-    CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, RuleRef,
-    SearchSourcesOrSinksInfoResp, SearchSourcesOrSinksItemResp, SearchSourcesOrSinksResp, Status,
+    Pagination, Status,
 };
 
 mod http;
@@ -157,12 +156,14 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
             let db_source = storage::app::source_sink::read_one(&source_id).await?;
             Ok(RuleInfoResp {
                 app,
-                source: Some(SearchSourcesOrSinksInfoResp {
+                source: Some(ListSourcesSinksItem {
                     id: db_source.id,
-                    conf: CreateUpdateSourceOrSinkReq {
-                        name: db_source.name,
-                        conf: db_source.conf,
-                    },
+                    name: db_source.name,
+                    status: db_source.status,
+                    err: todo!(),
+                    rule_reference_running_cnt: todo!(),
+                    rule_reference_total_cnt: todo!(),
+                    can_delete: todo!(),
                 }),
                 sink: None,
             })
@@ -172,12 +173,14 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
             Ok(RuleInfoResp {
                 app,
                 source: None,
-                sink: Some(SearchSourcesOrSinksInfoResp {
+                sink: Some(ListSourcesSinksItem {
                     id: db_sink.id,
-                    conf: CreateUpdateSourceOrSinkReq {
-                        name: db_sink.name,
-                        conf: db_sink.conf,
-                    },
+                    name: todo!(),
+                    status: todo!(),
+                    err: todo!(),
+                    rule_reference_running_cnt: todo!(),
+                    rule_reference_total_cnt: todo!(),
+                    can_delete: todo!(),
                 }),
             })
         }
@@ -314,25 +317,7 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn list_app_rules(
-    app_id: String,
-    pagination: Pagination,
-    mut query: types::rules::QueryParams,
-) -> HaliaResult<ListRulesResp> {
-    query.parent_id = Some(app_id.clone());
-    let (count, db_rules) = storage::rule::search(pagination, query).await?;
-    let list = db_rules
-        .into_iter()
-        .map(|x| ListRulesItem {
-            id: x.id,
-            name: x.name,
-            status: x.status,
-        })
-        .collect();
-    Ok(ListRulesResp { count, list })
-}
-
-pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
+pub async fn create_source(app_id: String, req: CreateUpdateSourceSinkReq) -> HaliaResult<()> {
     let app_type: AppType = storage::app::read_app_type(&app_id).await?;
     let source_id = common::get_id();
     match app_type {
@@ -357,7 +342,7 @@ pub async fn create_source(app_id: String, req: CreateUpdateSourceOrSinkReq) -> 
 pub async fn list_sources(
     app_id: String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QuerySourcesSinksParams,
 ) -> HaliaResult<ListSourcesSinksResp> {
     let (count, db_sources) =
         storage::app::source_sink::query_sources_by_app_id(&app_id, pagination, query).await?;
@@ -414,7 +399,7 @@ pub async fn read_source(app_id: String, source_id: String) -> HaliaResult<ReadS
 pub async fn update_source(
     app_id: String,
     source_id: String,
-    req: CreateUpdateSourceOrSinkReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         let old_conf = storage::app::source_sink::read_conf(&source_id).await?;
@@ -441,24 +426,6 @@ pub async fn delete_source(app_id: String, source_id: String) -> HaliaResult<()>
     Ok(())
 }
 
-pub async fn list_source_rules(
-    source_id: String,
-    pagination: Pagination,
-    mut query: types::rules::QueryParams,
-) -> HaliaResult<ListRulesResp> {
-    query.resource_id = Some(source_id);
-    let (count, db_rules) = storage::rule::search(pagination, query).await?;
-    let list = db_rules
-        .into_iter()
-        .map(|x| ListRulesItem {
-            id: x.id,
-            name: x.name,
-            status: x.status,
-        })
-        .collect();
-    Ok(ListRulesResp { count, list })
-}
-
 pub async fn get_source_rxs(
     app_id: &String,
     source_id: &String,
@@ -472,7 +439,7 @@ pub async fn get_source_rxs(
     }
 }
 
-pub async fn create_sink(app_id: String, req: CreateUpdateSourceOrSinkReq) -> HaliaResult<()> {
+pub async fn create_sink(app_id: String, req: CreateUpdateSourceSinkReq) -> HaliaResult<()> {
     let app_type: AppType = storage::app::read_app_type(&app_id).await?;
     match app_type {
         AppType::MqttV311 => mqtt_v311::validate_sink_conf(&req.conf)?,
@@ -523,41 +490,34 @@ pub async fn read_sink(app_id: String, sink_id: String) -> HaliaResult<ReadSourc
     })
 }
 
-pub async fn search_sinks(
+pub async fn list_sinks(
     app_id: String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
-) -> HaliaResult<SearchSourcesOrSinksResp> {
+    query: QuerySourcesSinksParams,
+) -> HaliaResult<ListSourcesSinksResp> {
     let (count, db_sinks) =
         storage::app::source_sink::query_sinks_by_app_id(&app_id, pagination, query).await?;
-    let mut data = Vec::with_capacity(db_sinks.len());
+    let mut list = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
-        let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?,
-            rule_active_ref_cnt: storage::rule::reference::count_active_cnt_by_resource_id(
-                &db_sink.id,
-            )
-            .await?,
-        };
-        data.push(SearchSourcesOrSinksItemResp {
-            info: SearchSourcesOrSinksInfoResp {
-                id: db_sink.id,
-                conf: CreateUpdateSourceOrSinkReq {
-                    name: db_sink.name,
-                    conf: db_sink.conf,
-                },
-            },
-            rule_ref,
+        list.push(ListSourcesSinksItem {
+            id: db_sink.id,
+            name: db_sink.name,
+            status: db_sink.status,
+            // todo
+            err: None,
+            rule_reference_running_cnt: todo!(),
+            rule_reference_total_cnt: todo!(),
+            can_delete: todo!(),
         });
     }
 
-    Ok(SearchSourcesOrSinksResp { total: count, data })
+    Ok(ListSourcesSinksResp { count, list })
 }
 
 pub async fn update_sink(
     app_id: String,
     sink_id: String,
-    req: CreateUpdateSourceOrSinkReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     if let Some(mut app) = GLOBAL_APP_MANAGER.get_mut(&app_id) {
         let old_conf = storage::app::source_sink::read_conf(&sink_id).await?;
@@ -583,24 +543,6 @@ pub async fn delete_sink(app_id: String, sink_id: String) -> HaliaResult<()> {
     }
 
     Ok(())
-}
-
-pub async fn list_sink_rules(
-    sink_id: String,
-    pagination: Pagination,
-    mut query: types::rules::QueryParams,
-) -> HaliaResult<ListRulesResp> {
-    query.resource_id = Some(sink_id);
-    let (count, db_rules) = storage::rule::search(pagination, query).await?;
-    let list = db_rules
-        .into_iter()
-        .map(|x| ListRulesItem {
-            id: x.id,
-            name: x.name,
-            status: x.status,
-        })
-        .collect();
-    Ok(ListRulesResp { count, list })
 }
 
 pub async fn get_sink_txs(

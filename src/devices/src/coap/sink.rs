@@ -11,7 +11,7 @@ use tokio::{
     sync::{mpsc, Mutex},
     task::JoinHandle,
 };
-use types::devices::coap::SinkConf;
+use types::devices::device::coap::SinkConf;
 
 use super::{transform_options, TokenManager};
 
@@ -78,9 +78,9 @@ impl Sink {
         SinkConf,
     )> {
         let method = match &conf.method {
-            types::devices::coap::SinkMethod::Post => Method::Post,
-            types::devices::coap::SinkMethod::Put => Method::Put,
-            types::devices::coap::SinkMethod::Delete => Method::Delete,
+            types::devices::device::coap::SinkMethod::Post => Method::Post,
+            types::devices::device::coap::SinkMethod::Put => Method::Put,
+            types::devices::device::coap::SinkMethod::Delete => Method::Delete,
         };
 
         // 在check conf中进行options校验

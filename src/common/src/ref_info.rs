@@ -1,5 +1,4 @@
 use tracing::debug;
-use types::RuleRef;
 use uuid::Uuid;
 
 #[derive(Debug)]

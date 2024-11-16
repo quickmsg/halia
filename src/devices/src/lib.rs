@@ -8,13 +8,13 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
-use tracing::debug;
 use types::{
     devices::{
-        device::{source_sink, QueryParams, QueryRuleInfoParams},
-        ConfType, DeviceType, ListDevicesResp, ListSourcesSinksItem, RuleInfoResp, Summary,
+        device::QueryParams, source_sink, ConfType, DeviceType, ListDevicesResp,
+        ListSourcesSinksItem, QueryRuleInfoParams, QuerySourcesSinksParams, RuleInfoDevice,
+        RuleInfoResp, RuleInfoSourceSink, Summary,
     },
-    Pagination, QuerySourcesOrSinksParams, RuleRef, Status, Value,
+    Pagination, Status, Value,
 };
 
 pub mod coap;
@@ -159,17 +159,19 @@ pub fn get_summary() -> Summary {
     Summary { total, on, running }
 }
 
+// 规则中读取详情
 pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<RuleInfoResp> {
     let db_device = storage::device::device::read_one(&query.device_id).await?;
-
-    let device_resp = transer_db_device_to_resp(db_device).await?;
+    let device = RuleInfoDevice {
+        name: db_device.name,
+        status: db_device.status,
+    };
     match (query.source_id, query.sink_id) {
         (Some(source_id), None) => {
             let db_source = storage::device::source_sink::read_one(&source_id).await?;
             Ok(RuleInfoResp {
-                device: device_resp,
-                source: Some(ListSourcesSinksItem {
-                    id: source_id,
+                device,
+                source: Some(RuleInfoSourceSink {
                     name: db_source.name,
                     status: db_source.status,
                 }),
@@ -180,10 +182,9 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<RuleInfoRe
             let db_sink: storage::device::source_sink::SourceSink =
                 storage::device::source_sink::read_one(&sink_id).await?;
             Ok(RuleInfoResp {
-                device: device_resp,
+                device,
                 source: None,
-                sink: Some(ListSourcesSinksItem {
-                    id: db_sink.id,
+                sink: Some(RuleInfoSourceSink {
                     name: db_sink.name,
                     status: db_sink.status,
                 }),
@@ -219,7 +220,7 @@ pub async fn create_device(
                 for device_template_source in device_template_sources {
                     match device_template_source.conf_type {
                         ConfType::Template => {
-                            let req = types::devices::device::source_sink::CreateUpdateReq {
+                            let req = types::devices::source_sink::CreateUpdateReq {
                                 name: device_template_source.name,
                                 conf_type: device_template_source.conf_type,
                                 template_id: device_template_source.template_id,
@@ -228,7 +229,7 @@ pub async fn create_device(
                             source_reqs.push(req);
                         }
                         ConfType::Customize => {
-                            let req = types::devices::device::source_sink::CreateUpdateReq {
+                            let req = types::devices::source_sink::CreateUpdateReq {
                                 name: device_template_source.name,
                                 conf_type: device_template_source.conf_type,
                                 template_id: None,
@@ -248,7 +249,7 @@ pub async fn create_device(
                 for device_template_sink in device_template_sinks {
                     match device_template_sink.conf_type {
                         ConfType::Template => {
-                            let req = types::devices::device::source_sink::CreateUpdateReq {
+                            let req = types::devices::source_sink::CreateUpdateReq {
                                 name: device_template_sink.name,
                                 conf_type: device_template_sink.conf_type,
                                 template_id: device_template_sink.template_id,
@@ -257,7 +258,7 @@ pub async fn create_device(
                             sink_reqs.push(req);
                         }
                         ConfType::Customize => {
-                            let req = types::devices::device::source_sink::CreateUpdateReq {
+                            let req = types::devices::source_sink::CreateUpdateReq {
                                 name: device_template_sink.name,
                                 conf_type: device_template_sink.conf_type,
                                 template_id: None,
@@ -509,36 +510,28 @@ pub(crate) async fn create_source(
     Ok(())
 }
 
-pub async fn search_sources(
+pub async fn list_sources(
     device_id: String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
-) -> HaliaResult<source_sink::SearchResp> {
+    query: QuerySourcesSinksParams,
+) -> HaliaResult<source_sink::ListSourcesSinksResp> {
     let (count, db_sources) =
         storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
-    debug!("here");
-    let mut data = Vec::with_capacity(db_sources.len());
+    let mut list = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
-        let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?,
-            rule_active_ref_cnt: storage::rule::reference::count_active_cnt_by_resource_id(
-                &db_source.id,
-            )
-            .await?,
-        };
-        data.push(source_sink::SearchItemResp {
+        list.push(source_sink::ListSourcesSinksItem {
             id: db_source.id,
-            rule_ref,
-            req: source_sink::CreateUpdateReq {
-                name: db_source.name,
-                conf_type: db_source.conf_type,
-                template_id: db_source.template_id,
-                conf: db_source.conf,
-            },
+            name: db_source.name,
+            status: db_source.status,
+            // TODO
+            err: None,
+            rule_reference_running_cnt: todo!(),
+            rule_reference_total_cnt: todo!(),
+            can_delete: todo!(),
         });
     }
 
-    Ok(source_sink::SearchResp { total: count, data })
+    Ok(source_sink::ListSourcesSinksResp { count, list })
 }
 
 pub async fn update_source(
@@ -682,35 +675,27 @@ pub(crate) async fn create_sink(
     Ok(())
 }
 
-pub async fn search_sinks(
+pub async fn list_sinks(
     device_id: String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
-) -> HaliaResult<source_sink::SearchResp> {
+    query: QuerySourcesSinksParams,
+) -> HaliaResult<source_sink::ListSourcesSinksResp> {
     let (count, db_sinks) =
         storage::device::source_sink::search_sinks(&device_id, pagination, query).await?;
-    let mut data = Vec::with_capacity(db_sinks.len());
+    let mut list = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
-        let rule_ref = RuleRef {
-            rule_ref_cnt: storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?,
-            rule_active_ref_cnt: storage::rule::reference::count_active_cnt_by_resource_id(
-                &db_sink.id,
-            )
-            .await?,
-        };
-        data.push(source_sink::SearchItemResp {
+        list.push(source_sink::ListSourcesSinksItem {
             id: db_sink.id,
-            req: source_sink::CreateUpdateReq {
-                name: db_sink.name,
-                conf_type: db_sink.conf_type,
-                template_id: db_sink.template_id,
-                conf: db_sink.conf,
-            },
-            rule_ref,
+            name: db_sink.name,
+            status: db_sink.status,
+            err: todo!(),
+            rule_reference_running_cnt: todo!(),
+            rule_reference_total_cnt: todo!(),
+            can_delete: todo!(),
         });
     }
 
-    Ok(source_sink::SearchResp { total: count, data })
+    Ok(source_sink::ListSourcesSinksResp { count, list })
 }
 
 pub async fn update_sink(

@@ -1,7 +1,10 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
-use types::{CreateUpdateSourceOrSinkReq, Pagination, QuerySourcesOrSinksParams, Status};
+use types::{
+    apps::{CreateUpdateSourceSinkReq, QuerySourcesSinksParams},
+    Pagination, Status,
+};
 
 use crate::SourceSinkType;
 
@@ -62,7 +65,7 @@ CREATE TABLE IF NOT EXISTS {} (
 pub async fn insert_source(
     app_id: &String,
     id: &String,
-    req: CreateUpdateSourceOrSinkReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> Result<()> {
     insert(SourceSinkType::Source, app_id, id, req).await
 }
@@ -70,7 +73,7 @@ pub async fn insert_source(
 pub async fn insert_sink(
     app_id: &String,
     id: &String,
-    req: CreateUpdateSourceOrSinkReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> Result<()> {
     insert(SourceSinkType::Sink, app_id, id, req).await
 }
@@ -79,7 +82,7 @@ async fn insert(
     source_sink_type: SourceSinkType,
     app_id: &String,
     id: &String,
-    req: CreateUpdateSourceOrSinkReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> Result<()> {
     sqlx::query(
         format!(
@@ -147,7 +150,7 @@ pub async fn read_one(id: &String) -> Result<SourceSink> {
 pub async fn query_sources_by_app_id(
     app_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QuerySourcesSinksParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     query_by_app_id(SourceSinkType::Source, app_id, pagination, query).await
 }
@@ -155,7 +158,7 @@ pub async fn query_sources_by_app_id(
 pub async fn query_sinks_by_app_id(
     app_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QuerySourcesSinksParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     query_by_app_id(SourceSinkType::Sink, app_id, pagination, query).await
 }
@@ -164,7 +167,7 @@ async fn query_by_app_id(
     source_sink_type: SourceSinkType,
     app_id: &String,
     pagination: Pagination,
-    query: QuerySourcesOrSinksParams,
+    query: QuerySourcesSinksParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     let source_sink_type: i32 = source_sink_type.into();
     let (limit, offset) = pagination.to_sql();
@@ -261,7 +264,7 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: CreateUpdateSourceOrSinkReq) -> Result<()> {
+pub async fn update(id: &String, req: CreateUpdateSourceSinkReq) -> Result<()> {
     let conf = serde_json::to_vec(&req.conf)?;
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)

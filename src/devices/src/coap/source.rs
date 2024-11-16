@@ -14,7 +14,7 @@ use tokio::{
     time,
 };
 use tracing::{debug, warn};
-use types::devices::coap::{GetConf, ObserveConf, SourceConf, SourceMethod};
+use types::devices::device::coap::{GetConf, ObserveConf, SourceConf, SourceMethod};
 use url::form_urlencoded;
 
 use super::{transform_options, TokenManager};
