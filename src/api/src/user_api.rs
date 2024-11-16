@@ -13,7 +13,7 @@ use time::{Duration, OffsetDateTime};
 use tracing::warn;
 use types::user::{AdminExists, AuthInfo, Password, UpdatePassword, User};
 
-use crate::{AppError, AppResult, AppSuccess, EMPTY_USER_CODE, WRONG_PASSWORD_CODE};
+use crate::{AppError, AppResult};
 
 const SECRET: &str = "must be random,todo";
 
@@ -76,15 +76,15 @@ pub fn routes() -> Router {
         .route("/password", put(password))
 }
 
-async fn check_empty_user() -> AppResult<AppSuccess<AdminExists>> {
+async fn check_empty_user() -> AppResult<Json<AdminExists>> {
     let exists = storage::user::check_admin_exists()
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
 
-    Ok(AppSuccess::data(AdminExists { exists }))
+    Ok(Json(AdminExists { exists }))
 }
 
-async fn registration(Json(password): Json<Password>) -> AppResult<AppSuccess<String>> {
+async fn registration(Json(password): Json<Password>) -> AppResult<Json<String>> {
     let exists = storage::user::check_admin_exists()
         .await
         .map_err(|e| HaliaError::Common(e.to_string()))?;
@@ -105,10 +105,10 @@ async fn registration(Json(password): Json<Password>) -> AppResult<AppSuccess<St
         password: password.password,
     });
 
-    Ok(AppSuccess::data(token))
+    Ok(Json(token))
 }
 
-async fn login(Json(user): Json<User>) -> AppResult<AppSuccess<AuthInfo>> {
+async fn login(Json(user): Json<User>) -> AppResult<Json<AuthInfo>> {
     let db_user = match storage::user::read_user().await {
         Ok(user) => match user {
             Some(user) => user,
@@ -131,7 +131,7 @@ async fn login(Json(user): Json<User>) -> AppResult<AppSuccess<AuthInfo>> {
 
     let token = sign_jwt(user);
 
-    Ok(AppSuccess::data(AuthInfo { token }))
+    Ok(Json(AuthInfo { token }))
 }
 
 fn sign_jwt(user: User) -> String {
@@ -148,7 +148,7 @@ fn sign_jwt(user: User) -> String {
     encode(&header, &claims, &EncodingKey::from_secret(SECRET.as_ref())).unwrap()
 }
 
-async fn password(Json(update_password): Json<UpdatePassword>) -> AppResult<AppSuccess<()>> {
+async fn password(Json(update_password): Json<UpdatePassword>) -> AppResult<()> {
     // 从token中读取
     let username = "xxs".to_owned();
     match storage::user::update_user_password(
@@ -158,7 +158,7 @@ async fn password(Json(update_password): Json<UpdatePassword>) -> AppResult<AppS
     )
     .await
     {
-        Ok(_) => Ok(AppSuccess::empty()),
+        Ok(_) => Ok(()),
         Err(e) => {
             warn!("{}", e);
             return Err(AppError::new(

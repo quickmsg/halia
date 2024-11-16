@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query},
-    routing::{self, get, post, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use types::{
@@ -8,38 +8,38 @@ use types::{
     Pagination,
 };
 
-use crate::{AppResult, AppSuccess};
+use crate::AppResult;
 
 pub fn routes() -> Router {
     Router::new()
-        .route("/", post(create))
-        .route("/", get(search))
-        .route("/:id", put(update))
-        .route("/:id", routing::delete(delete))
+        .route("/", post(create_schema))
+        .route("/list", get(list_schemas))
+        .route("/:id", put(update_schema))
+        .route("/:id", delete(delete_schema))
 }
 
-async fn create(Json(req): Json<CreateUpdateSchemaReq>) -> AppResult<AppSuccess<()>> {
+async fn create_schema(Json(req): Json<CreateUpdateSchemaReq>) -> AppResult<()> {
     schema::create(req).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn search(
+async fn list_schemas(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppResult<AppSuccess<SearchSchemasResp>> {
+) -> AppResult<Json<SearchSchemasResp>> {
     let resp = schema::search(pagination, query_params).await?;
-    Ok(AppSuccess::data(resp))
+    Ok(Json(resp))
 }
 
-async fn update(
+async fn update_schema(
     Path(id): Path<String>,
     Json(req): Json<CreateUpdateSchemaReq>,
-) -> AppResult<AppSuccess<()>> {
+) -> AppResult<()> {
     schema::update(id, req).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn delete(Path(id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn delete_schema(Path(id): Path<String>) -> AppResult<()> {
     schema::delete(id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }

@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query},
-    routing::{self, get, post, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use types::{
@@ -11,103 +11,101 @@ use types::{
     Pagination,
 };
 
-use crate::{AppResult, AppSuccess};
+use crate::AppResult;
 
 pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_databoards_summary))
         .route("/rule", get(get_rule_info))
         .route("/", post(create_databoard))
-        .route("/", get(search_databoards))
+        .route("/list", get(list_databoards))
         .route("/:databoard_id", put(update_databoard))
         .route("/:databoard_id/start", put(start_databoard))
         .route("/:databoard_id/stop", put(stop_databoard))
-        .route("/:databoard_id", routing::delete(delete_databoard))
+        .route("/:databoard_id", delete(delete_databoard))
         .nest(
             "/:databoard_id/data",
             Router::new()
                 .route("/", post(create_data))
                 .route("/", get(search_datas))
                 .route("/:data_id", put(update_data))
-                .route("/:data_id", routing::delete(delete_data)),
+                .route("/:data_id", delete(delete_data)),
         )
 }
 
-async fn get_databoards_summary() -> AppSuccess<Summary> {
-    AppSuccess::data(databoard::get_summary())
+async fn get_databoards_summary() -> AppResult<Json<Summary>> {
+    Ok(Json(databoard::get_summary()))
 }
 
-async fn get_rule_info(
-    Query(query): Query<QueryRuleInfo>,
-) -> AppResult<AppSuccess<SearchRuleInfo>> {
-    let rule_info = databoard::get_rule_info(query).await?;
-    Ok(AppSuccess::data(rule_info))
+async fn get_rule_info(Query(query): Query<QueryRuleInfo>) -> AppResult<Json<SearchRuleInfo>> {
+    let resp = databoard::get_rule_info(query).await?;
+    Ok(Json(resp))
 }
 
-async fn create_databoard(Json(req): Json<CreateUpdateDataboardReq>) -> AppResult<AppSuccess<()>> {
+async fn create_databoard(Json(req): Json<CreateUpdateDataboardReq>) -> AppResult<()> {
     databoard::create_databoard(req).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn search_databoards(
+async fn list_databoards(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppResult<AppSuccess<SearchDataboardsResp>> {
+) -> AppResult<Json<SearchDataboardsResp>> {
     let resp = databoard::search_databoards(pagination, query_params).await?;
-    Ok(AppSuccess::data(resp))
+    Ok(Json(resp))
 }
 
 async fn update_databoard(
     Path(databoard_id): Path<String>,
     Json(req): Json<CreateUpdateDataboardReq>,
-) -> AppResult<AppSuccess<()>> {
+) -> AppResult<()> {
     databoard::update_databoard(databoard_id, req).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn start_databoard(Path(databoard_id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn start_databoard(Path(databoard_id): Path<String>) -> AppResult<()> {
     databoard::start_databoard(databoard_id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn stop_databoard(Path(databoard_id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn stop_databoard(Path(databoard_id): Path<String>) -> AppResult<()> {
     databoard::stop_databoard(databoard_id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
-async fn delete_databoard(Path(databoard_id): Path<String>) -> AppResult<AppSuccess<()>> {
+async fn delete_databoard(Path(databoard_id): Path<String>) -> AppResult<()> {
     databoard::delete_databoard(databoard_id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
 async fn create_data(
     Path(databoard_id): Path<String>,
     Json(req): Json<CreateUpdateDataReq>,
-) -> AppResult<AppSuccess<()>> {
+) -> AppResult<()> {
     databoard::create_data(databoard_id, req).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
 async fn search_datas(
     Path(databoard_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryDatasParams>,
-) -> AppResult<AppSuccess<SearchDatasResp>> {
-    let data = databoard::search_datas(databoard_id, pagination, query_params).await?;
-    Ok(AppSuccess::data(data))
+) -> AppResult<Json<SearchDatasResp>> {
+    let resp = databoard::search_datas(databoard_id, pagination, query_params).await?;
+    Ok(Json(resp))
 }
 
 async fn update_data(
     Path((databoard_id, databoard_data_id)): Path<(String, String)>,
     Json(req): Json<CreateUpdateDataReq>,
-) -> AppResult<AppSuccess<()>> {
+) -> AppResult<()> {
     databoard::update_data(databoard_id, databoard_data_id, req).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
 async fn delete_data(
     Path((databoard_id, databoard_data_id)): Path<(String, String)>,
-) -> AppResult<AppSuccess<()>> {
+) -> AppResult<()> {
     databoard::delete_data(databoard_id, databoard_data_id).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }

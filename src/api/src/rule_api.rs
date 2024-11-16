@@ -13,7 +13,7 @@ use types::{
     Pagination,
 };
 
-use crate::{AppResult, AppSuccess};
+use crate::AppResult;
 
 pub fn routes() -> Router {
     Router::new()
@@ -32,13 +32,13 @@ pub fn routes() -> Router {
         .route("/:id/log", routing::delete(delete_log))
 }
 
-async fn get_rules_summary() -> AppSuccess<Summary> {
-    AppSuccess::data(rule::get_summary())
+async fn get_rules_summary() -> AppResult<Json<Summary>> {
+    Ok(Json(rule::get_summary()))
 }
 
-async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<AppSuccess<()>> {
+async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<()> {
     rule::create(req).await?;
-    Ok(AppSuccess::empty())
+    Ok(())
 }
 
 async fn list_rules(
@@ -50,9 +50,9 @@ async fn list_rules(
 }
 
 // TODO
-async fn read(Path(id): Path<String>) -> AppResult<AppSuccess<Vec<ReadRuleNodeResp>>> {
+async fn read(Path(id): Path<String>) -> AppResult<Json<Vec<ReadRuleNodeResp>>> {
     let resp = rule::read(id).await?;
-    Ok(AppSuccess::data(resp))
+    Ok(Json(resp))
 }
 
 async fn start(Path(id): Path<String>) -> AppResult<()> {

@@ -8,7 +8,6 @@ use axum::{
     Json, Router,
 };
 use common::{error::HaliaError, sys::get_machine_info};
-use serde::Serialize;
 use tokio::net::TcpListener;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -32,35 +31,6 @@ pub static JWT_EXPIRED_CODE: u16 = 4;
 
 pub(crate) type AppResult<T, E = AppError> = result::Result<T, E>;
 
-#[derive(Serialize, Debug)]
-pub(crate) struct AppSuccess<T> {
-    code: u8,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<T>,
-}
-
-impl<T> AppSuccess<T> {
-    pub fn empty() -> Self {
-        Self {
-            code: 0,
-            data: None,
-        }
-    }
-
-    pub fn data(data: T) -> Self {
-        Self {
-            code: 0,
-            data: Some(data),
-        }
-    }
-}
-
-impl<T: Serialize> IntoResponse for AppSuccess<T> {
-    fn into_response(self) -> Response {
-        (StatusCode::OK, Json(self)).into_response()
-    }
-}
-
 pub(crate) struct AppError {
     code: StatusCode,
     data: String,
@@ -83,7 +53,7 @@ impl From<HaliaError> for AppError {
                 AppError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string())
             }
             HaliaError::Common(e) => AppError::new(StatusCode::INTERNAL_SERVER_ERROR, e),
-            HaliaError::Io(error) => todo!(),
+            HaliaError::Io(_) => todo!(),
             HaliaError::Running => todo!(),
             HaliaError::Stopped(_) => todo!(),
             HaliaError::DeleteRefing => todo!(),
@@ -138,12 +108,12 @@ pub async fn start(port: u16) {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn get_dashboard() -> AppSuccess<Dashboard> {
-    AppSuccess::data(Dashboard {
+async fn get_dashboard() -> AppResult<Json<Dashboard>> {
+    Ok(Json(Dashboard {
         machine_info: get_machine_info(),
         device_summary: devices::get_summary(),
         app_summary: apps::get_summary().await,
         databoard_summary: databoard::get_summary(),
         rule_summary: rule::get_summary(),
-    })
+    }))
 }

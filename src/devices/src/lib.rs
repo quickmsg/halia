@@ -295,7 +295,7 @@ pub async fn create_device(device_id: String, req: device::CreateReq) -> HaliaRe
     Ok(())
 }
 
-pub async fn search_devices(
+pub async fn list_devices(
     pagination: Pagination,
     query_params: QueryParams,
 ) -> HaliaResult<SearchResp> {
