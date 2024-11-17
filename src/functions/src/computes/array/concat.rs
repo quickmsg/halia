@@ -16,6 +16,10 @@ enum Arg {
 
 impl Concat {
     pub fn new(conf: ItemConf) -> Result<Concat> {
+        match conf.args {
+            Some(_) => todo!(),
+            None => bail!("args is required"),
+        }
         let arg = match conf.args {
             Some(args) => {
                 if args.len() == 1 {

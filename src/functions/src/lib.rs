@@ -9,7 +9,6 @@ pub mod merge;
 pub mod metadata;
 pub mod type_conversion;
 pub mod type_judgment;
-pub mod types;
 pub mod window;
 
 #[macro_export]

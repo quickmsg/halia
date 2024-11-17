@@ -14,19 +14,19 @@ struct EndsWith {
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let arg = match conf.args {
-        Some(mut args) => match args.pop() {
-            Some(arg) => match get_dynamic_value_from_json(&arg) {
-                common::DynamicValue::Const(value) => match value {
-                    serde_json::Value::String(s) => Arg::Const(s),
-                    _ => bail!("只支持字符串常量"),
-                },
-                common::DynamicValue::Field(s) => Arg::Field(s),
-            },
-            None => bail!("Endswith function requires arguments"),
+    let arg = conf
+        .args
+        .as_ref()
+        .and_then(|conf_args| conf_args.get("value"))
+        .ok_or_else(|| anyhow::anyhow!("Endswith function requires value arguments"))?;
+    let arg = match get_dynamic_value_from_json(arg) {
+        common::DynamicValue::Const(value) => match value {
+            serde_json::Value::String(s) => Arg::Const(s),
+            _ => bail!("只支持字符串常量"),
         },
-        None => bail!("Endswith function requires arguments"),
+        common::DynamicValue::Field(s) => Arg::Field(s),
     };
+
     Ok(Box::new(EndsWith {
         field: conf.field,
         arg,

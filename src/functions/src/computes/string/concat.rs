@@ -14,23 +14,21 @@ struct Concat {
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let args = match conf.args {
-        Some(conf_args) => {
-            let mut args = Vec::with_capacity(conf_args.len());
-            for conf_arg in conf_args {
-                let arg = match get_dynamic_value_from_json(&conf_arg) {
-                    common::DynamicValue::Const(value) => match value {
-                        serde_json::Value::String(s) => Arg::Const(s),
-                        _ => bail!("只支持字符串常量"),
-                    },
-                    common::DynamicValue::Field(field) => Arg::Field(field),
-                };
-                args.push(arg);
-            }
-            args
-        }
-        None => bail!("Endswith function requires arguments"),
-    };
+    let args = conf
+        .args
+        .and_then(|mut conf_args| conf_args.remove("values"))
+        .ok_or_else(|| anyhow::anyhow!("concat function requires values arguments"))?
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("values arguments must be an array"))?
+        .iter()
+        .map(|right_arg| match get_dynamic_value_from_json(right_arg) {
+            common::DynamicValue::Const(value) => match value {
+                serde_json::Value::String(s) => Ok(Arg::Const(s)),
+                _ => bail!("invalid value"),
+            },
+            common::DynamicValue::Field(f) => Ok(Arg::Field(f)),
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(Box::new(Concat {
         field: conf.field,

@@ -1,4 +1,4 @@
-use crate::computes::Computer;
+use crate::computes::{Arg, Computer};
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{Message, MessageValue};
@@ -6,9 +6,8 @@ use types::rules::functions::computer::ItemConf;
 
 struct Lpad {
     field: String,
-    const_value: Option<i64>,
-    dynamic_value: Option<String>,
     target_field: Option<String>,
+    arg: Arg,
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {

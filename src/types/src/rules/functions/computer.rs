@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -11,7 +13,7 @@ pub struct ItemConf {
     pub typ: Type,
     pub field: String,
     pub target_field: Option<String>,
-    pub args: Option<Vec<serde_json::Value>>,
+    pub args: Option<HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -73,7 +75,7 @@ pub enum Type {
     HashSha1,
     HashSha256,
 
-    // 
+    //
     Date,
 
     // 数组
