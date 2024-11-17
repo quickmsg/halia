@@ -138,7 +138,7 @@ impl Rule {
                         indexes.push(index);
                     }
                     NodeType::Computer => {
-                        let conf: types::rules::functions::computer::Conf =
+                        let conf: types::rules::functions::Conf =
                             serde_json::from_value(node.conf.clone())?;
                         functions.push(computes::new(conf)?);
                         indexes.push(index);

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use message::Message;
-use types::rules::functions::computer::Conf;
+use types::rules::functions::Conf;
 
 use crate::Function;
 
@@ -24,138 +24,142 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
     for item_conf in conf.items {
         let computer = match item_conf.typ {
             // number
-            types::rules::functions::computer::Type::NumberAbs => number::abs::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberAcos => number::acos::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberAcosh => number::acosh::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberAdd => number::add::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberAsin => number::asin::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberAsinh => number::asinh::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberAtan => number::atan::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberAtan2 => {
+            types::rules::functions::Type::NumberAbs => number::abs::new(item_conf)?,
+            types::rules::functions::Type::NumberAcos => number::acos::new(item_conf)?,
+            types::rules::functions::Type::NumberAcosh => number::acosh::new(item_conf)?,
+            types::rules::functions::Type::NumberAdd => number::add::new(item_conf)?,
+            types::rules::functions::Type::NumberAsin => number::asin::new(item_conf)?,
+            types::rules::functions::Type::NumberAsinh => number::asinh::new(item_conf)?,
+            types::rules::functions::Type::NumberAtan => number::atan::new(item_conf)?,
+            types::rules::functions::Type::NumberAtan2 => {
                 //  number::atan2::new(item_conf)?,
                 todo!()
             }
-            types::rules::functions::computer::Type::NumberAtanh => number::atanh::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberBitand => {
-                number::bitand::new(item_conf)?
+            types::rules::functions::Type::NumberAtanh => number::atanh::new(item_conf)?,
+            types::rules::functions::Type::NumberBitand => {
+                todo!()
+                // number::bitand::new(item_conf)?
             }
-            types::rules::functions::computer::Type::NumberBitnot => {
-                number::bitnot::new(item_conf)?
+            types::rules::functions::Type::NumberBitnot => {
+                todo!()
+                // number::bitnot::new(item_conf)?
             }
-            types::rules::functions::computer::Type::NumberBitor => number::bitor::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberBitxor => {
-                number::bitxor::new(item_conf)?
+            // types::rules::functions::Type::NumberBitor => number::bitor::new(item_conf)?,
+            types::rules::functions::Type::NumberBitor => todo!(),
+            types::rules::functions::Type::NumberBitxor => {
+                todo!()
+                // number::bitxor::new(item_conf)?
             }
-            types::rules::functions::computer::Type::NumberCbrt => number::cbrt::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberCeil => number::ceil::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberCos => number::cos::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberCosh => number::cosh::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberDegrees => {
+            types::rules::functions::Type::NumberCbrt => number::cbrt::new(item_conf)?,
+            types::rules::functions::Type::NumberCeil => number::ceil::new(item_conf)?,
+            types::rules::functions::Type::NumberCos => number::cos::new(item_conf)?,
+            types::rules::functions::Type::NumberCosh => number::cosh::new(item_conf)?,
+            types::rules::functions::Type::NumberDegrees => {
                 number::degrees::new(item_conf)?
             }
-            types::rules::functions::computer::Type::NumberExp => number::exp::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberExp2 => number::exp2::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberFloor => number::floor::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberLn => number::ln::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberLog => todo!(),
-            types::rules::functions::computer::Type::NumberPower => todo!(),
-            types::rules::functions::computer::Type::NumberSin => number::sin::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberSub => number::sub::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberMulti => number::multi::new(item_conf)?,
-            types::rules::functions::computer::Type::NumberDivision => {
+            types::rules::functions::Type::NumberExp => number::exp::new(item_conf)?,
+            types::rules::functions::Type::NumberExp2 => number::exp2::new(item_conf)?,
+            types::rules::functions::Type::NumberFloor => number::floor::new(item_conf)?,
+            types::rules::functions::Type::NumberLn => number::ln::new(item_conf)?,
+            types::rules::functions::Type::NumberLog => todo!(),
+            types::rules::functions::Type::NumberPower => todo!(),
+            types::rules::functions::Type::NumberSin => number::sin::new(item_conf)?,
+            types::rules::functions::Type::NumberSub => number::sub::new(item_conf)?,
+            types::rules::functions::Type::NumberMulti => number::multi::new(item_conf)?,
+            types::rules::functions::Type::NumberDivision => {
                 number::division::new(item_conf)?
             }
-            types::rules::functions::computer::Type::NumberModulo => {
+            types::rules::functions::Type::NumberModulo => {
                 number::modulo::new(item_conf)?
             }
 
             // string
-            types::rules::functions::computer::Type::StringBase64 => {
+            types::rules::functions::Type::StringBase64 => {
                 // string::base64::new(item_conf)?
                 todo!()
             }
-            types::rules::functions::computer::Type::StringHex => {
+            types::rules::functions::Type::StringHex => {
                 // string::hex::new(item_conf)?;
                 todo!()
             }
-            types::rules::functions::computer::Type::StringLength => {
+            types::rules::functions::Type::StringLength => {
                 string::length::new(item_conf)?
             }
-            types::rules::functions::computer::Type::StringLower => string::lower::new(item_conf)?,
-            types::rules::functions::computer::Type::StringUpper => string::upper::new(item_conf)?,
-            types::rules::functions::computer::Type::StringLtrim => string::ltrim::new(item_conf)?,
-            // types::rules::functions::computer::Type::StringLpad => string::lpad::new(item_conf)?,
-            types::rules::functions::computer::Type::StringLpad => todo!(),
-            types::rules::functions::computer::Type::StringReverse => {
+            types::rules::functions::Type::StringLower => string::lower::new(item_conf)?,
+            types::rules::functions::Type::StringUpper => string::upper::new(item_conf)?,
+            types::rules::functions::Type::StringLtrim => string::ltrim::new(item_conf)?,
+            // types::rules::functions::Type::StringLpad => string::lpad::new(item_conf)?,
+            types::rules::functions::Type::StringLpad => todo!(),
+            types::rules::functions::Type::StringReverse => {
                 string::reverse::new(item_conf)?
             }
-            types::rules::functions::computer::Type::StringRtrim => string::rtrim::new(item_conf)?,
-            // types::rules::functions::computer::Type::StringSplit => string::split::new(item_conf)?,
-            types::rules::functions::computer::Type::StringSplit => todo!(),
-            types::rules::functions::computer::Type::StringTrim => string::trim::new(item_conf)?,
-            types::rules::functions::computer::Type::StringEndsWith => {
+            types::rules::functions::Type::StringRtrim => string::rtrim::new(item_conf)?,
+            // types::rules::functions::Type::StringSplit => string::split::new(item_conf)?,
+            types::rules::functions::Type::StringSplit => todo!(),
+            types::rules::functions::Type::StringTrim => string::trim::new(item_conf)?,
+            types::rules::functions::Type::StringEndsWith => {
                 string::ends_with::new(item_conf)?
             }
-            types::rules::functions::computer::Type::StringStartsWith => {
+            types::rules::functions::Type::StringStartsWith => {
                 // string::starts_with::new(item_conf)?
                 todo!()
             }
-            types::rules::functions::computer::Type::StringIndexOf => {
+            types::rules::functions::Type::StringIndexOf => {
                 string::index_of::new(item_conf)?
             }
-            types::rules::functions::computer::Type::StringNumbytes => {
+            types::rules::functions::Type::StringNumbytes => {
                 string::numbytes::new(item_conf)?
             }
-            types::rules::functions::computer::Type::StringRegexMatch => {
+            types::rules::functions::Type::StringRegexMatch => {
                 // string::regex_match::new(item_conf)?
                 todo!()
             }
-            types::rules::functions::computer::Type::StringConcat => {
+            types::rules::functions::Type::StringConcat => {
                 string::concat::new(item_conf)?
             }
-            // types::rules::functions::computer::Type::StringSlice => string::slice::new(item_conf)?,
-            types::rules::functions::computer::Type::StringSlice => todo!(),
+            // types::rules::functions::Type::StringSlice => string::slice::new(item_conf)?,
+            types::rules::functions::Type::StringSlice => todo!(),
             // hash
-            types::rules::functions::computer::Type::HashMd5 => hash::md5::new(item_conf)?,
-            types::rules::functions::computer::Type::HashSha1 => hash::sha1::new(item_conf)?,
-            types::rules::functions::computer::Type::HashSha256 => todo!(),
-            types::rules::functions::computer::Type::Date => todo!(),
-            types::rules::functions::computer::Type::ArrayCardinality => todo!(),
+            types::rules::functions::Type::HashMd5 => hash::md5::new(item_conf)?,
+            types::rules::functions::Type::HashSha1 => hash::sha1::new(item_conf)?,
+            types::rules::functions::Type::HashSha256 => todo!(),
+            types::rules::functions::Type::Date => todo!(),
+            types::rules::functions::Type::ArrayCardinality => todo!(),
             // compress
-            types::rules::functions::computer::Type::CompressBrotli => {
+            types::rules::functions::Type::CompressBrotli => {
                 compress::brotli::new_encoder(item_conf)
             }
-            types::rules::functions::computer::Type::DecompressBrotli => {
+            types::rules::functions::Type::DecompressBrotli => {
                 compress::brotli::new_decoder(item_conf)
             }
-            types::rules::functions::computer::Type::CompressDeflate => {
+            types::rules::functions::Type::CompressDeflate => {
                 compress::deflate::new_encoder(item_conf)
             }
-            types::rules::functions::computer::Type::DecompressDeflate => {
+            types::rules::functions::Type::DecompressDeflate => {
                 compress::deflate::new_decoder(item_conf)
             }
-            types::rules::functions::computer::Type::CompressGzip => {
+            types::rules::functions::Type::CompressGzip => {
                 compress::gzip::new_encoder(item_conf)
             }
-            types::rules::functions::computer::Type::DecompressGzip => {
+            types::rules::functions::Type::DecompressGzip => {
                 compress::gzip::new_decoder(item_conf)
             }
-            types::rules::functions::computer::Type::CompressLz4 => {
+            types::rules::functions::Type::CompressLz4 => {
                 compress::lz4::new_encoder(item_conf)
             }
-            types::rules::functions::computer::Type::DecompressLz4 => {
+            types::rules::functions::Type::DecompressLz4 => {
                 compress::lz4::new_decoder(item_conf)
             }
-            types::rules::functions::computer::Type::CompressSnappy => {
+            types::rules::functions::Type::CompressSnappy => {
                 compress::snappy::new_encoder(item_conf)
             }
-            types::rules::functions::computer::Type::DecompressSnappy => {
+            types::rules::functions::Type::DecompressSnappy => {
                 compress::snappy::new_decoder(item_conf)
             }
-            types::rules::functions::computer::Type::CompressZlib => {
+            types::rules::functions::Type::CompressZlib => {
                 compress::zlib::new_encoder(item_conf)
             }
-            types::rules::functions::computer::Type::DecompressZlib => {
+            types::rules::functions::Type::DecompressZlib => {
                 compress::zlib::new_decoder(item_conf)
             }
         };

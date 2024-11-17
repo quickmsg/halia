@@ -2,7 +2,7 @@ use std::f64::consts::PI;
 
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 use crate::computes::Computer;
 

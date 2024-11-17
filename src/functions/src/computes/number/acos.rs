@@ -1,6 +1,6 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 use crate::{add_or_set_message_value, computes::Computer};
 

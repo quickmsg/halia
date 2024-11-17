@@ -1,7 +1,7 @@
 use crate::computes::Computer;
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 struct Numbytes {
     field: String,

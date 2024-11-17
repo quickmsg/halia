@@ -1,9 +1,7 @@
-use crate::{add_or_set_message_value, computes::Computer, StringArg};
+use crate::{add_or_set_message_value, computes::Computer, get_string_arg, StringArg};
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::computer::ItemConf;
-
-use super::get_string_arg;
+use types::rules::functions::ItemConf;
 
 struct EndsWith {
     field: String,

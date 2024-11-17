@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use common::get_dynamic_value_from_json;
 use message::{MessageBatch, MessageValue};
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 struct Concat {
     field: String,

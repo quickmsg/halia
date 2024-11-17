@@ -2,7 +2,7 @@ use anyhow::Result;
 use message::MessageValue;
 use snap::raw::{Decoder, Encoder};
 use tracing::warn;
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 use crate::{add_or_set_message_value, computes::Computer};
 

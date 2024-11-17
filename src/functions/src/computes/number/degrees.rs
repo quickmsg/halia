@@ -1,6 +1,6 @@
 use anyhow::Result;
 use message::MessageValue;
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 use crate::computes::Computer;
 

@@ -6,10 +6,11 @@ pub mod asinh;
 pub mod atan;
 // mod atan2;
 pub mod atanh;
-pub mod bitand;
-pub mod bitnot;
-pub mod bitor;
-pub mod bitxor;
+// TODO 如何定义参数
+// pub mod bitand;
+// pub mod bitnot;
+// pub mod bitor;
+// pub mod bitxor;
 pub mod cbrt;
 pub mod ceil;
 pub mod cos;

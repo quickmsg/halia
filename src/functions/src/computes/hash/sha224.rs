@@ -1,7 +1,7 @@
 use anyhow::Result;
 use message::Message;
 use sha2::{Digest, Sha224};
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 use crate::{add_or_set_message_value, computes::Computer};
 

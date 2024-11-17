@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use hmac::{Hmac, Mac};
 use message::Message;
 use sha1::Sha1;
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 use crate::{add_or_set_message_value, computes::Computer};
 

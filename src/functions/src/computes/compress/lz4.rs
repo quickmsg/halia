@@ -2,7 +2,7 @@ use anyhow::Result;
 use lz4_flex::{compress, decompress};
 use message::MessageValue;
 use tracing::warn;
-use types::rules::functions::computer::ItemConf;
+use types::rules::functions::ItemConf;
 
 use crate::{add_or_set_message_value, computes::Computer};
 
