@@ -1,16 +1,16 @@
-use crate::{add_or_set_message_value, computes::Computer, get_string_arg, StringArg};
+use crate::{add_or_set_message_value, computes::Computer, get_string_field_arg, StringFieldArg};
 use anyhow::Result;
 use message::{Message, MessageValue};
 use types::rules::functions::ItemConf;
 
 struct EndsWith {
     field: String,
-    arg: StringArg,
+    arg: StringFieldArg,
     target_field: Option<String>,
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let arg = get_string_arg(&conf, "value")?;
+    let arg = get_string_field_arg(&conf, "value")?;
 
     Ok(Box::new(EndsWith {
         field: conf.field,
@@ -30,8 +30,8 @@ impl Computer for EndsWith {
         };
 
         let arg = match &self.arg {
-            StringArg::Const(s) => s,
-            StringArg::Field(f) => match message.get(f) {
+            StringFieldArg::Const(s) => s,
+            StringFieldArg::Field(f) => match message.get(f) {
                 Some(mv) => match mv {
                     MessageValue::String(s) => s,
                     _ => return,

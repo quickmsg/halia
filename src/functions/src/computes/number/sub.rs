@@ -2,16 +2,18 @@ use anyhow::Result;
 use message::{Message, MessageValue};
 use types::rules::functions::ItemConf;
 
-use crate::{add_or_set_message_value, computes::Computer, get_array_int_float_arg, IntFloagArg};
+use crate::{
+    add_or_set_message_value, computes::Computer, get_array_int_float_field_arg, IntFloatFieldArg,
+};
 
 struct Sub {
     field: String,
     target_field: Option<String>,
-    args: Vec<IntFloagArg>,
+    args: Vec<IntFloatFieldArg>,
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let args = get_array_int_float_arg(&conf, "value")?;
+    let args = get_array_int_float_field_arg(&conf, "value")?;
 
     Ok(Box::new(Sub {
         field: conf.field,
@@ -33,17 +35,17 @@ impl Computer for Sub {
 
         for arg in &self.args {
             match arg {
-                IntFloagArg::ConstInt(i) => match result {
+                IntFloatFieldArg::ConstInt(i) => match result {
                     MessageValue::Int64(v) => result = MessageValue::Int64(v - i),
                     MessageValue::Float64(v) => result = MessageValue::Float64(v - *i as f64),
                     _ => return,
                 },
-                IntFloagArg::ConstFloat(f) => match result {
+                IntFloatFieldArg::ConstFloat(f) => match result {
                     MessageValue::Int64(v) => result = MessageValue::Float64(v as f64 - f),
                     MessageValue::Float64(v) => result = MessageValue::Float64(v - f),
                     _ => return,
                 },
-                IntFloagArg::Field(field) => match message.get(field) {
+                IntFloatFieldArg::Field(field) => match message.get(field) {
                     Some(mv) => match mv {
                         MessageValue::Int64(i) => match result {
                             MessageValue::Int64(v) => result = MessageValue::Int64(v - i),

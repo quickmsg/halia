@@ -1,4 +1,4 @@
-use crate::{computes::Computer, get_string_arg, StringArg};
+use crate::{computes::Computer, get_string_field_arg, StringFieldArg};
 use anyhow::Result;
 use message::{Message, MessageValue};
 use types::rules::functions::ItemConf;
@@ -6,11 +6,11 @@ use types::rules::functions::ItemConf;
 struct IndexOf {
     field: String,
     target_field: Option<String>,
-    arg: StringArg,
+    arg: StringFieldArg,
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let arg = get_string_arg(&conf, "value")?;
+    let arg = get_string_field_arg(&conf, "value")?;
     Ok(Box::new(IndexOf {
         field: conf.field,
         target_field: conf.target_field,
@@ -31,8 +31,8 @@ impl Computer for IndexOf {
         };
 
         let target_value = match &self.arg {
-            StringArg::Const(s) => s,
-            StringArg::Field(f) => match message.get(f) {
+            StringFieldArg::Const(s) => s,
+            StringFieldArg::Field(f) => match message.get(f) {
                 Some(mv) => match mv {
                     MessageValue::String(s) => s,
                     _ => return,
