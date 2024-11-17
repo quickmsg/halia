@@ -84,18 +84,21 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::computer::Type::StringLower => string::lower::new(item_conf)?,
             types::rules::functions::computer::Type::StringUpper => string::upper::new(item_conf)?,
             types::rules::functions::computer::Type::StringLtrim => string::ltrim::new(item_conf)?,
-            types::rules::functions::computer::Type::StringLpad => string::lpad::new(item_conf)?,
+            // types::rules::functions::computer::Type::StringLpad => string::lpad::new(item_conf)?,
+            types::rules::functions::computer::Type::StringLpad => todo!(),
             types::rules::functions::computer::Type::StringReverse => {
                 string::reverse::new(item_conf)?
             }
             types::rules::functions::computer::Type::StringRtrim => string::rtrim::new(item_conf)?,
-            types::rules::functions::computer::Type::StringSplit => string::split::new(item_conf)?,
+            // types::rules::functions::computer::Type::StringSplit => string::split::new(item_conf)?,
+            types::rules::functions::computer::Type::StringSplit => todo!(),
             types::rules::functions::computer::Type::StringTrim => string::trim::new(item_conf)?,
             types::rules::functions::computer::Type::StringEndsWith => {
                 string::ends_with::new(item_conf)?
             }
             types::rules::functions::computer::Type::StringStartsWith => {
-                string::starts_with::new(item_conf)?
+                // string::starts_with::new(item_conf)?
+                todo!()
             }
             types::rules::functions::computer::Type::StringIndexOf => {
                 string::index_of::new(item_conf)?
@@ -104,12 +107,14 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
                 string::numbytes::new(item_conf)?
             }
             types::rules::functions::computer::Type::StringRegexMatch => {
-                string::regex_match::new(item_conf)?
+                // string::regex_match::new(item_conf)?
+                todo!()
             }
             types::rules::functions::computer::Type::StringConcat => {
                 string::concat::new(item_conf)?
             }
-            types::rules::functions::computer::Type::StringSlice => string::slice::new(item_conf)?,
+            // types::rules::functions::computer::Type::StringSlice => string::slice::new(item_conf)?,
+            types::rules::functions::computer::Type::StringSlice => todo!(),
             // hash
             types::rules::functions::computer::Type::HashMd5 => hash::md5::new(item_conf)?,
             types::rules::functions::computer::Type::HashSha1 => hash::sha1::new(item_conf)?,
@@ -171,9 +176,4 @@ impl Function for Node {
 
         true
     }
-}
-
-enum Arg {
-    Const(String),
-    Field(String),
 }

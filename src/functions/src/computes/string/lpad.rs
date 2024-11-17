@@ -7,7 +7,7 @@ use types::rules::functions::computer::ItemConf;
 struct Lpad {
     field: String,
     target_field: Option<String>,
-    arg: Arg,
+    arg: StringArg,
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {

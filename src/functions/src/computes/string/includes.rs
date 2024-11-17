@@ -1,31 +1,18 @@
-use crate::{
-    add_or_set_message_value,
-    computes::{Arg, Computer},
-};
-use anyhow::{bail, Result};
-use common::get_dynamic_value_from_json;
+use crate::{add_or_set_message_value, computes::Computer, StringArg};
+use anyhow::Result;
 use message::{Message, MessageValue};
 use types::rules::functions::computer::ItemConf;
 
+use super::get_string_arg;
+
 struct Includes {
     field: String,
-    arg: Arg,
+    arg: StringArg,
     target_field: Option<String>,
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let arg = conf
-        .args
-        .as_ref()
-        .and_then(|conf_args| conf_args.get("value"))
-        .ok_or_else(|| anyhow::anyhow!("Includes function requires value arguments"))?;
-    let arg = match get_dynamic_value_from_json(arg) {
-        common::DynamicValue::Const(value) => match value {
-            serde_json::Value::String(s) => Arg::Const(s),
-            _ => bail!("只支持字符串常量"),
-        },
-        common::DynamicValue::Field(s) => Arg::Field(s),
-    };
+    let arg = get_string_arg(&conf, "value")?;
     Ok(Box::new(Includes {
         field: conf.field,
         arg,
@@ -44,8 +31,8 @@ impl Computer for Includes {
         };
 
         let arg = match &self.arg {
-            Arg::Const(s) => s,
-            Arg::Field(f) => match message.get(f) {
+            StringArg::Const(s) => s,
+            StringArg::Field(f) => match message.get(f) {
                 Some(mv) => match mv {
                     MessageValue::String(s) => s,
                     _ => return,
