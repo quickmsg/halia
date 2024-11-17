@@ -52,7 +52,6 @@ thiserror = "1.0.63"
 base64 = "0.22.1"
 rustls = "0.23.12"
 webpki-roots = "0.26.6"
-md5 = "0.7.0"
 sha1 = "0.10.6"
 reqwest = { version = "0.12.5", features = [
     "rustls-tls",
