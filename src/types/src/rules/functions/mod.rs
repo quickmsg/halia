@@ -81,6 +81,11 @@ pub enum Type {
     HashSha256,
     HashSha384,
     HashSha512,
+    HashHmacSha1,
+    HashHmacSha224,
+    HashHmacSha256,
+    HashHmacSha384,
+    HashHmacSha512,
 
     //
     Date,

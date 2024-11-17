@@ -109,6 +109,11 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::Type::HashSha256 => hash::sha256::new(item_conf)?,
             types::rules::functions::Type::HashSha384 => hash::sha384::new(item_conf)?,
             types::rules::functions::Type::HashSha512 => hash::sha512::new(item_conf)?,
+            types::rules::functions::Type::HashHmacSha1 => hash::hmac_sha1::new(item_conf)?,
+            types::rules::functions::Type::HashHmacSha224 => hash::hmac_sha224::new(item_conf)?,
+            types::rules::functions::Type::HashHmacSha256 => hash::hmac_sha256::new(item_conf)?,
+            types::rules::functions::Type::HashHmacSha384 => hash::hmac_sha384::new(item_conf)?,
+            types::rules::functions::Type::HashHmacSha512 => hash::hmac_sha512::new(item_conf)?,
 
             types::rules::functions::Type::Date => todo!(),
             types::rules::functions::Type::ArrayCardinality => todo!(),

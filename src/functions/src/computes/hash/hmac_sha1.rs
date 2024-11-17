@@ -11,41 +11,91 @@ type HmacSha1 = Hmac<Sha1>;
 struct HaliaHmacSha1 {
     field: String,
     target_field: Option<String>,
-    key: String,
+    hasher: HmacSha1,
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
     let key = get_string_arg(&conf, "key")?;
+    let hasher = HmacSha1::new_from_slice(key.as_bytes())?;
+
     Ok(Box::new(HaliaHmacSha1 {
         field: conf.field,
         target_field: conf.target_field,
-        key,
+        hasher,
     }))
 }
 
 impl Computer for HaliaHmacSha1 {
     fn compute(&mut self, message: &mut Message) {
-        let resp = match message.get(&self.field) {
+        let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                message::MessageValue::String(s) => {
-                    let mut mac = HmacSha1::new_from_slice(b"my secret and secure key")
-                        .expect("HMAC can take key of any size");
-                    mac.update(s.as_bytes());
-                    let result = mac.finalize().into_bytes();
-                    message::MessageValue::String(format!("{:x}", result))
-                }
-                message::MessageValue::Bytes(vec) => {
-                    let mut mac = HmacSha1::new_from_slice(b"my secret and secure key")
-                        .expect("HMAC can take key of any size");
-                    mac.update(vec);
-                    let result = mac.finalize().into_bytes();
-                    message::MessageValue::String(format!("{:x}", result))
-                }
+                message::MessageValue::String(s) => s.as_bytes(),
+                message::MessageValue::Bytes(vec) => vec.as_slice(),
                 _ => return,
             },
             None => return,
         };
 
-        add_or_set_message_value!(self, message, resp);
+        self.hasher.update(value);
+        let result = self.hasher.finalize_reset().into_bytes();
+        let result = message::MessageValue::String(format!("{:x}", result));
+
+        add_or_set_message_value!(self, message, result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use message::Message;
+    use types::rules::functions::ItemConf;
+
+    use super::new;
+
+    #[test]
+    fn test_hmac_sha1() {
+        let mut message = Message::default();
+        message.add(
+            "k".to_owned(),
+            message::MessageValue::String("test_value".to_owned()),
+        );
+
+        let mut args = HashMap::new();
+        args.insert(
+            "key".to_owned(),
+            serde_json::Value::String("test_key".to_owned()),
+        );
+        let mut computer = new(ItemConf {
+            // TODO fix type
+            typ: types::rules::functions::Type::ArrayCardinality,
+            field: String::from("k"),
+            target_field: Some(String::from("k_hash")),
+            args: Some(args),
+        })
+        .unwrap();
+
+        computer.compute(&mut message);
+
+        assert_eq!(
+            message.get("k_hash"),
+            Some(&message::MessageValue::String(
+                "e1a791d33c1187176080999a04de696ddf3b2812".to_owned()
+            ))
+        );
+
+        assert_eq!(
+            message.get("k"),
+            Some(&message::MessageValue::String("test_value".to_owned()))
+        );
+
+        // 判断computer里的hash复用是否ok
+        computer.compute(&mut message);
+        assert_eq!(
+            message.get("k_hash"),
+            Some(&message::MessageValue::String(
+                "e1a791d33c1187176080999a04de696ddf3b2812".to_owned()
+            ))
+        );
     }
 }
