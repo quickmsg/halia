@@ -27,7 +27,7 @@ macro_rules! add_or_set_message_value {
 #[async_trait]
 pub trait Function: Send + Sync {
     // 修改消息，根据返回值判断是否要继续流程，为false则消息丢弃
-    async fn call(&self, message_batch: &mut MessageBatch) -> bool;
+    async fn call(&mut self, message_batch: &mut MessageBatch) -> bool;
 }
 
 enum StringFieldArg {

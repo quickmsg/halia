@@ -33,7 +33,7 @@ impl HaliaGzEncoder {
 }
 
 impl Computer for HaliaGzEncoder {
-    fn compute(&self, message: &mut message::Message) {
+    fn compute(&mut self, message: &mut message::Message) {
         let result = match message.get(&self.field) {
             Some(mv) => match mv {
                 message::MessageValue::String(str) => match Self::encode(str.as_bytes()) {
@@ -81,7 +81,7 @@ impl HaliaGzDecoder {
 }
 
 impl Computer for HaliaGzDecoder {
-    fn compute(&self, message: &mut message::Message) {
+    fn compute(&mut self, message: &mut message::Message) {
         let result = match message.get(&self.field) {
             Some(mv) => match mv {
                 message::MessageValue::String(str) => match Self::decode(str.as_bytes()) {

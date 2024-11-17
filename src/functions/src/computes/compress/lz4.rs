@@ -25,7 +25,7 @@ impl HaliaLz4Encoder {
 }
 
 impl Computer for HaliaLz4Encoder {
-    fn compute(&self, message: &mut message::Message) {
+    fn compute(&mut self, message: &mut message::Message) {
         let result = match message.get(&self.field) {
             Some(mv) => match mv {
                 message::MessageValue::String(str) => match Self::encode(str.as_bytes()) {
@@ -71,7 +71,7 @@ impl HaliaLz4Decoder {
 }
 
 impl Computer for HaliaLz4Decoder {
-    fn compute(&self, message: &mut message::Message) {
+    fn compute(&mut self, message: &mut message::Message) {
         let result = match message.get(&self.field) {
             Some(mv) => match mv {
                 message::MessageValue::String(str) => match Self::decode(str.as_bytes()) {

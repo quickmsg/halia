@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use message::MessageBatch;
 
@@ -27,7 +26,7 @@ pub struct FieldNode {
 
 #[async_trait]
 impl Function for FieldNode {
-    async fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
+    async fn call(&mut self, message_batch: &mut message::MessageBatch) -> bool {
         todo!()
     }
 }

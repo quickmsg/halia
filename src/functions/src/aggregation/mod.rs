@@ -42,7 +42,7 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
 
 #[async_trait]
 impl Function for Aggregate {
-    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
+    async fn call(&mut self, message_batch: &mut MessageBatch) -> bool {
         let mut message = Message::default();
         for aggregater in self.aggregaters.iter() {
             let (new_field, value) = aggregater.aggregate(&message_batch);

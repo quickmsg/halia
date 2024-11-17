@@ -20,7 +20,7 @@ impl IntToFloat {
 
 #[async_trait]
 impl Function for IntToFloat {
-    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
+    async fn call(&mut self, message_batch: &mut MessageBatch) -> bool {
         for message in message_batch.get_messages_mut() {
             match message.get(&self.field) {
                 Some(value) => match value {

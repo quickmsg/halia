@@ -17,7 +17,7 @@ pub fn new(field: String, target_field: Option<String>) -> Box<dyn Function> {
 
 #[async_trait]
 impl Function for ToInt {
-    async fn call(&self, message_batch: &mut MessageBatch) -> bool {
+    async fn call(&mut self, message_batch: &mut MessageBatch) -> bool {
         for message in message_batch.get_messages_mut() {
             match message.get(&self.field) {
                 Some(value) => match value {

@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use hmac::{Hmac, Mac};
 use message::Message;
 use sha1::Sha1;
@@ -24,7 +24,7 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
 }
 
 impl Computer for HaliaHmacSha1 {
-    fn compute(&self, message: &mut Message) {
+    fn compute(&mut self, message: &mut Message) {
         let resp = match message.get(&self.field) {
             Some(mv) => match mv {
                 message::MessageValue::String(s) => {

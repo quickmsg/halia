@@ -16,7 +16,7 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
 }
 
 impl Computer for Rtrim {
-    fn compute(&self, message: &mut Message) {
+    fn compute(&mut self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::String(s) => MessageValue::String(s.trim_end().to_string()),

@@ -12,7 +12,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub(crate) fn start_segment(
     rxs: Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>,
-    functions: Vec<Box<dyn Function>>,
+    mut functions: Vec<Box<dyn Function>>,
     txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
     mut stop_signal_rx: broadcast::Receiver<()>,
 ) {
@@ -27,7 +27,7 @@ pub(crate) fn start_segment(
         loop {
             select! {
                 Some(mb) = stream.next() => {
-                    handle_segment_mb(mb, &functions, &txs).await;
+                    handle_segment_mb(mb, &mut functions, &txs).await;
                 }
                 _ = stop_signal_rx.recv() => {
                     return
@@ -39,11 +39,11 @@ pub(crate) fn start_segment(
 
 async fn handle_segment_mb(
     mb: RuleMessageBatch,
-    functions: &Vec<Box<dyn Function>>,
+    functions: &mut Vec<Box<dyn Function>>,
     txs: &Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
 ) {
     let mut mb = mb.take_mb();
-    for function in functions {
+    for function in functions.iter_mut() {
         if !function.call(&mut mb).await {
             return;
         }

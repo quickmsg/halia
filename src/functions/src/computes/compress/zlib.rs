@@ -33,7 +33,7 @@ impl HaliaZlibEncoder {
 }
 
 impl Computer for HaliaZlibEncoder {
-    fn compute(&self, message: &mut message::Message) {
+    fn compute(&mut self, message: &mut message::Message) {
         let result = match message.get(&self.field) {
             Some(mv) => match mv {
                 message::MessageValue::String(str) => match Self::encode(str.as_bytes()) {
@@ -81,7 +81,7 @@ impl HaliaZlibDecoder {
 }
 
 impl Computer for HaliaZlibDecoder {
-    fn compute(&self, message: &mut message::Message) {
+    fn compute(&mut self, message: &mut message::Message) {
         let result = match message.get(&self.field) {
             Some(mv) => match mv {
                 message::MessageValue::String(str) => match Self::decode(str.as_bytes()) {

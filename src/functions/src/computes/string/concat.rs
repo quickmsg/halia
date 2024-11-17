@@ -1,4 +1,6 @@
-use crate::{add_or_set_message_value, computes::Computer, get_array_string_field_arg, StringFieldArg};
+use crate::{
+    add_or_set_message_value, computes::Computer, get_array_string_field_arg, StringFieldArg,
+};
 use anyhow::Result;
 use message::{Message, MessageValue};
 use types::rules::functions::ItemConf;
@@ -20,7 +22,7 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
 }
 
 impl Computer for Concat {
-    fn compute(&self, message: &mut Message) {
+    fn compute(&mut self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::String(s) => s,

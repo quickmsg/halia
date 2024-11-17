@@ -8,36 +8,33 @@ use crate::{add_or_set_message_value, computes::Computer};
 struct HaliaSha384 {
     field: String,
     target_field: Option<String>,
+    hasher: Sha384,
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
+    let hasher = Sha384::new();
     Ok(Box::new(HaliaSha384 {
         field: conf.field,
         target_field: conf.target_field,
+        hasher,
     }))
 }
 
 impl Computer for HaliaSha384 {
-    fn compute(&self, message: &mut Message) {
-        let resp = match message.get(&self.field) {
-            Some(mv) => match mv {
-                message::MessageValue::String(s) => {
-                    let mut hasher = Sha384::new();
-                    hasher.update(s);
-                    let result = hasher.finalize();
-                    message::MessageValue::String(format!("{:x}", result))
-                }
-                message::MessageValue::Bytes(vec) => {
-                    let mut hasher = Sha384::new();
-                    hasher.update(vec);
-                    let result = hasher.finalize();
-                    message::MessageValue::String(format!("{:x}", result))
-                }
+    fn compute(&mut self, message: &mut Message) {
+        let value = match message.get(&self.field) {
+            Some(value) => match value {
+                message::MessageValue::String(s) => s.as_bytes(),
+                message::MessageValue::Bytes(vec) => vec.as_slice(),
                 _ => return,
             },
             None => return,
         };
 
-        add_or_set_message_value!(self, message, resp);
+        self.hasher.update(value);
+        let result = self.hasher.finalize_reset();
+        let result = message::MessageValue::String(format!("{:x}", result));
+
+        add_or_set_message_value!(self, message, result);
     }
 }

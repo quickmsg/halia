@@ -19,7 +19,7 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
 }
 
 impl Computer for IndexOf {
-    fn compute(&self, message: &mut Message) {
+    fn compute(&mut self, message: &mut Message) {
         let value = message.get(&self.field).and_then(|mv| match mv {
             MessageValue::String(s) => Some(s),
             _ => None,

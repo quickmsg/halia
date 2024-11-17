@@ -17,7 +17,7 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
 }
 
 impl Computer for Ln {
-    fn compute(&self, message: &mut message::Message) {
+    fn compute(&mut self, message: &mut message::Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => {

@@ -10,11 +10,11 @@ mod ct;
 mod eq;
 mod gt;
 mod gte;
+mod is_array;
 mod lt;
 mod lte;
 mod neq;
 mod reg;
-mod is_array;
 
 #[async_trait]
 pub(crate) trait Filter: Sync + Send {
@@ -46,7 +46,7 @@ pub fn new(conf: Conf, logger: LoggerItem) -> Result<Box<dyn Function>> {
 
 #[async_trait]
 impl Function for Node {
-    async fn call(&self, message_batch: &mut message::MessageBatch) -> bool {
+    async fn call(&mut self, message_batch: &mut message::MessageBatch) -> bool {
         let messages = message_batch.get_messages_mut();
         for message in messages.iter_mut() {
             let mut passed = false;

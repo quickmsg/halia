@@ -18,16 +18,18 @@ pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
 }
 
 impl Computer for HaliaMd5 {
-    fn compute(&self, message: &mut Message) {
+    fn compute(&mut self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
-                MessageValue::String(s) => MessageValue::String(format!("{:x}", md5::compute(s))),
-                MessageValue::Bytes(b) => MessageValue::String(format!("{:x}", md5::compute(b))),
-                _ => MessageValue::Null,
+                MessageValue::String(s) => s.as_bytes(),
+                MessageValue::Bytes(b) => b.as_slice(),
+                _ => return,
             },
-            None => MessageValue::Null,
+            None => return,
         };
 
-        add_or_set_message_value!(self, message, value);
+        let result = MessageValue::String(format!("{:x}", md5::compute(value)));
+
+        add_or_set_message_value!(self, message, result);
     }
 }
