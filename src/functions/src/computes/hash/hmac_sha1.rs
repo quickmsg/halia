@@ -4,7 +4,7 @@ use message::Message;
 use sha1::Sha1;
 use types::rules::functions::ItemConf;
 
-use crate::{add_or_set_message_value, computes::Computer};
+use crate::{add_or_set_message_value, computes::Computer, get_string_arg};
 
 type HmacSha1 = Hmac<Sha1>;
 
@@ -15,20 +15,12 @@ struct HaliaHmacSha1 {
 }
 
 pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    match conf.args {
-        Some(args) => {
-            let key = match args.get("key") {
-                Some(key) => key.to_string(),
-                None => bail!("HMAC-SHA1 requires a key"),
-            };
-            Ok(Box::new(HaliaHmacSha1 {
-                field: conf.field,
-                target_field: conf.target_field,
-                key,
-            }))
-        }
-        None => bail!("HMAC-SHA1 requires a key"),
-    }
+    let key = get_string_arg(&conf, "key")?;
+    Ok(Box::new(HaliaHmacSha1 {
+        field: conf.field,
+        target_field: conf.target_field,
+        key,
+    }))
 }
 
 impl Computer for HaliaHmacSha1 {

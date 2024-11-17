@@ -41,3 +41,26 @@ impl Computer for HaliaSha1 {
         add_or_set_message_value!(self, message, value);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use message::Message;
+    use types::rules::functions::ItemConf;
+
+    use super::new;
+
+    fn test_sha1() {
+        let mut message = Message::default();
+        message.add(
+            "k".to_owned(),
+            message::MessageValue::String("test_value".to_owned()),
+        );
+
+        let mut computer = new(ItemConf {
+            typ: todo!(),
+            field: todo!(),
+            target_field: todo!(),
+            args: todo!(),
+        });
+    }
+}

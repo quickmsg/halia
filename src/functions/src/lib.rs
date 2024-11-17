@@ -116,3 +116,13 @@ fn get_array_int_float_field_arg(conf: &ItemConf, key: &str) -> Result<Vec<IntFl
         })
         .collect::<Result<Vec<_>>>()
 }
+
+fn get_string_arg(conf: &ItemConf, key: &str) -> Result<String> {
+    conf.args
+        .as_ref()
+        .and_then(|conf_args| conf_args.get(key))
+        .ok_or_else(|| anyhow::anyhow!("not found"))?
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("{} must be a string", key))
+        .map(|s| s.to_string())
+}
