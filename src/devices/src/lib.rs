@@ -11,8 +11,8 @@ use tokio::sync::mpsc;
 use types::{
     devices::{
         device::QueryParams, source_sink, ConfType, DeviceType, ListDevicesResp,
-        ListSourcesSinksItem, QueryRuleInfoParams, QuerySourcesSinksParams, RuleInfoDevice,
-        RuleInfoResp, RuleInfoSourceSink, Summary,
+        QueryRuleInfoParams, QuerySourcesSinksParams, ReadDeviceResp, RuleInfoDevice, RuleInfoResp,
+        RuleInfoSourceSink, Summary,
     },
     Pagination, Status, Value,
 };
@@ -69,6 +69,8 @@ pub(crate) fn sub_device_running_count() {
 #[async_trait]
 pub trait Device: Send + Sync {
     async fn read_err(&self) -> Option<String>;
+    async fn read_source_err(&self, source_id: &String) -> Option<String>;
+    async fn read_sink_err(&self, sink_id: &String) -> Option<String>;
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()>;
     async fn update_template_conf(
         &mut self,
@@ -302,6 +304,21 @@ pub async fn list_devices(
     Ok(ListDevicesResp { count, list })
 }
 
+pub async fn read_device(device_id: String) -> HaliaResult<types::devices::ReadDeviceResp> {
+    let db_device = storage::device::device::read_one(&device_id).await?;
+    let (can_stop, can_delete, err) = get_info_by_status(&device_id, &db_device.status).await?;
+    Ok(ReadDeviceResp {
+        id: db_device.id,
+        device_type: db_device.device_type,
+        name: db_device.name,
+        conf: db_device.conf,
+        status: db_device.status,
+        err,
+        can_stop,
+        can_delete,
+    })
+}
+
 pub async fn update_device(
     device_id: String,
     req: types::devices::device::UpdateReq,
@@ -519,15 +536,26 @@ pub async fn list_sources(
         storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
+        let rule_reference_running_cnt =
+            storage::rule::reference::count_running_cnt_by_resource_id(&db_source.id).await?;
+        let rule_reference_total_cnt =
+            storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?;
+        let can_delete = rule_reference_total_cnt == 0;
+        let err = match db_source.status {
+            Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
+                Some(device) => device.read_source_err(&db_source.id).await,
+                None => Some("应用未启动！".to_string()),
+            },
+            _ => None,
+        };
         list.push(source_sink::ListSourcesSinksItem {
             id: db_source.id,
             name: db_source.name,
             status: db_source.status,
-            // TODO
-            err: None,
-            rule_reference_running_cnt: todo!(),
-            rule_reference_total_cnt: todo!(),
-            can_delete: todo!(),
+            err,
+            rule_reference_running_cnt,
+            rule_reference_total_cnt,
+            can_delete,
         });
     }
 
@@ -684,14 +712,26 @@ pub async fn list_sinks(
         storage::device::source_sink::search_sinks(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
+        let rule_reference_running_cnt =
+            storage::rule::reference::count_running_cnt_by_resource_id(&db_sink.id).await?;
+        let rule_reference_total_cnt =
+            storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?;
+        let can_delete = rule_reference_total_cnt == 0;
+        let err = match db_sink.status {
+            Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
+                Some(device) => device.read_sink_err(&db_sink.id).await,
+                None => Some("应用未启动！".to_string()),
+            },
+            _ => None,
+        };
         list.push(source_sink::ListSourcesSinksItem {
             id: db_sink.id,
             name: db_sink.name,
             status: db_sink.status,
-            err: todo!(),
-            rule_reference_running_cnt: todo!(),
-            rule_reference_total_cnt: todo!(),
-            can_delete: todo!(),
+            err,
+            rule_reference_running_cnt,
+            rule_reference_total_cnt,
+            can_delete,
         });
     }
 
@@ -802,19 +842,20 @@ async fn get_info_by_status(
     match status {
         types::Status::Running => {
             let can_stop =
-                storage::rule::reference::count_active_cnt_by_parent_id(device_id).await? > 0;
+                storage::rule::reference::count_active_cnt_by_parent_id(device_id).await? == 0;
             Ok((can_stop, false, None))
         }
         types::Status::Stopped => {
-            let can_delete = storage::rule::reference::count_cnt_by_parent_id(device_id).await? > 0;
+            let can_delete =
+                storage::rule::reference::count_cnt_by_parent_id(device_id).await? == 0;
             Ok((false, can_delete, None))
         }
         types::Status::Error => {
             let can_stop =
-                storage::rule::reference::count_active_cnt_by_parent_id(device_id).await? > 0;
+                storage::rule::reference::count_active_cnt_by_parent_id(device_id).await? == 0;
             let device = match GLOBAL_DEVICE_MANAGER.get(device_id) {
                 Some(device) => device,
-                None => return Err(HaliaError::Common("应用未启动！".to_string())),
+                None => return Err(HaliaError::Common("设备未启动！".to_string())),
             };
             let err = device.read_err().await;
             Ok((can_stop, false, err))

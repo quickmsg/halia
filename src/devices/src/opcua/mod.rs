@@ -252,6 +252,14 @@ impl Device for Opcua {
         self.err.read().await.clone()
     }
 
+    async fn read_source_err(&self, _source_id: &String) -> Option<String> {
+        None
+    }
+
+    async fn read_sink_err(&self, _sink_id: &String) -> Option<String> {
+        None
+    }
+
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
         let opcua_conf: OpcuaConf = serde_json::from_value(conf)?;
         Self::update_conf(&mut self, opcua_conf).await;

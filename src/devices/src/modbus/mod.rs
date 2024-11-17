@@ -531,6 +531,14 @@ impl Device for Modbus {
         self.err.read().await.clone()
     }
 
+    async fn read_source_err(&self, _source_id: &String) -> Option<String> {
+        None
+    }
+
+    async fn read_sink_err(&self, _sink_id: &String) -> Option<String> {
+        None
+    }
+
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: ModbusConf = serde_json::from_value(conf)?;
         self.update_conf(conf).await;

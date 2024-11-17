@@ -74,6 +74,14 @@ impl Device for Coap {
         self.err.clone()
     }
 
+    async fn read_source_err(&self, _source_id: &String) -> Option<String> {
+        None
+    }
+
+    async fn read_sink_err(&self, _sink_id: &String) -> Option<String> {
+        None
+    }
+
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
         // let _old_conf: CoapConf = serde_json::from_value(old_conf)?;
         // let new_conf: CoapConf = serde_json::from_value(new_conf)?;

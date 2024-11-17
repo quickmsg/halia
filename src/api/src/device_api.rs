@@ -15,6 +15,7 @@ pub fn routes() -> Router {
         .route("/summary", get(get_devices_summary))
         .route("/", post(create_device))
         .route("/list", get(list_devices))
+        .route("/:device_id", get(read_device))
         .route("/:device_id", put(update_device))
         .route("/:device_id/start", put(start_device))
         .route("/:device_id/stop", put(stop_device))
@@ -101,6 +102,13 @@ async fn list_devices(
     Query(query): Query<types::devices::device::QueryParams>,
 ) -> AppResult<Json<types::devices::ListDevicesResp>> {
     let resp = devices::list_devices(pagination, query).await?;
+    Ok(Json(resp))
+}
+
+async fn read_device(
+    Path(device_id): Path<String>,
+) -> AppResult<Json<types::devices::ReadDeviceResp>> {
+    let resp = devices::read_device(device_id).await?;
     Ok(Json(resp))
 }
 

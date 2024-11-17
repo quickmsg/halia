@@ -122,11 +122,24 @@ pub struct ListDevicesItem {
     pub device_type: DeviceType,
     pub name: String,
     pub status: Status,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     pub rule_reference_running_cnt: usize,
     pub rule_reference_total_cnt: usize,
     pub source_cnt: usize,
     pub sink_cnt: usize,
+    pub can_stop: bool,
+    pub can_delete: bool,
+}
+
+#[derive(Serialize)]
+pub struct ReadDeviceResp {
+    pub id: String,
+    pub device_type: DeviceType,
+    pub name: String,
+    pub conf: serde_json::Value,
+    pub status: Status,
+    pub err: Option<String>,
     pub can_stop: bool,
     pub can_delete: bool,
 }
