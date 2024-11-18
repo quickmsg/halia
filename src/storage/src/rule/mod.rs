@@ -6,6 +6,7 @@ use sqlx::{
     query::{QueryAs, QueryScalar},
     Any,
 };
+use tracing::debug;
 use types::{
     rules::{Conf, CreateUpdateRuleReq, QueryParams},
     Pagination, Status,
@@ -72,7 +73,7 @@ pub async fn insert(id: &String, req: CreateUpdateRuleReq) -> Result<()> {
         .as_str(),
     )
     .bind(id)
-    .bind(false as i32)
+    .bind(Into::<i32>::into(Status::Stopped))
     .bind(req.name)
     .bind(conf)
     .bind(ts)
@@ -119,6 +120,7 @@ pub async fn read_all_on() -> Result<Vec<Rule>> {
 
 pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize, Vec<Rule>)> {
     let (limit, offset) = pagination.to_sql();
+    debug!("limit: {}, offset: {}", limit, offset);
     let (count, db_rules) = match (
         &query.name,
         &query.status,
@@ -131,6 +133,8 @@ pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize
                     .fetch_one(POOL.get().unwrap())
                     .await?;
 
+            debug!("here");
+
             let db_rules = sqlx::query_as::<_, DbRule>(
                 format!(
                     "SELECT * FROM {} ORDER BY ts DESC LIMIT ? OFFSET ?",
@@ -142,6 +146,8 @@ pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize
             .bind(offset)
             .fetch_all(POOL.get().unwrap())
             .await?;
+
+            debug!("here");
 
             (count, db_rules)
         }
@@ -162,7 +168,7 @@ pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize
                 if where_clause.is_empty() {
                     where_clause.push_str(
                         format!(
-                            "WHERE id IN (SELECT id FROM {} WHERE id = ?)",
+                            "WHERE id IN (SELECT id FROM {} WHERE parent_id = ?)",
                             reference::TABLE_NAME
                         )
                         .as_str(),
@@ -170,7 +176,7 @@ pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize
                 } else {
                     where_clause.push_str(
                         format!(
-                            " AND id IN (SELECT id FROM {} WHERE id = ?)",
+                            " AND id IN (SELECT id FROM {} WHERE parent_id = ?)",
                             reference::TABLE_NAME
                         )
                         .as_str(),
@@ -208,6 +214,8 @@ pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize
                 "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
                 TABLE_NAME, where_clause
             );
+
+            debug!("query_data_str: {}", query_data_str);
             let mut query_data_builder: QueryAs<'_, Any, DbRule, AnyArguments> =
                 sqlx::query_as::<_, DbRule>(&query_data_str);
 

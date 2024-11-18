@@ -16,7 +16,7 @@ use tokio::{
 use tracing::{debug, error};
 use types::rules::{
     AppSinkNode, AppSourceNode, Conf, DataboardNode, DeviceSinkNode, DeviceSourceNode, NodeType,
-    ReadRuleNodeResp,
+    ReadRuleNodeResp, ReadRuleResp,
 };
 
 use crate::{
@@ -187,9 +187,9 @@ impl Rule {
         self.logger.stop().await;
     }
 
-    pub async fn read(conf: Conf) -> HaliaResult<Vec<ReadRuleNodeResp>> {
+    pub async fn read(db_rule: storage::rule::Rule) -> HaliaResult<ReadRuleResp> {
         let mut read_rule_node_resp = vec![];
-        for node in conf.nodes.iter() {
+        for node in db_rule.conf.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
@@ -264,7 +264,13 @@ impl Rule {
             }
         }
 
-        Ok(read_rule_node_resp)
+        Ok(ReadRuleResp {
+            id: db_rule.id,
+            name: db_rule.name,
+            status: db_rule.status,
+            conf: db_rule.conf,
+            details: read_rule_node_resp,
+        })
     }
 
     pub async fn stop(&mut self) -> HaliaResult<()> {

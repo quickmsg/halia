@@ -151,6 +151,7 @@ pub async fn get_summary() -> Summary {
 pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
     let db_app = storage::app::read_one(&query.app_id).await?;
     let app = RuleInfoApp {
+        id: db_app.id,
         name: db_app.name,
         status: db_app.status,
     };
@@ -160,6 +161,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
             Ok(RuleInfoResp {
                 app,
                 source: Some(RuleInfoSourceSink {
+                    id: db_source.id,
                     name: db_source.name,
                     status: db_source.status,
                 }),
@@ -172,6 +174,7 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
                 app,
                 source: None,
                 sink: Some(RuleInfoSourceSink {
+                    id: db_sink.id,
                     name: db_sink.name,
                     status: db_sink.status,
                 }),

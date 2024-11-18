@@ -6,11 +6,11 @@ use std::sync::{
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use rule::Rule;
+use tracing::debug;
 use types::{
     rules::{
         AppSinkNode, AppSourceNode, Conf, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
-        DeviceSourceNode, ListRulesItem, ListRulesResp, Node, QueryParams, ReadRuleNodeResp,
-        Summary,
+        DeviceSourceNode, ListRulesItem, ListRulesResp, Node, QueryParams, ReadRuleResp, Summary,
     },
     Pagination,
 };
@@ -76,6 +76,7 @@ pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
 
 pub async fn list(pagination: Pagination, query: QueryParams) -> HaliaResult<ListRulesResp> {
     let (count, db_rules) = storage::rule::search(pagination, query).await?;
+    debug!("{}", count);
     let list = db_rules
         .into_iter()
         .map(|db_rule| ListRulesItem {
@@ -88,10 +89,9 @@ pub async fn list(pagination: Pagination, query: QueryParams) -> HaliaResult<Lis
     Ok(ListRulesResp { count, list })
 }
 
-pub async fn read(id: String) -> HaliaResult<Vec<ReadRuleNodeResp>> {
+pub async fn read(id: String) -> HaliaResult<ReadRuleResp> {
     let db_rule = storage::rule::read_one(&id).await?;
-    let detail = Rule::read(db_rule.conf).await?;
-    Ok(detail)
+    Rule::read(db_rule).await
 }
 
 pub async fn start(id: String) -> HaliaResult<()> {

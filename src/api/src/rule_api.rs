@@ -9,7 +9,9 @@ use axum::{
 };
 use futures_util::Stream;
 use types::{
-    rules::{CreateUpdateRuleReq, ListRulesResp, QueryParams, ReadRuleNodeResp, Summary},
+    rules::{
+        CreateUpdateRuleReq, ListRulesResp, QueryParams, ReadRuleNodeResp, ReadRuleResp, Summary,
+    },
     Pagination,
 };
 
@@ -49,8 +51,7 @@ async fn list_rules(
     Ok(Json(resp))
 }
 
-// TODO
-async fn read(Path(id): Path<String>) -> AppResult<Json<Vec<ReadRuleNodeResp>>> {
+async fn read(Path(id): Path<String>) -> AppResult<Json<ReadRuleResp>> {
     let resp = rule::read(id).await?;
     Ok(Json(resp))
 }

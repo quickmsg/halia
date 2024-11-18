@@ -138,12 +138,14 @@ pub struct RuleInfoResp {
 
 #[derive(Serialize)]
 pub struct RuleInfoApp {
+    pub id: String,
     pub name: String,
     pub status: Status,
 }
 
 #[derive(Serialize)]
 pub struct RuleInfoSourceSink {
+    pub id: String,
     pub name: String,
     pub status: Status,
 }

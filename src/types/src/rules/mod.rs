@@ -137,6 +137,15 @@ pub struct CreateSource {
 }
 
 #[derive(Serialize)]
+pub struct ReadRuleResp {
+    pub id: String,
+    pub name: String,
+    pub status: Status,
+    pub conf: Conf,
+    pub details: Vec<ReadRuleNodeResp>,
+}
+
+#[derive(Serialize)]
 pub struct ReadRuleNodeResp {
     pub index: usize,
     pub data: serde_json::Value,
