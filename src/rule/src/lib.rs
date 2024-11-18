@@ -105,7 +105,7 @@ pub async fn start(id: String) -> HaliaResult<()> {
     let rule = Rule::new(id.clone(), &db_rule.conf).await?;
     GLOBAL_RULE_MANAGER.insert(id.clone(), rule);
     storage::rule::reference::active(&id).await?;
-    storage::rule::update_status(&id, true).await?;
+    storage::rule::update_status(&id, types::Status::Running).await?;
     Ok(())
 }
 
@@ -117,7 +117,7 @@ pub async fn stop(id: String) -> HaliaResult<()> {
     match GLOBAL_RULE_MANAGER.remove(&id) {
         Some((_, mut rule)) => {
             rule.stop().await?;
-            storage::rule::update_status(&id, false).await?;
+            storage::rule::update_status(&id, types::Status::Stopped).await?;
             events::insert_stop(types::events::ResourceType::Rule, &id).await;
             sub_rule_on_count();
         }

@@ -257,9 +257,9 @@ pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize
     Ok((count as usize, rules))
 }
 
-pub async fn update_status(id: &String, status: bool) -> Result<()> {
+pub async fn update_status(id: &String, status: Status) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
-        .bind(status as i32)
+        .bind(Into::<i32>::into(status))
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;

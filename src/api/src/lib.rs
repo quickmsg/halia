@@ -8,6 +8,7 @@ use axum::{
     Json, Router,
 };
 use common::{error::HaliaError, sys::get_machine_info};
+use storage::app::App;
 use tokio::net::TcpListener;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -55,10 +56,13 @@ impl From<HaliaError> for AppError {
             HaliaError::Common(e) => AppError::new(StatusCode::INTERNAL_SERVER_ERROR, e),
             HaliaError::Io(_) => todo!(),
             HaliaError::Running => todo!(),
-            HaliaError::Stopped(_) => todo!(),
+            HaliaError::Stopped(e) => AppError::new(StatusCode::BAD_REQUEST, e),
             HaliaError::DeleteRefing => todo!(),
             HaliaError::DeleteRunning => todo!(),
-            HaliaError::StopActiveRefing => todo!(),
+            HaliaError::StopActiveRefing => AppError::new(
+                StatusCode::BAD_REQUEST,
+                "停止失败，有其他规则正在引用该规则".to_string(),
+            ),
             HaliaError::NameExists => todo!(),
             HaliaError::AddressExists => todo!(),
             HaliaError::Disconnect => todo!(),
