@@ -115,18 +115,30 @@ pub enum Encode {
 pub struct DataType {
     #[serde(rename = "type")]
     pub typ: Type,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub single_endian: Option<Endian>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub double_endian: Option<Endian>,
+
+    pub coder_type: CoderType,
 
     // string和bytes拥有len，值为寄存器数量
     #[serde(skip_serializing_if = "Option::is_none")]
     pub len: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub single: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub pos: Option<u8>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Copy, Clone, PartialEq)]
+pub enum CoderType {
+    A,
+    B,
+    AB,
+    BA,
+    ABCD,
+    BADC,
+    CDAB,
+    DCBA,
+    ABCDEFGH,
+    BADCFEHG,
+    GHEFCDAB,
+    HGFEDCBA,
 }
 
 impl DataType {
@@ -161,159 +173,107 @@ impl DataType {
                     }
                 }
             },
-            Type::Int8 => {
+            Type::Int8 | Type::Uint8 => {
                 let data = match data {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => MessageValue::Int64(data[0] as i64),
-                    Endian::Big => MessageValue::Int64(data[1] as i64),
+                match self.coder_type {
+                    CoderType::A => MessageValue::Int64(data[0] as i64),
+                    CoderType::B => MessageValue::Int64(data[1] as i64),
+                    _ => unreachable!(),
                 }
             }
-            Type::Uint8 => {
-                let data = match data {
-                    [a, b] => [*a, *b],
-                    _ => return MessageValue::Null,
-                };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => MessageValue::Int64(data[0] as i64),
-                    Endian::Big => MessageValue::Int64(data[1] as i64),
-                }
-            }
-            Type::Int16 => {
+            Type::Int16 | Type::Uint16 => {
                 let mut data = match data {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => data.swap(0, 1),
+
+                match self.coder_type {
+                    CoderType::AB => {}
+                    CoderType::BA => data.swap(0, 1),
+                    _ => {}
                 }
+
                 MessageValue::Int64(i16::from_be_bytes(data) as i64)
             }
-            Type::Uint16 => {
-                let mut data = match data {
-                    [a, b] => [*a, *b],
-                    _ => return MessageValue::Null,
-                };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => data.swap(0, 1),
-                }
-                MessageValue::Int64(u16::from_be_bytes(data) as i64)
-            }
-            Type::Int32 => {
+            Type::Int32 | Type::Uint32 => {
                 let mut data = match data {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
+
+                match self.coder_type {
+                    CoderType::ABCD => {}
+                    CoderType::BADC => {
                         data.swap(0, 1);
                         data.swap(2, 3);
                     }
-                }
-                match self.double_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
+                    CoderType::CDAB => {
                         data.swap(0, 2);
                         data.swap(1, 3);
                     }
+                    CoderType::DCBA => {
+                        data.swap(0, 3);
+                        data.swap(1, 2);
+                    }
+                    _ => unreachable!(),
                 }
                 MessageValue::Int64(i32::from_be_bytes(data) as i64)
             }
-            Type::Uint32 => {
-                let mut data = match data {
-                    [a, b, c, d] => [*a, *b, *c, *d],
-                    _ => return MessageValue::Null,
-                };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
-                        data.swap(0, 1);
-                        data.swap(2, 3);
-                    }
-                }
-                match self.double_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
-                        data.swap(0, 2);
-                        data.swap(1, 3);
-                    }
-                }
-                MessageValue::Int64(u32::from_be_bytes(data) as i64)
-            }
-            Type::Int64 => {
+            Type::Int64 | Type::Uint64 => {
                 let mut data = match data {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
+
+                match self.coder_type {
+                    CoderType::ABCDEFGH => {}
+                    CoderType::BADCFEHG => {
                         data.swap(0, 1);
                         data.swap(2, 3);
                         data.swap(4, 5);
                         data.swap(6, 7);
                     }
-                }
-                match self.double_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
+                    CoderType::GHEFCDAB => {
                         data.swap(0, 6);
                         data.swap(1, 7);
                         data.swap(2, 4);
                         data.swap(3, 5);
                     }
+                    CoderType::HGFEDCBA => {
+                        data.swap(0, 7);
+                        data.swap(1, 6);
+                        data.swap(2, 5);
+                        data.swap(3, 4);
+                    }
+                    _ => unreachable!(),
                 }
                 MessageValue::Int64(i64::from_be_bytes(data))
-            }
-            Type::Uint64 => {
-                let mut data = match data {
-                    [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
-                    _ => return MessageValue::Null,
-                };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
-                        data.swap(0, 1);
-                        data.swap(2, 3);
-                        data.swap(4, 5);
-                        data.swap(6, 7);
-                    }
-                }
-                match self.double_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
-                        data.swap(0, 6);
-                        data.swap(1, 7);
-                        data.swap(2, 4);
-                        data.swap(3, 5);
-                    }
-                }
-                MessageValue::Int64(u64::from_be_bytes(data) as i64)
             }
             Type::Float32 => {
                 let mut data = match data {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
+                match self.coder_type {
+                    CoderType::ABCD => {}
+                    CoderType::BADC => {
                         data.swap(0, 1);
                         data.swap(2, 3);
                     }
-                }
-                match self.double_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
+                    CoderType::CDAB => {
                         data.swap(0, 2);
                         data.swap(1, 3);
                     }
+                    CoderType::DCBA => {
+                        data.swap(0, 3);
+                        data.swap(1, 2);
+                    }
+                    _ => unreachable!(),
                 }
+
                 MessageValue::Float64(f32::from_be_bytes(data) as f64)
             }
             Type::Float64 => {
@@ -321,43 +281,32 @@ impl DataType {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
-                match self.single_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
+                match self.coder_type {
+                    CoderType::ABCDEFGH => {}
+                    CoderType::BADCFEHG => {
                         data.swap(0, 1);
                         data.swap(2, 3);
                         data.swap(4, 5);
                         data.swap(6, 7);
                     }
-                }
-                match self.double_endian.as_ref().unwrap() {
-                    Endian::Little => {}
-                    Endian::Big => {
+                    CoderType::GHEFCDAB => {
                         data.swap(0, 6);
                         data.swap(1, 7);
                         data.swap(2, 4);
                         data.swap(3, 5);
                     }
+                    CoderType::HGFEDCBA => {
+                        data.swap(0, 7);
+                        data.swap(1, 6);
+                        data.swap(2, 5);
+                        data.swap(3, 4);
+                    }
+                    _ => unreachable!(),
                 }
                 MessageValue::Float64(f64::from_be_bytes(data))
             }
-            Type::String => match (
-                self.single.as_ref().unwrap(),
-                self.single_endian.as_ref().unwrap(),
-            ) {
-                (true, Endian::Big) => {
-                    let mut new_data = vec![];
-                    for (i, v) in data.iter().enumerate() {
-                        if i % 2 != 0 {
-                            new_data.push(*v);
-                        }
-                    }
-                    match String::from_utf8(new_data) {
-                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
-                        Err(_) => return MessageValue::Null,
-                    }
-                }
-                (true, Endian::Little) => {
+            Type::String => match self.coder_type {
+                CoderType::A => {
                     let mut new_data = vec![];
                     for (i, v) in data.iter().enumerate() {
                         if i % 2 == 0 {
@@ -369,7 +318,26 @@ impl DataType {
                         Err(_) => return MessageValue::Null,
                     }
                 }
-                (false, Endian::Big) => {
+                CoderType::B => {
+                    let mut new_data = vec![];
+                    for (i, v) in data.iter().enumerate() {
+                        if i % 2 != 0 {
+                            new_data.push(*v);
+                        }
+                    }
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return MessageValue::String(string.replace("\0", "")),
+                        Err(_) => return MessageValue::Null,
+                    }
+                }
+                CoderType::AB => {
+                    let new_data = data.to_vec();
+                    match String::from_utf8(new_data) {
+                        Ok(string) => return MessageValue::String(string),
+                        Err(_) => return MessageValue::Null,
+                    }
+                }
+                CoderType::BA => {
                     for i in 0..*self.len.as_ref().unwrap() {
                         data.swap((i * 2) as usize, (i * 2 + 1) as usize);
                     }
@@ -379,13 +347,7 @@ impl DataType {
                         Err(_) => return MessageValue::Null,
                     }
                 }
-                (false, Endian::Little) => {
-                    let new_data = data.to_vec();
-                    match String::from_utf8(new_data) {
-                        Ok(string) => return MessageValue::String(string),
-                        Err(_) => return MessageValue::Null,
-                    }
-                }
+                _ => unreachable!(),
             },
             Type::Bytes => MessageValue::Bytes(data.to_vec()),
         }
@@ -448,21 +410,22 @@ impl DataType {
             Type::Int8 => match value.as_i64() {
                 Some(value) => {
                     let mut data = Vec::with_capacity(4);
-                    match &self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {
+                    match self.coder_type {
+                        CoderType::A => {
                             data.push(0x00);
                             data.push(0xFF);
 
                             data.push(value as u8);
                             data.push(0x00);
                         }
-                        Endian::Big => {
+                        CoderType::B => {
                             data.push(0xFF);
                             data.push(0x00);
 
                             data.push(0x00);
                             data.push(value as u8);
                         }
+                        _ => unreachable!(),
                     }
                     Ok(data)
                 }
@@ -471,21 +434,22 @@ impl DataType {
             Type::Uint8 => match value.as_i64() {
                 Some(value) => {
                     let mut data = Vec::with_capacity(4);
-                    match &self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {
+                    match self.coder_type {
+                        CoderType::A => {
                             data.push(0x00);
                             data.push(0xFF);
 
                             data.push(value as u8);
                             data.push(0x00);
                         }
-                        Endian::Big => {
+                        CoderType::B => {
                             data.push(0xFF);
                             data.push(0x00);
 
                             data.push(0x00);
                             data.push(value as u8);
                         }
+                        _ => unreachable!(),
                     }
                     Ok(data)
                 }
@@ -497,9 +461,10 @@ impl DataType {
                         Ok(value) => value,
                         Err(e) => bail!("value is wrong:{}", e),
                     };
-                    let data = match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => value.to_be_bytes().to_vec(),
-                        Endian::Big => value.to_le_bytes().to_vec(),
+                    let data = match self.coder_type {
+                        CoderType::AB => value.to_be_bytes().to_vec(),
+                        CoderType::BA => value.to_le_bytes().to_vec(),
+                        _ => unreachable!(),
                     };
                     return Ok(data.to_vec());
                 }
@@ -511,9 +476,10 @@ impl DataType {
                         Ok(value) => value,
                         Err(e) => bail!("value is wrong:{}", e),
                     };
-                    let data = match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => value.to_be_bytes().to_vec(),
-                        Endian::Big => value.to_le_bytes().to_vec(),
+                    let data = match self.coder_type {
+                        CoderType::AB => value.to_be_bytes(),
+                        CoderType::BA => value.to_le_bytes(),
+                        _ => unreachable!(),
                     };
                     return Ok(data.to_vec());
                 }
@@ -526,19 +492,21 @@ impl DataType {
                         Err(e) => bail!("value is wrong:{}", e),
                     };
                     let mut data = value.to_be_bytes();
-                    match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
+                    match self.coder_type {
+                        CoderType::ABCD => {}
+                        CoderType::BADC => {
+                            data.swap(0, 1);
+                            data.swap(2, 3);
+                        }
+                        CoderType::CDAB => {
                             data.swap(0, 2);
                             data.swap(1, 3);
                         }
-                    }
-                    match self.double_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
-                            data.swap(0, 1);
-                            data.swap(2, 3)
+                        CoderType::DCBA => {
+                            data.swap(0, 3);
+                            data.swap(1, 2);
                         }
+                        _ => unreachable!(),
                     }
                     return Ok(data.to_vec());
                 }
@@ -551,19 +519,21 @@ impl DataType {
                         Err(e) => bail!("value is wrong:{}", e),
                     };
                     let mut data = value.to_be_bytes();
-                    match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
+                    match self.coder_type {
+                        CoderType::ABCD => {}
+                        CoderType::BADC => {
+                            data.swap(0, 1);
+                            data.swap(2, 3);
+                        }
+                        CoderType::CDAB => {
                             data.swap(0, 2);
                             data.swap(1, 3);
                         }
-                    }
-                    match self.double_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
-                            data.swap(0, 1);
-                            data.swap(2, 3)
+                        CoderType::DCBA => {
+                            data.swap(0, 3);
+                            data.swap(1, 2);
                         }
+                        _ => unreachable!(),
                     }
                     return Ok(data.to_vec());
                 }
@@ -572,23 +542,27 @@ impl DataType {
             Type::Int64 => match value.as_i64() {
                 Some(value) => {
                     let mut data = value.to_be_bytes();
-                    match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
-                            data.swap(0, 6);
-                            data.swap(1, 7);
-                            data.swap(2, 4);
-                            data.swap(3, 5);
-                        }
-                    }
-                    match self.double_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
+                    match self.coder_type {
+                        CoderType::ABCDEFGH => {}
+                        CoderType::BADCFEHG => {
                             data.swap(0, 1);
                             data.swap(2, 3);
                             data.swap(4, 5);
                             data.swap(6, 7);
                         }
+                        CoderType::GHEFCDAB => {
+                            data.swap(0, 6);
+                            data.swap(1, 7);
+                            data.swap(2, 4);
+                            data.swap(3, 5);
+                        }
+                        CoderType::HGFEDCBA => {
+                            data.swap(0, 7);
+                            data.swap(1, 6);
+                            data.swap(2, 5);
+                            data.swap(3, 4);
+                        }
+                        _ => unreachable!(),
                     }
                     return Ok(data.to_vec());
                 }
@@ -597,23 +571,27 @@ impl DataType {
             Type::Uint64 => match value.as_i64() {
                 Some(value) => {
                     let mut data = value.to_be_bytes();
-                    match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
-                            data.swap(0, 6);
-                            data.swap(1, 7);
-                            data.swap(2, 4);
-                            data.swap(3, 5);
-                        }
-                    }
-                    match self.double_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
+                    match self.coder_type {
+                        CoderType::ABCDEFGH => {}
+                        CoderType::BADCFEHG => {
                             data.swap(0, 1);
                             data.swap(2, 3);
                             data.swap(4, 5);
                             data.swap(6, 7);
                         }
+                        CoderType::GHEFCDAB => {
+                            data.swap(0, 6);
+                            data.swap(1, 7);
+                            data.swap(2, 4);
+                            data.swap(3, 5);
+                        }
+                        CoderType::HGFEDCBA => {
+                            data.swap(0, 7);
+                            data.swap(1, 6);
+                            data.swap(2, 5);
+                            data.swap(3, 4);
+                        }
+                        _ => todo!(),
                     }
                     return Ok(data.to_vec());
                 }
@@ -625,19 +603,21 @@ impl DataType {
                         bail!("value is wrong, too big")
                     };
                     let mut data = (value as f32).to_be_bytes();
-                    match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
+                    match self.coder_type {
+                        CoderType::ABCD => {}
+                        CoderType::BADC => {
+                            data.swap(0, 1);
+                            data.swap(2, 3);
+                        }
+                        CoderType::CDAB => {
                             data.swap(0, 2);
                             data.swap(1, 3);
                         }
-                    }
-                    match self.double_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
-                            data.swap(0, 1);
-                            data.swap(2, 3)
+                        CoderType::DCBA => {
+                            data.swap(0, 3);
+                            data.swap(1, 2);
                         }
+                        _ => unreachable!("not support"),
                     }
                     return Ok(data.to_vec());
                 }
@@ -646,23 +626,27 @@ impl DataType {
             Type::Float64 => match value.as_f64() {
                 Some(value) => {
                     let mut data = value.to_be_bytes();
-                    match self.single_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
+                    match self.coder_type {
+                        CoderType::ABCDEFGH => {}
+                        CoderType::BADCFEHG => {
                             data.swap(0, 1);
                             data.swap(2, 3);
                             data.swap(4, 5);
                             data.swap(6, 7);
                         }
-                    }
-                    match self.double_endian.as_ref().unwrap() {
-                        Endian::Little => {}
-                        Endian::Big => {
+                        CoderType::GHEFCDAB => {
                             data.swap(0, 6);
                             data.swap(1, 7);
                             data.swap(2, 4);
                             data.swap(3, 5);
                         }
+                        CoderType::HGFEDCBA => {
+                            data.swap(0, 7);
+                            data.swap(1, 6);
+                            data.swap(2, 5);
+                            data.swap(3, 4);
+                        }
+                        _ => unreachable!(),
                     }
                     return Ok(data.to_vec());
                 }
@@ -672,35 +656,38 @@ impl DataType {
                 Some(value) => {
                     let mut new_data = vec![0; *self.len.as_ref().unwrap() as usize];
                     let data = value.as_bytes();
-                    match self.single.as_ref().unwrap() {
-                        true => {
+                    match self.coder_type {
+                        CoderType::A => {
                             if (*self.len.as_ref().unwrap() as usize) < data.len() * 2 {
                                 bail!("too long")
                             }
-                        }
-                        false => {
-                            if (*self.len.as_ref().unwrap() as usize) < data.len() {
-                                bail!("too long")
-                            }
-                        }
-                    }
-                    match (
-                        self.single.as_ref().unwrap(),
-                        self.single_endian.as_ref().unwrap(),
-                    ) {
-                        (true, Endian::Big) => {
-                            for (i, byte) in data.iter().enumerate() {
-                                new_data[i * 2 + 1] = *byte;
-                            }
-                            return Ok(new_data);
-                        }
-                        (true, Endian::Little) => {
                             for (i, byte) in data.iter().enumerate() {
                                 new_data[i * 2] = *byte;
                             }
                             return Ok(new_data);
                         }
-                        (false, Endian::Big) => {
+                        CoderType::B => {
+                            if (*self.len.as_ref().unwrap() as usize) < data.len() * 2 {
+                                bail!("too long")
+                            }
+                            for (i, byte) in data.iter().enumerate() {
+                                new_data[i * 2 + 1] = *byte;
+                            }
+                            return Ok(new_data);
+                        }
+                        CoderType::AB => {
+                            if (*self.len.as_ref().unwrap() as usize) < data.len() {
+                                bail!("too long")
+                            }
+                            for (i, v) in data.iter().enumerate() {
+                                new_data[i] = *v;
+                            }
+                            return Ok(new_data);
+                        }
+                        CoderType::BA => {
+                            if (*self.len.as_ref().unwrap() as usize) < data.len() {
+                                bail!("too long")
+                            }
                             for (i, v) in data.iter().enumerate() {
                                 match i % 2 {
                                     0 => {
@@ -714,12 +701,7 @@ impl DataType {
                             }
                             return Ok(data.to_vec());
                         }
-                        (false, Endian::Little) => {
-                            for (i, v) in data.iter().enumerate() {
-                                new_data[i] = *v;
-                            }
-                            return Ok(new_data);
-                        }
+                        _ => unreachable!(),
                     }
                 }
                 None => bail!("value is wrong"),
