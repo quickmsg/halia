@@ -83,7 +83,7 @@ pub async fn create_source(
     device_template_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
-    let device_source_req = types::devices::source_sink::CreateUpdateReq {
+    let device_source_req = types::devices::CreateUpdateSourceSinkReq {
         name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),
@@ -138,7 +138,7 @@ pub async fn update_source(
     source_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
-    let device_source_req = types::devices::source_sink::CreateUpdateReq {
+    let device_source_req = types::devices::CreateUpdateSourceSinkReq {
         name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),
@@ -184,7 +184,7 @@ pub async fn create_sink(
     device_template_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
-    let device_sink_req = types::devices::source_sink::CreateUpdateReq {
+    let device_sink_req = types::devices::CreateUpdateSourceSinkReq {
         name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),
@@ -234,7 +234,7 @@ pub async fn update_sink(
     sink_id: String,
     req: source_sink::CreateUpdateReq,
 ) -> HaliaResult<()> {
-    let device_sink_req = types::devices::source_sink::CreateUpdateReq {
+    let device_sink_req = types::devices::CreateUpdateSourceSinkReq {
         name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),

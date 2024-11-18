@@ -1,23 +1,19 @@
 use std::{io, sync::Arc, time::Duration};
 
 use common::error::{HaliaError, HaliaResult};
-use message::{Message, MessageBatch, RuleMessageBatch};
+use message::{Message, MessageBatch, MessageValue, RuleMessageBatch};
 use modbus_protocol::Context;
 use tokio::{
     select,
-    sync::{
-        broadcast,
-        mpsc::{self, UnboundedSender},
-        watch,
-    },
+    sync::{broadcast, mpsc, watch},
     task::JoinHandle,
     time,
 };
 use tracing::warn;
-use types::devices::device::modbus::{Area, SourceConf};
+use types::devices::device::modbus::{Area, DeviceConf, SourceConf};
 
 pub struct Source {
-    pub conf: SourceConf,
+    pub source_conf: SourceConf,
     quantity: u16,
 
     stop_signal_tx: watch::Sender<()>,
@@ -30,15 +26,15 @@ pub struct Source {
 pub struct JoinHandleData {
     pub id: String,
     pub stop_signal_rx: watch::Receiver<()>,
-    pub read_tx: UnboundedSender<String>,
+    pub read_tx: mpsc::UnboundedSender<String>,
     pub device_err_rx: broadcast::Receiver<bool>,
 }
 
 impl Source {
     pub fn new(
         id: String,
-        conf: SourceConf,
-        read_tx: UnboundedSender<String>,
+        source_conf: SourceConf,
+        read_tx: mpsc::UnboundedSender<String>,
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
@@ -49,11 +45,11 @@ impl Source {
             read_tx,
             device_err_rx,
         };
-        let join_handle = Self::event_loop(join_handle_data, &conf);
+        let join_handle = Self::event_loop(join_handle_data, &source_conf);
 
-        let quantity = conf.data_type.get_quantity();
+        let quantity = source_conf.data_type.get_quantity();
         Self {
-            conf,
+            source_conf,
             quantity,
             stop_signal_tx,
             join_handle: Some(join_handle),
@@ -157,39 +153,71 @@ impl Source {
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn update(&mut self, conf: SourceConf) {
+    pub async fn update(&mut self, source_conf: SourceConf) {
         let join_handle_data = self.stop().await;
-        self.conf = conf;
-        let join_handle = Self::event_loop(join_handle_data, &self.conf);
+        self.source_conf = source_conf;
+        let join_handle = Self::event_loop(join_handle_data, &self.source_conf);
         self.join_handle = Some(join_handle);
     }
 
-    pub async fn read(&mut self, ctx: &mut Box<dyn Context>) -> io::Result<()> {
-        let res = match self.conf.area {
+    pub async fn read(
+        &mut self,
+        ctx: &mut Box<dyn Context>,
+        device_conf: &DeviceConf,
+    ) -> io::Result<()> {
+        let res = match self.source_conf.area {
             Area::InputDiscrete => {
-                ctx.read_discrete_inputs(self.conf.slave, self.conf.address, self.quantity)
-                    .await
+                ctx.read_discrete_inputs(
+                    self.source_conf.slave,
+                    self.source_conf.address,
+                    self.quantity,
+                )
+                .await
             }
             Area::Coils => {
-                ctx.read_coils(self.conf.slave, self.conf.address, self.quantity)
-                    .await
+                ctx.read_coils(
+                    self.source_conf.slave,
+                    self.source_conf.address,
+                    self.quantity,
+                )
+                .await
             }
             Area::InputRegisters => {
-                ctx.read_input_registers(self.conf.slave, self.conf.address, self.quantity)
-                    .await
+                ctx.read_input_registers(
+                    self.source_conf.slave,
+                    self.source_conf.address,
+                    self.quantity,
+                )
+                .await
             }
             Area::HoldingRegisters => {
-                ctx.read_holding_registers(self.conf.slave, self.conf.address, self.quantity)
-                    .await
+                ctx.read_holding_registers(
+                    self.source_conf.slave,
+                    self.source_conf.address,
+                    self.quantity,
+                )
+                .await
             }
         };
 
         match res {
             Ok(mut data) => {
-                let value = self.conf.data_type.decode(&mut data);
+                let value = self.source_conf.data_type.decode(&mut data);
                 let mut message = Message::default();
                 // todo 考虑field的共享，避免clone
-                message.add(self.conf.field.clone(), value);
+                message.add(self.source_conf.field.clone(), value);
+                if let Some(metadatas) = &device_conf.metadata {
+                    for (k, v) in metadatas {
+                        message.add_metadata(k.clone(), MessageValue::from(v.clone()));
+                    }
+                }
+
+                if let Some(metadatas) = &self.source_conf.metadata {
+                    for (k, v) in metadatas {
+                        message.add_metadata(k.clone(), MessageValue::from(v.clone()));
+                    }
+                }
+
                 let mut message_batch = MessageBatch::default();
                 message_batch.push_message(message);
 

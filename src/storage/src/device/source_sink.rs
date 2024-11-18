@@ -2,7 +2,7 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    devices::{source_sink::CreateUpdateReq, ConfType, QuerySourcesSinksParams},
+    devices::{ConfType, CreateUpdateSourceSinkReq, QuerySourcesSinksParams},
     Pagination, Status,
 };
 
@@ -76,7 +76,7 @@ pub async fn insert_source(
     id: &String,
     device_id: &String,
     device_template_source_id: Option<&String>,
-    req: CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> Result<()> {
     insert(
         SourceSinkType::Source,
@@ -92,7 +92,7 @@ pub async fn insert_sink(
     id: &String,
     device_id: &String,
     device_template_sink_id: Option<&String>,
-    req: CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> Result<()> {
     insert(
         SourceSinkType::Sink,
@@ -109,7 +109,7 @@ async fn insert(
     id: &String,
     device_id: &String,
     device_template_source_sink_id: Option<&String>,
-    req: CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> Result<()> {
     let source_sink_type: i32 = source_sink_type.into();
     let conf_type: i32 = req.conf_type.into();
@@ -376,7 +376,7 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: CreateUpdateReq) -> Result<()> {
+pub async fn update(id: &String, req: CreateUpdateSourceSinkReq) -> Result<()> {
     let conf_type: i32 = req.conf_type.into();
     let conf = serde_json::to_vec(&req.conf)?;
     sqlx::query(

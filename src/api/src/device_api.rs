@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
 };
 use types::{
-    devices::{QuerySourcesSinksParams, Summary},
+    devices::{CreateUpdateSourceSinkReq, ListSourcesSinksResp, QuerySourcesSinksParams, Summary},
     Pagination, Value,
 };
 
@@ -137,7 +137,7 @@ async fn delete_device(Path(device_id): Path<String>) -> AppResult<()> {
 
 async fn create_source(
     Path(device_id): Path<String>,
-    Json(req): Json<types::devices::source_sink::CreateUpdateReq>,
+    Json(req): Json<CreateUpdateSourceSinkReq>,
 ) -> AppResult<()> {
     devices::device_create_source(device_id, req).await?;
     Ok(())
@@ -147,14 +147,14 @@ async fn search_sources(
     Path(device_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QuerySourcesSinksParams>,
-) -> AppResult<Json<types::devices::source_sink::ListSourcesSinksResp>> {
+) -> AppResult<Json<ListSourcesSinksResp>> {
     let resp = devices::list_sources(device_id, pagination, query_params).await?;
     Ok(Json(resp))
 }
 
 async fn update_source(
     Path((device_id, source_id)): Path<(String, String)>,
-    Json(req): Json<types::devices::source_sink::CreateUpdateReq>,
+    Json(req): Json<CreateUpdateSourceSinkReq>,
 ) -> AppResult<()> {
     devices::update_source(device_id, source_id, req).await?;
     Ok(())
@@ -175,7 +175,7 @@ async fn delete_source(Path((device_id, source_id)): Path<(String, String)>) -> 
 
 async fn create_sink(
     Path(device_id): Path<String>,
-    Json(req): Json<types::devices::source_sink::CreateUpdateReq>,
+    Json(req): Json<CreateUpdateSourceSinkReq>,
 ) -> AppResult<()> {
     devices::device_create_sink(device_id, req).await?;
     Ok(())
@@ -185,14 +185,14 @@ async fn search_sinks(
     Path(device_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<QuerySourcesSinksParams>,
-) -> AppResult<Json<types::devices::source_sink::ListSourcesSinksResp>> {
+) -> AppResult<Json<ListSourcesSinksResp>> {
     let resp = devices::list_sinks(device_id, pagination, query).await?;
     Ok(Json(resp))
 }
 
 async fn update_sink(
     Path((device_id, sink_id)): Path<(String, String)>,
-    Json(req): Json<types::devices::source_sink::CreateUpdateReq>,
+    Json(req): Json<CreateUpdateSourceSinkReq>,
 ) -> AppResult<()> {
     devices::update_sink(device_id, sink_id, req).await?;
     Ok(())

@@ -603,7 +603,7 @@ async fn get_info_by_status(
             Ok((can_stop, false, None))
         }
         types::Status::Stopped => {
-            let can_delete = storage::rule::reference::count_cnt_by_parent_id(app_id).await? != 0;
+            let can_delete = storage::rule::reference::count_cnt_by_parent_id(app_id).await? == 0;
             Ok((false, can_delete, None))
         }
         types::Status::Error => {

@@ -7,7 +7,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use crate::MessageRetain;
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct ModbusConf {
+pub struct DeviceConf {
     pub link_type: LinkType,
 
     // ms
@@ -20,6 +20,8 @@ pub struct ModbusConf {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub serial: Option<Serial>,
+
+    pub metadata: Option<Vec<(String, serde_json::Value)>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -49,6 +51,8 @@ pub struct SourceConf {
     pub area: Area,
     pub address: u16,
     pub interval: u64,
+
+    pub metadata: Option<Vec<(String, serde_json::Value)>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

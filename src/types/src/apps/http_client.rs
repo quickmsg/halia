@@ -29,6 +29,7 @@ pub struct SourceConf {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
 pub enum SourceType {
     Http,
     Websocket,

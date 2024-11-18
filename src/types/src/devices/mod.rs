@@ -7,7 +7,6 @@ use crate::Status;
 
 pub mod device;
 pub mod device_template;
-pub mod source_sink;
 pub mod source_sink_template;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
@@ -147,6 +146,8 @@ pub struct ReadDeviceResp {
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateUpdateSourceSinkReq {
     pub name: String,
+    pub conf_type: ConfType,
+    pub template_id: Option<String>,
     pub conf: serde_json::Value,
 }
 

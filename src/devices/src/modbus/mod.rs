@@ -31,7 +31,7 @@ use tracing::{trace, warn};
 use types::{
     devices::{
         device::modbus::{
-            Area, DataType, Encode, Ethernet, ModbusConf, Serial, SinkConf, SourceConf, Type,
+            Area, DataType, DeviceConf, Encode, Ethernet, Serial, SinkConf, SourceConf, Type,
         },
         device_template::modbus::{CustomizeConf, TemplateConf},
         source_sink_template::modbus::{
@@ -54,7 +54,6 @@ struct Modbus {
     stop_signal_tx: watch::Sender<()>,
     device_err_tx: broadcast::Sender<bool>,
     err: Arc<RwLock<Option<String>>>,
-    rtt: Arc<AtomicU16>,
 
     write_tx: UnboundedSender<WritePointEvent>,
     read_tx: UnboundedSender<String>,
@@ -64,7 +63,7 @@ struct Modbus {
 
 struct JoinHandleData {
     pub id: String,
-    pub modbus_conf: ModbusConf,
+    pub device_conf: DeviceConf,
     pub sources: Arc<DashMap<String, Source>>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub write_rx: UnboundedReceiver<WritePointEvent>,
@@ -73,17 +72,17 @@ struct JoinHandleData {
     pub rtt: Arc<AtomicU16>,
 }
 
-pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let modbus_conf: ModbusConf = serde_json::from_value(conf.clone())?;
+pub fn validate_conf(device_conf: &serde_json::Value) -> HaliaResult<()> {
+    let device_conf: DeviceConf = serde_json::from_value(device_conf.clone())?;
 
-    match modbus_conf.link_type {
+    match device_conf.link_type {
         types::devices::device::modbus::LinkType::Ethernet => {
-            if modbus_conf.ethernet.is_none() {
+            if device_conf.ethernet.is_none() {
                 return Err(HaliaError::Common("必须提供以太网的配置！".to_owned()));
             }
         }
         types::devices::device::modbus::LinkType::Serial => {
-            if modbus_conf.serial.is_none() {
+            if device_conf.serial.is_none() {
                 return Err(HaliaError::Common("必须提供串口的配置！".to_owned()));
             }
         }
@@ -92,9 +91,9 @@ pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn new_by_customize_conf(id: String, conf: serde_json::Value) -> Box<dyn Device> {
-    let modbus_conf: ModbusConf = serde_json::from_value(conf).unwrap();
-    new(id, modbus_conf)
+pub fn new_by_customize_conf(id: String, device_conf: serde_json::Value) -> Box<dyn Device> {
+    let device_conf: DeviceConf = serde_json::from_value(device_conf).unwrap();
+    new(id, device_conf)
 }
 
 pub fn new_by_template_conf(
@@ -106,7 +105,7 @@ pub fn new_by_template_conf(
     new(id, conf)
 }
 
-fn new(id: String, modbus_conf: ModbusConf) -> Box<dyn Device> {
+fn new(id: String, device_conf: DeviceConf) -> Box<dyn Device> {
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     let (read_tx, read_rx) = unbounded_channel();
     let (write_tx, write_rx) = unbounded_channel();
@@ -117,7 +116,7 @@ fn new(id: String, modbus_conf: ModbusConf) -> Box<dyn Device> {
     let rtt = Arc::new(AtomicU16::new(0));
     let join_handle_data = JoinHandleData {
         id,
-        modbus_conf,
+        device_conf,
         stop_signal_rx,
         write_rx,
         read_rx,
@@ -130,7 +129,6 @@ fn new(id: String, modbus_conf: ModbusConf) -> Box<dyn Device> {
 
     Box::new(Modbus {
         err,
-        rtt,
         sources,
         sinks: DashMap::new(),
         stop_signal_tx,
@@ -158,7 +156,7 @@ impl Modbus {
         tokio::spawn(async move {
             let mut task_err: Option<String> = Some("not connectd.".to_owned());
             loop {
-                match Modbus::connect(&join_handle_data.modbus_conf).await {
+                match Modbus::connect(&join_handle_data.device_conf).await {
                     Ok(mut ctx) => {
                         add_device_running_count();
                         task_err = None;
@@ -191,15 +189,15 @@ impl Modbus {
                                             break
                                         }
                                     }
-                                    if join_handle_data.modbus_conf.interval > 0 {
-                                        time::sleep(Duration::from_millis(join_handle_data.modbus_conf.interval)).await;
+                                    if join_handle_data.device_conf.interval > 0 {
+                                        time::sleep(Duration::from_millis(join_handle_data.device_conf.interval)).await;
                                     }
                                 }
 
                                 Some(point_id) = join_handle_data.read_rx.recv() => {
                                     if let Some(mut source) = join_handle_data.sources.get_mut(&point_id) {
                                         let now = Instant::now();
-                                        if let Err(_) = source.read(&mut ctx).await {
+                                        if let Err(_) = source.read(&mut ctx, &join_handle_data.device_conf).await {
                                             break
                                         }
                                         join_handle_data.rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
@@ -239,7 +237,7 @@ impl Modbus {
                         task_err = Some(e.to_string());
 
                         let sleep = time::sleep(Duration::from_secs(
-                            join_handle_data.modbus_conf.reconnect,
+                            join_handle_data.device_conf.reconnect,
                         ));
                         tokio::pin!(sleep);
                         select! {
@@ -255,10 +253,10 @@ impl Modbus {
         })
     }
 
-    async fn connect(conf: &ModbusConf) -> io::Result<Box<dyn Context>> {
-        match conf.link_type {
+    async fn connect(device_conf: &DeviceConf) -> io::Result<Box<dyn Context>> {
+        match device_conf.link_type {
             types::devices::device::modbus::LinkType::Ethernet => {
-                let ethernet = conf.ethernet.as_ref().unwrap();
+                let ethernet = device_conf.ethernet.as_ref().unwrap();
                 let socket_addrs = lookup_host(format!("{}:{}", ethernet.host, ethernet.port))
                     .await?
                     .collect::<Vec<SocketAddr>>();
@@ -273,7 +271,7 @@ impl Modbus {
                 }
             }
             types::devices::device::modbus::LinkType::Serial => {
-                let serial = conf.serial.as_ref().unwrap();
+                let serial = device_conf.serial.as_ref().unwrap();
                 let builder = tokio_serial::new(serial.path.clone(), serial.baud_rate);
 
                 let mut port = SerialStream::open(&builder).unwrap();
@@ -306,14 +304,14 @@ impl Modbus {
     fn get_conf(
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
-    ) -> HaliaResult<ModbusConf> {
+    ) -> HaliaResult<DeviceConf> {
         let customize_conf: CustomizeConf = serde_json::from_value(customize_conf)?;
         let template_conf: TemplateConf = serde_json::from_value(template_conf)?;
         match &template_conf.link_type {
             types::devices::device::modbus::LinkType::Ethernet => {
                 match (customize_conf.ethernet, template_conf.ethernet) {
                     (Some(ethernet_customize_conf), Some(ethernet_template_conf)) => {
-                        Ok(ModbusConf {
+                        Ok(DeviceConf {
                             link_type: template_conf.link_type,
                             reconnect: template_conf.reconnect,
                             interval: template_conf.interval,
@@ -324,6 +322,7 @@ impl Modbus {
                                 port: ethernet_customize_conf.port,
                             }),
                             serial: None,
+                            metadata: customize_conf.metadata,
                         })
                     }
                     _ => unreachable!(),
@@ -331,7 +330,7 @@ impl Modbus {
             }
             types::devices::device::modbus::LinkType::Serial => {
                 match (customize_conf.serial, template_conf.serial) {
-                    (Some(serial_customize_conf), Some(serial_template_conf)) => Ok(ModbusConf {
+                    (Some(serial_customize_conf), Some(serial_template_conf)) => Ok(DeviceConf {
                         link_type: template_conf.link_type,
                         reconnect: template_conf.reconnect,
                         interval: template_conf.interval,
@@ -343,6 +342,7 @@ impl Modbus {
                             data_bits: serial_template_conf.data_bits,
                             parity: serial_template_conf.parity,
                         }),
+                        metadata: customize_conf.metadata,
                     }),
                     _ => unreachable!(),
                 }
@@ -363,6 +363,7 @@ impl Modbus {
             area: template_conf.area,
             address: template_conf.address,
             interval: template_conf.interval,
+            metadata: customize_conf.metadata,
         })
     }
 
@@ -382,10 +383,10 @@ impl Modbus {
         })
     }
 
-    async fn update_conf(&mut self, modbus_conf: ModbusConf) {
+    async fn update_conf(&mut self, modbus_conf: DeviceConf) {
         self.stop_signal_tx.send(()).unwrap();
         let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
-        join_handle_data.modbus_conf = modbus_conf;
+        join_handle_data.device_conf = modbus_conf;
         let join_handle = Self::event_loop(join_handle_data);
         self.join_handle = Some(join_handle);
     }
@@ -539,9 +540,9 @@ impl Device for Modbus {
         None
     }
 
-    async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
-        let conf: ModbusConf = serde_json::from_value(conf)?;
-        self.update_conf(conf).await;
+    async fn update_customize_conf(&mut self, device_conf: serde_json::Value) -> HaliaResult<()> {
+        let device_conf: DeviceConf = serde_json::from_value(device_conf)?;
+        self.update_conf(device_conf).await;
         Ok(())
     }
 
@@ -550,8 +551,8 @@ impl Device for Modbus {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf = Self::get_conf(customize_conf, template_conf)?;
-        self.update_conf(conf).await;
+        let device_conf = Self::get_conf(customize_conf, template_conf)?;
+        self.update_conf(device_conf).await;
         Ok(())
     }
 
@@ -615,10 +616,10 @@ impl Device for Modbus {
         match self.sources.get(&source_id) {
             Some(source) => {
                 match WritePointEvent::new(
-                    source.conf.slave,
-                    source.conf.area.clone(),
-                    source.conf.address,
-                    source.conf.data_type.clone(),
+                    source.source_conf.slave,
+                    source.source_conf.area.clone(),
+                    source.source_conf.address,
+                    source.source_conf.data_type.clone(),
                     req.value,
                 ) {
                     Ok(wpe) => {

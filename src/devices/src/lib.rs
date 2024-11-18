@@ -10,9 +10,9 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     devices::{
-        device::QueryParams, source_sink, ConfType, DeviceType, ListDevicesResp,
-        QueryRuleInfoParams, QuerySourcesSinksParams, ReadDeviceResp, RuleInfoDevice, RuleInfoResp,
-        RuleInfoSourceSink, Summary,
+        device::QueryParams, ConfType, CreateUpdateSourceSinkReq, DeviceType, ListDevicesResp,
+        ListSourcesSinksItem, ListSourcesSinksResp, QueryRuleInfoParams, QuerySourcesSinksParams,
+        ReadDeviceResp, RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink, Summary,
     },
     Pagination, Status, Value,
 };
@@ -222,7 +222,7 @@ pub async fn create_device(
                 for device_template_source in device_template_sources {
                     match device_template_source.conf_type {
                         ConfType::Template => {
-                            let req = types::devices::source_sink::CreateUpdateReq {
+                            let req = types::devices::CreateUpdateSourceSinkReq {
                                 name: device_template_source.name,
                                 conf_type: device_template_source.conf_type,
                                 template_id: device_template_source.template_id,
@@ -231,7 +231,7 @@ pub async fn create_device(
                             source_reqs.push(req);
                         }
                         ConfType::Customize => {
-                            let req = types::devices::source_sink::CreateUpdateReq {
+                            let req = types::devices::CreateUpdateSourceSinkReq {
                                 name: device_template_source.name,
                                 conf_type: device_template_source.conf_type,
                                 template_id: None,
@@ -251,7 +251,7 @@ pub async fn create_device(
                 for device_template_sink in device_template_sinks {
                     match device_template_sink.conf_type {
                         ConfType::Template => {
-                            let req = types::devices::source_sink::CreateUpdateReq {
+                            let req = types::devices::CreateUpdateSourceSinkReq {
                                 name: device_template_sink.name,
                                 conf_type: device_template_sink.conf_type,
                                 template_id: device_template_sink.template_id,
@@ -260,7 +260,7 @@ pub async fn create_device(
                             sink_reqs.push(req);
                         }
                         ConfType::Customize => {
-                            let req = types::devices::source_sink::CreateUpdateReq {
+                            let req = types::devices::CreateUpdateSourceSinkReq {
                                 name: device_template_sink.name,
                                 conf_type: device_template_sink.conf_type,
                                 template_id: None,
@@ -467,7 +467,7 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
 
 pub async fn device_create_source(
     device_id: String,
-    req: source_sink::CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     let conf_type = storage::device::device::read_conf_type(&device_id).await?;
     if conf_type == ConfType::Template {
@@ -479,7 +479,7 @@ pub async fn device_create_source(
 pub(crate) async fn create_source(
     device_id: String,
     device_template_source_id: Option<&String>,
-    req: source_sink::CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     if req.conf_type == ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
@@ -531,7 +531,7 @@ pub async fn list_sources(
     device_id: String,
     pagination: Pagination,
     query: QuerySourcesSinksParams,
-) -> HaliaResult<source_sink::ListSourcesSinksResp> {
+) -> HaliaResult<ListSourcesSinksResp> {
     let (count, db_sources) =
         storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sources.len());
@@ -548,7 +548,7 @@ pub async fn list_sources(
             },
             _ => None,
         };
-        list.push(source_sink::ListSourcesSinksItem {
+        list.push(ListSourcesSinksItem {
             id: db_source.id,
             name: db_source.name,
             status: db_source.status,
@@ -559,13 +559,13 @@ pub async fn list_sources(
         });
     }
 
-    Ok(source_sink::ListSourcesSinksResp { count, list })
+    Ok(ListSourcesSinksResp { count, list })
 }
 
 pub async fn update_source(
     device_id: String,
     source_id: String,
-    req: source_sink::CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     let device_conf_type = storage::device::device::read_conf_type(&device_id).await?;
     if device_conf_type == ConfType::Template {
@@ -651,7 +651,7 @@ pub async fn get_source_rxs(
 
 pub async fn device_create_sink(
     device_id: String,
-    req: source_sink::CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     if storage::device::device::read_conf_type(&device_id).await? == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建动作。".to_string()));
@@ -662,7 +662,7 @@ pub async fn device_create_sink(
 pub(crate) async fn create_sink(
     device_id: String,
     device_template_sink_id: Option<&String>,
-    req: source_sink::CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
@@ -707,7 +707,7 @@ pub async fn list_sinks(
     device_id: String,
     pagination: Pagination,
     query: QuerySourcesSinksParams,
-) -> HaliaResult<source_sink::ListSourcesSinksResp> {
+) -> HaliaResult<ListSourcesSinksResp> {
     let (count, db_sinks) =
         storage::device::source_sink::search_sinks(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sinks.len());
@@ -724,7 +724,7 @@ pub async fn list_sinks(
             },
             _ => None,
         };
-        list.push(source_sink::ListSourcesSinksItem {
+        list.push(ListSourcesSinksItem {
             id: db_sink.id,
             name: db_sink.name,
             status: db_sink.status,
@@ -735,13 +735,13 @@ pub async fn list_sinks(
         });
     }
 
-    Ok(source_sink::ListSourcesSinksResp { count, list })
+    Ok(ListSourcesSinksResp { count, list })
 }
 
 pub async fn update_sink(
     device_id: String,
     sink_id: String,
-    req: source_sink::CreateUpdateReq,
+    req: CreateUpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     if req.conf_type == ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
