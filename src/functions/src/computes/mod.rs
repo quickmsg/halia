@@ -50,6 +50,9 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
                 todo!()
                 // number::bitxor::new(item_conf)?
             }
+
+            // string
+            types::rules::functions::Type::StringNew => string::new::new(item_conf)?,
             types::rules::functions::Type::NumberCbrt => number::cbrt::new(item_conf)?,
             types::rules::functions::Type::NumberCeil => number::ceil::new(item_conf)?,
             types::rules::functions::Type::NumberCos => number::cos::new(item_conf)?,

@@ -15,6 +15,6 @@ pub mod rtrim;
 // pub mod slice;
 // pub mod split;
 // pub mod starts_with;
+pub mod new;
 pub mod trim;
 pub mod upper;
-

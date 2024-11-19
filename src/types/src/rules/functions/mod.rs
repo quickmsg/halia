@@ -12,10 +12,15 @@ pub struct Conf {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct ItemConf {
+pub struct ItemConfWithType {
     #[serde(rename = "type")]
     pub typ: Type,
-    pub field: String,
+    pub conf: ItemConf,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ItemConf {
+    pub field: Option<String>,
     pub target_field: Option<String>,
     pub args: Option<HashMap<String, serde_json::Value>>,
 }
@@ -55,6 +60,7 @@ pub enum Type {
     NumberModulo,
 
     // string
+    StringNew,
     StringBase64,
     StringHex,
     StringLength,
