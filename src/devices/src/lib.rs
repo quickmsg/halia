@@ -165,6 +165,7 @@ pub fn get_summary() -> Summary {
 pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<RuleInfoResp> {
     let db_device = storage::device::device::read_one(&query.device_id).await?;
     let device = RuleInfoDevice {
+        id: db_device.id,
         name: db_device.name,
         status: db_device.status,
     };
@@ -174,6 +175,7 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<RuleInfoRe
             Ok(RuleInfoResp {
                 device,
                 source: Some(RuleInfoSourceSink {
+                    id: db_source.id,
                     name: db_source.name,
                     status: db_source.status,
                 }),
@@ -187,6 +189,7 @@ pub async fn get_rule_info(query: QueryRuleInfoParams) -> HaliaResult<RuleInfoRe
                 device,
                 source: None,
                 sink: Some(RuleInfoSourceSink {
+                    id: db_sink.id,
                     name: db_sink.name,
                     status: db_sink.status,
                 }),

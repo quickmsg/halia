@@ -4,7 +4,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     log::Logger,
 };
-use functions::{aggregation, computes, filter, merge::merge, window};
+use functions::{aggregation, filter, merge::merge, window};
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -138,10 +138,11 @@ impl Rule {
                         indexes.push(index);
                     }
                     NodeType::Computer => {
-                        let conf: types::rules::functions::Conf =
-                            serde_json::from_value(node.conf.clone())?;
-                        functions.push(computes::new(conf)?);
-                        indexes.push(index);
+                        todo!()
+                        // let conf: types::rules::functions::Conf =
+                        //     serde_json::from_value(node.conf.clone())?;
+                        // functions.push(computes::new(conf)?);
+                        // indexes.push(index);
                     }
                     NodeType::Aggregation => {
                         let conf: types::rules::functions::aggregation::Conf =
@@ -188,7 +189,7 @@ impl Rule {
     }
 
     pub async fn read(db_rule: storage::rule::Rule) -> HaliaResult<ReadRuleResp> {
-        let mut read_rule_node_resp = vec![];
+        let mut nodes = Vec::with_capacity(db_rule.conf.nodes.len());
         for node in db_rule.conf.nodes.iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
@@ -199,9 +200,10 @@ impl Rule {
                         sink_id: None,
                     })
                     .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
+                    nodes.push(ReadRuleNodeResp {
                         index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
+                        node_type: NodeType::DeviceSource,
+                        data: Some(serde_json::to_value(rule_info).unwrap()),
                     });
                 }
                 NodeType::AppSource => {
@@ -212,9 +214,10 @@ impl Rule {
                         sink_id: None,
                     })
                     .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
+                    nodes.push(ReadRuleNodeResp {
                         index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
+                        node_type: NodeType::AppSource,
+                        data: Some(serde_json::to_value(rule_info).unwrap()),
                     });
                 }
                 NodeType::DeviceSink => {
@@ -225,9 +228,10 @@ impl Rule {
                         sink_id: Some(sink_node.sink_id),
                     })
                     .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
+                    nodes.push(ReadRuleNodeResp {
                         index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
+                        node_type: NodeType::DeviceSink,
+                        data: Some(serde_json::to_value(rule_info).unwrap()),
                     });
                 }
                 NodeType::AppSink => {
@@ -238,9 +242,10 @@ impl Rule {
                         sink_id: Some(sink_node.sink_id),
                     })
                     .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
+                    nodes.push(ReadRuleNodeResp {
                         index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
+                        node_type: NodeType::AppSink,
+                        data: Some(serde_json::to_value(rule_info).unwrap()),
                     });
                 }
                 NodeType::Databoard => {
@@ -250,17 +255,28 @@ impl Rule {
                         data_id: databoard_node.data_id,
                     })
                     .await?;
-                    read_rule_node_resp.push(ReadRuleNodeResp {
+                    nodes.push(ReadRuleNodeResp {
                         index: node.index,
-                        data: serde_json::to_value(rule_info).unwrap(),
+                        node_type: NodeType::Databoard,
+                        data: Some(serde_json::to_value(rule_info).unwrap()),
                     });
                 }
-                NodeType::Merge
-                | NodeType::Window
-                | NodeType::Filter
-                | NodeType::Computer
-                | NodeType::BlackHole
-                | NodeType::Aggregation => {}
+                NodeType::Merge => {
+                    nodes.push(ReadRuleNodeResp {
+                        index: node.index,
+                        node_type: NodeType::Merge,
+                        data: None,
+                    });
+                }
+                NodeType::Window | NodeType::Filter | NodeType::Computer => {}
+                NodeType::BlackHole => {
+                    nodes.push(ReadRuleNodeResp {
+                        index: node.index,
+                        node_type: NodeType::BlackHole,
+                        data: None,
+                    });
+                }
+                NodeType::Aggregation => {}
             }
         }
 
@@ -268,8 +284,8 @@ impl Rule {
             id: db_rule.id,
             name: db_rule.name,
             status: db_rule.status,
-            conf: db_rule.conf,
-            details: read_rule_node_resp,
+            nodes,
+            edges: db_rule.conf.edges,
         })
     }
 

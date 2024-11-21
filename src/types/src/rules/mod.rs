@@ -141,14 +141,16 @@ pub struct ReadRuleResp {
     pub id: String,
     pub name: String,
     pub status: Status,
-    pub conf: Conf,
-    pub details: Vec<ReadRuleNodeResp>,
+    pub nodes: Vec<ReadRuleNodeResp>,
+    pub edges: Vec<Edge>,
 }
 
 #[derive(Serialize)]
 pub struct ReadRuleNodeResp {
     pub index: usize,
-    pub data: serde_json::Value,
+    pub node_type: NodeType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
 }
 
 // 规则引擎中传递的消息，避免内存消耗

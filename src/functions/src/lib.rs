@@ -5,7 +5,7 @@ use message::MessageBatch;
 use types::rules::functions::ItemConf;
 
 pub mod aggregation;
-pub mod computes;
+// pub mod computes;
 pub mod field;
 pub mod filter;
 pub mod merge;
