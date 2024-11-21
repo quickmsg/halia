@@ -2,9 +2,8 @@ use anyhow::Result;
 use hmac::{Hmac, Mac};
 use message::Message;
 use sha2::Sha512;
-use types::rules::functions::ItemConf;
 
-use crate::{add_or_set_message_value, computes::Computer, get_string_arg};
+use crate::{add_or_set_message_value, computes::Computer, get_string_arg, Args};
 
 type HmacSha512 = Hmac<Sha512>;
 
@@ -14,13 +13,14 @@ struct HaliaHmacSha512 {
     hasher: HmacSha512,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let key = get_string_arg(&conf, "key")?;
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let key = get_string_arg(&mut args, "key")?;
     let hasher = HmacSha512::new_from_slice(key.as_bytes())?;
 
     Ok(Box::new(HaliaHmacSha512 {
-        field: conf.field,
-        target_field: conf.target_field,
+        field,
+        target_field,
         hasher,
     }))
 }

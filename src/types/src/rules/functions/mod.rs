@@ -12,17 +12,10 @@ pub struct Conf {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct ItemConfWithType {
+pub struct ItemConf {
     #[serde(rename = "type")]
     pub typ: Type,
-    pub conf: ItemConf,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct ItemConf {
-    pub field: Option<String>,
-    pub target_field: Option<String>,
-    pub args: Option<HashMap<String, serde_json::Value>>,
+    pub args: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Serialize)]

@@ -1,9 +1,8 @@
 use anyhow::Result;
 use message::Message;
 use sha2::{Digest, Sha512};
-use types::rules::functions::ItemConf;
 
-use crate::{add_or_set_message_value, computes::Computer};
+use crate::{add_or_set_message_value, computes::Computer, Args};
 
 struct HaliaSha512 {
     field: String,
@@ -11,11 +10,12 @@ struct HaliaSha512 {
     hasher: Sha512,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
     let hasher = Sha512::new();
     Ok(Box::new(HaliaSha512 {
-        field: conf.field,
-        target_field: conf.target_field,
+        field,
+        target_field,
         hasher,
     }))
 }

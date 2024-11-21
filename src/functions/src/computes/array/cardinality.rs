@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ItemConf;
 
-use crate::add_or_set_message_value;
+use crate::{add_or_set_message_value, get_field_and_option_target_field};
 
 use super::Computer;
 
@@ -12,10 +13,11 @@ struct Cardinality {
     target_field: Option<String>,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(mut args: HashMap<String, serde_json::Value>) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
     Ok(Box::new(Cardinality {
-        field: conf.field,
-        target_field: conf.target_field,
+        field,
+        target_field,
     }))
 }
 
@@ -24,9 +26,9 @@ impl Computer for Cardinality {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Array(arr) => MessageValue::Int64(arr.len() as i64),
-                _ => MessageValue::Int64(-1),
+                _ => return,
             },
-            None => MessageValue::Int64(-1),
+            None => return,
         };
 
         add_or_set_message_value!(self, message, value);

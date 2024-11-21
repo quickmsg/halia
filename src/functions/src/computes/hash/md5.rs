@@ -1,9 +1,8 @@
 use anyhow::Result;
 use md5::Digest;
 use message::{Message, MessageValue};
-use types::rules::functions::ItemConf;
 
-use crate::{add_or_set_message_value, computes::Computer};
+use crate::{add_or_set_message_value, computes::Computer, Args};
 
 struct HaliaMd5 {
     field: String,
@@ -11,11 +10,12 @@ struct HaliaMd5 {
     hasher: md5::Md5,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
     let hasher = md5::Md5::new();
     Ok(Box::new(HaliaMd5 {
-        field: conf.field,
-        target_field: conf.target_field,
+        field,
+        target_field,
         hasher,
     }))
 }

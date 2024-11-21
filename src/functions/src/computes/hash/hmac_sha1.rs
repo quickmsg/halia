@@ -2,9 +2,11 @@ use anyhow::Result;
 use hmac::{Hmac, Mac};
 use message::Message;
 use sha1::Sha1;
-use types::rules::functions::ItemConf;
 
-use crate::{add_or_set_message_value, computes::Computer, get_string_arg};
+use crate::{
+    add_or_set_message_value, computes::Computer, get_field_and_option_target_field,
+    get_string_arg, Args,
+};
 
 type HmacSha1 = Hmac<Sha1>;
 
@@ -14,13 +16,14 @@ struct HaliaHmacSha1 {
     hasher: HmacSha1,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let key = get_string_arg(&conf, "key")?;
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
+    let key = get_string_arg(&mut args, "key")?;
     let hasher = HmacSha1::new_from_slice(key.as_bytes())?;
 
     Ok(Box::new(HaliaHmacSha1 {
-        field: conf.field,
-        target_field: conf.target_field,
+        field,
+        target_field,
         hasher,
     }))
 }
@@ -49,7 +52,8 @@ mod tests {
     use std::collections::HashMap;
 
     use message::Message;
-    use types::rules::functions::ItemConf;
+
+    use crate::{FIELD_KEY, TARGET_FIELD_KEY};
 
     use super::new;
 
@@ -63,17 +67,18 @@ mod tests {
 
         let mut args = HashMap::new();
         args.insert(
+            String::from(FIELD_KEY),
+            serde_json::Value::String("k".to_owned()),
+        );
+        args.insert(
+            TARGET_FIELD_KEY.to_owned(),
+            serde_json::Value::String("k_hash".to_owned()),
+        );
+        args.insert(
             "key".to_owned(),
             serde_json::Value::String("test_key".to_owned()),
         );
-        let mut computer = new(ItemConf {
-            // TODO fix type
-            typ: types::rules::functions::Type::ArrayCardinality,
-            field: String::from("k"),
-            target_field: Some(String::from("k_hash")),
-            args: Some(args),
-        })
-        .unwrap();
+        let mut computer = new(args).unwrap();
 
         computer.compute(&mut message);
 

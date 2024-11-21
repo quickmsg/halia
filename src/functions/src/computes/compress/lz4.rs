@@ -2,20 +2,22 @@ use anyhow::Result;
 use lz4_flex::{compress, decompress};
 use message::MessageValue;
 use tracing::warn;
-use types::rules::functions::ItemConf;
 
-use crate::{add_or_set_message_value, computes::Computer};
+use crate::{
+    add_or_set_message_value, computes::Computer, get_field_and_option_target_field, Args,
+};
 
 struct HaliaLz4Encoder {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new_encoder(conf: ItemConf) -> Box<dyn Computer> {
-    Box::new(HaliaLz4Encoder {
-        field: conf.field,
-        target_field: conf.target_field,
-    })
+pub fn new_encoder(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
+    Ok(Box::new(HaliaLz4Encoder {
+        field,
+        target_field,
+    }))
 }
 
 impl HaliaLz4Encoder {
@@ -56,11 +58,12 @@ struct HaliaLz4Decoder {
     target_field: Option<String>,
 }
 
-pub fn new_decoder(conf: ItemConf) -> Box<dyn Computer> {
-    Box::new(HaliaLz4Decoder {
-        field: conf.field,
-        target_field: conf.target_field,
-    })
+pub fn new_decoder(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
+    Ok(Box::new(HaliaLz4Decoder {
+        field,
+        target_field,
+    }))
 }
 
 impl HaliaLz4Decoder {

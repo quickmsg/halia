@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common::get_dynamic_value_from_json;
@@ -5,7 +7,7 @@ use message::MessageBatch;
 use types::rules::functions::ItemConf;
 
 pub mod aggregation;
-// pub mod computes;
+pub mod computes;
 pub mod field;
 pub mod filter;
 pub mod merge;
@@ -13,6 +15,11 @@ pub mod metadata;
 pub mod type_conversion;
 pub mod type_judgment;
 pub mod window;
+
+static FIELD_KEY: &str = "field";
+static TARGET_FIELD_KEY: &str = "target_field";
+
+type Args = HashMap<String, serde_json::Value>;
 
 #[macro_export]
 macro_rules! add_or_set_message_value {
@@ -38,8 +45,7 @@ enum StringFieldArg {
 fn get_string_field_arg(conf: &ItemConf, key: &str) -> Result<StringFieldArg> {
     let arg = conf
         .args
-        .as_ref()
-        .and_then(|conf_args| conf_args.get(key))
+        .get(key)
         .ok_or_else(|| anyhow::anyhow!("not found"))?;
     match get_dynamic_value_from_json(arg) {
         common::DynamicValue::Const(serde_json::Value::String(s)) => Ok(StringFieldArg::Const(s)),
@@ -50,8 +56,7 @@ fn get_string_field_arg(conf: &ItemConf, key: &str) -> Result<StringFieldArg> {
 
 fn get_array_string_field_arg(conf: &ItemConf, key: &str) -> Result<Vec<StringFieldArg>> {
     conf.args
-        .as_ref()
-        .and_then(|conf_args| conf_args.get(key))
+        .get(key)
         .ok_or_else(|| anyhow::anyhow!("concat function requires values arguments"))?
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("values arguments must be an array"))?
@@ -75,8 +80,7 @@ enum IntFloatFieldArg {
 fn get_int_float_field_arg(conf: &ItemConf, key: &str) -> Result<IntFloatFieldArg> {
     let arg = conf
         .args
-        .as_ref()
-        .and_then(|conf_args| conf_args.get(key))
+        .get(key)
         .ok_or_else(|| anyhow::anyhow!("not found"))?;
     match get_dynamic_value_from_json(arg) {
         common::DynamicValue::Const(serde_json::Value::Number(i)) => {
@@ -93,10 +97,8 @@ fn get_int_float_field_arg(conf: &ItemConf, key: &str) -> Result<IntFloatFieldAr
     }
 }
 
-fn get_array_int_float_field_arg(conf: &ItemConf, key: &str) -> Result<Vec<IntFloatFieldArg>> {
-    conf.args
-        .as_ref()
-        .and_then(|conf_args| conf_args.get(key))
+fn get_array_int_float_field_arg(args: &mut Args, key: &str) -> Result<Vec<IntFloatFieldArg>> {
+    args.remove(key)
         .ok_or_else(|| anyhow::anyhow!("concat function requires values arguments"))?
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("values arguments must be an array"))?
@@ -117,12 +119,28 @@ fn get_array_int_float_field_arg(conf: &ItemConf, key: &str) -> Result<Vec<IntFl
         .collect::<Result<Vec<_>>>()
 }
 
-fn get_string_arg(conf: &ItemConf, key: &str) -> Result<String> {
-    conf.args
-        .as_ref()
-        .and_then(|conf_args| conf_args.get(key))
-        .ok_or_else(|| anyhow::anyhow!("not found"))?
-        .as_str()
-        .ok_or_else(|| anyhow::anyhow!("{} must be a string", key))
-        .map(|s| s.to_string())
+fn get_string_arg(args: &mut Args, key: &str) -> Result<String> {
+    let arg = args
+        .remove(key)
+        .ok_or_else(|| anyhow::Error::msg(format!("Key '{}' not found", key)))?;
+    match arg {
+        serde_json::Value::String(s) => Ok(s),
+        _ => bail!("{} must be a string", key),
+    }
+}
+
+fn get_option_string_arg(args: &mut Args, key: &str) -> Result<Option<String>> {
+    args.get(key).map_or(Ok(None), |arg| {
+        if let serde_json::Value::String(s) = arg {
+            Ok(Some(s.clone()))
+        } else {
+            bail!("{} must be a string", key)
+        }
+    })
+}
+
+fn get_field_and_option_target_field(args: &mut Args) -> Result<(String, Option<String>)> {
+    let field = get_string_arg(args, FIELD_KEY)?;
+    let target_field = get_option_string_arg(args, TARGET_FIELD_KEY)?;
+    Ok((field, target_field))
 }

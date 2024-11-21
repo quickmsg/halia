@@ -7,20 +7,22 @@ use flate2::{
 };
 use message::MessageValue;
 use tracing::warn;
-use types::rules::functions::ItemConf;
 
-use crate::{add_or_set_message_value, computes::Computer};
+use crate::{
+    add_or_set_message_value, computes::Computer, get_field_and_option_target_field, Args,
+};
 
 struct HaliaZlibEncoder {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new_encoder(conf: ItemConf) -> Box<dyn Computer> {
-    Box::new(HaliaZlibEncoder {
-        field: conf.field,
-        target_field: conf.target_field,
-    })
+pub fn new_encoder(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
+    Ok(Box::new(HaliaZlibEncoder {
+        field,
+        target_field,
+    }))
 }
 
 impl HaliaZlibEncoder {
@@ -64,11 +66,12 @@ struct HaliaZlibDecoder {
     target_field: Option<String>,
 }
 
-pub fn new_decoder(conf: ItemConf) -> Box<dyn Computer> {
-    Box::new(HaliaZlibDecoder {
-        field: conf.field,
-        target_field: conf.target_field,
-    })
+pub fn new_decoder(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
+    Ok(Box::new(HaliaZlibDecoder {
+        field,
+        target_field,
+    }))
 }
 
 impl HaliaZlibDecoder {
