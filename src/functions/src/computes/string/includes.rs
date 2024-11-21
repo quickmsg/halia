@@ -1,20 +1,22 @@
-use crate::{add_or_set_message_value, computes::Computer, get_string_field_arg, StringFieldArg};
+use crate::{
+    add_or_set_message_value, computes::Computer, get_string_field_arg, Args, StringFieldArg,
+};
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ItemConf;
 
 struct Includes {
     field: String,
-    arg: StringFieldArg,
     target_field: Option<String>,
+    arg: StringFieldArg,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let arg = get_string_field_arg(&conf, "value")?;
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let arg = get_string_field_arg(&mut args, "value")?;
     Ok(Box::new(Includes {
-        field: conf.field,
+        field,
+        target_field,
         arg,
-        target_field: conf.target_field,
     }))
 }
 

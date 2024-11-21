@@ -1,17 +1,17 @@
-use crate::computes::Computer;
+use crate::{computes::Computer, Args};
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ItemConf;
 
 struct Length {
     field: String,
     target_field: Option<String>,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
     Ok(Box::new(Length {
-        field: conf.field,
-        target_field: conf.target_field,
+        field,
+        target_field,
     }))
 }
 

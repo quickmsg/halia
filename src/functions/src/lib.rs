@@ -42,21 +42,19 @@ enum StringFieldArg {
     Field(String),
 }
 
-fn get_string_field_arg(conf: &ItemConf, key: &str) -> Result<StringFieldArg> {
-    let arg = conf
-        .args
-        .get(key)
+fn get_string_field_arg(args: &mut Args, key: &str) -> Result<StringFieldArg> {
+    let arg = args
+        .remove(key)
         .ok_or_else(|| anyhow::anyhow!("not found"))?;
-    match get_dynamic_value_from_json(arg) {
+    match get_dynamic_value_from_json(&arg) {
         common::DynamicValue::Const(serde_json::Value::String(s)) => Ok(StringFieldArg::Const(s)),
         common::DynamicValue::Const(_) => bail!("只支持字符串常量"),
         common::DynamicValue::Field(s) => Ok(StringFieldArg::Field(s)),
     }
 }
 
-fn get_array_string_field_arg(conf: &ItemConf, key: &str) -> Result<Vec<StringFieldArg>> {
-    conf.args
-        .get(key)
+fn get_array_string_field_arg(args: &mut Args, key: &str) -> Result<Vec<StringFieldArg>> {
+    args.remove(key)
         .ok_or_else(|| anyhow::anyhow!("concat function requires values arguments"))?
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("values arguments must be an array"))?

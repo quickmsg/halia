@@ -4,7 +4,7 @@ use common::{
     error::{HaliaError, HaliaResult},
     log::Logger,
 };
-use functions::{aggregation, filter, merge::merge, window};
+use functions::{aggregation, computes, filter, merge::merge, window};
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -138,11 +138,10 @@ impl Rule {
                         indexes.push(index);
                     }
                     NodeType::Computer => {
-                        todo!()
-                        // let conf: types::rules::functions::Conf =
-                        //     serde_json::from_value(node.conf.clone())?;
-                        // functions.push(computes::new(conf)?);
-                        // indexes.push(index);
+                        let conf: types::rules::functions::Conf =
+                            serde_json::from_value(node.conf.clone())?;
+                        functions.push(computes::new(conf)?);
+                        indexes.push(index);
                     }
                     NodeType::Aggregation => {
                         let conf: types::rules::functions::aggregation::Conf =

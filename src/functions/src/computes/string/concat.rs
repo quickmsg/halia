@@ -1,9 +1,9 @@
-use crate::{
-    add_or_set_message_value, computes::Computer, get_array_string_field_arg, StringFieldArg,
-};
 use anyhow::Result;
 use message::{Message, MessageValue};
-use types::rules::functions::ItemConf;
+
+use crate::{
+    add_or_set_message_value, computes::Computer, get_array_string_field_arg, Args, StringFieldArg,
+};
 
 struct Concat {
     field: String,
@@ -11,12 +11,13 @@ struct Concat {
     target_field: Option<String>,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let args = get_array_string_field_arg(&conf, "value")?;
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let args = get_array_string_field_arg(&mut args, "value")?;
 
     Ok(Box::new(Concat {
-        field: conf.field,
-        target_field: conf.target_field,
+        field,
+        target_field,
         args,
     }))
 }
