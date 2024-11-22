@@ -6,6 +6,9 @@ use regex::Regex;
 
 use crate::{computes::Computer, get_string_arg, Args};
 
+const TARGET_FIELD_KEY: &str = "target_field";
+const TEMPLATE_KEY: &str = "template";
+
 struct New {
     target_field: String,
     template: String,
@@ -13,8 +16,8 @@ struct New {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let target_field = get_string_arg(&mut args, "target_field")?;
-    let template = get_string_arg(&mut args, "template")?;
+    let target_field = get_string_arg(&mut args, TARGET_FIELD_KEY)?;
+    let template = get_string_arg(&mut args, TEMPLATE_KEY)?;
     let re = Regex::new(r"\$\{(.*?)\}").unwrap();
     let mut template_fields = HashSet::new();
     for cap in re.captures_iter(&template) {
@@ -47,45 +50,42 @@ impl Computer for New {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use message::MessageValue;
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
 
-//     #[test]
-//     fn test_new() {
-//         use std::collections::HashMap;
+    use message::Message;
+    use message::MessageValue;
 
-//         use message::Message;
-//         use types::rules::functions::ItemConf;
+    use crate::TARGET_FIELD_KEY;
 
-//         use super::new;
+    use super::new;
 
-//         let mut message = Message::default();
-//         message.add(
-//             "key_a".to_owned(),
-//             message::MessageValue::String("value_a".to_owned()),
-//         );
-//         message.add("key_b".to_owned(), message::MessageValue::Int64(33));
+    #[test]
+    fn test_new() {
+        let mut message = Message::default();
+        message.add(
+            "key_a".to_owned(),
+            message::MessageValue::String("value_a".to_owned()),
+        );
+        message.add("key_b".to_owned(), message::MessageValue::Int64(33));
 
-//         let mut args = HashMap::new();
-//         args.insert(
-//             "template".to_owned(),
-//             serde_json::Value::String("hello ${key_a} bb ${key_b} ${22".to_owned()),
-//         );
-//         let conf = ItemConf {
-//             // TODO change type
-//             typ: types::rules::functions::Type::ArrayCardinality,
-//             args: Some(args),
-//             field: "".to_owned(),
-//             target_field: Some("key_c".to_owned()),
-//         };
+        let mut args = HashMap::new();
+        args.insert(
+            TARGET_FIELD_KEY.to_owned(),
+            serde_json::Value::String("key_c".to_owned()),
+        );
+        args.insert(
+            "template".to_owned(),
+            serde_json::Value::String("hello ${key_a} bb ${key_b} ${22".to_owned()),
+        );
 
-//         let mut computer = new(conf).unwrap();
-//         computer.compute(&mut message);
+        let mut computer = new(args).unwrap();
+        computer.compute(&mut message);
 
-//         assert_eq!(
-//             message.get("key_c"),
-//             Some(&MessageValue::String("hello value_a bb 33 ${22".to_owned()))
-//         );
-//     }
-// }
+        assert_eq!(
+            message.get("key_c"),
+            Some(&MessageValue::String("hello value_a bb 33 ${22".to_owned()))
+        );
+    }
+}

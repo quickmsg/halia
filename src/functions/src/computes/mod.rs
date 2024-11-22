@@ -94,10 +94,12 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
                 string::ends_with::new(item_conf.args)?
             }
             types::rules::functions::Type::StringStartsWith => {
-                // string::starts_with::new(item_conf)?
-                todo!()
+                string::starts_with::new(item_conf.args)?
             }
             types::rules::functions::Type::StringIndexOf => string::index_of::new(item_conf.args)?,
+            types::rules::functions::Type::StringLastIndexOf => {
+                string::last_index_of::new(item_conf.args)?
+            }
             types::rules::functions::Type::StringNumbytes => string::numbytes::new(item_conf.args)?,
             types::rules::functions::Type::StringRegexMatch => {
                 // string::regex_match::new(item_conf)?

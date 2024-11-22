@@ -16,8 +16,8 @@ pub mod type_conversion;
 pub mod type_judgment;
 pub mod window;
 
-static FIELD_KEY: &str = "field";
-static TARGET_FIELD_KEY: &str = "target_field";
+const FIELD_KEY: &str = "field";
+const TARGET_FIELD_KEY: &str = "target_field";
 
 type Args = HashMap<String, serde_json::Value>;
 

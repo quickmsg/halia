@@ -54,6 +54,10 @@ pub enum Type {
 
     // string
     StringNew,
+    StringConcat,
+    StringEndsWith,
+    StringIndexOf,
+    StringStartsWith,
     StringBase64,
     StringHex,
     StringLength,
@@ -65,12 +69,10 @@ pub enum Type {
     StringRtrim,
     StringSplit,
     StringTrim,
-    StringEndsWith,
-    StringStartsWith,
-    StringIndexOf,
+
     StringNumbytes,
+    StringLastIndexOf,
     StringRegexMatch,
-    StringConcat,
     StringSlice,
 
     // hash
