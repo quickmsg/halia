@@ -18,7 +18,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{error, warn};
-use types::apps::mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf};
+use types::{
+    apps::mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf},
+    Status,
+};
 
 use crate::{mqtt_client_ssl::get_ssl_config, App};
 
@@ -26,8 +29,6 @@ mod sink;
 mod source;
 
 pub struct MqttClient {
-    _id: String,
-
     err: Arc<RwLock<Option<String>>>,
     stop_signal_tx: watch::Sender<()>,
     app_err_tx: broadcast::Sender<bool>,
@@ -40,6 +41,7 @@ pub struct MqttClient {
 }
 
 struct JoinHandleData {
+    id: String,
     conf: Conf,
     stop_signal_rx: watch::Receiver<()>,
     app_err_tx: broadcast::Sender<bool>,
@@ -56,6 +58,7 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let app_err = Arc::new(RwLock::new(None));
 
     let join_handle_data = JoinHandleData {
+        id,
         conf,
         stop_signal_rx,
         app_err_tx: app_err_tx.clone(),
@@ -65,7 +68,6 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let (join_handle, mqtt_client) = MqttClient::event_loop(join_handle_data);
 
     Box::new(MqttClient {
-        _id: id,
         err: app_err,
         sources,
         sinks: DashMap::new(),
@@ -192,7 +194,7 @@ impl MqttClient {
                     }
 
                     event = event_loop.poll() => {
-                        Self::handle_event(event, &join_handle_data.sources, &join_handle_data.app_err, &mut err, &join_handle_data.app_err_tx).await;
+                        Self::handle_event(&join_handle_data.id, event, &join_handle_data.sources, &join_handle_data.app_err, &mut err, &join_handle_data.app_err_tx).await;
                     }
                 }
             }
@@ -202,6 +204,7 @@ impl MqttClient {
     }
 
     async fn handle_event(
+        app_id: &String,
         event: Result<Event, rumqttc::ConnectionError>,
         sources: &Arc<DashMap<String, Source>>,
         device_err: &Arc<RwLock<Option<String>>>,
@@ -247,6 +250,7 @@ impl MqttClient {
                     *err = false;
                     _ = app_err_tx.send(false);
                     *device_err.write().await = None;
+                    let _ = storage::app::update_status(app_id, Status::Running).await;
                 }
             }
             Err(e) => {
@@ -254,6 +258,8 @@ impl MqttClient {
                     *err = true;
                     _ = app_err_tx.send(true);
                     *device_err.write().await = Some(e.to_string());
+
+                    let _ = storage::app::update_status(app_id, Status::Error).await;
                 }
             }
         }

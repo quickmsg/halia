@@ -138,9 +138,9 @@ pub async fn read_one(id: &String) -> Result<App> {
 
 pub async fn read_all_running() -> Result<Vec<App>> {
     let db_apps = sqlx::query_as::<_, DbApp>(
-        format!("SELECT * FROM {} WHERE status = ?", TABLE_NAME).as_str(),
+        format!("SELECT * FROM {} WHERE status != ?", TABLE_NAME).as_str(),
     )
-    .bind(Into::<i32>::into(Status::Running))
+    .bind(Into::<i32>::into(Status::Stopped))
     .fetch_all(POOL.get().unwrap())
     .await?;
 
@@ -153,7 +153,11 @@ pub async fn search(
 ) -> Result<(usize, Vec<App>)> {
     let (limit, offset) = pagination.to_sql();
 
-    let (count, db_apps) = match (&query_params.name, &query_params.typ, &query_params.status) {
+    let (count, db_apps) = match (
+        &query_params.name,
+        &query_params.app_type,
+        &query_params.status,
+    ) {
         (None, None, None) => {
             let count: i64 =
                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
@@ -182,11 +186,11 @@ pub async fn search(
                     false => where_clause.push_str(" AND name LIKE ?"),
                 }
             }
-            if query_params.typ.is_some() {
-                let typ = transfer_type(&query_params.typ.unwrap())?;
+            if query_params.app_type.is_some() {
+                let app_type = transfer_type(&query_params.app_type.unwrap())?;
                 match where_clause.is_empty() {
-                    true => where_clause.push_str(format!("WHERE {}", typ).as_str()),
-                    false => where_clause.push_str(format!(" AND {}", typ).as_str()),
+                    true => where_clause.push_str(format!("WHERE {}", app_type).as_str()),
+                    false => where_clause.push_str(format!(" AND {}", app_type).as_str()),
                 }
             }
             if query_params.status.is_some() {
@@ -259,11 +263,11 @@ pub async fn update_conf(id: String, req: UpdateAppReq) -> HaliaResult<()> {
 
 fn transfer_type(typ: &str) -> Result<String> {
     let typ = match typ {
-        "mqtt" => "(typ = 10 OR typ = 11)".to_owned(),
-        "http" => "typ = 2".to_owned(),
-        "kafka" => "typ = 3".to_owned(),
-        "influxdb" => "(typ = 40 OR typ = 41)".to_owned(),
-        "tdengine" => "typ = 5".to_owned(),
+        "mqtt" => "(app_type = 10 OR app_type = 11)".to_owned(),
+        "http" => "app_type = 2".to_owned(),
+        "kafka" => "app_type = 3".to_owned(),
+        "influxdb" => "(app_type = 40 OR app_type = 41)".to_owned(),
+        "tdengine" => "app_type = 5".to_owned(),
         _ => bail!("未知应用类型。"),
     };
     Ok(typ)

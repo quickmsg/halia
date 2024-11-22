@@ -189,7 +189,7 @@ impl Rule {
 
     pub async fn read(db_rule: storage::rule::Rule) -> HaliaResult<ReadRuleResp> {
         let mut nodes = Vec::with_capacity(db_rule.conf.nodes.len());
-        for node in db_rule.conf.nodes.iter() {
+        for node in db_rule.conf.nodes.into_iter() {
             match node.node_type {
                 NodeType::DeviceSource => {
                     let source_node: DeviceSourceNode = serde_json::from_value(node.conf.clone())?;
@@ -267,7 +267,27 @@ impl Rule {
                         data: None,
                     });
                 }
-                NodeType::Window | NodeType::Filter | NodeType::Computer => {}
+                NodeType::Window => {
+                    nodes.push(ReadRuleNodeResp {
+                        index: node.index,
+                        node_type: NodeType::Window,
+                        data: Some(node.conf),
+                    });
+                }
+                NodeType::Filter => {
+                    nodes.push(ReadRuleNodeResp {
+                        index: node.index,
+                        node_type: NodeType::Filter,
+                        data: Some(node.conf),
+                    });
+                }
+                NodeType::Computer => {
+                    nodes.push(ReadRuleNodeResp {
+                        index: node.index,
+                        node_type: NodeType::Computer,
+                        data: Some(node.conf),
+                    });
+                }
                 NodeType::BlackHole => {
                     nodes.push(ReadRuleNodeResp {
                         index: node.index,
@@ -275,7 +295,11 @@ impl Rule {
                         data: None,
                     });
                 }
-                NodeType::Aggregation => {}
+                NodeType::Aggregation => nodes.push(ReadRuleNodeResp {
+                    index: node.index,
+                    node_type: NodeType::Aggregation,
+                    data: Some(node.conf),
+                }),
             }
         }
 
