@@ -1,10 +1,7 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
 
-use crate::{
-    add_or_set_message_value, computes::Computer, get_array_int_float_field_arg, Args,
-    IntFloatFieldArg,
-};
+use crate::{add_or_set_message_value, args::IntFloatFieldArg, computes::Computer, Args};
 
 struct Division {
     field: String,
@@ -13,8 +10,8 @@ struct Division {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    let args = get_array_int_float_field_arg(&mut args, "value")?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    let args = args.take_array_int_float_field("value")?;
 
     Ok(Box::new(Division {
         field,

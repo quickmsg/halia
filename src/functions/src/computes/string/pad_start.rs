@@ -14,9 +14,9 @@ struct PadStart {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    let target_length = crate::get_usize_arg(&mut args, TARGET_LEGNTH_KEY)?;
-    let pad_string = crate::get_option_string_arg(&mut args, PAD_STRING_KEY)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    let target_length = args.take_usize(TARGET_LEGNTH_KEY)?;
+    let pad_string = args.take_option_string(PAD_STRING_KEY)?;
 
     Ok(Box::new(PadStart {
         field,

@@ -9,7 +9,7 @@ struct Reverse {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
     Ok(Box::new(Reverse {
         field,
         target_field,

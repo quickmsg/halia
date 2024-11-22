@@ -10,7 +10,7 @@ struct Abs {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
     Ok(Box::new(Abs {
         field,
         target_field,
@@ -23,9 +23,9 @@ impl Computer for Abs {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => MessageValue::Int64(mv.abs()),
                 MessageValue::Float64(mv) => MessageValue::Float64(mv.abs()),
-                _ => MessageValue::Null,
+                _ => return,
             },
-            None => MessageValue::Null,
+            None => return,
         };
 
         add_or_set_message_value!(self, message, value);

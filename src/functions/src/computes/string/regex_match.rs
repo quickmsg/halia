@@ -2,7 +2,7 @@ use anyhow::Result;
 use message::{Message, MessageValue};
 use regex::Regex;
 
-use crate::{add_or_set_message_value, computes::Computer, get_string_field_arg, Args, StringFieldArg};
+use crate::{add_or_set_message_value, args::StringFieldArg, computes::Computer, Args};
 
 const REGEXP_KEY: &str = "regexp";
 
@@ -14,8 +14,8 @@ struct RegexMatch {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    let regexp = get_string_field_arg(&mut args, REGEXP_KEY)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    let regexp = args.take_string_field(REGEXP_KEY)?;
     let (regexp_const, regexp_field) = match regexp {
         StringFieldArg::Const(s) => match Regex::new(&s) {
             Ok(reg) => (Some(reg), None),

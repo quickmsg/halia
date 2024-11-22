@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
 use message::{Message, MessageValue};
 
-use crate::{add_or_set_message_value, get_field_and_option_target_field};
+use crate::{add_or_set_message_value, Args};
 
 use super::Computer;
 
@@ -13,8 +11,8 @@ struct Cardinality {
     target_field: Option<String>,
 }
 
-pub fn new(mut args: HashMap<String, serde_json::Value>) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = args.take_field_and_option_target_field()?;
     Ok(Box::new(Cardinality {
         field,
         target_field,

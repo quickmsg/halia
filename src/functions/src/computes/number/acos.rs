@@ -10,7 +10,7 @@ struct Acos {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
     Ok(Box::new(Acos {
         field,
         target_field,
@@ -23,7 +23,7 @@ impl Computer for Acos {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => {
                     if *mv < -1 || *mv > 1 {
-                        MessageValue::Null
+                        return;
                     } else {
                         MessageValue::Float64((*mv as f64).acos())
                     }

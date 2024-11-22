@@ -1,8 +1,7 @@
-use crate::{
-    add_or_set_message_value, computes::Computer, get_string_field_arg, Args, StringFieldArg,
-};
 use anyhow::Result;
 use message::{Message, MessageValue};
+
+use crate::{add_or_set_message_value, args::StringFieldArg, computes::Computer, Args};
 
 static SEARCH_STRING_KEY: &str = "search_string";
 
@@ -13,8 +12,8 @@ struct Includes {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    let search_string = get_string_field_arg(&mut args, SEARCH_STRING_KEY)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    let search_string = args.take_string_field(SEARCH_STRING_KEY)?;
     Ok(Box::new(Includes {
         field,
         target_field,

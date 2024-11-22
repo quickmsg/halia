@@ -12,7 +12,7 @@ struct HaliaSha1 {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
     let hasher = Sha1::new();
     Ok(Box::new(HaliaSha1 {
         field,

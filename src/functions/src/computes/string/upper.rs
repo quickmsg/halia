@@ -1,6 +1,7 @@
-use crate::{add_or_set_message_value, computes::Computer, Args};
 use anyhow::Result;
 use message::{Message, MessageValue};
+
+use crate::{add_or_set_message_value, computes::Computer, Args};
 
 struct Upper {
     field: String,
@@ -8,7 +9,7 @@ struct Upper {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
     Ok(Box::new(Upper {
         field,
         target_field,
@@ -17,14 +18,13 @@ pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
 
 impl Computer for Upper {
     fn compute(&mut self, message: &mut Message) {
-        let value = match message.get(&self.field) {
-            Some(mv) => match mv {
-                message::MessageValue::String(s) => MessageValue::String(s.to_uppercase()),
-                _ => MessageValue::Null,
-            },
-            None => MessageValue::Null,
+        let value = match message.get_str(&self.field) {
+            Some(mv) => mv,
+            None => return,
         };
 
-        add_or_set_message_value!(self, message, value);
+        let result = value.to_uppercase();
+
+        add_or_set_message_value!(self, message, MessageValue::String(result));
     }
 }

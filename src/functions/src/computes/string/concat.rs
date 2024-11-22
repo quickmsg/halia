@@ -1,9 +1,7 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
 
-use crate::{
-    add_or_set_message_value, computes::Computer, get_array_string_field_arg, Args, StringFieldArg,
-};
+use crate::{add_or_set_message_value, args::StringFieldArg, computes::Computer, Args};
 
 const STRS_KEY: &str = "strs";
 
@@ -13,9 +11,17 @@ struct Concat {
     target_field: Option<String>,
 }
 
+pub fn validate_conf(args: &Args) -> Result<()> {
+    // if args.get(STRS_KEY).is_none() {
+    //     return Err(anyhow::anyhow!("concat function requires strs arguments"));
+    // }
+
+    Ok(())
+}
+
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    let args = get_array_string_field_arg(&mut args, STRS_KEY)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    let args = args.take_array_string_field(STRS_KEY)?;
 
     Ok(Box::new(Concat {
         field,
@@ -54,9 +60,11 @@ mod tests {
     use message::{Message, MessageValue};
     use serde_json::json;
 
-    use crate::{computes::string::concat::STRS_KEY, FIELD_KEY, TARGET_FIELD_KEY};
-
     use super::new;
+    use crate::{
+        args::{Args, FIELD_KEY, TARGET_FIELD_KEY},
+        computes::string::concat::STRS_KEY,
+    };
 
     #[test]
     fn test_concat() {
@@ -80,6 +88,7 @@ mod tests {
             serde_json::Value::String("key_c".to_owned()),
         );
         args.insert(STRS_KEY.to_owned(), json!(["${key_b}", "value_c", "${22"]));
+        let args = Args::new(args);
 
         let mut computer = new(args).unwrap();
         computer.compute(&mut message);

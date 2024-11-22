@@ -12,8 +12,8 @@ struct Repeat {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    let count = crate::get_usize_arg(&mut args, COUNT_KEY)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    let count = args.take_usize(COUNT_KEY)?;
     Ok(Box::new(Repeat {
         field,
         target_field,

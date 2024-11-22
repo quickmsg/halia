@@ -5,9 +5,7 @@ use brotli::{CompressorWriter, Decompressor};
 use message::MessageValue;
 use tracing::warn;
 
-use crate::{
-    add_or_set_message_value, computes::Computer, get_field_and_option_target_field, Args,
-};
+use crate::{add_or_set_message_value, computes::Computer, Args};
 
 struct HaliaBrotliEncoder {
     field: String,
@@ -15,7 +13,7 @@ struct HaliaBrotliEncoder {
 }
 
 pub fn new_encoder(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
     Ok(Box::new(HaliaBrotliEncoder {
         field,
         target_field,
@@ -67,7 +65,7 @@ struct HaliaBrotliDecoder {
 }
 
 pub fn new_decoder(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
     Ok(Box::new(HaliaBrotliDecoder {
         field,
         target_field,

@@ -4,7 +4,7 @@ use anyhow::Result;
 use message::{Message, MessageValue};
 use regex::Regex;
 
-use crate::{computes::Computer, get_string_arg, Args};
+use crate::{computes::Computer, Args};
 
 const TARGET_FIELD_KEY: &str = "target_field";
 const TEMPLATE_KEY: &str = "template";
@@ -16,8 +16,8 @@ struct New {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let target_field = get_string_arg(&mut args, TARGET_FIELD_KEY)?;
-    let template = get_string_arg(&mut args, TEMPLATE_KEY)?;
+    let target_field = args.take_string(TARGET_FIELD_KEY)?;
+    let template = args.take_string(TEMPLATE_KEY)?;
     let re = Regex::new(r"\$\{(.*?)\}").unwrap();
     let mut template_fields = HashSet::new();
     for cap in re.captures_iter(&template) {
@@ -57,7 +57,8 @@ mod tests {
     use message::Message;
     use message::MessageValue;
 
-    use crate::TARGET_FIELD_KEY;
+    use crate::args::Args;
+    use crate::args::TARGET_FIELD_KEY;
 
     use super::new;
 
@@ -80,6 +81,7 @@ mod tests {
             serde_json::Value::String("hello ${key_a} bb ${key_b} ${22".to_owned()),
         );
 
+        let args = Args::new(args);
         let mut computer = new(args).unwrap();
         computer.compute(&mut message);
 

@@ -3,10 +3,7 @@ use hmac::{Hmac, Mac};
 use message::Message;
 use sha2::Sha256;
 
-use crate::{
-    add_or_set_message_value, computes::Computer, get_field_and_option_target_field,
-    get_string_arg, Args,
-};
+use crate::{add_or_set_message_value, computes::Computer, Args};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -17,8 +14,8 @@ struct HaliaHmacSha256 {
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
-    let (field, target_field) = get_field_and_option_target_field(&mut args)?;
-    let key = get_string_arg(&mut args, "key")?;
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    let key = args.take_string("key")?;
     let hasher = HmacSha256::new_from_slice(key.as_bytes())?;
 
     Ok(Box::new(HaliaHmacSha256 {
