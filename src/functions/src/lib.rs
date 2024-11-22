@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common::get_dynamic_value_from_json;
-use message::MessageBatch;
+use message::{Message, MessageBatch};
 use types::rules::functions::ItemConf;
 
 pub mod aggregation;
@@ -141,4 +141,17 @@ fn get_field_and_option_target_field(args: &mut Args) -> Result<(String, Option<
     let field = get_string_arg(args, FIELD_KEY)?;
     let target_field = get_option_string_arg(args, TARGET_FIELD_KEY)?;
     Ok((field, target_field))
+}
+
+fn get_usize_arg(args: &mut Args, key: &str) -> Result<usize> {
+    let arg = args
+        .remove(key)
+        .ok_or_else(|| anyhow::Error::msg(format!("Key '{}' not found", key)))?;
+    match arg {
+        serde_json::Value::Number(n) => Ok(n
+            .as_u64()
+            .ok_or_else(|| anyhow::Error::msg(format!("{} must be a u64", key)))?
+            as usize),
+        _ => bail!("{} must be a u64", key),
+    }
 }

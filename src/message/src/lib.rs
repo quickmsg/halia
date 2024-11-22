@@ -167,12 +167,10 @@ impl Message {
     }
 
     pub fn get_str(&self, field: &str) -> Option<&String> {
-        match self.value.get(field) {
-            Some(value) => match value {
-                MessageValue::String(s) => Some(s),
-                _ => None,
-            },
-            None => None,
+        if let Some(MessageValue::String(s)) = self.get(field) {
+            Some(s)
+        } else {
+            None
         }
     }
 

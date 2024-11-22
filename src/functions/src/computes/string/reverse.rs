@@ -1,7 +1,7 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
 
-use crate::{computes::Computer, Args};
+use crate::{add_or_set_message_value, computes::Computer, Args};
 
 struct Reverse {
     field: String,
@@ -18,17 +18,13 @@ pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
 
 impl Computer for Reverse {
     fn compute(&mut self, message: &mut Message) {
-        let value = match message.get(&self.field) {
-            Some(mv) => match mv {
-                message::MessageValue::String(s) => MessageValue::Int64(s.len() as i64),
-                _ => MessageValue::Null,
-            },
-            None => MessageValue::Null,
+        let value = match message.get_str(&self.field) {
+            Some(mv) => mv,
+            None => return,
         };
 
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), value),
-            None => message.set(&self.field, value),
-        }
+        let result = value.chars().rev().collect::<String>();
+
+        add_or_set_message_value!(self, message, MessageValue::String(result));
     }
 }

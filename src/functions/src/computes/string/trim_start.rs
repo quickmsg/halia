@@ -3,20 +3,20 @@ use message::{Message, MessageValue};
 
 use crate::{computes::Computer, Args};
 
-struct Ltrim {
+struct TrimStart {
     field: String,
     target_field: Option<String>,
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    Ok(Box::new(Ltrim {
+    Ok(Box::new(TrimStart {
         field,
         target_field,
     }))
 }
 
-impl Computer for Ltrim {
+impl Computer for TrimStart {
     fn compute(&mut self, message: &mut Message) {
         let value = match message.get(&self.field) {
             Some(mv) => match mv {

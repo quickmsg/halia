@@ -63,17 +63,19 @@ pub enum Type {
     StringLength,
     StringLower,
     StringUpper,
-    StringLtrim,
-    StringLpad,
+    StringTrimStart,
     StringReverse,
-    StringRtrim,
+    StringTrimEnd,
     StringSplit,
     StringTrim,
-
+    StringPadStart,
+    StringPadEnd,
     StringNumbytes,
     StringLastIndexOf,
     StringRegexMatch,
     StringSlice,
+    StringRepeat,
+    StringIncludes,
 
     // hash
     HashMd5,

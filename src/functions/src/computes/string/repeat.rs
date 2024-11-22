@@ -3,28 +3,32 @@ use message::{Message, MessageValue};
 
 use crate::{add_or_set_message_value, computes::Computer, Args};
 
-struct Length {
+static COUNT_KEY: &str = "count";
+
+struct Repeat {
     field: String,
     target_field: Option<String>,
+    count: usize,
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    Ok(Box::new(Length {
+    let count = crate::get_usize_arg(&mut args, COUNT_KEY)?;
+    Ok(Box::new(Repeat {
         field,
         target_field,
+        count,
     }))
 }
 
-impl Computer for Length {
+impl Computer for Repeat {
     fn compute(&mut self, message: &mut Message) {
         let value = match message.get_str(&self.field) {
-            Some(v) => v,
+            Some(mv) => mv,
             None => return,
         };
 
-        let reuslt = value.len() as i64;
-
-        add_or_set_message_value!(self, message, MessageValue::Int64(reuslt));
+        let result = value.repeat(self.count);
+        add_or_set_message_value!(self, message, MessageValue::String(result));
     }
 }

@@ -1,56 +1,57 @@
-use crate::{computes::Computer, StringArg};
 use anyhow::Result;
 use message::{Message, MessageValue};
 use regex::Regex;
-use types::rules::functions::computer::ItemConf;
 
-use super::get_string_arg;
+use crate::{add_or_set_message_value, computes::Computer, get_string_field_arg, Args, StringFieldArg};
+
+const REGEXP_KEY: &str = "regexp";
 
 struct RegexMatch {
     field: String,
     target_field: Option<String>,
-    arg: StringArg,
+    regexp_const: Option<Regex>,
+    regexp_field: Option<String>,
 }
 
-pub fn new(conf: ItemConf) -> Result<Box<dyn Computer>> {
-    let arg = get_string_arg(&conf, "value")?;
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
+    let regexp = get_string_field_arg(&mut args, REGEXP_KEY)?;
+    let (regexp_const, regexp_field) = match regexp {
+        StringFieldArg::Const(s) => match Regex::new(&s) {
+            Ok(reg) => (Some(reg), None),
+            Err(e) => return Err(anyhow::anyhow!(format!("Invalid regexp, err: {:?}", e))),
+        },
+        StringFieldArg::Field(f) => (None, Some(f)),
+    };
 
     Ok(Box::new(RegexMatch {
-        field: conf.field,
-        target_field: conf.target_field,
-        arg,
+        field,
+        target_field,
+        regexp_const,
+        regexp_field,
     }))
 }
 
 impl Computer for RegexMatch {
-    fn compute(&self, message: &mut Message) {
-        let value = match message.get(&self.field) {
-            Some(mv) => match mv {
-                MessageValue::String(s) => s,
-                _ => return,
-            },
+    fn compute(&mut self, message: &mut Message) {
+        let value = match message.get_str(&self.field) {
+            Some(mv) => mv,
             None => return,
         };
 
-        let resp_value = match &self.arg {
-            StringArg::Const(s) => self.reg.find(&value).is_some(),
-            StringArg::Field(s) => match message.get(s) {
-                Some(mv) => match mv {
-                    MessageValue::String(s) => match Regex::new(&s) {
-                        Ok(reg) => reg.find(&value).is_some(),
-                        Err(_) => return,
-                    },
-                    _ => return,
+        let resp_value = match (&self.regexp_const, &self.regexp_field) {
+            (None, Some(field)) => match message.get_str(field) {
+                Some(mv) => match Regex::new(&mv) {
+                    Ok(reg) => reg.find(&value).is_some(),
+                    Err(_) => return,
                 },
                 None => return,
             },
+            (Some(regex), None) => regex.find(&value).is_some(),
+            _ => unreachable!(),
         };
 
-        let resp_value = MessageValue::Boolean(resp_value);
-
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), resp_value),
-            None => message.set(&self.field, resp_value),
-        }
+        let result = MessageValue::Boolean(resp_value);
+        add_or_set_message_value!(self, message, result);
     }
 }

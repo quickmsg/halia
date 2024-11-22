@@ -82,12 +82,11 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::Type::StringLength => string::length::new(item_conf.args)?,
             types::rules::functions::Type::StringLower => string::lower::new(item_conf.args)?,
             types::rules::functions::Type::StringUpper => string::upper::new(item_conf.args)?,
-            types::rules::functions::Type::StringLtrim => string::ltrim::new(item_conf.args)?,
-            // types::rules::functions::Type::StringLpad => string::lpad::new(item_conf)?,
-            types::rules::functions::Type::StringLpad => todo!(),
+            types::rules::functions::Type::StringTrimStart => {
+                string::trim_start::new(item_conf.args)?
+            }
             types::rules::functions::Type::StringReverse => string::reverse::new(item_conf.args)?,
-            types::rules::functions::Type::StringRtrim => string::rtrim::new(item_conf.args)?,
-            // types::rules::functions::Type::StringSplit => string::split::new(item_conf)?,
+            types::rules::functions::Type::StringTrimEnd => string::trim_end::new(item_conf.args)?,
             types::rules::functions::Type::StringSplit => todo!(),
             types::rules::functions::Type::StringTrim => string::trim::new(item_conf.args)?,
             types::rules::functions::Type::StringEndsWith => {
@@ -102,12 +101,16 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             }
             types::rules::functions::Type::StringNumbytes => string::numbytes::new(item_conf.args)?,
             types::rules::functions::Type::StringRegexMatch => {
-                // string::regex_match::new(item_conf)?
-                todo!()
+                string::regex_match::new(item_conf.args)?
             }
             types::rules::functions::Type::StringConcat => string::concat::new(item_conf.args)?,
-            // types::rules::functions::Type::StringSlice => string::slice::new(item_conf)?,
             types::rules::functions::Type::StringSlice => todo!(),
+            types::rules::functions::Type::StringPadEnd => string::pad_end::new(item_conf.args)?,
+            types::rules::functions::Type::StringPadStart => {
+                string::pad_start::new(item_conf.args)?
+            }
+            types::rules::functions::Type::StringRepeat => string::repeat::new(item_conf.args)?,
+            types::rules::functions::Type::StringIncludes => string::includes::new(item_conf.args)?,
 
             // hash
             types::rules::functions::Type::HashMd5 => hash::md5::new(item_conf.args)?,

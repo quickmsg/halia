@@ -26,24 +26,17 @@ pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
 
 impl Computer for Concat {
     fn compute(&mut self, message: &mut Message) {
-        let value = match message.get(&self.field) {
-            Some(mv) => match mv {
-                MessageValue::String(s) => s,
-                _ => return,
-            },
+        let value = match message.get_str(&self.field) {
+            Some(v) => v,
             None => return,
         };
 
         let mut result = value.clone();
-
         for arg in &self.args {
             match arg {
                 StringFieldArg::Const(s) => result.push_str(s),
-                StringFieldArg::Field(field) => match message.get(field) {
-                    Some(mv) => match mv {
-                        MessageValue::String(s) => result.push_str(s),
-                        _ => return,
-                    },
+                StringFieldArg::Field(field) => match message.get_str(field) {
+                    Some(v) => result.push_str(v),
                     None => return,
                 },
             }
@@ -93,7 +86,9 @@ mod tests {
 
         assert_eq!(
             message.get("key_c"),
-            Some(&MessageValue::String("value_avalue_bvalue_c${22".to_owned()))
+            Some(&MessageValue::String(
+                "value_avalue_bvalue_c${22".to_owned()
+            ))
         );
     }
 }

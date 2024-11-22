@@ -1,45 +1,39 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
 
-use crate::{computes::Computer, get_string_field_arg, Args, StringFieldArg};
+use crate::{
+    add_or_set_message_value, computes::Computer, get_string_field_arg, Args, StringFieldArg,
+};
 
 const SEARCH_STRING_KEY: &str = "search_string";
 
 struct IndexOf {
     field: String,
     target_field: Option<String>,
-    arg: StringFieldArg,
+    search_string: StringFieldArg,
 }
 
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let (field, target_field) = crate::get_field_and_option_target_field(&mut args)?;
-    let arg = get_string_field_arg(&mut args, SEARCH_STRING_KEY)?;
+    let search_string = get_string_field_arg(&mut args, SEARCH_STRING_KEY)?;
     Ok(Box::new(IndexOf {
         field,
         target_field,
-        arg,
+        search_string,
     }))
 }
 
 impl Computer for IndexOf {
     fn compute(&mut self, message: &mut Message) {
-        let value = message.get(&self.field).and_then(|mv| match mv {
-            MessageValue::String(s) => Some(s),
-            _ => None,
-        });
-
-        let value = match value {
+        let value = match message.get_str(&self.field) {
             Some(s) => s,
             None => return,
         };
 
-        let target_value = match &self.arg {
+        let target_value = match &self.search_string {
             StringFieldArg::Const(s) => s,
-            StringFieldArg::Field(f) => match message.get(f) {
-                Some(mv) => match mv {
-                    MessageValue::String(s) => s,
-                    _ => return,
-                },
+            StringFieldArg::Field(f) => match message.get_str(f) {
+                Some(mv) => mv,
                 None => return,
             },
         };
@@ -48,11 +42,8 @@ impl Computer for IndexOf {
             Some(p) => p as i64,
             None => -1,
         };
-        let resp_value = MessageValue::Int64(index);
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), resp_value),
-            None => message.set(&self.field, resp_value),
-        }
+
+        add_or_set_message_value!(self, message, MessageValue::Int64(index));
     }
 }
 

@@ -1,7 +1,9 @@
-use crate::{computes::Computer, Args};
 use anyhow::Result;
 use message::{Message, MessageValue};
 
+use crate::{add_or_set_message_value, computes::Computer, Args};
+
+// TODO 搞清楚具体需求
 struct Numbytes {
     field: String,
     target_field: Option<String>,
@@ -17,17 +19,12 @@ pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
 
 impl Computer for Numbytes {
     fn compute(&mut self, message: &mut Message) {
-        let value = match message.get(&self.field) {
-            Some(mv) => match mv {
-                MessageValue::String(s) => MessageValue::Int64(s.bytes().len() as i64),
-                _ => MessageValue::Null,
-            },
-            None => MessageValue::Null,
+        let value = match message.get_str(&self.field) {
+            Some(mv) => mv,
+            None => return,
         };
 
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), value),
-            None => message.set(&self.field, value),
-        }
+        let result = value.len() as i64;
+        add_or_set_message_value!(self, message, MessageValue::Int64(result));
     }
 }

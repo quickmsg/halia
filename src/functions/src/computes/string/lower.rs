@@ -1,6 +1,7 @@
-use crate::{computes::Computer, Args};
 use anyhow::Result;
 use message::{Message, MessageValue};
+
+use crate::{add_or_set_message_value, computes::Computer, Args};
 
 struct Lower {
     field: String,
@@ -17,17 +18,13 @@ pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
 
 impl Computer for Lower {
     fn compute(&mut self, message: &mut Message) {
-        let value = match message.get(&self.field) {
-            Some(mv) => match mv {
-                MessageValue::String(s) => MessageValue::String(s.to_lowercase()),
-                _ => MessageValue::Null,
-            },
-            None => MessageValue::Null,
+        let value = match message.get_str(&self.field) {
+            Some(mv) => mv,
+            None => return,
         };
 
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), value),
-            None => message.set(&self.field, value),
-        }
+        let result = value.to_lowercase();
+
+        add_or_set_message_value!(self, message, MessageValue::String(result));
     }
 }
