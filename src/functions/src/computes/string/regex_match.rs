@@ -13,6 +13,11 @@ struct RegexMatch {
     regexp_field: Option<String>,
 }
 
+pub fn validate_conf(mut args: Args) -> Result<()> {
+    args.validate_field_and_option_target_field()?;
+    Ok(())
+}
+
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let (field, target_field) = args.take_field_and_option_target_field()?;
     let regexp = args.take_string_field(REGEXP_KEY)?;

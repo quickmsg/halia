@@ -20,6 +20,12 @@ impl Args {
         Ok((field, target_field))
     }
 
+    pub fn validate_field_and_option_target_field(&mut self) -> Result<()> {
+        let _ = self.take_string(FIELD_KEY)?;
+        let _ = self.take_option_string(TARGET_FIELD_KEY)?;
+        Ok(())
+    }
+
     pub fn take_string_field(&mut self, key: &str) -> Result<StringFieldArg> {
         let arg = self
             .0

@@ -15,6 +15,10 @@ struct New {
     template_fields: Vec<String>,
 }
 
+pub fn validate_conf(mut args: Args) -> Result<()> {
+    Ok(())
+}
+
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let target_field = args.take_string(TARGET_FIELD_KEY)?;
     let template = args.take_string(TEMPLATE_KEY)?;

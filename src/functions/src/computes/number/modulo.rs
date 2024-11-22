@@ -9,6 +9,11 @@ struct Modulo {
     args: Vec<IntFloatFieldArg>,
 }
 
+pub fn validate_conf(mut args: Args) -> Result<()> {
+    args.validate_field_and_option_target_field()?;
+    Ok(())
+}
+
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let (field, target_field) = args.take_field_and_option_target_field()?;
     let args = args.take_array_int_float_field("value")?;

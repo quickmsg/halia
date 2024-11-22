@@ -11,6 +11,11 @@ struct LastIndexOf {
     search_string: StringFieldArg,
 }
 
+pub fn validate_conf(mut args: Args) -> Result<()> {
+    args.validate_field_and_option_target_field()?;
+    Ok(())
+}
+
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let (field, target_field) = args.take_field_and_option_target_field()?;
     let search_string = args.take_string_field(SEARCH_STRING_KEY)?;

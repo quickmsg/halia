@@ -13,6 +13,12 @@ struct PadStart {
     pad_string: Option<String>,
 }
 
+pub fn validate_conf(mut args: Args) -> Result<()> {
+    args.validate_field_and_option_target_field()?;
+    // TODO
+    Ok(())
+}
+
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let (field, target_field) = args.take_field_and_option_target_field()?;
     let target_length = args.take_usize(TARGET_LEGNTH_KEY)?;

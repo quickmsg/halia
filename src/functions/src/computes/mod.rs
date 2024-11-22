@@ -19,37 +19,37 @@ pub struct Node {
     computers: Vec<Box<dyn Computer>>,
 }
 
-pub fn validate_conf(conf: &Conf) -> Result<()> {
-    for item_conf in &conf.items {
+pub fn validate_conf(conf: Conf) -> Result<()> {
+    for item_conf in conf.items.into_iter() {
         match item_conf.typ {
             // number
             types::rules::functions::Type::NumberAbs => {
-                number::abs::validate_conf(&item_conf.args)?
+                number::abs::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberAcos => {
-                number::acos::validate_conf(&item_conf.args)?
+                number::acos::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberAcosh => {
-                number::acosh::validate_conf(&item_conf.args)?
+                number::acosh::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberAdd => {
-                number::add::validate_conf(&item_conf.args)?
+                number::add::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberAsin => {
-                number::asin::validate_conf(&item_conf.args)?
+                number::asin::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberAsinh => {
-                number::asinh::validate_conf(&item_conf.args)?
+                number::asinh::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberAtan => {
-                number::atan::validate_conf(&item_conf.args)?
+                number::atan::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberAtan2 => {
                 // number::atan2::validate_conf(&item_conf)?
                 todo!()
             }
             types::rules::functions::Type::NumberAtanh => {
-                number::atanh::validate_conf(&item_conf.args)?
+                number::atanh::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberBitand => {
                 // number::bitand::validate_conf(&item_conf)?
@@ -68,13 +68,13 @@ pub fn validate_conf(conf: &Conf) -> Result<()> {
                 todo!()
             }
             types::rules::functions::Type::NumberCbrt => {
-                number::cbrt::validate_conf(&item_conf.args)?
+                number::cbrt::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberCeil => {
-                number::ceil::validate_conf(&item_conf.args)?
+                number::ceil::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberCos => {
-                number::cos::validate_conf(&item_conf.args)?
+                number::cos::validate_conf(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberCosh => todo!(),
             types::rules::functions::Type::NumberDegrees => todo!(),

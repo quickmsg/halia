@@ -11,6 +11,11 @@ struct Repeat {
     count: usize,
 }
 
+pub fn validate_conf(mut args: Args) -> Result<()> {
+    args.validate_field_and_option_target_field()?;
+    Ok(())
+}
+
 pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
     let (field, target_field) = args.take_field_and_option_target_field()?;
     let count = args.take_usize(COUNT_KEY)?;

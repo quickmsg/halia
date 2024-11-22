@@ -11,11 +11,8 @@ struct Concat {
     target_field: Option<String>,
 }
 
-pub fn validate_conf(args: &Args) -> Result<()> {
-    // if args.get(STRS_KEY).is_none() {
-    //     return Err(anyhow::anyhow!("concat function requires strs arguments"));
-    // }
-
+pub fn validate_conf(mut args: Args) -> Result<()> {
+    args.validate_field_and_option_target_field()?;
     Ok(())
 }
 
