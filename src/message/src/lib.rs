@@ -174,6 +174,14 @@ impl Message {
         }
     }
 
+    pub fn get_array(&self, field: &str) -> Option<&Vec<MessageValue>> {
+        if let Some(MessageValue::Array(arr)) = self.get(field) {
+            Some(arr)
+        } else {
+            None
+        }
+    }
+
     pub fn get_u8(&self, field: &str) -> Option<u8> {
         match self.value.get(field) {
             Some(value) => match value {

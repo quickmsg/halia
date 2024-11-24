@@ -20,6 +20,12 @@ impl Args {
         Ok((field, target_field))
     }
 
+    pub fn take_field_and_target_field(&mut self) -> Result<(String, String)> {
+        let field = self.take_string(FIELD_KEY)?;
+        let target_field = self.take_string(TARGET_FIELD_KEY)?;
+        Ok((field, target_field))
+    }
+
     pub fn validate_field_and_option_target_field(&mut self) -> Result<()> {
         let _ = self.take_string(FIELD_KEY)?;
         let _ = self.take_option_string(TARGET_FIELD_KEY)?;
@@ -37,6 +43,19 @@ impl Args {
             }
             common::DynamicValue::Const(_) => bail!("只支持字符串常量"),
             common::DynamicValue::Field(s) => Ok(StringFieldArg::Field(s)),
+        }
+    }
+
+    pub fn take_option_string_field(&mut self, key: &str) -> Result<Option<StringFieldArg>> {
+        match self.0.remove(key) {
+            Some(arg) => match get_dynamic_value_from_json(&arg) {
+                common::DynamicValue::Const(serde_json::Value::String(s)) => {
+                    Ok(Some(StringFieldArg::Const(s)))
+                }
+                common::DynamicValue::Const(_) => bail!("只支持字符串常量"),
+                common::DynamicValue::Field(s) => Ok(Some(StringFieldArg::Field(s))),
+            },
+            None => Ok(None),
         }
     }
 
@@ -134,6 +153,43 @@ impl Args {
             _ => bail!("{} must be a u64", key),
         }
     }
+
+    pub fn take_array_bool_string_int_float_field(
+        &mut self,
+        key: &str,
+    ) -> Result<Vec<BoolStringIntFloatFieldArg>> {
+        let arg = self
+            .0
+            .remove(key)
+            .ok_or_else(|| anyhow::anyhow!("not found"))?;
+        match arg {
+            serde_json::Value::Array(vec) => {
+                let mut values = Vec::with_capacity(vec.len());
+                for v in vec.into_iter() {
+                    let v = match v {
+                        serde_json::Value::Null => todo!(),
+                        serde_json::Value::Bool(b) => BoolStringIntFloatFieldArg::ConstBool(b),
+                        serde_json::Value::Number(number) => {
+                            if let Some(f) = number.as_f64() {
+                                BoolStringIntFloatFieldArg::ConstFloat(f)
+                            } else if let Some(i) = number.as_i64() {
+                                BoolStringIntFloatFieldArg::ConstInt(i)
+                            } else {
+                                bail!("只支持数字常量")
+                            }
+                        }
+                        serde_json::Value::String(s) => BoolStringIntFloatFieldArg::ConstString(s),
+                        serde_json::Value::Array(_) => todo!(),
+                        serde_json::Value::Object(_) => todo!(),
+                    };
+                    values.push(v);
+                }
+
+                Ok(values)
+            }
+            _ => bail!("{} must be an array", key),
+        }
+    }
 }
 
 pub(crate) enum StringFieldArg {
@@ -142,6 +198,14 @@ pub(crate) enum StringFieldArg {
 }
 
 pub(crate) enum IntFloatFieldArg {
+    ConstInt(i64),
+    ConstFloat(f64),
+    Field(String),
+}
+
+pub(crate) enum BoolStringIntFloatFieldArg {
+    ConstBool(bool),
+    ConstString(String),
     ConstInt(i64),
     ConstFloat(f64),
     Field(String),

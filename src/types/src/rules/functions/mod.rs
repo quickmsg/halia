@@ -95,6 +95,9 @@ pub enum Type {
 
     // 数组
     ArrayCardinality,
+    ArrayPush,
+    ArrayPop,
+    ArrayJoin,
 
     // compress
     CompressBrotli,
