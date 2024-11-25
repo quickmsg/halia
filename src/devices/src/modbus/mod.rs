@@ -11,6 +11,7 @@ use std::{
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use futures::lock::BiLock;
 use message::RuleMessageBatch;
 use modbus_protocol::{self, rtu, tcp, Context};
 use sink::Sink;
@@ -21,7 +22,7 @@ use tokio::{
     sync::{
         broadcast,
         mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
-        watch, RwLock,
+        watch,
     },
     task::JoinHandle,
     time,
@@ -53,7 +54,7 @@ struct Modbus {
 
     stop_signal_tx: watch::Sender<()>,
     device_err_tx: broadcast::Sender<bool>,
-    err: Arc<RwLock<Option<String>>>,
+    err: BiLock<Option<String>>,
 
     write_tx: UnboundedSender<WritePointEvent>,
     read_tx: UnboundedSender<String>,
@@ -68,7 +69,7 @@ struct JoinHandleData {
     pub stop_signal_rx: watch::Receiver<()>,
     pub write_rx: UnboundedReceiver<WritePointEvent>,
     pub read_rx: UnboundedReceiver<String>,
-    pub err: Arc<RwLock<Option<String>>>,
+    pub err: BiLock<Option<String>>,
     pub rtt: Arc<AtomicU16>,
 }
 
@@ -112,7 +113,7 @@ fn new(id: String, device_conf: DeviceConf) -> Box<dyn Device> {
     let (device_err_tx, _) = broadcast::channel(16);
 
     let sources = Arc::new(DashMap::new());
-    let err = Arc::new(RwLock::new(Some("连接中。。。".to_owned())));
+    let (err1, err2) = BiLock::new(Some("连接中。。。".to_owned()));
     let rtt = Arc::new(AtomicU16::new(0));
     let join_handle_data = JoinHandleData {
         id,
@@ -121,14 +122,14 @@ fn new(id: String, device_conf: DeviceConf) -> Box<dyn Device> {
         write_rx,
         read_rx,
         sources: sources.clone(),
-        err: err.clone(),
+        err: err1,
         rtt: rtt.clone(),
     };
 
     let join_handle = Modbus::event_loop(join_handle_data);
 
     Box::new(Modbus {
-        err,
+        err: err2,
         sources,
         sinks: DashMap::new(),
         stop_signal_tx,
@@ -160,7 +161,8 @@ impl Modbus {
                     Ok(mut ctx) => {
                         add_device_running_count();
                         task_err = None;
-                        *join_handle_data.err.write().await = None;
+                        *join_handle_data.err.lock().await = None;
+
                         if let Err(e) = storage::device::device::update_status(
                             &join_handle_data.id,
                             types::Status::Running,
@@ -217,12 +219,12 @@ impl Modbus {
                         match &task_err {
                             Some(te) => {
                                 if *te != e.to_string() {
-                                    *join_handle_data.err.write().await = Some(e.to_string());
+                                    *join_handle_data.err.lock().await = Some(e.to_string());
                                 }
                             }
                             None => {
                                 sub_device_running_count();
-                                *join_handle_data.err.write().await = Some(e.to_string());
+                                *join_handle_data.err.lock().await = Some(e.to_string());
                                 if let Err(storage_err) = storage::device::device::update_status(
                                     &join_handle_data.id,
                                     types::Status::Error,
@@ -529,7 +531,7 @@ async fn write_value(
 #[async_trait]
 impl Device for Modbus {
     async fn read_err(&self) -> Option<String> {
-        self.err.read().await.clone()
+        self.err.lock().await.clone()
     }
 
     async fn read_source_err(&self, _source_id: &String) -> Option<String> {
@@ -609,7 +611,7 @@ impl Device for Modbus {
     }
 
     async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()> {
-        if let Some(err) = self.err.read().await.as_ref() {
+        if let Some(err) = self.err.lock().await.as_ref() {
             return Err(HaliaError::Common(err.to_string()));
         }
 

@@ -206,10 +206,6 @@ pub async fn create_device(
     device_id: String,
     req: types::devices::device::CreateReq,
 ) -> HaliaResult<()> {
-    add_device_count();
-    storage::device::device::insert(&device_id, req.clone()).await?;
-    events::insert_create(types::events::ResourceType::Device, &device_id).await;
-
     match &req.conf_type {
         ConfType::Template => match &req.template_id {
             Some(device_template_id) => {
@@ -291,6 +287,10 @@ pub async fn create_device(
             DeviceType::Coap => coap::validate_conf(&req.conf)?,
         },
     }
+
+    add_device_count();
+    storage::device::device::insert(&device_id, req.clone()).await?;
+    events::insert_create(types::events::ResourceType::Device, &device_id).await;
 
     Ok(())
 }

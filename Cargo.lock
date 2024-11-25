@@ -1543,6 +1543,7 @@ dependencies = [
  "common",
  "dashmap 6.0.1",
  "events",
+ "futures",
  "message",
  "modbus",
  "opcua",
