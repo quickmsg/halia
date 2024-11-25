@@ -10,8 +10,7 @@ pub struct CustomizeConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub serial: Option<SerialCustomizeConf>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Vec<(String, serde_json::Value)>>,
+    pub metadatas: Vec<(String, serde_json::Value)>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

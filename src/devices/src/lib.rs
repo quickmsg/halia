@@ -12,7 +12,8 @@ use types::{
     devices::{
         device::QueryParams, ConfType, CreateUpdateSourceSinkReq, DeviceType, ListDevicesResp,
         ListSourcesSinksItem, ListSourcesSinksResp, QueryRuleInfoParams, QuerySourcesSinksParams,
-        ReadDeviceResp, RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink, Summary,
+        ReadDeviceResp, ReadSourceSinkResp, RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink,
+        Summary,
     },
     Pagination, Status, Value,
 };
@@ -590,6 +591,32 @@ pub async fn list_sources(
     Ok(ListSourcesSinksResp { count, list })
 }
 
+pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<ReadSourceSinkResp> {
+    let db_source = storage::device::source_sink::read_one(&source_id).await?;
+    let rule_reference_running_cnt =
+        storage::rule::reference::count_running_cnt_by_resource_id(&db_source.id).await?;
+    let rule_reference_total_cnt =
+        storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?;
+    let can_delete = rule_reference_total_cnt == 0;
+    let err = match db_source.status {
+        Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
+            Some(device) => device.read_source_err(&db_source.id).await,
+            None => Some("应用未启动！".to_string()),
+        },
+        _ => None,
+    };
+    Ok(ReadSourceSinkResp {
+        id: db_source.id,
+        name: db_source.name,
+        conf: db_source.conf,
+        status: db_source.status,
+        err,
+        rule_reference_running_cnt,
+        rule_reference_total_cnt,
+        can_delete,
+    })
+}
+
 pub async fn update_source(
     device_id: String,
     source_id: String,
@@ -781,6 +808,32 @@ pub async fn list_sinks(
     }
 
     Ok(ListSourcesSinksResp { count, list })
+}
+
+pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSourceSinkResp> {
+    let db_sink = storage::device::source_sink::read_one(&sink_id).await?;
+    let rule_reference_running_cnt =
+        storage::rule::reference::count_running_cnt_by_resource_id(&db_sink.id).await?;
+    let rule_reference_total_cnt =
+        storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?;
+    let can_delete = rule_reference_total_cnt == 0;
+    let err = match db_sink.status {
+        Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
+            Some(device) => device.read_sink_err(&db_sink.id).await,
+            None => Some("应用未启动！".to_string()),
+        },
+        _ => None,
+    };
+    Ok(ReadSourceSinkResp {
+        id: db_sink.id,
+        name: db_sink.name,
+        conf: db_sink.conf,
+        status: db_sink.status,
+        err,
+        rule_reference_running_cnt,
+        rule_reference_total_cnt,
+        can_delete,
+    })
 }
 
 pub async fn update_sink(

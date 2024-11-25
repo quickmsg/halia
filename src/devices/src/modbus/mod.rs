@@ -322,7 +322,7 @@ impl Modbus {
                                 port: ethernet_customize_conf.port,
                             }),
                             serial: None,
-                            metadata: customize_conf.metadata,
+                            metadatas: customize_conf.metadatas,
                         })
                     }
                     _ => unreachable!(),
@@ -342,7 +342,7 @@ impl Modbus {
                             data_bits: serial_template_conf.data_bits,
                             parity: serial_template_conf.parity,
                         }),
-                        metadata: customize_conf.metadata,
+                        metadatas: customize_conf.metadatas,
                     }),
                     _ => unreachable!(),
                 }
@@ -363,7 +363,7 @@ impl Modbus {
             area: template_conf.area,
             address: template_conf.address,
             interval: template_conf.interval,
-            metadata: customize_conf.metadata,
+            metadatas: customize_conf.metadatas,
         })
     }
 

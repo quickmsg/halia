@@ -21,7 +21,7 @@ pub struct DeviceConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub serial: Option<Serial>,
 
-    pub metadata: Option<Vec<(String, serde_json::Value)>>,
+    pub metadatas: Vec<(String, serde_json::Value)>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -53,7 +53,7 @@ pub struct SourceConf {
     pub address: u16,
     pub interval: u64,
 
-    pub metadata: Option<Vec<(String, serde_json::Value)>>,
+    pub metadatas: Vec<(String, serde_json::Value)>,
 }
 
 #[derive(Serialize)]

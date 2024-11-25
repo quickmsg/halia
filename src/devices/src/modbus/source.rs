@@ -229,16 +229,12 @@ impl Source {
                 let mut message = Message::default();
                 // todo 考虑field的共享，避免clone
                 message.add(self.source_conf.field.clone(), value);
-                if let Some(metadatas) = &device_conf.metadata {
-                    for (k, v) in metadatas {
-                        message.add_metadata(k.clone(), MessageValue::from(v.clone()));
-                    }
+                for (k, v) in &device_conf.metadatas {
+                    message.add_metadata(k.clone(), MessageValue::from(v.clone()));
                 }
 
-                if let Some(metadatas) = &self.source_conf.metadata {
-                    for (k, v) in metadatas {
-                        message.add_metadata(k.clone(), MessageValue::from(v.clone()));
-                    }
+                for (k, v) in &self.source_conf.metadatas {
+                    message.add_metadata(k.clone(), MessageValue::from(v.clone()));
                 }
 
                 let mut message_batch = MessageBatch::default();

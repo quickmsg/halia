@@ -4,7 +4,10 @@ use axum::{
     Json, Router,
 };
 use types::{
-    devices::{CreateUpdateSourceSinkReq, ListSourcesSinksResp, QuerySourcesSinksParams, Summary},
+    devices::{
+        CreateUpdateSourceSinkReq, ListSourcesSinksResp, QuerySourcesSinksParams,
+        ReadSourceSinkResp, Summary,
+    },
     Pagination, Value,
 };
 
@@ -26,9 +29,9 @@ pub fn routes() -> Router {
                 .nest(
                     "/source",
                     Router::new()
-                        .route("/list", get(list_sources))
                         .route("/", post(create_source))
-                        .route("/", get(search_sources))
+                        .route("/list", get(list_sources))
+                        .route("/:source_id", get(read_source))
                         .route("/:source_id", put(update_source))
                         .route("/:source_id/value", put(write_source_value))
                         .route("/:source_id", delete(delete_source)),
@@ -36,9 +39,9 @@ pub fn routes() -> Router {
                 .nest(
                     "/sink",
                     Router::new()
-                        .route("/list", get(list_sinks))
                         .route("/", post(create_sink))
-                        .route("/", get(search_sinks))
+                        .route("/list", get(list_sinks))
+                        .route("/:sink_id", get(read_sink))
                         .route("/:sink_id", put(update_sink))
                         .route("/:sink_id", delete(delete_sink)),
                 ),
@@ -137,6 +140,14 @@ async fn delete_device(Path(device_id): Path<String>) -> AppResult<()> {
     Ok(())
 }
 
+async fn create_source(
+    Path(device_id): Path<String>,
+    Json(req): Json<CreateUpdateSourceSinkReq>,
+) -> AppResult<()> {
+    devices::device_create_source(device_id, req).await?;
+    Ok(())
+}
+
 async fn list_sources(
     Path(device_id): Path<String>,
     Query(pagination): Query<Pagination>,
@@ -146,20 +157,10 @@ async fn list_sources(
     Ok(Json(resp))
 }
 
-async fn create_source(
-    Path(device_id): Path<String>,
-    Json(req): Json<CreateUpdateSourceSinkReq>,
-) -> AppResult<()> {
-    devices::device_create_source(device_id, req).await?;
-    Ok(())
-}
-
-async fn search_sources(
-    Path(device_id): Path<String>,
-    Query(pagination): Query<Pagination>,
-    Query(query_params): Query<QuerySourcesSinksParams>,
-) -> AppResult<Json<ListSourcesSinksResp>> {
-    let resp = devices::list_sources(device_id, pagination, query_params).await?;
+async fn read_source(
+    Path((device_id, source_id)): Path<(String, String)>,
+) -> AppResult<Json<ReadSourceSinkResp>> {
+    let resp = devices::read_source(device_id, source_id).await?;
     Ok(Json(resp))
 }
 
@@ -184,6 +185,14 @@ async fn delete_source(Path((device_id, source_id)): Path<(String, String)>) -> 
     Ok(())
 }
 
+async fn create_sink(
+    Path(device_id): Path<String>,
+    Json(req): Json<CreateUpdateSourceSinkReq>,
+) -> AppResult<()> {
+    devices::device_create_sink(device_id, req).await?;
+    Ok(())
+}
+
 async fn list_sinks(
     Path(device_id): Path<String>,
     Query(pagination): Query<Pagination>,
@@ -193,20 +202,10 @@ async fn list_sinks(
     Ok(Json(resp))
 }
 
-async fn create_sink(
-    Path(device_id): Path<String>,
-    Json(req): Json<CreateUpdateSourceSinkReq>,
-) -> AppResult<()> {
-    devices::device_create_sink(device_id, req).await?;
-    Ok(())
-}
-
-async fn search_sinks(
-    Path(device_id): Path<String>,
-    Query(pagination): Query<Pagination>,
-    Query(query): Query<QuerySourcesSinksParams>,
-) -> AppResult<Json<ListSourcesSinksResp>> {
-    let resp = devices::list_sinks(device_id, pagination, query).await?;
+async fn read_sink(
+    Path((device_id, sink_id)): Path<(String, String)>,
+) -> AppResult<Json<ReadSourceSinkResp>> {
+    let resp = devices::read_sink(device_id, sink_id).await?;
     Ok(Json(resp))
 }
 
