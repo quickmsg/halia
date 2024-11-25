@@ -276,6 +276,7 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
     }
 
     storage::app::update_status(&app_id, types::Status::Running).await?;
+    storage::app::source_sink::update_status_by_app_id(&app_id, types::Status::Running).await?;
     add_app_on_count();
 
     Ok(())
@@ -291,6 +292,7 @@ pub async fn stop_app(app_id: String) -> HaliaResult<()> {
         sub_app_on_count();
         events::insert_stop(types::events::ResourceType::App, &app_id).await;
         storage::app::update_status(&app_id, types::Status::Stopped).await?;
+        storage::app::source_sink::update_status_by_app_id(&app_id, types::Status::Stopped).await?;
     }
 
     Ok(())
