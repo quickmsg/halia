@@ -1,10 +1,4 @@
-use std::{
-    ops::Deref,
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        Arc,
-    },
-};
+use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -29,7 +23,6 @@ pub struct Influxdb {
     err: Arc<RwLock<Option<Arc<String>>>>,
     sinks: DashMap<String, Sink>,
     conf: Arc<InfluxdbConf>,
-    rtt: AtomicU16,
     app_err_tx: UnboundedSender<Option<String>>,
     stop_signal_tx: watch::Sender<()>,
 }
@@ -58,7 +51,6 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         err,
         sinks: DashMap::new(),
         conf: Arc::new(conf),
-        rtt: AtomicU16::new(0),
         app_err_tx,
         stop_signal_tx,
     })

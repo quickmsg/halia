@@ -34,6 +34,7 @@ pub struct ListDataboardsItem {
     pub id: String,
     pub name: String,
     pub status: Status,
+    pub data_count: usize,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -85,6 +86,19 @@ pub struct QueryRuleInfo {
 
 #[derive(Serialize)]
 pub struct RuleInfoResp {
-    pub databoard: SearchDatasItemResp,
-    pub data: SearchDatasInfoResp,
+    pub databoard: RuleInfoDataboard,
+    pub data: RuleInfoData,
+}
+
+#[derive(Serialize)]
+pub struct RuleInfoDataboard {
+    pub id: String,
+    pub name: String,
+    pub status: Status,
+}
+
+#[derive(Serialize)]
+pub struct RuleInfoData {
+    pub id: String,
+    pub name: String,
 }

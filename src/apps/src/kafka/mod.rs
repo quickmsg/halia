@@ -1,10 +1,4 @@
-use std::{
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -37,7 +31,6 @@ pub struct Kafka {
     sinks: Arc<DashMap<String, Sink>>,
     kafka_err_tx: mpsc::Sender<String>,
     jh: Option<JoinHandle<JoinHandleData>>,
-    rtt: AtomicU16,
 }
 
 struct JoinHandleData {
@@ -89,7 +82,6 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         stop_signal_tx,
         kafka_err_tx,
         jh: Some(jh),
-        rtt: AtomicU16::new(0),
     })
 }
 

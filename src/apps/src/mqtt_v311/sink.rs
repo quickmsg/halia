@@ -28,8 +28,8 @@ pub struct Sink {
     pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
-pub struct JoinHandleData {
-    pub topic: Topic,
+pub(crate) struct JoinHandleData {
+    topic: Topic,
     pub conf: SinkConf,
     pub encoder: Box<dyn Encoder>,
     pub message_retainer: Box<dyn SinkMessageRetain>,

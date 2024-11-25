@@ -34,7 +34,6 @@ struct Coap {
 
     coap_client: Arc<UdpCoAPClient>,
     err: Option<String>,
-    rtt: u16,
     token_manager: Arc<Mutex<TokenManager>>,
 }
 
@@ -48,7 +47,6 @@ pub async fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn Dev
         sinks: DashMap::new(),
         coap_client,
         err: None,
-        rtt: 0,
         token_manager: Arc::new(Mutex::new(TokenManager::new())),
     }))
 }

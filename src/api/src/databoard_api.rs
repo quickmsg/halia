@@ -5,8 +5,8 @@ use axum::{
 };
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, QueryDatasParams, QueryParams,
-        SearchDatasResp, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, ListDataboardsResp, QueryDatasParams,
+        QueryParams, SearchDatasResp, Summary,
     },
     Pagination,
 };
@@ -44,10 +44,9 @@ async fn create_databoard(Json(req): Json<CreateUpdateDataboardReq>) -> AppResul
 async fn list_databoards(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
-) -> AppResult<Json<String>> {
-    todo!()
-    // let resp = databoard::search_databoards(pagination, query_params).await?;
-    // Ok(Json(resp))
+) -> AppResult<Json<ListDataboardsResp>> {
+    let result = databoard::list_databoards(pagination, query_params).await?;
+    Ok(Json(result))
 }
 
 async fn update_databoard(

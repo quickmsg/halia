@@ -432,6 +432,9 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     add_device_on_count();
     storage::device::device::update_status(&device_id, types::Status::Running).await?;
+    storage::device::source_sink::update_status_by_device_id(&device_id, types::Status::Running)
+        .await?;
+
     Ok(())
 }
 
@@ -445,6 +448,11 @@ pub async fn stop_device(device_id: String) -> HaliaResult<()> {
         sub_device_on_count();
         events::insert_stop(types::events::ResourceType::Device, &device_id).await;
         storage::device::device::update_status(&device_id, types::Status::Stopped).await?;
+        storage::device::source_sink::update_status_by_device_id(
+            &device_id,
+            types::Status::Stopped,
+        )
+        .await?;
     }
 
     Ok(())

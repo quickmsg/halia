@@ -13,7 +13,7 @@ static TABLE_NAME: &str = "databoard_datas";
 #[derive(FromRow)]
 struct DbData {
     pub id: String,
-    pub parent_id: String,
+    pub databoard_id: String,
     pub name: String,
     pub conf: Vec<u8>,
     pub ts: i64,
@@ -23,7 +23,7 @@ impl DbData {
     pub fn transfer(self) -> Result<Data> {
         Ok(Data {
             id: self.id,
-            parent_id: self.parent_id,
+            parent_id: self.databoard_id,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
             ts: self.ts,
@@ -44,7 +44,7 @@ pub(crate) fn create_table() -> String {
         r#"  
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
-    parent_id CHAR(32) NOT NULL,
+    databoard_id CHAR(32) NOT NULL,
     name VARCHAR(255) NOT NULL UNIQUE,
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
@@ -54,19 +54,15 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert(
-    databoard_id: &String,
-    databoard_data_id: &String,
-    req: CreateUpdateDataReq,
-) -> Result<()> {
+pub async fn insert(id: &String, databoard_id: &String, req: CreateUpdateDataReq) -> Result<()> {
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, parent_id, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, databoard_id, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(databoard_data_id)
+    .bind(id)
     .bind(databoard_id)
     .bind(req.name)
     .bind(serde_json::to_vec(&req.ext)?)
@@ -74,6 +70,16 @@ pub async fn insert(
     .execute(POOL.get().unwrap())
     .await?;
     Ok(())
+}
+
+pub async fn count_by_databoard_id(databoard_id: &String) -> Result<usize> {
+    let count: i64 = sqlx::query_scalar(
+        format!("SELECT COUNT(*) FROM {} WHERE databoard_id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(databoard_id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+    Ok(count as usize)
 }
 
 pub async fn search(

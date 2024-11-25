@@ -203,6 +203,16 @@ pub async fn update_status(id: &String, status: Status) -> Result<()> {
     Ok(())
 }
 
+pub async fn update_status_by_device_id(device_id: &String, status: Status) -> Result<()> {
+    sqlx::query(format!("UPDATE {} SET status = ? WHERE device_id = ?", TABLE_NAME).as_str())
+        .bind(Into::<i32>::into(status))
+        .bind(device_id)
+        .execute(POOL.get().unwrap())
+        .await?;
+
+    Ok(())
+}
+
 async fn read_by_device_id(
     source_sink_type: SourceSinkType,
     device_id: &String,

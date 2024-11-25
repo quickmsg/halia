@@ -11,8 +11,9 @@ use tokio::sync::mpsc;
 use types::{
     databoard::{
         CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, DataboardConf, ListDataboardsItem,
-        ListDataboardsResp, QueryDatasParams, QueryParams, QueryRuleInfo, RuleInfoResp,
-        SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp, Summary,
+        ListDataboardsResp, QueryDatasParams, QueryParams, QueryRuleInfo, RuleInfoData,
+        RuleInfoDataboard, RuleInfoResp, SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp,
+        Summary,
     },
     Pagination,
 };
@@ -86,33 +87,17 @@ pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
     let db_databoard = storage::databoard::read_one(&query.databoard_id).await?;
     let db_databoard_data = storage::databoard::data::read_one(&query.data_id).await?;
 
-    // Ok(RuleInfoResp {
-    //     databoard: SearchDatasItemResp {
-    //         id: db_databoard.id,
-    //         on: db_databoard.status == types::Boolean::True,
-    //         conf: CreateUpdateDataboardReq {
-    //             name: db_databoard.name,
-    //             ext: serde_json::from_value(db_databoard.conf)?,
-    //         },
-    //     },
-    //     data: SearchDatasInfoResp {
-    //         id: db_databoard_data.id,
-    //         conf: CreateUpdateDataReq {
-    //             name: db_databoard_data.name,
-    //             ext: serde_json::from_value(db_databoard_data.conf)?,
-    //         },
-    //         value: None,
-    //         ts: Some(0),
-    //     },
-    // })
-    todo!()
-}
-
-pub async fn create_databoard(req: CreateUpdateDataboardReq) -> HaliaResult<()> {
-    let id = common::get_id();
-    add_databoard_count();
-    storage::databoard::insert(&id, req).await?;
-    Ok(())
+    Ok(RuleInfoResp {
+        databoard: RuleInfoDataboard {
+            id: db_databoard.id,
+            name: db_databoard.name,
+            status: db_databoard.status,
+        },
+        data: RuleInfoData {
+            id: db_databoard_data.id,
+            name: db_databoard_data.name,
+        },
+    })
 }
 
 pub async fn list_databoards(
@@ -121,16 +106,25 @@ pub async fn list_databoards(
 ) -> HaliaResult<ListDataboardsResp> {
     let (count, db_databoards) = storage::databoard::query(pagination, query).await?;
 
-    let list = db_databoards
-        .into_iter()
-        .map(|db_databard| ListDataboardsItem {
-            id: db_databard.id,
-            name: db_databard.name,
-            status: db_databard.status,
-        })
-        .collect::<Vec<_>>();
+    let mut list = Vec::with_capacity(db_databoards.len());
+    for db_databoard in db_databoards {
+        let data_count = storage::databoard::data::count_by_databoard_id(&db_databoard.id).await?;
+        list.push(ListDataboardsItem {
+            id: db_databoard.id,
+            name: db_databoard.name,
+            status: db_databoard.status,
+            data_count,
+        });
+    }
 
     Ok(ListDataboardsResp { count, list })
+}
+
+pub async fn create_databoard(req: CreateUpdateDataboardReq) -> HaliaResult<()> {
+    let id = common::get_id();
+    add_databoard_count();
+    storage::databoard::insert(&id, req).await?;
+    Ok(())
 }
 
 pub async fn update_databoard(

@@ -8,7 +8,6 @@ use axum::{
     Json, Router,
 };
 use common::{error::HaliaError, sys::get_machine_info};
-use storage::app::App;
 use tokio::net::TcpListener;
 use tower_http::{
     cors::{Any, CorsLayer},
