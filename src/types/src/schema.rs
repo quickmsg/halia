@@ -136,7 +136,7 @@ pub struct ListSchemasItem {
     pub name: String,
     pub schema_type: SchemaType,
     pub protocol_type: ProtocolType,
-    pub refrence_cnt: usize,
+    pub reference_cnt: usize,
     pub can_delete: bool,
 }
 
@@ -147,6 +147,78 @@ pub struct ReadSchemaResp {
     pub schema_type: SchemaType,
     pub protocol_type: ProtocolType,
     pub conf: serde_json::Value,
-    pub refrence_cnt: usize,
+    pub reference_cnt: usize,
     pub can_delete: bool,
+}
+
+#[derive(Serialize)]
+pub struct ListReferencesResp {
+    pub count: usize,
+    pub list: Vec<ListReferencesItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListReferencesItem {
+    pub parent_type: ParentType,
+    pub parent_id: String,
+    pub parent_name: String,
+    pub resource_type: ResourceType,
+    pub resource_id: String,
+    pub resource_name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParentType {
+    App,
+    Device,
+}
+
+impl Into<i32> for ParentType {
+    fn into(self) -> i32 {
+        match self {
+            ParentType::App => 1,
+            ParentType::Device => 2,
+        }
+    }
+}
+
+impl TryFrom<i32> for ParentType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(ParentType::App),
+            2 => Ok(ParentType::Device),
+            _ => bail!("未知资源类型: {}", value),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceType {
+    Source,
+    Sink,
+}
+
+impl Into<i32> for ResourceType {
+    fn into(self) -> i32 {
+        match self {
+            ResourceType::Source => 1,
+            ResourceType::Sink => 2,
+        }
+    }
+}
+
+impl TryFrom<i32> for ResourceType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(ResourceType::Source),
+            2 => Ok(ResourceType::Sink),
+            _ => bail!("未知资源类型: {}", value),
+        }
+    }
 }

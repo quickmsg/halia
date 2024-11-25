@@ -319,7 +319,7 @@ pub async fn create_source(app_id: String, req: CreateUpdateSourceSinkReq) -> Ha
     let app_type: AppType = storage::app::read_app_type(&app_id).await?;
     let source_id = common::get_id();
     match app_type {
-        AppType::MqttV311 => mqtt_v311::process_source_conf(&source_id, &req.conf).await?,
+        AppType::MqttV311 => mqtt_v311::process_source_conf(&app_id, &source_id, &req.conf).await?,
         AppType::MqttV50 => mqtt_v50::validate_source_conf(&req.conf)?,
         AppType::Http => http::validate_source_conf(&req.conf)?,
         AppType::Kafka | AppType::InfluxdbV1 | AppType::InfluxdbV2 | AppType::Tdengine => {

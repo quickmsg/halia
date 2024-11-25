@@ -8,7 +8,8 @@ use message::MessageBatch;
 use types::{
     schema::{
         AvroDecodeConf, CreateUpdateSchemaReq, CsvDecodeConf, DecodeType, EncodeType,
-        ListSchemasItem, ListSchemasResp, QueryParams, ReadSchemaResp, TemplateEncodeConf,
+        ListReferencesItem, ListReferencesResp, ListSchemasItem, ListSchemasResp, QueryParams,
+        ReadSchemaResp, TemplateEncodeConf,
     },
     Pagination,
 };
@@ -48,15 +49,14 @@ pub async fn list(
 
     let mut list = vec![];
     for db_schema in db_schemas {
+        let reference_cnt = storage::schema::reference::count_by_schema_id(&db_schema.id).await?;
         list.push(ListSchemasItem {
             id: db_schema.id,
             name: db_schema.name,
             schema_type: db_schema.schema_type,
             protocol_type: db_schema.protocol_type,
-            // TODO
-            refrence_cnt: 0,
-            // TODO
-            can_delete: false,
+            reference_cnt,
+            can_delete: reference_cnt == 0,
         });
     }
 
@@ -65,16 +65,15 @@ pub async fn list(
 
 pub async fn read(id: String) -> HaliaResult<ReadSchemaResp> {
     let db_schema = storage::schema::read_one(&id).await?;
+    let reference_cnt = storage::schema::reference::count_by_schema_id(&db_schema.id).await?;
     Ok(ReadSchemaResp {
         id,
         name: db_schema.name,
         schema_type: db_schema.schema_type,
         protocol_type: db_schema.protocol_type,
         conf: db_schema.conf,
-        // TODO
-        refrence_cnt: 0,
-        // TODO
-        can_delete: false,
+        reference_cnt,
+        can_delete: reference_cnt == 0,
     })
 }
 
@@ -86,7 +85,28 @@ pub async fn update(id: String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
 
 pub async fn delete(id: String) -> HaliaResult<()> {
     storage::schema::delete_by_id(&id).await?;
-    todo!()
+    Ok(())
+}
+
+pub async fn list_references(
+    id: String,
+    pagination: Pagination,
+) -> HaliaResult<ListReferencesResp> {
+    let (count, references) = storage::schema::reference::query(&id, pagination).await?;
+    let mut list = vec![];
+    for reference in references {
+        list.push(ListReferencesItem {
+            parent_type: reference.parent_type,
+            parent_id: reference.parent_id,
+            // parent_name: reference.parent_name,
+            parent_name: "".to_owned(),
+            resource_type: reference.resource_type,
+            resource_id: reference.resource_id,
+            // resource_name: reference.resource_name,
+            resource_name: "".to_owned(),
+        });
+    }
+    Ok(ListReferencesResp { count, list })
 }
 
 fn validate_conf(req: &CreateUpdateSchemaReq) -> HaliaResult<()> {
@@ -166,15 +186,10 @@ pub async fn new_encoder(
     }
 }
 
-pub enum ResourceType {
-    Device,
-    App,
-}
-
-pub async fn reference(
-    _rt: ResourceType,
+pub async fn reference_app_source(
     schema_id: &String,
-    resource_id: &String,
+    app_id: &String,
+    app_source_id: &String,
 ) -> HaliaResult<()> {
-    storage::schema::reference::insert(schema_id, resource_id).await
+    storage::schema::reference::insert_app_source(schema_id, app_id, app_source_id).await
 }

@@ -4,7 +4,9 @@ use axum::{
     Json, Router,
 };
 use types::{
-    schema::{CreateUpdateSchemaReq, ListSchemasResp, QueryParams, ReadSchemaResp},
+    schema::{
+        CreateUpdateSchemaReq, ListReferencesResp, ListSchemasResp, QueryParams, ReadSchemaResp,
+    },
     Pagination,
 };
 
@@ -17,8 +19,7 @@ pub fn routes() -> Router {
         .route("/:id", get(read_schema))
         .route("/:id", put(update_schema))
         .route("/:id", delete(delete_schema))
-    // TODO
-    // .route("/:id/references", get(list_references))
+        .route("/:id/references", get(list_references))
 }
 
 async fn create_schema(Json(req): Json<CreateUpdateSchemaReq>) -> AppResult<()> {
@@ -50,4 +51,12 @@ async fn update_schema(
 async fn delete_schema(Path(id): Path<String>) -> AppResult<()> {
     schema::delete(id).await?;
     Ok(())
+}
+
+async fn list_references(
+    Path(id): Path<String>,
+    Query(pagination): Query<Pagination>,
+) -> AppResult<Json<ListReferencesResp>> {
+    let resp = schema::list_references(id, pagination).await?;
+    Ok(Json(resp))
 }

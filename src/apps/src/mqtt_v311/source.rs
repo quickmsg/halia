@@ -23,7 +23,11 @@ impl Source {
         }
     }
 
-    pub async fn process_conf(id: &String, conf: &SourceConf) -> HaliaResult<()> {
+    pub async fn process_conf(
+        app_id: &String,
+        source_id: &String,
+        conf: &SourceConf,
+    ) -> HaliaResult<()> {
         if !valid_filter(&conf.topic) {
             return Err(HaliaError::Common("topic错误！".to_owned()));
         }
@@ -33,7 +37,7 @@ impl Source {
             | types::schema::DecodeType::AvroWithSchema
             | types::schema::DecodeType::Protobuf => match &conf.schema_id {
                 Some(schema_id) => {
-                    schema::reference(schema::ResourceType::Device, schema_id, id).await?
+                    schema::reference_app_source(schema_id, app_id, source_id).await?
                 }
                 None => return Err(HaliaError::Common("请填写schema_id".to_owned())),
             },
