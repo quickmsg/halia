@@ -74,44 +74,58 @@ impl Source {
             },
             types::devices::device::modbus::Type::Int8
             | types::devices::device::modbus::Type::Uint8 => match &conf.data_type.coder_type {
-                types::devices::device::modbus::CoderType::A
-                | types::devices::device::modbus::CoderType::B => {}
-                _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
+                Some(coder_type) => match coder_type {
+                    types::devices::device::modbus::CoderType::A
+                    | types::devices::device::modbus::CoderType::B => {}
+                    _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
+                },
+                None => return Err(HaliaError::Common("必须填写编码类型！".to_owned())),
             },
             types::devices::device::modbus::Type::Int16
             | types::devices::device::modbus::Type::Uint16 => match &conf.data_type.coder_type {
-                types::devices::device::modbus::CoderType::A
-                | types::devices::device::modbus::CoderType::B
-                | types::devices::device::modbus::CoderType::AB
-                | types::devices::device::modbus::CoderType::BA => {}
-                _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
-            },
-            types::devices::device::modbus::Type::Int32
-            | types::devices::device::modbus::Type::Uint32
-            | types::devices::device::modbus::Type::Float32 => match &conf.data_type.coder_type {
-                types::devices::device::modbus::CoderType::ABCD
-                | types::devices::device::modbus::CoderType::BADC
-                | types::devices::device::modbus::CoderType::CDAB
-                | types::devices::device::modbus::CoderType::DCBA => {}
-                _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
-            },
-            types::devices::device::modbus::Type::Int64
-            | types::devices::device::modbus::Type::Uint64
-            | types::devices::device::modbus::Type::Float64 => match &conf.data_type.coder_type {
-                types::devices::device::modbus::CoderType::ABCDEFGH
-                | types::devices::device::modbus::CoderType::BADCFEHG
-                | types::devices::device::modbus::CoderType::GHEFCDAB
-                | types::devices::device::modbus::CoderType::HGFEDCBA => {}
-                _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
-            },
-
-            types::devices::device::modbus::Type::String => {
-                match conf.data_type.coder_type {
+                Some(coder_type) => match coder_type {
                     types::devices::device::modbus::CoderType::A
                     | types::devices::device::modbus::CoderType::B
                     | types::devices::device::modbus::CoderType::AB
                     | types::devices::device::modbus::CoderType::BA => {}
                     _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
+                },
+                None => return Err(HaliaError::Common("必须填写编码类型！".to_owned())),
+            },
+            types::devices::device::modbus::Type::Int32
+            | types::devices::device::modbus::Type::Uint32
+            | types::devices::device::modbus::Type::Float32 => match &conf.data_type.coder_type {
+                Some(coder_type) => match coder_type {
+                    types::devices::device::modbus::CoderType::ABCD
+                    | types::devices::device::modbus::CoderType::BADC
+                    | types::devices::device::modbus::CoderType::CDAB
+                    | types::devices::device::modbus::CoderType::DCBA => {}
+                    _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
+                },
+                None => return Err(HaliaError::Common("必须填写编码类型！".to_owned())),
+            },
+            types::devices::device::modbus::Type::Int64
+            | types::devices::device::modbus::Type::Uint64
+            | types::devices::device::modbus::Type::Float64 => {
+                match &conf.data_type.coder_type.unwrap() {
+                    types::devices::device::modbus::CoderType::ABCDEFGH
+                    | types::devices::device::modbus::CoderType::BADCFEHG
+                    | types::devices::device::modbus::CoderType::GHEFCDAB
+                    | types::devices::device::modbus::CoderType::HGFEDCBA => {}
+                    _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
+                }
+            }
+
+            types::devices::device::modbus::Type::String => {
+                match conf.data_type.coder_type {
+                    Some(coder_type) => match coder_type {
+                        types::devices::device::modbus::CoderType::A
+                        | types::devices::device::modbus::CoderType::B
+                        | types::devices::device::modbus::CoderType::AB
+                        | types::devices::device::modbus::CoderType::BA => {}
+                        _ => return Err(HaliaError::Common("不支持的编码类型！".to_owned())),
+                    },
+                    None => return Err(HaliaError::Common("必须填写编码类型！".to_owned())),
                 }
                 if conf.data_type.len.is_none() {
                     return Err(HaliaError::Common("必须填写长度配置！".to_owned()));

@@ -46,9 +46,10 @@ pub struct SourceConf {
     pub slave: u8,
     // 字段名称
     pub field: String,
+
+    pub area: Area,
     #[serde(flatten)]
     pub data_type: DataType,
-    pub area: Area,
     pub address: u16,
     pub interval: u64,
 
@@ -116,8 +117,7 @@ pub struct DataType {
     #[serde(rename = "type")]
     pub typ: Type,
 
-    pub coder_type: CoderType,
-
+    pub coder_type: Option<CoderType>,
     // string和bytes拥有len，值为寄存器数量
     #[serde(skip_serializing_if = "Option::is_none")]
     pub len: Option<u16>,
@@ -178,7 +178,7 @@ impl DataType {
                     [a, b] => [*a, *b],
                     _ => return MessageValue::Null,
                 };
-                match self.coder_type {
+                match self.coder_type.unwrap() {
                     CoderType::A => MessageValue::Int64(data[0] as i64),
                     CoderType::B => MessageValue::Int64(data[1] as i64),
                     _ => unreachable!(),
@@ -190,7 +190,7 @@ impl DataType {
                     _ => return MessageValue::Null,
                 };
 
-                match self.coder_type {
+                match self.coder_type.unwrap() {
                     CoderType::AB => {}
                     CoderType::BA => data.swap(0, 1),
                     _ => {}
@@ -204,7 +204,7 @@ impl DataType {
                     _ => return MessageValue::Null,
                 };
 
-                match self.coder_type {
+                match self.coder_type.unwrap() {
                     CoderType::ABCD => {}
                     CoderType::BADC => {
                         data.swap(0, 1);
@@ -228,7 +228,7 @@ impl DataType {
                     _ => return MessageValue::Null,
                 };
 
-                match self.coder_type {
+                match self.coder_type.unwrap() {
                     CoderType::ABCDEFGH => {}
                     CoderType::BADCFEHG => {
                         data.swap(0, 1);
@@ -257,7 +257,7 @@ impl DataType {
                     [a, b, c, d] => [*a, *b, *c, *d],
                     _ => return MessageValue::Null,
                 };
-                match self.coder_type {
+                match self.coder_type.unwrap() {
                     CoderType::ABCD => {}
                     CoderType::BADC => {
                         data.swap(0, 1);
@@ -281,7 +281,7 @@ impl DataType {
                     [a, b, c, d, e, f, g, h] => [*a, *b, *c, *d, *e, *f, *g, *h],
                     _ => return MessageValue::Null,
                 };
-                match self.coder_type {
+                match self.coder_type.unwrap() {
                     CoderType::ABCDEFGH => {}
                     CoderType::BADCFEHG => {
                         data.swap(0, 1);
@@ -305,7 +305,7 @@ impl DataType {
                 }
                 MessageValue::Float64(f64::from_be_bytes(data))
             }
-            Type::String => match self.coder_type {
+            Type::String => match self.coder_type.unwrap() {
                 CoderType::A => {
                     let mut new_data = vec![];
                     for (i, v) in data.iter().enumerate() {
@@ -410,7 +410,7 @@ impl DataType {
             Type::Int8 => match value.as_i64() {
                 Some(value) => {
                     let mut data = Vec::with_capacity(4);
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::A => {
                             data.push(0x00);
                             data.push(0xFF);
@@ -434,7 +434,7 @@ impl DataType {
             Type::Uint8 => match value.as_i64() {
                 Some(value) => {
                     let mut data = Vec::with_capacity(4);
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::A => {
                             data.push(0x00);
                             data.push(0xFF);
@@ -461,7 +461,7 @@ impl DataType {
                         Ok(value) => value,
                         Err(e) => bail!("value is wrong:{}", e),
                     };
-                    let data = match self.coder_type {
+                    let data = match self.coder_type.unwrap() {
                         CoderType::AB => value.to_be_bytes().to_vec(),
                         CoderType::BA => value.to_le_bytes().to_vec(),
                         _ => unreachable!(),
@@ -476,7 +476,7 @@ impl DataType {
                         Ok(value) => value,
                         Err(e) => bail!("value is wrong:{}", e),
                     };
-                    let data = match self.coder_type {
+                    let data = match self.coder_type.unwrap() {
                         CoderType::AB => value.to_be_bytes(),
                         CoderType::BA => value.to_le_bytes(),
                         _ => unreachable!(),
@@ -492,7 +492,7 @@ impl DataType {
                         Err(e) => bail!("value is wrong:{}", e),
                     };
                     let mut data = value.to_be_bytes();
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::ABCD => {}
                         CoderType::BADC => {
                             data.swap(0, 1);
@@ -519,7 +519,7 @@ impl DataType {
                         Err(e) => bail!("value is wrong:{}", e),
                     };
                     let mut data = value.to_be_bytes();
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::ABCD => {}
                         CoderType::BADC => {
                             data.swap(0, 1);
@@ -542,7 +542,7 @@ impl DataType {
             Type::Int64 => match value.as_i64() {
                 Some(value) => {
                     let mut data = value.to_be_bytes();
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::ABCDEFGH => {}
                         CoderType::BADCFEHG => {
                             data.swap(0, 1);
@@ -571,7 +571,7 @@ impl DataType {
             Type::Uint64 => match value.as_i64() {
                 Some(value) => {
                     let mut data = value.to_be_bytes();
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::ABCDEFGH => {}
                         CoderType::BADCFEHG => {
                             data.swap(0, 1);
@@ -603,7 +603,7 @@ impl DataType {
                         bail!("value is wrong, too big")
                     };
                     let mut data = (value as f32).to_be_bytes();
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::ABCD => {}
                         CoderType::BADC => {
                             data.swap(0, 1);
@@ -626,7 +626,7 @@ impl DataType {
             Type::Float64 => match value.as_f64() {
                 Some(value) => {
                     let mut data = value.to_be_bytes();
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::ABCDEFGH => {}
                         CoderType::BADCFEHG => {
                             data.swap(0, 1);
@@ -656,7 +656,7 @@ impl DataType {
                 Some(value) => {
                     let mut new_data = vec![0; *self.len.as_ref().unwrap() as usize];
                     let data = value.as_bytes();
-                    match self.coder_type {
+                    match self.coder_type.unwrap() {
                         CoderType::A => {
                             if (*self.len.as_ref().unwrap() as usize) < data.len() * 2 {
                                 bail!("too long")

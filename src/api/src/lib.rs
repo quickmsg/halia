@@ -45,7 +45,7 @@ impl AppError {
 impl From<HaliaError> for AppError {
     fn from(err: HaliaError) -> Self {
         match err {
-            HaliaError::NotFound(_) => todo!(),
+            HaliaError::NotFound(e) => AppError::new(StatusCode::NOT_FOUND, e.to_string()),
             HaliaError::StorageErr(e) => {
                 AppError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
             }
@@ -53,7 +53,7 @@ impl From<HaliaError> for AppError {
                 AppError::new(StatusCode::UNPROCESSABLE_ENTITY, e.to_string())
             }
             HaliaError::Common(e) => AppError::new(StatusCode::INTERNAL_SERVER_ERROR, e),
-            HaliaError::Io(_) => todo!(),
+            HaliaError::Io(io) => AppError::new(StatusCode::INTERNAL_SERVER_ERROR, io.to_string()),
             HaliaError::Running => todo!(),
             HaliaError::Stopped(e) => AppError::new(StatusCode::BAD_REQUEST, e),
             HaliaError::DeleteRefing => todo!(),

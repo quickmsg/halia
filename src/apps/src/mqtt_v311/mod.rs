@@ -212,45 +212,47 @@ impl MqttClient {
         app_err_tx: &broadcast::Sender<bool>,
     ) {
         match event {
-            Ok(Event::Incoming(Incoming::Publish(p))) => {
-                if *err {
-                    *err = false;
-                    _ = app_err_tx.send(false);
-                    *device_err.write().await = None;
-                }
-                for mut source in sources.iter_mut() {
-                    if matches(&p.topic, &source.conf.topic) {
-                        let mb = match source.decoder.decode(p.payload.clone()) {
-                            Ok(mb) => mb,
-                            Err(e) => {
-                                warn!("decode err :{}", e);
-                                break;
-                            }
-                        };
-
-                        match source.mb_txs.len() {
-                            0 => {}
-                            1 => {
-                                let mb = RuleMessageBatch::Owned(mb);
-                                if let Err(e) = source.mb_txs[0].send(mb) {
-                                    warn!("send err :{}", e);
-                                    source.mb_txs.remove(0);
-                                }
-                            }
-                            _ => {
-                                let mb = RuleMessageBatch::Arc(Arc::new(mb));
-                                source.mb_txs.retain(|tx| tx.send(mb.clone()).is_ok());
-                            }
-                        }
-                    }
-                }
-            }
-            Ok(_) => {
+            Ok(event) => {
                 if *err {
                     *err = false;
                     _ = app_err_tx.send(false);
                     *device_err.write().await = None;
                     let _ = storage::app::update_status(app_id, Status::Running).await;
+                    let _ =
+                        storage::app::source_sink::update_status_by_app_id(app_id, Status::Running)
+                            .await;
+                }
+
+                match event {
+                    Event::Incoming(Incoming::Publish(p)) => {
+                        for mut source in sources.iter_mut() {
+                            if matches(&p.topic, &source.conf.topic) {
+                                let mb = match source.decoder.decode(p.payload.clone()) {
+                                    Ok(mb) => mb,
+                                    Err(e) => {
+                                        warn!("decode err :{}", e);
+                                        break;
+                                    }
+                                };
+
+                                match source.mb_txs.len() {
+                                    0 => {}
+                                    1 => {
+                                        let mb = RuleMessageBatch::Owned(mb);
+                                        if let Err(e) = source.mb_txs[0].send(mb) {
+                                            warn!("send err :{}", e);
+                                            source.mb_txs.remove(0);
+                                        }
+                                    }
+                                    _ => {
+                                        let mb = RuleMessageBatch::Arc(Arc::new(mb));
+                                        source.mb_txs.retain(|tx| tx.send(mb.clone()).is_ok());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
             Err(e) => {
@@ -260,6 +262,9 @@ impl MqttClient {
                     *device_err.write().await = Some(e.to_string());
 
                     let _ = storage::app::update_status(app_id, Status::Error).await;
+                    let _ =
+                        storage::app::source_sink::update_status_by_app_id(app_id, Status::Error)
+                            .await;
                 }
             }
         }

@@ -42,7 +42,7 @@ anyhow = "1.0.81"
 bytes = "1.6.0"
 tokio = { version = "1.40.0", features = ["full"] }
 tracing = "0.1.40"
-futures = "0.3.30"
+futures = { version = "0.3.31", features = ["unstable", "bilock"] }
 dashmap = "6.0.0"
 async-trait = "0.1.80"
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
