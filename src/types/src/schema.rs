@@ -6,7 +6,7 @@ pub struct CreateUpdateSchemaReq {
     pub name: String,
     pub schema_type: SchemaType,
     pub protocol_type: ProtocolType,
-    pub ext: serde_json::Value,
+    pub conf: serde_json::Value,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -125,13 +125,28 @@ pub struct TemplateEncodeConf {
 }
 
 #[derive(Serialize)]
-pub struct SearchSchemasResp {
-    pub total: usize,
-    pub data: Vec<SearchSchemasItemResp>,
+pub struct ListSchemasResp {
+    pub count: usize,
+    pub list: Vec<ListSchemasItem>,
 }
 
 #[derive(Serialize)]
-pub struct SearchSchemasItemResp {
+pub struct ListSchemasItem {
     pub id: String,
-    pub conf: CreateUpdateSchemaReq,
+    pub name: String,
+    pub schema_type: SchemaType,
+    pub protocol_type: ProtocolType,
+    pub refrence_cnt: usize,
+    pub can_delete: bool,
+}
+
+#[derive(Serialize)]
+pub struct ReadSchemaResp {
+    pub id: String,
+    pub name: String,
+    pub schema_type: SchemaType,
+    pub protocol_type: ProtocolType,
+    pub conf: serde_json::Value,
+    pub refrence_cnt: usize,
+    pub can_delete: bool,
 }

@@ -7,8 +7,8 @@ use common::{
 use message::MessageBatch;
 use types::{
     schema::{
-        AvroDecodeConf, CreateUpdateSchemaReq, CsvDecodeConf, DecodeType, EncodeType, QueryParams,
-        SearchSchemasItemResp, SearchSchemasResp, TemplateEncodeConf,
+        AvroDecodeConf, CreateUpdateSchemaReq, CsvDecodeConf, DecodeType, EncodeType,
+        ListSchemasItem, ListSchemasResp, QueryParams, ReadSchemaResp, TemplateEncodeConf,
     },
     Pagination,
 };
@@ -40,20 +40,41 @@ pub async fn create(req: CreateUpdateSchemaReq) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn search(
+pub async fn list(
     pagination: Pagination,
     query_params: QueryParams,
-) -> HaliaResult<SearchSchemasResp> {
+) -> HaliaResult<ListSchemasResp> {
     let (count, db_schemas) = storage::schema::search(pagination, query_params).await?;
 
-    let mut resp_schemas = vec![];
+    let mut list = vec![];
     for db_schema in db_schemas {
-        resp_schemas.push(transfer_db_schema_to_resp(db_schema)?);
+        list.push(ListSchemasItem {
+            id: db_schema.id,
+            name: db_schema.name,
+            schema_type: db_schema.schema_type,
+            protocol_type: db_schema.protocol_type,
+            // TODO
+            refrence_cnt: 0,
+            // TODO
+            can_delete: false,
+        });
     }
 
-    Ok(SearchSchemasResp {
-        total: count,
-        data: resp_schemas,
+    Ok(ListSchemasResp { count, list })
+}
+
+pub async fn read(id: String) -> HaliaResult<ReadSchemaResp> {
+    let db_schema = storage::schema::read_one(&id).await?;
+    Ok(ReadSchemaResp {
+        id,
+        name: db_schema.name,
+        schema_type: db_schema.schema_type,
+        protocol_type: db_schema.protocol_type,
+        conf: db_schema.conf,
+        // TODO
+        refrence_cnt: 0,
+        // TODO
+        can_delete: false,
     })
 }
 
@@ -75,18 +96,18 @@ fn validate_conf(req: &CreateUpdateSchemaReq) -> HaliaResult<()> {
             types::schema::ProtocolType::Protobuf => todo!(),
             types::schema::ProtocolType::Csv => todo!(),
             types::schema::ProtocolType::Template => {
-                encoders::template::validate_conf(&req.ext)?;
+                encoders::template::validate_conf(&req.conf)?;
             }
         },
         types::schema::SchemaType::Decode => match &req.protocol_type {
             types::schema::ProtocolType::Avro => {
-                decoders::avro::validate_conf(&req.ext)?;
+                decoders::avro::validate_conf(&req.conf)?;
             }
             types::schema::ProtocolType::Protobuf => {
-                decoders::protobuf::validate_conf(&req.ext)?;
+                decoders::protobuf::validate_conf(&req.conf)?;
             }
             types::schema::ProtocolType::Csv => {
-                decoders::csv::validate_conf(&req.ext)?;
+                decoders::csv::validate_conf(&req.conf)?;
             }
             types::schema::ProtocolType::Template => {
                 return Err(HaliaError::NotSupportResource);
@@ -95,20 +116,6 @@ fn validate_conf(req: &CreateUpdateSchemaReq) -> HaliaResult<()> {
     }
 
     Ok(())
-}
-
-fn transfer_db_schema_to_resp(
-    db_schema: storage::schema::Schema,
-) -> HaliaResult<SearchSchemasItemResp> {
-    Ok(SearchSchemasItemResp {
-        id: db_schema.id,
-        conf: CreateUpdateSchemaReq {
-            name: db_schema.name,
-            schema_type: db_schema.schema_type.try_into()?,
-            protocol_type: db_schema.protocol_type.try_into()?,
-            ext: serde_json::from_slice(&db_schema.conf)?,
-        },
-    })
 }
 
 pub async fn new_decoder(

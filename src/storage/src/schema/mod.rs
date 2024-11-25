@@ -7,7 +7,7 @@ use sqlx::{
     Any,
 };
 use types::{
-    schema::{CreateUpdateSchemaReq, QueryParams},
+    schema::{CreateUpdateSchemaReq, ProtocolType, QueryParams, SchemaType},
     Pagination,
 };
 
@@ -18,12 +18,34 @@ use super::POOL;
 const TABLE_NAME: &str = "halia_schemas";
 
 #[derive(FromRow)]
-pub struct Schema {
+pub struct DbSchema {
     pub id: String,
     pub name: String,
     pub schema_type: i32,
     pub protocol_type: i32,
     pub conf: Vec<u8>,
+    pub ts: i64,
+}
+
+impl DbSchema {
+    pub fn transfer(self) -> Result<Schema> {
+        Ok(Schema {
+            id: self.id,
+            name: self.name,
+            schema_type: self.schema_type.try_into()?,
+            protocol_type: self.protocol_type.try_into()?,
+            conf: serde_json::from_slice(&self.conf)?,
+            ts: self.ts,
+        })
+    }
+}
+
+pub struct Schema {
+    pub id: String,
+    pub name: String,
+    pub schema_type: SchemaType,
+    pub protocol_type: ProtocolType,
+    pub conf: serde_json::Value,
     pub ts: i64,
 }
 
@@ -44,10 +66,6 @@ CREATE TABLE IF NOT EXISTS {} (
 }
 
 pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
-    let ts = common::timestamp_millis() as i64;
-    let schema_type: i32 = req.schema_type.into();
-    let protocol_type: i32 = req.protocol_type.into();
     sqlx::query(
         format!(
             "INSERT INTO {} (id, name, schema_type, protocol_type, conf, ts) VALUES (?, ?, ?, ?, ?, ?)",
@@ -57,10 +75,10 @@ pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
     )
     .bind(id)
     .bind(req.name)
-    .bind(schema_type)
-    .bind(protocol_type)
-    .bind(conf)
-    .bind(ts)
+    .bind(Into::<i32>::into(req.schema_type))
+    .bind(Into::<i32>::into(req.protocol_type))
+    .bind(serde_json::to_vec(&req.conf)?)
+    .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
 
@@ -68,12 +86,14 @@ pub async fn insert(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
 }
 
 pub async fn read_one(id: &String) -> Result<Schema> {
-    let schema = sqlx::query_as::<_, Schema>("SELECT * FROM devices WHERE id = ?")
-        .bind(id)
-        .fetch_one(POOL.get().unwrap())
-        .await?;
+    let db_schema = sqlx::query_as::<_, DbSchema>(
+        format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
 
-    Ok(schema)
+    db_schema.transfer()
 }
 
 pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
@@ -119,8 +139,8 @@ pub async fn search(
         "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
         TABLE_NAME, where_cluase
     );
-    let mut query_schemas_builder: QueryAs<'_, Any, Schema, AnyArguments> =
-        sqlx::query_as::<_, Schema>(&query_schemas_str);
+    let mut query_schemas_builder: QueryAs<'_, Any, DbSchema, AnyArguments> =
+        sqlx::query_as::<_, DbSchema>(&query_schemas_str);
 
     if let Some(name) = query_params.name {
         let name = format!("%{}%", name);
@@ -139,18 +159,22 @@ pub async fn search(
     }
 
     let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
-    let schemas = query_schemas_builder
+    let db_schemas = query_schemas_builder
         .bind(limit)
         .bind(offset)
         .fetch_all(POOL.get().unwrap())
         .await?;
+
+    let schemas = db_schemas
+        .into_iter()
+        .map(|db_schema| db_schema.transfer())
+        .collect::<Result<Vec<_>>>()?;
 
     Ok((count as usize, schemas))
 }
 
 // TODO 更新运行中的源和动作
 pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
     sqlx::query(
         format!(
             "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
@@ -159,7 +183,7 @@ pub async fn update(id: &String, req: CreateUpdateSchemaReq) -> HaliaResult<()> 
         .as_str(),
     )
     .bind(req.name)
-    .bind(conf)
+    .bind(serde_json::to_vec(&req.conf)?)
     .bind(id)
     .execute(POOL.get().unwrap())
     .await?;
