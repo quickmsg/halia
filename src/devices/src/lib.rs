@@ -496,9 +496,7 @@ pub(crate) async fn create_source(
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let device_type: DeviceType = storage::device::device::read_device_type(&device_id)
-        .await?
-        .try_into()?;
+    let device_type: DeviceType = storage::device::device::read_device_type(&device_id).await?;
     match device_type {
         DeviceType::Modbus => modbus::validate_source_conf(&req.conf)?,
         DeviceType::Opcua => opcua::validate_source_conf(&req.conf)?,
@@ -543,6 +541,7 @@ pub async fn list_sources(
     pagination: Pagination,
     query: QuerySourcesSinksParams,
 ) -> HaliaResult<ListSourcesSinksResp> {
+    let device_type = storage::device::device::read_device_type(&device_id).await?;
     let (count, db_sources) =
         storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sources.len());
@@ -559,6 +558,23 @@ pub async fn list_sources(
             },
             _ => None,
         };
+        let conf = match device_type {
+            DeviceType::Modbus => {
+                let conf: types::devices::device::modbus::SourceConf =
+                    serde_json::from_value(db_source.conf)?;
+                let conf = types::devices::device::modbus::ListSourceConf {
+                    slave: conf.slave,
+                    field: conf.field,
+                    area: conf.area,
+                    typ: conf.data_type.typ,
+                    address: conf.address,
+                    interval: conf.interval,
+                };
+                serde_json::to_value(conf)?
+            }
+            DeviceType::Opcua => todo!(),
+            DeviceType::Coap => todo!(),
+        };
         list.push(ListSourcesSinksItem {
             id: db_source.id,
             name: db_source.name,
@@ -567,6 +583,7 @@ pub async fn list_sources(
             rule_reference_running_cnt,
             rule_reference_total_cnt,
             can_delete,
+            conf,
         });
     }
 
@@ -679,9 +696,7 @@ pub(crate) async fn create_sink(
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let device_type: DeviceType = storage::device::device::read_device_type(&device_id)
-        .await?
-        .try_into()?;
+    let device_type: DeviceType = storage::device::device::read_device_type(&device_id).await?;
     match device_type {
         DeviceType::Modbus => modbus::validate_sink_conf(&req.conf)?,
         DeviceType::Opcua => opcua::validate_sink_conf(&req.conf)?,
@@ -719,6 +734,7 @@ pub async fn list_sinks(
     pagination: Pagination,
     query: QuerySourcesSinksParams,
 ) -> HaliaResult<ListSourcesSinksResp> {
+    let device_type = storage::device::device::read_device_type(&device_id).await?;
     let (count, db_sinks) =
         storage::device::source_sink::search_sinks(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sinks.len());
@@ -735,6 +751,23 @@ pub async fn list_sinks(
             },
             _ => None,
         };
+        let conf = match device_type {
+            DeviceType::Modbus => {
+                let conf: types::devices::device::modbus::SinkConf =
+                    serde_json::from_value(db_sink.conf)?;
+                let conf = types::devices::device::modbus::LiskSinkConf {
+                    slave: conf.slave,
+                    area: conf.area,
+                    typ: conf.data_type.typ,
+                    address: conf.address,
+                    value: conf.value,
+                };
+                serde_json::to_value(conf)?
+            }
+            DeviceType::Opcua => todo!(),
+            DeviceType::Coap => todo!(),
+        };
+
         list.push(ListSourcesSinksItem {
             id: db_sink.id,
             name: db_sink.name,
@@ -743,6 +776,7 @@ pub async fn list_sinks(
             rule_reference_running_cnt,
             rule_reference_total_cnt,
             can_delete,
+            conf,
         });
     }
 

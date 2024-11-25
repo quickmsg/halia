@@ -8,7 +8,7 @@ use sqlx::{
 };
 use types::{
     devices::{
-        device::{CreateReq, QueryParams, UpdateReq},
+        device::{self, CreateReq, QueryParams, UpdateReq},
         ConfType, DeviceType,
     },
     Pagination, Status,
@@ -232,13 +232,14 @@ pub async fn read_name(id: &String) -> Result<String> {
     Ok(name)
 }
 
-pub async fn read_device_type(id: &String) -> Result<i32> {
+pub async fn read_device_type(id: &String) -> Result<DeviceType> {
     let device_type: i32 =
         sqlx::query_scalar(format!("SELECT device_type FROM {} WHERE id = ?", TABLE_NAME).as_str())
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
+    let device_type: DeviceType = device_type.try_into()?;
     Ok(device_type)
 }
 

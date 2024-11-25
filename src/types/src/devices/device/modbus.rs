@@ -56,6 +56,16 @@ pub struct SourceConf {
     pub metadata: Option<Vec<(String, serde_json::Value)>>,
 }
 
+#[derive(Serialize)]
+pub struct ListSourceConf {
+    pub slave: u8,
+    pub field: String,
+    pub area: Area,
+    pub typ: Type,
+    pub address: u16,
+    pub interval: u64,
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct SinkConf {
     pub slave: u8,
@@ -65,6 +75,15 @@ pub struct SinkConf {
     pub address: u16,
     pub value: serde_json::Value,
     pub message_retain: MessageRetain,
+}
+
+#[derive(Serialize)]
+pub struct LiskSinkConf {
+    pub slave: u8,
+    pub area: Area,
+    pub typ: Type,
+    pub address: u16,
+    pub value: serde_json::Value,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]

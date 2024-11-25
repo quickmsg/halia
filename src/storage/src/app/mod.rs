@@ -122,7 +122,6 @@ pub async fn read_app_type(id: &String) -> Result<AppType> {
             .await?;
 
     let app_type: AppType = app_type.try_into()?;
-
     Ok(app_type)
 }
 

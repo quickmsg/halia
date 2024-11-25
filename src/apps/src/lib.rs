@@ -342,6 +342,7 @@ pub async fn list_sources(
     pagination: Pagination,
     query: QuerySourcesSinksParams,
 ) -> HaliaResult<ListSourcesSinksResp> {
+    let app_type = storage::app::read_app_type(&app_id).await?;
     let (count, db_sources) =
         storage::app::source_sink::query_sources_by_app_id(&app_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sources.len());
@@ -358,6 +359,23 @@ pub async fn list_sources(
             },
             _ => None,
         };
+        let conf = match app_type {
+            AppType::MqttV311 => {
+                let conf: types::apps::mqtt_client_v311::SourceConf =
+                    serde_json::from_value(db_source.conf)?;
+                let conf = types::apps::mqtt_client_v311::ListSourceConf {
+                    topic: conf.topic,
+                    qos: conf.qos,
+                    decode_type: conf.decode_type,
+                };
+                serde_json::to_value(conf)?
+            }
+            AppType::MqttV50 => todo!(),
+            AppType::Http => todo!(),
+            AppType::Kafka | AppType::InfluxdbV1 | AppType::InfluxdbV2 | AppType::Tdengine => {
+                serde_json::Value::Null
+            }
+        };
         list.push(ListSourcesSinksItem {
             id: db_source.id,
             name: db_source.name,
@@ -366,6 +384,7 @@ pub async fn list_sources(
             rule_reference_running_cnt,
             rule_reference_total_cnt,
             can_delete,
+            conf,
         });
     }
 
@@ -499,6 +518,7 @@ pub async fn list_sinks(
     pagination: Pagination,
     query: QuerySourcesSinksParams,
 ) -> HaliaResult<ListSourcesSinksResp> {
+    let app_type = storage::app::read_app_type(&app_id).await?;
     let (count, db_sinks) =
         storage::app::source_sink::query_sinks_by_app_id(&app_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sinks.len());
@@ -515,6 +535,24 @@ pub async fn list_sinks(
             },
             _ => None,
         };
+        let conf = match app_type {
+            AppType::MqttV311 => {
+                let conf: types::apps::mqtt_client_v311::SinkConf =
+                    serde_json::from_value(db_sink.conf)?;
+                let conf = types::apps::mqtt_client_v311::ListSinkConf {
+                    topic: conf.topic,
+                    qos: conf.qos,
+                    retain: conf.retain,
+                    encode_type: conf.encode_type,
+                };
+                serde_json::to_value(conf)?
+            }
+            AppType::MqttV50 => todo!(),
+            AppType::Http => todo!(),
+            AppType::Kafka | AppType::InfluxdbV1 | AppType::InfluxdbV2 | AppType::Tdengine => {
+                serde_json::Value::Null
+            }
+        };
         list.push(ListSourcesSinksItem {
             id: db_sink.id,
             name: db_sink.name,
@@ -523,6 +561,7 @@ pub async fn list_sinks(
             rule_reference_running_cnt,
             rule_reference_total_cnt,
             can_delete,
+            conf,
         });
     }
 

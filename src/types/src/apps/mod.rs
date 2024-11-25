@@ -211,6 +211,9 @@ pub struct ListSourcesSinksItem {
     pub rule_reference_running_cnt: usize,
     pub rule_reference_total_cnt: usize,
     pub can_delete: bool,
+
+    #[serde(flatten)]
+    pub conf: serde_json::Value,
 }
 
 #[derive(Serialize)]

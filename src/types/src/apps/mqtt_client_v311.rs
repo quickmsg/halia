@@ -57,6 +57,13 @@ pub struct SourceConf {
     pub schema_id: Option<String>,
 }
 
+#[derive(Serialize)]
+pub struct ListSourceConf {
+    pub topic: String,
+    pub qos: Qos,
+    pub decode_type: DecodeType,
+}
+
 #[derive(Deserialize_repr, Serialize_repr, Clone, PartialEq, Copy)]
 #[repr(u8)]
 pub enum Qos {
@@ -73,4 +80,12 @@ pub struct SinkConf {
     pub message_retain: MessageRetain,
     pub encode_type: EncodeType,
     pub schema_id: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ListSinkConf {
+    pub topic: String,
+    pub qos: Qos,
+    pub retain: bool,
+    pub encode_type: EncodeType,
 }
