@@ -10,10 +10,9 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, ListDataboardsItem,
-        ListDataboardsResp, QueryDatasParams, QueryParams, QueryRuleInfo, RuleInfoData,
-        RuleInfoDataboard, RuleInfoResp, SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp,
-        Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, ListDataboardsItem, ListDataboardsResp,
+        ListDatasItemResp, ListDatasResp, QueryDatasParams, QueryParams, QueryRuleInfo,
+        RuleInfoData, RuleInfoDataboard, RuleInfoResp, Summary,
     },
     Pagination,
 };
@@ -69,11 +68,10 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     for db_on_databoard in db_on_databoards {
         let mut databoard = Databoard::new();
 
-        // todo start
-        let db_datas = storage::databoard::data::read_all_by_parent_id(&db_on_databoard.id).await?;
+        let db_datas =
+            storage::databoard::data::read_all_by_databoard_id(&db_on_databoard.id).await?;
         for db_data in db_datas {
-            let data_conf: DataConf = serde_json::from_value(db_data.conf)?;
-            databoard.create_data(db_data.id, data_conf).await?;
+            databoard.create_data(db_data.id, db_data.conf).await?;
         }
 
         GLOBAL_DATABOARD_MANAGER.insert(db_on_databoard.id, databoard);
@@ -163,10 +161,9 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
     GLOBAL_DATABOARD_MANAGER.insert(databoard_id.clone(), databoard);
 
     let mut databoard = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id).unwrap();
-    let db_datas = storage::databoard::data::read_all_by_parent_id(&databoard_id).await?;
+    let db_datas = storage::databoard::data::read_all_by_databoard_id(&databoard_id).await?;
     for db_data in db_datas {
-        let data_conf: DataConf = serde_json::from_value(db_data.conf)?;
-        databoard.create_data(db_data.id, data_conf).await?;
+        databoard.create_data(db_data.id, db_data.conf).await?;
     }
 
     add_databoard_on_count();
@@ -204,14 +201,11 @@ pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRefing);
     }
 
-    GLOBAL_DATABOARD_MANAGER
-        .get_mut(&databoard_id)
-        .ok_or(HaliaError::NotFound(databoard_id.clone()))?
-        .stop()
-        .await;
+    if GLOBAL_DATABOARD_MANAGER.contains_key(&databoard_id) {
+        return Err(HaliaError::DeleteRunning);
+    }
 
     sub_databoard_count();
-    GLOBAL_DATABOARD_MANAGER.remove(&databoard_id);
     storage::databoard::delete_by_id(&databoard_id).await?;
 
     Ok(())
@@ -221,7 +215,7 @@ pub async fn create_data(databoard_id: String, req: CreateUpdateDataReq) -> Hali
     let data_id = common::get_id();
 
     if let Some(mut databoard) = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id) {
-        let conf = req.ext.clone();
+        let conf = req.conf.clone();
         databoard.create_data(data_id.clone(), conf).await?;
     }
 
@@ -230,15 +224,15 @@ pub async fn create_data(databoard_id: String, req: CreateUpdateDataReq) -> Hali
     Ok(())
 }
 
-pub async fn search_datas(
+pub async fn list_datas(
     databoard_id: String,
     pagination: Pagination,
     query: QueryDatasParams,
-) -> HaliaResult<SearchDatasResp> {
+) -> HaliaResult<ListDatasResp> {
     let (count, db_datas) =
         storage::databoard::data::search(&databoard_id, pagination, query).await?;
 
-    let mut datas = Vec::with_capacity(db_datas.len());
+    let mut list = Vec::with_capacity(db_datas.len());
 
     let databoard = GLOBAL_DATABOARD_MANAGER.get(&databoard_id);
 
@@ -250,23 +244,16 @@ pub async fn search_datas(
             }
             None => (None, None),
         };
-        datas.push(SearchDatasItemResp {
-            info: SearchDatasInfoResp {
-                id: db_data.id,
-                conf: CreateUpdateDataReq {
-                    name: db_data.name,
-                    ext: serde_json::from_value(db_data.conf)?,
-                },
-                value,
-                ts,
-            },
+        list.push(ListDatasItemResp {
+            id: db_data.id,
+            name: db_data.name,
+            conf: db_data.conf,
+            value,
+            ts,
         });
     }
 
-    Ok(SearchDatasResp {
-        total: count,
-        data: datas,
-    })
+    Ok(ListDatasResp { count, list })
 }
 
 pub async fn update_data(

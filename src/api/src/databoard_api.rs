@@ -5,8 +5,8 @@ use axum::{
 };
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, ListDataboardsResp, QueryDatasParams,
-        QueryParams, SearchDatasResp, Summary,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, ListDataboardsResp, ListDatasResp,
+        QueryDatasParams, QueryParams, Summary,
     },
     Pagination,
 };
@@ -26,7 +26,7 @@ pub fn routes() -> Router {
             "/:databoard_id/data",
             Router::new()
                 .route("/", post(create_data))
-                .route("/", get(search_datas))
+                .route("/list", get(list_datas))
                 .route("/:data_id", put(update_data))
                 .route("/:data_id", delete(delete_data)),
         )
@@ -80,12 +80,12 @@ async fn create_data(
     Ok(())
 }
 
-async fn search_datas(
+async fn list_datas(
     Path(databoard_id): Path<String>,
     Query(pagination): Query<Pagination>,
-    Query(query_params): Query<QueryDatasParams>,
-) -> AppResult<Json<SearchDatasResp>> {
-    let resp = databoard::search_datas(databoard_id, pagination, query_params).await?;
+    Query(query): Query<QueryDatasParams>,
+) -> AppResult<Json<ListDatasResp>> {
+    let resp = databoard::list_datas(databoard_id, pagination, query).await?;
     Ok(Json(resp))
 }
 

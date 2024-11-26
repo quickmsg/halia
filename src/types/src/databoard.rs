@@ -40,7 +40,7 @@ pub struct ListDataboardsItem {
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct CreateUpdateDataReq {
     pub name: String,
-    pub ext: DataConf,
+    pub conf: DataConf,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
@@ -54,15 +54,20 @@ pub struct QueryDatasParams {
 }
 
 #[derive(Serialize)]
-pub struct SearchDatasResp {
-    pub total: usize,
-    pub data: Vec<SearchDatasItemResp>,
+pub struct ListDatasResp {
+    pub count: usize,
+    pub list: Vec<ListDatasItemResp>,
 }
 
 #[derive(Serialize)]
-pub struct SearchDatasItemResp {
-    #[serde(flatten)]
-    pub info: SearchDatasInfoResp,
+pub struct ListDatasItemResp {
+    pub id: String,
+    pub name: String,
+    pub conf: DataConf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ts: Option<u64>,
 }
 
 #[derive(Serialize)]

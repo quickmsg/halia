@@ -2,7 +2,7 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    databoard::{CreateUpdateDataReq, QueryDatasParams},
+    databoard::{CreateUpdateDataReq, DataConf, QueryDatasParams},
     Pagination,
 };
 
@@ -23,7 +23,7 @@ impl DbData {
     pub fn transfer(self) -> Result<Data> {
         Ok(Data {
             id: self.id,
-            parent_id: self.databoard_id,
+            databoard_id: self.databoard_id,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
             ts: self.ts,
@@ -33,9 +33,9 @@ impl DbData {
 
 pub struct Data {
     pub id: String,
-    pub parent_id: String,
+    pub databoard_id: String,
     pub name: String,
-    pub conf: serde_json::Value,
+    pub conf: DataConf,
     pub ts: i64,
 }
 
@@ -65,7 +65,7 @@ pub async fn insert(id: &String, databoard_id: &String, req: CreateUpdateDataReq
     .bind(id)
     .bind(databoard_id)
     .bind(req.name)
-    .bind(serde_json::to_vec(&req.ext)?)
+    .bind(serde_json::to_vec(&req.conf)?)
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
@@ -143,9 +143,9 @@ pub async fn search(
     Ok((count as usize, databoard_datas))
 }
 
-pub async fn read_all_by_parent_id(databoard_id: &String) -> Result<Vec<Data>> {
+pub async fn read_all_by_databoard_id(databoard_id: &String) -> Result<Vec<Data>> {
     let db_databoard_datas = sqlx::query_as::<_, DbData>(
-        format!("SELECT * FROM {} WHERE parent_id = ?", TABLE_NAME).as_str(),
+        format!("SELECT * FROM {} WHERE databoard_id = ?", TABLE_NAME).as_str(),
     )
     .bind(databoard_id)
     .fetch_all(POOL.get().unwrap())
@@ -169,7 +169,7 @@ pub async fn read_one(databoard_data_id: &String) -> Result<Data> {
 pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
-        .bind(serde_json::to_vec(&req.ext)?)
+        .bind(serde_json::to_vec(&req.conf)?)
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;
@@ -177,7 +177,7 @@ pub async fn update(id: &String, req: CreateUpdateDataReq) -> Result<()> {
 }
 
 pub(crate) async fn delete_many(databoard_id: &String) -> Result<()> {
-    sqlx::query(format!("DELETE FROM {} WHERE parent_id = ?", TABLE_NAME).as_str())
+    sqlx::query(format!("DELETE FROM {} WHERE databoard_id = ?", TABLE_NAME).as_str())
         .bind(databoard_id)
         .execute(POOL.get().unwrap())
         .await?;
