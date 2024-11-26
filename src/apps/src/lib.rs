@@ -73,12 +73,13 @@ pub(crate) fn sub_app_running_count() {
 #[async_trait]
 pub trait App: Send + Sync {
     async fn read_app_err(&self) -> Option<String>;
-    async fn read_source_err(&self, _source_id: &String) -> Option<String> {
-        Some("Not support".to_string())
+    async fn read_source_err(&self, _source_id: &String) -> HaliaResult<Option<String>> {
+        Err(HaliaError::Common("Not support".to_string()))
     }
-    async fn read_sink_err(&self, _sink_id: &String) -> Option<String> {
-        Some("Not support".to_string())
+    async fn read_sink_err(&self, _sink_id: &String) -> HaliaResult<Option<String>> {
+        Err(HaliaError::Common("Not support".to_string()))
     }
+
     async fn update(
         &mut self,
         old_conf: serde_json::Value,
@@ -354,7 +355,7 @@ pub async fn list_sources(
         let can_delete = rule_reference_total_cnt == 0;
         let err = match db_source.status {
             Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
-                Some(app) => app.read_source_err(&db_source.id).await,
+                Some(app) => app.read_source_err(&db_source.id).await?,
                 None => Some("App未启动！".to_string()),
             },
             _ => None,
@@ -371,7 +372,15 @@ pub async fn list_sources(
                 serde_json::to_value(conf)?
             }
             AppType::MqttV50 => todo!(),
-            AppType::Http => todo!(),
+            AppType::Http => {
+                let conf: types::apps::http_client::SourceConf =
+                    serde_json::from_value(db_source.conf)?;
+                let conf = types::apps::http_client::ListSourceConf {
+                    typ: conf.typ,
+                    path: conf.path,
+                };
+                serde_json::to_value(conf)?
+            }
             AppType::Kafka | AppType::InfluxdbV1 | AppType::InfluxdbV2 | AppType::Tdengine => {
                 serde_json::Value::Null
             }
@@ -395,7 +404,7 @@ pub async fn read_source(app_id: String, source_id: String) -> HaliaResult<ReadS
     let db_source = storage::app::source_sink::read_one(&source_id).await?;
     let err = match db_source.status {
         Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
-            Some(app) => app.read_source_err(&source_id).await,
+            Some(app) => app.read_source_err(&source_id).await?,
             None => Some("App未启动！".to_string()),
         },
         _ => None,
@@ -489,7 +498,7 @@ pub async fn read_sink(app_id: String, sink_id: String) -> HaliaResult<ReadSourc
     let db_sink = storage::app::source_sink::read_one(&sink_id).await?;
     let err = match db_sink.status {
         Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
-            Some(app) => app.read_sink_err(&sink_id).await,
+            Some(app) => app.read_sink_err(&sink_id).await?,
             None => Some("App未启动！".to_string()),
         },
         _ => None,
@@ -530,7 +539,7 @@ pub async fn list_sinks(
         let can_delete = rule_reference_total_cnt == 0;
         let err = match db_sink.status {
             Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
-                Some(app) => app.read_sink_err(&db_sink.id).await,
+                Some(app) => app.read_sink_err(&db_sink.id).await?,
                 None => Some("App未启动！".to_string()),
             },
             _ => None,

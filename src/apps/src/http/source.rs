@@ -63,6 +63,10 @@ impl Source {
         Ok(())
     }
 
+    pub async fn read_err(&self) -> Option<String> {
+        self.err.lock().await.clone()
+    }
+
     pub async fn update_conf(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
         let mut join_handle_data = self.stop().await;
         join_handle_data.source_conf = new_conf;
@@ -81,8 +85,7 @@ impl Source {
         match join_handle_data.source_conf.typ {
             types::apps::http_client::SourceType::Http => Self::http_event_loop(join_handle_data),
             types::apps::http_client::SourceType::Websocket => {
-                // Self::ws_event_loop(join_handle_data).await
-                todo!()
+                Self::ws_event_loop(join_handle_data).await
             }
         }
     }
@@ -134,7 +137,7 @@ impl Source {
                 let request = connect_websocket(
                     &join_handle_data.http_client_conf,
                     &join_handle_data.source_conf.path,
-                    &Some(join_handle_data.source_conf.headers.clone()),
+                    &join_handle_data.source_conf.headers,
                 );
                 match connect_async(request).await {
                     Ok((ws_stream, response)) => {
@@ -235,7 +238,7 @@ impl Source {
 fn connect_websocket(
     conf: &Arc<HttpClientConf>,
     path: &String,
-    headers: &Option<Vec<(String, String)>>,
+    headers: &Vec<(String, String)>,
 ) -> tokio_tungstenite::tungstenite::handshake::client::Request {
     match conf.ssl_enable {
         true => todo!(),
@@ -244,10 +247,8 @@ fn connect_websocket(
                 .into_client_request()
                 .unwrap();
 
-            if let Some(headers) = headers {
-                for (key, value) in headers {
-                    // request.headers_mut().insert(key, value.parse().unwrap());
-                }
+            for (key, value) in headers {
+                // request.headers_mut().insert(key, value.parse().unwrap());
             }
 
             request

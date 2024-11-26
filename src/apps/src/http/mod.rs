@@ -4,9 +4,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
-use reqwest::{
-    header::HeaderName, Certificate, Client, ClientBuilder, Identity, Request, RequestBuilder,
-};
+use reqwest::{Certificate, Client, ClientBuilder, Identity, RequestBuilder};
 use sink::Sink;
 use source::Source;
 use tokio::sync::mpsc;
@@ -37,7 +35,8 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     })
 }
 
-pub fn validate_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
+pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
+    let _: HttpClientConf = serde_json::from_value(conf.clone())?;
     Ok(())
 }
 
@@ -57,6 +56,14 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 impl App for HttpClient {
     async fn read_app_err(&self) -> Option<String> {
         self.err.clone()
+    }
+
+    async fn read_source_err(&self, source_id: &String) -> HaliaResult<Option<String>> {
+        match self.sources.get(source_id) {
+            Some(source) => Ok(source.read_err().await),
+            // 错误提示 TODO
+            None => Err(HaliaError::NotFound("source".to_owned())),
+        }
     }
 
     async fn update(

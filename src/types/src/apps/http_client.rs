@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::SslConf;
+use crate::{SslConf, Status};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct HttpClientConf {
@@ -28,6 +28,13 @@ pub struct SourceConf {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceType {
+    Http,
+    Websocket,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct HttpSourceConf {
     pub interval: u64,
 }
@@ -37,11 +44,11 @@ pub struct WebsocketSourceConf {
     pub reconnect: u64,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
-#[serde(rename_all = "snake_case")]
-pub enum SourceType {
-    Http,
-    Websocket,
+#[derive(Serialize)]
+pub struct ListSourceConf {
+    #[serde(rename = "type")]
+    pub typ: SourceType,
+    pub path: String,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
