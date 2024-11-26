@@ -2,19 +2,17 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc::UnboundedSender;
-use types::databoard::{DataConf, DataboardConf, SearchDatasRuntimeResp};
+use types::databoard::{DataConf, SearchDatasRuntimeResp};
 
 use crate::data::Data;
 
 pub struct Databoard {
-    _conf: DataboardConf,
     datas: DashMap<String, Data>,
 }
 
 impl Databoard {
-    pub fn new(conf: DataboardConf) -> Self {
+    pub fn new() -> Self {
         Self {
-            _conf: conf,
             datas: DashMap::new(),
         }
     }

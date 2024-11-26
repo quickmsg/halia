@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::prelude::FromRow;
+use sqlx::{any::AnyArguments, prelude::FromRow, query::QueryScalar, Any};
 use types::{
     databoard::{CreateUpdateDataboardReq, QueryParams},
     Pagination, Status,
@@ -16,7 +16,6 @@ struct DbDataboard {
     pub id: String,
     pub status: i32,
     pub name: String,
-    pub conf: Vec<u8>,
     pub ts: i64,
 }
 
@@ -26,7 +25,6 @@ impl DbDataboard {
             id: self.id,
             status: self.status.try_into()?,
             name: self.name,
-            conf: serde_json::from_slice(&self.conf)?,
             ts: self.ts,
         })
     }
@@ -36,7 +34,6 @@ pub struct Databoard {
     pub id: String,
     pub status: Status,
     pub name: String,
-    pub conf: serde_json::Value,
     pub ts: i64,
 }
 
@@ -47,7 +44,6 @@ CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     status SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
-    conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL
 );
 "#,
@@ -58,7 +54,7 @@ CREATE TABLE IF NOT EXISTS {} (
 pub async fn insert(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
     sqlx::query(
         format!(
-            "INSERT INTO {} (id, status, name, conf, ts) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO {} (id, status, name, ts) VALUES (?, ?, ?, ?)",
             TABLE_NAME
         )
         .as_str(),
@@ -66,19 +62,15 @@ pub async fn insert(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
     .bind(id)
     .bind(Into::<i32>::into(Status::default()))
     .bind(req.name)
-    .bind(serde_json::to_vec(&req.ext)?)
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
     Ok(())
 }
 
-pub async fn query(
-    pagination: Pagination,
-    query_params: QueryParams,
-) -> Result<(usize, Vec<Databoard>)> {
+pub async fn query(pagination: Pagination, query: QueryParams) -> Result<(usize, Vec<Databoard>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, db_databoards) = match (query_params.name, query_params.on) {
+    let (count, db_databoards) = match (&query.name, &query.status) {
         (None, None) => {
             let count: i64 =
                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
@@ -97,78 +89,52 @@ pub async fn query(
             .fetch_all(POOL.get().unwrap())
             .await?;
 
-            (count as usize, databoards)
+            (count, databoards)
         }
-        (None, Some(on)) => {
-            let count: i64 = sqlx::query_scalar(
-                format!("SELECT COUNT(*) FROM {} WHERE status = ?", TABLE_NAME).as_str(),
-            )
-            .bind(on as i32)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
+        _ => {
+            let mut where_clause = String::new();
+            if query.name.is_some() {
+                where_clause.push_str("WHERE name LIKE ?");
+            }
+            if query.status.is_some() {
+                match where_clause.is_empty() {
+                    true => where_clause.push_str("WHERE status = ?"),
+                    false => where_clause.push_str(" AND status = ?"),
+                }
+            }
 
-            let databoards = sqlx::query_as::<_, DbDataboard>(
-                format!(
-                    "SELECT * FROM {} WHERE status = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-                    TABLE_NAME
-                )
-                .as_str(),
-            )
-            .bind(on as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
+            let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_clause);
+            let mut query_count_builder: QueryScalar<'_, Any, i64, AnyArguments> =
+                sqlx::query_scalar(query_count_str.as_str());
 
-            (count as usize, databoards)
-        }
-        (Some(name), None) => {
-            let count: i64 = sqlx::query_scalar(
-                format!("SELECT COUNT(*) FROM {} WHERE name LIKE ?", TABLE_NAME).as_str(),
-            )
-            .bind(format!("%{}%", name))
-            .fetch_one(POOL.get().unwrap())
-            .await?;
+            let query_schemas_str = format!(
+                "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
+                TABLE_NAME, where_clause
+            );
+            let mut query_schemas_builder: sqlx::query::QueryAs<
+                '_,
+                Any,
+                DbDataboard,
+                AnyArguments,
+            > = sqlx::query_as::<_, DbDataboard>(query_schemas_str.as_str());
 
-            let databoards = sqlx::query_as::<_, DbDataboard>(
-                format!(
-                    "SELECT * FROM {} WHERE name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
-                    TABLE_NAME
-                )
-                .as_str(),
-            )
-            .bind(format!("%{}%", name))
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
+            if let Some(name) = query.name {
+                query_count_builder = query_count_builder.bind(format!("%{}%", name));
+                query_schemas_builder = query_schemas_builder.bind(format!("%{}%", name));
+            }
+            if let Some(status) = query.status {
+                query_count_builder = query_count_builder.bind(Into::<i32>::into(status));
+                query_schemas_builder = query_schemas_builder.bind(Into::<i32>::into(status));
+            }
 
-            (count as usize, databoards)
-        }
-        (Some(name), Some(on)) => {
-            let count: i64 = sqlx::query_scalar(
-                format!(
-                    "SELECT COUNT(*) FROM {} WHERE name LIKE ? AND status = ?",
-                    TABLE_NAME
-                )
-                .as_str(),
-            )
-            .bind(format!("%{}%", name))
-            .bind(on as i32)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
+            let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
+            let databoards = query_schemas_builder
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(POOL.get().unwrap())
+                .await?;
 
-            let databoards = sqlx::query_as::<_, DbDataboard>(
-            format!("SELECT * FROM {} WHERE name LIKE ? AND status = ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
-            )
-            .bind(format!("%{}%", name))
-            .bind(on as i32)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(POOL.get().unwrap())
-            .await?;
-
-            (count as usize, databoards)
+            (count, databoards)
         }
     };
 
@@ -177,7 +143,7 @@ pub async fn query(
         .map(|x| x.transfer())
         .collect::<Result<Vec<_>>>()?;
 
-    Ok((count, databoards))
+    Ok((count as usize, databoards))
 }
 
 pub async fn read_one(id: &String) -> Result<Databoard> {
@@ -220,10 +186,8 @@ pub async fn count() -> Result<usize> {
 }
 
 pub async fn update_conf(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
-    let conf = serde_json::to_vec(&req.ext)?;
-    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
+    sqlx::query(format!("UPDATE {} SET name = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
-        .bind(conf)
         .bind(id)
         .execute(POOL.get().unwrap())
         .await?;

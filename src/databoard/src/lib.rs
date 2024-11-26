@@ -10,7 +10,7 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     databoard::{
-        CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, DataboardConf, ListDataboardsItem,
+        CreateUpdateDataReq, CreateUpdateDataboardReq, DataConf, ListDataboardsItem,
         ListDataboardsResp, QueryDatasParams, QueryParams, QueryRuleInfo, RuleInfoData,
         RuleInfoDataboard, RuleInfoResp, SearchDatasInfoResp, SearchDatasItemResp, SearchDatasResp,
         Summary,
@@ -67,8 +67,7 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     DATABOARD_ON_COUNT.store(on_count, Ordering::SeqCst);
 
     for db_on_databoard in db_on_databoards {
-        let conf: DataboardConf = serde_json::from_value(db_on_databoard.conf)?;
-        let mut databoard = Databoard::new(conf);
+        let mut databoard = Databoard::new();
 
         // todo start
         let db_datas = storage::databoard::data::read_all_by_parent_id(&db_on_databoard.id).await?;
@@ -109,11 +108,30 @@ pub async fn list_databoards(
     let mut list = Vec::with_capacity(db_databoards.len());
     for db_databoard in db_databoards {
         let data_count = storage::databoard::data::count_by_databoard_id(&db_databoard.id).await?;
+        let rule_reference_running_cnt =
+            storage::rule::reference::count_running_cnt_by_parent_id(&db_databoard.id).await?;
+        let rule_reference_total_cnt =
+            storage::rule::reference::count_cnt_by_parent_id(&db_databoard.id).await?;
+        let (can_stop, can_delete) = match &db_databoard.status {
+            types::Status::Running => {
+                let can_stop = rule_reference_running_cnt == 0;
+                (can_stop, false)
+            }
+            types::Status::Stopped => {
+                let can_delete = rule_reference_total_cnt == 0;
+                (true, can_delete)
+            }
+            _ => unreachable!("数据看板不可能出现错误情况。"),
+        };
         list.push(ListDataboardsItem {
             id: db_databoard.id,
             name: db_databoard.name,
             status: db_databoard.status,
             data_count,
+            rule_reference_running_cnt,
+            rule_reference_total_cnt,
+            can_stop,
+            can_delete,
         });
     }
 
@@ -131,12 +149,7 @@ pub async fn update_databoard(
     databoard_id: String,
     req: CreateUpdateDataboardReq,
 ) -> HaliaResult<()> {
-    // if let Some(mut databoard) = databoards.get_mut(&databoard_id) {
-    //     databoard.update(req).await?;
-    // }
-
     storage::databoard::update_conf(&databoard_id, req).await?;
-
     Ok(())
 }
 
@@ -145,10 +158,8 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
         return Ok(());
     }
 
-    let db_databoard = storage::databoard::read_one(&databoard_id).await?;
-
-    let databoard_conf: DataboardConf = serde_json::from_value(db_databoard.conf)?;
-    let databoard = Databoard::new(databoard_conf);
+    // let db_databoard = storage::databoard::read_one(&databoard_id).await?;
+    let databoard = Databoard::new();
     GLOBAL_DATABOARD_MANAGER.insert(databoard_id.clone(), databoard);
 
     let mut databoard = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id).unwrap();
@@ -263,10 +274,6 @@ pub async fn update_data(
     databoard_data_id: String,
     req: CreateUpdateDataReq,
 ) -> HaliaResult<()> {
-    // if let Some(databoard) = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id) {
-    //     // databoard.update_data(&databoard_data_id, req).await?;
-    // }
-
     storage::databoard::data::update(&databoard_data_id, req).await?;
 
     Ok(())

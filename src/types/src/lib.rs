@@ -114,7 +114,7 @@ impl Into<Bytes> for PlainOrBase64Value {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Running,

@@ -11,17 +11,13 @@ pub struct Summary {
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    pub on: Option<bool>,
+    pub status: Option<Status>,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CreateUpdateDataboardReq {
     pub name: String,
-    pub ext: DataboardConf,
 }
-
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-pub struct DataboardConf {}
 
 #[derive(Serialize)]
 pub struct ListDataboardsResp {
@@ -35,6 +31,10 @@ pub struct ListDataboardsItem {
     pub name: String,
     pub status: Status,
     pub data_count: usize,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+    pub can_stop: bool,
+    pub can_delete: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
