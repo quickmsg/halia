@@ -287,36 +287,6 @@ fn build_http_client(http_client_conf: &HttpClientConf) -> Client {
     builder.build().unwrap()
 }
 
-fn build_basic_auth(
-    mut builder: RequestBuilder,
-    basic_auth_item: &Option<BasicAuth>,
-    basic_auth_client: &Option<BasicAuth>,
-) -> RequestBuilder {
-    match (basic_auth_item, basic_auth_client) {
-        (None, None) => {}
-        (None, Some(basic_auth_client)) => {
-            builder = builder.basic_auth(
-                basic_auth_client.username.clone(),
-                basic_auth_client.password.clone(),
-            );
-        }
-        (Some(basic_auth_item), None) => {
-            builder = builder.basic_auth(
-                basic_auth_item.username.clone(),
-                basic_auth_item.password.clone(),
-            );
-        }
-        (Some(basic_auth_item), Some(_)) => {
-            builder = builder.basic_auth(
-                basic_auth_item.username.clone(),
-                basic_auth_item.password.clone(),
-            );
-        }
-    }
-
-    builder
-}
-
 fn insert_headers(
     mut builder: RequestBuilder,
     headers_client: &Vec<(String, String)>,
@@ -339,4 +309,16 @@ fn insert_query(
 ) -> RequestBuilder {
     builder = builder.query(client_query_params);
     builder.query(source_sink_query_params)
+}
+
+fn insert_basic_auth(
+    mut builder: RequestBuilder,
+    basic_auth: &Option<BasicAuth>,
+) -> RequestBuilder {
+    match basic_auth {
+        Some(basic_auth) => {
+            builder.basic_auth(basic_auth.username.clone(), basic_auth.password.clone())
+        }
+        None => builder,
+    }
 }

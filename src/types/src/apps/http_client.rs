@@ -55,8 +55,8 @@ pub struct ListSourceConf {
 pub struct SinkConf {
     pub method: SinkMethod,
     pub path: String,
-    pub headers: Vec<(String, serde_json::Value)>,
-    pub query_params: Vec<(String, serde_json::Value)>,
+    pub headers: Vec<(String, String)>,
+    pub query_params: Vec<(String, String)>,
     pub body: Option<String>,
 }
 

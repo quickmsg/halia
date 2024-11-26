@@ -14,7 +14,7 @@ use tokio::{
 use tracing::{trace, warn};
 use types::apps::http_client::{HttpClientConf, SinkConf};
 
-use super::build_http_client;
+use super::{build_http_client, insert_basic_auth, insert_headers, insert_query};
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -112,7 +112,9 @@ impl Sink {
 
         builder = builder.query(&conf.query_params);
 
-        // builder = build_headers(builder, &conf.headers, &http_client_conf.headers);
+        builder = insert_headers(builder, &http_client_conf.headers, &conf.headers);
+        builder = insert_query(builder, &http_client_conf.query_params, &conf.query_params);
+        builder = insert_basic_auth(builder, &http_client_conf.basic_auth);
 
         let request = builder.build().unwrap();
 

@@ -4,7 +4,7 @@ use common::error::HaliaResult;
 use futures::lock::BiLock;
 use futures_util::StreamExt;
 use message::{MessageBatch, RuleMessageBatch};
-use reqwest::{Client, Request, StatusCode};
+use reqwest::{header::HeaderName, Client, Request, StatusCode};
 use tokio::{
     select,
     sync::{
@@ -18,7 +18,7 @@ use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest as
 use tracing::{debug, warn};
 use types::apps::http_client::{HttpClientConf, SourceConf};
 
-use super::{insert_headers, insert_query};
+use super::{insert_basic_auth, insert_headers, insert_query};
 
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
@@ -114,8 +114,6 @@ impl Source {
                 &join_handle_data.source_conf.path
             ));
 
-            debug!("{:?}", builder);
-
             builder = insert_headers(
                 builder,
                 &join_handle_data.source_conf.headers,
@@ -126,8 +124,7 @@ impl Source {
                 &join_handle_data.http_client_conf.query_params,
                 &join_handle_data.source_conf.query_params,
             );
-
-            debug!("{:?}", builder);
+            builder = insert_basic_auth(builder, &join_handle_data.http_client_conf.basic_auth);
 
             let request = match builder.build() {
                 Ok(request) => request,
@@ -258,8 +255,8 @@ impl Source {
                 match connect_async(request).await {
                     Ok((ws_stream, response)) => {
                         if !response.status().is_success() {
-                            warn!("websocket 连接失败，状态码：{}", response.status());
-                            warn!("response: {:?}", response);
+                            task_err =
+                                Some(format!("websocket 连接失败，状态码：{}", response.status()));
                         }
                         let (_, mut read) = ws_stream.split();
                         loop {
@@ -275,6 +272,7 @@ impl Source {
                         }
                     }
                     Err(e) => {
+                        task_err = Some(e.to_string());
                         let sleep = time::sleep(Duration::from_secs(
                             join_handle_data
                                 .source_conf
@@ -328,7 +326,11 @@ fn connect_websocket(
                 .unwrap();
 
             for (key, value) in headers {
-                // request.headers_mut().insert(key, value.parse().unwrap());
+                request.headers_mut().insert(
+                    // TODO 提前检查，确认不会出发panic
+                    HeaderName::from_bytes(key.as_bytes()).unwrap(),
+                    value.parse().unwrap(),
+                );
             }
 
             request
