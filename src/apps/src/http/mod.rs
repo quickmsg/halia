@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
-use reqwest::{Certificate, Client, ClientBuilder, Identity, RequestBuilder};
+use reqwest::{
+    header::HeaderName, Certificate, Client, ClientBuilder, Identity, Request, RequestBuilder,
+};
 use sink::Sink;
 use source::Source;
 use tokio::sync::mpsc;
@@ -237,31 +239,20 @@ fn build_basic_auth(
     builder
 }
 
-fn build_headers(
-    mut builder: RequestBuilder,
-    headers_item: &Option<Vec<(String, String)>>,
-    headers_client: &Option<Vec<(String, String)>>,
-) -> RequestBuilder {
-    match (headers_item, headers_client) {
-        (None, None) => {}
-        (None, Some(headers_client)) => {
-            for (k, v) in headers_client {
-                builder = builder.header(k, v);
-            }
-        }
-        (Some(headers_item), None) => {
-            for (k, v) in headers_item {
-                builder = builder.header(k, v);
-            }
-        }
-        (Some(headers_item), Some(headers_client)) => {
-            for (k, v) in headers_client {
-                if headers_item.iter().find(|(key, _)| key == k).is_none() {
-                    builder = builder.header(k, v);
-                }
-            }
-        }
+fn insert_headers(
+    request: &mut Request,
+    headers_client: &Vec<(String, String)>,
+    headers_item: &Vec<(String, String)>,
+) {
+    for (k, v) in headers_client {
+        request
+            .headers_mut()
+            .insert(k.parse::<HeaderName>().unwrap(), v.parse().unwrap());
     }
 
-    builder
+    for (k, v) in headers_item {
+        request
+            .headers_mut()
+            .insert(k.parse::<HeaderName>().unwrap(), v.parse().unwrap());
+    }
 }

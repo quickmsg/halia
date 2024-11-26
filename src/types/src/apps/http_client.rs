@@ -8,8 +8,8 @@ pub struct HttpClientConf {
     pub port: u16,
 
     pub basic_auth: Option<BasicAuth>,
-    pub headers: Option<Vec<(String, String)>>,
-    pub query_params: Option<Vec<(String, String)>>,
+    pub headers: Vec<(String, String)>,
+    pub query_params: Vec<(String, String)>,
     // 超时时间，单位为s
     // pub timeout: usize,
     pub ssl_enable: bool,
@@ -20,12 +20,21 @@ pub struct HttpClientConf {
 pub struct SourceConf {
     #[serde(rename = "type")]
     pub typ: SourceType,
-    // 间隔 毫秒 当类型为http时必须存在
-    pub interval: Option<u64>,
     pub path: String,
-    pub basic_auth: Option<BasicAuth>,
-    pub headers: Option<Vec<(String, String)>>,
-    pub query_params: Option<Vec<(String, String)>>,
+    pub headers: Vec<(String, String)>,
+    pub query_params: Vec<(String, String)>,
+    pub http: Option<HttpSourceConf>,
+    pub websocket: Option<WebsocketSourceConf>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct HttpSourceConf {
+    pub interval: u64,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
+pub struct WebsocketSourceConf {
+    pub reconnect: u64,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
@@ -39,9 +48,8 @@ pub enum SourceType {
 pub struct SinkConf {
     pub method: SinkMethod,
     pub path: String,
-    pub basic_auth: Option<BasicAuth>,
-    pub headers: Option<Vec<(String, String)>>,
-    pub query_params: Option<Vec<(String, String)>>,
+    pub headers: Vec<(String, serde_json::Value)>,
+    pub query_params: Vec<(String, serde_json::Value)>,
     pub body: Option<String>,
 }
 

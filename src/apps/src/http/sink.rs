@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use common::error::HaliaResult;
-use tracing::{trace, warn};
 use message::RuleMessageBatch;
 use reqwest::Client;
 use tokio::{
@@ -12,9 +11,10 @@ use tokio::{
     },
     task::JoinHandle,
 };
+use tracing::{trace, warn};
 use types::apps::http_client::{HttpClientConf, SinkConf};
 
-use super::{build_headers, build_http_client};
+use super::build_http_client;
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
@@ -112,7 +112,7 @@ impl Sink {
 
         builder = builder.query(&conf.query_params);
 
-        builder = build_headers(builder, &conf.headers, &http_client_conf.headers);
+        // builder = build_headers(builder, &conf.headers, &http_client_conf.headers);
 
         let request = builder.build().unwrap();
 
