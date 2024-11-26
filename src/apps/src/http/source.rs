@@ -8,7 +8,7 @@ use reqwest::{Client, Request, StatusCode};
 use tokio::{
     select,
     sync::{
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
         watch,
     },
     task::JoinHandle,
@@ -35,6 +35,7 @@ pub struct JoinHandleData {
     pub source_conf: SourceConf,
     pub client: Client,
     pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
+    device_err_tx: mpsc::UnboundedSender<Option<String>>,
 }
 
 impl Source {
@@ -42,6 +43,7 @@ impl Source {
         id: String,
         http_client_conf: Arc<HttpClientConf>,
         source_conf: SourceConf,
+        device_err_tx: mpsc::UnboundedSender<Option<String>>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
@@ -56,6 +58,7 @@ impl Source {
             source_conf,
             client: http_client.clone(),
             mb_txs: mb_txs1,
+            device_err_tx,
         };
         let join_handle = Self::event_loop(join_handle_data).await;
         Self {
@@ -160,6 +163,17 @@ impl Source {
         match join_handle_data.client.execute(request).await {
             Ok(resp) => {
                 if resp.status().is_success() {
+                    if task_err.is_some() {
+                        *join_handle_data.err.lock().await = None;
+                        *task_err = None;
+                        let _ = storage::app::source_sink::update_status(
+                            &join_handle_data.id,
+                            types::Status::Running,
+                        )
+                        .await;
+
+                        join_handle_data.device_err_tx.send(None).unwrap();
+                    }
                     match resp.bytes().await {
                         Ok(body) => match MessageBatch::from_json(body) {
                             Ok(mb) => {
@@ -218,7 +232,17 @@ impl Source {
                     }
                 }
             }
-            Err(e) => warn!("{}", e),
+            Err(e) => {
+                let e = e.to_string();
+                match task_err {
+                    Some(task_err_some) => {
+                        if *task_err_some.1 != e {
+                            join_handle_data.device_err_tx.send(Some(e)).unwrap();
+                        }
+                    }
+                    None => join_handle_data.device_err_tx.send(Some(e)).unwrap(),
+                }
+            }
         }
     }
 

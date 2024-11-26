@@ -3,11 +3,15 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use futures::lock::BiLock;
 use message::RuleMessageBatch;
 use reqwest::{Certificate, Client, ClientBuilder, Identity, RequestBuilder};
 use sink::Sink;
 use source::Source;
-use tokio::sync::mpsc;
+use tokio::{
+    select,
+    sync::{mpsc, watch},
+};
 use types::apps::http_client::{BasicAuth, HttpClientConf, SinkConf, SourceConf};
 
 use crate::App;
@@ -16,23 +20,82 @@ mod sink;
 mod source;
 
 pub struct HttpClient {
-    _id: String,
     conf: Arc<HttpClientConf>,
-    err: Option<String>,
+    err: BiLock<Option<String>>,
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
+    device_err_tx: mpsc::UnboundedSender<Option<String>>,
+    stop_signal_tx: watch::Sender<()>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: HttpClientConf = serde_json::from_value(conf).unwrap();
 
+    let (device_err_tx, device_err_rx) = mpsc::unbounded_channel();
+
+    let (err1, err2) = BiLock::new(None);
+    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
+    HttpClient::event_loop(id, err1, device_err_rx, stop_signal_rx);
+
     Box::new(HttpClient {
-        _id: id,
         conf: Arc::new(conf),
-        err: None,
+        err: err2,
         sources: DashMap::new(),
         sinks: DashMap::new(),
+        device_err_tx,
+        stop_signal_tx,
     })
+}
+
+impl HttpClient {
+    fn event_loop(
+        id: String,
+        device_err: BiLock<Option<String>>,
+        mut device_err_rx: mpsc::UnboundedReceiver<Option<String>>,
+        mut stop_signal_rx: watch::Receiver<()>,
+    ) {
+        tokio::spawn(async move {
+            let mut old_err: Option<String> = None;
+            loop {
+                select! {
+                    Some(err) = device_err_rx.recv() => {
+                        Self::handle_err(&id, &mut old_err, err, &device_err).await;
+                    }
+
+                    _ = stop_signal_rx.changed() => {
+                        return;
+                    }
+                }
+            }
+        });
+    }
+
+    async fn handle_err(
+        id: &String,
+        old_err: &mut Option<String>,
+        new_err: Option<String>,
+        device_err: &BiLock<Option<String>>,
+    ) {
+        match (&old_err, new_err) {
+            (None, None) => {}
+            (None, Some(new_err)) => {
+                *device_err.lock().await = Some(new_err.clone());
+                *old_err = Some(new_err);
+                let _ = storage::app::update_status(id, types::Status::Error).await;
+            }
+            (Some(_), None) => {
+                *device_err.lock().await = None;
+                *old_err = None;
+                let _ = storage::app::update_status(id, types::Status::Running).await;
+            }
+            (Some(old_err_some), Some(new_err)) => {
+                if *old_err_some != new_err {
+                    *device_err.lock().await = Some(new_err.clone());
+                    *old_err = Some(new_err);
+                }
+            }
+        }
+    }
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
@@ -55,7 +118,7 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 #[async_trait]
 impl App for HttpClient {
     async fn read_app_err(&self) -> Option<String> {
-        self.err.clone()
+        self.err.lock().await.clone()
     }
 
     async fn read_source_err(&self, source_id: &String) -> HaliaResult<Option<String>> {
@@ -93,6 +156,8 @@ impl App for HttpClient {
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
+
+        self.stop_signal_tx.send(()).unwrap();
     }
 
     async fn create_source(
@@ -101,7 +166,13 @@ impl App for HttpClient {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
-        let source = Source::new(source_id.clone(), self.conf.clone(), conf).await;
+        let source = Source::new(
+            source_id.clone(),
+            self.conf.clone(),
+            conf,
+            self.device_err_tx.clone(),
+        )
+        .await;
         self.sources.insert(source_id, source);
         Ok(())
     }
