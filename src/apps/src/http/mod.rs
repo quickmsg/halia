@@ -240,19 +240,25 @@ fn build_basic_auth(
 }
 
 fn insert_headers(
-    request: &mut Request,
+    mut builder: RequestBuilder,
     headers_client: &Vec<(String, String)>,
     headers_item: &Vec<(String, String)>,
-) {
+) -> RequestBuilder {
     for (k, v) in headers_client {
-        request
-            .headers_mut()
-            .insert(k.parse::<HeaderName>().unwrap(), v.parse().unwrap());
+        builder = builder.header(k, v);
+    }
+    for (k, v) in headers_item {
+        builder = builder.header(k, v);
     }
 
-    for (k, v) in headers_item {
-        request
-            .headers_mut()
-            .insert(k.parse::<HeaderName>().unwrap(), v.parse().unwrap());
-    }
+    builder
+}
+
+fn insert_query(
+    mut builder: RequestBuilder,
+    client_query_params: &Vec<(String, String)>,
+    source_sink_query_params: &Vec<(String, String)>,
+) -> RequestBuilder {
+    builder = builder.query(client_query_params);
+    builder.query(source_sink_query_params)
 }

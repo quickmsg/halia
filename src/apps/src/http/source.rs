@@ -4,7 +4,7 @@ use common::error::HaliaResult;
 use futures::lock::BiLock;
 use futures_util::StreamExt;
 use message::{MessageBatch, RuleMessageBatch};
-use reqwest::{Client, Method, Request, Url};
+use reqwest::{Client, Request};
 use tokio::{
     select,
     sync::{
@@ -18,7 +18,7 @@ use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest as
 use tracing::{debug, warn};
 use types::apps::http_client::{HttpClientConf, SourceConf};
 
-use super::insert_headers;
+use super::{insert_headers, insert_query};
 
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
@@ -93,23 +93,25 @@ impl Source {
                 join_handle_data.source_conf.http.as_ref().unwrap().interval,
             ));
 
-            let url = Url::parse(
-                format!(
-                    "{}:{}{}",
-                    &join_handle_data.http_client_conf.host,
-                    &join_handle_data.http_client_conf.port,
-                    &join_handle_data.source_conf.path
-                )
-                .as_str(),
-            )
-            // TODO 验证参数时进行验证，避免此处panic
-            .unwrap();
-            let mut request = Request::new(Method::GET, url);
-            insert_headers(
-                &mut request,
+            let mut builder = join_handle_data.client.get(format!(
+                "{}:{}{}",
+                &join_handle_data.http_client_conf.host,
+                &join_handle_data.http_client_conf.port,
+                &join_handle_data.source_conf.path
+            ));
+
+            builder = insert_headers(
+                builder,
                 &join_handle_data.source_conf.headers,
                 &join_handle_data.http_client_conf.headers,
             );
+            builder = insert_query(
+                builder,
+                &join_handle_data.http_client_conf.query_params,
+                &join_handle_data.source_conf.query_params,
+            );
+
+            let request = builder.build().unwrap();
 
             loop {
                 select! {
@@ -125,56 +127,56 @@ impl Source {
         })
     }
 
-    // async fn ws_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-    //     tokio::spawn(async move {
-    //         let mut task_err: Option<String> = Some("not connectd.".to_owned());
-    //         loop {
-    //             let request = connect_websocket(
-    //                 &join_handle_data.http_client_conf,
-    //                 &join_handle_data.source_conf.http.as_ref().unwrap().path,
-    //                 &Some(join_handle_data.source_conf.http.as_ref().unwrap().headers),
-    //             );
-    //             match connect_async(request).await {
-    //                 Ok((ws_stream, response)) => {
-    //                     if !response.status().is_success() {
-    //                         warn!("websocket 连接失败，状态码：{}", response.status());
-    //                         warn!("response: {:?}", response);
-    //                     }
-    //                     let (_, mut read) = ws_stream.split();
-    //                     loop {
-    //                         select! {
-    //                             msg = read.next() => {
-    //                                 debug!("msg: {:?}", msg);
-    //                             }
+    async fn ws_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
+        tokio::spawn(async move {
+            let mut task_err: Option<String> = Some("not connectd.".to_owned());
+            loop {
+                let request = connect_websocket(
+                    &join_handle_data.http_client_conf,
+                    &join_handle_data.source_conf.path,
+                    &Some(join_handle_data.source_conf.headers.clone()),
+                );
+                match connect_async(request).await {
+                    Ok((ws_stream, response)) => {
+                        if !response.status().is_success() {
+                            warn!("websocket 连接失败，状态码：{}", response.status());
+                            warn!("response: {:?}", response);
+                        }
+                        let (_, mut read) = ws_stream.split();
+                        loop {
+                            select! {
+                                msg = read.next() => {
+                                    debug!("msg: {:?}", msg);
+                                }
 
-    //                             _ = join_handle_data.stop_signal_rx.changed() => {
-    //                                 return join_handle_data;
-    //                             }
-    //                         }
-    //                     }
-    //                 }
-    //                 Err(e) => {
-    //                     let sleep = time::sleep(Duration::from_secs(
-    //                         join_handle_data
-    //                             .source_conf
-    //                             .websocket
-    //                             .as_ref()
-    //                             .unwrap()
-    //                             .reconnect,
-    //                     ));
-    //                     tokio::pin!(sleep);
-    //                     select! {
-    //                         _ = join_handle_data.stop_signal_rx.changed() => {
-    //                             return join_handle_data;
-    //                         }
+                                _ = join_handle_data.stop_signal_rx.changed() => {
+                                    return join_handle_data;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let sleep = time::sleep(Duration::from_secs(
+                            join_handle_data
+                                .source_conf
+                                .websocket
+                                .as_ref()
+                                .unwrap()
+                                .reconnect,
+                        ));
+                        tokio::pin!(sleep);
+                        select! {
+                            _ = join_handle_data.stop_signal_rx.changed() => {
+                                return join_handle_data;
+                            }
 
-    //                         _ = &mut sleep => {}
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     })
-    // }
+                            _ = &mut sleep => {}
+                        }
+                    }
+                }
+            }
+        })
+    }
 
     async fn do_request(
         client: &Client,
