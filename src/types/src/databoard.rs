@@ -68,6 +68,9 @@ pub struct ListDatasItemResp {
     pub value: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ts: Option<u64>,
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+    pub can_delete: bool,
 }
 
 #[derive(Serialize)]

@@ -92,7 +92,7 @@ pub async fn search(
         Some(name) => {
             let count: i64 = sqlx::query_scalar(
                 format!(
-                    "SELECT COUNT(*) FROM {} WHERE parent_id = ? AND name LIKE ?",
+                    "SELECT COUNT(*) FROM {} WHERE databoard_id = ? AND name LIKE ?",
                     TABLE_NAME
                 )
                 .as_str(),
@@ -103,7 +103,7 @@ pub async fn search(
             .await?;
 
             let databoard_datas = sqlx::query_as::<_, DbData>(
-                format!("SELECT * FROM {} WHERE parent_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
+                format!("SELECT * FROM {} WHERE databoard_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
             )
             .bind(databoard_id)
             .bind(format!("%{}%", name))
@@ -115,14 +115,14 @@ pub async fn search(
         }
         None => {
             let count: i64 = sqlx::query_scalar(
-                format!("SELECT COUNT(*) FROM {} WHERE parent_id = ?", TABLE_NAME).as_str(),
+                format!("SELECT COUNT(*) FROM {} WHERE databoard_id = ?", TABLE_NAME).as_str(),
             )
             .bind(databoard_id)
             .fetch_one(POOL.get().unwrap())
             .await?;
             let databoard_datas = sqlx::query_as::<_, DbData>(
                 format!(
-                    "SELECT * FROM {} WHERE parent_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    "SELECT * FROM {} WHERE databoard_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
                 )
                 .as_str(),

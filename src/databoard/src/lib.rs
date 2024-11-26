@@ -219,7 +219,7 @@ pub async fn create_data(databoard_id: String, req: CreateUpdateDataReq) -> Hali
         databoard.create_data(data_id.clone(), conf).await?;
     }
 
-    storage::databoard::data::insert(&databoard_id, &data_id, req).await?;
+    storage::databoard::data::insert(&data_id, &databoard_id, req).await?;
 
     Ok(())
 }
@@ -244,12 +244,19 @@ pub async fn list_datas(
             }
             None => (None, None),
         };
+        let rule_reference_running_cnt =
+            storage::rule::reference::count_running_cnt_by_resource_id(&db_data.id).await?;
+        let rule_reference_total_cnt =
+            storage::rule::reference::count_cnt_by_resource_id(&db_data.id).await?;
         list.push(ListDatasItemResp {
             id: db_data.id,
             name: db_data.name,
             conf: db_data.conf,
             value,
             ts,
+            rule_reference_running_cnt,
+            rule_reference_total_cnt,
+            can_delete: rule_reference_total_cnt == 0,
         });
     }
 
