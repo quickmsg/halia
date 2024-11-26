@@ -6,7 +6,7 @@ impl TryFrom<apache_avro::types::Value> for Message {
 
     fn try_from(value: apache_avro::types::Value) -> Result<Self, Self::Error> {
         Ok(Self {
-            metadata: Default::default(),
+            metadatas: Default::default(),
             value: MessageValue::try_from(value)?,
         })
     }

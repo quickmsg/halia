@@ -44,7 +44,7 @@ impl MessageBatch {
 impl From<serde_json::Value> for Message {
     fn from(value: serde_json::Value) -> Self {
         Self {
-            metadata: HashMap::new(),
+            metadatas: HashMap::new(),
             value: MessageValue::from(value),
         }
     }

@@ -3,7 +3,7 @@ use crate::{Message, MessageValue};
 impl From<prost_reflect::Value> for Message {
     fn from(value: prost_reflect::Value) -> Self {
         Self {
-            metadata: Default::default(),
+            metadatas: Default::default(),
             value: MessageValue::from(value),
         }
     }

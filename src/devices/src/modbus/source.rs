@@ -1,7 +1,7 @@
 use std::{io, sync::Arc, time::Duration};
 
 use common::error::{HaliaError, HaliaResult};
-use message::{Message, MessageBatch, MessageValue, RuleMessageBatch};
+use message::{Message, MessageBatch, RuleMessageBatch};
 use modbus_protocol::Context;
 use tokio::{
     select,
@@ -229,13 +229,9 @@ impl Source {
                 let mut message = Message::default();
                 // todo 考虑field的共享，避免clone
                 message.add(self.source_conf.field.clone(), value);
-                for (k, v) in &device_conf.metadatas {
-                    message.add_metadata(k.clone(), MessageValue::from(v.clone()));
-                }
 
-                for (k, v) in &self.source_conf.metadatas {
-                    message.add_metadata(k.clone(), MessageValue::from(v.clone()));
-                }
+                message.insert_raw_metadatas(device_conf.metadatas.clone());
+                message.insert_raw_metadatas(self.source_conf.metadatas.clone());
 
                 let mut message_batch = MessageBatch::default();
                 message_batch.push_message(message);

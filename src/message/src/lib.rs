@@ -123,7 +123,7 @@ impl Default for MessageBatch {
 
 #[derive(Clone)]
 pub struct Message {
-    metadata: HashMap<String, MessageValue>,
+    metadatas: HashMap<String, MessageValue>,
     value: MessageValue,
 }
 
@@ -138,21 +138,33 @@ impl Debug for Message {
 impl Message {
     pub fn new() -> Self {
         Self {
-            metadata: HashMap::new(),
+            metadatas: HashMap::new(),
             value: MessageValue::Object(HashMap::new()),
         }
     }
 
-    pub fn add_metadata(&mut self, key: String, value: MessageValue) {
-        self.metadata.insert(key, value);
+    pub fn insert_raw_metadatas(&mut self, metadatas: Vec<(String, serde_json::Value)>) {
+        for (k, v) in metadatas {
+            self.metadatas.insert(k, MessageValue::from(v));
+        }
+    }
+
+    pub fn insert_metadatas(&mut self, metadatas: Vec<(String, MessageValue)>) {
+        for (k, v) in metadatas {
+            self.metadatas.insert(k, v);
+        }
+    }
+
+    pub fn insert_metadata(&mut self, field: String, value: MessageValue) {
+        self.metadatas.insert(field, value);
     }
 
     pub fn remove_metadate(&mut self, key: &str) {
-        self.metadata.remove(key);
+        self.metadatas.remove(key);
     }
 
     pub fn get_metadata(&self, key: &str) -> Option<&MessageValue> {
-        self.metadata.get(key)
+        self.metadatas.get(key)
     }
 
     pub fn get_obj(&self) -> Option<&HashMap<String, MessageValue>> {
@@ -257,7 +269,7 @@ impl Message {
 impl Default for Message {
     fn default() -> Self {
         Self {
-            metadata: HashMap::new(),
+            metadatas: HashMap::new(),
             value: MessageValue::Object(HashMap::new()),
         }
     }

@@ -57,7 +57,7 @@ impl Function for Node {
                 }
             }
             if !passed {
-                message.add_metadata("keep".to_owned(), message::MessageValue::Boolean(false));
+                message.insert_metadata("keep".to_owned(), message::MessageValue::Boolean(false));
             }
         }
 
