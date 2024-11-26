@@ -126,6 +126,7 @@ pub struct ListRulesItem {
     pub id: String,
     pub name: String,
     pub status: Status,
+    pub log_status: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

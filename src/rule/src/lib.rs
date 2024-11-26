@@ -6,7 +6,6 @@ use std::sync::{
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use rule::Rule;
-use tracing::debug;
 use types::{
     rules::{
         AppSinkNode, AppSourceNode, Conf, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
@@ -76,15 +75,19 @@ pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
 
 pub async fn list(pagination: Pagination, query: QueryParams) -> HaliaResult<ListRulesResp> {
     let (count, db_rules) = storage::rule::search(pagination, query).await?;
-    debug!("{}", count);
-    let list = db_rules
-        .into_iter()
-        .map(|db_rule| ListRulesItem {
-            id: db_rule.id,
-            name: db_rule.name,
+    let mut list = vec![];
+    for db_rule in db_rules.into_iter() {
+        let status = match GLOBAL_RULE_MANAGER.get(&db_rule.id) {
+            Some(rule) => rule.get_log_status(),
+            None => false,
+        };
+        list.push(ListRulesItem {
+            id: db_rule.id.clone(),
+            name: db_rule.name.clone(),
             status: db_rule.status,
-        })
-        .collect::<Vec<_>>();
+            log_status: status,
+        });
+    }
 
     Ok(ListRulesResp { count, list })
 }
