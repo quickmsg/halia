@@ -4,7 +4,7 @@ use common::error::HaliaResult;
 use futures::lock::BiLock;
 use futures_util::StreamExt;
 use message::{MessageBatch, RuleMessageBatch};
-use reqwest::{Client, Request};
+use reqwest::{Client, Request, StatusCode};
 use tokio::{
     select,
     sync::{
@@ -24,38 +24,45 @@ pub struct Source {
     stop_signal_tx: watch::Sender<()>,
     err: BiLock<Option<String>>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
-    pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
+    pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
 }
 
 pub struct JoinHandleData {
+    pub id: String,
     pub err: BiLock<Option<String>>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub http_client_conf: Arc<HttpClientConf>,
     pub source_conf: SourceConf,
     pub client: Client,
-    pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
+    pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
 }
 
 impl Source {
-    pub async fn new(http_client_conf: Arc<HttpClientConf>, source_conf: SourceConf) -> Self {
+    pub async fn new(
+        id: String,
+        http_client_conf: Arc<HttpClientConf>,
+        source_conf: SourceConf,
+    ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
         let (err1, err2) = BiLock::new(None);
+        let (mb_txs1, mb_txs2) = BiLock::new(vec![]);
         let http_client = Client::new();
         let join_handle_data = JoinHandleData {
+            id,
             err: err1,
             stop_signal_rx,
             http_client_conf,
             source_conf,
             client: http_client.clone(),
-            mb_txs: vec![],
+            mb_txs: mb_txs1,
         };
         let join_handle = Self::event_loop(join_handle_data).await;
         Self {
             err: err2,
             stop_signal_tx,
             join_handle: Some(join_handle),
-            mb_txs: vec![],
+            mb_txs: mb_txs2,
         }
     }
 
@@ -92,16 +99,19 @@ impl Source {
 
     fn http_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
+            let mut task_err: Option<(Option<StatusCode>, String)> = None;
             let mut interval = time::interval(Duration::from_millis(
                 join_handle_data.source_conf.http.as_ref().unwrap().interval,
             ));
 
             let mut builder = join_handle_data.client.get(format!(
-                "{}:{}{}",
+                "http://{}:{}{}",
                 &join_handle_data.http_client_conf.host,
                 &join_handle_data.http_client_conf.port,
                 &join_handle_data.source_conf.path
             ));
+
+            debug!("{:?}", builder);
 
             builder = insert_headers(
                 builder,
@@ -114,7 +124,15 @@ impl Source {
                 &join_handle_data.source_conf.query_params,
             );
 
-            let request = builder.build().unwrap();
+            debug!("{:?}", builder);
+
+            let request = match builder.build() {
+                Ok(request) => request,
+                Err(e) => {
+                    warn!("{:?}", e);
+                    return join_handle_data;
+                }
+            };
 
             loop {
                 select! {
@@ -123,11 +141,85 @@ impl Source {
                     }
 
                     _ = interval.tick() => {
-                        Self::do_request(&join_handle_data.client, request.try_clone().unwrap(), &mut join_handle_data.mb_txs).await;
+                        Self::do_request(&mut join_handle_data, request.try_clone().unwrap(), &mut task_err).await;
                     }
                 }
             }
         })
+    }
+
+    async fn do_request(
+        join_handle_data: &JoinHandleData,
+        request: Request,
+        task_err: &mut Option<(Option<StatusCode>, String)>,
+    ) {
+        if join_handle_data.mb_txs.lock().await.len() == 0 {
+            return;
+        }
+
+        match join_handle_data.client.execute(request).await {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    match resp.bytes().await {
+                        Ok(body) => match MessageBatch::from_json(body) {
+                            Ok(mb) => {
+                                let mut mb_txs = join_handle_data.mb_txs.lock().await;
+                                if mb_txs.len() == 1 {
+                                    let rmb = RuleMessageBatch::Owned(mb);
+                                    if let Err(_) = mb_txs[0].send(rmb) {
+                                        mb_txs.remove(0);
+                                    }
+                                } else {
+                                    let rmb = RuleMessageBatch::Arc(Arc::new(mb));
+                                    mb_txs.retain(|tx| tx.send(rmb.clone()).is_ok());
+                                }
+                            }
+                            Err(e) => warn!("{}", e),
+                        },
+
+                        Err(e) => warn!("{}", e),
+                    }
+                } else {
+                    let status_code = resp.status();
+                    // TODO 是否会触发unwrap
+                    let body = resp.text().await.unwrap();
+                    if let Some((task_err_status_code, task_err_body)) = task_err {
+                        match task_err_status_code {
+                            Some(task_err_status_code) => {
+                                if task_err_status_code != &status_code {
+                                    *join_handle_data.err.lock().await =
+                                        Some(format!("状态码：{}, 错误：{}。", status_code, body));
+                                    *task_err = Some((Some(status_code), body));
+                                } else {
+                                    if body != *task_err_body {
+                                        *join_handle_data.err.lock().await = Some(format!(
+                                            "状态码：{}, 错误：{}。",
+                                            status_code, body
+                                        ));
+                                        *task_err = Some((Some(status_code), body));
+                                    }
+                                }
+                            }
+                            None => {
+                                *join_handle_data.err.lock().await =
+                                    Some(format!("状态码：{}, 错误：{}。", status_code, body));
+                                *task_err = Some((Some(status_code), body));
+                            }
+                        }
+                    } else {
+                        *join_handle_data.err.lock().await =
+                            Some(format!("状态码：{}, 错误：{}。", status_code, body));
+                        *task_err = Some((Some(status_code), body));
+                        let _ = storage::app::source_sink::update_status(
+                            &join_handle_data.id,
+                            types::Status::Error,
+                        )
+                        .await;
+                    }
+                }
+            }
+            Err(e) => warn!("{}", e),
+        }
     }
 
     async fn ws_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
@@ -181,56 +273,20 @@ impl Source {
         })
     }
 
-    async fn do_request(
-        client: &Client,
-        request: Request,
-        mb_txs: &mut Vec<UnboundedSender<RuleMessageBatch>>,
-    ) {
-        if mb_txs.len() == 0 {
-            return;
-        }
-
-        match client.execute(request).await {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    match resp.bytes().await {
-                        Ok(body) => match MessageBatch::from_json(body) {
-                            Ok(mb) => {
-                                if mb_txs.len() == 1 {
-                                    let rmb = RuleMessageBatch::Owned(mb);
-                                    if let Err(_) = mb_txs[0].send(rmb) {
-                                        mb_txs.remove(0);
-                                    }
-                                } else {
-                                    let rmb = RuleMessageBatch::Arc(Arc::new(mb));
-                                    mb_txs.retain(|tx| tx.send(rmb.clone()).is_ok());
-                                }
-                            }
-                            Err(e) => warn!("{}", e),
-                        },
-
-                        Err(e) => warn!("{}", e),
-                    }
-                } else {
-                    warn!("请求失败，状态码：{}", resp.status());
-                }
-            }
-            Err(e) => warn!("{}", e),
-        }
-    }
-
     pub async fn stop(&mut self) -> JoinHandleData {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
 
     pub async fn get_rxs(&mut self, cnt: usize) -> Vec<UnboundedReceiver<RuleMessageBatch>> {
-        let mut rxs = vec![];
+        let mut rxs = Vec::with_capacity(cnt);
+        let mut txs = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             let (tx, rx) = unbounded_channel();
-            self.mb_txs.push(tx);
+            txs.push(tx);
             rxs.push(rx);
         }
+        self.mb_txs.lock().await.append(&mut txs);
         rxs
     }
 }

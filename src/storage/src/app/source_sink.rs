@@ -276,6 +276,16 @@ pub async fn update(id: &String, req: CreateUpdateSourceSinkReq) -> Result<()> {
     Ok(())
 }
 
+pub async fn update_status(id: &String, status: Status) -> Result<()> {
+    sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(Into::<i32>::into(status))
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
+
+    Ok(())
+}
+
 pub async fn update_status_by_app_id(app_id: &String, status: Status) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET status = ? WHERE app_id = ?", TABLE_NAME).as_str())
         .bind(Into::<i32>::into(status))

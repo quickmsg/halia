@@ -101,7 +101,7 @@ impl App for HttpClient {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
-        let source = Source::new(self.conf.clone(), conf).await;
+        let source = Source::new(source_id.clone(), self.conf.clone(), conf).await;
         self.sources.insert(source_id, source);
         Ok(())
     }
