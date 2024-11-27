@@ -12,6 +12,8 @@ mod avro;
 mod csv;
 mod json;
 mod ptorobuf;
+mod yaml;
+mod toml;
 
 #[derive(Clone)]
 pub struct MessageBatch {

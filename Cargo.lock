@@ -2997,13 +2997,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "apache-avro",
+ "base64 0.22.1",
  "bytes",
  "csv",
  "prost-reflect",
  "serde",
  "serde_json",
+ "toml 0.8.19",
  "tracing",
  "uuid",
+ "yaml-rust2",
 ]
 
 [[package]]
@@ -4810,6 +4813,7 @@ dependencies = [
  "serde",
  "serde_json",
  "storage",
+ "toml 0.8.19",
  "tracing",
  "types",
  "yaml-rust2",

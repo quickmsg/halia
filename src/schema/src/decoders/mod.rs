@@ -4,3 +4,4 @@ pub mod json;
 pub mod raw;
 pub mod yaml;
 pub mod protobuf;
+pub mod toml;

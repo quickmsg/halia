@@ -311,10 +311,7 @@ fn insert_query(
     builder.query(source_sink_query_params)
 }
 
-fn insert_basic_auth(
-    mut builder: RequestBuilder,
-    basic_auth: &Option<BasicAuth>,
-) -> RequestBuilder {
+fn insert_basic_auth(builder: RequestBuilder, basic_auth: &Option<BasicAuth>) -> RequestBuilder {
     match basic_auth {
         Some(basic_auth) => {
             builder.basic_auth(basic_auth.username.clone(), basic_auth.password.clone())

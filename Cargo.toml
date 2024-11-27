@@ -91,6 +91,7 @@ axum = { version = "0.7.5", features = [
     "multipart",
     "tokio",
 ] }
+yaml-rust2 = "0.9.0"
 
 [profile.release]
 strip = true

@@ -17,6 +17,8 @@ use types::{
 mod decoders;
 mod encoders;
 
+const DEFAULT_KEY: &str = "key";
+
 pub trait Decoder: Sync + Send {
     fn decode(&self, data: Bytes) -> Result<MessageBatch>;
 }
