@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common::error::{HaliaError, HaliaResult};
+use common::{
+    error::{HaliaError, HaliaResult},
+    ErrorManager,
+};
 use dashmap::DashMap;
 use futures::lock::BiLock;
 use message::RuleMessageBatch;
@@ -21,7 +24,7 @@ mod source;
 
 pub struct HttpClient {
     conf: Arc<HttpClientConf>,
-    err: BiLock<Option<String>>,
+    err: BiLock<Option<Arc<String>>>,
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
     device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
@@ -35,7 +38,16 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
     let (err1, err2) = BiLock::new(None);
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-    HttpClient::event_loop(id, err1, device_err_rx, stop_signal_rx);
+
+    let task_data = TaskData {
+        id,
+        device_err: err1,
+        error_manager: ErrorManager::default(),
+        device_err_rx,
+        stop_signal_rx,
+    };
+
+    task_data.event_loop();
 
     Box::new(HttpClient {
         conf: Arc::new(conf),
@@ -47,22 +59,24 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     })
 }
 
-impl HttpClient {
-    fn event_loop(
-        id: String,
-        device_err: BiLock<Option<String>>,
-        mut device_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
-        mut stop_signal_rx: watch::Receiver<()>,
-    ) {
+struct TaskData {
+    id: String,
+    device_err: BiLock<Option<Arc<String>>>,
+    error_manager: ErrorManager,
+    device_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
+    stop_signal_rx: watch::Receiver<()>,
+}
+
+impl TaskData {
+    fn event_loop(mut self) {
         tokio::spawn(async move {
-            let mut old_err: Option<String> = None;
             loop {
                 select! {
-                    Some(err) = device_err_rx.recv() => {
-                        Self::handle_err(&id, &mut old_err, err, &device_err).await;
+                    Some(err) = self.device_err_rx.recv() => {
+                        self.handle_err(err).await;
                     }
 
-                    _ = stop_signal_rx.changed() => {
+                    _ = self.stop_signal_rx.changed() => {
                         return;
                     }
                 }
@@ -70,29 +84,24 @@ impl HttpClient {
         });
     }
 
-    // todo use error manager
-    async fn handle_err(
-        id: &String,
-        old_err: &mut Option<String>,
-        new_err: Option<Arc<String>>,
-        device_err: &BiLock<Option<String>>,
-    ) {
-        match (&old_err, new_err) {
-            (None, None) => {}
-            (None, Some(new_err)) => {
-                *device_err.lock().await = Some(new_err.clone());
-                *old_err = Some(new_err);
-                let _ = storage::app::update_status(id, types::Status::Error).await;
+    async fn handle_err(&mut self, err: Option<Arc<String>>) {
+        match err {
+            Some(err) => {
+                let (need_update_err, need_update_status) = self.error_manager.put_err(err.clone());
+                if need_update_err {
+                    *self.device_err.lock().await = Some(err);
+                }
+                if need_update_status {
+                    let _ = storage::app::update_status(&self.id, types::Status::Error).await;
+                }
             }
-            (Some(_), None) => {
-                *device_err.lock().await = None;
-                *old_err = None;
-                let _ = storage::app::update_status(id, types::Status::Running).await;
-            }
-            (Some(old_err_some), Some(new_err)) => {
-                if *old_err_some != new_err {
-                    *device_err.lock().await = Some(new_err.clone());
-                    *old_err = Some(new_err);
+            None => {
+                let (need_update_err, need_update_status) = self.error_manager.put_ok();
+                if need_update_err {
+                    *self.device_err.lock().await = None;
+                }
+                if need_update_status {
+                    let _ = storage::app::update_status(&self.id, types::Status::Running).await;
                 }
             }
         }
@@ -119,7 +128,10 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 #[async_trait]
 impl App for HttpClient {
     async fn read_app_err(&self) -> Option<String> {
-        self.err.lock().await.clone()
+        match &(*self.err.lock().await) {
+            Some(err) => Some((**err).clone()),
+            None => None,
+        }
     }
 
     async fn read_source_err(&self, source_id: &String) -> HaliaResult<Option<String>> {
