@@ -12,8 +12,8 @@ mod avro;
 mod csv;
 mod json;
 mod ptorobuf;
-mod yaml;
 mod toml;
+mod yaml;
 
 #[derive(Clone)]
 pub struct MessageBatch {
@@ -313,7 +313,7 @@ impl MessageValue {
             return Some(self);
         }
         pointer
-            .split("->")
+            .split(".")
             .map(|x| x.replace("~1", "/").replace("~0", "~"))
             .try_fold(self, |target, token| match target {
                 MessageValue::Object(map) => map.get(&token),
