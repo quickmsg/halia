@@ -19,3 +19,4 @@ tracing = { workspace = true }
 apache-avro = "0.17.0"
 prost-reflect = "0.14.2"
 base64 = { workspace = true }
+yaml-rust2 = "0.9.0"
