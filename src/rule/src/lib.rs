@@ -107,7 +107,7 @@ pub async fn start(id: String) -> HaliaResult<()> {
     let db_rule = storage::rule::read_one(&id).await?;
     let rule = Rule::new(id.clone(), &db_rule.conf).await?;
     GLOBAL_RULE_MANAGER.insert(id.clone(), rule);
-    storage::rule::reference::active(&id).await?;
+    storage::rule::reference::update_status_by_rule_id(&id, types::Status::Running).await?;
     storage::rule::update_status(&id, types::Status::Running).await?;
     Ok(())
 }

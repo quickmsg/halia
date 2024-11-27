@@ -150,3 +150,9 @@ impl TryFrom<i32> for Status {
         }
     }
 }
+
+#[derive(Serialize)]
+pub struct RuleRefCnt {
+    pub rule_reference_running_cnt: usize,
+    pub rule_reference_total_cnt: usize,
+}

@@ -317,8 +317,8 @@ impl Rule {
             error!("rule stop send signal err:{}", e);
         }
 
-        storage::rule::reference::deactive(&self.id).await?;
-
+        storage::rule::reference::update_status_by_rule_id(&self.id, types::Status::Stopped)
+            .await?;
         Ok(())
     }
 

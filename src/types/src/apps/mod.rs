@@ -3,7 +3,7 @@ use std::fmt;
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::Status;
+use crate::{RuleRefCnt, Status};
 
 pub mod http_client;
 pub mod influxdb_v1;
@@ -163,8 +163,8 @@ pub struct ListAppsItem {
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref_cnt: RuleRefCnt,
     pub source_cnt: usize,
     pub sink_cnt: usize,
     pub can_stop: bool,
@@ -208,8 +208,8 @@ pub struct ListSourcesSinksItem {
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref_cnt: RuleRefCnt,
     pub can_delete: bool,
 
     #[serde(flatten)]
@@ -224,7 +224,7 @@ pub struct ReadSourceSinkResp {
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref_cnt: RuleRefCnt,
     pub can_delete: bool,
 }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Status;
+use crate::{RuleRefCnt, Status};
 
 #[derive(Serialize)]
 pub struct Summary {
@@ -31,8 +31,8 @@ pub struct ListDataboardsItem {
     pub name: String,
     pub status: Status,
     pub data_count: usize,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref_cnt: RuleRefCnt,
     pub can_stop: bool,
     pub can_delete: bool,
 }
@@ -68,8 +68,7 @@ pub struct ListDatasItemResp {
     pub value: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ts: Option<u64>,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
+    pub rule_ref_cnt: RuleRefCnt,
     pub can_delete: bool,
 }
 

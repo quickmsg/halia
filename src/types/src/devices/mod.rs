@@ -3,7 +3,7 @@ use std::fmt;
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::Status;
+use crate::{RuleRefCnt, Status};
 
 pub mod device;
 pub mod device_template;
@@ -123,8 +123,8 @@ pub struct ListDevicesItem {
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref_cnt: RuleRefCnt,
     pub source_cnt: usize,
     pub sink_cnt: usize,
     pub can_stop: bool,
@@ -170,8 +170,8 @@ pub struct ListSourcesSinksItem {
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref_cnt: RuleRefCnt,
     pub can_delete: bool,
     #[serde(flatten)]
     pub conf: serde_json::Value,
@@ -184,8 +184,8 @@ pub struct ReadSourceSinkResp {
     pub conf: serde_json::Value,
     pub status: Status,
     pub err: Option<String>,
-    pub rule_reference_running_cnt: usize,
-    pub rule_reference_total_cnt: usize,
+    #[serde(flatten)]
+    pub rule_ref_cnt: RuleRefCnt,
     pub can_delete: bool,
 }
 

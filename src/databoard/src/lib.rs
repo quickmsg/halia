@@ -106,17 +106,15 @@ pub async fn list_databoards(
     let mut list = Vec::with_capacity(db_databoards.len());
     for db_databoard in db_databoards {
         let data_count = storage::databoard::data::count_by_databoard_id(&db_databoard.id).await?;
-        let rule_reference_running_cnt =
-            storage::rule::reference::count_running_cnt_by_parent_id(&db_databoard.id).await?;
-        let rule_reference_total_cnt =
-            storage::rule::reference::count_cnt_by_parent_id(&db_databoard.id).await?;
+        let rule_ref_cnt =
+            storage::rule::reference::get_rule_ref_info_by_parent_id(&db_databoard.id).await?;
         let (can_stop, can_delete) = match &db_databoard.status {
             types::Status::Running => {
-                let can_stop = rule_reference_running_cnt == 0;
+                let can_stop = rule_ref_cnt.rule_reference_running_cnt == 0;
                 (can_stop, false)
             }
             types::Status::Stopped => {
-                let can_delete = rule_reference_total_cnt == 0;
+                let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
                 (true, can_delete)
             }
             _ => unreachable!("数据看板不可能出现错误情况。"),
@@ -126,8 +124,7 @@ pub async fn list_databoards(
             name: db_databoard.name,
             status: db_databoard.status,
             data_count,
-            rule_reference_running_cnt,
-            rule_reference_total_cnt,
+            rule_ref_cnt,
             can_stop,
             can_delete,
         });
@@ -177,10 +174,10 @@ pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
     if !GLOBAL_DATABOARD_MANAGER.contains_key(&databoard_id) {
         return Ok(());
     }
-
-    let active_rule_ref_cnt =
-        storage::rule::reference::count_active_cnt_by_parent_id(&databoard_id).await?;
-    if active_rule_ref_cnt > 0 {
+    if storage::rule::reference::count_cnt_by_parent_id(&databoard_id, Some(types::Status::Running))
+        .await?
+        > 0
+    {
         return Err(HaliaError::StopActiveRefing);
     }
 
@@ -196,13 +193,12 @@ pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
 }
 
 pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule::reference::count_cnt_by_parent_id(&databoard_id).await?;
-    if rule_ref_cnt > 0 {
-        return Err(HaliaError::DeleteRefing);
-    }
-
     if GLOBAL_DATABOARD_MANAGER.contains_key(&databoard_id) {
         return Err(HaliaError::DeleteRunning);
+    }
+
+    if storage::rule::reference::count_cnt_by_parent_id(&databoard_id, None).await? > 0 {
+        return Err(HaliaError::DeleteRefing);
     }
 
     sub_databoard_count();
@@ -244,19 +240,17 @@ pub async fn list_datas(
             }
             None => (None, None),
         };
-        let rule_reference_running_cnt =
-            storage::rule::reference::count_running_cnt_by_resource_id(&db_data.id).await?;
-        let rule_reference_total_cnt =
-            storage::rule::reference::count_cnt_by_resource_id(&db_data.id).await?;
+        let rule_ref_cnt =
+            storage::rule::reference::get_rule_ref_info_by_parent_id(&db_data.id).await?;
+        let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
         list.push(ListDatasItemResp {
             id: db_data.id,
             name: db_data.name,
             conf: db_data.conf,
             value,
             ts,
-            rule_reference_running_cnt,
-            rule_reference_total_cnt,
-            can_delete: rule_reference_total_cnt == 0,
+            rule_ref_cnt,
+            can_delete,
         });
     }
 
@@ -274,16 +268,12 @@ pub async fn update_data(
 }
 
 pub async fn delete_data(databoard_id: String, databoard_data_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt =
-        storage::rule::reference::count_cnt_by_resource_id(&databoard_data_id).await?;
-    if rule_ref_cnt > 0 {
+    if storage::rule::reference::count_cnt_by_resource_id(&databoard_data_id, None).await? > 0 {
         return Err(HaliaError::DeleteRefing);
     }
-
     if let Some(databoard) = GLOBAL_DATABOARD_MANAGER.get_mut(&databoard_id) {
         databoard.delete_data(&databoard_data_id).await?;
     }
-
     storage::databoard::data::delete_by_id(&databoard_data_id).await?;
 
     Ok(())

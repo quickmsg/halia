@@ -15,7 +15,7 @@ use types::{
         ReadDeviceResp, ReadSourceSinkResp, RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink,
         Summary,
     },
-    Pagination, Status, Value,
+    Pagination, RuleRefCnt, Status, Value,
 };
 
 pub mod coap;
@@ -310,7 +310,10 @@ pub async fn list_devices(
 
 pub async fn read_device(device_id: String) -> HaliaResult<types::devices::ReadDeviceResp> {
     let db_device = storage::device::device::read_one(&device_id).await?;
-    let (can_stop, can_delete, err) = get_info_by_status(&device_id, &db_device.status).await?;
+    let rule_ref_cnt =
+        storage::rule::reference::get_rule_ref_info_by_parent_id(&db_device.id).await?;
+    let (can_stop, can_delete, err) =
+        get_info_by_status(&device_id, &db_device.status, &rule_ref_cnt).await?;
     Ok(ReadDeviceResp {
         id: db_device.id,
         device_type: db_device.device_type,
@@ -440,7 +443,9 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 }
 
 pub async fn stop_device(device_id: String) -> HaliaResult<()> {
-    if storage::rule::reference::count_active_cnt_by_parent_id(&device_id).await? > 0 {
+    if storage::rule::reference::count_cnt_by_parent_id(&device_id, Some(Status::Running)).await?
+        > 0
+    {
         return Err(HaliaError::StopActiveRefing);
     }
 
@@ -464,8 +469,7 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
         return Err(HaliaError::Common("运行中，不能删除".to_string()));
     }
 
-    let cnt = storage::rule::reference::count_cnt_by_parent_id(&device_id).await?;
-    if cnt > 0 {
+    if storage::rule::reference::count_cnt_by_parent_id(&device_id, None).await? > 0 {
         return Err(HaliaError::DeleteRefing);
     }
 
@@ -547,11 +551,9 @@ pub async fn list_sources(
         storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
-        let rule_reference_running_cnt =
-            storage::rule::reference::count_running_cnt_by_resource_id(&db_source.id).await?;
-        let rule_reference_total_cnt =
-            storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?;
-        let can_delete = rule_reference_total_cnt == 0;
+        let rule_ref_cnt =
+            storage::rule::reference::get_rule_ref_info_by_resource_id(&db_source.id).await?;
+        let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
         let err = match db_source.status {
             Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
                 Some(device) => device.read_source_err(&db_source.id).await,
@@ -581,8 +583,7 @@ pub async fn list_sources(
             name: db_source.name,
             status: db_source.status,
             err,
-            rule_reference_running_cnt,
-            rule_reference_total_cnt,
+            rule_ref_cnt,
             can_delete,
             conf,
         });
@@ -593,11 +594,9 @@ pub async fn list_sources(
 
 pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<ReadSourceSinkResp> {
     let db_source = storage::device::source_sink::read_one(&source_id).await?;
-    let rule_reference_running_cnt =
-        storage::rule::reference::count_running_cnt_by_resource_id(&db_source.id).await?;
-    let rule_reference_total_cnt =
-        storage::rule::reference::count_cnt_by_resource_id(&db_source.id).await?;
-    let can_delete = rule_reference_total_cnt == 0;
+    let rule_ref_cnt =
+        storage::rule::reference::get_rule_ref_info_by_resource_id(&source_id).await?;
+    let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
     let err = match db_source.status {
         Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
             Some(device) => device.read_source_err(&db_source.id).await,
@@ -611,8 +610,7 @@ pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<Re
         conf: db_source.conf,
         status: db_source.status,
         err,
-        rule_reference_running_cnt,
-        rule_reference_total_cnt,
+        rule_ref_cnt,
         can_delete,
     })
 }
@@ -677,8 +675,7 @@ pub async fn device_delete_source(device_id: String, source_id: String) -> Halia
 }
 
 pub(crate) async fn delete_source(device_id: String, source_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule::reference::count_cnt_by_resource_id(&source_id).await?;
-    if rule_ref_cnt > 0 {
+    if storage::rule::reference::count_cnt_by_resource_id(&source_id, None).await? > 0 {
         return Err(HaliaError::DeleteRefing);
     }
 
@@ -766,11 +763,9 @@ pub async fn list_sinks(
         storage::device::source_sink::search_sinks(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sinks.len());
     for db_sink in db_sinks {
-        let rule_reference_running_cnt =
-            storage::rule::reference::count_running_cnt_by_resource_id(&db_sink.id).await?;
-        let rule_reference_total_cnt =
-            storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?;
-        let can_delete = rule_reference_total_cnt == 0;
+        let rule_ref_cnt =
+            storage::rule::reference::get_rule_ref_info_by_resource_id(&db_sink.id).await?;
+        let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
         let err = match db_sink.status {
             Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
                 Some(device) => device.read_sink_err(&db_sink.id).await,
@@ -800,8 +795,7 @@ pub async fn list_sinks(
             name: db_sink.name,
             status: db_sink.status,
             err,
-            rule_reference_running_cnt,
-            rule_reference_total_cnt,
+            rule_ref_cnt,
             can_delete,
             conf,
         });
@@ -812,11 +806,8 @@ pub async fn list_sinks(
 
 pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSourceSinkResp> {
     let db_sink = storage::device::source_sink::read_one(&sink_id).await?;
-    let rule_reference_running_cnt =
-        storage::rule::reference::count_running_cnt_by_resource_id(&db_sink.id).await?;
-    let rule_reference_total_cnt =
-        storage::rule::reference::count_cnt_by_resource_id(&db_sink.id).await?;
-    let can_delete = rule_reference_total_cnt == 0;
+    let rule_ref_cnt = storage::rule::reference::get_rule_ref_info_by_resource_id(&sink_id).await?;
+    let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
     let err = match db_sink.status {
         Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
             Some(device) => device.read_sink_err(&db_sink.id).await,
@@ -830,8 +821,7 @@ pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSo
         conf: db_sink.conf,
         status: db_sink.status,
         err,
-        rule_reference_running_cnt,
-        rule_reference_total_cnt,
+        rule_ref_cnt,
         can_delete,
     })
 }
@@ -877,8 +867,7 @@ pub async fn device_delete_sink(device_id: String, sink_id: String) -> HaliaResu
 }
 
 pub(crate) async fn delete_sink(device_id: String, sink_id: String) -> HaliaResult<()> {
-    let rule_ref_cnt = storage::rule::reference::count_cnt_by_resource_id(&sink_id).await?;
-    if rule_ref_cnt > 0 {
+    if storage::rule::reference::count_cnt_by_resource_id(&sink_id, None).await? > 0 {
         return Err(HaliaError::DeleteRefing);
     }
 
@@ -911,12 +900,11 @@ async fn transer_db_device_to_resp(
         storage::device::source_sink::count_sources_by_device_id(&db_device.id).await?;
     let sink_cnt = storage::device::source_sink::count_sinks_by_device_id(&db_device.id).await?;
 
-    let rule_reference_running_cnt =
-        storage::rule::reference::count_running_cnt_by_parent_id(&db_device.id).await?;
-    let rule_reference_total_cnt =
-        storage::rule::reference::count_cnt_by_parent_id(&db_device.id).await?;
+    let rule_ref_cnt =
+        storage::rule::reference::get_rule_ref_info_by_parent_id(&db_device.id).await?;
 
-    let (can_stop, can_delete, err) = get_info_by_status(&db_device.id, &db_device.status).await?;
+    let (can_stop, can_delete, err) =
+        get_info_by_status(&db_device.id, &db_device.status, &rule_ref_cnt).await?;
 
     Ok(types::devices::ListDevicesItem {
         id: db_device.id,
@@ -924,8 +912,7 @@ async fn transer_db_device_to_resp(
         device_type: db_device.device_type,
         status: db_device.status,
         err,
-        rule_reference_running_cnt,
-        rule_reference_total_cnt,
+        rule_ref_cnt,
         source_cnt,
         sink_cnt,
         can_stop,
@@ -936,21 +923,19 @@ async fn transer_db_device_to_resp(
 async fn get_info_by_status(
     device_id: &String,
     status: &Status,
+    rule_ref_cnt: &RuleRefCnt,
 ) -> HaliaResult<(bool, bool, Option<String>)> {
     match status {
         types::Status::Running => {
-            let can_stop =
-                storage::rule::reference::count_active_cnt_by_parent_id(device_id).await? == 0;
+            let can_stop = rule_ref_cnt.rule_reference_running_cnt == 0;
             Ok((can_stop, false, None))
         }
         types::Status::Stopped => {
-            let can_delete =
-                storage::rule::reference::count_cnt_by_parent_id(device_id).await? == 0;
-            Ok((false, can_delete, None))
+            let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
+            Ok((true, can_delete, None))
         }
         types::Status::Error => {
-            let can_stop =
-                storage::rule::reference::count_active_cnt_by_parent_id(device_id).await? == 0;
+            let can_stop = rule_ref_cnt.rule_reference_running_cnt == 0;
             let device = match GLOBAL_DEVICE_MANAGER.get(device_id) {
                 Some(device) => device,
                 None => return Err(HaliaError::Common("设备未启动！".to_string())),
