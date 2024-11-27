@@ -1,10 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
-use common::error::HaliaResult;
+use common::{error::HaliaResult, ErrorManager};
 use futures::lock::BiLock;
 use futures_util::StreamExt;
 use message::RuleMessageBatch;
-use reqwest::{header::HeaderName, Client, Request, StatusCode};
+use reqwest::{header::HeaderName, Client, Request};
 use tokio::{
     select,
     sync::{
@@ -22,21 +22,22 @@ use super::{insert_basic_auth, insert_headers, insert_query};
 
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
-    err: BiLock<Option<String>>,
+    err: BiLock<Option<Arc<String>>>,
     join_handle: Option<JoinHandle<JoinHandleData>>,
     pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
 }
 
 pub struct JoinHandleData {
     pub id: String,
-    pub err: BiLock<Option<String>>,
+    pub err: BiLock<Option<Arc<String>>>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub http_client_conf: Arc<HttpClientConf>,
     pub source_conf: SourceConf,
     pub client: Client,
     pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
-    device_err_tx: mpsc::UnboundedSender<Option<String>>,
+    device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
     decoder: Box<dyn schema::Decoder>,
+    error_manager: ErrorManager,
 }
 
 impl Source {
@@ -44,7 +45,7 @@ impl Source {
         id: String,
         http_client_conf: Arc<HttpClientConf>,
         source_conf: SourceConf,
-        device_err_tx: mpsc::UnboundedSender<Option<String>>,
+        device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
     ) -> Self {
         let decoder = schema::new_decoder(&source_conf.decode_type, &source_conf.schema_id)
             .await
@@ -63,6 +64,7 @@ impl Source {
             mb_txs: mb_txs1,
             device_err_tx,
             decoder,
+            error_manager: Default::default(),
         };
         let join_handle = Self::event_loop(join_handle_data).await;
         Self {
@@ -78,7 +80,10 @@ impl Source {
     }
 
     pub async fn read_err(&self) -> Option<String> {
-        self.err.lock().await.clone()
+        match &(*self.err.lock().await) {
+            Some(err) => Some((**err).clone()),
+            None => None,
+        }
     }
 
     pub async fn update_conf(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
@@ -106,7 +111,6 @@ impl Source {
 
     fn http_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
         tokio::spawn(async move {
-            let mut task_err: Option<(Option<StatusCode>, String)> = None;
             let mut interval = time::interval(Duration::from_millis(
                 join_handle_data.source_conf.http.as_ref().unwrap().interval,
             ));
@@ -145,18 +149,14 @@ impl Source {
                     }
 
                     _ = interval.tick() => {
-                        Self::do_request(&mut join_handle_data, request.try_clone().unwrap(), &mut task_err).await;
+                        Self::do_request(&mut join_handle_data, request.try_clone().unwrap()).await;
                     }
                 }
             }
         })
     }
 
-    async fn do_request(
-        join_handle_data: &JoinHandleData,
-        request: Request,
-        task_err: &mut Option<(Option<StatusCode>, String)>,
-    ) {
+    async fn do_request(join_handle_data: &mut JoinHandleData, request: Request) {
         if join_handle_data.mb_txs.lock().await.len() == 0 {
             return;
         }
@@ -164,17 +164,20 @@ impl Source {
         match join_handle_data.client.execute(request).await {
             Ok(resp) => {
                 if resp.status().is_success() {
-                    if task_err.is_some() {
+                    let (need_update_err, need_update_status) =
+                        join_handle_data.error_manager.put_ok();
+                    if need_update_err {
                         *join_handle_data.err.lock().await = None;
-                        *task_err = None;
+                    }
+                    if need_update_status {
                         let _ = storage::app::source_sink::update_status(
                             &join_handle_data.id,
                             types::Status::Running,
                         )
                         .await;
-
                         join_handle_data.device_err_tx.send(None).unwrap();
                     }
+
                     match resp.bytes().await {
                         Ok(body) => match join_handle_data.decoder.decode(body) {
                             Ok(mb) => {
@@ -197,33 +200,13 @@ impl Source {
                     let status_code = resp.status();
                     // TODO 是否会触发unwrap
                     let body = resp.text().await.unwrap();
-                    if let Some((task_err_status_code, task_err_body)) = task_err {
-                        match task_err_status_code {
-                            Some(task_err_status_code) => {
-                                if task_err_status_code != &status_code {
-                                    *join_handle_data.err.lock().await =
-                                        Some(format!("状态码：{}, 错误：{}。", status_code, body));
-                                    *task_err = Some((Some(status_code), body));
-                                } else {
-                                    if body != *task_err_body {
-                                        *join_handle_data.err.lock().await = Some(format!(
-                                            "状态码：{}, 错误：{}。",
-                                            status_code, body
-                                        ));
-                                        *task_err = Some((Some(status_code), body));
-                                    }
-                                }
-                            }
-                            None => {
-                                *join_handle_data.err.lock().await =
-                                    Some(format!("状态码：{}, 错误：{}。", status_code, body));
-                                *task_err = Some((Some(status_code), body));
-                            }
-                        }
-                    } else {
-                        *join_handle_data.err.lock().await =
-                            Some(format!("状态码：{}, 错误：{}。", status_code, body));
-                        *task_err = Some((Some(status_code), body));
+                    let err = Arc::new(format!("状态码：{}, 错误：{}。", status_code, body));
+                    let (need_update_err, need_update_err_status) =
+                        join_handle_data.error_manager.put_err(err.clone());
+                    if need_update_err {
+                        *join_handle_data.err.lock().await = Some(err);
+                    }
+                    if need_update_err_status {
                         let _ = storage::app::source_sink::update_status(
                             &join_handle_data.id,
                             types::Status::Error,
@@ -233,14 +216,23 @@ impl Source {
                 }
             }
             Err(e) => {
-                let e = e.to_string();
-                match task_err {
-                    Some(task_err_some) => {
-                        if *task_err_some.1 != e {
-                            join_handle_data.device_err_tx.send(Some(e)).unwrap();
-                        }
-                    }
-                    None => join_handle_data.device_err_tx.send(Some(e)).unwrap(),
+                let err = Arc::new(e.to_string());
+                let (need_update_err, need_update_err_status) =
+                    join_handle_data.error_manager.put_err(err.clone());
+
+                if need_update_err {
+                    *join_handle_data.err.lock().await = Some(err.clone());
+                    join_handle_data
+                        .device_err_tx
+                        .send(Some(err.clone()))
+                        .unwrap();
+                }
+                if need_update_err_status {
+                    let _ = storage::app::source_sink::update_status(
+                        &join_handle_data.id,
+                        types::Status::Error,
+                    )
+                    .await;
                 }
             }
         }

@@ -24,7 +24,7 @@ pub struct HttpClient {
     err: BiLock<Option<String>>,
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
-    device_err_tx: mpsc::UnboundedSender<Option<String>>,
+    device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
 }
 
@@ -51,7 +51,7 @@ impl HttpClient {
     fn event_loop(
         id: String,
         device_err: BiLock<Option<String>>,
-        mut device_err_rx: mpsc::UnboundedReceiver<Option<String>>,
+        mut device_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
         mut stop_signal_rx: watch::Receiver<()>,
     ) {
         tokio::spawn(async move {
@@ -70,10 +70,11 @@ impl HttpClient {
         });
     }
 
+    // todo use error manager
     async fn handle_err(
         id: &String,
         old_err: &mut Option<String>,
-        new_err: Option<String>,
+        new_err: Option<Arc<String>>,
         device_err: &BiLock<Option<String>>,
     ) {
         match (&old_err, new_err) {

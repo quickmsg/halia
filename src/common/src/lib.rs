@@ -10,6 +10,8 @@ pub mod sys;
 pub mod log;
 pub mod error_manager;
 
+pub use error_manager::ErrorManager;
+
 pub enum DynamicValue {
     Const(serde_json::Value),
     Field(String),
