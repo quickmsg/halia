@@ -14,16 +14,8 @@ use types::{
     Pagination,
 };
 
-pub mod decoders;
-pub mod encoders;
-
-pub enum Schema {
-    Json,
-    Csv,
-    Avro,
-    Yaml,
-    Toml,
-}
+mod decoders;
+mod encoders;
 
 pub trait Decoder: Sync + Send {
     fn decode(&self, data: Bytes) -> Result<MessageBatch>;

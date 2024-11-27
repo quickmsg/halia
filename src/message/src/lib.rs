@@ -268,8 +268,14 @@ impl Message {
 
 impl Default for Message {
     fn default() -> Self {
+        let mut metadatas = HashMap::new();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        metadatas.insert("timestamp".to_string(), MessageValue::Int64(ts));
         Self {
-            metadatas: HashMap::new(),
+            metadatas,
             value: MessageValue::Object(HashMap::new()),
         }
     }

@@ -1,2 +1,10 @@
-[build]
-target = "x86_64-unknown-linux-musl"
+# [build]
+# target = "x86_64-unknown-linux-musl"
+
+[target.'cfg(target_os = "linux")']
+rustflags = [
+    "-Clink-arg=-fuse-ld=lld",       # 使用 lld 作为链接器
+    # "-Clink-arg=-Wl,--no-rosegment", # 禁用只读段
+]
+
+# LD_LIBRARY_PATH=./libs ./target/release/my_binary

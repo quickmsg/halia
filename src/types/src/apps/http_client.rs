@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{SslConf, Status};
+use crate::{schema::DecodeType, SslConf};
 
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct HttpClientConf {
@@ -23,6 +23,8 @@ pub struct SourceConf {
     pub path: String,
     pub headers: Vec<(String, String)>,
     pub query_params: Vec<(String, String)>,
+    pub decode_type: DecodeType,
+    pub schema_id: Option<String>,
     pub http: Option<HttpSourceConf>,
     pub websocket: Option<WebsocketSourceConf>,
 }

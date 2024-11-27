@@ -17,7 +17,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use types::{
     apps::mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf},
     Status,
@@ -217,6 +217,7 @@ impl MqttClient {
     ) {
         match event {
             Ok(event) => {
+                debug!("event: {:?}", event);
                 if *err {
                     *err = false;
                     _ = app_err_tx.send(false);

@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use common::error::HaliaResult;
 use futures::lock::BiLock;
 use futures_util::StreamExt;
-use message::{MessageBatch, RuleMessageBatch};
+use message::RuleMessageBatch;
 use reqwest::{header::HeaderName, Client, Request, StatusCode};
 use tokio::{
     select,
@@ -36,6 +36,7 @@ pub struct JoinHandleData {
     pub client: Client,
     pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
     device_err_tx: mpsc::UnboundedSender<Option<String>>,
+    decoder: Box<dyn schema::Decoder>,
 }
 
 impl Source {
@@ -45,8 +46,10 @@ impl Source {
         source_conf: SourceConf,
         device_err_tx: mpsc::UnboundedSender<Option<String>>,
     ) -> Self {
+        let decoder = schema::new_decoder(&source_conf.decode_type, &source_conf.schema_id)
+            .await
+            .unwrap();
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-
         let (err1, err2) = BiLock::new(None);
         let (mb_txs1, mb_txs2) = BiLock::new(vec![]);
         let http_client = Client::new();
@@ -59,6 +62,7 @@ impl Source {
             client: http_client.clone(),
             mb_txs: mb_txs1,
             device_err_tx,
+            decoder,
         };
         let join_handle = Self::event_loop(join_handle_data).await;
         Self {
@@ -172,7 +176,7 @@ impl Source {
                         join_handle_data.device_err_tx.send(None).unwrap();
                     }
                     match resp.bytes().await {
-                        Ok(body) => match MessageBatch::from_json(body) {
+                        Ok(body) => match join_handle_data.decoder.decode(body) {
                             Ok(mb) => {
                                 let mut mb_txs = join_handle_data.mb_txs.lock().await;
                                 if mb_txs.len() == 1 {
@@ -187,8 +191,7 @@ impl Source {
                             }
                             Err(e) => warn!("{}", e),
                         },
-
-                        Err(e) => warn!("{}", e),
+                        Err(_) => todo!(),
                     }
                 } else {
                     let status_code = resp.status();
