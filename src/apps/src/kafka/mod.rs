@@ -11,7 +11,7 @@ use sink::Sink;
 use tokio::{
     select,
     sync::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         watch, RwLock,
     },
     task::JoinHandle,
@@ -33,8 +33,40 @@ pub struct Kafka {
     kafka_client: Arc<RwLock<Option<Client>>>,
 
     sinks: Arc<DashMap<String, Sink>>,
-    kafka_err_tx: UnboundedSender<Option<Arc<String>>>,
-    jh: Option<JoinHandle<TaskLoop>>,
+    app_err_tx: UnboundedSender<Option<Arc<String>>>,
+    join_handle: Option<JoinHandle<TaskLoop>>,
+}
+
+pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
+    let conf: Conf = serde_json::from_value(conf).unwrap();
+    let kafka_client = Arc::new(RwLock::new(None));
+    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
+
+    let sinks = Arc::new(DashMap::new());
+    let (app_err_tx, app_err_rx) = unbounded_channel();
+
+    let (err1, err2) = BiLock::new(None);
+
+    // let jhd = JoinHandleData {
+    //     id,
+    //     conf,
+    //     err: err1,
+    //     kafka_client: kafka_client.clone(),
+    //     stop_signal_rx,
+    //     kafka_err_rx,
+    //     sinks: sinks.clone(),
+    // };
+
+    // let jh = Kafka::event_loop(jhd);
+
+    Box::new(Kafka {
+        err: err2,
+        sinks,
+        kafka_client,
+        stop_signal_tx,
+        app_err_tx,
+        join_handle: todo!(),
+    })
 }
 
 struct TaskLoop {
@@ -138,40 +170,6 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let conf: Conf = serde_json::from_value(conf).unwrap();
-    let kafka_client = Arc::new(RwLock::new(None));
-    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-
-    let sinks = Arc::new(DashMap::new());
-    let (kafka_err_tx, kafka_err_rx) = mpsc::channel(1);
-
-    let (err1, err2) = BiLock::new(None);
-
-    // let jhd = JoinHandleData {
-    //     id,
-    //     conf,
-    //     err: err1,
-    //     kafka_client: kafka_client.clone(),
-    //     stop_signal_rx,
-    //     kafka_err_rx,
-    //     sinks: sinks.clone(),
-    // };
-
-    // let jh = Kafka::event_loop(jhd);
-
-    Box::new(Kafka {
-        err: err2,
-        sinks,
-        kafka_client,
-        stop_signal_tx,
-        app_err_tx,
-        jh: Some(jh),
-    })
-}
-
-impl Kafka {}
-
 #[async_trait]
 impl App for Kafka {
     async fn read_app_err(&self) -> Option<Arc<String>> {
@@ -185,9 +183,10 @@ impl App for Kafka {
     ) -> HaliaResult<()> {
         let new_conf: Conf = serde_json::from_value(new_conf)?;
         self.stop_signal_tx.send(()).unwrap();
-        let mut jhd = self.jh.take().unwrap().await.unwrap();
-        jhd.conf = new_conf;
-        Self::event_loop(jhd);
+        let mut task_loop = self.join_handle.take().unwrap().await.unwrap();
+        task_loop.app_conf = new_conf;
+        let join_handle = task_loop.start();
+        self.join_handle = Some(join_handle);
         Ok(())
     }
 
@@ -205,7 +204,7 @@ impl App for Kafka {
             sink_id.clone(),
             conf,
             self.kafka_client.read().await.as_ref(),
-            self.kafka_err_tx.clone(),
+            self.app_err_tx.clone(),
         )
         .await;
         self.sinks.insert(sink_id, sink);

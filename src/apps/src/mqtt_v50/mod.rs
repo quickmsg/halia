@@ -4,6 +4,8 @@ use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use futures::lock::BiLock;
+use halia_derive::AppErr;
 use message::{MessageBatch, RuleMessageBatch};
 use rumqttc::v5::{
     self,
@@ -30,10 +32,11 @@ use crate::{mqtt_client_ssl::get_ssl_config, App};
 mod sink;
 mod source;
 
+#[derive(AppErr)]
 pub struct MqttClient {
     _id: String,
 
-    err: Arc<RwLock<Option<String>>>,
+    err: BiLock<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
     app_err_tx: broadcast::Sender<bool>,
 
@@ -48,7 +51,7 @@ struct JoinHandleData {
     stop_signal_rx: watch::Receiver<()>,
     app_err_tx: broadcast::Sender<bool>,
     sources: Arc<DashMap<String, Source>>,
-    app_err: Arc<RwLock<Option<String>>>,
+    app_err: BiLock<Option<Arc<String>>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -57,21 +60,21 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
     let sources = Arc::new(DashMap::new());
-    let app_err = Arc::new(RwLock::new(None));
+    let (app_err1, app_err2) = BiLock::new(None);
 
     let join_handle_data = JoinHandleData {
         conf,
         stop_signal_rx,
         app_err_tx: app_err_tx.clone(),
         sources: sources.clone(),
-        app_err: app_err.clone(),
+        app_err: app_err1,
     };
 
     let (join_handle, mqtt_client) = MqttClient::event_loop(join_handle_data);
 
     Box::new(MqttClient {
         _id: id,
-        err: app_err,
+        err: app_err2,
         sources,
         sinks: DashMap::new(),
         mqtt_client,

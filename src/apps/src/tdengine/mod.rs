@@ -44,11 +44,13 @@ pub fn validate_sink_conf(_conf: &serde_json::Value) -> HaliaResult<()> {
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: TDengineConf = serde_json::from_value(conf).unwrap();
 
+    let (app_err1, _app_err2) = BiLock::new(None);
+
     Box::new(TDengine {
         _id: id,
         conf: Arc::new(conf),
         sinks: DashMap::new(),
-        err: None,
+        err: app_err1,
     })
 }
 
