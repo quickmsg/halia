@@ -1,6 +1,6 @@
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    LazyLock,
+    Arc, LazyLock,
 };
 
 use async_trait::async_trait;
@@ -72,11 +72,11 @@ pub(crate) fn sub_app_running_count() {
 
 #[async_trait]
 pub trait App: Send + Sync {
-    async fn read_app_err(&self) -> Option<String>;
-    async fn read_source_err(&self, _source_id: &String) -> HaliaResult<Option<String>> {
+    async fn read_app_err(&self) -> Option<Arc<String>>;
+    async fn read_source_err(&self, _source_id: &String) -> HaliaResult<Option<Arc<String>>> {
         Err(HaliaError::Common("Not support".to_string()))
     }
-    async fn read_sink_err(&self, _sink_id: &String) -> HaliaResult<Option<String>> {
+    async fn read_sink_err(&self, _sink_id: &String) -> HaliaResult<Option<Arc<String>>> {
         Err(HaliaError::Common("Not support".to_string()))
     }
 
@@ -355,7 +355,7 @@ pub async fn list_sources(
         let err = match db_source.status {
             Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
                 Some(app) => app.read_source_err(&db_source.id).await?,
-                None => Some("App未启动！".to_string()),
+                None => Some(Arc::new("App未启动！".to_string())),
             },
             _ => None,
         };
@@ -403,7 +403,7 @@ pub async fn read_source(app_id: String, source_id: String) -> HaliaResult<ReadS
     let err = match db_source.status {
         Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
             Some(app) => app.read_source_err(&source_id).await?,
-            None => Some("App未启动！".to_string()),
+            None => Some(Arc::new("App未启动！".to_string())),
         },
         _ => None,
     };
@@ -494,7 +494,7 @@ pub async fn read_sink(app_id: String, sink_id: String) -> HaliaResult<ReadSourc
     let err = match db_sink.status {
         Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
             Some(app) => app.read_sink_err(&sink_id).await?,
-            None => Some("App未启动！".to_string()),
+            None => Some(Arc::new("App未启动！".to_string())),
         },
         _ => None,
     };
@@ -529,7 +529,7 @@ pub async fn list_sinks(
         let err = match db_sink.status {
             Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
                 Some(app) => app.read_sink_err(&db_sink.id).await?,
-                None => Some("App未启动！".to_string()),
+                None => Some(Arc::new("App未启动！".to_string())),
             },
             _ => None,
         };
@@ -634,7 +634,7 @@ async fn get_info_by_status(
     app_id: &String,
     status: &Status,
     rule_ref_cnt: &RuleRefCnt,
-) -> HaliaResult<(bool, bool, Option<String>)> {
+) -> HaliaResult<(bool, bool, Option<Arc<String>>)> {
     match status {
         types::Status::Running => {
             let can_stop = rule_ref_cnt.rule_reference_running_cnt == 0;

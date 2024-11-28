@@ -15,6 +15,7 @@ members = [
     "src/events",
     "src/storage",
     "src/utils",
+    "src/halia-derive",
 ]
 resolver = "2"
 
@@ -23,6 +24,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
+halia-derive = { path = "src/halia-derive" }
 utils = { path = "src/utils" }
 storage = { path = "src/storage" }
 api = { path = "src/api" }
@@ -94,6 +96,7 @@ axum = { version = "0.7.5", features = [
     "tokio",
 ] }
 yaml-rust2 = "0.9.0"
+proc-macro2 = "1.0.92"
 
 [profile.release]
 strip = true

@@ -4,7 +4,6 @@ pub mod config;
 pub mod constants;
 pub mod error;
 pub mod json;
-// pub mod ref_info;
 pub mod log;
 pub mod sink_message_retain;
 pub mod sys;

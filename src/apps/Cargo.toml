@@ -21,6 +21,7 @@ events = { workspace = true }
 storage = { workspace = true }
 schema = { workspace = true }
 utils = { workspace = true }
+halia-derive = { workspace = true }
 
 anyhow = { workspace = true }
 serde = { workspace = true }

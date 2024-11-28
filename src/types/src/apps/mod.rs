@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
@@ -162,7 +162,7 @@ pub struct ListAppsItem {
     pub name: String,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub err: Option<String>,
+    pub err: Option<Arc<String>>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
     pub source_cnt: usize,
@@ -207,7 +207,7 @@ pub struct ListSourcesSinksItem {
     pub name: String,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub err: Option<String>,
+    pub err: Option<Arc<String>>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
     pub can_delete: bool,
@@ -223,7 +223,7 @@ pub struct ReadSourceSinkResp {
     pub conf: serde_json::Value,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub err: Option<String>,
+    pub err: Option<Arc<String>>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
     pub can_delete: bool,

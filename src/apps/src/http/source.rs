@@ -3,14 +3,12 @@ use std::{sync::Arc, time::Duration};
 use common::error::HaliaResult;
 use futures::lock::BiLock;
 use futures_util::StreamExt;
+use halia_derive::Source;
 use message::RuleMessageBatch;
 use reqwest::{header::HeaderName, Client, Request};
 use tokio::{
     select,
-    sync::{
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-        watch,
-    },
+    sync::{mpsc::UnboundedSender, watch},
     task::JoinHandle,
     time,
 };
@@ -21,6 +19,7 @@ use utils::ErrorManager;
 
 use super::{insert_basic_auth, insert_headers, insert_query};
 
+#[derive(Source)]
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
     err: BiLock<Option<Arc<String>>>,
@@ -256,13 +255,6 @@ impl Source {
         Ok(())
     }
 
-    pub async fn read_err(&self) -> Option<String> {
-        match &(*self.err.lock().await) {
-            Some(err) => Some((**err).clone()),
-            None => None,
-        }
-    }
-
     pub async fn update_conf(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
         let mut task_loop = self.stop().await;
         task_loop.source_conf = new_conf;
@@ -275,23 +267,6 @@ impl Source {
         task_loop.http_client_conf = http_client_conf;
         let join_hdnale = task_loop.start();
         self.join_handle = Some(join_hdnale);
-    }
-
-    pub async fn stop(&mut self) -> TaskLoop {
-        self.stop_signal_tx.send(()).unwrap();
-        self.join_handle.take().unwrap().await.unwrap()
-    }
-
-    pub async fn get_rxs(&mut self, cnt: usize) -> Vec<UnboundedReceiver<RuleMessageBatch>> {
-        let mut rxs = Vec::with_capacity(cnt);
-        let mut txs = Vec::with_capacity(cnt);
-        for _ in 0..cnt {
-            let (tx, rx) = unbounded_channel();
-            txs.push(tx);
-            rxs.push(rx);
-        }
-        self.mb_txs.lock().await.append(&mut txs);
-        rxs
     }
 }
 

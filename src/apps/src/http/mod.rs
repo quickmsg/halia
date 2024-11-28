@@ -122,14 +122,15 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl App for HttpClient {
-    async fn read_app_err(&self) -> Option<String> {
-        match &(*self.err.lock().await) {
-            Some(err) => Some((**err).clone()),
+    async fn read_app_err(&self) -> Option<Arc<String>> {
+        let err_guard = self.err.lock().await;
+        match &(*err_guard) {
+            Some(err) => Some(err.clone()),
             None => None,
         }
     }
 
-    async fn read_source_err(&self, source_id: &String) -> HaliaResult<Option<String>> {
+    async fn read_source_err(&self, source_id: &String) -> HaliaResult<Option<Arc<String>>> {
         match self.sources.get(source_id) {
             Some(source) => Ok(source.read_err().await),
             // 错误提示 TODO
