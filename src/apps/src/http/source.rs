@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use common::{error::HaliaResult, ErrorManager};
+use common::error::HaliaResult;
 use futures::lock::BiLock;
 use futures_util::StreamExt;
 use message::RuleMessageBatch;
@@ -17,27 +17,155 @@ use tokio::{
 use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest as _};
 use tracing::{debug, warn};
 use types::apps::http_client::{HttpClientConf, SourceConf};
+use utils::ErrorManager;
 
 use super::{insert_basic_auth, insert_headers, insert_query};
 
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
     err: BiLock<Option<Arc<String>>>,
-    join_handle: Option<JoinHandle<JoinHandleData>>,
+    join_handle: Option<JoinHandle<TaskLoop>>,
     pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
 }
 
-pub struct JoinHandleData {
+pub struct TaskLoop {
     pub id: String,
-    pub err: BiLock<Option<Arc<String>>>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub http_client_conf: Arc<HttpClientConf>,
     pub source_conf: SourceConf,
-    pub client: Client,
+    pub http_client: Client,
     pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
     device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
     decoder: Box<dyn schema::Decoder>,
     error_manager: ErrorManager,
+}
+
+impl TaskLoop {
+    async fn new(
+        id: String,
+        err: BiLock<Option<Arc<String>>>,
+        stop_signal_rx: watch::Receiver<()>,
+        http_client_conf: Arc<HttpClientConf>,
+        source_conf: SourceConf,
+        mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
+        device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
+    ) -> Self {
+        let decoder = schema::new_decoder(&source_conf.decode_type, &source_conf.schema_id)
+            .await
+            .unwrap();
+        let http_client = Client::new();
+        let error_manager = ErrorManager::new(
+            utils::error_manager::ResourceType::AppSource,
+            id.clone(),
+            err,
+        );
+
+        Self {
+            id,
+            stop_signal_rx,
+            http_client_conf,
+            source_conf,
+            http_client,
+            mb_txs,
+            device_err_tx,
+            decoder,
+            error_manager,
+        }
+    }
+
+    fn start(mut self) -> JoinHandle<Self> {
+        tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_millis(
+                self.source_conf.http.as_ref().unwrap().interval,
+            ));
+
+            let mut builder = self.http_client.get(format!(
+                "http://{}:{}{}",
+                &self.http_client_conf.host, &self.http_client_conf.port, &self.source_conf.path
+            ));
+
+            builder = insert_headers(
+                builder,
+                &self.source_conf.headers,
+                &self.http_client_conf.headers,
+            );
+            builder = insert_query(
+                builder,
+                &self.http_client_conf.query_params,
+                &self.source_conf.query_params,
+            );
+            builder = insert_basic_auth(builder, &self.http_client_conf.basic_auth);
+
+            let request = match builder.build() {
+                Ok(request) => request,
+                Err(e) => {
+                    warn!("{:?}", e);
+                    return self;
+                }
+            };
+
+            loop {
+                select! {
+                    _ = self.stop_signal_rx.changed() => {
+                        return self;
+                    }
+
+                    _ = interval.tick() => {
+                        self.do_request(request.try_clone().unwrap()).await;
+                    }
+                }
+            }
+        })
+    }
+
+    async fn do_request(&mut self, request: Request) {
+        if self.mb_txs.lock().await.len() == 0 {
+            return;
+        }
+
+        match self.http_client.execute(request).await {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    let status_changed = self.error_manager.set_ok().await;
+                    if status_changed {
+                        self.device_err_tx.send(None).unwrap();
+                    }
+
+                    match resp.bytes().await {
+                        Ok(body) => match self.decoder.decode(body) {
+                            Ok(mb) => {
+                                let mut mb_txs = self.mb_txs.lock().await;
+                                if mb_txs.len() == 1 {
+                                    let rmb = RuleMessageBatch::Owned(mb);
+                                    if let Err(_) = mb_txs[0].send(rmb) {
+                                        mb_txs.remove(0);
+                                    }
+                                } else {
+                                    let rmb = RuleMessageBatch::Arc(Arc::new(mb));
+                                    mb_txs.retain(|tx| tx.send(rmb.clone()).is_ok());
+                                }
+                            }
+                            Err(e) => warn!("{}", e),
+                        },
+                        Err(_) => todo!(),
+                    }
+                } else {
+                    let status_code = resp.status();
+                    // TODO 是否会触发unwrap
+                    let body = resp.text().await.unwrap();
+                    let err = Arc::new(format!("状态码：{}, 错误：{}。", status_code, body));
+                    self.error_manager.put_err(err.clone());
+                }
+            }
+            Err(e) => {
+                let err = Arc::new(e.to_string());
+                let status_changed = self.error_manager.put_err(err.clone()).await;
+                if status_changed {
+                    self.device_err_tx.send(Some(err.clone())).unwrap();
+                }
+            }
+        }
+    }
 }
 
 impl Source {
@@ -47,26 +175,23 @@ impl Source {
         source_conf: SourceConf,
         device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
     ) -> Self {
-        let decoder = schema::new_decoder(&source_conf.decode_type, &source_conf.schema_id)
-            .await
-            .unwrap();
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (err1, err2) = BiLock::new(None);
         let (mb_txs1, mb_txs2) = BiLock::new(vec![]);
-        let http_client = Client::new();
-        let join_handle_data = JoinHandleData {
+
+        let task_loop = TaskLoop::new(
             id,
-            err: err1,
+            err1,
             stop_signal_rx,
             http_client_conf,
             source_conf,
-            client: http_client.clone(),
-            mb_txs: mb_txs1,
+            mb_txs1,
             device_err_tx,
-            decoder,
-            error_manager: Default::default(),
-        };
-        let join_handle = Self::event_loop(join_handle_data).await;
+        )
+        .await;
+
+        let join_handle = task_loop.start();
+
         Self {
             err: err2,
             stop_signal_tx,

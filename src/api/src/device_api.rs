@@ -66,7 +66,7 @@ pub fn routes() -> Router {
             "/device_template",
             Router::new()
                 .route("/", post(create_device_template))
-                .route("/", get(search_device_templates))
+                .route("/list", get(list_device_templates))
                 .route("/:id", get(read_device_template))
                 .route("/:id", put(update_device_template))
                 .route("/:id", delete(delete_device_template))
@@ -285,11 +285,11 @@ async fn create_device_template(
     Ok(())
 }
 
-async fn search_device_templates(
+async fn list_device_templates(
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::device_template::QueryParams>,
-) -> AppResult<Json<types::devices::device_template::SearchResp>> {
-    let resp = devices::device_template::search_device_templates(pagination, query).await?;
+) -> AppResult<Json<types::devices::device_template::ListResp>> {
+    let resp = devices::device_template::list_device_templates(pagination, query).await?;
     Ok(Json(resp))
 }
 

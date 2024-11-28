@@ -1,8 +1,7 @@
 use common::error::{HaliaError, HaliaResult};
-use tracing::debug;
 use types::{
     devices::{
-        device_template::{self, source_sink, CreateReq, QueryParams, ReadResp, SearchResp},
+        device_template::{self, source_sink, CreateReq, ListResp, QueryParams, ReadResp},
         DeviceType,
     },
     Pagination,
@@ -24,32 +23,39 @@ pub async fn create_device_template(req: CreateReq) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn search_device_templates(
+pub async fn list_device_templates(
     pagination: Pagination,
     query_params: QueryParams,
-) -> HaliaResult<SearchResp> {
+) -> HaliaResult<ListResp> {
     let (count, db_device_templates) =
         storage::device::template::search(pagination, query_params).await?;
-    let mut resp_device_templates = vec![];
+    let mut list = vec![];
     for db_device_template in db_device_templates {
-        resp_device_templates.push(device_template::SearchItemResp {
+        let reference_cnt =
+            storage::device::device::count_by_template_id(&db_device_template.id).await?;
+        list.push(device_template::ListItem {
             id: db_device_template.id,
-            req: CreateReq {
-                name: db_device_template.name,
-                device_type: db_device_template.device_type,
-                conf: db_device_template.conf,
-            },
+            name: db_device_template.name,
+            device_type: db_device_template.device_type,
+            reference_cnt,
+            can_delete: reference_cnt == 0,
         });
     }
 
-    Ok(SearchResp {
-        total: count,
-        data: resp_device_templates,
-    })
+    Ok(ListResp { count, list })
 }
 
-pub async fn read_device_template(_id: String) -> HaliaResult<ReadResp> {
-    todo!()
+pub async fn read_device_template(id: String) -> HaliaResult<ReadResp> {
+    let db_device_template = storage::device::template::read_one(&id).await?;
+    let reference_cnt = storage::device::device::count_by_template_id(&id).await?;
+    Ok(ReadResp {
+        id: db_device_template.id,
+        name: db_device_template.name,
+        device_type: db_device_template.device_type,
+        reference_cnt,
+        can_delete: reference_cnt == 0,
+        conf: db_device_template.conf,
+    })
 }
 
 pub async fn update_device_template(
@@ -264,8 +270,6 @@ pub async fn delete_sink(device_template_id: String, sink_id: String) -> HaliaRe
         }
     }
 
-    debug!("here");
-
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
     for device_id in device_ids {
         let device_sink_id =
@@ -276,7 +280,6 @@ pub async fn delete_sink(device_template_id: String, sink_id: String) -> HaliaRe
         super::delete_sink(device_id, device_sink_id).await?;
     }
 
-    debug!("delete sink: {}", sink_id);
     storage::device::template_source_sink::delete_by_id(&sink_id).await?;
     Ok(())
 }
