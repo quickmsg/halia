@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common::{
-    error::{HaliaError, HaliaResult},
-    ErrorManager,
-};
+use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use futures::lock::BiLock;
 use message::RuleMessageBatch;
@@ -14,8 +11,10 @@ use source::Source;
 use tokio::{
     select,
     sync::{mpsc, watch},
+    task::JoinHandle,
 };
 use types::apps::http_client::{BasicAuth, HttpClientConf, SinkConf, SourceConf};
+use utils::ErrorManager;
 
 use crate::App;
 
@@ -29,6 +28,7 @@ pub struct HttpClient {
     sinks: DashMap<String, Sink>,
     device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
+    // join_handle: Option<JoinHandle<TaskLoop>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -39,15 +39,8 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let (err1, err2) = BiLock::new(None);
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
-    let task_data = TaskData {
-        id,
-        device_err: err1,
-        error_manager: ErrorManager::default(),
-        device_err_rx,
-        stop_signal_rx,
-    };
-
-    task_data.event_loop();
+    let task_loop = TaskLoop::new(id, err1, device_err_rx, stop_signal_rx);
+    let _join_handle = task_loop.start();
 
     Box::new(HttpClient {
         conf: Arc::new(conf),
@@ -56,19 +49,33 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
         sinks: DashMap::new(),
         device_err_tx,
         stop_signal_tx,
+        // join_handle: Some(join_handle),
     })
 }
 
-struct TaskData {
-    id: String,
-    device_err: BiLock<Option<Arc<String>>>,
+struct TaskLoop {
     error_manager: ErrorManager,
     device_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
     stop_signal_rx: watch::Receiver<()>,
 }
 
-impl TaskData {
-    fn event_loop(mut self) {
+impl TaskLoop {
+    fn new(
+        id: String,
+        device_err: BiLock<Option<Arc<String>>>,
+        device_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
+        stop_signal_rx: watch::Receiver<()>,
+    ) -> Self {
+        let error_manager =
+            ErrorManager::new(utils::error_manager::ResourceType::App, id, device_err);
+        Self {
+            error_manager,
+            device_err_rx,
+            stop_signal_rx,
+        }
+    }
+
+    fn start(mut self) -> JoinHandle<TaskLoop> {
         tokio::spawn(async move {
             loop {
                 select! {
@@ -77,32 +84,20 @@ impl TaskData {
                     }
 
                     _ = self.stop_signal_rx.changed() => {
-                        return;
+                        return self;
                     }
                 }
             }
-        });
+        })
     }
 
     async fn handle_err(&mut self, err: Option<Arc<String>>) {
         match err {
             Some(err) => {
-                let (need_update_err, need_update_status) = self.error_manager.put_err(err.clone());
-                if need_update_err {
-                    *self.device_err.lock().await = Some(err);
-                }
-                if need_update_status {
-                    let _ = storage::app::update_status(&self.id, types::Status::Error).await;
-                }
+                self.error_manager.put_err(err.clone()).await;
             }
             None => {
-                let (need_update_err, need_update_status) = self.error_manager.put_ok();
-                if need_update_err {
-                    *self.device_err.lock().await = None;
-                }
-                if need_update_status {
-                    let _ = storage::app::update_status(&self.id, types::Status::Running).await;
-                }
+                self.error_manager.set_ok().await;
             }
         }
     }

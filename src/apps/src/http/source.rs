@@ -8,7 +8,7 @@ use reqwest::{header::HeaderName, Client, Request};
 use tokio::{
     select,
     sync::{
-        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         watch,
     },
     task::JoinHandle,
@@ -29,13 +29,12 @@ pub struct Source {
 }
 
 pub struct TaskLoop {
-    pub id: String,
     pub stop_signal_rx: watch::Receiver<()>,
     pub http_client_conf: Arc<HttpClientConf>,
     pub source_conf: SourceConf,
     pub http_client: Client,
     pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
-    device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
+    device_err_tx: UnboundedSender<Option<Arc<String>>>,
     decoder: Box<dyn schema::Decoder>,
     error_manager: ErrorManager,
 }
@@ -48,20 +47,16 @@ impl TaskLoop {
         http_client_conf: Arc<HttpClientConf>,
         source_conf: SourceConf,
         mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
-        device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
+        device_err_tx: UnboundedSender<Option<Arc<String>>>,
     ) -> Self {
         let decoder = schema::new_decoder(&source_conf.decode_type, &source_conf.schema_id)
             .await
             .unwrap();
         let http_client = Client::new();
-        let error_manager = ErrorManager::new(
-            utils::error_manager::ResourceType::AppSource,
-            id.clone(),
-            err,
-        );
+        let error_manager =
+            ErrorManager::new(utils::error_manager::ResourceType::AppSource, id, err);
 
         Self {
-            id,
             stop_signal_rx,
             http_client_conf,
             source_conf,
@@ -73,7 +68,14 @@ impl TaskLoop {
         }
     }
 
-    fn start(mut self) -> JoinHandle<Self> {
+    fn start(self) -> JoinHandle<Self> {
+        match self.source_conf.typ {
+            types::apps::http_client::SourceType::Http => self.start_http(),
+            types::apps::http_client::SourceType::Websocket => self.start_websocket(),
+        }
+    }
+
+    fn start_http(mut self) -> JoinHandle<Self> {
         tokio::spawn(async move {
             let mut interval = time::interval(Duration::from_millis(
                 self.source_conf.http.as_ref().unwrap().interval,
@@ -111,14 +113,14 @@ impl TaskLoop {
                     }
 
                     _ = interval.tick() => {
-                        self.do_request(request.try_clone().unwrap()).await;
+                        self.do_http_request(request.try_clone().unwrap()).await;
                     }
                 }
             }
         })
     }
 
-    async fn do_request(&mut self, request: Request) {
+    async fn do_http_request(&mut self, request: Request) {
         if self.mb_txs.lock().await.len() == 0 {
             return;
         }
@@ -154,7 +156,7 @@ impl TaskLoop {
                     // TODO 是否会触发unwrap
                     let body = resp.text().await.unwrap();
                     let err = Arc::new(format!("状态码：{}, 错误：{}。", status_code, body));
-                    self.error_manager.put_err(err.clone());
+                    self.error_manager.put_err(err.clone()).await;
                 }
             }
             Err(e) => {
@@ -166,6 +168,56 @@ impl TaskLoop {
             }
         }
     }
+
+    fn start_websocket(mut self) -> JoinHandle<Self> {
+        tokio::spawn(async move {
+            loop {
+                let request = connect_websocket(
+                    &self.http_client_conf,
+                    &self.source_conf.path,
+                    &self.source_conf.headers,
+                );
+                match connect_async(request).await {
+                    Ok((ws_stream, response)) => {
+                        if !response.status().is_success() {
+                            let status_changed = self.error_manager.set_ok().await;
+                            if status_changed {
+                                self.device_err_tx.send(None).unwrap();
+                            }
+                        }
+                        let (_, mut read) = ws_stream.split();
+                        loop {
+                            select! {
+                                msg = read.next() => {
+                                    debug!("msg: {:?}", msg);
+                                }
+
+                                _ = self.stop_signal_rx.changed() => {
+                                    return self;
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        let err = Arc::new(err.to_string());
+                        self.error_manager.put_err(err.clone()).await;
+                        self.device_err_tx.send(Some(err)).unwrap();
+                        let sleep = time::sleep(Duration::from_secs(
+                            self.source_conf.websocket.as_ref().unwrap().reconnect,
+                        ));
+                        tokio::pin!(sleep);
+                        select! {
+                            _ = self.stop_signal_rx.changed() => {
+                                return self;
+                            }
+
+                            _ = &mut sleep => {}
+                        }
+                    }
+                }
+            }
+        })
+    }
 }
 
 impl Source {
@@ -173,7 +225,7 @@ impl Source {
         id: String,
         http_client_conf: Arc<HttpClientConf>,
         source_conf: SourceConf,
-        device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
+        device_err_tx: UnboundedSender<Option<Arc<String>>>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (err1, err2) = BiLock::new(None);
@@ -212,210 +264,20 @@ impl Source {
     }
 
     pub async fn update_conf(&mut self, _old_conf: SourceConf, new_conf: SourceConf) {
-        let mut join_handle_data = self.stop().await;
-        join_handle_data.source_conf = new_conf;
-        let join_handle = Self::event_loop(join_handle_data).await;
+        let mut task_loop = self.stop().await;
+        task_loop.source_conf = new_conf;
+        let join_handle = task_loop.start();
         self.join_handle = Some(join_handle);
     }
 
     pub async fn update_http_client(&mut self, http_client_conf: Arc<HttpClientConf>) {
-        let mut join_handle_data = self.stop().await;
-        join_handle_data.http_client_conf = http_client_conf;
-        let join_hdnale = Self::event_loop(join_handle_data).await;
+        let mut task_loop = self.stop().await;
+        task_loop.http_client_conf = http_client_conf;
+        let join_hdnale = task_loop.start();
         self.join_handle = Some(join_hdnale);
     }
 
-    async fn event_loop(join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        match join_handle_data.source_conf.typ {
-            types::apps::http_client::SourceType::Http => Self::http_event_loop(join_handle_data),
-            types::apps::http_client::SourceType::Websocket => {
-                Self::ws_event_loop(join_handle_data).await
-            }
-        }
-    }
-
-    fn http_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_millis(
-                join_handle_data.source_conf.http.as_ref().unwrap().interval,
-            ));
-
-            let mut builder = join_handle_data.client.get(format!(
-                "http://{}:{}{}",
-                &join_handle_data.http_client_conf.host,
-                &join_handle_data.http_client_conf.port,
-                &join_handle_data.source_conf.path
-            ));
-
-            builder = insert_headers(
-                builder,
-                &join_handle_data.source_conf.headers,
-                &join_handle_data.http_client_conf.headers,
-            );
-            builder = insert_query(
-                builder,
-                &join_handle_data.http_client_conf.query_params,
-                &join_handle_data.source_conf.query_params,
-            );
-            builder = insert_basic_auth(builder, &join_handle_data.http_client_conf.basic_auth);
-
-            let request = match builder.build() {
-                Ok(request) => request,
-                Err(e) => {
-                    warn!("{:?}", e);
-                    return join_handle_data;
-                }
-            };
-
-            loop {
-                select! {
-                    _ = join_handle_data.stop_signal_rx.changed() => {
-                        return join_handle_data;
-                    }
-
-                    _ = interval.tick() => {
-                        Self::do_request(&mut join_handle_data, request.try_clone().unwrap()).await;
-                    }
-                }
-            }
-        })
-    }
-
-    async fn do_request(join_handle_data: &mut JoinHandleData, request: Request) {
-        if join_handle_data.mb_txs.lock().await.len() == 0 {
-            return;
-        }
-
-        match join_handle_data.client.execute(request).await {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    let (need_update_err, need_update_status) =
-                        join_handle_data.error_manager.put_ok();
-                    if need_update_err {
-                        *join_handle_data.err.lock().await = None;
-                    }
-                    if need_update_status {
-                        let _ = storage::app::source_sink::update_status(
-                            &join_handle_data.id,
-                            types::Status::Running,
-                        )
-                        .await;
-                        join_handle_data.device_err_tx.send(None).unwrap();
-                    }
-
-                    match resp.bytes().await {
-                        Ok(body) => match join_handle_data.decoder.decode(body) {
-                            Ok(mb) => {
-                                let mut mb_txs = join_handle_data.mb_txs.lock().await;
-                                if mb_txs.len() == 1 {
-                                    let rmb = RuleMessageBatch::Owned(mb);
-                                    if let Err(_) = mb_txs[0].send(rmb) {
-                                        mb_txs.remove(0);
-                                    }
-                                } else {
-                                    let rmb = RuleMessageBatch::Arc(Arc::new(mb));
-                                    mb_txs.retain(|tx| tx.send(rmb.clone()).is_ok());
-                                }
-                            }
-                            Err(e) => warn!("{}", e),
-                        },
-                        Err(_) => todo!(),
-                    }
-                } else {
-                    let status_code = resp.status();
-                    // TODO 是否会触发unwrap
-                    let body = resp.text().await.unwrap();
-                    let err = Arc::new(format!("状态码：{}, 错误：{}。", status_code, body));
-                    let (need_update_err, need_update_err_status) =
-                        join_handle_data.error_manager.put_err(err.clone());
-                    if need_update_err {
-                        *join_handle_data.err.lock().await = Some(err);
-                    }
-                    if need_update_err_status {
-                        let _ = storage::app::source_sink::update_status(
-                            &join_handle_data.id,
-                            types::Status::Error,
-                        )
-                        .await;
-                    }
-                }
-            }
-            Err(e) => {
-                let err = Arc::new(e.to_string());
-                let (need_update_err, need_update_err_status) =
-                    join_handle_data.error_manager.put_err(err.clone());
-
-                if need_update_err {
-                    *join_handle_data.err.lock().await = Some(err.clone());
-                    join_handle_data
-                        .device_err_tx
-                        .send(Some(err.clone()))
-                        .unwrap();
-                }
-                if need_update_err_status {
-                    let _ = storage::app::source_sink::update_status(
-                        &join_handle_data.id,
-                        types::Status::Error,
-                    )
-                    .await;
-                }
-            }
-        }
-    }
-
-    async fn ws_event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        tokio::spawn(async move {
-            let mut task_err: Option<String> = Some("not connectd.".to_owned());
-            loop {
-                let request = connect_websocket(
-                    &join_handle_data.http_client_conf,
-                    &join_handle_data.source_conf.path,
-                    &join_handle_data.source_conf.headers,
-                );
-                match connect_async(request).await {
-                    Ok((ws_stream, response)) => {
-                        if !response.status().is_success() {
-                            task_err =
-                                Some(format!("websocket 连接失败，状态码：{}", response.status()));
-                        }
-                        let (_, mut read) = ws_stream.split();
-                        loop {
-                            select! {
-                                msg = read.next() => {
-                                    debug!("msg: {:?}", msg);
-                                }
-
-                                _ = join_handle_data.stop_signal_rx.changed() => {
-                                    return join_handle_data;
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        task_err = Some(e.to_string());
-                        let sleep = time::sleep(Duration::from_secs(
-                            join_handle_data
-                                .source_conf
-                                .websocket
-                                .as_ref()
-                                .unwrap()
-                                .reconnect,
-                        ));
-                        tokio::pin!(sleep);
-                        select! {
-                            _ = join_handle_data.stop_signal_rx.changed() => {
-                                return join_handle_data;
-                            }
-
-                            _ = &mut sleep => {}
-                        }
-                    }
-                }
-            }
-        })
-    }
-
-    pub async fn stop(&mut self) -> JoinHandleData {
+    pub async fn stop(&mut self) -> TaskLoop {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
