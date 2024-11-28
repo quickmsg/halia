@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use futures::lock::BiLock;
+use halia_derive::AppErr;
 use message::RuleMessageBatch;
 use reqwest::{Certificate, Client, ClientBuilder, Identity, RequestBuilder};
 use sink::Sink;
@@ -21,12 +22,13 @@ use crate::App;
 mod sink;
 mod source;
 
+#[derive(AppErr)]
 pub struct HttpClient {
     conf: Arc<HttpClientConf>,
     err: BiLock<Option<Arc<String>>>,
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
-    device_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
+    app_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
     // join_handle: Option<JoinHandle<TaskLoop>>,
 }
@@ -34,20 +36,20 @@ pub struct HttpClient {
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: HttpClientConf = serde_json::from_value(conf).unwrap();
 
-    let (device_err_tx, device_err_rx) = mpsc::unbounded_channel();
+    let (app_err_tx, app_err_rx) = mpsc::unbounded_channel();
 
-    let (err1, err2) = BiLock::new(None);
+    let (app_err1, app_err2) = BiLock::new(None);
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
-    let task_loop = TaskLoop::new(id, err1, device_err_rx, stop_signal_rx);
+    let task_loop = TaskLoop::new(id, app_err1, app_err_rx, stop_signal_rx);
     let _join_handle = task_loop.start();
 
     Box::new(HttpClient {
         conf: Arc::new(conf),
-        err: err2,
+        err: app_err2,
         sources: DashMap::new(),
         sinks: DashMap::new(),
-        device_err_tx,
+        app_err_tx,
         stop_signal_tx,
         // join_handle: Some(join_handle),
     })
@@ -55,22 +57,21 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
 struct TaskLoop {
     error_manager: ErrorManager,
-    device_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
+    app_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
     stop_signal_rx: watch::Receiver<()>,
 }
 
 impl TaskLoop {
     fn new(
         id: String,
-        device_err: BiLock<Option<Arc<String>>>,
-        device_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
+        app_err: BiLock<Option<Arc<String>>>,
+        app_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
         stop_signal_rx: watch::Receiver<()>,
     ) -> Self {
-        let error_manager =
-            ErrorManager::new(utils::error_manager::ResourceType::App, id, device_err);
+        let error_manager = ErrorManager::new(utils::error_manager::ResourceType::App, id, app_err);
         Self {
             error_manager,
-            device_err_rx,
+            app_err_rx,
             stop_signal_rx,
         }
     }
@@ -79,7 +80,7 @@ impl TaskLoop {
         tokio::spawn(async move {
             loop {
                 select! {
-                    Some(err) = self.device_err_rx.recv() => {
+                    Some(err) = self.app_err_rx.recv() => {
                         self.handle_err(err).await;
                     }
 
@@ -123,11 +124,7 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 #[async_trait]
 impl App for HttpClient {
     async fn read_app_err(&self) -> Option<Arc<String>> {
-        let err_guard = self.err.lock().await;
-        match &(*err_guard) {
-            Some(err) => Some(err.clone()),
-            None => None,
-        }
+        self.read_err().await
     }
 
     async fn read_source_err(&self, source_id: &String) -> HaliaResult<Option<Arc<String>>> {
@@ -179,7 +176,7 @@ impl App for HttpClient {
             source_id.clone(),
             self.conf.clone(),
             conf,
-            self.device_err_tx.clone(),
+            self.app_err_tx.clone(),
         )
         .await;
         self.sources.insert(source_id, source);

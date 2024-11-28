@@ -1,58 +1,52 @@
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use futures::lock::BiLock;
+use halia_derive::AppErr;
 use message::RuleMessageBatch;
 use sink::Sink;
 use tokio::{
     select,
     sync::{
-        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
-        watch, RwLock,
+        mpsc::{self, unbounded_channel, UnboundedSender},
+        watch,
     },
+    task::JoinHandle,
 };
-use tracing::warn;
 use types::apps::influxdb_v2::{InfluxdbConf, SinkConf};
+use utils::ErrorManager;
 
-use crate::{add_app_running_count, sub_app_running_count, App};
+use crate::{add_app_running_count, App};
 
 mod sink;
 
+#[derive(AppErr)]
 pub struct Influxdb {
-    err: Arc<RwLock<Option<Arc<String>>>>,
+    err: BiLock<Option<Arc<String>>>,
     sinks: DashMap<String, Sink>,
     conf: Arc<InfluxdbConf>,
-    app_err_tx: UnboundedSender<Option<String>>,
+    app_err_tx: UnboundedSender<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
-}
-
-struct JoinHandleData {
-    id: String,
-    err: Arc<RwLock<Option<Arc<String>>>>,
-    stop_signal_rx: watch::Receiver<()>,
-    app_err_rx: UnboundedReceiver<Option<String>>,
+    join_handle: Option<JoinHandle<TaskLoop>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
 
-    let err = Arc::new(RwLock::new(None));
+    let (app_err1, app_err2) = BiLock::new(None);
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     let (app_err_tx, app_err_rx) = unbounded_channel();
-    let join_handle_data = JoinHandleData {
-        id,
-        err: err.clone(),
-        stop_signal_rx,
-        app_err_rx,
-    };
-    Influxdb::event_loop(join_handle_data);
+    let task_loop = TaskLoop::new(id.clone(), app_err1, app_err_rx, stop_signal_rx);
+    let join_handle = task_loop.start();
     Box::new(Influxdb {
-        err,
+        err: app_err2,
         sinks: DashMap::new(),
         conf: Arc::new(conf),
         app_err_tx,
         stop_signal_tx,
+        join_handle: Some(join_handle),
     })
 }
 
@@ -67,73 +61,64 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
     Ok(())
 }
 
-impl Influxdb {
-    fn event_loop(mut join_handle_data: JoinHandleData) {
-        add_app_running_count();
-        tokio::spawn(async move {
-            let mut task_err = None;
-            loop {
-                select! {
-                    _ = join_handle_data.stop_signal_rx.changed() => {
-                        break;
-                    }
-                    Some(err) = join_handle_data.app_err_rx.recv() => {
-                        Self::handle_err(&join_handle_data, &mut task_err, err).await;
-                    }
-                }
-            }
-        });
+struct TaskLoop {
+    id: String,
+    error_manager: ErrorManager,
+    app_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
+    stop_signal_rx: watch::Receiver<()>,
+}
+
+impl TaskLoop {
+    fn new(
+        id: String,
+        app_err: BiLock<Option<Arc<String>>>,
+        app_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
+        stop_signal_rx: watch::Receiver<()>,
+    ) -> Self {
+        let error_manager =
+            ErrorManager::new(utils::error_manager::ResourceType::App, id.clone(), app_err);
+        Self {
+            id,
+            error_manager,
+            app_err_rx,
+            stop_signal_rx,
+        }
     }
 
-    async fn handle_err(
-        join_handle_data: &JoinHandleData,
-        task_err: &mut Option<Arc<String>>,
-        err: Option<String>,
-    ) {
-        match err {
-            Some(err) => {
-                events::insert_connect_failed(
-                    types::events::ResourceType::App,
-                    &join_handle_data.id,
-                    err.clone(),
-                )
-                .await;
-
-                if task_err.is_none() {
-                    sub_app_running_count();
-                    if let Err(e) =
-                        storage::app::update_status(&join_handle_data.id, types::Status::Error)
-                            .await
-                    {
-                        warn!("{}", e);
+    fn start(mut self) -> JoinHandle<TaskLoop> {
+        add_app_running_count();
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = self.stop_signal_rx.changed() => {
+                        return self;
                     }
-                    let err = Arc::new(err);
-                    join_handle_data.err.write().await.replace(err.clone());
-                    *task_err = Some(err);
-                } else {
-                    if *task_err.as_ref().unwrap().deref() != err {
-                        let err = Arc::new(err);
-                        join_handle_data.err.write().await.replace(err.clone());
-                        *task_err = Some(err);
+                    Some(err) = self.app_err_rx.recv() => {
+                        self.handle_err(err).await;
                     }
                 }
             }
+        })
+    }
+
+    async fn handle_err(&mut self, err: Option<Arc<String>>) {
+        match err {
+            Some(err) => {
+                // events::insert_connect_failed(
+                //     types::events::ResourceType::App,
+                //     &self.id,
+                //     err.clone(),
+                // )
+                // .await;
+                self.error_manager.put_err(err).await;
+            }
             None => {
-                events::insert_connect_succeed(
-                    types::events::ResourceType::App,
-                    &join_handle_data.id,
-                )
-                .await;
-                if task_err.is_some() {
-                    if let Err(e) =
-                        storage::app::update_status(&join_handle_data.id, types::Status::Running)
-                            .await
-                    {
-                        warn!("{}", e);
-                    }
-                    *task_err = None;
-                    *join_handle_data.err.write().await = None;
-                }
+                // events::insert_connect_succeed(
+                //     types::events::ResourceType::App,
+                //     &join_handle_data.id,
+                // )
+                // .await;
+                self.error_manager.set_ok().await;
             }
         }
     }
@@ -141,11 +126,8 @@ impl Influxdb {
 
 #[async_trait]
 impl App for Influxdb {
-    async fn read_app_err(&self) -> Option<String> {
-        match self.err.read().await.as_ref() {
-            Some(err) => Some(err.as_ref().clone()),
-            None => None,
-        }
+    async fn read_app_err(&self) -> Option<Arc<String>> {
+        self.read_err().await
     }
 
     async fn update(
@@ -171,7 +153,12 @@ impl App for Influxdb {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(conf, self.conf.clone(), self.app_err_tx.clone());
+        let sink = Sink::new(
+            sink_id.clone(),
+            conf,
+            self.conf.clone(),
+            self.app_err_tx.clone(),
+        );
         self.sinks.insert(sink_id, sink);
         Ok(())
     }

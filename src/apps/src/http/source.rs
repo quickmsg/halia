@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use common::error::HaliaResult;
 use futures::lock::BiLock;
 use futures_util::StreamExt;
-use halia_derive::Source;
+use halia_derive::{SourceErr, SourceRxs, SourceStop};
 use message::RuleMessageBatch;
 use reqwest::{header::HeaderName, Client, Request};
 use tokio::{
@@ -19,12 +19,12 @@ use utils::ErrorManager;
 
 use super::{insert_basic_auth, insert_headers, insert_query};
 
-#[derive(Source)]
+#[derive(SourceRxs, SourceStop, SourceErr)]
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
     err: BiLock<Option<Arc<String>>>,
     join_handle: Option<JoinHandle<TaskLoop>>,
-    pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
+    mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
 }
 
 pub struct TaskLoop {
@@ -33,7 +33,7 @@ pub struct TaskLoop {
     pub source_conf: SourceConf,
     pub http_client: Client,
     pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
-    device_err_tx: UnboundedSender<Option<Arc<String>>>,
+    app_err_tx: UnboundedSender<Option<Arc<String>>>,
     decoder: Box<dyn schema::Decoder>,
     error_manager: ErrorManager,
 }
@@ -46,7 +46,7 @@ impl TaskLoop {
         http_client_conf: Arc<HttpClientConf>,
         source_conf: SourceConf,
         mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
-        device_err_tx: UnboundedSender<Option<Arc<String>>>,
+        app_err_tx: UnboundedSender<Option<Arc<String>>>,
     ) -> Self {
         let decoder = schema::new_decoder(&source_conf.decode_type, &source_conf.schema_id)
             .await
@@ -61,7 +61,7 @@ impl TaskLoop {
             source_conf,
             http_client,
             mb_txs,
-            device_err_tx,
+            app_err_tx,
             decoder,
             error_manager,
         }
@@ -129,7 +129,7 @@ impl TaskLoop {
                 if resp.status().is_success() {
                     let status_changed = self.error_manager.set_ok().await;
                     if status_changed {
-                        self.device_err_tx.send(None).unwrap();
+                        self.app_err_tx.send(None).unwrap();
                     }
 
                     match resp.bytes().await {
@@ -162,7 +162,7 @@ impl TaskLoop {
                 let err = Arc::new(e.to_string());
                 let status_changed = self.error_manager.put_err(err.clone()).await;
                 if status_changed {
-                    self.device_err_tx.send(Some(err.clone())).unwrap();
+                    self.app_err_tx.send(Some(err.clone())).unwrap();
                 }
             }
         }
@@ -181,7 +181,7 @@ impl TaskLoop {
                         if !response.status().is_success() {
                             let status_changed = self.error_manager.set_ok().await;
                             if status_changed {
-                                self.device_err_tx.send(None).unwrap();
+                                self.app_err_tx.send(None).unwrap();
                             }
                         }
                         let (_, mut read) = ws_stream.split();
@@ -200,7 +200,7 @@ impl TaskLoop {
                     Err(err) => {
                         let err = Arc::new(err.to_string());
                         self.error_manager.put_err(err.clone()).await;
-                        self.device_err_tx.send(Some(err)).unwrap();
+                        self.app_err_tx.send(Some(err)).unwrap();
                         let sleep = time::sleep(Duration::from_secs(
                             self.source_conf.websocket.as_ref().unwrap().reconnect,
                         ));

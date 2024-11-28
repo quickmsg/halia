@@ -180,7 +180,7 @@ pub struct ReadAppResp {
     pub status: Status,
     pub can_stop: bool,
     pub can_delete: bool,
-    pub err: Option<String>,
+    pub err: Option<Arc<String>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]

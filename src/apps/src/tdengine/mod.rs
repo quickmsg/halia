@@ -3,6 +3,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use futures::lock::BiLock;
+use halia_derive::AppErr;
 use message::RuleMessageBatch;
 use sink::Sink;
 use taos::{AsyncQueryable, AsyncTBuilder, Taos, TaosBuilder};
@@ -14,11 +16,12 @@ use crate::App;
 
 mod sink;
 
+#[derive(AppErr)]
 pub struct TDengine {
     _id: String,
     conf: Arc<TDengineConf>,
     sinks: DashMap<String, Sink>,
-    err: Option<String>,
+    err: BiLock<Option<Arc<String>>>,
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
@@ -51,8 +54,8 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 
 #[async_trait]
 impl App for TDengine {
-    async fn read_app_err(&self) -> Option<String> {
-        self.err.clone()
+    async fn read_app_err(&self) -> Option<Arc<String>> {
+        self.read_err().await
     }
 
     async fn update(

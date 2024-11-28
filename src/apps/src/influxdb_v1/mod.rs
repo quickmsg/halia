@@ -3,6 +3,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use futures::lock::BiLock;
+use halia_derive::AppErr;
 use influxdb::Client;
 use message::RuleMessageBatch;
 use sink::Sink;
@@ -13,9 +15,10 @@ use crate::App;
 
 mod sink;
 
+#[derive(AppErr)]
 pub struct Influxdb {
     _id: String,
-    err: Option<String>,
+    err: BiLock<Option<Arc<String>>>,
     sinks: DashMap<String, Sink>,
     influxdb_conf: Arc<InfluxdbConf>,
 }
@@ -23,9 +26,11 @@ pub struct Influxdb {
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let influxdb_conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
 
+    let (err1, err2) = BiLock::new(None);
+
     Box::new(Influxdb {
         _id: id,
-        err: None,
+        err: err1,
         sinks: DashMap::new(),
         influxdb_conf: Arc::new(influxdb_conf),
     })
@@ -60,8 +65,8 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl App for Influxdb {
-    async fn read_app_err(&self) -> Option<String> {
-        self.err.clone()
+    async fn read_app_err(&self) -> Option<Arc<String>> {
+        self.read_err().await
     }
 
     async fn update(

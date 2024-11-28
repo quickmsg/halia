@@ -1,14 +1,20 @@
+use std::sync::Arc;
+
 use common::error::{HaliaError, HaliaResult};
+use futures::lock::BiLock;
+use halia_derive::SourceErr;
 use message::RuleMessageBatch;
 use rumqttc::valid_filter;
 use schema::Decoder;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use types::apps::mqtt_client_v311::SourceConf;
 
+#[derive(SourceErr)]
 pub struct Source {
     pub conf: SourceConf,
     pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
     pub decoder: Box<dyn Decoder>,
+    pub err: BiLock<Option<Arc<String>>>,
 }
 
 impl Source {
@@ -20,6 +26,7 @@ impl Source {
             conf,
             mb_txs: vec![],
             decoder,
+            err: todo!(),
         }
     }
 

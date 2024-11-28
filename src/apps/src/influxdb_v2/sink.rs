@@ -5,7 +5,7 @@ use common::{
     get_dynamic_value_from_json,
     sink_message_retain::{self, SinkMessageRetain},
 };
-use futures::stream;
+use futures::{lock::BiLock, stream};
 use influxdb2::{
     api::write::TimestampPrecision,
     models::{DataPoint, FieldValue},
@@ -22,20 +22,13 @@ use tokio::{
 };
 use tracing::{debug, warn};
 use types::apps::influxdb_v2::{InfluxdbConf, SinkConf};
+use utils::ErrorManager;
 
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<JoinHandle<JoinHandleData>>,
+    join_handle: Option<JoinHandle<TaskLoop>>,
+    err: BiLock<Option<Arc<String>>>,
     pub mb_tx: UnboundedSender<RuleMessageBatch>,
-}
-
-pub struct JoinHandleData {
-    pub app_err_tx: UnboundedSender<Option<String>>,
-    pub conf: SinkConf,
-    pub influxdb_conf: Arc<InfluxdbConf>,
-    pub message_retainer: Box<dyn SinkMessageRetain>,
-    pub stop_signal_rx: watch::Receiver<()>,
-    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
 }
 
 impl Sink {
@@ -44,35 +37,103 @@ impl Sink {
     }
 
     pub fn new(
-        conf: SinkConf,
+        sink_id: String,
+        sink_conf: SinkConf,
         influxdb_conf: Arc<InfluxdbConf>,
-        app_err_tx: UnboundedSender<Option<String>>,
+        app_err_tx: UnboundedSender<Option<Arc<String>>>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = unbounded_channel();
+        let (sink_err1, sink_err2) = BiLock::new(None);
 
-        let message_retainer = sink_message_retain::new(&conf.message_retain);
-        let join_handle_data = JoinHandleData {
-            conf,
+        let task_loop = TaskLoop::new(
+            sink_id,
+            sink_conf,
+            sink_err1,
             influxdb_conf,
-            message_retainer,
+            app_err_tx,
             stop_signal_rx,
             mb_rx,
-            app_err_tx,
-        };
-        let join_handle = Self::event_loop(join_handle_data);
+        );
+        let join_handle = task_loop.start();
 
         Sink {
             stop_signal_tx,
             mb_tx,
+            err: sink_err2,
             join_handle: Some(join_handle),
         }
     }
 
-    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        let influxdb_client = new_influxdb_client(&join_handle_data.influxdb_conf);
+    pub async fn stop(&mut self) -> TaskLoop {
+        self.stop_signal_tx.send(()).unwrap();
+        self.join_handle.take().unwrap().await.unwrap()
+    }
 
-        let timestamp_precision = match &join_handle_data.conf.precision {
+    pub async fn update_conf(&mut self, sink_conf: SinkConf) {
+        let mut task_loop = self.stop().await;
+        task_loop.sink_conf = sink_conf;
+        let join_handle = task_loop.start();
+        self.join_handle = Some(join_handle);
+    }
+
+    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
+        let mut task_loop = self.stop().await;
+        task_loop.influxdb_conf = influxdb_conf;
+        let join_handle = task_loop.start();
+        self.join_handle = Some(join_handle);
+    }
+
+    pub fn get_txs(&self, cnt: usize) -> Vec<UnboundedSender<RuleMessageBatch>> {
+        let mut txs = vec![];
+        for _ in 0..cnt {
+            txs.push(self.mb_tx.clone());
+        }
+        txs
+    }
+}
+
+pub struct TaskLoop {
+    sink_conf: SinkConf,
+    influxdb_conf: Arc<InfluxdbConf>,
+    app_err_tx: UnboundedSender<Option<Arc<String>>>,
+    message_retainer: Box<dyn SinkMessageRetain>,
+    stop_signal_rx: watch::Receiver<()>,
+    mb_rx: UnboundedReceiver<RuleMessageBatch>,
+    error_manager: ErrorManager,
+}
+
+impl TaskLoop {
+    fn new(
+        sink_id: String,
+        sink_conf: SinkConf,
+        sink_err: BiLock<Option<Arc<String>>>,
+        influxdb_conf: Arc<InfluxdbConf>,
+        app_err_tx: UnboundedSender<Option<Arc<String>>>,
+        stop_signal_rx: watch::Receiver<()>,
+        mb_rx: UnboundedReceiver<RuleMessageBatch>,
+    ) -> Self {
+        let message_retainer = sink_message_retain::new(&sink_conf.message_retain);
+        let error_manager = ErrorManager::new(
+            utils::error_manager::ResourceType::AppSink,
+            sink_id.clone(),
+            sink_err,
+        );
+        Self {
+            sink_conf,
+            influxdb_conf,
+            app_err_tx,
+            message_retainer,
+            stop_signal_rx,
+            mb_rx,
+            error_manager,
+        }
+    }
+
+    fn start(mut self) -> JoinHandle<Self> {
+        let influxdb_client = new_influxdb_client(&self.influxdb_conf);
+
+        let timestamp_precision = match &self.sink_conf.precision {
             types::apps::influxdb_v2::Precision::Seconds => TimestampPrecision::Seconds,
             types::apps::influxdb_v2::Precision::Milliseconds => TimestampPrecision::Milliseconds,
             types::apps::influxdb_v2::Precision::Microseconds => TimestampPrecision::Microseconds,
@@ -80,16 +141,15 @@ impl Sink {
         };
 
         tokio::spawn(async move {
-            let mut err = None;
             loop {
                 select! {
-                    _ = join_handle_data.stop_signal_rx.changed() => {
-                        return join_handle_data;
+                    _ = self.stop_signal_rx.changed() => {
+                        return self;
                     }
 
-                    Some(mb) = join_handle_data.mb_rx.recv() => {
+                    Some(mb) = self.mb_rx.recv() => {
                         // if !app_err {
-                        Self::send_msg_to_influxdb(&join_handle_data.app_err_tx, &mut err, &influxdb_client, &join_handle_data.conf, timestamp_precision.clone(), mb, &mut join_handle_data.message_retainer).await;
+                       self.send_msg_to_influxdb(&influxdb_client, timestamp_precision.clone(), mb).await;
                         // } else {
                         //     join_handle_data.message_retainer.push(mb);
                         // }
@@ -100,19 +160,16 @@ impl Sink {
     }
 
     async fn send_msg_to_influxdb(
-        app_err_tx: &UnboundedSender<Option<String>>,
-        err: &mut Option<String>,
+        &mut self,
         influxdb_client: &Client,
-        conf: &SinkConf,
         timestamp_precision: TimestampPrecision,
         rmb: RuleMessageBatch,
-        message_retainer: &mut Box<dyn SinkMessageRetain>,
     ) {
         let mb = rmb.take_mb();
         let mut data_points = Vec::with_capacity(mb.len());
         for msg in mb.get_messages() {
-            let mut data_point_builder = DataPoint::builder(&conf.mesaurement);
-            for (field, field_value) in &conf.fields {
+            let mut data_point_builder = DataPoint::builder(&self.sink_conf.mesaurement);
+            for (field, field_value) in &self.sink_conf.fields {
                 let value = match get_dynamic_value_from_json(field_value) {
                     common::DynamicValue::Const(value) => value,
                     common::DynamicValue::Field(s) => match msg.get(&s) {
@@ -151,32 +208,28 @@ impl Sink {
         }
 
         match influxdb_client
-            .write_with_precision(&conf.bucket, stream::iter(data_points), timestamp_precision)
+            .write_with_precision(
+                &self.sink_conf.bucket,
+                stream::iter(data_points),
+                timestamp_precision,
+            )
             .await
         {
-            Ok(_) => match err {
-                Some(_) => {
-                    app_err_tx.send(None).unwrap();
-                    *err = None;
+            Ok(_) => {
+                let status_changed = self.error_manager.set_ok().await;
+                if status_changed {
+                    self.app_err_tx.send(None).unwrap();
                 }
-                None => {}
-            },
+            }
             Err(e) => {
+                self.message_retainer.push(mb);
                 match e {
                     influxdb2::RequestError::ReqwestProcessing { source } => {
-                        message_retainer.push(mb);
-                        match err {
-                            Some(err) => {
-                                if *err != source.to_string() {
-                                    app_err_tx.send(Some(source.to_string())).unwrap();
-                                    *err = source.to_string();
-                                }
-                            }
-                            None => {
-                                app_err_tx.send(Some(source.to_string())).unwrap();
-                                *err = Some(source.to_string());
-                            }
-                        };
+                        let err = Arc::new(source.to_string());
+                        let status_changed = self.error_manager.put_err(err.clone()).await;
+                        if status_changed {
+                            self.app_err_tx.send(Some(err)).unwrap();
+                        }
                     }
                     influxdb2::RequestError::Http { status, text } => {
                         // TODO sink err
@@ -193,31 +246,6 @@ impl Sink {
                 }
             }
         }
-    }
-
-    pub async fn stop(&mut self) -> JoinHandleData {
-        self.stop_signal_tx.send(()).unwrap();
-        self.join_handle.take().unwrap().await.unwrap()
-    }
-
-    pub async fn update_conf(&mut self, conf: SinkConf) {
-        let mut join_handle_data = self.stop().await;
-        join_handle_data.conf = conf;
-        self.join_handle = Some(Self::event_loop(join_handle_data));
-    }
-
-    pub async fn update_influxdb_client(&mut self, influxdb_conf: Arc<InfluxdbConf>) {
-        let mut join_handle_data = self.stop().await;
-        join_handle_data.influxdb_conf = influxdb_conf;
-        self.join_handle = Some(Self::event_loop(join_handle_data));
-    }
-
-    pub fn get_txs(&self, cnt: usize) -> Vec<UnboundedSender<RuleMessageBatch>> {
-        let mut txs = vec![];
-        for _ in 0..cnt {
-            txs.push(self.mb_tx.clone());
-        }
-        txs
     }
 }
 

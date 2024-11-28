@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
 use chrono::{TimeZone, Utc};
@@ -6,7 +6,7 @@ use common::{
     error::HaliaResult,
     sink_message_retain::{self, SinkMessageRetain},
 };
-use tracing::warn;
+use futures::lock::BiLock;
 use message::RuleMessageBatch;
 use rskafka::{
     client::{
@@ -18,80 +18,77 @@ use rskafka::{
 use tokio::{
     select,
     sync::{
-        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         watch,
     },
     task::JoinHandle,
 };
 use types::apps::kafka::SinkConf;
+use utils::ErrorManager;
 
 pub struct Sink {
+    err: BiLock<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<JoinHandle<JoinHandleData>>,
+    join_handle: Option<JoinHandle<TaskLoop>>,
     pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
-pub struct JoinHandleData {
-    pub partition_client: Option<PartitionClient>,
-    pub kafka_err_tx: mpsc::Sender<String>,
-    pub conf: SinkConf,
-    pub stop_signal_rx: watch::Receiver<()>,
-    pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
-    pub message_retainer: Box<dyn SinkMessageRetain>,
+pub struct TaskLoop {
+    sink_id: String,
+    sink_conf: SinkConf,
+    partition_client: Option<PartitionClient>,
+    app_err_tx: UnboundedSender<Option<Arc<String>>>,
+    stop_signal_rx: watch::Receiver<()>,
+    mb_rx: UnboundedReceiver<RuleMessageBatch>,
+    message_retainer: Box<dyn SinkMessageRetain>,
+    error_manager: ErrorManager,
 }
 
-impl Sink {
-    pub fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
-        Ok(())
-    }
-
-    pub async fn new(
-        kafka_client: Option<&Client>,
-        kafka_err_tx: mpsc::Sender<String>,
-        conf: SinkConf,
+impl TaskLoop {
+    fn new(
+        sink_id: String,
+        sink_conf: SinkConf,
+        sink_err: BiLock<Option<Arc<String>>>,
+        partition_client: Option<PartitionClient>,
+        app_err_tx: UnboundedSender<Option<Arc<String>>>,
+        stop_signal_rx: watch::Receiver<()>,
+        mb_rx: UnboundedReceiver<RuleMessageBatch>,
     ) -> Self {
-        let (stop_signal_tx, stop_signal_rx) = watch::channel(());
-        let (mb_tx, mb_rx) = unbounded_channel();
-
-        let message_retainer = sink_message_retain::new(&conf.message_retain);
-        let partition_client = new_partition_client(kafka_client, &conf).await;
-        let join_handle_data = JoinHandleData {
+        let message_retainer = sink_message_retain::new(&sink_conf.message_retain);
+        let error_manager = ErrorManager::new(
+            utils::error_manager::ResourceType::AppSink,
+            sink_id.clone(),
+            sink_err,
+        );
+        Self {
+            sink_id,
+            sink_conf,
             partition_client,
-            kafka_err_tx,
-            conf,
+            app_err_tx,
             stop_signal_rx,
             mb_rx,
             message_retainer,
-        };
-        let join_handle = Self::event_loop(join_handle_data).await;
-
-        Self {
-            stop_signal_tx,
-            mb_tx,
-            join_handle: Some(join_handle),
+            error_manager,
         }
     }
 
-    async fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        let compression = transfer_compression(&join_handle_data.conf.compression);
+    fn start(mut self) -> JoinHandle<Self> {
+        let compression = transfer_compression(&self.sink_conf.compression);
         tokio::spawn(async move {
             loop {
                 select! {
-                    _ = join_handle_data.stop_signal_rx.changed() => {
-                        return join_handle_data;
+                    _ = self.stop_signal_rx.changed() => {
+                        return self;
                     }
 
-                    Some(mb) = join_handle_data.mb_rx.recv() => {
-                        match &join_handle_data.partition_client {
+                    Some(mb) = self.mb_rx.recv() => {
+                        match &self.partition_client {
                             Some(partition_client) => {
-                                if let Err(e) = Self::send_msg_to_kafka(&join_handle_data.conf, partition_client, mb, compression).await {
-                                    warn!("{}", e);
-                                    join_handle_data.kafka_err_tx.send(e.to_string()).await.unwrap();
-                                }
+                                &self.send_msg_to_kafka(partition_client, mb, compression).await;
                             }
                             None => {
                                 let mb = mb.take_mb();
-                                join_handle_data.message_retainer.push(mb);
+                                self.message_retainer.push(mb);
                             }
                         }
 
@@ -102,18 +99,18 @@ impl Sink {
     }
 
     async fn send_msg_to_kafka(
-        conf: &SinkConf,
+        &self,
         partition_client: &PartitionClient,
         rmb: RuleMessageBatch,
         compression: Compression,
     ) -> Result<()> {
         let mb = rmb.take_mb();
-        let key = conf.key.clone().map(|value| {
+        let key = self.sink_conf.key.clone().map(|value| {
             let value: Vec<u8> = value.into();
             value
         });
         let mut headers = BTreeMap::new();
-        if let Some(conf_headers) = &conf.headers {
+        if let Some(conf_headers) = &self.sink_conf.headers {
             for (k, v) in conf_headers.iter() {
                 let v: Vec<u8> = v.clone().into();
                 headers.insert(k.clone(), v);
@@ -129,23 +126,59 @@ impl Sink {
         partition_client.produce(vec![record], compression).await?;
         Ok(())
     }
+}
 
-    pub async fn update_conf(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
-        let mut join_handle_data = self.stop().await;
-        join_handle_data.conf = new_conf;
-        let join_handle = Self::event_loop(join_handle_data).await;
+impl Sink {
+    pub fn validate_conf(_conf: &SinkConf) -> HaliaResult<()> {
+        Ok(())
+    }
+
+    pub async fn new(
+        sink_id: String,
+        sink_conf: SinkConf,
+        kafka_client: Option<&Client>,
+        app_err_tx: UnboundedSender<Option<Arc<String>>>,
+    ) -> Self {
+        let (stop_signal_tx, stop_signal_rx) = watch::channel(());
+        let (mb_tx, mb_rx) = unbounded_channel();
+        let (sink_err1, sink_err2) = BiLock::new(None);
+
+        let partition_client = new_partition_client(kafka_client, &sink_conf).await;
+        let task_loop = TaskLoop::new(
+            sink_id,
+            sink_conf,
+            sink_err1,
+            partition_client,
+            app_err_tx,
+            stop_signal_rx,
+            mb_rx,
+        );
+        let join_handle = task_loop.start();
+
+        Self {
+            err: sink_err2,
+            stop_signal_tx,
+            mb_tx,
+            join_handle: Some(join_handle),
+        }
+    }
+
+    pub async fn update_conf(&mut self, _old_conf: SinkConf, sink_conf: SinkConf) {
+        let mut task_loop = self.stop().await;
+        task_loop.sink_conf = sink_conf;
+        let join_handle = task_loop.start();
         self.join_handle = Some(join_handle);
     }
 
     pub async fn update_kafka_client(&mut self, kafka_client: Option<&Client>) {
-        let mut join_handle_data = self.stop().await;
-        let partition_client = new_partition_client(kafka_client, &join_handle_data.conf).await;
-        join_handle_data.partition_client = partition_client;
-        let join_handle = Self::event_loop(join_handle_data).await;
+        let mut task_loop = self.stop().await;
+        let partition_client = new_partition_client(kafka_client, &task_loop.sink_conf).await;
+        task_loop.partition_client = partition_client;
+        let join_handle = task_loop.start();
         self.join_handle = Some(join_handle);
     }
 
-    pub async fn stop(&mut self) -> JoinHandleData {
+    pub async fn stop(&mut self) -> TaskLoop {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
