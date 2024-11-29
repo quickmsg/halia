@@ -99,13 +99,6 @@ impl TryFrom<String> for AppType {
     }
 }
 
-#[derive(Serialize)]
-pub struct Summary {
-    pub total: usize,
-    pub on: usize,
-    pub running: usize,
-}
-
 #[derive(Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,

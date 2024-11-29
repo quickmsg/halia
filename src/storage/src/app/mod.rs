@@ -136,7 +136,7 @@ pub async fn read_one(id: &String) -> Result<App> {
     db_app.transfer()
 }
 
-pub async fn read_all_running() -> Result<Vec<App>> {
+pub async fn read_all_on() -> Result<Vec<App>> {
     let db_apps = sqlx::query_as::<_, DbApp>(
         format!("SELECT * FROM {} WHERE status != ?", TABLE_NAME).as_str(),
     )
@@ -145,6 +145,10 @@ pub async fn read_all_running() -> Result<Vec<App>> {
     .await?;
 
     db_apps.into_iter().map(|x| x.transfer()).collect()
+}
+
+pub async fn get_summary() -> Result<(usize, usize, usize)> {
+    crate::get_summary(TABLE_NAME).await
 }
 
 pub async fn search(

@@ -18,7 +18,7 @@ use tokio::{
 use types::apps::influxdb_v2::{InfluxdbConf, SinkConf};
 use utils::ErrorManager;
 
-use crate::{add_app_running_count, App};
+use crate::App;
 
 mod sink;
 
@@ -86,7 +86,6 @@ impl TaskLoop {
     }
 
     fn start(mut self) -> JoinHandle<TaskLoop> {
-        add_app_running_count();
         tokio::spawn(async move {
             loop {
                 select! {

@@ -9,15 +9,15 @@ use axum::{
 };
 use futures_util::Stream;
 use types::{
-    rules::{CreateUpdateRuleReq, ListRulesResp, QueryParams, ReadRuleResp, Summary},
-    Pagination,
+    rules::{CreateUpdateRuleReq, ListRulesResp, QueryParams, ReadRuleResp},
+    Pagination, Summary,
 };
 
 use crate::AppResult;
 
 pub fn routes() -> Router {
     Router::new()
-        .route("/summary", get(get_rules_summary))
+        .route("/summary", get(get_summary))
         .route("/", post(create))
         .route("/list", get(list_rules))
         .route("/:id", get(read))
@@ -32,8 +32,8 @@ pub fn routes() -> Router {
         .route("/:id/log", routing::delete(delete_log))
 }
 
-async fn get_rules_summary() -> AppResult<Json<Summary>> {
-    Ok(Json(rule::get_summary()))
+async fn get_summary() -> AppResult<Json<Summary>> {
+    Ok(Json(rule::get_summary().await?))
 }
 
 async fn create(Json(req): Json<CreateUpdateRuleReq>) -> AppResult<()> {

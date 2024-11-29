@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    LazyLock,
-};
+use std::sync::LazyLock;
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -13,9 +10,8 @@ use types::{
         device::QueryParams, ConfType, CreateUpdateSourceSinkReq, DeviceType, ListDevicesResp,
         ListSourcesSinksItem, ListSourcesSinksResp, QueryRuleInfoParams, QuerySourcesSinksParams,
         ReadDeviceResp, ReadSourceSinkResp, RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink,
-        Summary,
     },
-    Pagination, Status, Value,
+    Pagination, Status, Summary, Value,
 };
 
 pub mod coap;
@@ -26,46 +22,6 @@ pub mod source_sink_template;
 
 static GLOBAL_DEVICE_MANAGER: LazyLock<DashMap<String, Box<dyn Device>>> =
     LazyLock::new(|| DashMap::new());
-
-static DEVICE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-static DEVICE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-static DEVICE_RUNNING_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-
-fn get_device_count() -> usize {
-    DEVICE_COUNT.load(Ordering::SeqCst)
-}
-
-fn add_device_count() {
-    DEVICE_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-fn sub_device_count() {
-    DEVICE_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-pub(crate) fn get_device_on_count() -> usize {
-    DEVICE_ON_COUNT.load(Ordering::SeqCst)
-}
-
-pub(crate) fn add_device_on_count() {
-    DEVICE_ON_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-pub(crate) fn sub_device_on_count() {
-    DEVICE_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-pub(crate) fn get_device_running_count() -> usize {
-    DEVICE_RUNNING_COUNT.load(Ordering::SeqCst)
-}
-
-pub(crate) fn add_device_running_count() {
-    DEVICE_RUNNING_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-pub(crate) fn sub_device_running_count() {
-    DEVICE_RUNNING_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
 
 #[async_trait]
 pub trait Device: Send + Sync {
@@ -143,9 +99,6 @@ pub trait Device: Send + Sync {
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
-    let count = storage::device::device::count_all().await?;
-    DEVICE_COUNT.store(count, Ordering::SeqCst);
-
     let db_devices = storage::device::device::read_many_on().await?;
     for db_device in db_devices {
         start_device(db_device.id).await?;
@@ -154,12 +107,13 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     Ok(())
 }
 
-pub fn get_summary() -> Summary {
-    let total = get_device_count();
-    let on = get_device_on_count();
-    let running = get_device_running_count();
-
-    Summary { total, on, running }
+pub async fn get_summary() -> HaliaResult<Summary> {
+    let (total, running_cnt, error_cnt) = storage::device::device::get_summary().await?;
+    Ok(Summary {
+        total,
+        running_cnt,
+        error_cnt: Some(error_cnt),
+    })
 }
 
 // 规则中读取详情
@@ -288,7 +242,6 @@ pub async fn create_device(
         },
     }
 
-    add_device_count();
     storage::device::device::insert(&device_id, req.clone()).await?;
     events::insert_create(types::events::ResourceType::Device, &device_id).await;
 
@@ -465,7 +418,6 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);
 
-    add_device_on_count();
     storage::device::device::update_status(&device_id, types::Status::Running).await?;
     storage::device::source_sink::update_status_by_device_id(&device_id, types::Status::Running)
         .await?;
@@ -482,7 +434,6 @@ pub async fn stop_device(device_id: String) -> HaliaResult<()> {
 
     if let Some((_, mut device)) = GLOBAL_DEVICE_MANAGER.remove(&device_id) {
         device.stop().await;
-        sub_device_on_count();
         events::insert_stop(types::events::ResourceType::Device, &device_id).await;
         storage::device::device::update_status(&device_id, types::Status::Stopped).await?;
         storage::device::source_sink::update_status_by_device_id(
@@ -504,7 +455,6 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRefing);
     }
 
-    sub_device_count();
     events::insert_delete(types::events::ResourceType::Device, &device_id).await;
     storage::device::device::delete_by_id(&device_id).await?;
     storage::device::source_sink::delete_many_by_device_id(&device_id).await?;

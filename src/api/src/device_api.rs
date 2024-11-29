@@ -6,9 +6,9 @@ use axum::{
 use types::{
     devices::{
         CreateUpdateSourceSinkReq, ListSourcesSinksResp, QuerySourcesSinksParams,
-        ReadSourceSinkResp, Summary,
+        ReadSourceSinkResp,
     },
-    Pagination, Value,
+    Pagination, Summary, Value,
 };
 
 use crate::AppResult;
@@ -94,7 +94,7 @@ pub fn routes() -> Router {
 }
 
 async fn get_devices_summary() -> AppResult<Json<Summary>> {
-    Ok(Json(devices::get_summary()))
+    Ok(Json(devices::get_summary().await?))
 }
 
 async fn create_device(Json(req): Json<types::devices::device::CreateReq>) -> AppResult<()> {

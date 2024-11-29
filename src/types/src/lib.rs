@@ -15,10 +15,18 @@ pub mod user;
 #[derive(Serialize)]
 pub struct Dashboard {
     pub machine_info: MachineInfo,
-    pub device_summary: devices::Summary,
-    pub app_summary: apps::Summary,
-    pub databoard_summary: databoard::Summary,
-    pub rule_summary: rules::Summary,
+    pub device_summary: Summary,
+    pub app_summary: Summary,
+    pub databoard_summary: Summary,
+    pub rule_summary: Summary,
+}
+
+#[derive(Serialize)]
+pub struct Summary {
+    pub total: usize,
+    pub running_cnt: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_cnt: Option<usize>,
 }
 
 #[derive(Serialize)]

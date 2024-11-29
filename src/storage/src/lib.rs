@@ -5,6 +5,7 @@ use sqlx::{any::AnyConnectOptions, AnyPool, ConnectOptions as _};
 use tokio::sync::OnceCell;
 
 use common::{config::StorageConfig, error::HaliaResult};
+use types::Status;
 
 static POOL: LazyLock<OnceCell<AnyPool>> = LazyLock::new(OnceCell::new);
 
@@ -140,4 +141,26 @@ impl Into<i32> for SourceSinkType {
             SourceSinkType::Sink => 2,
         }
     }
+}
+
+pub async fn get_summary(table_name: &str) -> Result<(usize, usize, usize)> {
+    let total: i64 = sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", table_name).as_str())
+        .fetch_one(POOL.get().unwrap())
+        .await?;
+
+    let running_cnt: i64 = sqlx::query_scalar(
+        format!("SELECT COUNT(*) FROM {} WHERE status = ?", table_name).as_str(),
+    )
+    .bind(Into::<i32>::into(Status::Running))
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+
+    let error_cnt: i64 = sqlx::query_scalar(
+        format!("SELECT COUNT(*) FROM {} WHERE status = ?", table_name).as_str(),
+    )
+    .bind(Into::<i32>::into(Status::Error))
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+
+    Ok((total as usize, running_cnt as usize, error_cnt as usize))
 }

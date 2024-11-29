@@ -185,6 +185,11 @@ pub async fn count() -> Result<usize> {
     Ok(count as usize)
 }
 
+pub async fn get_summary() -> Result<(usize, usize)> {
+    let (total, running_cnt, _) = crate::get_summary(TABLE_NAME).await?;
+    Ok((total as usize, running_cnt as usize))
+}
+
 pub async fn update_conf(id: &String, req: CreateUpdateDataboardReq) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET name = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)

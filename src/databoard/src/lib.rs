@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    LazyLock,
-};
+use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
@@ -12,9 +9,9 @@ use types::{
     databoard::{
         CreateUpdateDataReq, CreateUpdateDataboardReq, ListDataboardsItem, ListDataboardsResp,
         ListDatasItemResp, ListDatasResp, QueryDatasParams, QueryParams, QueryRuleInfo,
-        RuleInfoData, RuleInfoDataboard, RuleInfoResp, Summary,
+        RuleInfoData, RuleInfoDataboard, RuleInfoResp,
     },
-    Pagination,
+    Pagination, Summary,
 };
 
 pub mod data;
@@ -23,48 +20,17 @@ pub mod databoard_struct;
 static GLOBAL_DATABOARD_MANAGER: LazyLock<DashMap<String, Databoard>> =
     LazyLock::new(|| DashMap::new());
 
-static DATABOARD_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-static DATABOARD_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-
-fn get_databoard_count() -> usize {
-    DATABOARD_COUNT.load(Ordering::SeqCst)
-}
-
-fn add_databoard_count() {
-    DATABOARD_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-fn sub_databoard_count() {
-    DATABOARD_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-fn get_databoard_on_count() -> usize {
-    DATABOARD_ON_COUNT.load(Ordering::SeqCst)
-}
-
-fn add_databoard_on_count() {
-    DATABOARD_ON_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-fn sub_databoard_on_count() {
-    DATABOARD_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-pub fn get_summary() -> Summary {
-    Summary {
-        total: get_databoard_count(),
-        on: get_databoard_on_count(),
-    }
+pub async fn get_summary() -> HaliaResult<Summary> {
+    let (total, running_cnt) = storage::databoard::get_summary().await?;
+    Ok(Summary {
+        total,
+        running_cnt,
+        error_cnt: None,
+    })
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
-    let count = storage::databoard::count().await?;
-    DATABOARD_COUNT.store(count, Ordering::SeqCst);
-
     let db_on_databoards = storage::databoard::read_all_running().await?;
-    let on_count = db_on_databoards.len();
-    DATABOARD_ON_COUNT.store(on_count, Ordering::SeqCst);
-
     for db_on_databoard in db_on_databoards {
         let mut databoard = Databoard::new();
 
@@ -122,7 +88,6 @@ pub async fn list_databoards(
 
 pub async fn create_databoard(req: CreateUpdateDataboardReq) -> HaliaResult<()> {
     let id = common::get_id();
-    add_databoard_count();
     storage::databoard::insert(&id, req).await?;
     Ok(())
 }
@@ -140,7 +105,6 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
         return Ok(());
     }
 
-    // let db_databoard = storage::databoard::read_one(&databoard_id).await?;
     let databoard = Databoard::new();
     GLOBAL_DATABOARD_MANAGER.insert(databoard_id.clone(), databoard);
 
@@ -149,8 +113,6 @@ pub async fn start_databoard(databoard_id: String) -> HaliaResult<()> {
     for db_data in db_datas {
         databoard.create_data(db_data.id, db_data.conf).await?;
     }
-
-    add_databoard_on_count();
 
     storage::databoard::update_status(&databoard_id, types::Status::Running).await?;
 
@@ -171,7 +133,6 @@ pub async fn stop_databoard(databoard_id: String) -> HaliaResult<()> {
     match GLOBAL_DATABOARD_MANAGER.remove(&databoard_id) {
         Some((_, mut databoard)) => {
             databoard.stop().await;
-            sub_databoard_on_count();
             storage::databoard::update_status(&databoard_id, types::Status::Stopped).await?;
             Ok(())
         }
@@ -188,7 +149,6 @@ pub async fn delete_databoard(databoard_id: String) -> HaliaResult<()> {
         return Err(HaliaError::DeleteRefing);
     }
 
-    sub_databoard_count();
     storage::databoard::delete_by_id(&databoard_id).await?;
 
     Ok(())

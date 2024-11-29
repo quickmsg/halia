@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    LazyLock,
-};
+use std::sync::LazyLock;
 
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
@@ -9,9 +6,9 @@ use rule::Rule;
 use types::{
     rules::{
         AppSinkNode, AppSourceNode, Conf, CreateUpdateRuleReq, DataboardNode, DeviceSinkNode,
-        DeviceSourceNode, ListRulesItem, ListRulesResp, Node, QueryParams, ReadRuleResp, Summary,
+        DeviceSourceNode, ListRulesItem, ListRulesResp, Node, QueryParams, ReadRuleResp,
     },
-    Pagination,
+    Pagination, Summary,
 };
 
 mod graph;
@@ -20,38 +17,13 @@ mod segment;
 
 static GLOBAL_RULE_MANAGER: LazyLock<DashMap<String, Rule>> = LazyLock::new(|| DashMap::new());
 
-static RULE_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-static RULE_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-
-fn get_rule_count() -> usize {
-    RULE_COUNT.load(Ordering::SeqCst)
-}
-
-fn add_rule_count() {
-    RULE_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-fn sub_rule_count() {
-    RULE_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-pub(crate) fn get_rule_on_count() -> usize {
-    RULE_ON_COUNT.load(Ordering::SeqCst)
-}
-
-pub(crate) fn add_rule_on_count() {
-    RULE_ON_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-pub(crate) fn sub_rule_on_count() {
-    RULE_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-pub fn get_summary() -> Summary {
-    Summary {
-        total: get_rule_count(),
-        on: get_rule_on_count(),
-    }
+pub async fn get_summary() -> HaliaResult<Summary> {
+    let (total, running_cnt) = storage::rule::get_summary().await?;
+    Ok(Summary {
+        total,
+        running_cnt,
+        error_cnt: None,
+    })
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
@@ -69,7 +41,6 @@ pub async fn create(req: CreateUpdateRuleReq) -> HaliaResult<()> {
 
     storage::rule::insert(&id, req).await?;
     events::insert_create(types::events::ResourceType::Rule, &id).await;
-    add_rule_count();
     Ok(())
 }
 
@@ -102,7 +73,6 @@ pub async fn start(id: String) -> HaliaResult<()> {
         return Ok(());
     }
 
-    add_rule_on_count();
     events::insert_update(types::events::ResourceType::Rule, &id).await;
     let db_rule = storage::rule::read_one(&id).await?;
     let rule = Rule::new(id.clone(), &db_rule.conf).await?;
@@ -122,7 +92,6 @@ pub async fn stop(id: String) -> HaliaResult<()> {
             rule.stop().await?;
             storage::rule::update_status(&id, types::Status::Stopped).await?;
             events::insert_stop(types::events::ResourceType::Rule, &id).await;
-            sub_rule_on_count();
         }
         None => return Err(HaliaError::NotFound(id)),
     }
@@ -157,7 +126,6 @@ pub async fn delete(id: String) -> HaliaResult<()> {
     storage::rule::delete_by_id(&id).await?;
     storage::rule::reference::delete_many_by_rule_id(&id).await?;
 
-    sub_rule_count();
     Ok(())
 }
 

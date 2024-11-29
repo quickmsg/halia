@@ -42,7 +42,7 @@ use types::{
     Value,
 };
 
-use crate::{add_device_running_count, sub_device_running_count, Device};
+use crate::Device;
 
 mod sink;
 mod source;
@@ -159,7 +159,6 @@ impl Modbus {
             loop {
                 match Modbus::connect(&join_handle_data.device_conf).await {
                     Ok(mut ctx) => {
-                        add_device_running_count();
                         task_err = None;
                         *join_handle_data.err.lock().await = None;
 
@@ -223,7 +222,6 @@ impl Modbus {
                                 }
                             }
                             None => {
-                                sub_device_running_count();
                                 *join_handle_data.err.lock().await = Some(e.to_string());
                                 if let Err(storage_err) = storage::device::device::update_status(
                                     &join_handle_data.id,

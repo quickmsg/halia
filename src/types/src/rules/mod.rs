@@ -10,12 +10,6 @@ pub mod databoard;
 pub mod devices;
 pub mod functions;
 
-#[derive(Serialize)]
-pub struct Summary {
-    pub total: usize,
-    pub on: usize,
-}
-
 #[derive(Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,

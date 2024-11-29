@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc, LazyLock,
-};
+use std::sync::{Arc, LazyLock};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -13,9 +10,9 @@ use types::{
         AppType, CreateAppReq, CreateUpdateSourceSinkReq, ListAppsItem, ListAppsResp,
         ListSourcesSinksItem, ListSourcesSinksResp, QueryParams, QueryRuleInfo,
         QuerySourcesSinksParams, ReadAppResp, ReadSourceSinkResp, RuleInfoApp, RuleInfoResp,
-        RuleInfoSourceSink, Summary, UpdateAppReq,
+        RuleInfoSourceSink, UpdateAppReq,
     },
-    Pagination, Status,
+    Pagination, Status, Summary,
 };
 
 mod http;
@@ -29,46 +26,6 @@ mod tdengine;
 
 static GLOBAL_APP_MANAGER: LazyLock<DashMap<String, Box<dyn App>>> =
     LazyLock::new(|| DashMap::new());
-
-static APP_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-static APP_ON_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-static APP_RUNNING_COUNT: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
-
-fn get_app_count() -> usize {
-    APP_COUNT.load(Ordering::SeqCst)
-}
-
-fn add_app_count() {
-    APP_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-fn sub_app_count() {
-    APP_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-pub(crate) fn get_app_on_count() -> usize {
-    APP_ON_COUNT.load(Ordering::SeqCst)
-}
-
-pub(crate) fn add_app_on_count() {
-    APP_ON_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-pub(crate) fn sub_app_on_count() {
-    APP_ON_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
-
-pub(crate) fn get_app_running_count() -> usize {
-    APP_RUNNING_COUNT.load(Ordering::SeqCst)
-}
-
-pub(crate) fn add_app_running_count() {
-    APP_RUNNING_COUNT.fetch_add(1, Ordering::SeqCst);
-}
-
-pub(crate) fn sub_app_running_count() {
-    APP_RUNNING_COUNT.fetch_sub(1, Ordering::SeqCst);
-}
 
 #[async_trait]
 pub trait App: Send + Sync {
@@ -129,11 +86,7 @@ pub trait App: Send + Sync {
 }
 
 pub async fn load_from_storage() -> HaliaResult<()> {
-    let count = storage::app::count().await?;
-    APP_COUNT.store(count, Ordering::SeqCst);
-
-    let db_apps = storage::app::read_all_running().await?;
-
+    let db_apps = storage::app::read_all_on().await?;
     for db_app in db_apps {
         start_app(db_app.id).await.unwrap();
     }
@@ -141,12 +94,13 @@ pub async fn load_from_storage() -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn get_summary() -> Summary {
-    Summary {
-        total: get_app_count(),
-        on: get_app_on_count(),
-        running: get_app_running_count(),
-    }
+pub async fn get_summary() -> HaliaResult<Summary> {
+    let (total, running_cnt, error_cnt) = storage::app::get_summary().await?;
+    Ok(Summary {
+        total,
+        running_cnt,
+        error_cnt: Some(error_cnt),
+    })
 }
 
 pub async fn get_rule_info(query: QueryRuleInfo) -> HaliaResult<RuleInfoResp> {
@@ -203,8 +157,6 @@ pub async fn create_app(req: CreateAppReq) -> HaliaResult<()> {
     let app_id = common::get_id();
     storage::app::insert(&app_id, req).await?;
     events::insert_create(types::events::ResourceType::App, &app_id).await;
-
-    add_app_count();
     Ok(())
 }
 
@@ -283,7 +235,6 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
 
     // storage::app::update_status(&app_id, types::Status::Running).await?;
     // storage::app::source_sink::update_status_by_app_id(&app_id, types::Status::Running).await?;
-    add_app_on_count();
 
     Ok(())
 }
@@ -295,7 +246,6 @@ pub async fn stop_app(app_id: String) -> HaliaResult<()> {
 
     if let Some((_, mut app)) = GLOBAL_APP_MANAGER.remove(&app_id) {
         app.stop().await;
-        sub_app_on_count();
         events::insert_stop(types::events::ResourceType::App, &app_id).await;
         storage::app::update_status(&app_id, types::Status::Stopped).await?;
         storage::app::source_sink::update_status_by_app_id(&app_id, types::Status::Stopped).await?;
@@ -315,7 +265,6 @@ pub async fn delete_app(app_id: String) -> HaliaResult<()> {
 
     events::insert_delete(types::events::ResourceType::App, &app_id).await;
 
-    sub_app_count();
     storage::app::delete_by_id(&app_id).await?;
     Ok(())
 }

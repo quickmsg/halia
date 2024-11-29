@@ -93,13 +93,6 @@ impl TryFrom<i32> for ConfType {
     }
 }
 
-#[derive(Serialize)]
-pub struct Summary {
-    pub total: usize,
-    pub on: usize,
-    pub running: usize,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,

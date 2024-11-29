@@ -2,12 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{RuleRefCnt, Status};
 
-#[derive(Serialize)]
-pub struct Summary {
-    pub total: usize,
-    pub on: usize,
-}
-
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,

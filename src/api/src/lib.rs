@@ -114,9 +114,9 @@ pub async fn start(port: u16) {
 async fn get_dashboard() -> AppResult<Json<Dashboard>> {
     Ok(Json(Dashboard {
         machine_info: get_machine_info(),
-        device_summary: devices::get_summary(),
-        app_summary: apps::get_summary().await,
-        databoard_summary: databoard::get_summary(),
-        rule_summary: rule::get_summary(),
+        device_summary: devices::get_summary().await?,
+        app_summary: apps::get_summary().await?,
+        databoard_summary: databoard::get_summary().await?,
+        rule_summary: rule::get_summary().await?,
     }))
 }

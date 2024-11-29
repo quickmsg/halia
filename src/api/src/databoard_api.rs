@@ -6,9 +6,9 @@ use axum::{
 use types::{
     databoard::{
         CreateUpdateDataReq, CreateUpdateDataboardReq, ListDataboardsResp, ListDatasResp,
-        QueryDatasParams, QueryParams, Summary,
+        QueryDatasParams, QueryParams,
     },
-    Pagination,
+    Pagination, Summary,
 };
 
 use crate::AppResult;
@@ -33,7 +33,7 @@ pub fn routes() -> Router {
 }
 
 async fn get_databoards_summary() -> AppResult<Json<Summary>> {
-    Ok(Json(databoard::get_summary()))
+    Ok(Json(databoard::get_summary().await?))
 }
 
 async fn create_databoard(Json(req): Json<CreateUpdateDataboardReq>) -> AppResult<()> {

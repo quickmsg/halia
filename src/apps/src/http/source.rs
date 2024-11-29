@@ -17,7 +17,7 @@ use tracing::{debug, warn};
 use types::apps::http_client::{HttpClientConf, SourceConf};
 use utils::ErrorManager;
 
-use super::{insert_basic_auth, insert_headers, insert_query};
+use super::{build_http_client, insert_basic_auth, insert_headers, insert_query};
 
 #[derive(SourceRxs, SourceStop, SourceErr)]
 pub struct Source {
@@ -51,7 +51,7 @@ impl TaskLoop {
         let decoder = schema::new_decoder(&source_conf.decode_type, &source_conf.schema_id)
             .await
             .unwrap();
-        let http_client = Client::new();
+        let http_client = build_http_client(&http_client_conf);
         let error_manager =
             ErrorManager::new(utils::error_manager::ResourceType::AppSource, id, err);
 

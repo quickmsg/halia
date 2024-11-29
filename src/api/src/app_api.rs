@@ -6,9 +6,9 @@ use axum::{
 use types::{
     apps::{
         CreateAppReq, CreateUpdateSourceSinkReq, ListAppsResp, ListSourcesSinksResp, QueryParams,
-        QuerySourcesSinksParams, ReadAppResp, ReadSourceSinkResp, Summary, UpdateAppReq,
+        QuerySourcesSinksParams, ReadAppResp, ReadSourceSinkResp, UpdateAppReq,
     },
-    Pagination,
+    Pagination, Summary,
 };
 
 use crate::AppResult;
@@ -48,13 +48,11 @@ pub fn routes() -> Router {
 }
 
 async fn get_apps_summary() -> AppResult<Json<Summary>> {
-    let summary = apps::get_summary().await;
-    Ok(Json(summary))
+    Ok(Json(apps::get_summary().await?))
 }
 
 async fn create_app(Json(req): Json<CreateAppReq>) -> AppResult<()> {
-    apps::create_app(req).await?;
-    Ok(())
+    Ok(apps::create_app(req).await?)
 }
 
 async fn list_apps(

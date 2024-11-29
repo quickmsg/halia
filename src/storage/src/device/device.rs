@@ -8,7 +8,7 @@ use sqlx::{
 };
 use types::{
     devices::{
-        device::{self, CreateReq, QueryParams, UpdateReq},
+        device::{CreateReq, QueryParams, UpdateReq},
         ConfType, DeviceType,
     },
     Pagination, Status,
@@ -260,6 +260,10 @@ pub async fn count_all() -> Result<usize> {
         .await?;
 
     Ok(count as usize)
+}
+
+pub async fn get_summary() -> Result<(usize, usize, usize)> {
+    crate::get_summary(TABLE_NAME).await
 }
 
 pub async fn read_ids_by_template_id(template_id: &String) -> Result<Vec<String>> {

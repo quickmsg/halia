@@ -118,6 +118,11 @@ pub async fn read_all_on() -> Result<Vec<Rule>> {
     Ok(rules)
 }
 
+pub async fn get_summary() -> Result<(usize, usize)> {
+    let (total, running_cnt, _) = crate::get_summary(TABLE_NAME).await?;
+    Ok((total as usize, running_cnt as usize))
+}
+
 pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize, Vec<Rule>)> {
     let (limit, offset) = pagination.to_sql();
     debug!("limit: {}, offset: {}", limit, offset);

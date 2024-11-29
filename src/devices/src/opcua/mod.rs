@@ -29,7 +29,7 @@ use types::{
     Value,
 };
 
-use crate::{add_device_running_count, sub_device_running_count, Device};
+use crate::Device;
 
 mod sink;
 mod source;
@@ -159,7 +159,6 @@ impl Opcua {
                     Ok((session, join_handle)) => {
                         debug!("opcua connect success");
                         task_err = None;
-                        add_device_running_count();
                         events::insert_connect_succeed(
                             types::events::ResourceType::Device,
                             &join_handle_data.id,
@@ -174,9 +173,7 @@ impl Opcua {
                         }
                     }
                     Err(e) => {
-                        if task_err.is_none() {
-                            sub_device_running_count();
-                        }
+                        if task_err.is_none() {}
                         debug!("{}", e);
 
                         events::insert_connect_failed(

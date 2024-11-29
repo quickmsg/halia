@@ -21,7 +21,7 @@ use tracing::debug;
 use types::apps::kafka::{Conf, SinkConf};
 use utils::ErrorManager;
 
-use crate::{add_app_running_count, sub_app_running_count, App};
+use crate::App;
 
 mod sink;
 
@@ -115,7 +115,6 @@ impl TaskLoop {
         loop {
             match ClientBuilder::new(bootstrap_brokers.clone()).build().await {
                 Ok(client) => {
-                    add_app_running_count();
                     *self.kafka_client.write().await = Some(client);
                     events::insert_connect_succeed(types::events::ResourceType::App, &self.app_id)
                         .await;
@@ -131,9 +130,7 @@ impl TaskLoop {
 
                     let err = Arc::new(e.to_string());
                     let status_changed = self.error_manager.put_err(err).await;
-                    if status_changed {
-                        sub_app_running_count();
-                    }
+                    if status_changed {}
 
                     let sleep = time::sleep(Duration::from_secs(reconnect));
                     tokio::pin!(sleep);
