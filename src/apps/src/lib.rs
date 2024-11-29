@@ -15,7 +15,7 @@ use types::{
         QuerySourcesSinksParams, ReadAppResp, ReadSourceSinkResp, RuleInfoApp, RuleInfoResp,
         RuleInfoSourceSink, Summary, UpdateAppReq,
     },
-    Pagination, RuleRefCnt, Status,
+    Pagination, Status,
 };
 
 mod http;
@@ -224,17 +224,20 @@ pub async fn list_apps(pagination: Pagination, query: QueryParams) -> HaliaResul
 
 pub async fn read_app(app_id: String) -> HaliaResult<ReadAppResp> {
     let db_app = storage::app::read_one(&app_id).await?;
-    let rule_ref_cnt = storage::rule::reference::get_rule_ref_info_by_parent_id(&app_id).await?;
-    let (can_stop, can_delete, err) =
-        get_info_by_status(&app_id, &db_app.status, &rule_ref_cnt).await?;
+    let err = match db_app.status {
+        Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
+            Some(app) => app.read_app_err().await,
+            None => return Err(HaliaError::Common("App未启动！".to_string())),
+        },
+        _ => None,
+    };
+
     Ok(ReadAppResp {
         id: db_app.id,
         app_type: db_app.app_type,
         name: db_app.name,
         conf: db_app.conf,
         status: db_app.status,
-        can_stop,
-        can_delete,
         err,
     })
 }
@@ -278,8 +281,8 @@ pub async fn start_app(app_id: String) -> HaliaResult<()> {
         app.create_sink(db_sink.id, db_sink.conf).await?;
     }
 
-    storage::app::update_status(&app_id, types::Status::Running).await?;
-    storage::app::source_sink::update_status_by_app_id(&app_id, types::Status::Running).await?;
+    // storage::app::update_status(&app_id, types::Status::Running).await?;
+    // storage::app::source_sink::update_status_by_app_id(&app_id, types::Status::Running).await?;
     add_app_on_count();
 
     Ok(())
@@ -351,7 +354,6 @@ pub async fn list_sources(
     for db_source in db_sources {
         let rule_ref_cnt =
             storage::rule::reference::get_rule_ref_info_by_resource_id(&db_source.id).await?;
-        let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
         let err = match db_source.status {
             Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
                 Some(app) => app.read_source_err(&db_source.id).await?,
@@ -390,7 +392,6 @@ pub async fn list_sources(
             status: db_source.status,
             err,
             rule_ref_cnt,
-            can_delete,
             conf,
         });
     }
@@ -410,7 +411,6 @@ pub async fn read_source(app_id: String, source_id: String) -> HaliaResult<ReadS
 
     let rule_ref_cnt =
         storage::rule::reference::get_rule_ref_info_by_resource_id(&source_id).await?;
-    let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
 
     Ok(ReadSourceSinkResp {
         id: db_source.id,
@@ -419,7 +419,6 @@ pub async fn read_source(app_id: String, source_id: String) -> HaliaResult<ReadS
         status: db_source.status,
         err,
         rule_ref_cnt,
-        can_delete,
     })
 }
 
@@ -500,7 +499,6 @@ pub async fn read_sink(app_id: String, sink_id: String) -> HaliaResult<ReadSourc
     };
 
     let rule_ref_cnt = storage::rule::reference::get_rule_ref_info_by_resource_id(&sink_id).await?;
-    let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
 
     Ok(ReadSourceSinkResp {
         id: db_sink.id,
@@ -509,7 +507,6 @@ pub async fn read_sink(app_id: String, sink_id: String) -> HaliaResult<ReadSourc
         status: db_sink.status,
         err,
         rule_ref_cnt,
-        can_delete,
     })
 }
 
@@ -525,7 +522,6 @@ pub async fn list_sinks(
     for db_sink in db_sinks {
         let rule_ref_cnt =
             storage::rule::reference::get_rule_ref_info_by_resource_id(&db_sink.id).await?;
-        let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
         let err = match db_sink.status {
             Status::Error => match GLOBAL_APP_MANAGER.get(&app_id) {
                 Some(app) => app.read_sink_err(&db_sink.id).await?,
@@ -557,7 +553,6 @@ pub async fn list_sinks(
             status: db_sink.status,
             err,
             rule_ref_cnt,
-            can_delete,
             conf,
         });
     }
@@ -611,10 +606,16 @@ pub async fn get_sink_txs(
 
 async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<ListAppsItem> {
     let rule_ref_cnt = storage::rule::reference::get_rule_ref_info_by_parent_id(&db_app.id).await?;
-    let (can_stop, can_delete, err) =
-        get_info_by_status(&db_app.id, &db_app.status, &rule_ref_cnt).await?;
     let source_cnt = storage::app::source_sink::count_sources_by_app_id(&db_app.id).await?;
     let sink_cnt = storage::app::source_sink::count_sinks_by_app_id(&db_app.id).await?;
+
+    let err = match db_app.status {
+        Status::Error => match GLOBAL_APP_MANAGER.get(&db_app.id) {
+            Some(app) => app.read_app_err().await,
+            None => Some(Arc::new("App未启动！".to_string())),
+        },
+        _ => None,
+    };
 
     Ok(ListAppsItem {
         id: db_app.id,
@@ -625,33 +626,5 @@ async fn transer_db_app_to_resp(db_app: storage::app::App) -> HaliaResult<ListAp
         rule_ref_cnt,
         source_cnt,
         sink_cnt,
-        can_stop,
-        can_delete,
     })
-}
-
-async fn get_info_by_status(
-    app_id: &String,
-    status: &Status,
-    rule_ref_cnt: &RuleRefCnt,
-) -> HaliaResult<(bool, bool, Option<Arc<String>>)> {
-    match status {
-        types::Status::Running => {
-            let can_stop = rule_ref_cnt.rule_reference_running_cnt == 0;
-            Ok((can_stop, false, None))
-        }
-        types::Status::Stopped => {
-            let can_delete = rule_ref_cnt.rule_reference_running_cnt == 0;
-            Ok((true, can_delete, None))
-        }
-        types::Status::Error => {
-            let can_stop = rule_ref_cnt.rule_reference_running_cnt == 0;
-            let app = match GLOBAL_APP_MANAGER.get(app_id) {
-                Some(app) => app,
-                None => return Err(HaliaError::Common("App未启动！".to_string())),
-            };
-            let err = app.read_app_err().await;
-            Ok((can_stop, false, err))
-        }
-    }
 }

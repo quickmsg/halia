@@ -108,25 +108,12 @@ pub async fn list_databoards(
         let data_count = storage::databoard::data::count_by_databoard_id(&db_databoard.id).await?;
         let rule_ref_cnt =
             storage::rule::reference::get_rule_ref_info_by_parent_id(&db_databoard.id).await?;
-        let (can_stop, can_delete) = match &db_databoard.status {
-            types::Status::Running => {
-                let can_stop = rule_ref_cnt.rule_reference_running_cnt == 0;
-                (can_stop, false)
-            }
-            types::Status::Stopped => {
-                let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
-                (true, can_delete)
-            }
-            _ => unreachable!("数据看板不可能出现错误情况。"),
-        };
         list.push(ListDataboardsItem {
             id: db_databoard.id,
             name: db_databoard.name,
             status: db_databoard.status,
             data_count,
             rule_ref_cnt,
-            can_stop,
-            can_delete,
         });
     }
 
@@ -242,7 +229,6 @@ pub async fn list_datas(
         };
         let rule_ref_cnt =
             storage::rule::reference::get_rule_ref_info_by_parent_id(&db_data.id).await?;
-        let can_delete = rule_ref_cnt.rule_reference_total_cnt == 0;
         list.push(ListDatasItemResp {
             id: db_data.id,
             name: db_data.name,
@@ -250,7 +236,6 @@ pub async fn list_datas(
             value,
             ts,
             rule_ref_cnt,
-            can_delete,
         });
     }
 

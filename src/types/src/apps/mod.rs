@@ -167,8 +167,6 @@ pub struct ListAppsItem {
     pub rule_ref_cnt: RuleRefCnt,
     pub source_cnt: usize,
     pub sink_cnt: usize,
-    pub can_stop: bool,
-    pub can_delete: bool,
 }
 
 #[derive(Serialize)]
@@ -178,8 +176,6 @@ pub struct ReadAppResp {
     pub name: String,
     pub conf: serde_json::Value,
     pub status: Status,
-    pub can_stop: bool,
-    pub can_delete: bool,
     pub err: Option<Arc<String>>,
 }
 
@@ -210,7 +206,6 @@ pub struct ListSourcesSinksItem {
     pub err: Option<Arc<String>>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
-    pub can_delete: bool,
 
     #[serde(flatten)]
     pub conf: serde_json::Value,
@@ -226,5 +221,4 @@ pub struct ReadSourceSinkResp {
     pub err: Option<Arc<String>>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
-    pub can_delete: bool,
 }

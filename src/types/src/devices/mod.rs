@@ -127,8 +127,6 @@ pub struct ListDevicesItem {
     pub rule_ref_cnt: RuleRefCnt,
     pub source_cnt: usize,
     pub sink_cnt: usize,
-    pub can_stop: bool,
-    pub can_delete: bool,
 }
 
 #[derive(Serialize)]
@@ -139,8 +137,6 @@ pub struct ReadDeviceResp {
     pub conf: serde_json::Value,
     pub status: Status,
     pub err: Option<String>,
-    pub can_stop: bool,
-    pub can_delete: bool,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -172,7 +168,6 @@ pub struct ListSourcesSinksItem {
     pub err: Option<String>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
-    pub can_delete: bool,
     #[serde(flatten)]
     pub conf: serde_json::Value,
 }
@@ -186,7 +181,6 @@ pub struct ReadSourceSinkResp {
     pub err: Option<String>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
-    pub can_delete: bool,
 }
 
 #[derive(Deserialize)]

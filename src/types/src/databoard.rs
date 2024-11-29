@@ -33,8 +33,6 @@ pub struct ListDataboardsItem {
     pub data_count: usize,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
-    pub can_stop: bool,
-    pub can_delete: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
@@ -70,7 +68,6 @@ pub struct ListDatasItemResp {
     pub ts: Option<u64>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
-    pub can_delete: bool,
 }
 
 #[derive(Serialize)]

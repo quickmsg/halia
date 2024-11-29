@@ -142,7 +142,7 @@ impl TaskLoop {
                 let status_changed = self.error_manager.set_ok().await;
                 if status_changed {
                     // TODO
-                    self.app_err_tx.send(false).unwrap();
+                    // self.app_err_tx.send(false).unwrap();
                 }
 
                 match event {
@@ -181,7 +181,7 @@ impl TaskLoop {
                 let err = Arc::new(err.to_string());
                 let status_changed = self.error_manager.put_err(err).await;
                 if status_changed {
-                    self.app_err_tx.send(true).unwrap();
+                    // self.app_err_tx.send(true).unwrap();
                 }
             }
         }
