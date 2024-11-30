@@ -72,7 +72,6 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
 struct TaskLoop {
     app_id: String,
     app_conf: Conf,
-    err: BiLock<Option<Arc<String>>>,
     kafka_client: Arc<RwLock<Option<Client>>>,
     stop_signal_rx: watch::Receiver<()>,
     app_err_rx: UnboundedReceiver<Option<Arc<String>>>,
@@ -81,7 +80,14 @@ struct TaskLoop {
 }
 
 impl TaskLoop {
-    fn new() -> Self {
+    fn new(
+        app_id: String,
+        app_conf: Conf,
+        app_err: BiLock<Option<Arc<String>>>,
+        app_err_rx: UnboundedReceiver<Option<Arc<String>>>,
+    ) -> Self {
+        let error_manager =
+            ErrorManager::new(utils::error_manager::ResourceType::App, app_id, app_err);
         todo!()
     }
 

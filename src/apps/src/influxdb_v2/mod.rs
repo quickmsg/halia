@@ -29,7 +29,7 @@ pub struct Influxdb {
     conf: Arc<InfluxdbConf>,
     app_err_tx: UnboundedSender<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<JoinHandle<TaskLoop>>,
+    // join_handle: Option<JoinHandle<TaskLoop>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -39,14 +39,14 @@ pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     let (app_err_tx, app_err_rx) = unbounded_channel();
     let task_loop = TaskLoop::new(id.clone(), app_err1, app_err_rx, stop_signal_rx);
-    let join_handle = task_loop.start();
+    let _join_handle = task_loop.start();
     Box::new(Influxdb {
         err: app_err2,
         sinks: DashMap::new(),
         conf: Arc::new(conf),
         app_err_tx,
         stop_signal_tx,
-        join_handle: Some(join_handle),
+        // join_handle: Some(join_handle),
     })
 }
 
@@ -62,7 +62,6 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 struct TaskLoop {
-    id: String,
     error_manager: ErrorManager,
     app_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
     stop_signal_rx: watch::Receiver<()>,
@@ -75,10 +74,8 @@ impl TaskLoop {
         app_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
         stop_signal_rx: watch::Receiver<()>,
     ) -> Self {
-        let error_manager =
-            ErrorManager::new(utils::error_manager::ResourceType::App, id.clone(), app_err);
+        let error_manager = ErrorManager::new(utils::error_manager::ResourceType::App, id, app_err);
         Self {
-            id,
             error_manager,
             app_err_rx,
             stop_signal_rx,

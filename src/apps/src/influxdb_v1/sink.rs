@@ -6,6 +6,7 @@ use common::{
     sink_message_retain::{self, SinkMessageRetain},
 };
 use futures::lock::BiLock;
+use halia_derive::ResourceErr;
 use influxdb::{Client, InfluxDbWriteable as _, Timestamp, Type};
 use message::RuleMessageBatch;
 use tokio::{
@@ -22,6 +23,7 @@ use utils::ErrorManager;
 
 use super::new_influxdb_client;
 
+#[derive(ResourceErr)]
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<TaskLoop>>,
