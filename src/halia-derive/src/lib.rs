@@ -43,28 +43,8 @@ pub fn derive_source_stop(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     proc_macro::TokenStream::from(expanded)
 }
 
-#[proc_macro_derive(SourceErr)]
-pub fn derive_source_err(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let struct_name = input.ident;
-
-    let expanded = quote! {
-        impl #struct_name {
-            pub async fn read_err(&self) -> Option<Arc<String>> {
-                let err_guard = self.err.lock().await;
-                match &(*err_guard) {
-                    Some(err) => Some(err.clone()),
-                    None => None,
-                }
-            }
-        }
-    };
-
-    proc_macro::TokenStream::from(expanded)
-}
-
-#[proc_macro_derive(AppErr)]
-pub fn derive_app_err(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+#[proc_macro_derive(ResourceErr)]
+pub fn derive_resource_err(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let struct_name = input.ident;
 

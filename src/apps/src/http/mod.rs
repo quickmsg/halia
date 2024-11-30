@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use futures::lock::BiLock;
-use halia_derive::AppErr;
+use halia_derive::ResourceErr;
 use message::RuleMessageBatch;
 use reqwest::{Certificate, Client, ClientBuilder, Identity, RequestBuilder};
 use sink::Sink;
@@ -22,7 +22,7 @@ use crate::App;
 mod sink;
 mod source;
 
-#[derive(AppErr)]
+#[derive(ResourceErr)]
 pub struct HttpClient {
     conf: Arc<HttpClientConf>,
     err: BiLock<Option<Arc<String>>>,
@@ -30,7 +30,6 @@ pub struct HttpClient {
     sinks: DashMap<String, Sink>,
     app_err_tx: mpsc::UnboundedSender<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
-    // join_handle: Option<JoinHandle<TaskLoop>>,
 }
 
 pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
@@ -95,7 +94,7 @@ impl TaskLoop {
     async fn handle_err(&mut self, err: Option<Arc<String>>) {
         match err {
             Some(err) => {
-                self.error_manager.put_err(err.clone()).await;
+                self.error_manager.put_err(err).await;
             }
             None => {
                 self.error_manager.set_ok().await;

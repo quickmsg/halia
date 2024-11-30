@@ -4,36 +4,99 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use futures::lock::BiLock;
-use halia_derive::AppErr;
+use halia_derive::ResourceErr;
 use influxdb::Client;
 use message::RuleMessageBatch;
 use sink::Sink;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::{
+    select,
+    sync::{
+        mpsc::{self, UnboundedReceiver, UnboundedSender},
+        watch,
+    },
+    task::JoinHandle,
+};
 use types::apps::influxdb_v1::{InfluxdbConf, SinkConf};
+use utils::ErrorManager;
 
 use crate::App;
 
 mod sink;
 
-#[derive(AppErr)]
+#[derive(ResourceErr)]
 pub struct Influxdb {
-    _id: String,
     err: BiLock<Option<Arc<String>>>,
     sinks: DashMap<String, Sink>,
     influxdb_conf: Arc<InfluxdbConf>,
+    app_err_tx: UnboundedSender<Option<Arc<String>>>,
+    stop_signal_tx: watch::Sender<()>,
 }
 
-pub fn new(id: String, conf: serde_json::Value) -> Box<dyn App> {
-    let influxdb_conf: InfluxdbConf = serde_json::from_value(conf).unwrap();
-
+pub fn new(app_id: String, app_conf: serde_json::Value) -> Box<dyn App> {
+    let influxdb_conf: InfluxdbConf = serde_json::from_value(app_conf).unwrap();
     let (err1, err2) = BiLock::new(None);
+    let (app_err_tx, app_err_rx) = mpsc::unbounded_channel();
+    let (stop_signal_tx, stop_signal_rx) = watch::channel(());
+
+    let task_loop = TaskLoop::new(app_id, err1, app_err_rx, stop_signal_rx);
+    task_loop.start();
 
     Box::new(Influxdb {
-        _id: id,
-        err: err1,
+        err: err2,
         sinks: DashMap::new(),
         influxdb_conf: Arc::new(influxdb_conf),
+        app_err_tx,
+        stop_signal_tx,
     })
+}
+
+struct TaskLoop {
+    app_err_rx: mpsc::UnboundedReceiver<Option<Arc<String>>>,
+    stop_signal_rx: watch::Receiver<()>,
+    error_manager: ErrorManager,
+}
+
+impl TaskLoop {
+    fn new(
+        app_id: String,
+        app_err: BiLock<Option<Arc<String>>>,
+        app_err_rx: UnboundedReceiver<Option<Arc<String>>>,
+        stop_signal_rx: watch::Receiver<()>,
+    ) -> Self {
+        let error_manager =
+            ErrorManager::new(utils::error_manager::ResourceType::App, app_id, app_err);
+        Self {
+            app_err_rx,
+            stop_signal_rx,
+            error_manager,
+        }
+    }
+
+    fn start(mut self) -> JoinHandle<TaskLoop> {
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = self.stop_signal_rx.changed() => {
+                        return self;
+                    }
+                    Some(err) = self.app_err_rx.recv() => {
+                        self.handle_err(err).await;
+                    }
+                }
+            }
+        })
+    }
+
+    async fn handle_err(&mut self, err: Option<Arc<String>>) {
+        match err {
+            Some(err) => {
+                self.error_manager.put_err(err).await;
+            }
+            None => {
+                self.error_manager.set_ok().await;
+            }
+        }
+    }
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
@@ -85,6 +148,7 @@ impl App for Influxdb {
     }
 
     async fn stop(&mut self) {
+        self.stop_signal_tx.send(()).unwrap();
         for mut sink in self.sinks.iter_mut() {
             sink.stop().await;
         }
@@ -92,7 +156,12 @@ impl App for Influxdb {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(conf, self.influxdb_conf.clone());
+        let sink = Sink::new(
+            sink_id.clone(),
+            conf,
+            self.influxdb_conf.clone(),
+            self.app_err_tx.clone(),
+        );
         self.sinks.insert(sink_id, sink);
         Ok(())
     }

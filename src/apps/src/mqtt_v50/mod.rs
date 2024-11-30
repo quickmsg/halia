@@ -5,7 +5,7 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use futures::lock::BiLock;
-use halia_derive::AppErr;
+use halia_derive::ResourceErr;
 use message::{MessageBatch, RuleMessageBatch};
 use rumqttc::v5::{
     self,
@@ -19,7 +19,7 @@ use tokio::{
     sync::{
         broadcast,
         mpsc::{self, UnboundedSender},
-        watch, RwLock,
+        watch,
     },
     task::JoinHandle,
 };
@@ -32,7 +32,7 @@ use crate::{mqtt_client_ssl::get_ssl_config, App};
 mod sink;
 mod source;
 
-#[derive(AppErr)]
+#[derive(ResourceErr)]
 pub struct MqttClient {
     _id: String,
 

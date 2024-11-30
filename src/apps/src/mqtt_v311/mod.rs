@@ -5,7 +5,7 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use futures::lock::BiLock;
-use halia_derive::AppErr;
+use halia_derive::ResourceErr;
 use message::RuleMessageBatch;
 use rumqttc::{mqttbytes, AsyncClient, Event, Incoming, LastWill, MqttOptions, QoS};
 use sink::Sink;
@@ -28,7 +28,7 @@ use crate::{mqtt_client_ssl::get_ssl_config, App};
 mod sink;
 mod source;
 
-#[derive(AppErr)]
+#[derive(ResourceErr)]
 pub struct MqttClient {
     err: BiLock<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,

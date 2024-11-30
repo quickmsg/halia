@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use futures::lock::BiLock;
-use halia_derive::AppErr;
+use halia_derive::ResourceErr;
 use message::RuleMessageBatch;
 use sink::Sink;
 use taos::{AsyncQueryable, AsyncTBuilder, Taos, TaosBuilder};
@@ -16,7 +16,7 @@ use crate::App;
 
 mod sink;
 
-#[derive(AppErr)]
+#[derive(ResourceErr)]
 pub struct TDengine {
     _id: String,
     conf: Arc<TDengineConf>,

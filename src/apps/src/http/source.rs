@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use common::error::HaliaResult;
 use futures::lock::BiLock;
 use futures_util::StreamExt;
-use halia_derive::{SourceErr, SourceRxs, SourceStop};
+use halia_derive::{ResourceErr, SourceRxs, SourceStop};
 use message::RuleMessageBatch;
 use reqwest::{header::HeaderName, Client, Request};
 use tokio::{
@@ -19,7 +19,7 @@ use utils::ErrorManager;
 
 use super::{build_http_client, insert_basic_auth, insert_headers, insert_query};
 
-#[derive(SourceRxs, SourceStop, SourceErr)]
+#[derive(ResourceErr, SourceRxs, SourceStop)]
 pub struct Source {
     stop_signal_tx: watch::Sender<()>,
     err: BiLock<Option<Arc<String>>>,
