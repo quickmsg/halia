@@ -25,13 +25,24 @@ pub struct QueryParams {
 }
 
 #[derive(Serialize)]
-pub struct SearchResp {
-    pub total: usize,
-    pub data: Vec<SearchItemResp>,
+pub struct ListResp {
+    pub count: usize,
+    pub list: Vec<ListItem>,
 }
 
 #[derive(Serialize)]
-pub struct SearchItemResp {
+pub struct ListItem {
     pub id: String,
-    pub req: CreateReq,
+    pub name: String,
+    pub device_type: DeviceType,
+    pub reference_cnt: usize,
+}
+
+#[derive(Serialize)]
+pub struct ReadResp {
+    pub id: String,
+    pub name: String,
+    pub device_type: DeviceType,
+    pub reference_cnt: usize,
+    pub conf: serde_json::Value,
 }

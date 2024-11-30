@@ -1,7 +1,7 @@
 use common::error::{HaliaError, HaliaResult};
 use types::{
     devices::{
-        source_sink_template::{CreateReq, QueryParams, SearchItemResp, SearchResp, UpdateReq},
+        source_sink_template::{CreateReq, ListItem, ListResp, QueryParams, ReadResp, UpdateReq},
         DeviceType,
     },
     Pagination,
@@ -22,28 +22,37 @@ pub async fn create_source_template(req: CreateReq) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn search_source_templates(
+pub async fn list_source_templates(
     pagination: Pagination,
     query: QueryParams,
-) -> HaliaResult<SearchResp> {
+) -> HaliaResult<ListResp> {
     let (count, db_sources) =
         storage::device::source_sink_template::search_source_templates(pagination, query).await?;
-
-    let mut source_templates = vec![];
+    let mut list = vec![];
     for db_source_template in db_sources {
-        source_templates.push(SearchItemResp {
+        // TODO 再次统计模板中的引用数量
+        let reference_cnt =
+            storage::device::source_sink::count_by_template_id(&db_source_template.id).await?;
+        list.push(ListItem {
             id: db_source_template.id,
-            req: CreateReq {
-                name: db_source_template.name,
-                device_type: db_source_template.device_type,
-                conf: db_source_template.conf,
-            },
+            name: db_source_template.name,
+            device_type: db_source_template.device_type,
+            reference_cnt,
         });
     }
 
-    Ok(SearchResp {
-        total: count,
-        data: source_templates,
+    Ok(ListResp { count, list })
+}
+
+pub async fn read_source_template(id: String) -> HaliaResult<ReadResp> {
+    let db_source_template = storage::device::source_sink_template::read_one(&id).await?;
+    let reference_cnt = storage::device::source_sink::count_by_template_id(&id).await?;
+    Ok(ReadResp {
+        id: db_source_template.id,
+        name: db_source_template.name,
+        device_type: db_source_template.device_type,
+        reference_cnt,
+        conf: db_source_template.conf,
     })
 }
 
@@ -84,28 +93,36 @@ pub async fn create_sink_template(req: CreateReq) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn search_sink_templates(
+pub async fn list_sink_templates(
     pagination: Pagination,
     query: QueryParams,
-) -> HaliaResult<SearchResp> {
+) -> HaliaResult<ListResp> {
     let (count, db_sinks) =
         storage::device::source_sink_template::search_sink_templates(pagination, query).await?;
-
-    let mut sink_templates = vec![];
+    let mut list = vec![];
     for db_sink_template in db_sinks {
-        sink_templates.push(SearchItemResp {
+        let reference_cnt =
+            storage::device::source_sink::count_by_template_id(&db_sink_template.id).await?;
+        list.push(ListItem {
             id: db_sink_template.id,
-            req: CreateReq {
-                name: db_sink_template.name,
-                device_type: db_sink_template.device_type,
-                conf: db_sink_template.conf,
-            },
+            name: db_sink_template.name,
+            device_type: db_sink_template.device_type,
+            reference_cnt,
         });
     }
 
-    Ok(SearchResp {
-        total: count,
-        data: sink_templates,
+    Ok(ListResp { count, list })
+}
+
+pub async fn read_sink_template(id: String) -> HaliaResult<ReadResp> {
+    let db_source_template = storage::device::source_sink_template::read_one(&id).await?;
+    let reference_cnt = storage::device::source_sink::count_by_template_id(&id).await?;
+    Ok(ReadResp {
+        id: db_source_template.id,
+        name: db_source_template.name,
+        device_type: db_source_template.device_type,
+        reference_cnt,
+        conf: db_source_template.conf,
     })
 }
 

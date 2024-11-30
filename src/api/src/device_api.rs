@@ -50,7 +50,9 @@ pub fn routes() -> Router {
             "/source_template",
             Router::new()
                 .route("/", post(create_source_template))
-                .route("/", get(search_source_templates))
+                // TODO
+                .route("/list", get(list_source_templates))
+                .route("/:id", get(read_source_template))
                 .route("/:id", put(update_source_template))
                 .route("/:id", delete(delete_source_template)),
         )
@@ -58,7 +60,8 @@ pub fn routes() -> Router {
             "/sink_template",
             Router::new()
                 .route("/", post(create_sink_template))
-                .route("/", get(search_sink_templates))
+                .route("/list", get(list_sink_templates))
+                .route("/:id", get(read_sink_template))
                 .route("/:id", put(update_sink_template))
                 .route("/:id", delete(delete_sink_template)),
         )
@@ -77,7 +80,8 @@ pub fn routes() -> Router {
                             "/source",
                             Router::new()
                                 .route("/", post(create_device_template_source))
-                                .route("/", get(search_device_template_sources))
+                                .route("/list", get(list_device_template_sources))
+                                .route("/:source_id", get(read_device_template_source))
                                 .route("/:source_id", put(update_device_template_source))
                                 .route("/:source_id", delete(delete_device_template_source)),
                         )
@@ -85,7 +89,8 @@ pub fn routes() -> Router {
                             "/sink",
                             Router::new()
                                 .route("/", post(create_device_template_sink))
-                                .route("/", get(search_device_template_sinks))
+                                .route("/list", get(list_device_template_sinks))
+                                .route("/:sink_id", get(read_device_template_sink))
                                 .route("/:sink_id", put(update_device_template_sink))
                                 .route("/:sink_id", delete(delete_device_template_sink)),
                         ),
@@ -229,12 +234,20 @@ async fn create_source_template(
     Ok(())
 }
 
-async fn search_source_templates(
+async fn list_source_templates(
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::source_sink_template::QueryParams>,
-) -> AppResult<Json<types::devices::source_sink_template::SearchResp>> {
-    let resp = devices::source_sink_template::search_source_templates(pagination, query).await?;
+) -> AppResult<Json<types::devices::source_sink_template::ListResp>> {
+    let resp = devices::source_sink_template::list_source_templates(pagination, query).await?;
     Ok(Json(resp))
+}
+
+async fn read_source_template(
+    Path(id): Path<String>,
+) -> AppResult<Json<types::devices::source_sink_template::ReadResp>> {
+    Ok(Json(
+        devices::source_sink_template::read_source_template(id).await?,
+    ))
 }
 
 async fn update_source_template(
@@ -257,12 +270,21 @@ async fn create_sink_template(
     Ok(())
 }
 
-async fn search_sink_templates(
+async fn list_sink_templates(
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::source_sink_template::QueryParams>,
-) -> AppResult<Json<types::devices::source_sink_template::SearchResp>> {
-    let resp = devices::source_sink_template::search_sink_templates(pagination, query).await?;
-    Ok(Json(resp))
+) -> AppResult<Json<types::devices::source_sink_template::ListResp>> {
+    Ok(Json(
+        devices::source_sink_template::list_sink_templates(pagination, query).await?,
+    ))
+}
+
+async fn read_sink_template(
+    Path(id): Path<String>,
+) -> AppResult<Json<types::devices::source_sink_template::ReadResp>> {
+    Ok(Json(
+        devices::source_sink_template::read_sink_template(id).await?,
+    ))
 }
 
 async fn update_sink_template(
@@ -321,14 +343,22 @@ async fn create_device_template_source(
     Ok(())
 }
 
-async fn search_device_template_sources(
+async fn list_device_template_sources(
     Path(device_template_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::device_template::source_sink::QueryParams>,
-) -> AppResult<Json<types::devices::device_template::source_sink::SearchResp>> {
-    let resp =
-        devices::device_template::search_sources(device_template_id, pagination, query).await?;
-    Ok(Json(resp))
+) -> AppResult<Json<types::devices::device_template::source_sink::ListResp>> {
+    Ok(Json(
+        devices::device_template::list_sources(device_template_id, pagination, query).await?,
+    ))
+}
+
+async fn read_device_template_source(
+    Path((device_template_id, source_id)): Path<(String, String)>,
+) -> AppResult<Json<types::devices::device_template::source_sink::ReadResp>> {
+    Ok(Json(
+        devices::device_template::read_source(device_template_id, source_id).await?,
+    ))
 }
 
 async fn update_device_template_source(
@@ -354,22 +384,29 @@ async fn create_device_template_sink(
     Ok(())
 }
 
-async fn search_device_template_sinks(
+async fn list_device_template_sinks(
     Path(device_template_id): Path<String>,
     Query(pagination): Query<Pagination>,
     Query(query): Query<types::devices::device_template::source_sink::QueryParams>,
-) -> AppResult<Json<types::devices::device_template::source_sink::SearchResp>> {
-    let resp =
-        devices::device_template::search_sinks(device_template_id, pagination, query).await?;
-    Ok(Json(resp))
+) -> AppResult<Json<types::devices::device_template::source_sink::ListResp>> {
+    Ok(Json(
+        devices::device_template::list_sinks(device_template_id, pagination, query).await?,
+    ))
+}
+
+async fn read_device_template_sink(
+    Path((device_template_id, sink_id)): Path<(String, String)>,
+) -> AppResult<Json<types::devices::device_template::source_sink::ReadResp>> {
+    Ok(Json(
+        devices::device_template::read_sink(device_template_id, sink_id).await?,
+    ))
 }
 
 async fn update_device_template_sink(
     Path((device_template_id, sink_id)): Path<(String, String)>,
     Json(req): Json<types::devices::device_template::source_sink::CreateUpdateReq>,
 ) -> AppResult<()> {
-    devices::device_template::update_sink(device_template_id, sink_id, req).await?;
-    Ok(())
+    Ok(devices::device_template::update_sink(device_template_id, sink_id, req).await?)
 }
 
 async fn delete_device_template_sink(

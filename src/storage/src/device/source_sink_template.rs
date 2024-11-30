@@ -34,7 +34,6 @@ impl DbSourceSinkTemplate {
     pub fn transfer(self) -> Result<SourceSinkTemplate> {
         Ok(SourceSinkTemplate {
             id: self.id,
-            source_sink_type: self.source_sink_type.try_into()?,
             device_type: self.device_type.try_into()?,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
@@ -45,7 +44,6 @@ impl DbSourceSinkTemplate {
 
 pub struct SourceSinkTemplate {
     pub id: String,
-    pub source_sink_type: SourceSinkType,
     pub device_type: DeviceType,
     pub name: String,
     pub conf: serde_json::Value,
@@ -219,6 +217,17 @@ pub async fn read_name(id: &String) -> Result<String> {
         .await?;
 
     Ok(name)
+}
+
+pub async fn read_one(id: &String) -> Result<SourceSinkTemplate> {
+    let db = sqlx::query_as::<_, DbSourceSinkTemplate>(
+        format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+
+    db.transfer()
 }
 
 pub async fn update(id: &String, req: UpdateReq) -> HaliaResult<()> {

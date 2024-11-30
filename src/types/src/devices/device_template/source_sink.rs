@@ -16,13 +16,22 @@ pub struct QueryParams {
 }
 
 #[derive(Serialize)]
-pub struct SearchResp {
-    pub total: usize,
-    pub data: Vec<SearchItemResp>,
+pub struct ListResp {
+    pub count: usize,
+    pub list: Vec<ListItem>,
 }
 
 #[derive(Serialize)]
-pub struct SearchItemResp {
+pub struct ListItem {
     pub id: String,
-    pub req: CreateUpdateReq,
+    pub name: String,
+}
+
+#[derive(Serialize)]
+pub struct ReadResp {
+    pub id: String,
+    pub name: String,
+    pub conf_type: ConfType,
+    pub template_id: Option<String>,
+    pub conf: serde_json::Value,
 }
