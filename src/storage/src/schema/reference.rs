@@ -11,7 +11,7 @@ use super::POOL;
 const TABLE_NAME: &str = "schema_refs";
 
 #[derive(FromRow)]
-pub struct DbSchema {
+pub struct DbSchemaReference {
     pub schema_id: String,
     pub parent_type: i32,
     pub parent_id: String,
@@ -19,9 +19,9 @@ pub struct DbSchema {
     pub resource_id: String,
 }
 
-impl DbSchema {
-    pub fn transfer(self) -> Result<Schema> {
-        Ok(Schema {
+impl DbSchemaReference {
+    pub fn transfer(self) -> Result<SchemaReference> {
+        Ok(SchemaReference {
             schema_id: self.schema_id,
             parent_type: self.parent_type.try_into()?,
             parent_id: self.parent_id,
@@ -31,7 +31,7 @@ impl DbSchema {
     }
 }
 
-pub struct Schema {
+pub struct SchemaReference {
     pub schema_id: String,
     pub parent_type: ParentType,
     pub parent_id: String,
@@ -151,7 +151,10 @@ pub async fn count_by_schema_id(schema_id: &String) -> HaliaResult<usize> {
     Ok(count as usize)
 }
 
-pub async fn query(schema_id: &String, pagination: Pagination) -> HaliaResult<(usize, Vec<Schema>)> {
+pub async fn query(
+    schema_id: &String,
+    pagination: Pagination,
+) -> HaliaResult<(usize, Vec<SchemaReference>)> {
     let (limit, offset) = pagination.to_sql();
     let count: i64 = sqlx::query_scalar(
         format!(
@@ -166,7 +169,7 @@ pub async fn query(schema_id: &String, pagination: Pagination) -> HaliaResult<(u
     .fetch_one(POOL.get().unwrap())
     .await?;
 
-    let db_schemas = sqlx::query_as::<_, DbSchema>(
+    let db_schemas = sqlx::query_as::<_, DbSchemaReference>(
         format!(
             "SELECT * FROM {} WHERE schema_id = ? LIMIT ? OFFSET ?",
             TABLE_NAME

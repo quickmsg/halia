@@ -6,19 +6,19 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use types::apps::mqtt_client_v311::SourceConf;
 
 pub struct Source {
-    pub conf: SourceConf,
+    pub source_conf: SourceConf,
     pub mb_txs: Vec<UnboundedSender<RuleMessageBatch>>,
     pub decoder: Box<dyn Decoder>,
 }
 
 impl Source {
-    pub async fn new(conf: SourceConf) -> Self {
-        let decoder = schema::new_decoder(&conf.decode_type, &conf.schema_id)
+    pub async fn new(source_conf: SourceConf) -> Self {
+        let decoder = schema::new_decoder(&source_conf.decode_type, &source_conf.schema_id)
             .await
             .unwrap();
 
         Source {
-            conf,
+            source_conf,
             mb_txs: vec![],
             decoder,
         }

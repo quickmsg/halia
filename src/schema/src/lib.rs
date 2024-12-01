@@ -50,7 +50,6 @@ pub async fn list(
             schema_type: db_schema.schema_type,
             protocol_type: db_schema.protocol_type,
             reference_cnt,
-            can_delete: reference_cnt == 0,
         });
     }
 
@@ -89,15 +88,25 @@ pub async fn list_references(
     let (count, references) = storage::schema::reference::query(&id, pagination).await?;
     let mut list = vec![];
     for reference in references {
+        let (parent_name, resource_name) = match &reference.parent_type {
+            types::schema::ParentType::App => {
+                let app = storage::app::read_one(&reference.parent_id).await?;
+                let source = storage::app::source_sink::read_one(&reference.resource_id).await?;
+                (app.name, source.name)
+            }
+            types::schema::ParentType::Device => {
+                let device = storage::device::device::read_one(&reference.parent_id).await?;
+                let source = storage::device::source_sink::read_one(&reference.resource_id).await?;
+                (device.name, source.name)
+            }
+        };
         list.push(ListReferencesItem {
             parent_type: reference.parent_type,
             parent_id: reference.parent_id,
-            // parent_name: reference.parent_name,
-            parent_name: "".to_owned(),
+            parent_name,
             resource_type: reference.resource_type,
             resource_id: reference.resource_id,
-            // resource_name: reference.resource_name,
-            resource_name: "".to_owned(),
+            resource_name,
         });
     }
     Ok(ListReferencesResp { count, list })

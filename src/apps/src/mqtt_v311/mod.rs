@@ -148,7 +148,7 @@ impl TaskLoop {
                 match event {
                     Event::Incoming(Incoming::Publish(p)) => {
                         for mut source in self.sources.iter_mut() {
-                            if matches(&p.topic, &source.conf.topic) {
+                            if matches(&p.topic, &source.source_conf.topic) {
                                 let mb = match source.decoder.decode(p.payload.clone()) {
                                     Ok(mb) => mb,
                                     Err(e) => {
@@ -355,7 +355,10 @@ impl App for MqttClient {
         let source = Source::new(conf).await;
         if let Err(e) = self
             .mqtt_client
-            .subscribe(&source.conf.topic, transfer_qos(&source.conf.qos))
+            .subscribe(
+                &source.source_conf.topic,
+                transfer_qos(&source.source_conf.qos),
+            )
             .await
         {
             error!("client subscribe err:{e}");
@@ -401,7 +404,7 @@ impl App for MqttClient {
             source.decoder = decoder;
         }
 
-        source.conf = new_conf;
+        source.source_conf = new_conf;
 
         Ok(())
     }
@@ -412,7 +415,7 @@ impl App for MqttClient {
             .remove(&source_id)
             .ok_or(HaliaError::NotFound(source_id))?;
 
-        if let Err(e) = self.mqtt_client.unsubscribe(source.conf.topic).await {
+        if let Err(e) = self.mqtt_client.unsubscribe(source.source_conf.topic).await {
             error!("unsubscribe err:{e}");
         }
 

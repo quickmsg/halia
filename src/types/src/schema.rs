@@ -137,7 +137,6 @@ pub struct ListSchemasItem {
     pub schema_type: SchemaType,
     pub protocol_type: ProtocolType,
     pub reference_cnt: usize,
-    pub can_delete: bool,
 }
 
 #[derive(Serialize)]
