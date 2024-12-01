@@ -148,25 +148,23 @@ pub async fn new_decoder(
     match decode_type {
         DecodeType::Raw => decoders::raw::new(),
         DecodeType::Json => decoders::json::new(),
-        DecodeType::Csv => decoders::csv::new(),
-        DecodeType::CsvWithSchema => match schema_id {
+        DecodeType::Csv => match schema_id {
             Some(schema_id) => {
                 let conf = storage::schema::read_conf(schema_id).await?;
                 let conf: CsvDecodeConf = serde_json::from_slice(&conf)?;
                 decoders::csv::new_with_conf(conf)
             }
-            None => return Err(HaliaError::Common("必须提供schema_id".to_owned())),
+            None => decoders::csv::new(),
         },
-        DecodeType::Avro => decoders::avro::new(),
-        DecodeType::AvroWithSchema => match schema_id {
+        DecodeType::Avro => match schema_id {
             Some(schema_id) => {
                 let conf = storage::schema::read_conf(schema_id).await?;
                 let conf: AvroDecodeConf = serde_json::from_slice(&conf)?;
                 decoders::avro::new_with_conf(conf)
             }
-            None => return Err(HaliaError::Common("必须提供schema_id".to_owned())),
+            None => decoders::avro::new(),
         },
-        DecodeType::Yaml => todo!(),
+        DecodeType::Yaml => todo!(), // decoders::yaml::new(),
         DecodeType::Toml => todo!(),
         DecodeType::Protobuf => todo!(),
     }

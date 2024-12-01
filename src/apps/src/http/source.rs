@@ -28,11 +28,11 @@ pub struct Source {
 }
 
 pub struct TaskLoop {
-    pub stop_signal_rx: watch::Receiver<()>,
-    pub http_client_conf: Arc<HttpClientConf>,
-    pub source_conf: SourceConf,
-    pub http_client: Client,
-    pub mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
+    stop_signal_rx: watch::Receiver<()>,
+    http_client_conf: Arc<HttpClientConf>,
+    source_conf: SourceConf,
+    http_client: Client,
+    mb_txs: BiLock<Vec<UnboundedSender<RuleMessageBatch>>>,
     app_err_tx: UnboundedSender<Option<Arc<String>>>,
     decoder: Box<dyn schema::Decoder>,
     error_manager: ErrorManager,

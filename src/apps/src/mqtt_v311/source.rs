@@ -34,9 +34,7 @@ impl Source {
         }
 
         match conf.decode_type {
-            types::schema::DecodeType::CsvWithSchema
-            | types::schema::DecodeType::AvroWithSchema
-            | types::schema::DecodeType::Protobuf => match &conf.schema_id {
+            types::schema::DecodeType::Protobuf => match &conf.schema_id {
                 Some(schema_id) => {
                     schema::reference_app_source(schema_id, app_id, source_id).await?
                 }
