@@ -31,8 +31,7 @@ async fn list_schemas(
     Query(pagination): Query<Pagination>,
     Query(query_params): Query<QueryParams>,
 ) -> AppResult<Json<ListSchemasResp>> {
-    let resp = schema::list(pagination, query_params).await?;
-    Ok(Json(resp))
+    Ok(Json(schema::list(pagination, query_params).await?))
 }
 
 async fn read_schema(Path(id): Path<String>) -> AppResult<Json<ReadSchemaResp>> {

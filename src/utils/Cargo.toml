@@ -6,6 +6,6 @@ edition.workspace = true
 [dependencies]
 storage = { workspace = true }
 types = { workspace = true }
-
+events = { workspace = true }
 
 futures = { workspace = true }

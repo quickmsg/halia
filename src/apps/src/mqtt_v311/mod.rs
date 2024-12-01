@@ -43,7 +43,6 @@ pub struct MqttClient {
 }
 
 struct TaskLoop {
-    app_id: String,
     app_conf: Conf,
     stop_signal_rx: watch::Receiver<()>,
     sources: Arc<DashMap<String, Source>>,
@@ -66,7 +65,6 @@ impl TaskLoop {
             app_err,
         );
         Self {
-            app_id,
             app_conf,
             stop_signal_rx,
             sources,
@@ -142,8 +140,8 @@ impl TaskLoop {
             Ok(event) => {
                 let status_changed = self.error_manager.set_ok().await;
                 if status_changed {
-                    // TODO
-                    // self.app_err_tx.send(false).unwrap();
+                    self.mqtt_status
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                 }
 
                 match event {
@@ -182,7 +180,8 @@ impl TaskLoop {
                 let err = Arc::new(err.to_string());
                 let status_changed = self.error_manager.put_err(err).await;
                 if status_changed {
-                    // self.app_err_tx.send(true).unwrap();
+                    self.mqtt_status
+                        .store(false, std::sync::atomic::Ordering::Relaxed);
                 }
             }
         }
@@ -424,12 +423,13 @@ impl App for MqttClient {
     }
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
-        let conf: SinkConf = serde_json::from_value(conf)?;
-        // for sink in self.sinks.iter() {
-        // sink.check_duplicate(&req.base, &ext_conf)?;
-        // }
-
-        let sink = Sink::new(sink_id.clone(), conf, self.mqtt_client.clone()).await;
+        let sink_conf: SinkConf = serde_json::from_value(conf)?;
+        let sink = Sink::new(
+            sink_conf,
+            self.mqtt_client.clone(),
+            self.mqtt_status.clone(),
+        )
+        .await;
         self.sinks.insert(sink_id, sink);
         Ok(())
     }

@@ -1,4 +1,7 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use common::{
     error::{HaliaError, HaliaResult},
@@ -37,17 +40,17 @@ pub struct TaskLoop {
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
-    pub mqtt_client: Arc<AsyncClient>,
-    // error_manager: ErrorManager,
+    mqtt_client: Arc<AsyncClient>,
+    mqtt_status: Arc<AtomicBool>,
 }
 
 impl TaskLoop {
     pub async fn new(
-        sink_id: String,
         sink_conf: SinkConf,
         stop_signal_rx: watch::Receiver<()>,
         mb_rx: UnboundedReceiver<RuleMessageBatch>,
         mqtt_client: Arc<AsyncClient>,
+        mqtt_status: Arc<AtomicBool>,
     ) -> Self {
         let qos = transfer_qos(&sink_conf.qos);
         let encoder = schema::new_encoder(&sink_conf.encode_type, &sink_conf.schema_id)
@@ -55,8 +58,6 @@ impl TaskLoop {
             .unwrap();
         let message_retainer = sink_message_retain::new(&sink_conf.message_retain);
         let topic = Topic::new(&sink_conf.topic);
-        // let error_manager =
-        //     ErrorManager::new(error_manager::ResourceType::AppSink, sink_id, sink_err);
         Self {
             topic,
             sink_conf,
@@ -66,6 +67,7 @@ impl TaskLoop {
             stop_signal_rx,
             mb_rx,
             mqtt_client,
+            mqtt_status,
         }
     }
 
@@ -78,13 +80,8 @@ impl TaskLoop {
                     }
 
                     Some(mb) = self.mb_rx.recv() => {
-                        // let mb = mb.take_mb();
                         self.handle_data(mb).await;
                     }
-                        // } else {
-                        //     join_handle_data.message_retainer.push(mb);
-                        // }
-                    // }
                 }
             }
         })
@@ -92,6 +89,10 @@ impl TaskLoop {
 
     async fn handle_data(&mut self, rmb: RuleMessageBatch) {
         let mb = rmb.take_mb();
+        if !self.mqtt_status.load(std::sync::atomic::Ordering::Relaxed) {
+            self.message_retainer.push(mb);
+            return;
+        }
         let topic = {
             let messages = mb.get_messages();
             if messages.len() == 0 {
@@ -126,11 +127,16 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn new(sink_id: String, sink_conf: SinkConf, mqtt_client: Arc<AsyncClient>) -> Self {
+    pub async fn new(
+        sink_conf: SinkConf,
+        mqtt_client: Arc<AsyncClient>,
+        mqtt_status: Arc<AtomicBool>,
+    ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = unbounded_channel();
 
-        let task_loop = TaskLoop::new(sink_id, sink_conf, stop_signal_rx, mb_rx, mqtt_client).await;
+        let task_loop =
+            TaskLoop::new(sink_conf, stop_signal_rx, mb_rx, mqtt_client, mqtt_status).await;
         let join_handle = task_loop.start();
 
         Self {

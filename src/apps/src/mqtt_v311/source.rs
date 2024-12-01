@@ -40,7 +40,18 @@ impl Source {
                 }
                 None => return Err(HaliaError::Common("请填写schema_id".to_owned())),
             },
-            _ => {}
+            types::schema::DecodeType::Csv | types::schema::DecodeType::Avro => {
+                match &conf.schema_id {
+                    Some(schema_id) => {
+                        schema::reference_app_source(schema_id, app_id, source_id).await?
+                    }
+                    None => {}
+                }
+            }
+            types::schema::DecodeType::Raw
+            | types::schema::DecodeType::Yaml
+            | types::schema::DecodeType::Json
+            | types::schema::DecodeType::Toml => {}
         }
 
         Ok(())
