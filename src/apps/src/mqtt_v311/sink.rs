@@ -4,7 +4,6 @@ use common::{
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
-use futures::lock::BiLock;
 use halia_derive::{ResourceStop, SinkTxs};
 use message::{Message, RuleMessageBatch};
 use regex::Regex;
@@ -13,7 +12,6 @@ use schema::Encoder;
 use tokio::{
     select,
     sync::{
-        broadcast,
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         watch,
     },
@@ -21,7 +19,6 @@ use tokio::{
 };
 use tracing::warn;
 use types::apps::mqtt_client_v311::SinkConf;
-use utils::{error_manager, ErrorManager};
 
 use super::transfer_qos;
 
@@ -29,8 +26,7 @@ use super::transfer_qos;
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<TaskLoop>>,
-    err: BiLock<Option<Arc<String>>>,
-    pub mb_tx: UnboundedSender<RuleMessageBatch>,
+    mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
 pub struct TaskLoop {
@@ -42,19 +38,16 @@ pub struct TaskLoop {
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
     pub mqtt_client: Arc<AsyncClient>,
-    pub _app_err_rx: broadcast::Receiver<bool>,
-    error_manager: ErrorManager,
+    // error_manager: ErrorManager,
 }
 
 impl TaskLoop {
     pub async fn new(
         sink_id: String,
         sink_conf: SinkConf,
-        sink_err: BiLock<Option<Arc<String>>>,
         stop_signal_rx: watch::Receiver<()>,
         mb_rx: UnboundedReceiver<RuleMessageBatch>,
         mqtt_client: Arc<AsyncClient>,
-        _app_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let qos = transfer_qos(&sink_conf.qos);
         let encoder = schema::new_encoder(&sink_conf.encode_type, &sink_conf.schema_id)
@@ -62,8 +55,8 @@ impl TaskLoop {
             .unwrap();
         let message_retainer = sink_message_retain::new(&sink_conf.message_retain);
         let topic = Topic::new(&sink_conf.topic);
-        let error_manager =
-            ErrorManager::new(error_manager::ResourceType::AppSink, sink_id, sink_err);
+        // let error_manager =
+        //     ErrorManager::new(error_manager::ResourceType::AppSink, sink_id, sink_err);
         Self {
             topic,
             sink_conf,
@@ -73,8 +66,6 @@ impl TaskLoop {
             stop_signal_rx,
             mb_rx,
             mqtt_client,
-            _app_err_rx,
-            error_manager,
         }
     }
 
@@ -119,13 +110,10 @@ impl TaskLoop {
             }
         };
 
-        if let Err(e) = self
-            .mqtt_client
+        self.mqtt_client
             .publish_bytes(topic, self.qos, self.sink_conf.retain, payload)
             .await
-        {
-            warn!("{:?}", e);
-        }
+            .unwrap();
     }
 }
 
@@ -138,32 +126,16 @@ impl Sink {
         Ok(())
     }
 
-    pub async fn new(
-        sink_id: String,
-        sink_conf: SinkConf,
-        mqtt_client: Arc<AsyncClient>,
-        app_err_rx: broadcast::Receiver<bool>,
-    ) -> Self {
+    pub async fn new(sink_id: String, sink_conf: SinkConf, mqtt_client: Arc<AsyncClient>) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = unbounded_channel();
-        let (err1, err2) = BiLock::new(None);
 
-        let task_loop = TaskLoop::new(
-            sink_id,
-            sink_conf,
-            err1,
-            stop_signal_rx,
-            mb_rx,
-            mqtt_client,
-            app_err_rx,
-        )
-        .await;
+        let task_loop = TaskLoop::new(sink_id, sink_conf, stop_signal_rx, mb_rx, mqtt_client).await;
         let join_handle = task_loop.start();
 
         Self {
             mb_tx,
             stop_signal_tx,
-            err: err2,
             join_handle: Some(join_handle),
         }
     }

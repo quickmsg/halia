@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine as _};
@@ -13,7 +16,6 @@ use source::Source;
 use tokio::{
     select,
     sync::{
-        broadcast,
         mpsc::{UnboundedReceiver, UnboundedSender},
         watch,
     },
@@ -32,22 +34,21 @@ mod source;
 pub struct MqttClient {
     err: BiLock<Option<Arc<String>>>,
     stop_signal_tx: watch::Sender<()>,
-    app_err_tx: broadcast::Sender<bool>,
-
     mqtt_client: Arc<AsyncClient>,
-
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
     join_handle: Option<JoinHandle<TaskLoop>>,
+
+    mqtt_status: Arc<AtomicBool>,
 }
 
 struct TaskLoop {
     app_id: String,
     app_conf: Conf,
     stop_signal_rx: watch::Receiver<()>,
-    app_err_tx: broadcast::Sender<bool>,
     sources: Arc<DashMap<String, Source>>,
     error_manager: ErrorManager,
+    mqtt_status: Arc<AtomicBool>,
 }
 
 impl TaskLoop {
@@ -56,8 +57,8 @@ impl TaskLoop {
         app_conf: Conf,
         app_err: BiLock<Option<Arc<String>>>,
         stop_signal_rx: watch::Receiver<()>,
-        app_err_tx: broadcast::Sender<bool>,
         sources: Arc<DashMap<String, Source>>,
+        mqtt_status: Arc<AtomicBool>,
     ) -> Self {
         let error_manager = ErrorManager::new(
             utils::error_manager::ResourceType::App,
@@ -68,9 +69,9 @@ impl TaskLoop {
             app_id,
             app_conf,
             stop_signal_rx,
-            app_err_tx,
             sources,
             error_manager,
+            mqtt_status,
         }
     }
 
@@ -117,7 +118,7 @@ impl TaskLoop {
             });
         }
 
-        let (client, mut event_loop) = AsyncClient::new(mqtt_options, 16);
+        let (client, mut event_loop) = AsyncClient::new(mqtt_options, 256);
 
         let join_handle = tokio::spawn(async move {
             loop {
@@ -190,19 +191,19 @@ impl TaskLoop {
 
 pub fn new(app_id: String, conf: serde_json::Value) -> Box<dyn App> {
     let conf: Conf = serde_json::from_value(conf).unwrap();
-    let (app_err_tx, _) = broadcast::channel(16);
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
     let sources = Arc::new(DashMap::new());
     let (app_err1, app_err2) = BiLock::new(None);
 
+    let mqtt_status = Arc::new(AtomicBool::new(false));
     let task_loop = TaskLoop::new(
         app_id,
         conf,
         app_err1,
         stop_signal_rx,
-        app_err_tx.clone(),
         sources.clone(),
+        mqtt_status.clone(),
     );
     let (join_handle, mqtt_client) = task_loop.start();
 
@@ -211,9 +212,9 @@ pub fn new(app_id: String, conf: serde_json::Value) -> Box<dyn App> {
         sources,
         sinks: DashMap::new(),
         stop_signal_tx,
-        app_err_tx,
         join_handle: Some(join_handle),
         mqtt_client,
+        mqtt_status,
     })
 }
 
@@ -428,13 +429,7 @@ impl App for MqttClient {
         // sink.check_duplicate(&req.base, &ext_conf)?;
         // }
 
-        let sink = Sink::new(
-            sink_id.clone(),
-            conf,
-            self.mqtt_client.clone(),
-            self.app_err_tx.subscribe(),
-        )
-        .await;
+        let sink = Sink::new(sink_id.clone(), conf, self.mqtt_client.clone()).await;
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
