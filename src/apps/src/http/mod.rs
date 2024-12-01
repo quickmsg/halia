@@ -134,6 +134,14 @@ impl App for HttpClient {
         }
     }
 
+    async fn read_sink_err(&self, sink_id: &String) -> HaliaResult<Option<Arc<String>>> {
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.read_err().await),
+            // 错误提示 TODO
+            None => Err(HaliaError::NotFound("sink".to_owned())),
+        }
+    }
+
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,
@@ -211,7 +219,12 @@ impl App for HttpClient {
 
     async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(self.conf.clone(), conf);
+        let sink = Sink::new(
+            sink_id.clone(),
+            self.conf.clone(),
+            conf,
+            self.app_err_tx.clone(),
+        );
         self.sinks.insert(sink_id, sink);
         Ok(())
     }

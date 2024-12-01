@@ -425,7 +425,13 @@ impl App for MqttClient {
         // sink.check_duplicate(&req.base, &ext_conf)?;
         // }
 
-        let sink = Sink::new(conf, self.mqtt_client.clone(), self.app_err_tx.subscribe()).await;
+        let sink = Sink::new(
+            sink_id.clone(),
+            conf,
+            self.mqtt_client.clone(),
+            self.app_err_tx.subscribe(),
+        )
+        .await;
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
@@ -440,7 +446,7 @@ impl App for MqttClient {
         let new_conf: SinkConf = serde_json::from_value(new_conf)?;
 
         match self.sinks.get_mut(&sink_id) {
-            Some(mut sink) => sink.update_conf(old_conf, new_conf).await,
+            Some(mut sink) => Ok(sink.update_conf(old_conf, new_conf).await),
             None => Err(HaliaError::NotFound(sink_id)),
         }
     }

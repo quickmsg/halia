@@ -126,6 +126,13 @@ impl App for Influxdb {
         self.read_err().await
     }
 
+    async fn read_sink_err(&self, sink_id: &String) -> HaliaResult<Option<Arc<String>>> {
+        match self.sinks.get(sink_id) {
+            Some(sink) => Ok(sink.read_err().await),
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
+    }
+
     async fn update(
         &mut self,
         _old_conf: serde_json::Value,

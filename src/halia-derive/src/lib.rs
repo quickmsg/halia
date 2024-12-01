@@ -26,8 +26,8 @@ pub fn derive_source_rxs(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     proc_macro::TokenStream::from(expanded)
 }
 
-#[proc_macro_derive(SourceStop)]
-pub fn derive_source_stop(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+#[proc_macro_derive(ResourceStop)]
+pub fn derive_resource_stop(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let struct_name = input.ident;
 
@@ -56,6 +56,26 @@ pub fn derive_resource_err(input: proc_macro::TokenStream) -> proc_macro::TokenS
                     Some(err) => Some(err.clone()),
                     None => None,
                 }
+            }
+        }
+    };
+
+    proc_macro::TokenStream::from(expanded)
+}
+
+#[proc_macro_derive(SinkTxs)]
+pub fn derive_sink_txs(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = input.ident;
+
+    let expanded = quote! {
+        impl #struct_name {
+            pub fn get_txs(&self, cnt: usize) -> Vec<tokio::sync::mpsc::UnboundedSender<message::RuleMessageBatch>> {
+                let mut txs = vec![];
+                for _ in 0..cnt {
+                    txs.push(self.mb_tx.clone());
+                }
+                txs
             }
         }
     };

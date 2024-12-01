@@ -4,7 +4,9 @@ use common::{
     error::{HaliaError, HaliaResult},
     sink_message_retain::{self, SinkMessageRetain},
 };
-use message::{Message, MessageBatch, RuleMessageBatch};
+use futures::lock::BiLock;
+use halia_derive::{ResourceStop, SinkTxs};
+use message::{Message, RuleMessageBatch};
 use regex::Regex;
 use rumqttc::{valid_topic, AsyncClient};
 use schema::Encoder;
@@ -19,24 +21,112 @@ use tokio::{
 };
 use tracing::warn;
 use types::apps::mqtt_client_v311::SinkConf;
+use utils::{error_manager, ErrorManager};
 
 use super::transfer_qos;
 
+#[derive(ResourceStop, SinkTxs)]
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<JoinHandle<JoinHandleData>>,
+    join_handle: Option<JoinHandle<TaskLoop>>,
+    err: BiLock<Option<Arc<String>>>,
     pub mb_tx: UnboundedSender<RuleMessageBatch>,
 }
 
-pub(crate) struct JoinHandleData {
+pub struct TaskLoop {
     topic: Topic,
-    pub conf: SinkConf,
+    sink_conf: SinkConf,
+    qos: rumqttc::QoS,
     pub encoder: Box<dyn Encoder>,
     pub message_retainer: Box<dyn SinkMessageRetain>,
     pub stop_signal_rx: watch::Receiver<()>,
     pub mb_rx: UnboundedReceiver<RuleMessageBatch>,
     pub mqtt_client: Arc<AsyncClient>,
     pub _app_err_rx: broadcast::Receiver<bool>,
+    error_manager: ErrorManager,
+}
+
+impl TaskLoop {
+    pub async fn new(
+        sink_id: String,
+        sink_conf: SinkConf,
+        sink_err: BiLock<Option<Arc<String>>>,
+        stop_signal_rx: watch::Receiver<()>,
+        mb_rx: UnboundedReceiver<RuleMessageBatch>,
+        mqtt_client: Arc<AsyncClient>,
+        _app_err_rx: broadcast::Receiver<bool>,
+    ) -> Self {
+        let qos = transfer_qos(&sink_conf.qos);
+        let encoder = schema::new_encoder(&sink_conf.encode_type, &sink_conf.schema_id)
+            .await
+            .unwrap();
+        let message_retainer = sink_message_retain::new(&sink_conf.message_retain);
+        let topic = Topic::new(&sink_conf.topic);
+        let error_manager =
+            ErrorManager::new(error_manager::ResourceType::AppSink, sink_id, sink_err);
+        Self {
+            topic,
+            sink_conf,
+            qos,
+            encoder,
+            message_retainer,
+            stop_signal_rx,
+            mb_rx,
+            mqtt_client,
+            _app_err_rx,
+            error_manager,
+        }
+    }
+
+    pub fn start(mut self) -> JoinHandle<Self> {
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = self.stop_signal_rx.changed() => {
+                        return self;
+                    }
+
+                    Some(mb) = self.mb_rx.recv() => {
+                        // let mb = mb.take_mb();
+                        self.handle_data(mb).await;
+                    }
+                        // } else {
+                        //     join_handle_data.message_retainer.push(mb);
+                        // }
+                    // }
+                }
+            }
+        })
+    }
+
+    async fn handle_data(&mut self, rmb: RuleMessageBatch) {
+        let mb = rmb.take_mb();
+        let topic = {
+            let messages = mb.get_messages();
+            if messages.len() == 0 {
+                return;
+            }
+            self.topic.get_topic(&messages[0])
+        };
+
+        let payload = {
+            match self.encoder.encode(mb) {
+                Ok(data) => data,
+                Err(e) => {
+                    warn!("{:?}", e);
+                    return;
+                }
+            }
+        };
+
+        if let Err(e) = self
+            .mqtt_client
+            .publish_bytes(topic, self.qos, self.sink_conf.retain, payload)
+            .await
+        {
+            warn!("{:?}", e);
+        }
+    }
 }
 
 impl Sink {
@@ -49,118 +139,47 @@ impl Sink {
     }
 
     pub async fn new(
-        conf: SinkConf,
+        sink_id: String,
+        sink_conf: SinkConf,
         mqtt_client: Arc<AsyncClient>,
         app_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
         let (mb_tx, mb_rx) = unbounded_channel();
-        let encoder = schema::new_encoder(&conf.encode_type, &conf.schema_id)
-            .await
-            .unwrap();
+        let (err1, err2) = BiLock::new(None);
 
-        let message_retainer = sink_message_retain::new(&conf.message_retain);
-        let topic = Topic::new(&conf.topic);
-        let join_handle_data = JoinHandleData {
-            topic,
-            conf,
-            encoder,
-            message_retainer,
+        let task_loop = TaskLoop::new(
+            sink_id,
+            sink_conf,
+            err1,
             stop_signal_rx,
             mb_rx,
             mqtt_client,
-            _app_err_rx: app_err_rx,
-        };
-
-        let join_handle = Self::event_loop(join_handle_data);
+            app_err_rx,
+        )
+        .await;
+        let join_handle = task_loop.start();
 
         Self {
             mb_tx,
             stop_signal_tx,
+            err: err2,
             join_handle: Some(join_handle),
         }
     }
 
-    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        let mut err = false;
-        let qos = transfer_qos(&join_handle_data.conf.qos);
-        tokio::spawn(async move {
-            loop {
-                select! {
-                    _ = join_handle_data.stop_signal_rx.changed() => {
-                        return join_handle_data;
-                    }
-
-                    Some(mb) = join_handle_data.mb_rx.recv() => {
-                        let mb = mb.take_mb();
-                        Self::handle_data(mb, &join_handle_data, qos).await;
-                    }
-                        // } else {
-                        //     join_handle_data.message_retainer.push(mb);
-                        // }
-                    // }
-                }
-            }
-        })
-    }
-
-    async fn handle_data(mb: MessageBatch, join_handle_data: &JoinHandleData, qos: rumqttc::QoS) {
-        let topic = {
-            let messages = mb.get_messages();
-            if messages.len() == 0 {
-                return;
-            }
-            join_handle_data.topic.get_topic(&messages[0])
-        };
-
-        let payload = {
-            match join_handle_data.encoder.encode(mb) {
-                Ok(data) => data,
-                Err(e) => {
-                    warn!("{:?}", e);
-                    return;
-                }
-            }
-        };
-
-        if let Err(e) = join_handle_data
-            .mqtt_client
-            .publish_bytes(topic, qos, join_handle_data.conf.retain, payload)
-            .await
-        {
-            warn!("{:?}", e);
-        }
-    }
-
-    pub async fn update_conf(
-        &mut self,
-        _old_conf: SinkConf,
-        new_conf: SinkConf,
-    ) -> HaliaResult<()> {
-        let mut join_handle_data = self.stop().await;
-        join_handle_data.conf = new_conf;
-        Self::event_loop(join_handle_data);
-
-        Ok(())
-    }
-
-    pub async fn stop(&mut self) -> JoinHandleData {
-        self.stop_signal_tx.send(()).unwrap();
-        self.join_handle.take().unwrap().await.unwrap()
+    pub async fn update_conf(&mut self, _old_conf: SinkConf, new_conf: SinkConf) {
+        let mut task_loop = self.stop().await;
+        task_loop.sink_conf = new_conf;
+        let join_handle = task_loop.start();
+        self.join_handle = Some(join_handle);
     }
 
     pub async fn update_mqtt_client(&mut self, mqtt_client: Arc<AsyncClient>) {
-        let mut join_handle_data = self.stop().await;
-        join_handle_data.mqtt_client = mqtt_client;
-        Self::event_loop(join_handle_data);
-    }
-
-    pub fn get_txs(&self, cnt: usize) -> Vec<UnboundedSender<RuleMessageBatch>> {
-        let mut txs = vec![];
-        for _ in 0..cnt {
-            txs.push(self.mb_tx.clone());
-        }
-        txs
+        let mut task_loop = self.stop().await;
+        task_loop.mqtt_client = mqtt_client;
+        let join_handle = task_loop.start();
+        self.join_handle = Some(join_handle);
     }
 }
 

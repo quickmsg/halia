@@ -6,6 +6,7 @@ use common::{
     sink_message_retain::{self, SinkMessageRetain},
 };
 use futures::{lock::BiLock, stream};
+use halia_derive::{ResourceErr, ResourceStop, SinkTxs};
 use influxdb2::{
     api::write::TimestampPrecision,
     models::{DataPoint, FieldValue},
@@ -24,6 +25,7 @@ use tracing::{debug, warn};
 use types::apps::influxdb_v2::{InfluxdbConf, SinkConf};
 use utils::ErrorManager;
 
+#[derive(ResourceErr, ResourceStop, SinkTxs)]
 pub struct Sink {
     stop_signal_tx: watch::Sender<()>,
     join_handle: Option<JoinHandle<TaskLoop>>,
@@ -65,11 +67,6 @@ impl Sink {
         }
     }
 
-    pub async fn stop(&mut self) -> TaskLoop {
-        self.stop_signal_tx.send(()).unwrap();
-        self.join_handle.take().unwrap().await.unwrap()
-    }
-
     pub async fn update_conf(&mut self, sink_conf: SinkConf) {
         let mut task_loop = self.stop().await;
         task_loop.sink_conf = sink_conf;
@@ -82,14 +79,6 @@ impl Sink {
         task_loop.influxdb_conf = influxdb_conf;
         let join_handle = task_loop.start();
         self.join_handle = Some(join_handle);
-    }
-
-    pub fn get_txs(&self, cnt: usize) -> Vec<UnboundedSender<RuleMessageBatch>> {
-        let mut txs = vec![];
-        for _ in 0..cnt {
-            txs.push(self.mb_tx.clone());
-        }
-        txs
     }
 }
 
