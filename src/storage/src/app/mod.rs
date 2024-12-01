@@ -6,7 +6,6 @@ use sqlx::{
     query::{QueryAs, QueryScalar},
     Any,
 };
-use tracing::debug;
 use types::{
     apps::{AppType, CreateAppReq, QueryParams, UpdateAppReq},
     Pagination, Status,
@@ -246,7 +245,6 @@ pub async fn search(
 }
 
 pub async fn update_status(id: &String, status: Status) -> Result<()> {
-    debug!("{} {:?}", id, status);
     sqlx::query(format!("UPDATE {} SET status = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(Into::<i32>::into(status))
         .bind(id)
