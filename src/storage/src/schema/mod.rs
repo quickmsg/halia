@@ -118,16 +118,16 @@ pub async fn search(
             false => where_cluase.push_str(" AND name LIKE ?"),
         }
     }
-    if query_params.typ.is_some() {
+    if query_params.schema_type.is_some() {
         match where_cluase.is_empty() {
-            true => where_cluase.push_str("WHERE typ = ?"),
-            false => where_cluase.push_str(" AND typ = ?"),
+            true => where_cluase.push_str("WHERE schema_type = ?"),
+            false => where_cluase.push_str(" AND schema_type = ?"),
         }
     }
-    if query_params.device_type.is_some() {
+    if query_params.protocol_type.is_some() {
         match where_cluase.is_empty() {
-            true => where_cluase.push_str("WHERE device_type = ?"),
-            false => where_cluase.push_str(" AND device_type = ?"),
+            true => where_cluase.push_str("WHERE protocol_type = ?"),
+            false => where_cluase.push_str(" AND protocol_type = ?"),
         }
     }
 
@@ -147,15 +147,15 @@ pub async fn search(
         query_count_builder = query_count_builder.bind(name.clone());
         query_schemas_builder = query_schemas_builder.bind(name);
     }
-    if let Some(typ) = query_params.typ {
-        let typ: i32 = typ.into();
-        query_count_builder = query_count_builder.bind(typ);
-        query_schemas_builder = query_schemas_builder.bind(typ);
+    if let Some(schema_type) = query_params.schema_type {
+        let schema_type: i32 = schema_type.into();
+        query_count_builder = query_count_builder.bind(schema_type);
+        query_schemas_builder = query_schemas_builder.bind(schema_type);
     }
-    if let Some(device_type) = query_params.device_type {
-        let device_type: i32 = device_type.into();
-        query_count_builder = query_count_builder.bind(device_type);
-        query_schemas_builder = query_schemas_builder.bind(device_type);
+    if let Some(protocol_type) = query_params.protocol_type {
+        let protocol_type: i32 = protocol_type.into();
+        query_count_builder = query_count_builder.bind(protocol_type);
+        query_schemas_builder = query_schemas_builder.bind(protocol_type);
     }
 
     let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;

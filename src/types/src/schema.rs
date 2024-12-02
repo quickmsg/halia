@@ -92,9 +92,8 @@ impl TryFrom<i32> for ProtocolType {
 #[derive(Debug, Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
-    #[serde(rename = "type")]
-    pub typ: Option<SchemaType>,
-    pub device_type: Option<ProtocolType>,
+    pub schema_type: Option<SchemaType>,
+    pub protocol_type: Option<ProtocolType>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
