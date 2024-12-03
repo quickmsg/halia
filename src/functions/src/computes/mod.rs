@@ -142,6 +142,9 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::ArrayPush => todo!(),
             types::rules::functions::Type::ArrayPop => todo!(),
             types::rules::functions::Type::ArrayDistinct => todo!(),
+            types::rules::functions::Type::ArrayReverse => todo!(),
+            types::rules::functions::Type::ArrayIndexOf => todo!(),
+            types::rules::functions::Type::ArrayLastIndexOf => todo!(),
         }
     }
 
@@ -353,6 +356,15 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             }
             types::rules::functions::Type::ArrayDistinct => {
                 array::distinct::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::ArrayReverse => {
+                array::reverse::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::ArrayIndexOf => {
+                array::index_of::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::ArrayLastIndexOf => {
+                array::last_index_of::new(Args::new(item_conf.args))?
             }
 
             // compress

@@ -154,6 +154,33 @@ impl Args {
         }
     }
 
+    pub fn take_bool_string_int_float_field(
+        &mut self,
+        key: &str,
+    ) -> Result<BoolStringIntFloatFieldArg> {
+        let arg = self
+            .0
+            .remove(key)
+            .ok_or_else(|| anyhow::anyhow!("not found"))?;
+        match arg {
+            // serde_json::Value::Null => Ok(BoolStringIntFloatFieldArg::C)
+            serde_json::Value::Bool(b) => Ok(BoolStringIntFloatFieldArg::ConstBool(b)),
+            serde_json::Value::Number(number) => {
+                if let Some(f) = number.as_f64() {
+                    Ok(BoolStringIntFloatFieldArg::ConstFloat(f))
+                } else if let Some(i) = number.as_i64() {
+                    Ok(BoolStringIntFloatFieldArg::ConstInt(i))
+                } else {
+                    bail!("只支持数字常量")
+                }
+            }
+            serde_json::Value::String(s) => Ok(BoolStringIntFloatFieldArg::ConstString(s)),
+            _ => bail!("not support now"),
+            // serde_json::Value::Array(vec) => todo!(),
+            // serde_json::Value::Object(map) => todo!(),
+        }
+    }
+
     pub fn take_array_bool_string_int_float_field(
         &mut self,
         key: &str,

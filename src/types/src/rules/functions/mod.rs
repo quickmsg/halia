@@ -99,6 +99,9 @@ pub enum Type {
     ArrayPop,
     ArrayJoin,
     ArrayDistinct,
+    ArrayReverse,
+    ArrayIndexOf,
+    ArrayLastIndexOf,
 
     // compress
     CompressBrotli,
