@@ -125,11 +125,6 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::HashHmacSha512 => todo!(),
             types::rules::functions::Type::Date => todo!(),
 
-            // array
-            types::rules::functions::Type::ArrayCardinality => todo!(),
-            types::rules::functions::Type::ArrayPush => todo!(),
-            types::rules::functions::Type::ArrayPop => todo!(),
-
             types::rules::functions::Type::CompressBrotli => todo!(),
             types::rules::functions::Type::DecompressBrotli => todo!(),
             types::rules::functions::Type::CompressDeflate => todo!(),
@@ -143,6 +138,10 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::CompressZlib => todo!(),
             types::rules::functions::Type::DecompressZlib => todo!(),
             types::rules::functions::Type::ArrayJoin => todo!(),
+            types::rules::functions::Type::ArrayLen => todo!(),
+            types::rules::functions::Type::ArrayPush => todo!(),
+            types::rules::functions::Type::ArrayPop => todo!(),
+            types::rules::functions::Type::ArrayDistinct => todo!(),
         }
     }
 
@@ -344,13 +343,16 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::Type::Date => todo!(),
 
             // array
-            types::rules::functions::Type::ArrayCardinality => todo!(),
+            types::rules::functions::Type::ArrayLen => array::len::new(Args::new(item_conf.args))?,
             types::rules::functions::Type::ArrayPush => {
                 array::push::new(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::ArrayPop => array::pop::new(Args::new(item_conf.args))?,
             types::rules::functions::Type::ArrayJoin => {
                 array::join::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::ArrayDistinct => {
+                array::distinct::new(Args::new(item_conf.args))?
             }
 
             // compress

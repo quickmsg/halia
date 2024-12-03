@@ -94,10 +94,11 @@ pub enum Type {
     Date,
 
     // 数组
-    ArrayCardinality,
+    ArrayLen,
     ArrayPush,
     ArrayPop,
     ArrayJoin,
+    ArrayDistinct,
 
     // compress
     CompressBrotli,
