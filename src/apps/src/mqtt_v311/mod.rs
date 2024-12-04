@@ -21,7 +21,7 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use types::apps::mqtt_client_v311::{Conf, Qos, SinkConf, SourceConf};
 use utils::ErrorManager;
 
@@ -189,6 +189,7 @@ impl TaskLoop {
 }
 
 pub fn new(app_id: String, conf: serde_json::Value) -> Box<dyn App> {
+    debug!("here");
     let conf: Conf = serde_json::from_value(conf).unwrap();
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 

@@ -12,6 +12,7 @@ pub enum ResourceType {
 }
 
 pub struct ErrorManager {
+    inited: bool,
     resource_type: ResourceType,
     resource_id: String,
     resource_err: BiLock<Option<Arc<String>>>,
@@ -25,6 +26,7 @@ impl ErrorManager {
         resource_err: BiLock<Option<Arc<String>>>,
     ) -> Self {
         Self {
+            inited: false,
             resource_type,
             resource_id,
             resource_err,
@@ -34,6 +36,9 @@ impl ErrorManager {
 
     // 状态是否切换
     pub async fn put_err(&mut self, err: Arc<String>) -> bool {
+        if !self.inited {
+            self.inited = true;
+        }
         match &self.last_err {
             Some(last_err) => {
                 if *last_err != err {
@@ -106,6 +111,33 @@ impl ErrorManager {
     }
 
     pub async fn set_ok(&mut self) -> bool {
+        if !self.inited {
+            match self.resource_type {
+                ResourceType::Device => todo!(),
+                ResourceType::DeviceSource => todo!(),
+                ResourceType::DeviceSink => todo!(),
+                ResourceType::App => {
+                    let _ = storage::app::update_status(&self.resource_id, types::Status::Running)
+                        .await;
+                    events::insert_connect_succeed(
+                        types::events::ResourceType::App,
+                        &self.resource_id,
+                    )
+                    .await;
+                }
+                ResourceType::AppSource => {
+                    let _ = storage::app::source_sink::update_status(
+                        &self.resource_id,
+                        types::Status::Running,
+                    )
+                    .await;
+                }
+                ResourceType::AppSink => todo!(),
+            }
+
+            return false;
+        }
+
         if self.last_err.is_some() {
             self.last_err = None;
             *self.resource_err.lock().await = None;

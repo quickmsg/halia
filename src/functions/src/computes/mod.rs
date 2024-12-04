@@ -7,6 +7,7 @@ use crate::{args::Args, Function};
 
 mod array;
 mod compress;
+mod date;
 mod hash;
 mod number;
 mod string;
