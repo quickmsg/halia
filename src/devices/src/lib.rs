@@ -253,6 +253,39 @@ pub async fn list_devices(
     query_params: QueryParams,
 ) -> HaliaResult<ListDevicesResp> {
     let (count, db_devices) = storage::device::device::search(pagination, query_params).await?;
+    // let xx = stream::iter(db_devices)
+    //     .then(|db_device| async move {
+    //         let source_cnt =
+    //             storage::device::source_sink::count_sources_by_device_id(&db_device.id).await?;
+    //         let sink_cnt =
+    //             storage::device::source_sink::count_sinks_by_device_id(&db_device.id).await?;
+    //         let rule_ref_cnt =
+    //             storage::rule::reference::get_rule_ref_info_by_parent_id(&db_device.id).await?;
+    //         let err = match db_device.status {
+    //             Status::Error => {
+    //                 let device = match GLOBAL_DEVICE_MANAGER.get(&db_device.id) {
+    //                     Some(device) => device,
+    //                     None => return Err(HaliaError::Common("设备未启动！".to_string())),
+    //                 };
+    //                 device.read_err().await
+    //             }
+    //             _ => None,
+    //         };
+
+    //         Ok(types::devices::ListDevicesItem {
+    //             id: db_device.id,
+    //             name: db_device.name,
+    //             device_type: db_device.device_type,
+    //             status: db_device.status,
+    //             err,
+    //             rule_ref_cnt,
+    //             source_cnt,
+    //             sink_cnt,
+    //         })
+    //     })
+    //     .collect::<HaliaResult<Vec<_>>>()
+    //     .await;
+
     let mut list = Vec::with_capacity(db_devices.len());
     for db_device in db_devices {
         let source_cnt =

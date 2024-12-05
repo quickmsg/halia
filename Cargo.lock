@@ -4819,6 +4819,7 @@ dependencies = [
  "common",
  "csv",
  "message",
+ "num-bigint 0.4.6",
  "prost-reflect",
  "regex",
  "serde",
@@ -4827,6 +4828,7 @@ dependencies = [
  "toml 0.8.19",
  "tracing",
  "types",
+ "uuid",
  "yaml-rust2",
 ]
 

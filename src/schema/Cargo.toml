@@ -21,3 +21,5 @@ prost-reflect = "0.14.2"
 base64 = { workspace = true }
 yaml-rust2 = { workspace = true }
 toml = { workspace = true }
+uuid = { workspace = true }
+num-bigint = "0.4.6"

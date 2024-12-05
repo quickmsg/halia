@@ -28,7 +28,7 @@ impl Computer for Acos {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => {
                     if *mv < -1 || *mv > 1 {
-                        return;
+                        MessageValue::Null
                     } else {
                         MessageValue::Float64((*mv as f64).acos())
                     }
