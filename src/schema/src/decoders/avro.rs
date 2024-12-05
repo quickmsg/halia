@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use anyhow::{bail, Result};
-use apache_avro::{Reader, Schema};
+use apache_avro::{from_avro_datum, Reader, Schema};
 use bytes::Bytes;
 use common::error::HaliaResult;
 use message::{Message, MessageBatch};
@@ -55,17 +55,19 @@ struct AvroWithSchema {
 
 impl Decoder for AvroWithSchema {
     fn decode(&self, data: Bytes) -> Result<MessageBatch> {
-        let reader = Reader::with_schema(&self.schema, Cursor::new(data)).unwrap();
+        let value = from_avro_datum(&self.schema, &mut Cursor::new(data), None)?;
+        dbg!(&value);
+        // let reader = Reader::with_schema(&self.schema, Cursor::new(data)).unwrap();
         let mut mb = MessageBatch::default();
-        for value in reader {
-            match value {
-                Ok(v) => {
-                    let msg = Message::try_from(v)?;
-                    mb.push_message(msg);
-                }
-                Err(e) => bail!(e),
-            }
-        }
+        // for value in reader {
+        // match value {
+        // Ok(v) => {
+        let msg = Message::try_from(value)?;
+        mb.push_message(msg);
+        // }
+        // Err(e) => bail!(e),
+        // }
+        // }
         Ok(mb)
     }
 }
@@ -83,7 +85,7 @@ mod tests {
     use super::new_with_conf;
 
     #[test]
-    fn test_decode_avro() {
+    fn test_decode_avro_with_schema() {
         let raw_schema = r#"{
             "type": "record",
             "name": "test",

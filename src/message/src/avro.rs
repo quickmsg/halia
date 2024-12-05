@@ -38,19 +38,29 @@ impl TryFrom<apache_avro::types::Value> for MessageValue {
                     .map(|(key, value)| (key.into(), Self::try_from(value).unwrap()))
                     .collect(),
             )),
-            apache_avro::types::Value::Record(vec) => todo!(),
-            apache_avro::types::Value::Date(_) => todo!(),
-            apache_avro::types::Value::Decimal(decimal) => todo!(),
+            apache_avro::types::Value::Record(vec) => Ok(Self::Object(
+                vec.into_iter()
+                    .map(|(key, value)| (key.into(), value.try_into().unwrap()))
+                    .collect(),
+            )),
+            apache_avro::types::Value::Date(d) => Ok(Self::Int64(d as i64)),
+            apache_avro::types::Value::Decimal(decimal) => {
+                let vec: Vec<u8> = decimal.try_into()?;
+                Ok(Self::Bytes(vec))
+            }
             apache_avro::types::Value::BigDecimal(big_decimal) => todo!(),
-            apache_avro::types::Value::TimeMillis(_) => todo!(),
-            apache_avro::types::Value::TimeMicros(_) => todo!(),
-            apache_avro::types::Value::TimestampMillis(_) => todo!(),
-            apache_avro::types::Value::TimestampMicros(_) => todo!(),
-            apache_avro::types::Value::TimestampNanos(_) => todo!(),
-            apache_avro::types::Value::LocalTimestampMillis(_) => todo!(),
-            apache_avro::types::Value::LocalTimestampMicros(_) => todo!(),
-            apache_avro::types::Value::LocalTimestampNanos(_) => todo!(),
-            apache_avro::types::Value::Duration(duration) => todo!(),
+            apache_avro::types::Value::TimeMillis(t) => Ok(Self::Int64(t as i64)),
+            apache_avro::types::Value::TimeMicros(t) => Ok(Self::Int64(t as i64)),
+            apache_avro::types::Value::TimestampMillis(t) => Ok(Self::Int64(t)),
+            apache_avro::types::Value::TimestampMicros(t) => Ok(Self::Int64(t)),
+            apache_avro::types::Value::TimestampNanos(t) => Ok(Self::Int64(t)),
+            apache_avro::types::Value::LocalTimestampMillis(t) => Ok(Self::Int64(t)),
+            apache_avro::types::Value::LocalTimestampMicros(t) => Ok(Self::Int64(t)),
+            apache_avro::types::Value::LocalTimestampNanos(t) => Ok(Self::Int64(t)),
+            apache_avro::types::Value::Duration(duration) => {
+                let mills: u32 = duration.millis().try_into()?;
+                Ok(Self::Int64(mills as i64))
+            }
             apache_avro::types::Value::Uuid(uuid) => {
                 Ok(self::MessageValue::String(uuid.to_string()))
             }
