@@ -222,9 +222,27 @@ impl TaskLoop {
         &mut self,
         msg: Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>,
     ) {
+        debug!("{:?}", msg);
         match msg {
             Ok(msg) => match msg {
-                tokio_tungstenite::tungstenite::Message::Text(_) => todo!(),
+                tokio_tungstenite::tungstenite::Message::Text(t) => {
+                    match self.decoder.decode(t.into()) {
+                        Ok(mb) => {
+                            debug!("{:?}", mb);
+                            let mut mb_txs = self.mb_txs.lock().await;
+                            if mb_txs.len() == 1 {
+                                let rmb = RuleMessageBatch::Owned(mb);
+                                if let Err(_) = mb_txs[0].send(rmb) {
+                                    mb_txs.remove(0);
+                                }
+                            } else {
+                                let rmb = RuleMessageBatch::Arc(Arc::new(mb));
+                                mb_txs.retain(|tx| tx.send(rmb.clone()).is_ok());
+                            }
+                        }
+                        Err(e) => warn!("{}", e),
+                    }
+                }
                 tokio_tungstenite::tungstenite::Message::Binary(vec) => {
                     match self.decoder.decode(vec.into()) {
                         Ok(mb) => {
@@ -247,7 +265,7 @@ impl TaskLoop {
                 }
                 tokio_tungstenite::tungstenite::Message::Pong(vec) => todo!(),
                 tokio_tungstenite::tungstenite::Message::Close(close_frame) => todo!(),
-                tokio_tungstenite::tungstenite::Message::Frame(frame) => todo!(),
+                tokio_tungstenite::tungstenite::Message::Frame(frame) => {}
             },
             Err(e) => {
                 let err = Arc::new(e.to_string());
@@ -319,9 +337,11 @@ fn connect_websocket(
     match conf.ssl_enable {
         true => todo!(),
         false => {
-            let mut request = format!("ws://{}:{}/{}", conf.host, conf.port, path)
+            let mut request = format!("ws://{}:{}{}", conf.host, conf.port, path)
                 .into_client_request()
                 .unwrap();
+
+            debug!("{:?}", request);
 
             for (key, value) in headers {
                 request.headers_mut().insert(
