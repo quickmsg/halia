@@ -46,3 +46,31 @@ pub struct ReadResp {
     pub reference_cnt: usize,
     pub conf: serde_json::Value,
 }
+
+#[derive(Serialize)]
+pub struct ListSourceReferencesResp {
+    pub count: usize,
+    pub list: Vec<ListSourceReferencesItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListSourceReferencesItem {
+    pub device_id: String,
+    pub device_name: String,
+    pub source_id: String,
+    pub source_name: String,
+}
+
+#[derive(Serialize)]
+pub struct ListSinkReferencesResp {
+    pub count: usize,
+    pub list: Vec<ListSinkReferencesItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListSinkReferencesItem {
+    pub device_id: String,
+    pub device_name: String,
+    pub sink_id: String,
+    pub sink_name: String,
+}

@@ -12,7 +12,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest as _};
+use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest};
 use tracing::{debug, warn};
 use types::apps::http_client::{HttpClientConf, SourceConf};
 use utils::ErrorManager;
@@ -187,8 +187,8 @@ impl TaskLoop {
                         let (_, mut read) = ws_stream.split();
                         loop {
                             select! {
-                                msg = read.next() => {
-                                    debug!("msg: {:?}", msg);
+                                Some(msg) = read.next() => {
+                                    self.handle_websocket_msg(msg).await;
                                 }
 
                                 _ = self.stop_signal_rx.changed() => {
@@ -216,6 +216,47 @@ impl TaskLoop {
                 }
             }
         })
+    }
+
+    async fn handle_websocket_msg(
+        &mut self,
+        msg: Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>,
+    ) {
+        match msg {
+            Ok(msg) => match msg {
+                tokio_tungstenite::tungstenite::Message::Text(_) => todo!(),
+                tokio_tungstenite::tungstenite::Message::Binary(vec) => {
+                    match self.decoder.decode(vec.into()) {
+                        Ok(mb) => {
+                            let mut mb_txs = self.mb_txs.lock().await;
+                            if mb_txs.len() == 1 {
+                                let rmb = RuleMessageBatch::Owned(mb);
+                                if let Err(_) = mb_txs[0].send(rmb) {
+                                    mb_txs.remove(0);
+                                }
+                            } else {
+                                let rmb = RuleMessageBatch::Arc(Arc::new(mb));
+                                mb_txs.retain(|tx| tx.send(rmb.clone()).is_ok());
+                            }
+                        }
+                        Err(e) => warn!("{}", e),
+                    }
+                }
+                tokio_tungstenite::tungstenite::Message::Ping(vec) => {
+                    debug!("{:?}", vec);
+                }
+                tokio_tungstenite::tungstenite::Message::Pong(vec) => todo!(),
+                tokio_tungstenite::tungstenite::Message::Close(close_frame) => todo!(),
+                tokio_tungstenite::tungstenite::Message::Frame(frame) => todo!(),
+            },
+            Err(e) => {
+                let err = Arc::new(e.to_string());
+                let status_changed = self.error_manager.put_err(err.clone()).await;
+                if status_changed {
+                    self.app_err_tx.send(Some(err)).unwrap();
+                }
+            }
+        }
     }
 }
 

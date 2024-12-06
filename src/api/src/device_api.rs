@@ -54,7 +54,8 @@ pub fn routes() -> Router {
                 .route("/list", get(list_source_templates))
                 .route("/:id", get(read_source_template))
                 .route("/:id", put(update_source_template))
-                .route("/:id", delete(delete_source_template)),
+                .route("/:id", delete(delete_source_template))
+                .route("/:id/references/list", get(list_source_template_references)),
         )
         .nest(
             "/sink_template",
@@ -63,7 +64,8 @@ pub fn routes() -> Router {
                 .route("/list", get(list_sink_templates))
                 .route("/:id", get(read_sink_template))
                 .route("/:id", put(update_sink_template))
-                .route("/:id", delete(delete_sink_template)),
+                .route("/:id", delete(delete_sink_template))
+                .route("/:id/references/list", get(list_sink_template_references)),
         )
         .nest(
             "/device_template",
@@ -263,6 +265,15 @@ async fn delete_source_template(Path(id): Path<String>) -> AppResult<()> {
     Ok(())
 }
 
+async fn list_source_template_references(
+    Path(id): Path<String>,
+    Query(pagination): Query<Pagination>,
+) -> AppResult<Json<types::devices::source_sink_template::ListSourceReferencesResp>> {
+    let resp =
+        devices::source_sink_template::list_source_template_references(id, pagination).await?;
+    Ok(Json(resp))
+}
+
 async fn create_sink_template(
     Json(req): Json<types::devices::source_sink_template::CreateReq>,
 ) -> AppResult<()> {
@@ -298,6 +309,14 @@ async fn update_sink_template(
 async fn delete_sink_template(Path(id): Path<String>) -> AppResult<()> {
     devices::source_sink_template::delete_sink_template(id).await?;
     Ok(())
+}
+
+async fn list_sink_template_references(
+    Path(id): Path<String>,
+    Query(pagination): Query<Pagination>,
+) -> AppResult<Json<types::devices::source_sink_template::ListSinkReferencesResp>> {
+    let resp = devices::source_sink_template::list_sink_template_references(id, pagination).await?;
+    Ok(Json(resp))
 }
 
 async fn create_device_template(

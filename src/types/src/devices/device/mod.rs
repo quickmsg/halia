@@ -32,4 +32,5 @@ pub struct QueryParams {
     pub name: Option<String>,
     pub device_type: Option<DeviceType>,
     pub status: Option<Status>,
+    pub template_id: Option<String>,
 }

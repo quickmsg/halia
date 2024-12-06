@@ -122,8 +122,13 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
 
 pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize, Vec<Device>)> {
     let (limit, offset) = pagination.to_sql();
-    let (count, db_devices) = match (&query.name, &query.device_type, &query.status) {
-        (None, None, None) => {
+    let (count, db_devices) = match (
+        &query.name,
+        &query.device_type,
+        &query.status,
+        &query.template_id,
+    ) {
+        (None, None, None, None) => {
             let count: i64 =
                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
                     .fetch_one(POOL.get().unwrap())
@@ -161,6 +166,12 @@ pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize
                     false => where_clause.push_str(" AND status = ?"),
                 }
             }
+            if query.template_id.is_some() {
+                match where_clause.is_empty() {
+                    true => where_clause.push_str("WHERE template_id = ?"),
+                    false => where_clause.push_str(" AND template_id = ?"),
+                }
+            }
 
             let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_clause);
             let mut query_count_builder: QueryScalar<'_, Any, i64, AnyArguments> =
@@ -187,6 +198,10 @@ pub async fn search(pagination: Pagination, query: QueryParams) -> Result<(usize
                 let status: i32 = status.into();
                 query_count_builder = query_count_builder.bind(status);
                 query_schemas_builder = query_schemas_builder.bind(status);
+            }
+            if let Some(template_id) = query.template_id {
+                query_count_builder = query_count_builder.bind(template_id.clone());
+                query_schemas_builder = query_schemas_builder.bind(template_id);
             }
 
             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;

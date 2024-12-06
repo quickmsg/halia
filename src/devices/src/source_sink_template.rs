@@ -1,7 +1,10 @@
 use common::error::{HaliaError, HaliaResult};
 use types::{
     devices::{
-        source_sink_template::{CreateReq, ListItem, ListResp, QueryParams, ReadResp, UpdateReq},
+        source_sink_template::{
+            CreateReq, ListItem, ListResp, ListSinkReferencesItem, ListSinkReferencesResp,
+            ListSourceReferencesItem, ListSourceReferencesResp, QueryParams, ReadResp, UpdateReq,
+        },
         DeviceType,
     },
     Pagination,
@@ -81,6 +84,26 @@ pub async fn delete_source_template(id: String) -> HaliaResult<()> {
     Ok(())
 }
 
+pub async fn list_source_template_references(
+    template_id: String,
+    pagination: Pagination,
+) -> HaliaResult<ListSourceReferencesResp> {
+    let (count, db_sources) =
+        storage::device::source_sink::search_by_template_id(&template_id, pagination).await?;
+    let mut list = vec![];
+    for db_source in db_sources {
+        let device = storage::device::device::read_one(&db_source.device_id).await?;
+        list.push(ListSourceReferencesItem {
+            device_id: device.id,
+            device_name: device.name,
+            source_id: db_source.id,
+            source_name: db_source.name,
+        });
+    }
+
+    Ok(ListSourceReferencesResp { count, list })
+}
+
 pub async fn create_sink_template(req: CreateReq) -> HaliaResult<()> {
     match req.device_type {
         DeviceType::Modbus => modbus::template::validate_sink_template_conf(req.conf.clone())?,
@@ -149,4 +172,24 @@ pub async fn delete_sink_template(id: String) -> HaliaResult<()> {
     }
     storage::device::source_sink_template::delete_by_id(&id).await?;
     Ok(())
+}
+
+pub async fn list_sink_template_references(
+    template_id: String,
+    pagination: Pagination,
+) -> HaliaResult<ListSinkReferencesResp> {
+    let (count, db_sinks) =
+        storage::device::source_sink::search_by_template_id(&template_id, pagination).await?;
+    let mut list = vec![];
+    for db_sink in db_sinks {
+        let device = storage::device::device::read_one(&db_sink.device_id).await?;
+        list.push(ListSinkReferencesItem {
+            device_id: device.id,
+            device_name: device.name,
+            sink_id: db_sink.id,
+            sink_name: db_sink.name,
+        });
+    }
+
+    Ok(ListSinkReferencesResp { count, list })
 }

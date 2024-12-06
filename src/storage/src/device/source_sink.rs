@@ -353,6 +353,40 @@ async fn search(
     Ok((count as usize, sources_or_sinks))
 }
 
+pub async fn search_by_template_id(
+    template_id: &String,
+    pagination: Pagination,
+) -> Result<(usize, Vec<SourceSink>)> {
+    let (limit, offset) = pagination.to_sql();
+
+    let count: i64 = sqlx::query_scalar(
+        format!("SELECT COUNT(*) FROM {} WHERE template_id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(template_id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+
+    let db_sources_or_sinks = sqlx::query_as::<_, DbSourceSink>(
+        format!(
+            "SELECT * FROM {} WHERE template_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(template_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(POOL.get().unwrap())
+    .await?;
+
+    let sources_or_sinks = db_sources_or_sinks
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<SourceSink>>>()?;
+
+    Ok((count as usize, sources_or_sinks))
+}
+
 pub async fn count_sources_by_device_id(device_id: &String) -> Result<usize> {
     count_by_device_id(SourceSinkType::Source, device_id).await
 }
