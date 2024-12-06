@@ -7,7 +7,6 @@ pub mod field;
 pub mod filter;
 pub mod merge;
 pub mod metadata;
-pub mod type_conversion;
 pub mod window;
 
 mod args;

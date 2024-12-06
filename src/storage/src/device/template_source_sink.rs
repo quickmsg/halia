@@ -295,7 +295,7 @@ async fn count_by_device_template_id(
     let source_sink_type: i32 = source_sink_type.into();
     let count: i64 = sqlx::query_scalar(
         format!(
-            "SELECT COUNT(*) FROM {} WHERE source_sink_type = ? AND device_templaet_id = ?",
+            "SELECT COUNT(*) FROM {} WHERE source_sink_type = ? AND device_template_id = ?",
             TABLE_NAME
         )
         .as_str(),

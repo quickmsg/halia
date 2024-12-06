@@ -13,6 +13,7 @@ mod number;
 mod string;
 mod trigonometric;
 mod type_judgment;
+mod type_conversion;
 
 pub trait Computer: Sync + Send {
     fn compute(&mut self, message: &mut Message);
