@@ -1909,38 +1909,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "functions"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "base64 0.22.1",
- "brotli",
- "bytes",
- "chrono",
- "common",
- "flate2",
- "futures",
- "hmac",
- "lz4_flex",
- "md-5",
- "message",
- "pin-utils",
- "rand",
- "regex",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "snap",
- "tokio",
- "tokio-stream",
- "tracing",
- "types",
-]
-
-[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4481,7 +4449,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "apps",
+ "async-stream",
  "async-trait",
+ "brotli",
  "bytes",
  "chrono",
  "common",
@@ -4489,11 +4459,19 @@ dependencies = [
  "databoard",
  "devices",
  "events",
- "functions",
+ "flate2",
  "futures",
+ "hmac",
+ "lz4_flex",
+ "md-5",
  "message",
  "notify",
+ "rand",
+ "regex",
  "serde_json",
+ "sha1",
+ "sha2",
+ "snap",
  "storage",
  "tokio",
  "tokio-stream",

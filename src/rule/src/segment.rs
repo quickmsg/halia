@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use common::log::LoggerItem;
-use functions::Function;
 use futures::StreamExt;
 use message::RuleMessageBatch;
 use tokio::{
@@ -9,6 +8,8 @@ use tokio::{
     sync::{broadcast, mpsc},
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
+
+use crate::nodes::Function;
 
 pub(crate) fn start_segment(
     rxs: Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>,

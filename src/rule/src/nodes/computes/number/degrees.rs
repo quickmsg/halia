@@ -1,0 +1,41 @@
+use anyhow::Result;
+use message::MessageValue;
+
+use crate::nodes::{args::Args, computes::Computer};
+
+// 弧度转为角度
+struct Degrees {
+    field: String,
+    target_field: Option<String>,
+}
+
+pub fn validate_conf(mut args: Args) -> Result<()> {
+    args.validate_field_and_option_target_field()?;
+    Ok(())
+}
+
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    Ok(Box::new(Degrees {
+        field,
+        target_field,
+    }))
+}
+
+impl Computer for Degrees {
+    fn compute(&mut self, message: &mut message::Message) {
+        let value = match message.get(&self.field) {
+            Some(mv) => match mv {
+                MessageValue::Int64(mv) => MessageValue::Float64((*mv as f64).to_degrees()),
+                MessageValue::Float64(mv) => MessageValue::Float64(mv.to_degrees()),
+                _ => MessageValue::Null,
+            },
+            None => MessageValue::Null,
+        };
+
+        match &self.target_field {
+            Some(target_field) => message.add(target_field.clone(), value),
+            None => message.set(&self.field, value),
+        }
+    }
+}

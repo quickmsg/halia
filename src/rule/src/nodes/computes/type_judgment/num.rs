@@ -1,0 +1,34 @@
+use anyhow::Result;
+use message::{Message, MessageValue};
+
+use crate::{
+    add_or_set_message_value,
+    nodes::{args::Args, computes::Computer},
+};
+
+struct Num {
+    field: String,
+    target_field: Option<String>,
+}
+
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    Ok(Box::new(Num {
+        field,
+        target_field,
+    }))
+}
+
+impl Computer for Num {
+    fn compute(&mut self, message: &mut Message) {
+        let value = match message.get(&self.field) {
+            Some(v) => match v {
+                MessageValue::Int64(_) | MessageValue::Float64(_) => MessageValue::Boolean(true),
+                _ => MessageValue::Boolean(false),
+            },
+            None => MessageValue::Boolean(false),
+        };
+
+        add_or_set_message_value!(self, message, value);
+    }
+}

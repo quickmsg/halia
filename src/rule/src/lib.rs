@@ -14,6 +14,7 @@ use types::{
 mod graph;
 pub mod rule;
 mod segment;
+mod nodes;
 
 static GLOBAL_RULE_MANAGER: LazyLock<DashMap<String, Rule>> = LazyLock::new(|| DashMap::new());
 

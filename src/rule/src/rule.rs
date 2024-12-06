@@ -4,7 +4,6 @@ use common::{
     error::{HaliaError, HaliaResult},
     log::Logger,
 };
-use functions::{aggregation, computes, filter, merge::merge, window};
 use message::RuleMessageBatch;
 use tokio::{
     select,
@@ -21,6 +20,7 @@ use types::rules::{
 
 use crate::{
     graph::Graph,
+    nodes::{aggregation, computes, filter, merge::merge, window},
     segment::{start_segment, BlackHole},
 };
 
