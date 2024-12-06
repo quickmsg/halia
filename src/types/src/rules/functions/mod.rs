@@ -129,4 +129,10 @@ pub enum Type {
     TypeJudgmentNull,
     TypeJudgmentString,
     TypeJudgmentObject,
+
+    // 类型转换
+    TypeConversionBool,
+    TypeConversionFloat,
+    TypeConversionInt,
+    TypeConversionStr,
 }

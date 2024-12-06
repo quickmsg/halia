@@ -12,8 +12,8 @@ mod hash;
 mod number;
 mod string;
 mod trigonometric;
-mod type_judgment;
 mod type_conversion;
+mod type_judgment;
 
 pub trait Computer: Sync + Send {
     fn compute(&mut self, message: &mut Message);
@@ -144,6 +144,10 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::TypeJudgmentNull => todo!(),
             types::rules::functions::Type::TypeJudgmentString => todo!(),
             types::rules::functions::Type::TypeJudgmentObject => todo!(),
+            types::rules::functions::Type::TypeConversionBool => todo!(),
+            types::rules::functions::Type::TypeConversionFloat => todo!(),
+            types::rules::functions::Type::TypeConversionInt => todo!(),
+            types::rules::functions::Type::TypeConversionStr => todo!(),
         }
     }
 
@@ -416,6 +420,20 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             }
             types::rules::functions::Type::TypeJudgmentObject => {
                 type_judgment::object::new(Args::new(item_conf.args))?
+            }
+
+            // 类型转换
+            types::rules::functions::Type::TypeConversionBool => {
+                type_conversion::bool::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeConversionFloat => {
+                type_conversion::float::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeConversionInt => {
+                type_conversion::int::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeConversionStr => {
+                type_conversion::str::new(Args::new(item_conf.args))?
             }
         };
         computers.push(computer);
