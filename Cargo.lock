@@ -1927,6 +1927,7 @@ dependencies = [
  "md-5",
  "message",
  "pin-utils",
+ "rand",
  "regex",
  "serde",
  "serde_json",

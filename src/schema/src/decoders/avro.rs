@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use apache_avro::{from_avro_datum, Reader, Schema};
 use bytes::Bytes;
 use common::error::HaliaResult;

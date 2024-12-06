@@ -11,6 +11,7 @@ mod date;
 mod hash;
 mod number;
 mod string;
+mod trigonometric;
 
 pub trait Computer: Sync + Send {
     fn compute(&mut self, message: &mut Message);
@@ -27,31 +28,11 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::NumberAbs => {
                 number::abs::validate_conf(Args::new(item_conf.args))?
             }
-            types::rules::functions::Type::NumberAcos => {
-                number::acos::validate_conf(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberAcosh => {
-                number::acosh::validate_conf(Args::new(item_conf.args))?
-            }
+
             types::rules::functions::Type::NumberAdd => {
                 number::add::validate_conf(Args::new(item_conf.args))?
             }
-            types::rules::functions::Type::NumberAsin => {
-                number::asin::validate_conf(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberAsinh => {
-                number::asinh::validate_conf(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberAtan => {
-                number::atan::validate_conf(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberAtan2 => {
-                // number::atan2::validate_conf(&item_conf)?
-                todo!()
-            }
-            types::rules::functions::Type::NumberAtanh => {
-                number::atanh::validate_conf(Args::new(item_conf.args))?
-            }
+
             types::rules::functions::Type::NumberBitand => {
                 // number::bitand::validate_conf(&item_conf)?
                 todo!()
@@ -74,10 +55,7 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::NumberCeil => {
                 number::ceil::validate_conf(Args::new(item_conf.args))?
             }
-            types::rules::functions::Type::NumberCos => {
-                number::cos::validate_conf(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberCosh => todo!(),
+
             types::rules::functions::Type::NumberDegrees => todo!(),
             types::rules::functions::Type::NumberExp => todo!(),
             types::rules::functions::Type::NumberExp2 => todo!(),
@@ -85,7 +63,6 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::NumberLn => todo!(),
             types::rules::functions::Type::NumberLog => todo!(),
             types::rules::functions::Type::NumberPower => todo!(),
-            types::rules::functions::Type::NumberSin => todo!(),
             types::rules::functions::Type::NumberSub => todo!(),
             types::rules::functions::Type::NumberMulti => todo!(),
             types::rules::functions::Type::NumberDivision => todo!(),
@@ -146,6 +123,18 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::ArrayReverse => todo!(),
             types::rules::functions::Type::ArrayIndexOf => todo!(),
             types::rules::functions::Type::ArrayLastIndexOf => todo!(),
+            types::rules::functions::Type::NumberRandom => todo!(),
+            types::rules::functions::Type::NumberRound => todo!(),
+            types::rules::functions::Type::TrigonometricAcos => todo!(),
+            types::rules::functions::Type::TrigonometricAcosh => todo!(),
+            types::rules::functions::Type::TrigonometricAsin => todo!(),
+            types::rules::functions::Type::TrigonometricAsinh => todo!(),
+            types::rules::functions::Type::TrigonometricAtan => todo!(),
+            types::rules::functions::Type::TrigonometricAtan2 => todo!(),
+            types::rules::functions::Type::TrigonometricAtanh => todo!(),
+            types::rules::functions::Type::TrigonometricSin => todo!(),
+            types::rules::functions::Type::TrigonometricCos => todo!(),
+            types::rules::functions::Type::TrigonometricCosh => todo!(),
         }
     }
 
@@ -160,31 +149,11 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::Type::NumberAbs => {
                 number::abs::new(Args::new(item_conf.args))?
             }
-            types::rules::functions::Type::NumberAcos => {
-                number::acos::new(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberAcosh => {
-                number::acosh::new(Args::new(item_conf.args))?
-            }
+
             types::rules::functions::Type::NumberAdd => {
                 number::add::new(Args::new(item_conf.args))?
             }
-            types::rules::functions::Type::NumberAsin => {
-                number::asin::new(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberAsinh => {
-                number::asinh::new(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberAtan => {
-                number::atan::new(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberAtan2 => {
-                //  number::atan2::new(item_conf)?,
-                todo!()
-            }
-            types::rules::functions::Type::NumberAtanh => {
-                number::atanh::new(Args::new(item_conf.args))?
-            }
+
             types::rules::functions::Type::NumberBitand => {
                 todo!()
                 // number::bitand::new(item_conf)?
@@ -210,12 +179,7 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::Type::NumberCeil => {
                 number::ceil::new(Args::new(item_conf.args))?
             }
-            types::rules::functions::Type::NumberCos => {
-                number::cos::new(Args::new(item_conf.args))?
-            }
-            types::rules::functions::Type::NumberCosh => {
-                number::cosh::new(Args::new(item_conf.args))?
-            }
+
             types::rules::functions::Type::NumberDegrees => {
                 number::degrees::new(Args::new(item_conf.args))?
             }
@@ -231,9 +195,7 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::Type::NumberLn => number::ln::new(Args::new(item_conf.args))?,
             types::rules::functions::Type::NumberLog => todo!(),
             types::rules::functions::Type::NumberPower => todo!(),
-            types::rules::functions::Type::NumberSin => {
-                number::sin::new(Args::new(item_conf.args))?
-            }
+
             types::rules::functions::Type::NumberSub => {
                 number::sub::new(Args::new(item_conf.args))?
             }
@@ -246,6 +208,26 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             types::rules::functions::Type::NumberModulo => {
                 number::modulo::new(Args::new(item_conf.args))?
             }
+            types::rules::functions::Type::NumberRandom => {
+                number::random::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::NumberRound => {
+                number::round::new(Args::new(item_conf.args))?
+            }
+
+            // 三角函数
+            types::rules::functions::Type::TrigonometricAcos => {
+                trigonometric::acos::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TrigonometricAcosh => todo!(),
+            types::rules::functions::Type::TrigonometricAsin => todo!(),
+            types::rules::functions::Type::TrigonometricAsinh => todo!(),
+            types::rules::functions::Type::TrigonometricAtan => todo!(),
+            types::rules::functions::Type::TrigonometricAtan2 => todo!(),
+            types::rules::functions::Type::TrigonometricAtanh => todo!(),
+            types::rules::functions::Type::TrigonometricSin => todo!(),
+            types::rules::functions::Type::TrigonometricCos => todo!(),
+            types::rules::functions::Type::TrigonometricCosh => todo!(),
 
             // string
             types::rules::functions::Type::StringBase64 => {

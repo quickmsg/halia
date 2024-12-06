@@ -1,11 +1,4 @@
 pub mod abs;
-pub mod acos;
-pub mod acosh;
-pub mod asin;
-pub mod asinh;
-pub mod atan;
-// mod atan2;
-pub mod atanh;
 // TODO 如何定义参数
 // pub mod bitand;
 // pub mod bitnot;
@@ -13,8 +6,6 @@ pub mod atanh;
 // pub mod bitxor;
 pub mod cbrt;
 pub mod ceil;
-pub mod cos;
-pub mod cosh;
 pub mod degrees;
 pub mod exp;
 pub mod exp2;
@@ -26,5 +17,7 @@ pub mod add;
 pub mod division;
 pub mod modulo;
 pub mod multi;
+pub mod random;
+pub mod round;
 pub mod sin;
 pub mod sub;

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use message::{Message, MessageValue};
 
-use crate::{computes::Computer, Args};
+use crate::{add_or_set_message_value, computes::Computer, Args};
 
 // 反双曲余弦函数
 struct Acosh {
@@ -45,9 +45,6 @@ impl Computer for Acosh {
             None => MessageValue::Null,
         };
 
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), compute_value),
-            None => message.set(&self.field, compute_value),
-        }
+        add_or_set_message_value!(self, message, compute_value);
     }
 }
