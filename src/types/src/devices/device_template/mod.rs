@@ -39,6 +39,8 @@ pub struct ListItem {
     pub name: String,
     pub device_type: DeviceType,
     pub reference_cnt: usize,
+    pub source_cnt: usize,
+    pub sink_cnt: usize,
 }
 
 #[derive(Serialize)]

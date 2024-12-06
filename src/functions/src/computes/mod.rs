@@ -12,6 +12,7 @@ mod hash;
 mod number;
 mod string;
 mod trigonometric;
+mod type_judgment;
 
 pub trait Computer: Sync + Send {
     fn compute(&mut self, message: &mut Message);
@@ -135,6 +136,13 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::TrigonometricSin => todo!(),
             types::rules::functions::Type::TrigonometricCos => todo!(),
             types::rules::functions::Type::TrigonometricCosh => todo!(),
+            types::rules::functions::Type::TypeJudgmentArray => todo!(),
+            types::rules::functions::Type::TypeJudgmentBool => todo!(),
+            types::rules::functions::Type::TypeJudgmentFloat => todo!(),
+            types::rules::functions::Type::TypeJudgmentInt => todo!(),
+            types::rules::functions::Type::TypeJudgmentNull => todo!(),
+            types::rules::functions::Type::TypeJudgmentString => todo!(),
+            types::rules::functions::Type::TypeJudgmentObject => todo!(),
         }
     }
 
@@ -386,6 +394,27 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
             }
             types::rules::functions::Type::DecompressZlib => {
                 compress::zlib::new_decoder(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeJudgmentArray => {
+                type_judgment::array::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeJudgmentBool => {
+                type_judgment::bool::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeJudgmentFloat => {
+                type_judgment::float::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeJudgmentInt => {
+                type_judgment::int::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeJudgmentNull => {
+                type_judgment::null::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeJudgmentString => {
+                type_judgment::string::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::TypeJudgmentObject => {
+                type_judgment::object::new(Args::new(item_conf.args))?
             }
         };
         computers.push(computer);

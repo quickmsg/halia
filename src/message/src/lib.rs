@@ -196,6 +196,22 @@ impl Message {
         }
     }
 
+    pub fn get_float(&self, field: &str) -> Option<&f64> {
+        if let Some(MessageValue::Float64(f)) = self.get(field) {
+            Some(f)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_int(&self, field: &str) -> Option<&i64> {
+        if let Some(MessageValue::Int64(i)) = self.get(field) {
+            Some(i)
+        } else {
+            None
+        }
+    }
+
     pub fn get_u8(&self, field: &str) -> Option<u8> {
         match self.value.get(field) {
             Some(value) => match value {

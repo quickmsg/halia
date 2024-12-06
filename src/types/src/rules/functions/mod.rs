@@ -120,4 +120,13 @@ pub enum Type {
     DecompressSnappy,
     CompressZlib,
     DecompressZlib,
+
+    // 类型判断
+    TypeJudgmentArray,
+    TypeJudgmentBool,
+    TypeJudgmentFloat,
+    TypeJudgmentInt,
+    TypeJudgmentNull,
+    TypeJudgmentString,
+    TypeJudgmentObject,
 }

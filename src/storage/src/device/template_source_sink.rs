@@ -31,7 +31,6 @@ impl DbSourceSink {
         Ok(SourceSink {
             id: self.id,
             device_template_id: self.device_template_id,
-            source_sink_type: self.source_sink_type.try_into()?,
             name: self.name,
             conf_type: self.conf_type.try_into()?,
             template_id: self.template_id,
@@ -44,7 +43,6 @@ impl DbSourceSink {
 pub struct SourceSink {
     pub id: String,
     pub device_template_id: String,
-    pub source_sink_type: SourceSinkType,
     pub name: String,
     pub conf_type: ConfType,
     pub template_id: Option<String>,

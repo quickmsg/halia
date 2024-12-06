@@ -31,6 +31,15 @@ pub async fn list_device_templates(
         storage::device::template::search(pagination, query_params).await?;
     let mut list = vec![];
     for db_device_template in db_device_templates {
+        let source_cnt =
+            storage::device::template_source_sink::count_sources_by_device_template_id(
+                &db_device_template.id,
+            )
+            .await?;
+        let sink_cnt = storage::device::template_source_sink::count_sinks_by_device_template_id(
+            &db_device_template.id,
+        )
+        .await?;
         let reference_cnt =
             storage::device::device::count_by_template_id(&db_device_template.id).await?;
         list.push(device_template::ListItem {
@@ -38,6 +47,8 @@ pub async fn list_device_templates(
             name: db_device_template.name,
             device_type: db_device_template.device_type,
             reference_cnt,
+            source_cnt,
+            sink_cnt,
         });
     }
 

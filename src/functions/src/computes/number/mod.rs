@@ -19,5 +19,4 @@ pub mod modulo;
 pub mod multi;
 pub mod random;
 pub mod round;
-pub mod sin;
 pub mod sub;
