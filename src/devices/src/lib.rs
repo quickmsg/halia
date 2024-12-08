@@ -309,6 +309,7 @@ pub async fn list_devices(
             id: db_device.id,
             name: db_device.name,
             device_type: db_device.device_type,
+            conf_type: db_device.conf_type,
             status: db_device.status,
             err,
             rule_ref_cnt,

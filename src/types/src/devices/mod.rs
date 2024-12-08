@@ -112,6 +112,7 @@ pub struct ListDevicesResp {
 pub struct ListDevicesItem {
     pub id: String,
     pub device_type: DeviceType,
+    pub conf_type: ConfType,
     pub name: String,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
