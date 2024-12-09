@@ -31,3 +31,16 @@ pub fn validate_sink_template_conf(conf: serde_json::Value) -> HaliaResult<()> {
     let _conf: SinkTemplateConf = serde_json::from_value(conf)?;
     Ok(())
 }
+
+pub fn validate_device_customize_conf(conf: serde_json::Value) -> HaliaResult<()> {
+    let conf: types::devices::device_template::modbus::CustomizeConf =
+        serde_json::from_value(conf)?;
+
+    if conf.ethernet.is_none() && conf.serial.is_none() {
+        return Err(HaliaError::Common(
+            "Ethernet or serial conf is required".to_string(),
+        ));
+    }
+
+    Ok(())
+}

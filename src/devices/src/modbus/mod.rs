@@ -21,7 +21,7 @@ use tokio::{
     time,
 };
 use tokio_serial::{DataBits, Parity, SerialPort, SerialStream, StopBits};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use types::{
     devices::{
         device::modbus::{
@@ -335,6 +335,7 @@ impl Modbus {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<DeviceConf> {
+        debug!("{:?}", customize_conf);
         let customize_conf: CustomizeConf = serde_json::from_value(customize_conf)?;
         let template_conf: TemplateConf = serde_json::from_value(template_conf)?;
         match &template_conf.link_type {

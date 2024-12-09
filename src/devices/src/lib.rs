@@ -163,6 +163,13 @@ pub async fn create_device(
                     return Err(HaliaError::Common("模板不存在".to_owned()));
                 }
 
+                match &req.device_type {
+                    DeviceType::Modbus => {
+                        modbus::template::validate_device_customize_conf(req.conf.clone())?
+                    }
+                    DeviceType::Opcua => todo!(),
+                    DeviceType::Coap => todo!(),
+                }
                 let device_template_sources =
                     storage::device::template_source_sink::read_sources_by_device_template_id(
                         device_template_id,
