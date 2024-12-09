@@ -159,13 +159,15 @@ pub struct ListSourcesSinksResp {
 pub struct ListSourcesSinksItem {
     pub id: String,
     pub name: String,
+    // pub conf_type: ConfType,
+    // pub template_id: Option<String>,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
-    #[serde(flatten)]
-    pub conf: serde_json::Value,
+    // #[serde(flatten)]
+    // pub conf: serde_json::Value,
 }
 
 #[derive(Serialize)]

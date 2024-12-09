@@ -569,30 +569,29 @@ pub async fn list_sources(
             },
             _ => None,
         };
-        let conf = match device_type {
-            DeviceType::Modbus => {
-                let conf: types::devices::device::modbus::SourceConf =
-                    serde_json::from_value(db_source.conf)?;
-                let conf = types::devices::device::modbus::ListSourceConf {
-                    slave: conf.slave,
-                    field: conf.field,
-                    area: conf.area,
-                    typ: conf.data_type.typ,
-                    address: conf.address,
-                    interval: conf.interval,
-                };
-                serde_json::to_value(conf)?
-            }
-            DeviceType::Opcua => todo!(),
-            DeviceType::Coap => todo!(),
-        };
+        // let conf = match device_type {
+        //     DeviceType::Modbus => {
+        //         let conf: types::devices::device::modbus::SourceConf =
+        //             serde_json::from_value(db_source.conf)?;
+        //         let conf = types::devices::device::modbus::ListSourceConf {
+        //             slave: conf.slave,
+        //             field: conf.field,
+        //             area: conf.area,
+        //             typ: conf.data_type.typ,
+        //             address: conf.address,
+        //             interval: conf.interval,
+        //         };
+        //         serde_json::to_value(conf)?
+        //     }
+        //     DeviceType::Opcua => todo!(),
+        //     DeviceType::Coap => todo!(),
+        // };
         list.push(ListSourcesSinksItem {
             id: db_source.id,
             name: db_source.name,
             status: db_source.status,
             err,
             rule_ref_cnt,
-            conf,
         });
     }
 
@@ -779,22 +778,22 @@ pub async fn list_sinks(
             },
             _ => None,
         };
-        let conf = match device_type {
-            DeviceType::Modbus => {
-                let conf: types::devices::device::modbus::SinkConf =
-                    serde_json::from_value(db_sink.conf)?;
-                let conf = types::devices::device::modbus::LiskSinkConf {
-                    slave: conf.slave,
-                    area: conf.area,
-                    typ: conf.data_type.typ,
-                    address: conf.address,
-                    value: conf.value,
-                };
-                serde_json::to_value(conf)?
-            }
-            DeviceType::Opcua => todo!(),
-            DeviceType::Coap => todo!(),
-        };
+        // let conf = match device_type {
+        //     DeviceType::Modbus => {
+        //         let conf: types::devices::device::modbus::SinkConf =
+        //             serde_json::from_value(db_sink.conf)?;
+        //         let conf = types::devices::device::modbus::LiskSinkConf {
+        //             slave: conf.slave,
+        //             area: conf.area,
+        //             typ: conf.data_type.typ,
+        //             address: conf.address,
+        //             value: conf.value,
+        //         };
+        //         serde_json::to_value(conf)?
+        //     }
+        //     DeviceType::Opcua => todo!(),
+        //     DeviceType::Coap => todo!(),
+        // };
 
         list.push(ListSourcesSinksItem {
             id: db_sink.id,
@@ -802,7 +801,7 @@ pub async fn list_sinks(
             status: db_sink.status,
             err,
             rule_ref_cnt,
-            conf,
+            // conf,
         });
     }
 
