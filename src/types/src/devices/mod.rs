@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use anyhow::{bail, Error};
 use serde::{Deserialize, Serialize};
@@ -116,7 +116,7 @@ pub struct ListDevicesItem {
     pub name: String,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub err: Option<String>,
+    pub err: Option<Arc<String>>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
     pub source_cnt: usize,
@@ -128,9 +128,11 @@ pub struct ReadDeviceResp {
     pub id: String,
     pub device_type: DeviceType,
     pub name: String,
+    pub conf_type: ConfType,
+    pub template_id: Option<String>,
     pub conf: serde_json::Value,
     pub status: Status,
-    pub err: Option<String>,
+    pub err: Option<Arc<String>>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -170,6 +172,8 @@ pub struct ListSourcesSinksItem {
 pub struct ReadSourceSinkResp {
     pub id: String,
     pub name: String,
+    pub conf_type: ConfType,
+    pub template_id: Option<String>,
     pub conf: serde_json::Value,
     pub status: Status,
     pub err: Option<String>,

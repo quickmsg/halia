@@ -1553,6 +1553,7 @@ dependencies = [
  "dashmap 6.0.1",
  "events",
  "futures",
+ "halia-derive",
  "message",
  "modbus",
  "opcua",
@@ -1568,6 +1569,7 @@ dependencies = [
  "tracing",
  "types",
  "url 2.5.2",
+ "utils",
 ]
 
 [[package]]

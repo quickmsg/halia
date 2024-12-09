@@ -245,8 +245,9 @@ impl Opcua {
 
 #[async_trait]
 impl Device for Opcua {
-    async fn read_err(&self) -> Option<String> {
-        self.err.read().await.clone()
+    async fn read_err(&self) -> Option<Arc<String>> {
+        // self.err.read().await.clone()
+        todo!()
     }
 
     async fn read_source_err(&self, _source_id: &String) -> Option<String> {

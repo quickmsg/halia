@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
@@ -25,7 +25,7 @@ static GLOBAL_DEVICE_MANAGER: LazyLock<DashMap<String, Box<dyn Device>>> =
 
 #[async_trait]
 pub trait Device: Send + Sync {
-    async fn read_err(&self) -> Option<String>;
+    async fn read_err(&self) -> Option<Arc<String>>;
     async fn read_source_err(&self, source_id: &String) -> Option<String>;
     async fn read_sink_err(&self, sink_id: &String) -> Option<String>;
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()>;
@@ -333,6 +333,8 @@ pub async fn read_device(device_id: String) -> HaliaResult<types::devices::ReadD
     Ok(ReadDeviceResp {
         id: db_device.id,
         device_type: db_device.device_type,
+        conf_type: db_device.conf_type,
+        template_id: db_device.template_id,
         name: db_device.name,
         conf: db_device.conf,
         status: db_device.status,
@@ -611,6 +613,8 @@ pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<Re
     Ok(ReadSourceSinkResp {
         id: db_source.id,
         name: db_source.name,
+        conf_type: db_source.conf_type,
+        template_id: db_source.template_id,
         conf: db_source.conf,
         status: db_source.status,
         err,
@@ -818,6 +822,8 @@ pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSo
     Ok(ReadSourceSinkResp {
         id: db_sink.id,
         name: db_sink.name,
+        conf_type: db_sink.conf_type,
+        template_id: db_sink.template_id,
         conf: db_sink.conf,
         status: db_sink.status,
         err,

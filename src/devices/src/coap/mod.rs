@@ -68,8 +68,9 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl Device for Coap {
-    async fn read_err(&self) -> Option<String> {
-        self.err.clone()
+    async fn read_err(&self) -> Option<Arc<String>> {
+        todo!()
+        // self.err.clone()
     }
 
     async fn read_source_err(&self, _source_id: &String) -> Option<String> {

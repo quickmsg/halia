@@ -1,17 +1,10 @@
-use std::{
-    io,
-    net::SocketAddr,
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
+use std::{io, net::SocketAddr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use futures::lock::BiLock;
+use halia_derive::ResourceErr;
 use message::RuleMessageBatch;
 use modbus_protocol::{self, rtu, tcp, Context};
 use sink::Sink;
@@ -41,6 +34,7 @@ use types::{
     },
     Value,
 };
+use utils::ErrorManager;
 
 use crate::Device;
 
@@ -48,32 +42,157 @@ mod sink;
 mod source;
 pub(crate) mod template;
 
+#[derive(ResourceErr)]
 struct Modbus {
     sources: Arc<DashMap<String, Source>>,
     sinks: DashMap<String, Sink>,
 
     stop_signal_tx: watch::Sender<()>,
     device_err_tx: broadcast::Sender<bool>,
-    err: BiLock<Option<String>>,
+    err: BiLock<Option<Arc<String>>>,
 
     write_tx: UnboundedSender<WritePointEvent>,
     read_tx: UnboundedSender<String>,
 
-    join_handle: Option<JoinHandle<JoinHandleData>>,
+    join_handle: Option<JoinHandle<TaskLoop>>,
 }
 
-struct JoinHandleData {
-    pub id: String,
-    pub device_conf: DeviceConf,
-    pub sources: Arc<DashMap<String, Source>>,
-    pub stop_signal_rx: watch::Receiver<()>,
-    pub write_rx: UnboundedReceiver<WritePointEvent>,
-    pub read_rx: UnboundedReceiver<String>,
-    pub err: BiLock<Option<String>>,
-    pub rtt: Arc<AtomicU16>,
+struct TaskLoop {
+    device_conf: DeviceConf,
+    error_manager: ErrorManager,
+    sources: Arc<DashMap<String, Source>>,
+    stop_signal_rx: watch::Receiver<()>,
+    write_rx: UnboundedReceiver<WritePointEvent>,
+    read_rx: UnboundedReceiver<String>,
 }
 
-impl JoinHandleData {
+impl TaskLoop {
+    pub fn new(
+        device_id: String,
+        device_conf: DeviceConf,
+        err: BiLock<Option<Arc<String>>>,
+        stop_signal_rx: watch::Receiver<()>,
+        sources: Arc<DashMap<String, Source>>,
+        write_rx: UnboundedReceiver<WritePointEvent>,
+        read_rx: UnboundedReceiver<String>,
+    ) -> Self {
+        let error_manager =
+            ErrorManager::new(utils::error_manager::ResourceType::Device, device_id, err);
+        Self {
+            device_conf,
+            error_manager,
+            sources,
+            stop_signal_rx,
+            write_rx,
+            read_rx,
+        }
+    }
+
+    pub fn start(mut self) -> JoinHandle<TaskLoop> {
+        tokio::spawn(async move {
+            loop {
+                match self.connect().await {
+                    Ok(mut ctx) => {
+                        let status_changed = self.error_manager.set_ok().await;
+                        if status_changed {
+                            // todo
+                        }
+
+                        loop {
+                            select! {
+                                biased;
+                                _ = self.stop_signal_rx.changed() => {
+                                    return self;
+                                }
+
+                                wpe = self.write_rx.recv() => {
+                                    if let Some(wpe) = wpe {
+                                        if write_value(&mut ctx, wpe).await.is_err() {
+                                            break
+                                        }
+                                    }
+                                    if self.device_conf.interval > 0 {
+                                        time::sleep(Duration::from_millis(self.device_conf.interval)).await;
+                                    }
+                                }
+
+                                Some(point_id) = self.read_rx.recv() => {
+                                    if let Some(mut source) = self.sources.get_mut(&point_id) {
+                                        if let Err(_) = source.read(&mut ctx, &self.device_conf).await {
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let e = Arc::new(e.to_string());
+                        let status_changed = self.error_manager.put_err(e.clone()).await;
+
+                        let sleep = time::sleep(Duration::from_secs(self.device_conf.reconnect));
+                        tokio::pin!(sleep);
+                        select! {
+                            _ = self.stop_signal_rx.changed() => {
+                                return self;
+                            }
+
+                            _ = &mut sleep => {}
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    pub async fn connect(&self) -> io::Result<Box<dyn Context>> {
+        match self.device_conf.link_type {
+            types::devices::device::modbus::LinkType::Ethernet => {
+                let ethernet = self.device_conf.ethernet.as_ref().unwrap();
+                let socket_addrs = lookup_host(format!("{}:{}", ethernet.host, ethernet.port))
+                    .await?
+                    .collect::<Vec<SocketAddr>>();
+                if socket_addrs.len() == 0 {
+                    return Err(io::Error::new(io::ErrorKind::Other, "no address found"));
+                }
+                let stream = TcpStream::connect(socket_addrs[0]).await?;
+
+                match ethernet.encode {
+                    Encode::Tcp => tcp::new(stream),
+                    Encode::RtuOverTcp => rtu::new(stream),
+                }
+            }
+            types::devices::device::modbus::LinkType::Serial => {
+                let serial = &self.device_conf.serial.as_ref().unwrap();
+                let builder = tokio_serial::new(serial.path.clone(), serial.baud_rate);
+
+                let mut port = SerialStream::open(&builder).unwrap();
+                let stop_bits = match serial.stop_bits {
+                    types::devices::device::modbus::StopBits::One => StopBits::One,
+                    types::devices::device::modbus::StopBits::Two => StopBits::Two,
+                };
+                port.set_stop_bits(stop_bits).unwrap();
+
+                let data_bits = match serial.data_bits {
+                    types::devices::device::modbus::DataBits::Five => DataBits::Five,
+                    types::devices::device::modbus::DataBits::Six => DataBits::Six,
+                    types::devices::device::modbus::DataBits::Seven => DataBits::Seven,
+                    types::devices::device::modbus::DataBits::Eight => DataBits::Eight,
+                };
+                port.set_data_bits(data_bits).unwrap();
+
+                let partity = match serial.parity {
+                    types::devices::device::modbus::Parity::None => Parity::None,
+                    types::devices::device::modbus::Parity::Odd => Parity::Odd,
+                    types::devices::device::modbus::Parity::Even => Parity::Even,
+                };
+                port.set_parity(partity).unwrap();
+
+                rtu::new(port)
+            }
+        }
+    }
+
     pub fn update_template_conf(&mut self, template_conf: serde_json::Value) -> HaliaResult<()> {
         let template_conf: TemplateConf = serde_json::from_value(template_conf)?;
         match template_conf.link_type {
@@ -171,27 +290,26 @@ pub fn new_by_template_conf(
     new(id, conf)
 }
 
-fn new(id: String, device_conf: DeviceConf) -> Box<dyn Device> {
+fn new(device_id: String, device_conf: DeviceConf) -> Box<dyn Device> {
     let (stop_signal_tx, stop_signal_rx) = watch::channel(());
     let (read_tx, read_rx) = unbounded_channel();
     let (write_tx, write_rx) = unbounded_channel();
     let (device_err_tx, _) = broadcast::channel(16);
 
     let sources = Arc::new(DashMap::new());
-    let (err1, err2) = BiLock::new(Some("连接中。。。".to_owned()));
-    let rtt = Arc::new(AtomicU16::new(0));
-    let join_handle_data = JoinHandleData {
-        id,
+    let (err1, err2) = BiLock::new(None);
+
+    let task_loop = TaskLoop::new(
+        device_id,
         device_conf,
+        err1,
         stop_signal_rx,
+        sources.clone(),
         write_rx,
         read_rx,
-        sources: sources.clone(),
-        err: err1,
-        rtt: rtt.clone(),
-    };
+    );
 
-    let join_handle = Modbus::event_loop(join_handle_data);
+    let join_handle = task_loop.start();
 
     Box::new(Modbus {
         err: err2,
@@ -218,154 +336,6 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl Modbus {
-    fn event_loop(mut join_handle_data: JoinHandleData) -> JoinHandle<JoinHandleData> {
-        tokio::spawn(async move {
-            let mut task_err: Option<String> = Some("not connectd.".to_owned());
-            loop {
-                match Modbus::connect(&join_handle_data.device_conf).await {
-                    Ok(mut ctx) => {
-                        task_err = None;
-                        *join_handle_data.err.lock().await = None;
-
-                        if let Err(e) = storage::device::device::update_status(
-                            &join_handle_data.id,
-                            types::Status::Running,
-                        )
-                        .await
-                        {
-                            warn!("update device err failed: {}", e);
-                        }
-
-                        events::insert_connect_succeed(
-                            types::events::ResourceType::Device,
-                            &join_handle_data.id,
-                        )
-                        .await;
-
-                        loop {
-                            select! {
-                                biased;
-                                _ = join_handle_data.stop_signal_rx.changed() => {
-                                    return join_handle_data;
-                                }
-
-                                wpe = join_handle_data.write_rx.recv() => {
-                                    if let Some(wpe) = wpe {
-                                        if write_value(&mut ctx, wpe).await.is_err() {
-                                            break
-                                        }
-                                    }
-                                    if join_handle_data.device_conf.interval > 0 {
-                                        time::sleep(Duration::from_millis(join_handle_data.device_conf.interval)).await;
-                                    }
-                                }
-
-                                Some(point_id) = join_handle_data.read_rx.recv() => {
-                                    if let Some(mut source) = join_handle_data.sources.get_mut(&point_id) {
-                                        let now = Instant::now();
-                                        if let Err(_) = source.read(&mut ctx, &join_handle_data.device_conf).await {
-                                            break
-                                        }
-                                        join_handle_data.rtt.store(now.elapsed().as_secs() as u16, Ordering::SeqCst);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        events::insert_connect_failed(
-                            types::events::ResourceType::Device,
-                            &join_handle_data.id,
-                            e.to_string(),
-                        )
-                        .await;
-
-                        match &task_err {
-                            Some(te) => {
-                                if *te != e.to_string() {
-                                    *join_handle_data.err.lock().await = Some(e.to_string());
-                                }
-                            }
-                            None => {
-                                *join_handle_data.err.lock().await = Some(e.to_string());
-                                if let Err(storage_err) = storage::device::device::update_status(
-                                    &join_handle_data.id,
-                                    types::Status::Error,
-                                )
-                                .await
-                                {
-                                    warn!("update device err failed: {}", storage_err);
-                                }
-                            }
-                        }
-
-                        task_err = Some(e.to_string());
-
-                        let sleep = time::sleep(Duration::from_secs(
-                            join_handle_data.device_conf.reconnect,
-                        ));
-                        tokio::pin!(sleep);
-                        select! {
-                            _ = join_handle_data.stop_signal_rx.changed() => {
-                                return join_handle_data;
-                            }
-
-                            _ = &mut sleep => {}
-                        }
-                    }
-                }
-            }
-        })
-    }
-
-    async fn connect(device_conf: &DeviceConf) -> io::Result<Box<dyn Context>> {
-        match device_conf.link_type {
-            types::devices::device::modbus::LinkType::Ethernet => {
-                let ethernet = device_conf.ethernet.as_ref().unwrap();
-                let socket_addrs = lookup_host(format!("{}:{}", ethernet.host, ethernet.port))
-                    .await?
-                    .collect::<Vec<SocketAddr>>();
-                if socket_addrs.len() == 0 {
-                    return Err(io::Error::new(io::ErrorKind::Other, "no address found"));
-                }
-                let stream = TcpStream::connect(socket_addrs[0]).await?;
-
-                match ethernet.encode {
-                    Encode::Tcp => tcp::new(stream),
-                    Encode::RtuOverTcp => rtu::new(stream),
-                }
-            }
-            types::devices::device::modbus::LinkType::Serial => {
-                let serial = device_conf.serial.as_ref().unwrap();
-                let builder = tokio_serial::new(serial.path.clone(), serial.baud_rate);
-
-                let mut port = SerialStream::open(&builder).unwrap();
-                let stop_bits = match serial.stop_bits {
-                    types::devices::device::modbus::StopBits::One => StopBits::One,
-                    types::devices::device::modbus::StopBits::Two => StopBits::Two,
-                };
-                port.set_stop_bits(stop_bits).unwrap();
-
-                let data_bits = match serial.data_bits {
-                    types::devices::device::modbus::DataBits::Five => DataBits::Five,
-                    types::devices::device::modbus::DataBits::Six => DataBits::Six,
-                    types::devices::device::modbus::DataBits::Seven => DataBits::Seven,
-                    types::devices::device::modbus::DataBits::Eight => DataBits::Eight,
-                };
-                port.set_data_bits(data_bits).unwrap();
-
-                let partity = match serial.parity {
-                    types::devices::device::modbus::Parity::None => Parity::None,
-                    types::devices::device::modbus::Parity::Odd => Parity::Odd,
-                    types::devices::device::modbus::Parity::Even => Parity::Even,
-                };
-                port.set_parity(partity).unwrap();
-
-                rtu::new(port)
-            }
-        }
-    }
-
     fn get_conf(
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
@@ -450,9 +420,9 @@ impl Modbus {
 
     async fn update_conf(&mut self, modbus_conf: DeviceConf) {
         self.stop_signal_tx.send(()).unwrap();
-        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
-        join_handle_data.device_conf = modbus_conf;
-        let join_handle = Self::event_loop(join_handle_data);
+        let mut task_loop = self.join_handle.take().unwrap().await.unwrap();
+        task_loop.device_conf = modbus_conf;
+        let join_handle = task_loop.start();
         self.join_handle = Some(join_handle);
     }
 
@@ -593,8 +563,8 @@ async fn write_value(
 
 #[async_trait]
 impl Device for Modbus {
-    async fn read_err(&self) -> Option<String> {
-        self.err.lock().await.clone()
+    async fn read_err(&self) -> Option<Arc<String>> {
+        self.read_err().await
     }
 
     async fn read_source_err(&self, _source_id: &String) -> Option<String> {
@@ -613,9 +583,9 @@ impl Device for Modbus {
 
     async fn update_template_conf(&mut self, template_conf: serde_json::Value) -> HaliaResult<()> {
         self.stop_signal_tx.send(()).unwrap();
-        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
-        join_handle_data.update_template_conf(template_conf)?;
-        let join_handle = Self::event_loop(join_handle_data);
+        let mut task_loop = self.join_handle.take().unwrap().await.unwrap();
+        task_loop.update_template_conf(template_conf)?;
+        let join_handle = task_loop.start();
         self.join_handle = Some(join_handle);
 
         Ok(())
