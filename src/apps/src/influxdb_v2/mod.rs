@@ -100,20 +100,9 @@ impl TaskLoop {
     async fn handle_err(&mut self, err: Option<Arc<String>>) {
         match err {
             Some(err) => {
-                // events::insert_connect_failed(
-                //     types::events::ResourceType::App,
-                //     &self.id,
-                //     err.clone(),
-                // )
-                // .await;
-                self.error_manager.put_err(err).await;
+                self.error_manager.set_err(err).await;
             }
             None => {
-                // events::insert_connect_succeed(
-                //     types::events::ResourceType::App,
-                //     &join_handle_data.id,
-                // )
-                // .await;
                 self.error_manager.set_ok().await;
             }
         }

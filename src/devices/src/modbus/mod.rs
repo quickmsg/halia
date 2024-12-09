@@ -128,7 +128,7 @@ impl TaskLoop {
                     }
                     Err(e) => {
                         let e = Arc::new(e.to_string());
-                        let status_changed = self.error_manager.put_err(e.clone()).await;
+                        let status_changed = self.error_manager.set_err(e.clone()).await;
 
                         let sleep = time::sleep(Duration::from_secs(self.device_conf.reconnect));
                         tokio::pin!(sleep);

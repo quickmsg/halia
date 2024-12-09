@@ -35,7 +35,7 @@ impl ErrorManager {
     }
 
     // 状态是否切换
-    pub async fn put_err(&mut self, err: Arc<String>) -> bool {
+    pub async fn set_err(&mut self, err: Arc<String>) -> bool {
         if !self.inited {
             self.inited = true;
         }

@@ -128,12 +128,12 @@ impl TaskLoop {
                     // TODO 是否会触发unwrap
                     let body = resp.text().await.unwrap();
                     let err = Arc::new(format!("状态码：{}, 错误：{}。", status_code, body));
-                    self.error_manager.put_err(err.clone()).await;
+                    self.error_manager.set_err(err.clone()).await;
                 }
             }
             Err(e) => {
                 let err = Arc::new(e.to_string());
-                let status_changed = self.error_manager.put_err(err.clone()).await;
+                let status_changed = self.error_manager.set_err(err.clone()).await;
                 if status_changed {
                     self.app_err_tx.send(Some(err.clone())).unwrap();
                 }

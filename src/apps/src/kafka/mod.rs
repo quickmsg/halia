@@ -135,7 +135,7 @@ impl TaskLoop {
                     .await;
 
                     let err = Arc::new(e.to_string());
-                    let status_changed = self.error_manager.put_err(err).await;
+                    let status_changed = self.error_manager.set_err(err).await;
                     if status_changed {}
 
                     let sleep = time::sleep(Duration::from_secs(reconnect));

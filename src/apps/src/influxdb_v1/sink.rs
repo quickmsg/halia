@@ -216,13 +216,13 @@ impl TaskLoop {
                 influxdb::Error::DatabaseError { error } => {
                     // TODO database error 说明已连接
                     let err = Arc::new(error);
-                    self.error_manager.put_err(err.clone()).await;
+                    self.error_manager.set_err(err.clone()).await;
                 }
                 influxdb::Error::AuthenticationError => todo!(),
                 influxdb::Error::AuthorizationError => todo!(),
                 influxdb::Error::ConnectionError { error } => {
                     let err = Arc::new(error);
-                    let status_changed = self.error_manager.put_err(err.clone()).await;
+                    let status_changed = self.error_manager.set_err(err.clone()).await;
                     if status_changed {
                         let _ = self.app_err_tx.send(Some(err));
                     }

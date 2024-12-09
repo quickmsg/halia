@@ -94,7 +94,7 @@ impl TaskLoop {
     async fn handle_err(&mut self, err: Option<Arc<String>>) {
         match err {
             Some(err) => {
-                self.error_manager.put_err(err).await;
+                self.error_manager.set_err(err).await;
             }
             None => {
                 self.error_manager.set_ok().await;

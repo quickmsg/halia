@@ -178,7 +178,7 @@ impl TaskLoop {
             }
             Err(err) => {
                 let err = Arc::new(err.to_string());
-                let status_changed = self.error_manager.put_err(err).await;
+                let status_changed = self.error_manager.set_err(err).await;
                 if status_changed {
                     self.mqtt_status
                         .store(false, std::sync::atomic::Ordering::Relaxed);

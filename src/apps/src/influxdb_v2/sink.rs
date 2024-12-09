@@ -215,7 +215,7 @@ impl TaskLoop {
                 match e {
                     influxdb2::RequestError::ReqwestProcessing { source } => {
                         let err = Arc::new(source.to_string());
-                        let status_changed = self.error_manager.put_err(err.clone()).await;
+                        let status_changed = self.error_manager.set_err(err.clone()).await;
                         if status_changed {
                             self.app_err_tx.send(Some(err)).unwrap();
                         }

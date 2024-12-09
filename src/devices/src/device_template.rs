@@ -1,8 +1,9 @@
 use common::error::{HaliaError, HaliaResult};
-use futures::future;
 use types::{
     devices::{
-        device_template::{self, source_sink, CreateReq, ListResp, QueryParams, ReadResp},
+        device_template::{
+            self, source_sink, CreateReq, ListResp, QueryParams, ReadResp, UpdateReq,
+        },
         DeviceType,
     },
     Pagination,
@@ -64,36 +65,23 @@ pub async fn read_device_template(id: String) -> HaliaResult<ReadResp> {
         name: db_device_template.name,
         device_type: db_device_template.device_type,
         reference_cnt,
-        can_delete: reference_cnt == 0,
         conf: db_device_template.conf,
     })
 }
 
-pub async fn update_device_template(
-    id: String,
-    req: device_template::UpdateReq,
-) -> HaliaResult<()> {
+pub async fn update_device_template(id: String, req: UpdateReq) -> HaliaResult<()> {
     let db_conf = storage::device::template::read_conf(&id).await?;
     if req.conf != db_conf {
         let device_ids = storage::device::device::read_ids_by_template_id(&id).await?;
-        for device_id in device_ids {
-            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-                device.update_template_conf(req.conf.clone()).await?;
-            }
-        }
+        device_ids.into_iter().for_each(|device_id| {
+            let conf = req.conf.clone();
+            tokio::spawn(async move {
+                if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+                    let _ = device.update_template_conf(conf).await;
+                }
+            });
+        });
     }
-
-    // let conf = req.conf.clone();
-    // let results = future::try_join_all(device_ids.into_iter().map(|device_id| async move {
-    //     let customize_conf = storage::device::device::read_conf(&device_id).await?;
-    //     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-    //         device
-    //             .update_template_conf(customize_conf, conf.clone())
-    //             .await?;
-    //     }
-    //     Ok::<(), HaliaError>(())
-    // }))
-    // .await?;
 
     storage::device::template::update(&id, req).await?;
     Ok(())
@@ -119,9 +107,7 @@ pub async fn create_source(
         conf: req.conf.clone(),
     };
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
-
     let source_id = common::get_id();
-
     for device_id in device_ids {
         super::create_source(device_id, Some(&source_id), device_source_req.clone()).await?;
     }

@@ -49,6 +49,5 @@ pub struct ReadResp {
     pub name: String,
     pub device_type: DeviceType,
     pub reference_cnt: usize,
-    pub can_delete: bool,
     pub conf: serde_json::Value,
 }
