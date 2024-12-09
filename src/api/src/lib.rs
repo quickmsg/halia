@@ -62,7 +62,9 @@ impl From<HaliaError> for AppError {
                 StatusCode::BAD_REQUEST,
                 "停止失败，有其他规则正在引用该规则".to_string(),
             ),
-            HaliaError::NameExists => todo!(),
+            HaliaError::NameExists => {
+                AppError::new(StatusCode::BAD_REQUEST, "名称已存在！".to_string())
+            }
             HaliaError::AddressExists => todo!(),
             HaliaError::Disconnect => todo!(),
             HaliaError::Error(e) => AppError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),

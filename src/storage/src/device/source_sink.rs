@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS {} (
     template_id CHAR(32),
     status SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
-    UNIQUE (device_id, source_sink_type, name)
+    UNIQUE (device_id, source_sink_type, name),
+    FOREIGN KEY (device_id) REFERENCES devices(id)
 );
 "#,
         TABLE_NAME

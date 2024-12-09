@@ -23,7 +23,6 @@ const TABLE_NAME: &str = "device_source_sink_templates";
 #[derive(FromRow)]
 struct DbSourceSinkTemplate {
     pub id: String,
-    pub source_sink_type: i32,
     pub device_type: i32,
     pub name: String,
     pub conf: Vec<u8>,

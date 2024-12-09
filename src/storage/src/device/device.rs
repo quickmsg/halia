@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS {} (
 }
 
 pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
-    sqlx::query(
+    if let Err(err) = sqlx::query(
         format!(
             r#"INSERT INTO {} 
 (id, device_type, name, conf_type, conf, template_id, status, ts) 
@@ -93,7 +93,38 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(Into::<i32>::into(Status::Stopped))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
-    .await?;
+    .await
+    {
+        match err {
+            sqlx::Error::Configuration(error) => todo!(),
+            sqlx::Error::Database(database_error) => match database_error.code() {
+                Some(code) => {
+                    if code == "2067" {
+                        return Err(common::error::HaliaError::NameExists);
+                    } else {
+                        todo!()
+                    }
+                }
+                None => todo!(),
+            },
+            sqlx::Error::Io(error) => todo!(),
+            sqlx::Error::Tls(error) => todo!(),
+            sqlx::Error::Protocol(_) => todo!(),
+            sqlx::Error::RowNotFound => todo!(),
+            sqlx::Error::TypeNotFound { type_name } => todo!(),
+            sqlx::Error::ColumnIndexOutOfBounds { index, len } => todo!(),
+            sqlx::Error::ColumnNotFound(_) => todo!(),
+            sqlx::Error::ColumnDecode { index, source } => todo!(),
+            sqlx::Error::Encode(error) => todo!(),
+            sqlx::Error::Decode(error) => todo!(),
+            sqlx::Error::AnyDriverError(error) => todo!(),
+            sqlx::Error::PoolTimedOut => todo!(),
+            sqlx::Error::PoolClosed => todo!(),
+            sqlx::Error::WorkerCrashed => todo!(),
+            sqlx::Error::Migrate(migrate_error) => todo!(),
+            _ => todo!(),
+        }
+    }
 
     Ok(())
 }
