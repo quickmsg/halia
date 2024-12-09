@@ -114,6 +114,7 @@ pub struct ListDevicesItem {
     pub device_type: DeviceType,
     pub conf_type: ConfType,
     pub name: String,
+    pub addr: String,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<Arc<String>>,

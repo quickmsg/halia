@@ -230,8 +230,12 @@ impl Source {
                 // todo 考虑field的共享，避免clone
                 message.add(self.source_conf.field.clone(), value);
 
-                message.insert_raw_metadatas(device_conf.metadatas.clone());
-                message.insert_raw_metadatas(self.source_conf.metadatas.clone());
+                if let Some(metadatas) = &device_conf.metadatas {
+                    message.insert_raw_metadatas(metadatas.clone());
+                }
+                if let Some(metadatas) = &self.source_conf.metadatas {
+                    message.insert_raw_metadatas(metadatas.clone());
+                }
 
                 let mut message_batch = MessageBatch::default();
                 message_batch.push_message(message);

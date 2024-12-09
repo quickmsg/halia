@@ -301,6 +301,45 @@ pub async fn list_devices(
             _ => None,
         };
 
+        let addr = match &db_device.device_type {
+            DeviceType::Modbus => match &db_device.conf_type {
+                ConfType::Template => {
+                    let template_conf = storage::device::template::read_conf(
+                        &db_device.template_id.as_ref().unwrap(),
+                    )
+                    .await?;
+                    let template_conf: types::devices::device_template::modbus::TemplateConf =
+                        serde_json::from_value(template_conf)?;
+                    match (template_conf.ethernet, template_conf.serial) {
+                        (None, Some(_)) => {
+                            let conf: types::devices::device_template::modbus::SerialCustomizeConf =
+                                serde_json::from_value(db_device.conf)?;
+                            conf.path
+                        }
+                        (Some(_), None) => {
+                            let conf: types::devices::device_template::modbus::EthernetCustomizeConf =
+                                serde_json::from_value(db_device.conf)?;
+                            format!("tcp://{}:{}", conf.host, conf.port)
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                ConfType::Customize => {
+                    let conf: types::devices::device::modbus::DeviceConf =
+                        serde_json::from_value(db_device.conf)?;
+                    match (conf.ethernet, conf.serial) {
+                        (None, Some(serial)) => serial.path,
+                        (Some(ethernet), None) => {
+                            format!("tcp://{}:{}", ethernet.host, ethernet.port)
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            },
+            DeviceType::Opcua => todo!(),
+            DeviceType::Coap => todo!(),
+        };
+
         let device = types::devices::ListDevicesItem {
             id: db_device.id,
             name: db_device.name,
@@ -311,6 +350,7 @@ pub async fn list_devices(
             rule_ref_cnt,
             source_cnt,
             sink_cnt,
+            addr,
         };
         list.push(device);
     }

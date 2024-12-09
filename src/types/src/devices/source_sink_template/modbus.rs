@@ -8,7 +8,7 @@ use crate::{
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SourceCustomizeConf {
     pub slave: u8,
-    pub metadatas: Vec<(String, serde_json::Value)>,
+    pub metadatas: Option<Vec<(String, serde_json::Value)>>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
