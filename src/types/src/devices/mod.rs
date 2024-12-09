@@ -132,6 +132,8 @@ pub struct ReadDeviceResp {
     pub conf_type: ConfType,
     pub template_id: Option<String>,
     pub conf: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template_conf: Option<serde_json::Value>,
     pub status: Status,
     pub err: Option<Arc<String>>,
 }
@@ -178,6 +180,8 @@ pub struct ReadSourceSinkResp {
     pub conf_type: ConfType,
     pub template_id: Option<String>,
     pub conf: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template_conf: Option<serde_json::Value>,
     pub status: Status,
     pub err: Option<String>,
     #[serde(flatten)]

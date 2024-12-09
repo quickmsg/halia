@@ -5,6 +5,7 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
+use tracing::debug;
 use types::{
     devices::{
         device::QueryParams, ConfType, CreateUpdateSourceSinkReq, DeviceType, ListDevicesResp,
@@ -311,22 +312,12 @@ pub async fn list_devices(
         let addr = match &db_device.device_type {
             DeviceType::Modbus => match &db_device.conf_type {
                 ConfType::Template => {
-                    let template_conf = storage::device::template::read_conf(
-                        &db_device.template_id.as_ref().unwrap(),
-                    )
-                    .await?;
-                    let template_conf: types::devices::device_template::modbus::TemplateConf =
-                        serde_json::from_value(template_conf)?;
-                    match (template_conf.ethernet, template_conf.serial) {
-                        (None, Some(_)) => {
-                            let conf: types::devices::device_template::modbus::SerialCustomizeConf =
-                                serde_json::from_value(db_device.conf)?;
-                            conf.path
-                        }
-                        (Some(_), None) => {
-                            let conf: types::devices::device_template::modbus::EthernetCustomizeConf =
-                                serde_json::from_value(db_device.conf)?;
-                            format!("tcp://{}:{}", conf.host, conf.port)
+                    let customize_conf: types::devices::device_template::modbus::CustomizeConf =
+                        serde_json::from_value(db_device.conf)?;
+                    match (customize_conf.ethernet, customize_conf.serial) {
+                        (None, Some(serial)) => serial.path,
+                        (Some(ethernet), None) => {
+                            format!("tcp://{}:{}", ethernet.host, ethernet.port)
                         }
                         _ => unreachable!(),
                     }
@@ -377,6 +368,14 @@ pub async fn read_device(device_id: String) -> HaliaResult<types::devices::ReadD
         }
         _ => None,
     };
+    let template_conf = match &db_device.conf_type {
+        ConfType::Template => {
+            let template_id = db_device.template_id.as_ref().unwrap();
+            let template_conf = storage::device::template::read_conf(template_id).await?;
+            Some(template_conf)
+        }
+        ConfType::Customize => None,
+    };
     Ok(ReadDeviceResp {
         id: db_device.id,
         device_type: db_device.device_type,
@@ -384,6 +383,7 @@ pub async fn read_device(device_id: String) -> HaliaResult<types::devices::ReadD
         template_id: db_device.template_id,
         name: db_device.name,
         conf: db_device.conf,
+        template_conf,
         status: db_device.status,
         err,
     })
@@ -602,7 +602,7 @@ pub async fn list_sources(
     pagination: Pagination,
     query: QuerySourcesSinksParams,
 ) -> HaliaResult<ListSourcesSinksResp> {
-    let device_type = storage::device::device::read_device_type(&device_id).await?;
+    // let device_type = storage::device::device::read_device_type(&device_id).await?;
     let (count, db_sources) =
         storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sources.len());
@@ -656,12 +656,22 @@ pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<Re
         },
         _ => None,
     };
+    let template_conf = match &db_source.conf_type {
+        ConfType::Template => {
+            let template_id = db_source.template_id.as_ref().unwrap();
+            let template_conf =
+                storage::device::source_sink_template::read_conf(template_id).await?;
+            Some(template_conf)
+        }
+        ConfType::Customize => None,
+    };
     Ok(ReadSourceSinkResp {
         id: db_source.id,
         name: db_source.name,
         conf_type: db_source.conf_type,
         template_id: db_source.template_id,
         conf: db_source.conf,
+        template_conf,
         status: db_source.status,
         err,
         rule_ref_cnt,
@@ -865,11 +875,21 @@ pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSo
         },
         _ => None,
     };
+    let template_conf = match &db_sink.conf_type {
+        ConfType::Template => {
+            let template_id = db_sink.template_id.as_ref().unwrap();
+            let template_conf =
+                storage::device::source_sink_template::read_conf(template_id).await?;
+            Some(template_conf)
+        }
+        ConfType::Customize => None,
+    };
     Ok(ReadSourceSinkResp {
         id: db_sink.id,
         name: db_sink.name,
         conf_type: db_sink.conf_type,
         template_id: db_sink.template_id,
+        template_conf,
         conf: db_sink.conf,
         status: db_sink.status,
         err,
