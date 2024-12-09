@@ -14,7 +14,7 @@ use tokio::{
     select,
     sync::{
         broadcast,
-        mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         watch,
     },
     task::JoinHandle,
@@ -93,11 +93,7 @@ impl TaskLoop {
             loop {
                 match self.connect().await {
                     Ok(mut ctx) => {
-                        let status_changed = self.error_manager.set_ok().await;
-                        if status_changed {
-                            // todo
-                        }
-
+                        self.error_manager.set_ok().await;
                         loop {
                             select! {
                                 biased;
@@ -128,8 +124,7 @@ impl TaskLoop {
                     }
                     Err(e) => {
                         let e = Arc::new(e.to_string());
-                        let status_changed = self.error_manager.set_err(e.clone()).await;
-
+                        self.error_manager.set_err(e.clone()).await;
                         let sleep = time::sleep(Duration::from_secs(self.device_conf.reconnect));
                         tokio::pin!(sleep);
                         select! {
@@ -735,9 +730,8 @@ impl Device for Modbus {
         &self,
         source_id: &String,
         cnt: usize,
-    ) -> HaliaResult<Vec<mpsc::UnboundedReceiver<RuleMessageBatch>>> {
+    ) -> HaliaResult<Vec<UnboundedReceiver<RuleMessageBatch>>> {
         match self.sources.get_mut(source_id) {
-            // Some(source) => Ok(source.mb_tx.subscribe()),
             Some(mut source) => Ok(source.get_rxs(cnt)),
             None => Err(HaliaError::NotFound(source_id.to_owned())),
         }
@@ -747,7 +741,7 @@ impl Device for Modbus {
         &self,
         sink_id: &String,
         cnt: usize,
-    ) -> HaliaResult<Vec<mpsc::UnboundedSender<RuleMessageBatch>>> {
+    ) -> HaliaResult<Vec<UnboundedSender<RuleMessageBatch>>> {
         match self.sinks.get(sink_id) {
             Some(sink) => Ok(sink.get_txs(cnt)),
             None => Err(HaliaError::NotFound(sink_id.to_owned())),

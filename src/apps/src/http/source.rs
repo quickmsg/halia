@@ -1,7 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
+use bytes::Bytes;
 use common::error::HaliaResult;
-use futures::lock::BiLock;
+use futures::{lock::BiLock, stream::SplitSink, SinkExt};
 use futures_util::StreamExt;
 use halia_derive::{ResourceErr, ResourceStop, SourceRxs};
 use message::RuleMessageBatch;
@@ -12,7 +13,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest};
+use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest, WebSocketStream};
 use tracing::{debug, warn};
 use types::apps::http_client::{HttpClientConf, SourceConf};
 use utils::ErrorManager;
@@ -36,6 +37,9 @@ pub struct TaskLoop {
     app_err_tx: UnboundedSender<Option<Arc<String>>>,
     decoder: Box<dyn schema::Decoder>,
     error_manager: ErrorManager,
+
+    // websocket frame
+    buf: Option<Bytes>,
 }
 
 impl TaskLoop {
@@ -64,6 +68,7 @@ impl TaskLoop {
             app_err_tx,
             decoder,
             error_manager,
+            buf: None,
         }
     }
 
@@ -169,6 +174,7 @@ impl TaskLoop {
     }
 
     fn start_websocket(mut self) -> JoinHandle<Self> {
+        self.buf = Some(Bytes::new());
         tokio::spawn(async move {
             loop {
                 let request = connect_websocket(
@@ -184,11 +190,11 @@ impl TaskLoop {
                                 self.app_err_tx.send(None).unwrap();
                             }
                         }
-                        let (_, mut read) = ws_stream.split();
+                        let (mut write, mut read) = ws_stream.split();
                         loop {
                             select! {
                                 Some(msg) = read.next() => {
-                                    self.handle_websocket_msg(msg).await;
+                                    self.handle_websocket_msg(&mut write, msg).await;
                                 }
 
                                 _ = self.stop_signal_rx.changed() => {
@@ -220,6 +226,10 @@ impl TaskLoop {
 
     async fn handle_websocket_msg(
         &mut self,
+        write: &mut SplitSink<
+            WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+            tokio_tungstenite::tungstenite::Message,
+        >,
         msg: Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>,
     ) {
         debug!("{:?}", msg);
@@ -261,11 +271,27 @@ impl TaskLoop {
                     }
                 }
                 tokio_tungstenite::tungstenite::Message::Ping(vec) => {
-                    debug!("{:?}", vec);
+                    let _ = write
+                        .send(tokio_tungstenite::tungstenite::Message::Pong(vec))
+                        .await;
                 }
-                tokio_tungstenite::tungstenite::Message::Pong(vec) => todo!(),
-                tokio_tungstenite::tungstenite::Message::Close(close_frame) => todo!(),
-                tokio_tungstenite::tungstenite::Message::Frame(frame) => {}
+                tokio_tungstenite::tungstenite::Message::Pong(_) => {
+                    // Note halia 不会主动发ping，所以不需要处理pong
+                }
+                tokio_tungstenite::tungstenite::Message::Close(close_frame) => {
+                    warn!("Close frame: {:?}", close_frame);
+                }
+                tokio_tungstenite::tungstenite::Message::Frame(frame) => {
+                    // match frame.header().is_final {
+                    //     true => todo!(),
+                    //     false => self
+                    //         .buf
+                    //         .as_mut()
+                    //         .unwrap()
+                    //         .push(frame.payload()),
+                    // }
+                    warn!("Unsupported frame: {:?}", frame);
+                }
             },
             Err(e) => {
                 let err = Arc::new(e.to_string());
