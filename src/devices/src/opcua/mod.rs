@@ -265,11 +265,11 @@ impl Device for Opcua {
 
     async fn update_template_conf(
         &mut self,
-        customize_conf: serde_json::Value,
+        // customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
-        Self::update_conf(&mut self, opcua_conf).await;
+        // let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
+        // Self::update_conf(&mut self, opcua_conf).await;
 
         Ok(())
     }

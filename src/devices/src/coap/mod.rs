@@ -95,11 +95,7 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn update_template_conf(
-        &mut self,
-        _conf: serde_json::Value,
-        _23: serde_json::Value,
-    ) -> HaliaResult<()> {
+    async fn update_template_conf(&mut self, _23: serde_json::Value) -> HaliaResult<()> {
         todo!()
         // let old_conf: CoapConf = serde_json::from_value(old_conf)?;
         // let new_conf: CoapConf = serde_json::from_value(new_conf)?;

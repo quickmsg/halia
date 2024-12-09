@@ -73,6 +73,71 @@ struct JoinHandleData {
     pub rtt: Arc<AtomicU16>,
 }
 
+impl JoinHandleData {
+    pub fn update_template_conf(&mut self, template_conf: serde_json::Value) -> HaliaResult<()> {
+        let template_conf: TemplateConf = serde_json::from_value(template_conf)?;
+        match template_conf.link_type {
+            types::devices::device::modbus::LinkType::Ethernet => {
+                match (&self.device_conf.ethernet, template_conf.ethernet) {
+                    (Some(ethernet_customize_conf), Some(ethernet_template_conf)) => {
+                        // Ok(DeviceConf {
+                        //     link_type: template_conf.link_type,
+                        //     reconnect: template_conf.reconnect,
+                        //     interval: template_conf.interval,
+                        //     ethernet: Some(Ethernet {
+                        //         mode: ethernet_template_conf.mode,
+                        //         encode: ethernet_template_conf.encode,
+                        //         host: ethernet_customize_conf.host,
+                        //         port: ethernet_customize_conf.port,
+                        //     }),
+                        //     serial: None,
+                        //     metadatas: customize_conf.metadatas,
+                        // })
+                        self.device_conf.reconnect = template_conf.reconnect;
+                        self.device_conf.interval = template_conf.interval;
+                        self.device_conf.ethernet.as_mut().unwrap().mode =
+                            ethernet_template_conf.mode;
+                        self.device_conf.ethernet.as_mut().unwrap().encode =
+                            ethernet_template_conf.encode;
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            types::devices::device::modbus::LinkType::Serial => {
+                match (&self.device_conf.serial, template_conf.serial) {
+                    (Some(serial_customize_conf), Some(serial_template_conf)) => {
+                        self.device_conf.serial.as_mut().unwrap().stop_bits =
+                            serial_template_conf.stop_bits;
+                        self.device_conf.serial.as_mut().unwrap().baud_rate =
+                            serial_template_conf.baud_rate;
+                        self.device_conf.serial.as_mut().unwrap().data_bits =
+                            serial_template_conf.data_bits;
+                        self.device_conf.serial.as_mut().unwrap().parity =
+                            serial_template_conf.parity;
+                    }
+                    // Ok(DeviceConf {
+                    //     link_type: template_conf.link_type,
+                    //     reconnect: template_conf.reconnect,
+                    //     interval: template_conf.interval,
+                    //     ethernet: None,
+                    //     serial: Some(Serial {
+                    //         path: serial_customize_conf.path,
+                    //         stop_bits: serial_template_conf.stop_bits,
+                    //         baud_rate: serial_template_conf.baud_rate,
+                    //         data_bits: serial_template_conf.data_bits,
+                    //         parity: serial_template_conf.parity,
+                    //     }),
+                    //     metadatas: customize_conf.metadatas,
+                    // }),
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 pub fn validate_conf(device_conf: &serde_json::Value) -> HaliaResult<()> {
     let device_conf: DeviceConf = serde_json::from_value(device_conf.clone())?;
 
@@ -546,13 +611,13 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn update_template_conf(
-        &mut self,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let device_conf = Self::get_conf(customize_conf, template_conf)?;
-        self.update_conf(device_conf).await;
+    async fn update_template_conf(&mut self, template_conf: serde_json::Value) -> HaliaResult<()> {
+        self.stop_signal_tx.send(()).unwrap();
+        let mut join_handle_data = self.join_handle.take().unwrap().await.unwrap();
+        join_handle_data.update_template_conf(template_conf)?;
+        let join_handle = Self::event_loop(join_handle_data);
+        self.join_handle = Some(join_handle);
+
         Ok(())
     }
 

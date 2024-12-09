@@ -1,4 +1,5 @@
 use common::error::{HaliaError, HaliaResult};
+use futures::future;
 use types::{
     devices::{
         device_template::{self, source_sink, CreateReq, ListResp, QueryParams, ReadResp},
@@ -72,15 +73,27 @@ pub async fn update_device_template(
     id: String,
     req: device_template::UpdateReq,
 ) -> HaliaResult<()> {
-    let device_ids = storage::device::device::read_ids_by_template_id(&id).await?;
-    for device_id in device_ids {
-        let customize_conf = storage::device::device::read_conf(&device_id).await?;
-        if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-            device
-                .update_template_conf(customize_conf, req.conf.clone())
-                .await?;
+    let db_conf = storage::device::template::read_conf(&id).await?;
+    if req.conf != db_conf {
+        let device_ids = storage::device::device::read_ids_by_template_id(&id).await?;
+        for device_id in device_ids {
+            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+                device.update_template_conf(req.conf.clone()).await?;
+            }
         }
     }
+
+    // let conf = req.conf.clone();
+    // let results = future::try_join_all(device_ids.into_iter().map(|device_id| async move {
+    //     let customize_conf = storage::device::device::read_conf(&device_id).await?;
+    //     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+    //         device
+    //             .update_template_conf(customize_conf, conf.clone())
+    //             .await?;
+    //     }
+    //     Ok::<(), HaliaError>(())
+    // }))
+    // .await?;
 
     storage::device::template::update(&id, req).await?;
     Ok(())

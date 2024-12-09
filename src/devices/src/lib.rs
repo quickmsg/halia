@@ -29,11 +29,7 @@ pub trait Device: Send + Sync {
     async fn read_source_err(&self, source_id: &String) -> Option<String>;
     async fn read_sink_err(&self, sink_id: &String) -> Option<String>;
     async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()>;
-    async fn update_template_conf(
-        &mut self,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()>;
+    async fn update_template_conf(&mut self, template_conf: serde_json::Value) -> HaliaResult<()>;
     async fn stop(&mut self);
 
     async fn create_customize_source(
@@ -352,11 +348,8 @@ pub async fn update_device(
         ConfType::Template => match &req.template_id {
             Some(template_id) => {
                 let template_conf = storage::device::template::read_conf(&template_id).await?;
-                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                 if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-                    device
-                        .update_template_conf(req.conf.clone(), template_conf)
-                        .await?;
+                    device.update_template_conf(template_conf).await?;
                 }
             }
             None => return Err(HaliaError::Common("模板ID不能为空".to_string())),
@@ -386,7 +379,6 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
         ConfType::Template => match db_device.template_id {
             Some(template_id) => {
                 let template_conf = storage::device::template::read_conf(&template_id).await?;
-                let template_conf: serde_json::Value = serde_json::from_slice(&template_conf)?;
                 match db_device.device_type {
                     DeviceType::Modbus => modbus::new_by_template_conf(
                         db_device.id.clone(),

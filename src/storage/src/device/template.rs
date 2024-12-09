@@ -98,14 +98,14 @@ pub async fn read_one(id: &String) -> Result<DeviceTemplate> {
     db_device_tempalte.transfer()
 }
 
-pub async fn read_conf(id: &String) -> Result<Vec<u8>> {
+pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     let conf: Vec<u8> =
         sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
             .bind(id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
-    Ok(conf)
+    serde_json::from_slice(&conf).map_err(Into::into)
 }
 
 pub async fn check_exists(id: &String) -> Result<bool> {
