@@ -5,7 +5,6 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
-use tracing::debug;
 use types::{
     devices::{
         device::QueryParams, ConfType, CreateSourceSinkReq, DeviceType, ListDevicesResp,
@@ -176,10 +175,6 @@ pub async fn create_device(
     match &req.conf_type {
         ConfType::Template => match &req.template_id {
             Some(device_template_id) => {
-                if !storage::device::template::check_exists(&device_template_id).await? {
-                    return Err(HaliaError::Common("模板不存在".to_owned()));
-                }
-
                 match &req.device_type {
                     DeviceType::Modbus => {
                         modbus::template::validate_device_customize_conf(req.conf.clone())?
@@ -561,23 +556,6 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
                 }
             },
         }
-        // match db_sink.conf_type {
-        //     types::devices::ConfType::Template => match db_sink.template_id {
-        //         Some(template_id) => {
-        //             let template_conf =
-        //                 storage::device::source_sink_template::read_conf(&template_id).await?;
-        //             device
-        //                 .create_template_sink(db_sink.id, db_sink.conf, template_conf)
-        //                 .await?;
-        //         }
-        //         None => panic!("数据库数据损坏"),
-        //     },
-        //     types::devices::ConfType::Customize => {
-        //         device
-        //             .create_customize_sink(db_sink.id, db_sink.conf)
-        //             .await?;
-        //     }
-        // }
     }
 
     GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);

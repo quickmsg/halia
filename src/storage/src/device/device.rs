@@ -1,5 +1,5 @@
 use anyhow::Result;
-use common::error::HaliaResult;
+use common::error::{HaliaError, HaliaResult};
 use sqlx::{
     any::AnyArguments,
     prelude::FromRow,
@@ -17,6 +17,25 @@ use types::{
 use crate::POOL;
 
 const TABLE_NAME: &str = "devices";
+
+pub(crate) fn create_table() -> String {
+    format!(
+        r#"  
+CREATE TABLE IF NOT EXISTS {} (
+    id CHAR(32) PRIMARY KEY,
+    device_type SMALLINT UNSIGNED NOT NULL,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    conf_type SMALLINT UNSIGNED NOT NULL,
+    conf BLOB NOT NULL,
+    template_id CHAR(32),
+    status SMALLINT UNSIGNED NOT NULL,
+    ts BIGINT UNSIGNED NOT NULL,
+    FOREIGN KEY (template_id) REFERENCES device_templates(id)
+);
+"#,
+        TABLE_NAME
+    )
+}
 
 #[derive(FromRow)]
 struct DbDevice {
@@ -56,24 +75,6 @@ pub struct Device {
     pub ts: i64,
 }
 
-pub(crate) fn create_table() -> String {
-    format!(
-        r#"  
-CREATE TABLE IF NOT EXISTS {} (
-    id CHAR(32) PRIMARY KEY,
-    device_type SMALLINT UNSIGNED NOT NULL,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    conf_type SMALLINT UNSIGNED NOT NULL,
-    conf BLOB NOT NULL,
-    template_id CHAR(32),
-    status SMALLINT UNSIGNED NOT NULL,
-    ts BIGINT UNSIGNED NOT NULL
-);
-"#,
-        TABLE_NAME
-    )
-}
-
 pub async fn insert(id: &String, req: CreateReq) -> HaliaResult<()> {
     if let Err(err) = sqlx::query(
         format!(
@@ -107,7 +108,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
                 }
                 None => todo!(),
             },
-            sqlx::Error::Io(error) => todo!(),
+            sqlx::Error::Io(error) => return Err(HaliaError::Common(error.to_string())),
             sqlx::Error::Tls(error) => todo!(),
             sqlx::Error::Protocol(_) => todo!(),
             sqlx::Error::RowNotFound => todo!(),

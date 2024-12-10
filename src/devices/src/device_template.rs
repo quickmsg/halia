@@ -242,20 +242,57 @@ pub async fn create_sink(
     device_template_id: String,
     req: source_sink::CreateReq,
 ) -> HaliaResult<()> {
-    let device_sink_req = types::devices::CreateSourceSinkReq {
-        name: req.name.clone(),
-        conf_type: req.conf_type.clone(),
-        conf: req.conf.clone(),
-        template_id: req.template_id.clone(),
-    };
-    let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
-
-    let sink_id = common::get_id();
-    for device_id in device_ids {
-        // super::create_sink(device_id, Some(&sink_id), device_sink_req.clone()).await?;
+    if req.conf_type == ConfType::Template && req.template_id.is_none() {
+        return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    storage::device::template_source_sink::insert_sink(&sink_id, &device_template_id, req).await?;
+    // let device_type: DeviceType =
+    //     storage::device::template::read_device_type(&device_template_id).await?;
+    // match device_type {
+    //     DeviceType::Modbus => modbus::validate_source_conf(&req.conf)?,
+    //     DeviceType::Opcua => opcua::validate_source_conf(&req.conf)?,
+    //     DeviceType::Coap => coap::validate_source_conf(&req.conf)?,
+    // }
+
+    let device_template_sink_id = common::get_id();
+    storage::device::template_source_sink::insert_sink(
+        &device_template_sink_id,
+        &device_template_id,
+        req.clone(),
+    )
+    .await?;
+
+    let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
+    for device_id in device_ids {
+        let sink_id = common::get_id();
+        if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+            let conf = req.conf.clone();
+            match req.conf_type {
+                types::devices::ConfType::Template => {
+                    let template_conf = storage::device::source_sink_template::read_conf(
+                        // 函数入口处即进行了验证，此处永远不会panic
+                        req.template_id.as_ref().unwrap(),
+                    )
+                    .await?;
+                    device
+                        .create_template_sink(sink_id.clone(), conf, template_conf)
+                        .await?
+                }
+                types::devices::ConfType::Customize => {
+                    device.create_customize_sink(sink_id.clone(), conf).await?
+                }
+            }
+        }
+
+        storage::device::source_sink::insert_sink_by_device_template(
+            &sink_id,
+            &device_id,
+            &req.name,
+            &device_template_sink_id,
+        )
+        .await?;
+    }
+
     Ok(())
 }
 

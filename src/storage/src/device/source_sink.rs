@@ -75,7 +75,9 @@ CREATE TABLE IF NOT EXISTS {} (
     status SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
     UNIQUE (device_id, source_sink_type, name),
-    FOREIGN KEY (device_id) REFERENCES devices(id)
+    FOREIGN KEY (device_id) REFERENCES devices(id),
+    FOREIGN KEY (device_template_source_sink_id) REFERENCES device_template_sources_sinks(id),
+    FOREIGN KEY (template_id) REFERENCES device_source_sink_templates(id)
 );
 "#,
         TABLE_NAME
