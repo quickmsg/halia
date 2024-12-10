@@ -5,6 +5,7 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
+use tracing::debug;
 use types::{
     devices::{
         device::QueryParams, ConfType, CreateSourceSinkReq, DeviceType, ListDevicesResp,

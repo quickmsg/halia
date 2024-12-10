@@ -104,8 +104,8 @@ pub async fn start(port: u16) {
                 .allow_origin(Any)
                 .allow_methods(Any)
                 .allow_headers(Any),
-        )
-        .layer(TraceLayer::new_for_http());
+        );
+        // .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
         .await

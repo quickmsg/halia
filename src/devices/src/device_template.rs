@@ -112,9 +112,9 @@ pub async fn create_source(
         DeviceType::Coap => coap::validate_source_conf(&req.conf)?,
     }
 
-    let source_id = common::get_id();
+    let device_template_source_id = common::get_id();
     storage::device::template_source_sink::insert_source(
-        &source_id,
+        &device_template_source_id,
         &device_template_id,
         req.clone(),
     )
@@ -145,7 +145,10 @@ pub async fn create_source(
         }
 
         storage::device::source_sink::insert_source_by_device_template(
-            &source_id, &device_id, &req.name, &source_id,
+            &source_id,
+            &device_id,
+            &req.name,
+            &device_template_source_id,
         )
         .await?;
     }

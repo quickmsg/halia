@@ -47,6 +47,7 @@ impl DbSourceSink {
     }
 }
 
+#[derive(Debug)]
 pub struct SourceSink {
     pub id: String,
     pub device_id: String,
