@@ -4,7 +4,7 @@ use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
     devices::{
-        device_template::source_sink::{CreateUpdateReq, QueryParams},
+        device_template::source_sink::{CreateReq, QueryParams, UpdateReq},
         ConfType,
     },
     Pagination,
@@ -18,7 +18,6 @@ static TABLE_NAME: &str = "device_template_sources_sinks";
 struct DbSourceSink {
     pub id: String,
     pub device_template_id: String,
-    pub source_sink_type: i32,
     pub name: String,
     pub conf_type: i32,
     pub template_id: Option<String>,
@@ -69,19 +68,11 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert_source(
-    id: &String,
-    device_template_id: &String,
-    req: CreateUpdateReq,
-) -> Result<()> {
+pub async fn insert_source(id: &String, device_template_id: &String, req: CreateReq) -> Result<()> {
     insert(SourceSinkType::Source, id, device_template_id, req).await
 }
 
-pub async fn insert_sink(
-    id: &String,
-    device_template_id: &String,
-    req: CreateUpdateReq,
-) -> Result<()> {
+pub async fn insert_sink(id: &String, device_template_id: &String, req: CreateReq) -> Result<()> {
     insert(SourceSinkType::Sink, id, device_template_id, req).await
 }
 
@@ -89,7 +80,7 @@ async fn insert(
     source_sink_type: SourceSinkType,
     id: &String,
     device_template_id: &String,
-    req: CreateUpdateReq,
+    req: CreateReq,
 ) -> Result<()> {
     sqlx::query(
         format!(
@@ -316,20 +307,13 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: CreateUpdateReq) -> Result<()> {
-    let conf = serde_json::to_vec(&req.conf)?;
-    sqlx::query(
-        format!(
-            "UPDATE {} SET name = ?, des = ?, conf = ? WHERE id = ?",
-            TABLE_NAME
-        )
-        .as_str(),
-    )
-    .bind(req.name)
-    .bind(conf)
-    .bind(id)
-    .execute(POOL.get().unwrap())
-    .await?;
+pub async fn update(id: &String, req: UpdateReq) -> Result<()> {
+    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(req.name)
+        .bind(serde_json::to_vec(&req.conf)?)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
 
     Ok(())
 }

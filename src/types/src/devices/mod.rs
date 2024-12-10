@@ -139,10 +139,16 @@ pub struct ReadDeviceResp {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateSourceSinkReq {
+pub struct CreateSourceSinkReq {
     pub name: String,
     pub conf_type: ConfType,
     pub template_id: Option<String>,
+    pub conf: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct UpdateSourceSinkReq {
+    pub name: String,
     pub conf: serde_json::Value,
 }
 

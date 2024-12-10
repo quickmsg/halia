@@ -333,22 +333,12 @@ pub async fn update_status(id: &String, status: Status) -> Result<()> {
 }
 
 pub async fn update_conf(id: &String, req: UpdateReq) -> HaliaResult<()> {
-    let conf_type: i32 = req.conf_type.into();
-    let conf = serde_json::to_vec(&req.conf)?;
-    sqlx::query(
-        format!(
-            "UPDATE {} SET name = ?, conf_type = ?, conf = ?, template_id = ? WHERE id = ?",
-            TABLE_NAME
-        )
-        .as_str(),
-    )
-    .bind(req.name)
-    .bind(conf_type)
-    .bind(conf)
-    .bind(req.template_id)
-    .bind(id)
-    .execute(POOL.get().unwrap())
-    .await?;
+    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(req.name)
+        .bind(serde_json::to_vec(&req.conf)?)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
 
     Ok(())
 }

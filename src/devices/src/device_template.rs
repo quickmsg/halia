@@ -98,9 +98,9 @@ pub async fn delete_device_template(id: String) -> HaliaResult<()> {
 
 pub async fn create_source(
     device_template_id: String,
-    req: source_sink::CreateUpdateReq,
+    req: source_sink::CreateReq,
 ) -> HaliaResult<()> {
-    let device_source_req = types::devices::CreateUpdateSourceSinkReq {
+    let device_source_req = types::devices::CreateSourceSinkReq {
         name: req.name.clone(),
         conf_type: req.conf_type.clone(),
         template_id: req.template_id.clone(),
@@ -157,12 +157,10 @@ pub async fn read_source(
 pub async fn update_source(
     device_template_id: String,
     source_id: String,
-    req: source_sink::CreateUpdateReq,
+    req: source_sink::UpdateReq,
 ) -> HaliaResult<()> {
-    let device_source_req = types::devices::CreateUpdateSourceSinkReq {
+    let device_source_req = types::devices::UpdateSourceSinkReq {
         name: req.name.clone(),
-        conf_type: req.conf_type.clone(),
-        template_id: req.template_id.clone(),
         conf: req.conf.clone(),
     };
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
@@ -203,13 +201,13 @@ pub async fn delete_source(device_template_id: String, source_id: String) -> Hal
 
 pub async fn create_sink(
     device_template_id: String,
-    req: source_sink::CreateUpdateReq,
+    req: source_sink::CreateReq,
 ) -> HaliaResult<()> {
-    let device_sink_req = types::devices::CreateUpdateSourceSinkReq {
+    let device_sink_req = types::devices::CreateSourceSinkReq {
         name: req.name.clone(),
         conf_type: req.conf_type.clone(),
-        template_id: req.template_id.clone(),
         conf: req.conf.clone(),
+        template_id: req.template_id.clone(),
     };
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
 
@@ -259,12 +257,10 @@ pub async fn read_sink(
 pub async fn update_sink(
     device_template_id: String,
     sink_id: String,
-    req: source_sink::CreateUpdateReq,
+    req: source_sink::UpdateReq,
 ) -> HaliaResult<()> {
-    let device_sink_req = types::devices::CreateUpdateSourceSinkReq {
+    let device_sink_req = types::devices::UpdateSourceSinkReq {
         name: req.name.clone(),
-        conf_type: req.conf_type.clone(),
-        template_id: req.template_id.clone(),
         conf: req.conf.clone(),
     };
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;

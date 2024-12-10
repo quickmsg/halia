@@ -2,7 +2,7 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    devices::{ConfType, CreateUpdateSourceSinkReq, QuerySourcesSinksParams},
+    devices::{ConfType, CreateSourceSinkReq, QuerySourcesSinksParams, UpdateSourceSinkReq},
     Pagination, Status,
 };
 
@@ -85,7 +85,7 @@ pub async fn insert_source(
     id: &String,
     device_id: &String,
     device_template_source_id: Option<&String>,
-    req: CreateUpdateSourceSinkReq,
+    req: CreateSourceSinkReq,
 ) -> Result<()> {
     insert(
         SourceSinkType::Source,
@@ -101,7 +101,7 @@ pub async fn insert_sink(
     id: &String,
     device_id: &String,
     device_template_sink_id: Option<&String>,
-    req: CreateUpdateSourceSinkReq,
+    req: CreateSourceSinkReq,
 ) -> Result<()> {
     insert(
         SourceSinkType::Sink,
@@ -118,7 +118,7 @@ async fn insert(
     id: &String,
     device_id: &String,
     device_template_source_sink_id: Option<&String>,
-    req: CreateUpdateSourceSinkReq,
+    req: CreateSourceSinkReq,
 ) -> Result<()> {
     let (conf_type, conf) = match &device_template_source_sink_id {
         Some(_) => (None, None),
@@ -433,23 +433,13 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: CreateUpdateSourceSinkReq) -> Result<()> {
-    let conf_type: i32 = req.conf_type.into();
-    let conf = serde_json::to_vec(&req.conf)?;
-    sqlx::query(
-        format!(
-            "UPDATE {} SET name = ?, conf_type = ?, conf = ?, template_id = ? WHERE id = ?",
-            TABLE_NAME
-        )
-        .as_str(),
-    )
-    .bind(req.name)
-    .bind(conf_type)
-    .bind(conf)
-    .bind(req.template_id)
-    .bind(id)
-    .execute(POOL.get().unwrap())
-    .await?;
+pub async fn update(id: &String, req: UpdateSourceSinkReq) -> Result<()> {
+    sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
+        .bind(req.name)
+        .bind(serde_json::to_vec(&req.conf)?)
+        .bind(id)
+        .execute(POOL.get().unwrap())
+        .await?;
 
     Ok(())
 }

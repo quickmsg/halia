@@ -22,8 +22,6 @@ pub struct CreateReq {
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct UpdateReq {
     pub name: String,
-    pub conf_type: ConfType,
-    pub template_id: Option<String>,
     pub conf: serde_json::Value,
 }
 

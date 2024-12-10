@@ -7,9 +7,10 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     devices::{
-        device::QueryParams, ConfType, CreateUpdateSourceSinkReq, DeviceType, ListDevicesResp,
+        device::QueryParams, ConfType, CreateSourceSinkReq, DeviceType, ListDevicesResp,
         ListSourcesSinksItem, ListSourcesSinksResp, QueryRuleInfoParams, QuerySourcesSinksParams,
         ReadDeviceResp, ReadSourceSinkResp, RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink,
+        UpdateSourceSinkReq,
     },
     Pagination, Status, Summary, Value,
 };
@@ -194,7 +195,7 @@ pub async fn create_device(
                 for device_template_source in device_template_sources {
                     match device_template_source.conf_type {
                         ConfType::Template => {
-                            let req = types::devices::CreateUpdateSourceSinkReq {
+                            let req = types::devices::CreateSourceSinkReq {
                                 name: device_template_source.name,
                                 conf_type: device_template_source.conf_type,
                                 template_id: device_template_source.template_id,
@@ -203,7 +204,7 @@ pub async fn create_device(
                             source_reqs.push(req);
                         }
                         ConfType::Customize => {
-                            let req = types::devices::CreateUpdateSourceSinkReq {
+                            let req = types::devices::CreateSourceSinkReq {
                                 name: device_template_source.name,
                                 conf_type: device_template_source.conf_type,
                                 template_id: None,
@@ -223,7 +224,7 @@ pub async fn create_device(
                 for device_template_sink in device_template_sinks {
                     match device_template_sink.conf_type {
                         ConfType::Template => {
-                            let req = types::devices::CreateUpdateSourceSinkReq {
+                            let req = types::devices::CreateSourceSinkReq {
                                 name: device_template_sink.name,
                                 conf_type: device_template_sink.conf_type,
                                 template_id: device_template_sink.template_id,
@@ -232,7 +233,7 @@ pub async fn create_device(
                             sink_reqs.push(req);
                         }
                         ConfType::Customize => {
-                            let req = types::devices::CreateUpdateSourceSinkReq {
+                            let req = types::devices::CreateSourceSinkReq {
                                 name: device_template_sink.name,
                                 conf_type: device_template_sink.conf_type,
                                 template_id: None,
@@ -409,52 +410,14 @@ pub async fn update_device(
 ) -> HaliaResult<()> {
     let db_device = storage::device::device::read_one(&device_id).await?;
 
-    match (&req.conf_type, &db_device.conf_type) {
-        (ConfType::Template, ConfType::Template) => match &req.template_id {
-            Some(new_template_id) => {
-                // 更换了模板 todo 是否有源和动作关联，是否可以更换
-                if *new_template_id != db_device.template_id.unwrap() {
-                    let template_conf =
-                        storage::device::template::read_conf(&new_template_id).await?;
-                    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-                        device
-                            .update_template_mode_template_conf(template_conf)
-                            .await?;
-                    }
-                }
-            }
-            None => return Err(HaliaError::Common("模板ID不能为空".to_string())),
-        },
-        (ConfType::Template, ConfType::Customize) => {
-            // 从模板更改为自定义  todo 源迁移
-            let customize_conf: types::devices::device::modbus::DeviceConf =
-                serde_json::from_value(req.conf.clone())?;
-            match &db_device.device_type {
-                DeviceType::Modbus => modbus::validate_conf(&req.conf)?,
-                DeviceType::Opcua => todo!(),
-                DeviceType::Coap => todo!(),
-            }
-            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-                device.update_customize_mode_conf(req.conf.clone()).await?;
-            }
-        }
-        (ConfType::Customize, ConfType::Template) => {
-            // 从自定义更改为模板 todo 源迁移
-            let template_conf =
-                storage::device::template::read_conf(req.template_id.as_ref().unwrap()).await?;
-            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+        match db_device.conf_type {
+            ConfType::Template => {
                 device
-                    .update_template_mode_conf(todo!(), template_conf)
+                    .update_template_mode_customize_conf(req.conf.clone())
                     .await?;
             }
-        }
-        (ConfType::Customize, ConfType::Customize) => {
-            match &db_device.device_type {
-                DeviceType::Modbus => modbus::validate_conf(&req.conf)?,
-                DeviceType::Opcua => todo!(),
-                DeviceType::Coap => todo!(),
-            }
-            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+            ConfType::Customize => {
                 device.update_customize_mode_conf(req.conf.clone()).await?;
             }
         }
@@ -654,16 +617,13 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
     }
 
     events::insert_delete(types::events::ResourceType::Device, &device_id).await;
-    storage::device::device::delete_by_id(&device_id).await?;
     storage::device::source_sink::delete_many_by_device_id(&device_id).await?;
+    storage::device::device::delete_by_id(&device_id).await?;
 
     Ok(())
 }
 
-pub async fn device_create_source(
-    device_id: String,
-    req: CreateUpdateSourceSinkReq,
-) -> HaliaResult<()> {
+pub async fn device_create_source(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
     let conf_type = storage::device::device::read_conf_type(&device_id).await?;
     if conf_type == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建源".to_string()));
@@ -674,7 +634,7 @@ pub async fn device_create_source(
 pub(crate) async fn create_source(
     device_id: String,
     device_template_source_id: Option<&String>,
-    req: CreateUpdateSourceSinkReq,
+    req: CreateSourceSinkReq,
 ) -> HaliaResult<()> {
     if req.conf_type == ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
@@ -838,35 +798,32 @@ pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<Re
 pub async fn update_source(
     device_id: String,
     source_id: String,
-    req: CreateUpdateSourceSinkReq,
+    req: UpdateSourceSinkReq,
 ) -> HaliaResult<()> {
     let device_conf_type = storage::device::device::read_conf_type(&device_id).await?;
     if device_conf_type == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能修改源。".to_string()));
     }
 
-    if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
-        return Err(HaliaError::Common("模板ID不能为空".to_string()));
-    }
-
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-        // let db_source = storage::device::source_sink::read_one(&source_id).await?;
-        // let db_conf_type: types::devices::SourceSinkConfType = db_source.conf_type.try_into()?;
-        match req.conf_type {
-            types::devices::ConfType::Template => {
-                // TODO 判断配置相同的情况下，不更新
-                let template_conf = storage::device::source_sink_template::read_conf(
-                    req.template_id.as_ref().unwrap(),
-                )
-                .await?;
-                device
-                    .update_template_source(&source_id, req.conf.clone(), template_conf)
+        let db_source = storage::device::source_sink::read_one(&source_id).await?;
+        if db_source.conf.unwrap() != req.conf {
+            match db_source.conf_type.unwrap() {
+                types::devices::ConfType::Template => {
+                    // TODO 有问题，逻辑不对
+                    let template_conf = storage::device::source_sink_template::read_conf(
+                        db_source.template_id.as_ref().unwrap(),
+                    )
                     .await?;
-            }
-            types::devices::ConfType::Customize => {
-                device
-                    .update_customize_source(&source_id, req.conf.clone())
-                    .await?;
+                    device
+                        .update_template_source(&source_id, req.conf.clone(), template_conf)
+                        .await?;
+                }
+                types::devices::ConfType::Customize => {
+                    device
+                        .update_customize_source(&source_id, req.conf.clone())
+                        .await?;
+                }
             }
         }
     }
@@ -921,10 +878,7 @@ pub async fn get_source_rxs(
     }
 }
 
-pub async fn device_create_sink(
-    device_id: String,
-    req: CreateUpdateSourceSinkReq,
-) -> HaliaResult<()> {
+pub async fn device_create_sink(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
     if storage::device::device::read_conf_type(&device_id).await? == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建动作。".to_string()));
     }
@@ -934,18 +888,18 @@ pub async fn device_create_sink(
 pub(crate) async fn create_sink(
     device_id: String,
     device_template_sink_id: Option<&String>,
-    req: CreateUpdateSourceSinkReq,
+    req: CreateSourceSinkReq,
 ) -> HaliaResult<()> {
     if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let device_type: DeviceType = storage::device::device::read_device_type(&device_id).await?;
-    match device_type {
-        DeviceType::Modbus => modbus::validate_sink_conf(&req.conf)?,
-        DeviceType::Opcua => opcua::validate_sink_conf(&req.conf)?,
-        DeviceType::Coap => coap::validate_sink_conf(&req.conf)?,
-    }
+    // let device_type: DeviceType = storage::device::device::read_device_type(&device_id).await?;
+    // match device_type {
+    //     DeviceType::Modbus => modbus::validate_sink_conf(&req.conf)?,
+    //     DeviceType::Opcua => opcua::validate_sink_conf(&req.conf)?,
+    //     DeviceType::Coap => coap::validate_sink_conf(&req.conf)?,
+    // }
 
     let sink_id = common::get_id();
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
@@ -1091,30 +1045,30 @@ pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSo
 pub async fn update_sink(
     device_id: String,
     sink_id: String,
-    req: CreateUpdateSourceSinkReq,
+    req: UpdateSourceSinkReq,
 ) -> HaliaResult<()> {
-    if req.conf_type == ConfType::Template && req.template_id.is_none() {
-        return Err(HaliaError::Common("模板ID不能为空".to_string()));
-    }
+    // if req.conf_type == ConfType::Template && req.template_id.is_none() {
+    //     return Err(HaliaError::Common("模板ID不能为空".to_string()));
+    // }
 
-    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-        match req.conf_type {
-            ConfType::Template => {
-                let template_conf = storage::device::source_sink_template::read_conf(
-                    req.template_id.as_ref().unwrap(),
-                )
-                .await?;
-                device
-                    .update_template_sink(&sink_id, req.conf.clone(), template_conf)
-                    .await?;
-            }
-            ConfType::Customize => {
-                device
-                    .update_customize_sink(&sink_id, req.conf.clone())
-                    .await?;
-            }
-        }
-    }
+    // if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+    //     match req.conf_type {
+    //         ConfType::Template => {
+    //             let template_conf = storage::device::source_sink_template::read_conf(
+    //                 req.template_id.as_ref().unwrap(),
+    //             )
+    //             .await?;
+    //             device
+    //                 .update_template_sink(&sink_id, req.conf.clone(), template_conf)
+    //                 .await?;
+    //         }
+    //         ConfType::Customize => {
+    //             device
+    //                 .update_customize_sink(&sink_id, req.conf.clone())
+    //                 .await?;
+    //         }
+    //     }
+    // }
 
     storage::device::source_sink::update(&sink_id, req).await?;
 
