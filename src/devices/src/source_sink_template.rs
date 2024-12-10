@@ -66,10 +66,12 @@ pub async fn update_source_template(id: String, req: UpdateReq) -> HaliaResult<(
         for source in sources {
             if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&source.device_id) {
                 device
-                    .update_template_source(&source.id, source.conf, req.conf.clone())
+                    .update_template_source(&source.id, source.conf.unwrap(), req.conf.clone())
                     .await?;
             }
         }
+
+        // todo 更新设备模板中的源
     }
 
     storage::device::source_sink_template::update(&id, req).await?;
@@ -156,10 +158,12 @@ pub async fn update_sink_template(id: String, req: UpdateReq) -> HaliaResult<()>
         for sink in sinks {
             if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&sink.device_id) {
                 device
-                    .update_template_sink(&sink.id, sink.conf, req.conf.clone())
+                    .update_template_sink(&sink.id, sink.conf.unwrap(), req.conf.clone())
                     .await?;
             }
         }
+
+        // TODO
     }
 
     storage::device::source_sink_template::update(&id, req).await?;

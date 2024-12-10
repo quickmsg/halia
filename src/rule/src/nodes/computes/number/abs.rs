@@ -44,11 +44,7 @@ impl Computer for Abs {
 mod tests {
     use std::collections::HashMap;
 
-    use message::Message;
-
-    use crate::nodes::args::Args;
-
-    use super::new;
+    use super::*;
 
     #[test]
     fn test_abs_int() {

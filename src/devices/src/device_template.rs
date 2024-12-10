@@ -77,7 +77,7 @@ pub async fn update_device_template(id: String, req: UpdateReq) -> HaliaResult<(
             let conf = req.conf.clone();
             tokio::spawn(async move {
                 if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-                    let _ = device.update_template_conf(conf).await;
+                    let _ = device.update_template_mode_template_conf(conf).await;
                 }
             });
         });

@@ -571,13 +571,43 @@ impl Device for Modbus {
         None
     }
 
-    async fn update_customize_conf(&mut self, device_conf: serde_json::Value) -> HaliaResult<()> {
+    async fn update_customize_mode_conf(
+        &mut self,
+        device_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         let device_conf: DeviceConf = serde_json::from_value(device_conf)?;
         self.update_conf(device_conf).await;
         Ok(())
     }
 
-    async fn update_template_conf(&mut self, template_conf: serde_json::Value) -> HaliaResult<()> {
+    async fn update_template_mode_conf(
+        &mut self,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        // let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
+        // Self::update_conf(&mut self, opcua_conf).await;
+
+        Ok(())
+    }
+
+    async fn update_template_mode_customize_conf(
+        &mut self,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        self.stop_signal_tx.send(()).unwrap();
+        let mut task_loop = self.join_handle.take().unwrap().await.unwrap();
+        task_loop.update_template_conf(template_conf)?;
+        let join_handle = task_loop.start();
+        self.join_handle = Some(join_handle);
+
+        Ok(())
+    }
+
+    async fn update_template_mode_template_conf(
+        &mut self,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         self.stop_signal_tx.send(()).unwrap();
         let mut task_loop = self.join_handle.take().unwrap().await.unwrap();
         task_loop.update_template_conf(template_conf)?;

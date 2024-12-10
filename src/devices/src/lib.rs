@@ -5,7 +5,6 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
-use tracing::debug;
 use types::{
     devices::{
         device::QueryParams, ConfType, CreateUpdateSourceSinkReq, DeviceType, ListDevicesResp,
@@ -29,8 +28,23 @@ pub trait Device: Send + Sync {
     async fn read_err(&self) -> Option<Arc<String>>;
     async fn read_source_err(&self, source_id: &String) -> Option<String>;
     async fn read_sink_err(&self, sink_id: &String) -> Option<String>;
-    async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()>;
-    async fn update_template_conf(&mut self, template_conf: serde_json::Value) -> HaliaResult<()>;
+    async fn update_customize_mode_conf(
+        &mut self,
+        customize_conf: serde_json::Value,
+    ) -> HaliaResult<()>;
+    async fn update_template_mode_conf(
+        &mut self,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()>;
+    async fn update_template_mode_customize_conf(
+        &mut self,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()>;
+    async fn update_template_mode_template_conf(
+        &mut self,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()>;
     async fn stop(&mut self);
 
     async fn create_customize_source(
@@ -393,19 +407,55 @@ pub async fn update_device(
     device_id: String,
     req: types::devices::device::UpdateReq,
 ) -> HaliaResult<()> {
-    match &req.conf_type {
-        ConfType::Template => match &req.template_id {
-            Some(template_id) => {
-                let template_conf = storage::device::template::read_conf(&template_id).await?;
-                if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-                    device.update_template_conf(template_conf).await?;
+    let db_device = storage::device::device::read_one(&device_id).await?;
+
+    match (&req.conf_type, &db_device.conf_type) {
+        (ConfType::Template, ConfType::Template) => match &req.template_id {
+            Some(new_template_id) => {
+                // 更换了模板 todo 是否有源和动作关联，是否可以更换
+                if *new_template_id != db_device.template_id.unwrap() {
+                    let template_conf =
+                        storage::device::template::read_conf(&new_template_id).await?;
+                    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+                        device
+                            .update_template_mode_template_conf(template_conf)
+                            .await?;
+                    }
                 }
             }
             None => return Err(HaliaError::Common("模板ID不能为空".to_string())),
         },
-        ConfType::Customize => {
+        (ConfType::Template, ConfType::Customize) => {
+            // 从模板更改为自定义  todo 源迁移
+            let customize_conf: types::devices::device::modbus::DeviceConf =
+                serde_json::from_value(req.conf.clone())?;
+            match &db_device.device_type {
+                DeviceType::Modbus => modbus::validate_conf(&req.conf)?,
+                DeviceType::Opcua => todo!(),
+                DeviceType::Coap => todo!(),
+            }
             if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-                device.update_customize_conf(req.conf.clone()).await?;
+                device.update_customize_mode_conf(req.conf.clone()).await?;
+            }
+        }
+        (ConfType::Customize, ConfType::Template) => {
+            // 从自定义更改为模板 todo 源迁移
+            let template_conf =
+                storage::device::template::read_conf(req.template_id.as_ref().unwrap()).await?;
+            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+                device
+                    .update_template_mode_conf(todo!(), template_conf)
+                    .await?;
+            }
+        }
+        (ConfType::Customize, ConfType::Customize) => {
+            match &db_device.device_type {
+                DeviceType::Modbus => modbus::validate_conf(&req.conf)?,
+                DeviceType::Opcua => todo!(),
+                DeviceType::Coap => todo!(),
+            }
+            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+                device.update_customize_mode_conf(req.conf.clone()).await?;
             }
         }
     }
@@ -451,44 +501,117 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     let db_sources = storage::device::source_sink::read_sources_by_device_id(&device_id).await?;
     for db_source in db_sources {
-        match db_source.conf_type {
-            types::devices::ConfType::Template => match db_source.template_id {
-                Some(template_id) => {
-                    let template_conf =
-                        storage::device::source_sink_template::read_conf(&template_id).await?;
+        match db_source.device_template_source_sink_id {
+            Some(device_template_source_sink_id) => {
+                let db_template_source_sink = storage::device::template_source_sink::read_one(
+                    &device_template_source_sink_id,
+                )
+                .await?;
+                match db_template_source_sink.conf_type {
+                    ConfType::Template => {
+                        let template_conf = storage::device::source_sink_template::read_conf(
+                            db_template_source_sink.template_id.as_ref().unwrap(),
+                        )
+                        .await?;
+                        device
+                            .create_template_source(
+                                db_source.id,
+                                db_template_source_sink.conf,
+                                template_conf,
+                            )
+                            .await?;
+                    }
+                    ConfType::Customize => {
+                        device
+                            .create_customize_source(db_source.id, db_template_source_sink.conf)
+                            .await?;
+                    }
+                }
+            }
+            None => match db_source.conf_type.unwrap() {
+                types::devices::ConfType::Template => match db_source.template_id {
+                    Some(template_id) => {
+                        let template_conf =
+                            storage::device::source_sink_template::read_conf(&template_id).await?;
+                        device
+                            .create_template_source(
+                                db_source.id,
+                                db_source.conf.unwrap(),
+                                template_conf,
+                            )
+                            .await?;
+                    }
+                    None => panic!("数据库数据损坏"),
+                },
+                types::devices::ConfType::Customize => {
                     device
-                        .create_template_source(db_source.id, db_source.conf, template_conf)
+                        .create_customize_source(db_source.id, db_source.conf.unwrap())
                         .await?;
                 }
-                None => panic!("数据库数据损坏"),
             },
-            types::devices::ConfType::Customize => {
-                device
-                    .create_customize_source(db_source.id, db_source.conf)
-                    .await?;
-            }
         }
     }
 
     let db_sinks = storage::device::source_sink::read_sinks_by_device_id(&device_id).await?;
     for db_sink in db_sinks {
-        match db_sink.conf_type {
-            types::devices::ConfType::Template => match db_sink.template_id {
-                Some(template_id) => {
-                    let template_conf =
-                        storage::device::source_sink_template::read_conf(&template_id).await?;
+        match db_sink.device_template_source_sink_id {
+            Some(device_template_source_sink_id) => {
+                let db_template_sink = storage::device::template_source_sink::read_one(
+                    &device_template_source_sink_id,
+                )
+                .await?;
+                match db_template_sink.conf_type {
+                    ConfType::Template => {
+                        let template_conf = storage::device::source_sink_template::read_conf(
+                            db_template_sink.template_id.as_ref().unwrap(),
+                        )
+                        .await?;
+                        device
+                            .create_template_sink(db_sink.id, db_template_sink.conf, template_conf)
+                            .await?;
+                    }
+                    ConfType::Customize => {
+                        device
+                            .create_customize_sink(db_sink.id, db_template_sink.conf)
+                            .await?;
+                    }
+                }
+            }
+            None => match db_sink.conf_type.unwrap() {
+                types::devices::ConfType::Template => match db_sink.template_id {
+                    Some(template_id) => {
+                        let template_conf =
+                            storage::device::source_sink_template::read_conf(&template_id).await?;
+                        device
+                            .create_template_sink(db_sink.id, db_sink.conf.unwrap(), template_conf)
+                            .await?;
+                    }
+                    None => panic!("数据库数据损坏"),
+                },
+                types::devices::ConfType::Customize => {
                     device
-                        .create_template_sink(db_sink.id, db_sink.conf, template_conf)
+                        .create_customize_sink(db_sink.id, db_sink.conf.unwrap())
                         .await?;
                 }
-                None => panic!("数据库数据损坏"),
             },
-            types::devices::ConfType::Customize => {
-                device
-                    .create_customize_sink(db_sink.id, db_sink.conf)
-                    .await?;
-            }
         }
+        // match db_sink.conf_type {
+        //     types::devices::ConfType::Template => match db_sink.template_id {
+        //         Some(template_id) => {
+        //             let template_conf =
+        //                 storage::device::source_sink_template::read_conf(&template_id).await?;
+        //             device
+        //                 .create_template_sink(db_sink.id, db_sink.conf, template_conf)
+        //                 .await?;
+        //         }
+        //         None => panic!("数据库数据损坏"),
+        //     },
+        //     types::devices::ConfType::Customize => {
+        //         device
+        //             .create_customize_sink(db_sink.id, db_sink.conf)
+        //             .await?;
+        //     }
+        // }
     }
 
     GLOBAL_DEVICE_MANAGER.insert(device_id.clone(), device);
@@ -656,21 +779,55 @@ pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<Re
         },
         _ => None,
     };
-    let template_conf = match &db_source.conf_type {
-        ConfType::Template => {
-            let template_id = db_source.template_id.as_ref().unwrap();
-            let template_conf =
-                storage::device::source_sink_template::read_conf(template_id).await?;
-            Some(template_conf)
+
+    let (conf_type, conf, template_id, template_conf) = match &db_source
+        .device_template_source_sink_id
+    {
+        Some(device_template_source_id) => {
+            let db_device_template_source =
+                storage::device::template_source_sink::read_one(&device_template_source_id).await?;
+            match db_device_template_source.conf_type {
+                ConfType::Template => {
+                    let template_id = db_device_template_source.template_id.as_ref().unwrap();
+                    let template_conf =
+                        storage::device::source_sink_template::read_conf(template_id).await?;
+                    (
+                        ConfType::Template,
+                        db_device_template_source.conf,
+                        db_device_template_source.template_id,
+                        Some(template_conf),
+                    )
+                }
+                ConfType::Customize => (
+                    ConfType::Customize,
+                    db_device_template_source.conf,
+                    None,
+                    None,
+                ),
+            }
         }
-        ConfType::Customize => None,
+        None => match &db_source.conf_type.unwrap() {
+            ConfType::Template => {
+                let template_id = db_source.template_id.as_ref().unwrap();
+                let template_conf =
+                    storage::device::source_sink_template::read_conf(template_id).await?;
+                (
+                    ConfType::Template,
+                    db_source.conf.unwrap(),
+                    db_source.template_id,
+                    Some(template_conf),
+                )
+            }
+            ConfType::Customize => (ConfType::Customize, db_source.conf.unwrap(), None, None),
+        },
     };
+
     Ok(ReadSourceSinkResp {
         id: db_source.id,
         name: db_source.name,
-        conf_type: db_source.conf_type,
-        template_id: db_source.template_id,
-        conf: db_source.conf,
+        conf_type,
+        template_id,
+        conf,
         template_conf,
         status: db_source.status,
         err,
@@ -875,22 +1032,56 @@ pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSo
         },
         _ => None,
     };
-    let template_conf = match &db_sink.conf_type {
-        ConfType::Template => {
-            let template_id = db_sink.template_id.as_ref().unwrap();
-            let template_conf =
-                storage::device::source_sink_template::read_conf(template_id).await?;
-            Some(template_conf)
+
+    let (conf_type, conf, template_id, template_conf) = match &db_sink
+        .device_template_source_sink_id
+    {
+        Some(device_template_sink_id) => {
+            let db_device_template_sink =
+                storage::device::template_source_sink::read_one(&device_template_sink_id).await?;
+            match db_device_template_sink.conf_type {
+                ConfType::Template => {
+                    let template_id = db_device_template_sink.template_id.as_ref().unwrap();
+                    let template_conf =
+                        storage::device::source_sink_template::read_conf(template_id).await?;
+                    (
+                        ConfType::Template,
+                        db_device_template_sink.conf,
+                        db_device_template_sink.template_id,
+                        Some(template_conf),
+                    )
+                }
+                ConfType::Customize => (
+                    ConfType::Customize,
+                    db_device_template_sink.conf,
+                    None,
+                    None,
+                ),
+            }
         }
-        ConfType::Customize => None,
+        None => match &db_sink.conf_type.unwrap() {
+            ConfType::Template => {
+                let template_id = db_sink.template_id.as_ref().unwrap();
+                let template_conf =
+                    storage::device::source_sink_template::read_conf(template_id).await?;
+                (
+                    ConfType::Template,
+                    db_sink.conf.unwrap(),
+                    db_sink.template_id,
+                    Some(template_conf),
+                )
+            }
+            ConfType::Customize => (ConfType::Customize, db_sink.conf.unwrap(), None, None),
+        },
     };
+
     Ok(ReadSourceSinkResp {
         id: db_sink.id,
         name: db_sink.name,
-        conf_type: db_sink.conf_type,
-        template_id: db_sink.template_id,
+        conf_type,
+        template_id,
         template_conf,
-        conf: db_sink.conf,
+        conf,
         status: db_sink.status,
         err,
         rule_ref_cnt,

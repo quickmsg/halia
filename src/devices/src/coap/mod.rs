@@ -81,7 +81,7 @@ impl Device for Coap {
         None
     }
 
-    async fn update_customize_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn update_customize_mode_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
         // let _old_conf: CoapConf = serde_json::from_value(old_conf)?;
         // let new_conf: CoapConf = serde_json::from_value(new_conf)?;
         // let coap_client =
@@ -96,7 +96,21 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn update_template_conf(&mut self, _23: serde_json::Value) -> HaliaResult<()> {
+    async fn update_template_mode_conf(
+        &mut self,
+        customize_conf: serde_json::Value,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        // let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
+        // Self::update_conf(&mut self, opcua_conf).await;
+
+        Ok(())
+    }
+
+    async fn update_template_mode_customize_conf(
+        &mut self,
+        _23: serde_json::Value,
+    ) -> HaliaResult<()> {
         todo!()
         // let old_conf: CoapConf = serde_json::from_value(old_conf)?;
         // let new_conf: CoapConf = serde_json::from_value(new_conf)?;
@@ -110,6 +124,13 @@ impl Device for Coap {
         // }
         // self.coap_client = coap_client;
         // Ok(())
+    }
+
+    async fn update_template_mode_template_conf(
+        &mut self,
+        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        todo!()
     }
 
     async fn stop(&mut self) {

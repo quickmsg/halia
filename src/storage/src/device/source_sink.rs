@@ -16,8 +16,8 @@ struct DbSourceSink {
     pub device_id: String,
     pub device_template_source_sink_id: Option<String>,
     pub name: String,
-    pub conf_type: i32,
-    pub conf: Vec<u8>,
+    pub conf_type: Option<i32>,
+    pub conf: Option<Vec<u8>>,
     pub template_id: Option<String>,
     pub status: i32,
     pub ts: i64,
@@ -25,13 +25,21 @@ struct DbSourceSink {
 
 impl DbSourceSink {
     pub fn transfer(self) -> Result<SourceSink> {
+        let conf_type = match self.conf_type {
+            Some(conf_type) => Some(conf_type.try_into()?),
+            None => None,
+        };
+        let conf = match self.conf {
+            Some(conf) => Some(serde_json::from_slice(&conf)?),
+            None => None,
+        };
         Ok(SourceSink {
             id: self.id,
             device_id: self.device_id,
             device_template_source_sink_id: self.device_template_source_sink_id,
             name: self.name,
-            conf_type: self.conf_type.try_into()?,
-            conf: serde_json::from_slice(&self.conf)?,
+            conf_type,
+            conf,
             template_id: self.template_id,
             status: self.status.try_into()?,
             ts: self.ts,
@@ -44,8 +52,8 @@ pub struct SourceSink {
     pub device_id: String,
     pub device_template_source_sink_id: Option<String>,
     pub name: String,
-    pub conf_type: ConfType,
-    pub conf: serde_json::Value,
+    pub conf_type: Option<ConfType>,
+    pub conf: Option<serde_json::Value>,
     pub template_id: Option<String>,
     pub status: Status,
     pub ts: i64,
@@ -60,8 +68,8 @@ CREATE TABLE IF NOT EXISTS {} (
     device_template_source_sink_id CHAR(32),
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
-    conf_type SMALLINT UNSIGNED NOT NULL,
-    conf BLOB NOT NULL,
+    conf_type SMALLINT UNSIGNED,
+    conf BLOB,
     template_id CHAR(32),
     status SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
@@ -112,10 +120,14 @@ async fn insert(
     device_template_source_sink_id: Option<&String>,
     req: CreateUpdateSourceSinkReq,
 ) -> Result<()> {
-    let source_sink_type: i32 = source_sink_type.into();
-    let conf_type: i32 = req.conf_type.into();
-    let conf = serde_json::to_vec(&req.conf)?;
-    let ts = common::timestamp_millis() as i64;
+    let (conf_type, conf) = match &device_template_source_sink_id {
+        Some(_) => (None, None),
+        None => {
+            let conf_type: i32 = req.conf_type.into();
+            let conf = serde_json::to_vec(&req.conf)?;
+            (Some(conf_type), Some(conf))
+        }
+    };
 
     sqlx::query(
         format!(
@@ -129,13 +141,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(id)
     .bind(device_id)
     .bind(device_template_source_sink_id)
-    .bind(source_sink_type)
+    .bind(Into::<i32>::into(source_sink_type))
     .bind(req.name)
     .bind(conf_type)
     .bind(conf)
     .bind(req.template_id)
     .bind(Into::<i32>::into(Status::default()))
-    .bind(ts)
+    .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
 
