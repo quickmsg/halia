@@ -4,12 +4,12 @@ use types::{
         device_template::{
             self, source_sink, CreateReq, ListResp, QueryParams, ReadResp, UpdateReq,
         },
-        DeviceType,
+        ConfType, DeviceType,
     },
     Pagination,
 };
 
-use crate::{modbus, opcua, GLOBAL_DEVICE_MANAGER};
+use crate::{coap, modbus, opcua, GLOBAL_DEVICE_MANAGER};
 
 pub async fn create_device_template(req: CreateReq) -> HaliaResult<()> {
     match &req.device_type {
@@ -100,20 +100,56 @@ pub async fn create_source(
     device_template_id: String,
     req: source_sink::CreateReq,
 ) -> HaliaResult<()> {
-    let device_source_req = types::devices::CreateSourceSinkReq {
-        name: req.name.clone(),
-        conf_type: req.conf_type.clone(),
-        template_id: req.template_id.clone(),
-        conf: req.conf.clone(),
-    };
-    let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
-    let source_id = common::get_id();
-    for device_id in device_ids {
-        super::create_source(device_id, Some(&source_id), device_source_req.clone()).await?;
+    if req.conf_type == ConfType::Template && req.template_id.is_none() {
+        return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    storage::device::template_source_sink::insert_source(&source_id, &device_template_id, req)
+    let device_type: DeviceType =
+        storage::device::template::read_device_type(&device_template_id).await?;
+    match device_type {
+        DeviceType::Modbus => modbus::validate_source_conf(&req.conf)?,
+        DeviceType::Opcua => opcua::validate_source_conf(&req.conf)?,
+        DeviceType::Coap => coap::validate_source_conf(&req.conf)?,
+    }
+
+    let source_id = common::get_id();
+    storage::device::template_source_sink::insert_source(
+        &source_id,
+        &device_template_id,
+        req.clone(),
+    )
+    .await?;
+
+    let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
+    for device_id in device_ids {
+        let source_id = common::get_id();
+        if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+            let conf = req.conf.clone();
+            match req.conf_type {
+                types::devices::ConfType::Template => {
+                    let template_conf = storage::device::source_sink_template::read_conf(
+                        // 函数入口处即进行了验证，此处永远不会panic
+                        req.template_id.as_ref().unwrap(),
+                    )
+                    .await?;
+                    device
+                        .create_template_source(source_id.clone(), conf, template_conf)
+                        .await?
+                }
+                types::devices::ConfType::Customize => {
+                    device
+                        .create_customize_source(source_id.clone(), conf)
+                        .await?
+                }
+            }
+        }
+
+        storage::device::source_sink::insert_source_by_device_template(
+            &source_id, &device_id, &req.name, &source_id,
+        )
         .await?;
+    }
+
     Ok(())
 }
 
@@ -213,7 +249,7 @@ pub async fn create_sink(
 
     let sink_id = common::get_id();
     for device_id in device_ids {
-        super::create_sink(device_id, Some(&sink_id), device_sink_req.clone()).await?;
+        // super::create_sink(device_id, Some(&sink_id), device_sink_req.clone()).await?;
     }
 
     storage::device::template_source_sink::insert_sink(&sink_id, &device_template_id, req).await?;

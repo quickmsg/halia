@@ -50,7 +50,6 @@ pub fn routes() -> Router {
             "/source_template",
             Router::new()
                 .route("/", post(create_source_template))
-                // TODO
                 .route("/list", get(list_source_templates))
                 .route("/:id", get(read_source_template))
                 .route("/:id", put(update_source_template))
@@ -151,7 +150,7 @@ async fn create_source(
     Path(device_id): Path<String>,
     Json(req): Json<CreateSourceSinkReq>,
 ) -> AppResult<()> {
-    devices::device_create_source(device_id, req).await?;
+    devices::create_source(device_id, req).await?;
     Ok(())
 }
 
@@ -196,7 +195,7 @@ async fn create_sink(
     Path(device_id): Path<String>,
     Json(req): Json<CreateSourceSinkReq>,
 ) -> AppResult<()> {
-    devices::device_create_sink(device_id, req).await?;
+    devices::create_sink(device_id, req).await?;
     Ok(())
 }
 

@@ -244,13 +244,15 @@ pub async fn create_device(
                     }
                 }
 
-                for source_req in source_reqs {
-                    create_source(device_id.clone(), Some(&device_template_id), source_req).await?;
-                }
+                // 从模板中进行初始化
 
-                for sink_req in sink_reqs {
-                    create_sink(device_id.clone(), Some(&device_template_id), sink_req).await?;
-                }
+                // for source_req in source_reqs {
+                //     create_source(device_id.clone(), Some(&device_template_id), source_req).await?;
+                // }
+
+                // for sink_req in sink_reqs {
+                //     create_sink(device_id.clone(), Some(&device_template_id), sink_req).await?;
+                // }
             }
             None => return Err(HaliaError::Common("必须提供模板ID".to_owned())),
         },
@@ -623,19 +625,12 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn device_create_source(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
+pub async fn create_source(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
     let conf_type = storage::device::device::read_conf_type(&device_id).await?;
     if conf_type == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建源".to_string()));
     }
-    create_source(device_id, None, req).await
-}
 
-pub(crate) async fn create_source(
-    device_id: String,
-    device_template_source_id: Option<&String>,
-    req: CreateSourceSinkReq,
-) -> HaliaResult<()> {
     if req.conf_type == ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
@@ -669,13 +664,7 @@ pub(crate) async fn create_source(
         }
     }
 
-    storage::device::source_sink::insert_source(
-        &source_id,
-        &device_id,
-        device_template_source_id,
-        req,
-    )
-    .await?;
+    storage::device::source_sink::insert_source(&source_id, &device_id, req).await?;
 
     Ok(())
 }
@@ -878,18 +867,11 @@ pub async fn get_source_rxs(
     }
 }
 
-pub async fn device_create_sink(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
+pub async fn create_sink(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
     if storage::device::device::read_conf_type(&device_id).await? == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建动作。".to_string()));
     }
-    create_sink(device_id, None, req).await
-}
 
-pub(crate) async fn create_sink(
-    device_id: String,
-    device_template_sink_id: Option<&String>,
-    req: CreateSourceSinkReq,
-) -> HaliaResult<()> {
     if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
@@ -921,8 +903,7 @@ pub(crate) async fn create_sink(
         }
     }
 
-    storage::device::source_sink::insert_sink(&sink_id, &device_id, device_template_sink_id, req)
-        .await?;
+    storage::device::source_sink::insert_sink(&sink_id, &device_id, req).await?;
 
     Ok(())
 }
@@ -932,7 +913,7 @@ pub async fn list_sinks(
     pagination: Pagination,
     query: QuerySourcesSinksParams,
 ) -> HaliaResult<ListSourcesSinksResp> {
-    let device_type = storage::device::device::read_device_type(&device_id).await?;
+    // let device_type = storage::device::device::read_device_type(&device_id).await?;
     let (count, db_sinks) =
         storage::device::source_sink::search_sinks(&device_id, pagination, query).await?;
     let mut list = Vec::with_capacity(db_sinks.len());

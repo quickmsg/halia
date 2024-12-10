@@ -84,31 +84,44 @@ CREATE TABLE IF NOT EXISTS {} (
 pub async fn insert_source(
     id: &String,
     device_id: &String,
-    device_template_source_id: Option<&String>,
     req: CreateSourceSinkReq,
 ) -> Result<()> {
-    insert(
+    insert(SourceSinkType::Source, id, device_id, req).await
+}
+
+// 设备模板增加源
+pub async fn insert_source_by_device_template(
+    id: &String,
+    device_id: &String,
+    name: &String,
+    device_template_source_id: &String,
+) -> Result<()> {
+    insert_by_device_template(
         SourceSinkType::Source,
         id,
         device_id,
+        name,
         device_template_source_id,
-        req,
     )
     .await
 }
 
-pub async fn insert_sink(
+pub async fn insert_sink(id: &String, device_id: &String, req: CreateSourceSinkReq) -> Result<()> {
+    insert(SourceSinkType::Sink, id, device_id, req).await
+}
+
+pub async fn insert_sink_by_device_template(
     id: &String,
     device_id: &String,
-    device_template_sink_id: Option<&String>,
-    req: CreateSourceSinkReq,
+    name: &String,
+    device_template_source_id: &String,
 ) -> Result<()> {
-    insert(
+    insert_by_device_template(
         SourceSinkType::Sink,
         id,
         device_id,
-        device_template_sink_id,
-        req,
+        name,
+        device_template_source_id,
     )
     .await
 }
@@ -117,18 +130,40 @@ async fn insert(
     source_sink_type: SourceSinkType,
     id: &String,
     device_id: &String,
-    device_template_source_sink_id: Option<&String>,
     req: CreateSourceSinkReq,
 ) -> Result<()> {
-    let (conf_type, conf) = match &device_template_source_sink_id {
-        Some(_) => (None, None),
-        None => {
-            let conf_type: i32 = req.conf_type.into();
-            let conf = serde_json::to_vec(&req.conf)?;
-            (Some(conf_type), Some(conf))
-        }
-    };
+    sqlx::query(
+        format!(
+            r#"INSERT INTO {} 
+(id, device_id, device_template_source_sink_id, source_sink_type, name, conf_type, conf, template_id, status, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(id)
+    .bind(device_id)
+    .bind(None::<String>)
+    .bind(Into::<i32>::into(source_sink_type))
+    .bind(req.name)
+    .bind(Into::<i32>::into(req.conf_type))
+    .bind(serde_json::to_vec(&req.conf)?)
+    .bind(req.template_id)
+    .bind(Into::<i32>::into(Status::default()))
+    .bind(common::timestamp_millis() as i64)
+    .execute(POOL.get().unwrap())
+    .await?;
 
+    Ok(())
+}
+
+async fn insert_by_device_template(
+    source_sink_type: SourceSinkType,
+    id: &String,
+    device_id: &String,
+    name: &String,
+    device_template_source_sink_id: &String,
+) -> Result<()> {
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
@@ -142,10 +177,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(device_id)
     .bind(device_template_source_sink_id)
     .bind(Into::<i32>::into(source_sink_type))
-    .bind(req.name)
-    .bind(conf_type)
-    .bind(conf)
-    .bind(req.template_id)
+    .bind(name)
+    .bind(None::<i32>)
+    .bind(None::<Vec<u8>>)
+    .bind(None::<String>)
     .bind(Into::<i32>::into(Status::default()))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
