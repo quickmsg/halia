@@ -5,7 +5,11 @@ use message::{Message, MessageBatch, RuleMessageBatch};
 use modbus_protocol::Context;
 use tokio::{
     select,
-    sync::{broadcast, mpsc, watch},
+    sync::{
+        broadcast,
+        mpsc::{self, UnboundedSender},
+        watch,
+    },
     task::JoinHandle,
     time,
 };
@@ -22,35 +26,71 @@ pub struct Source {
     quantity: u16,
 
     stop_signal_tx: watch::Sender<()>,
-    join_handle: Option<JoinHandle<JoinHandleData>>,
+    join_handle: Option<JoinHandle<TaskLoop>>,
     err_info: Option<String>,
 
     pub mb_txs: Vec<mpsc::UnboundedSender<RuleMessageBatch>>,
 }
 
-pub struct JoinHandleData {
-    id: String,
+pub struct TaskLoop {
+    id: Arc<String>,
     stop_signal_rx: watch::Receiver<()>,
-    read_tx: mpsc::UnboundedSender<String>,
+    read_tx: mpsc::UnboundedSender<Arc<String>>,
     device_err_rx: broadcast::Receiver<bool>,
+}
+
+impl TaskLoop {
+    fn new(
+        id: String,
+        stop_signal_rx: watch::Receiver<()>,
+        read_tx: UnboundedSender<Arc<String>>,
+        device_err_rx: broadcast::Receiver<bool>,
+    ) -> Self {
+        Self {
+            id: Arc::new(id),
+            stop_signal_rx,
+            read_tx,
+            device_err_rx,
+        }
+    }
+
+    fn start(mut self, source_conf: &SourceConf) -> JoinHandle<Self> {
+        let mut interval = time::interval(Duration::from_millis(source_conf.interval));
+        let mut device_err = false;
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    _ = self.stop_signal_rx.changed() => {
+                        return self;
+                    }
+
+                    _ = interval.tick() => {
+                        if !device_err {
+                            _ = self.read_tx.send(self.id.clone());
+                        }
+                    }
+
+                    Ok(err) = self.device_err_rx.recv() => {
+                        device_err = err;
+                    }
+                }
+            }
+        })
+    }
 }
 
 impl Source {
     pub fn new(
         id: String,
         source_conf: SourceConf,
-        read_tx: mpsc::UnboundedSender<String>,
+        read_tx: UnboundedSender<Arc<String>>,
         device_err_rx: broadcast::Receiver<bool>,
     ) -> Self {
         let (stop_signal_tx, stop_signal_rx) = watch::channel(());
 
-        let join_handle_data = JoinHandleData {
-            id,
-            stop_signal_rx,
-            read_tx,
-            device_err_rx,
-        };
-        let join_handle = Self::event_loop(join_handle_data, &source_conf);
+        let task_loop = TaskLoop::new(id, stop_signal_rx, read_tx, device_err_rx);
+
+        let join_handle = task_loop.start(&source_conf);
 
         let quantity = source_conf.data_type.get_quantity();
         Self {
@@ -146,37 +186,7 @@ impl Source {
         Ok(())
     }
 
-    fn event_loop(
-        mut join_handle_data: JoinHandleData,
-        conf: &SourceConf,
-    ) -> JoinHandle<JoinHandleData> {
-        let mut interval = time::interval(Duration::from_millis(conf.interval));
-        let mut device_err = false;
-        tokio::spawn(async move {
-            loop {
-                select! {
-                    _ = join_handle_data.stop_signal_rx.changed() => {
-                        return join_handle_data;
-                    }
-
-                    _ = interval.tick() => {
-                        if !device_err {
-                            _ = join_handle_data.read_tx.send(join_handle_data.id.clone());
-                        }
-                    }
-
-                    err = join_handle_data.device_err_rx.recv() => {
-                        match err {
-                            Ok(err) => device_err = err,
-                            Err(e) => warn!("{}", e),
-                        }
-                    }
-                }
-            }
-        })
-    }
-
-    pub async fn stop(&mut self) -> JoinHandleData {
+    pub async fn stop(&mut self) -> TaskLoop {
         self.stop_signal_tx.send(()).unwrap();
         self.join_handle.take().unwrap().await.unwrap()
     }
@@ -186,8 +196,7 @@ impl Source {
         mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let join_handle_data = self.stop().await;
-        // self.source_conf = source_conf;
+        let task_loop = self.stop().await;
         match mode {
             UpdateConfMode::CustomizeMode => {
                 let conf: SourceConf = serde_json::from_value(conf)?;
@@ -200,7 +209,7 @@ impl Source {
                 update_template_conf(&mut self.source_conf, conf)?;
             }
         }
-        let join_handle = Self::event_loop(join_handle_data, &self.source_conf);
+        let join_handle = task_loop.start(&self.source_conf);
         self.join_handle = Some(join_handle);
 
         Ok(())

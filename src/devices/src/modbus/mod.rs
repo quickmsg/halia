@@ -50,7 +50,7 @@ struct Modbus {
     err: BiLock<Option<Arc<String>>>,
 
     write_tx: UnboundedSender<WritePointEvent>,
-    read_tx: UnboundedSender<String>,
+    read_tx: UnboundedSender<Arc<String>>,
 
     join_handle: Option<JoinHandle<TaskLoop>>,
 }
@@ -61,7 +61,7 @@ struct TaskLoop {
     sources: Arc<DashMap<String, Source>>,
     stop_signal_rx: watch::Receiver<()>,
     write_rx: UnboundedReceiver<WritePointEvent>,
-    read_rx: UnboundedReceiver<String>,
+    read_rx: UnboundedReceiver<Arc<String>>,
 }
 
 impl TaskLoop {
@@ -72,7 +72,7 @@ impl TaskLoop {
         stop_signal_rx: watch::Receiver<()>,
         sources: Arc<DashMap<String, Source>>,
         write_rx: UnboundedReceiver<WritePointEvent>,
-        read_rx: UnboundedReceiver<String>,
+        read_rx: UnboundedReceiver<Arc<String>>,
     ) -> Self {
         let error_manager =
             ErrorManager::new(utils::error_manager::ResourceType::Device, device_id, err);
@@ -111,7 +111,7 @@ impl TaskLoop {
                                 }
 
                                 Some(point_id) = self.read_rx.recv() => {
-                                    if let Some(mut source) = self.sources.get_mut(&point_id) {
+                                    if let Some(mut source) = self.sources.get_mut(point_id.as_ref()) {
                                         if let Err(_) = source.read(&mut ctx, &self.device_conf).await {
                                             break
                                         }
@@ -292,29 +292,9 @@ impl Modbus {
         self.sources.insert(source_id, source);
     }
 
-    // async fn update_source(&mut self, source_id: &String, conf: SourceConf) -> HaliaResult<()> {
-    //     match self.sources.get_mut(source_id) {
-    //         Some(mut source) => {
-    //             source.update(conf).await;
-    //             Ok(())
-    //         }
-    //         None => Err(HaliaError::NotFound(source_id.to_owned())),
-    //     }
-    // }
-
     fn create_sink(&mut self, sink_id: String, conf: SinkConf) {
         let sink = Sink::new(conf, self.write_tx.clone(), self.device_err_tx.subscribe());
         self.sinks.insert(sink_id, sink);
-    }
-
-    async fn update_sink(&mut self, sink_id: &String, conf: SinkConf) -> HaliaResult<()> {
-        match self.sinks.get_mut(sink_id) {
-            Some(mut sink) => {
-                sink.update(conf).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        }
     }
 }
 
@@ -496,7 +476,7 @@ impl Device for Modbus {
     ) -> HaliaResult<()> {
         match self.sources.get_mut(source_id) {
             Some(mut source) => {
-                source.update(mode, conf).await;
+                source.update(mode, conf).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound(source_id.to_owned())),
@@ -564,13 +544,17 @@ impl Device for Modbus {
 
     async fn update_sink_conf(
         &mut self,
-        source_id: &String,
+        sink_id: &String,
         mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        todo!()
-        // let conf: SourceConf = serde_json::from_value(conf)?;
-        // self.update_source(source_id, conf).await
+        match self.sinks.get_mut(sink_id) {
+            Some(mut sink) => {
+                sink.update(mode, conf).await?;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(sink_id.to_owned())),
+        }
     }
 
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()> {
