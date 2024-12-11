@@ -318,6 +318,41 @@ async fn read_by_template_id(
     Ok(sources_sinks)
 }
 
+pub async fn read_sources_by_device_template_source_id(
+    device_template_source_id: &String,
+) -> Result<Vec<SourceSink>> {
+    read_by_device_template_source_sink_id(SourceSinkType::Source, device_template_source_id).await
+}
+
+pub async fn read_sinks_by_device_template_sink_id(
+    device_template_sink_id: &String,
+) -> Result<Vec<SourceSink>> {
+    read_by_device_template_source_sink_id(SourceSinkType::Sink, device_template_sink_id).await
+}
+
+async fn read_by_device_template_source_sink_id(
+    source_sink_type: SourceSinkType,
+    device_template_source_sink_id: &String,
+) -> Result<Vec<SourceSink>> {
+    let db_sources_sinks = sqlx::query_as::<_, DbSourceSink>(
+        format!(
+            "SELECT * FROM {} WHERE source_sink_type = ? AND device_template_source_sink_id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(Into::<i32>::into(source_sink_type))
+    .bind(device_template_source_sink_id)
+    .fetch_all(POOL.get().unwrap())
+    .await?;
+
+    let sources_sinks = db_sources_sinks
+        .into_iter()
+        .map(|x| x.transfer())
+        .collect::<Result<Vec<SourceSink>>>()?;
+    Ok(sources_sinks)
+}
+
 pub async fn search_sources(
     device_id: &String,
     pagination: Pagination,

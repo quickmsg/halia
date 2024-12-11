@@ -16,7 +16,7 @@ use types::{
     Value,
 };
 
-use crate::Device;
+use crate::{Device, UpdateConfMode};
 
 mod sink;
 mod source;
@@ -81,7 +81,11 @@ impl Device for Coap {
         None
     }
 
-    async fn update_customize_mode_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn update_conf(
+        &mut self,
+        mode: UpdateConfMode,
+        conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         // let _old_conf: CoapConf = serde_json::from_value(old_conf)?;
         // let new_conf: CoapConf = serde_json::from_value(new_conf)?;
         // let coap_client =
@@ -94,32 +98,6 @@ impl Device for Coap {
         // }
         // self.coap_client = coap_client;
         Ok(())
-    }
-
-    async fn update_template_mode_customize_conf(
-        &mut self,
-        _23: serde_json::Value,
-    ) -> HaliaResult<()> {
-        todo!()
-        // let old_conf: CoapConf = serde_json::from_value(old_conf)?;
-        // let new_conf: CoapConf = serde_json::from_value(new_conf)?;
-        // let coap_client =
-        //     Arc::new(UdpCoAPClient::new_udp((new_conf.host.clone(), new_conf.port)).await?);
-        // for mut source in self.sources.iter_mut() {
-        //     _ = source.update_coap_client(coap_client.clone());
-        // }
-        // for mut sink in self.sinks.iter_mut() {
-        //     _ = sink.update_coap_client(coap_client.clone());
-        // }
-        // self.coap_client = coap_client;
-        // Ok(())
-    }
-
-    async fn update_template_mode_template_conf(
-        &mut self,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        todo!()
     }
 
     async fn stop(&mut self) {
@@ -154,53 +132,13 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn update_customize_mode_source_conf(
+    async fn update_source_conf(
         &mut self,
         source_id: &String,
+        mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf: SourceConf = serde_json::from_value(conf)?;
-        match self.sources.get_mut(source_id) {
-            Some(mut source) => {
-                source.update_conf(conf).await?;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(source_id.to_owned())),
-        }
-    }
-
-    async fn update_template_mode_source_customize_conf(
-        &mut self,
-        source_id: &String,
-        customize_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
         todo!()
-        // let old_conf: SourceConf = serde_json::from_value(old_conf)?;
-        // let new_conf: SourceConf = serde_json::from_value(new_conf)?;
-        // match self.sources.get_mut(source_id) {
-        //     Some(mut source) => {
-        //         source.update_conf(old_conf, new_conf).await?;
-        //         Ok(())
-        //     }
-        //     None => Err(HaliaError::NotFound(source_id.to_owned())),
-        // }
-    }
-
-    async fn update_template_mode_source_template_conf(
-        &mut self,
-        source_id: &String,
-        customize_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        todo!()
-        // let old_conf: SourceConf = serde_json::from_value(old_conf)?;
-        // let new_conf: SourceConf = serde_json::from_value(new_conf)?;
-        // match self.sources.get_mut(source_id) {
-        //     Some(mut source) => {
-        //         source.update_conf(old_conf, new_conf).await?;
-        //         Ok(())
-        //     }
-        //     None => Err(HaliaError::NotFound(source_id.to_owned())),
-        // }
     }
 
     async fn write_source_value(&mut self, _source_id: String, _req: Value) -> HaliaResult<()> {
@@ -240,39 +178,13 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn update_customize_sink(
+    async fn update_sink_conf(
         &mut self,
         sink_id: &String,
-        new_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        // let old_conf: SinkConf = serde_json::from_value(old_conf)?;
-        // let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-        // match self.sinks.get_mut(sink_id) {
-        //     Some(mut sink) => {
-        //         sink.update_conf(old_conf, new_conf).await;
-        //         Ok(())
-        //     }
-        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        // }
-        todo!()
-    }
-
-    async fn update_template_sink(
-        &mut self,
-        sink_id: &String,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
+        mode: UpdateConfMode,
+        conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
-        // let old_conf: SinkConf = serde_json::from_value(old_conf)?;
-        // let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-        // match self.sinks.get_mut(sink_id) {
-        //     Some(mut sink) => {
-        //         sink.update_conf(old_conf, new_conf).await;
-        //         Ok(())
-        //     }
-        //     None => Err(HaliaError::NotFound(sink_id.to_owned())),
-        // }
     }
 
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()> {

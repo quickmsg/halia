@@ -219,7 +219,7 @@ async fn update_sink(
     Path((device_id, sink_id)): Path<(String, String)>,
     Json(req): Json<UpdateSourceSinkReq>,
 ) -> AppResult<()> {
-    devices::update_sink(device_id, sink_id, req).await?;
+    devices::device_update_sink(device_id, sink_id, req).await?;
     Ok(())
 }
 

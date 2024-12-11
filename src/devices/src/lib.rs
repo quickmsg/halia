@@ -29,22 +29,10 @@ pub trait Device: Send + Sync {
     async fn read_err(&self) -> Option<Arc<String>>;
     async fn read_source_err(&self, source_id: &String) -> Option<String>;
     async fn read_sink_err(&self, sink_id: &String) -> Option<String>;
-    async fn update_customize_mode_conf(
+    async fn update_conf(
         &mut self,
+        mode: UpdateConfMode,
         customize_conf: serde_json::Value,
-    ) -> HaliaResult<()>;
-    // async fn update_template_mode_conf(
-    //     &mut self,
-    //     customize_conf: serde_json::Value,
-    //     template_conf: serde_json::Value,
-    // ) -> HaliaResult<()>;
-    async fn update_template_mode_customize_conf(
-        &mut self,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()>;
-    async fn update_template_mode_template_conf(
-        &mut self,
-        template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn stop(&mut self);
 
@@ -59,20 +47,11 @@ pub trait Device: Send + Sync {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
-    async fn update_customize_mode_source_conf(
+    async fn update_source_conf(
         &mut self,
         source_id: &String,
+        mode: UpdateConfMode,
         conf: serde_json::Value,
-    ) -> HaliaResult<()>;
-    async fn update_template_mode_source_customize_conf(
-        &mut self,
-        source_id: &String,
-        customize_conf: serde_json::Value,
-    ) -> HaliaResult<()>;
-    async fn update_template_mode_source_template_conf(
-        &mut self,
-        source_id: &String,
-        template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()>;
     async fn delete_source(&mut self, source_id: &String) -> HaliaResult<()>;
@@ -88,16 +67,11 @@ pub trait Device: Send + Sync {
         customize_conf: serde_json::Value,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
-    async fn update_customize_sink(
+    async fn update_sink_conf(
         &mut self,
         sink_id: &String,
+        mode: UpdateConfMode,
         conf: serde_json::Value,
-    ) -> HaliaResult<()>;
-    async fn update_template_sink(
-        &mut self,
-        sink_id: &String,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn delete_sink(&mut self, sink_id: &String) -> HaliaResult<()>;
 
@@ -410,19 +384,13 @@ pub async fn update_device(
     device_id: String,
     req: types::devices::device::UpdateReq,
 ) -> HaliaResult<()> {
-    let db_device = storage::device::device::read_one(&device_id).await?;
-
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-        match db_device.conf_type {
-            ConfType::Template => {
-                device
-                    .update_template_mode_customize_conf(req.conf.clone())
-                    .await?;
-            }
-            ConfType::Customize => {
-                device.update_customize_mode_conf(req.conf.clone()).await?;
-            }
-        }
+        let db_device = storage::device::device::read_one(&device_id).await?;
+        let mode = match db_device.conf_type {
+            ConfType::Customize => UpdateConfMode::CustomizeMode,
+            ConfType::Template => UpdateConfMode::TemplateModeCustomize,
+        };
+        device.update_conf(mode, req.conf.clone()).await?;
     }
 
     events::insert_update(types::events::ResourceType::Device, &device_id).await;
@@ -444,11 +412,9 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
             Some(template_id) => {
                 let template_conf = storage::device::template::read_conf(&template_id).await?;
                 match db_device.device_type {
-                    DeviceType::Modbus => modbus::new_by_template_conf(
-                        db_device.id.clone(),
-                        db_device.conf,
-                        template_conf,
-                    ),
+                    DeviceType::Modbus => {
+                        modbus::new_by_template(db_device.id.clone(), db_device.conf, template_conf)
+                    }
                     DeviceType::Opcua => todo!(),
                     DeviceType::Coap => todo!(),
                 }
@@ -456,9 +422,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
             None => unreachable!(),
         },
         ConfType::Customize => match db_device.device_type {
-            DeviceType::Modbus => {
-                modbus::new_by_customize_conf(db_device.id.clone(), db_device.conf)
-            }
+            DeviceType::Modbus => modbus::new_by_customize(db_device.id.clone(), db_device.conf),
             DeviceType::Opcua => todo!(),
             DeviceType::Coap => todo!(),
         },
@@ -794,92 +758,42 @@ pub async fn device_update_source(
 
     let db_source = storage::device::source_sink::read_one(&source_id).await?;
     if req.conf != db_source.conf.unwrap() {
-        match db_source.conf_type.unwrap() {
-            ConfType::Customize => {
-                update_customize_mode_source(&device_id, &source_id, req.conf.clone()).await?;
-            }
-            ConfType::Template => {
-                update_template_mode_source_customize_conf(
-                    &device_id,
-                    &source_id,
-                    req.conf.clone(),
-                )
-                .await?;
-            }
-        }
+        let mode = match db_source.conf_type.unwrap() {
+            ConfType::Customize => UpdateConfMode::CustomizeMode,
+            ConfType::Template => UpdateConfMode::TemplateModeCustomize,
+        };
+        update_source_conf(device_id, source_id.clone(), mode, req.conf.clone()).await?;
     }
 
     storage::device::source_sink::update(&source_id, req).await?;
     Ok(())
 }
 
-pub async fn device_template_update_source(
-    device_id: String,
-    source_id: String,
-    conf_type: &ConfType,
-    conf: serde_json::Value,
-) -> HaliaResult<()> {
-    match conf_type {
-        ConfType::Customize => update_customize_mode_source(&device_id, &source_id, conf).await?,
-        ConfType::Template => {
-            update_template_mode_source_customize_conf(&device_id, &source_id, conf).await?
-        }
-    }
-    Ok(())
-}
+// pub async fn device_template_update_source(
+//     device_id: String,
+//     source_id: String,
+//     conf_type: &ConfType,
+//     conf: serde_json::Value,
+// ) -> HaliaResult<()> {
+//     let mode = match conf_type {
+//         ConfType::Customize => update_customize_mode_source(&device_id, &source_id, conf).await?,
+//         ConfType::Template => {
+//             update_template_mode_source_customize_conf(&device_id, &source_id, conf).await?
+//         }
+//     };
+//     Ok(())
+// }
 
-pub async fn source_template_update_source(
+async fn update_source_conf(
     device_id: String,
     source_id: String,
-    template_conf: serde_json::Value,
+    mode: UpdateConfMode,
+    conf: serde_json::Value,
 ) -> HaliaResult<()> {
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-        device
-            .update_template_mode_source_template_conf(&source_id, template_conf)
-            .await?;
+        device.update_source_conf(&source_id, mode, conf).await?;
     }
 
-    Ok(())
-}
-
-async fn update_customize_mode_source(
-    device_id: &String,
-    source_id: &String,
-    conf: serde_json::Value,
-) -> HaliaResult<()> {
-    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(device_id) {
-        device
-            .update_customize_mode_source_conf(source_id, conf)
-            .await?;
-    }
-
-    Ok(())
-}
-
-async fn update_template_mode_source_customize_conf(
-    device_id: &String,
-    source_id: &String,
-    customize_conf: serde_json::Value,
-) -> HaliaResult<()> {
-    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(device_id) {
-        device
-            .update_template_mode_source_customize_conf(source_id, customize_conf)
-            .await?;
-    }
-
-    Ok(())
-}
-
-async fn update_template_mode_source_template_conf(
-    device_id: &String,
-    source_id: &String,
-    template_conf: serde_json::Value,
-) -> HaliaResult<()> {
-    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(device_id) {
-        device
-            .update_template_mode_source_template_conf(source_id, template_conf)
-            .await?;
-    }
     Ok(())
 }
 
@@ -1101,35 +1015,38 @@ pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSo
     })
 }
 
-pub async fn update_sink(
+pub async fn device_update_sink(
     device_id: String,
     sink_id: String,
     req: UpdateSourceSinkReq,
 ) -> HaliaResult<()> {
-    // if req.conf_type == ConfType::Template && req.template_id.is_none() {
-    //     return Err(HaliaError::Common("模板ID不能为空".to_string()));
-    // }
+    let device_conf_type = storage::device::device::read_conf_type(&device_id).await?;
+    if device_conf_type == ConfType::Template {
+        return Err(HaliaError::Common("模板设备不能修改动作。".to_string()));
+    }
 
-    // if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-    //     match req.conf_type {
-    //         ConfType::Template => {
-    //             let template_conf = storage::device::source_sink_template::read_conf(
-    //                 req.template_id.as_ref().unwrap(),
-    //             )
-    //             .await?;
-    //             device
-    //                 .update_template_sink(&sink_id, req.conf.clone(), template_conf)
-    //                 .await?;
-    //         }
-    //         ConfType::Customize => {
-    //             device
-    //                 .update_customize_sink(&sink_id, req.conf.clone())
-    //                 .await?;
-    //         }
-    //     }
-    // }
+    let db_sink = storage::device::source_sink::read_one(&sink_id).await?;
+    if req.conf != db_sink.conf.unwrap() {
+        let mode = match db_sink.conf_type.unwrap() {
+            ConfType::Customize => UpdateConfMode::CustomizeMode,
+            ConfType::Template => UpdateConfMode::TemplateModeCustomize,
+        };
+        update_sink_conf(device_id, sink_id.clone(), mode, req.conf.clone()).await?;
+    }
 
     storage::device::source_sink::update(&sink_id, req).await?;
+    Ok(())
+}
+
+async fn update_sink_conf(
+    device_id: String,
+    sink_id: String,
+    mode: UpdateConfMode,
+    conf: serde_json::Value,
+) -> HaliaResult<()> {
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+        device.update_sink_conf(&sink_id, mode, conf).await?;
+    }
 
     Ok(())
 }
@@ -1166,4 +1083,11 @@ pub async fn get_sink_txs(
         let device_name = storage::device::device::read_name(&device_id).await?;
         Err(HaliaError::Stopped(format!("设备：{}", device_name)))
     }
+}
+
+#[derive(Clone, Copy)]
+enum UpdateConfMode {
+    CustomizeMode,
+    TemplateModeCustomize,
+    TemplateModeTemplate,
 }

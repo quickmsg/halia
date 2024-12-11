@@ -29,7 +29,7 @@ use types::{
     Value,
 };
 
-use crate::Device;
+use crate::{Device, UpdateConfMode};
 
 mod sink;
 mod source;
@@ -258,31 +258,13 @@ impl Device for Opcua {
         None
     }
 
-    async fn update_customize_mode_conf(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
+    async fn update_conf(
+        &mut self,
+        mode: UpdateConfMode,
+        conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         let opcua_conf: OpcuaConf = serde_json::from_value(conf)?;
         Self::update_conf(&mut self, opcua_conf).await;
-        Ok(())
-    }
-
-    async fn update_template_mode_customize_conf(
-        &mut self,
-        // customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        // let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
-        // Self::update_conf(&mut self, opcua_conf).await;
-
-        Ok(())
-    }
-
-    async fn update_template_mode_template_conf(
-        &mut self,
-        // customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        // let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
-        // Self::update_conf(&mut self, opcua_conf).await;
-
         Ok(())
     }
 
@@ -309,44 +291,13 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn update_customize_mode_source_conf(
+    async fn update_source_conf(
         &mut self,
         source_id: &String,
+        mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
-        match self.sources.get_mut(source_id) {
-            Some(mut source) => {
-                source.update_conf(conf).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(source_id.to_string())),
-        }
-    }
-
-    async fn update_template_mode_source_customize_conf(
-        &mut self,
-        source_id: &String,
-        customize_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        // TODO
-        let conf: SourceConf = serde_json::from_value(customize_conf)?;
-        match self.sources.get_mut(source_id) {
-            Some(mut source) => {
-                source.update_conf(conf).await;
-                Ok(())
-            }
-            None => Err(HaliaError::NotFound(source_id.to_string())),
-        }
-    }
-
-    async fn update_template_mode_source_template_conf(
-        &mut self,
-        source_id: &String,
-        customize_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        // TODO
-        let conf: SourceConf = serde_json::from_value(customize_conf)?;
         match self.sources.get_mut(source_id) {
             Some(mut source) => {
                 source.update_conf(conf).await;
@@ -393,36 +344,12 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn update_customize_sink(
+    async fn update_sink_conf(
         &mut self,
-        sink_id: &String,
+        source_id: &String,
+        mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        // let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-        // match self.sinks.get_mut(sink_id) {
-        //     Some(mut sink) => {
-        //         sink.update_conf(old_conf, new_conf).await;
-        //         Ok(())
-        //     }
-        //     None => Err(HaliaError::NotFound(sink_id.to_string())),
-        // }
-        todo!()
-    }
-
-    async fn update_template_sink(
-        &mut self,
-        sink_id: &String,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        // let new_conf: SinkConf = serde_json::from_value(new_conf)?;
-        // match self.sinks.get_mut(sink_id) {
-        //     Some(mut sink) => {
-        //         sink.update_conf(old_conf, new_conf).await;
-        //         Ok(())
-        //     }
-        //     None => Err(HaliaError::NotFound(sink_id.to_string())),
-        // }
         todo!()
     }
 

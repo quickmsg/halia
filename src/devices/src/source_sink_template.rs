@@ -10,7 +10,7 @@ use types::{
     Pagination,
 };
 
-use crate::{modbus, GLOBAL_DEVICE_MANAGER};
+use crate::modbus;
 
 pub async fn create_source_template(req: CreateReq) -> HaliaResult<()> {
     match req.device_type {
@@ -64,9 +64,10 @@ pub async fn update_source_template(id: String, req: UpdateReq) -> HaliaResult<(
     if old_conf != req.conf {
         let device_sources = storage::device::source_sink::read_sources_by_template_id(&id).await?;
         for device_source in device_sources {
-            super::update_template_mode_source_template_conf(
-                &device_source.device_id,
-                &device_source.id,
+            super::update_source_conf(
+                device_source.device_id,
+                device_source.id,
+                crate::UpdateConfMode::TemplateModeTemplate,
                 req.conf.clone(),
             )
             .await?;
@@ -75,10 +76,21 @@ pub async fn update_source_template(id: String, req: UpdateReq) -> HaliaResult<(
         let device_template_sources =
             storage::device::template_source_sink::read_sources_by_template_id(&id).await?;
         for device_template_source in device_template_sources {
-            todo!()
+            let device_sources =
+                storage::device::source_sink::read_sources_by_device_template_source_id(
+                    &device_template_source.id,
+                )
+                .await?;
+            for device_source in device_sources {
+                super::update_source_conf(
+                    device_source.device_id,
+                    device_source.id,
+                    crate::UpdateConfMode::TemplateModeTemplate,
+                    req.conf.clone(),
+                )
+                .await?;
+            }
         }
-
-        // todo 更新设备模板中的源
     }
 
     storage::device::source_sink_template::update(&id, req).await?;
@@ -161,16 +173,34 @@ pub async fn read_sink_template(id: String) -> HaliaResult<ReadResp> {
 pub async fn update_sink_template(id: String, req: UpdateReq) -> HaliaResult<()> {
     let old_conf = storage::device::source_sink_template::read_conf(&id).await?;
     if old_conf != req.conf {
-        let sinks = storage::device::source_sink::read_sinks_by_template_id(&id).await?;
-        for sink in sinks {
-            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&sink.device_id) {
-                device
-                    .update_template_sink(&sink.id, sink.conf.unwrap(), req.conf.clone())
-                    .await?;
-            }
+        let device_sinks = storage::device::source_sink::read_sinks_by_template_id(&id).await?;
+        for device_sink in device_sinks {
+            super::update_sink_conf(
+                device_sink.device_id,
+                device_sink.id,
+                crate::UpdateConfMode::TemplateModeTemplate,
+                req.conf.clone(),
+            )
+            .await?;
         }
 
-        // TODO
+        let device_template_sinks =
+            storage::device::template_source_sink::read_sinks_by_template_id(&id).await?;
+        for device_template_sink in device_template_sinks {
+            let device_sinks = storage::device::source_sink::read_sinks_by_device_template_sink_id(
+                &device_template_sink.id,
+            )
+            .await?;
+            for device_sink in device_sinks {
+                super::update_sink_conf(
+                    device_sink.device_id,
+                    device_sink.id,
+                    crate::UpdateConfMode::TemplateModeTemplate,
+                    req.conf.clone(),
+                )
+                .await?;
+            }
+        }
     }
 
     storage::device::source_sink_template::update(&id, req).await?;

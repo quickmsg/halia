@@ -11,7 +11,7 @@ use types::{
 
 use crate::{
     coap, device_template_create_sink, device_template_create_source, modbus, opcua,
-    GLOBAL_DEVICE_MANAGER,
+    UpdateConfMode, GLOBAL_DEVICE_MANAGER,
 };
 
 pub async fn create_device_template(req: CreateReq) -> HaliaResult<()> {
@@ -80,7 +80,9 @@ pub async fn update_device_template(id: String, req: UpdateReq) -> HaliaResult<(
             let conf = req.conf.clone();
             tokio::spawn(async move {
                 if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
-                    let _ = device.update_template_mode_template_conf(conf).await;
+                    let _ = device
+                        .update_conf(crate::UpdateConfMode::TemplateModeTemplate, conf)
+                        .await;
                 }
             });
         });
@@ -175,6 +177,10 @@ pub async fn update_source(
 ) -> HaliaResult<()> {
     let db_source = storage::device::template_source_sink::read_one(&source_id).await?;
     if req.conf != db_source.conf {
+        let mode = match db_source.conf_type {
+            ConfType::Customize => UpdateConfMode::CustomizeMode,
+            ConfType::Template => UpdateConfMode::TemplateModeCustomize,
+        };
         let device_ids =
             storage::device::device::read_ids_by_template_id(&device_template_id).await?;
         for device_id in device_ids {
@@ -183,13 +189,7 @@ pub async fn update_source(
                     &device_id, &source_id,
                 )
                 .await?;
-            super::device_template_update_source(
-                device_id,
-                device_source_id,
-                &db_source.conf_type,
-                req.conf.clone(),
-            )
-            .await?;
+            super::update_source_conf(device_id, device_source_id, mode, req.conf.clone()).await?;
         }
     }
 
@@ -282,7 +282,6 @@ pub async fn read_sink(
     })
 }
 
-// TODO
 pub async fn update_sink(
     device_template_id: String,
     sink_id: String,
@@ -290,21 +289,19 @@ pub async fn update_sink(
 ) -> HaliaResult<()> {
     let db_sink = storage::device::template_source_sink::read_one(&sink_id).await?;
     if req.conf != db_sink.conf {
+        let mode = match db_sink.conf_type {
+            ConfType::Customize => UpdateConfMode::CustomizeMode,
+            ConfType::Template => UpdateConfMode::TemplateModeCustomize,
+        };
         let device_ids =
             storage::device::device::read_ids_by_template_id(&device_template_id).await?;
         for device_id in device_ids {
-            let device_source_id =
+            let device_sink_id =
                 storage::device::source_sink::read_id_by_device_template_source_sink_id(
                     &device_id, &sink_id,
                 )
                 .await?;
-            super::device_template_update_source(
-                device_id,
-                device_source_id,
-                &db_sink.conf_type,
-                req.conf.clone(),
-            )
-            .await?;
+            super::update_sink_conf(device_id, device_sink_id, mode, req.conf.clone()).await?;
         }
     }
 

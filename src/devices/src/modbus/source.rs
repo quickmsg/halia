@@ -10,7 +10,12 @@ use tokio::{
     time,
 };
 use tracing::warn;
-use types::devices::device::modbus::{Area, DeviceConf, SourceConf};
+use types::devices::{
+    device::modbus::{Area, DeviceConf, SourceConf},
+    source_sink_template::modbus::{SourceCustomizeConf, SourceTemplateConf},
+};
+
+use crate::UpdateConfMode;
 
 pub struct Source {
     pub source_conf: SourceConf,
@@ -24,10 +29,10 @@ pub struct Source {
 }
 
 pub struct JoinHandleData {
-    pub id: String,
-    pub stop_signal_rx: watch::Receiver<()>,
-    pub read_tx: mpsc::UnboundedSender<String>,
-    pub device_err_rx: broadcast::Receiver<bool>,
+    id: String,
+    stop_signal_rx: watch::Receiver<()>,
+    read_tx: mpsc::UnboundedSender<String>,
+    device_err_rx: broadcast::Receiver<bool>,
 }
 
 impl Source {
@@ -176,11 +181,29 @@ impl Source {
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn update(&mut self, source_conf: SourceConf) {
+    pub async fn update(
+        &mut self,
+        mode: UpdateConfMode,
+        conf: serde_json::Value,
+    ) -> HaliaResult<()> {
         let join_handle_data = self.stop().await;
-        self.source_conf = source_conf;
+        // self.source_conf = source_conf;
+        match mode {
+            UpdateConfMode::CustomizeMode => {
+                let conf: SourceConf = serde_json::from_value(conf)?;
+                self.source_conf = conf;
+            }
+            UpdateConfMode::TemplateModeCustomize => {
+                update_customize_conf(&mut self.source_conf, conf)?;
+            }
+            UpdateConfMode::TemplateModeTemplate => {
+                update_template_conf(&mut self.source_conf, conf)?;
+            }
+        }
         let join_handle = Self::event_loop(join_handle_data, &self.source_conf);
         self.join_handle = Some(join_handle);
+
+        Ok(())
     }
 
     pub async fn read(
@@ -283,4 +306,45 @@ impl Source {
         }
         rxs
     }
+}
+
+pub fn get_source_conf(
+    customize_conf: serde_json::Value,
+    template_conf: serde_json::Value,
+) -> HaliaResult<SourceConf> {
+    let customize_conf: SourceCustomizeConf = serde_json::from_value(customize_conf)?;
+    let template_conf: SourceTemplateConf = serde_json::from_value(template_conf)?;
+    Ok(SourceConf {
+        slave: customize_conf.slave,
+        field: template_conf.field,
+        data_type: template_conf.data_type,
+        area: template_conf.area,
+        address: template_conf.address,
+        interval: template_conf.interval,
+        metadatas: customize_conf.metadatas,
+    })
+}
+
+pub fn update_customize_conf(
+    source_conf: &mut SourceConf,
+    customize_conf: serde_json::Value,
+) -> HaliaResult<()> {
+    let customize_conf: SourceCustomizeConf = serde_json::from_value(customize_conf)?;
+    source_conf.slave = customize_conf.slave;
+    source_conf.metadatas = customize_conf.metadatas;
+
+    Ok(())
+}
+
+pub fn update_template_conf(
+    source_conf: &mut SourceConf,
+    template_conf: serde_json::Value,
+) -> HaliaResult<()> {
+    let template_conf: SourceTemplateConf = serde_json::from_value(template_conf)?;
+    source_conf.field = template_conf.field;
+    source_conf.data_type = template_conf.data_type;
+    source_conf.area = template_conf.area;
+    source_conf.address = template_conf.address;
+    source_conf.interval = template_conf.interval;
+    Ok(())
 }
