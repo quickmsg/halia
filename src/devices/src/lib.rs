@@ -51,7 +51,7 @@ pub trait Device: Send + Sync {
     async fn create_customize_source(
         &mut self,
         source_id: String,
-        conf: serde_json::Value,
+        customize_conf: serde_json::Value,
     ) -> HaliaResult<()>;
     async fn create_template_source(
         &mut self,
@@ -604,7 +604,7 @@ pub async fn delete_device(device_id: String) -> HaliaResult<()> {
     Ok(())
 }
 
-pub async fn create_source(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
+pub async fn device_create_source(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
     let conf_type = storage::device::device::read_conf_type(&device_id).await?;
     if conf_type == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建源".to_string()));
@@ -614,15 +614,32 @@ pub async fn create_source(device_id: String, req: CreateSourceSinkReq) -> Halia
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    let device_type: DeviceType = storage::device::device::read_device_type(&device_id).await?;
-    match device_type {
-        DeviceType::Modbus => modbus::validate_source_conf(&req.conf)?,
-        DeviceType::Opcua => opcua::validate_source_conf(&req.conf)?,
-        DeviceType::Coap => coap::validate_source_conf(&req.conf)?,
-    }
+    let source_id = create_source(&device_id, req.clone()).await?;
+    storage::device::source_sink::insert_source(&source_id, &device_id, req).await?;
+    Ok(())
+}
 
+pub(crate) async fn device_template_create_source(
+    device_id: String,
+    device_template_source_id: &String,
+    req: CreateSourceSinkReq,
+) -> HaliaResult<()> {
+    let name = req.name.clone();
+    let source_id = create_source(&device_id, req).await?;
+    storage::device::source_sink::insert_source_by_device_template(
+        &source_id,
+        &device_id,
+        &name,
+        &device_template_source_id,
+    )
+    .await?;
+
+    Ok(())
+}
+
+async fn create_source(device_id: &String, req: CreateSourceSinkReq) -> HaliaResult<String> {
     let source_id = common::get_id();
-    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(device_id) {
         let conf = req.conf.clone();
         match req.conf_type {
             types::devices::ConfType::Template => {
@@ -643,9 +660,7 @@ pub async fn create_source(device_id: String, req: CreateSourceSinkReq) -> Halia
         }
     }
 
-    storage::device::source_sink::insert_source(&source_id, &device_id, req).await?;
-
-    Ok(())
+    Ok(source_id)
 }
 
 pub async fn list_sources(
@@ -846,24 +861,42 @@ pub async fn get_source_rxs(
     }
 }
 
-pub async fn create_sink(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
-    if storage::device::device::read_conf_type(&device_id).await? == ConfType::Template {
+pub async fn device_create_sink(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
+    let conf_type = storage::device::device::read_conf_type(&device_id).await?;
+    if conf_type == ConfType::Template {
         return Err(HaliaError::Common("模板设备不能创建动作。".to_string()));
     }
 
-    if req.conf_type == types::devices::ConfType::Template && req.template_id.is_none() {
+    if req.conf_type == ConfType::Template && req.template_id.is_none() {
         return Err(HaliaError::Common("模板ID不能为空".to_string()));
     }
 
-    // let device_type: DeviceType = storage::device::device::read_device_type(&device_id).await?;
-    // match device_type {
-    //     DeviceType::Modbus => modbus::validate_sink_conf(&req.conf)?,
-    //     DeviceType::Opcua => opcua::validate_sink_conf(&req.conf)?,
-    //     DeviceType::Coap => coap::validate_sink_conf(&req.conf)?,
-    // }
+    let sink_id = create_sink(&device_id, req.clone()).await?;
+    storage::device::source_sink::insert_sink(&sink_id, &device_id, req).await?;
+    Ok(())
+}
 
+pub(crate) async fn device_template_create_sink(
+    device_id: String,
+    device_template_sink_id: &String,
+    req: CreateSourceSinkReq,
+) -> HaliaResult<()> {
+    let name = req.name.clone();
+    let sink_id = create_sink(&device_id, req).await?;
+    storage::device::source_sink::insert_sink_by_device_template(
+        &sink_id,
+        &device_id,
+        &name,
+        &device_template_sink_id,
+    )
+    .await?;
+
+    Ok(())
+}
+
+async fn create_sink(device_id: &String, req: CreateSourceSinkReq) -> HaliaResult<String> {
     let sink_id = common::get_id();
-    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_id) {
+    if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(device_id) {
         let conf: serde_json::Value = req.conf.clone();
         match req.conf_type {
             types::devices::ConfType::Template => {
@@ -882,9 +915,7 @@ pub async fn create_sink(device_id: String, req: CreateSourceSinkReq) -> HaliaRe
         }
     }
 
-    storage::device::source_sink::insert_sink(&sink_id, &device_id, req).await?;
-
-    Ok(())
+    Ok(sink_id)
 }
 
 pub async fn list_sinks(

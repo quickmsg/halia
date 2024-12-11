@@ -150,7 +150,7 @@ async fn create_source(
     Path(device_id): Path<String>,
     Json(req): Json<CreateSourceSinkReq>,
 ) -> AppResult<()> {
-    devices::create_source(device_id, req).await?;
+    devices::device_create_source(device_id, req).await?;
     Ok(())
 }
 
@@ -195,7 +195,7 @@ async fn create_sink(
     Path(device_id): Path<String>,
     Json(req): Json<CreateSourceSinkReq>,
 ) -> AppResult<()> {
-    devices::create_sink(device_id, req).await?;
+    devices::device_create_sink(device_id, req).await?;
     Ok(())
 }
 
@@ -355,7 +355,7 @@ async fn delete_device_template(Path(id): Path<String>) -> AppResult<()> {
 
 async fn create_device_template_source(
     Path(device_template_id): Path<String>,
-    Json(req): Json<types::devices::device_template::source_sink::CreateReq>,
+    Json(req): Json<CreateSourceSinkReq>,
 ) -> AppResult<()> {
     devices::device_template::create_source(device_template_id, req).await?;
     Ok(())
@@ -381,7 +381,7 @@ async fn read_device_template_source(
 
 async fn update_device_template_source(
     Path((device_template_id, source_id)): Path<(String, String)>,
-    Json(req): Json<types::devices::device_template::source_sink::UpdateReq>,
+    Json(req): Json<UpdateSourceSinkReq>,
 ) -> AppResult<()> {
     devices::device_template::update_source(device_template_id, source_id, req).await?;
     Ok(())
@@ -396,7 +396,7 @@ async fn delete_device_template_source(
 
 async fn create_device_template_sink(
     Path(device_template_id): Path<String>,
-    Json(req): Json<types::devices::device_template::source_sink::CreateReq>,
+    Json(req): Json<CreateSourceSinkReq>,
 ) -> AppResult<()> {
     devices::device_template::create_sink(device_template_id, req).await?;
     Ok(())
@@ -422,7 +422,7 @@ async fn read_device_template_sink(
 
 async fn update_device_template_sink(
     Path((device_template_id, sink_id)): Path<(String, String)>,
-    Json(req): Json<types::devices::device_template::source_sink::UpdateReq>,
+    Json(req): Json<UpdateSourceSinkReq>,
 ) -> AppResult<()> {
     Ok(devices::device_template::update_sink(device_template_id, sink_id, req).await?)
 }

@@ -4,8 +4,8 @@ use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
     devices::{
-        device_template::source_sink::{CreateReq, QueryParams, UpdateReq},
-        ConfType,
+        device_template::source_sink::QueryParams, ConfType, CreateSourceSinkReq,
+        UpdateSourceSinkReq,
     },
     Pagination,
 };
@@ -69,11 +69,19 @@ CREATE TABLE IF NOT EXISTS {} (
     )
 }
 
-pub async fn insert_source(id: &String, device_template_id: &String, req: CreateReq) -> Result<()> {
+pub async fn insert_source(
+    id: &String,
+    device_template_id: &String,
+    req: CreateSourceSinkReq,
+) -> Result<()> {
     insert(SourceSinkType::Source, id, device_template_id, req).await
 }
 
-pub async fn insert_sink(id: &String, device_template_id: &String, req: CreateReq) -> Result<()> {
+pub async fn insert_sink(
+    id: &String,
+    device_template_id: &String,
+    req: CreateSourceSinkReq,
+) -> Result<()> {
     insert(SourceSinkType::Sink, id, device_template_id, req).await
 }
 
@@ -81,7 +89,7 @@ async fn insert(
     source_sink_type: SourceSinkType,
     id: &String,
     device_template_id: &String,
-    req: CreateReq,
+    req: CreateSourceSinkReq,
 ) -> Result<()> {
     sqlx::query(
         format!(
@@ -308,7 +316,7 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: UpdateReq) -> Result<()> {
+pub async fn update(id: &String, req: UpdateSourceSinkReq) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
         .bind(serde_json::to_vec(&req.conf)?)

@@ -2,20 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::devices::ConfType;
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
-pub struct CreateReq {
-    pub name: String,
-    pub conf_type: ConfType,
-    pub template_id: Option<String>,
-    pub conf: serde_json::Value,
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
-pub struct UpdateReq {
-    pub name: String,
-    pub conf: serde_json::Value,
-}
-
 #[derive(Deserialize)]
 pub struct QueryParams {
     pub name: Option<String>,
