@@ -7,6 +7,7 @@ use crate::{RuleRefCnt, Status};
 
 pub mod device;
 pub mod device_template;
+pub mod source_group;
 pub mod source_sink_template;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]

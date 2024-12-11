@@ -35,7 +35,10 @@ struct TaskLoop {
     id: String,
 }
 
-pub async fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn Device>> {
+pub(crate) async fn new_by_customize(
+    id: String,
+    conf: serde_json::Value,
+) -> HaliaResult<Box<dyn Device>> {
     let device_conf: DeviceConf = serde_json::from_value(conf)?;
     let coap_client =
         Arc::new(UdpCoAPClient::new_udp((device_conf.host.clone(), device_conf.port)).await?);

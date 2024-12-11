@@ -19,13 +19,14 @@ pub mod coap;
 pub mod device_template;
 pub mod modbus;
 pub mod opcua;
+pub mod source_group;
 pub mod source_sink_template;
 
 static GLOBAL_DEVICE_MANAGER: LazyLock<DashMap<String, Box<dyn Device>>> =
     LazyLock::new(|| DashMap::new());
 
 #[async_trait]
-trait Device: Send + Sync {
+pub(crate) trait Device: Send + Sync {
     async fn read_device_err(&self) -> Option<Arc<String>>;
     async fn read_source_err(&self, source_id: &String) -> Option<String>;
     async fn read_sink_err(&self, sink_id: &String) -> Option<String>;

@@ -47,6 +47,24 @@ pub fn routes() -> Router {
                 ),
         )
         .nest(
+            "/source_group",
+            Router::new()
+                .route("/", post(create_source_group))
+                .route("/", get(list_source_groups))
+                .route("/:id", get(read_source_group))
+                .route("/:id", put(update_source_group))
+                .route("/:id", delete(delete_source_group))
+                .nest(
+                    "/:source_group_id",
+                    Router::new()
+                        .route("/", post(create_source_group_source))
+                        .route("/", get(list_source_group_sources))
+                        .route("/:source_id", get(read_source_group_source))
+                        .route("/:source_id", put(update_source_group_source))
+                        .route("/:source_id", delete(delete_source_group_source)),
+                ),
+        )
+        .nest(
             "/source_template",
             Router::new()
                 .route("/", post(create_source_template))
@@ -227,6 +245,49 @@ async fn delete_sink(Path((device_id, sink_id)): Path<(String, String)>) -> AppR
     devices::device_delete_sink(device_id, sink_id).await?;
     Ok(())
 }
+
+async fn create_source_group(
+    Json(req): Json<types::devices::source_group::CreateReq>,
+) -> AppResult<()> {
+    devices::source_group::create_source_group(req).await?;
+    Ok(())
+}
+
+async fn list_source_groups(
+    Query(pagination): Query<Pagination>,
+    Query(query): Query<types::devices::source_group::QueryParams>,
+) -> AppResult<()> {
+    devices::source_group::list_source_groups(pagination, query).await?;
+    Ok(())
+}
+
+async fn read_source_group(Path(id): Path<String>) -> AppResult<()> {
+    devices::source_group::read_source_group(id).await?;
+    Ok(())
+}
+
+async fn update_source_group(
+    Path(id): Path<String>,
+    Json(req): Json<types::devices::source_group::UpdateReq>,
+) -> AppResult<()> {
+    devices::source_group::update_source_group(id, req).await?;
+    Ok(())
+}
+
+async fn delete_source_group(Path(id): Path<String>) -> AppResult<()> {
+    devices::source_group::delete_source_group(id).await?;
+    Ok(())
+}
+
+async fn create_source_group_source() {}
+
+async fn list_source_group_sources() {}
+
+async fn read_source_group_source() {}
+
+async fn update_source_group_source() {}
+
+async fn delete_source_group_source() {}
 
 async fn create_source_template(
     Json(req): Json<types::devices::source_sink_template::CreateReq>,
