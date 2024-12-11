@@ -25,8 +25,8 @@ static GLOBAL_DEVICE_MANAGER: LazyLock<DashMap<String, Box<dyn Device>>> =
     LazyLock::new(|| DashMap::new());
 
 #[async_trait]
-pub trait Device: Send + Sync {
-    async fn read_err(&self) -> Option<Arc<String>>;
+trait Device: Send + Sync {
+    async fn read_device_err(&self) -> Option<Arc<String>>;
     async fn read_source_err(&self, source_id: &String) -> Option<String>;
     async fn read_sink_err(&self, sink_id: &String) -> Option<String>;
     async fn update_conf(
@@ -53,7 +53,9 @@ pub trait Device: Send + Sync {
         mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()>;
-    async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()>;
+    async fn write_source_value(&mut self, _source_id: String, _req: Value) -> HaliaResult<()> {
+        return Err(HaliaError::Common("不支持写入数据。".into()));
+    }
     async fn delete_source(&mut self, source_id: &String) -> HaliaResult<()>;
 
     async fn create_customize_sink(
@@ -295,7 +297,7 @@ pub async fn list_devices(
                     Some(device) => device,
                     None => return Err(HaliaError::Common("设备未启动！".to_string())),
                 };
-                device.read_err().await
+                device.read_device_err().await
             }
             _ => None,
         };
@@ -355,7 +357,7 @@ pub async fn read_device(device_id: String) -> HaliaResult<types::devices::ReadD
                 Some(device) => device,
                 None => return Err(HaliaError::Common("设备未启动！".to_string())),
             };
-            device.read_err().await
+            device.read_device_err().await
         }
         _ => None,
     };

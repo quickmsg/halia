@@ -4,6 +4,7 @@ use super::DeviceType;
 
 pub mod modbus;
 pub mod opcua;
+pub mod coap;
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CreateReq {

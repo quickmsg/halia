@@ -7,6 +7,8 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use futures::lock::BiLock;
+use halia_derive::ResourceErr;
 use message::RuleMessageBatch;
 use opcua_protocol::{
     client::{ClientBuilder, IdentityToken, Session},
@@ -35,8 +37,9 @@ mod sink;
 mod source;
 pub(crate) mod template;
 
+#[derive(ResourceErr)]
 struct Opcua {
-    err: Arc<RwLock<Option<String>>>,
+    err: BiLock<Option<Arc<String>>>,
     rtt: Arc<AtomicU16>,
     stop_signal_tx: watch::Sender<()>,
     opcua_client: Arc<RwLock<Option<Arc<Session>>>>,
@@ -73,19 +76,19 @@ fn new(id: String, opcua_conf: OpcuaConf) -> Box<dyn Device> {
 
     let opcua_client: Arc<RwLock<Option<Arc<Session>>>> = Arc::new(RwLock::new(None));
 
-    let err = Arc::new(RwLock::new(None));
+    let (err1, err2) = BiLock::new(None);
     let join_handle_data = JoinHandleData {
         id,
         opcua_conf,
         opcua_client: opcua_client.clone(),
         stop_signal_rx,
-        err: err.clone(),
+        err: todo!(),
     };
 
     let join_handle = Opcua::event_loop(join_handle_data);
 
     Box::new(Opcua {
-        err,
+        err: err2,
         opcua_client,
         stop_signal_tx,
         sources: DashMap::new(),
@@ -245,7 +248,7 @@ impl Opcua {
 
 #[async_trait]
 impl Device for Opcua {
-    async fn read_err(&self) -> Option<Arc<String>> {
+    async fn read_device_err(&self) -> Option<Arc<String>> {
         // self.err.read().await.clone()
         todo!()
     }

@@ -1,36 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct CreateUpdateCoapReq {
-    pub name: String,
-    pub conf: CoapConf,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
-pub struct CoapConf {
+pub struct DeviceConf {
     pub host: String,
     pub port: u16,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateAPIReq {
-    pub name: String,
-    #[serde(flatten)]
-    pub ext: APIConf,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct APIConf {
-    // ms
-    pub interval: u64,
-
-    pub path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Vec<u8>>,
-    pub options: Vec<(CoapOption, String)>,
-    pub domain: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token: Option<Vec<u8>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -58,47 +31,19 @@ pub enum CoapOption {
     NoResponse,
 }
 
-#[derive(Serialize)]
-pub struct SearchAPIsResp {
-    pub total: usize,
-    pub data: Vec<SearchAPIsItemResp>,
-}
-
-#[derive(Serialize)]
-pub struct SearchAPIsItemResp {
-    pub id: String,
-    pub conf: CreateUpdateAPIReq,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateObserveReq {
-    pub name: String,
-    #[serde(flatten)]
-    pub ext: ObserveConf,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-pub struct CreateUpdateSourceReq {
-    pub name: String,
-    #[serde(flatten)]
-    pub ext: SourceConf,
-}
-
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct SourceConf {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub querys: Option<Vec<(String, String)>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<Vec<(CoapOption, String)>>,
+
     pub method: SourceMethod,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub get: Option<GetConf>,
+    pub get: Option<SourceGetConf>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub observe: Option<ObserveConf>,
-    // #[serde(flatten)]
-    // pub conf: serde_json::Value,
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub data: Option<Vec<u8>>,
-
-    // pub domain: String,
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub token: Option<Vec<u8>>,
+    pub observe: Option<SourceObserveConf>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -109,42 +54,31 @@ pub enum SourceMethod {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct GetConf {
+pub struct SourceGetConf {
     pub interval: u64,
-    pub path: String,
-    pub querys: Vec<(String, String)>,
-    pub options: Vec<(CoapOption, String)>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub struct ObserveConf {
-    pub path: String,
-    pub options: Vec<(CoapOption, String)>,
-}
+pub struct SourceObserveConf {}
 
-#[derive(Deserialize)]
-pub struct QueryObserves {
-    pub name: Option<String>,
-}
+// #[derive(Serialize)]
+// pub struct SearchObservesResp {
+//     pub total: usize,
+//     pub data: Vec<SearchObservesItemResp>,
+// }
 
-#[derive(Serialize)]
-pub struct SearchObservesResp {
-    pub total: usize,
-    pub data: Vec<SearchObservesItemResp>,
-}
+// #[derive(Serialize)]
+// pub struct SearchObservesItemResp {
+//     pub id: String,
+//     pub conf: CreateUpdateObserveReq,
+// }
 
-#[derive(Serialize)]
-pub struct SearchObservesItemResp {
-    pub id: String,
-    pub conf: CreateUpdateObserveReq,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-pub struct CreateUpdateSinkReq {
-    pub name: String,
-    #[serde(flatten)]
-    pub ext: SinkConf,
-}
+// #[derive(Deserialize, Serialize, Clone)]
+// pub struct CreateUpdateSinkReq {
+//     pub name: String,
+//     #[serde(flatten)]
+//     pub ext: SinkConf,
+// }
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct SinkConf {
@@ -164,14 +98,14 @@ pub enum SinkMethod {
     Delete,
 }
 
-#[derive(Serialize)]
-pub struct SearchSinksResp {
-    pub total: usize,
-    pub data: Vec<SearchSinksItemResp>,
-}
+// #[derive(Serialize)]
+// pub struct SearchSinksResp {
+//     pub total: usize,
+//     pub data: Vec<SearchSinksItemResp>,
+// }
 
-#[derive(Serialize)]
-pub struct SearchSinksItemResp {
-    pub id: String,
-    pub conf: CreateUpdateSinkReq,
-}
+// #[derive(Serialize)]
+// pub struct SearchSinksItemResp {
+//     pub id: String,
+//     pub conf: CreateUpdateSinkReq,
+// }

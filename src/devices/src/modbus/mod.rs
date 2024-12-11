@@ -399,7 +399,7 @@ async fn write_value(
 
 #[async_trait]
 impl Device for Modbus {
-    async fn read_err(&self) -> Option<Arc<String>> {
+    async fn read_device_err(&self) -> Option<Arc<String>> {
         self.read_err().await
     }
 

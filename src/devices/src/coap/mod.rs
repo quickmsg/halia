@@ -6,53 +6,53 @@ use base64::{prelude::BASE64_STANDARD, Engine as _};
 use coap_protocol::{client::UdpCoAPClient, request::CoapOption};
 use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
+use futures::lock::BiLock;
+use halia_derive::ResourceErr;
 use message::RuleMessageBatch;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sink::Sink;
 use source::Source;
 use tokio::sync::{mpsc, Mutex};
-use types::{
-    devices::device::coap::{CoapConf, SinkConf, SourceConf},
-    Value,
-};
+use types::devices::device::coap::{DeviceConf, SinkConf, SourceConf};
 
 use crate::{Device, UpdateConfMode};
 
 mod sink;
 mod source;
 
-macro_rules! coap_not_support_write_source_value {
-    () => {
-        Err(HaliaError::Common("coap设备不支持写入源数据!".to_owned()))
-    };
-}
-
+#[derive(ResourceErr)]
 struct Coap {
-    id: String,
     sources: DashMap<String, Source>,
     sinks: DashMap<String, Sink>,
 
     coap_client: Arc<UdpCoAPClient>,
-    err: Option<String>,
+    err: BiLock<Option<Arc<String>>>,
     token_manager: Arc<Mutex<TokenManager>>,
 }
 
+struct TaskLoop {
+    device_err: BiLock<Option<Arc<String>>>,
+    id: String,
+}
+
 pub async fn new(id: String, conf: serde_json::Value) -> HaliaResult<Box<dyn Device>> {
-    let conf: CoapConf = serde_json::from_value(conf)?;
-    let coap_client = Arc::new(UdpCoAPClient::new_udp((conf.host.clone(), conf.port)).await?);
+    let device_conf: DeviceConf = serde_json::from_value(conf)?;
+    let coap_client =
+        Arc::new(UdpCoAPClient::new_udp((device_conf.host.clone(), device_conf.port)).await?);
+
+    let (err1, err2) = BiLock::new(None);
 
     Ok(Box::new(Coap {
-        id,
         sources: DashMap::new(),
         sinks: DashMap::new(),
         coap_client,
-        err: None,
+        err: err2,
         token_manager: Arc::new(Mutex::new(TokenManager::new())),
     }))
 }
 
 pub fn validate_conf(conf: &serde_json::Value) -> HaliaResult<()> {
-    let _conf: CoapConf = serde_json::from_value(conf.clone())?;
+    let _conf: DeviceConf = serde_json::from_value(conf.clone())?;
     Ok(())
 }
 
@@ -68,9 +68,8 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 
 #[async_trait]
 impl Device for Coap {
-    async fn read_err(&self) -> Option<Arc<String>> {
-        todo!()
-        // self.err.clone()
+    async fn read_device_err(&self) -> Option<Arc<String>> {
+        self.read_err().await
     }
 
     async fn read_source_err(&self, _source_id: &String) -> Option<String> {
@@ -139,10 +138,6 @@ impl Device for Coap {
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
-    }
-
-    async fn write_source_value(&mut self, _source_id: String, _req: Value) -> HaliaResult<()> {
-        coap_not_support_write_source_value!()
     }
 
     async fn delete_source(&mut self, source_id: &String) -> HaliaResult<()> {
