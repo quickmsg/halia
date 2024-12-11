@@ -1,7 +1,10 @@
 use anyhow::Result;
 use message::MessageValue;
 
-use crate::nodes::{args::Args, computes::Computer};
+use crate::{
+    add_or_set_message_value,
+    nodes::{args::Args, computes::Computer},
+};
 
 pub struct Exp {
     field: String,
@@ -32,9 +35,30 @@ impl Computer for Exp {
             None => MessageValue::Null,
         };
 
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), value),
-            None => message.set(&self.field, value),
-        }
+        add_or_set_message_value!(self, message, value);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_exp_int() {
+        let mut message = message::Message::default();
+        message.add("k".to_owned(), message::MessageValue::Int64(2));
+
+        let mut args = std::collections::HashMap::new();
+        args.insert(
+            "field".to_owned(),
+            serde_json::Value::String("k".to_owned()),
+        );
+        let mut computer = new(args.into()).unwrap();
+        computer.compute(&mut message);
+
+        assert_eq!(
+            message.get("k"),
+            Some(&message::MessageValue::Float64(7.38905609893065))
+        );
     }
 }

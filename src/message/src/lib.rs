@@ -299,7 +299,7 @@ impl Default for Message {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum MessageValue {
     Null,
     Boolean(bool),
@@ -309,6 +309,30 @@ pub enum MessageValue {
     Bytes(Vec<u8>),
     Array(Vec<MessageValue>),
     Object(HashMap<String, MessageValue>),
+}
+
+impl PartialEq for MessageValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MessageValue::Null, MessageValue::Null) => true,
+            (MessageValue::Boolean(left), MessageValue::Boolean(right)) => left == right,
+            (MessageValue::Int64(left), MessageValue::Int64(right)) => left == right,
+            (MessageValue::Float64(left), MessageValue::Float64(right)) => left - right < 1e10,
+            (MessageValue::String(left), MessageValue::String(right)) => left == right,
+            (MessageValue::Bytes(left), MessageValue::Bytes(right)) => left == right,
+            (MessageValue::Array(left), MessageValue::Array(right)) => {
+                left.len() == right.len() && left.iter().zip(right.iter()).all(|(l, r)| l == r)
+            }
+            (MessageValue::Object(left), MessageValue::Object(right)) => {
+                left.len() == right.len()
+                    && left.iter().all(|(k, v)| match right.get(k) {
+                        Some(rv) => v == rv,
+                        None => false,
+                    })
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Eq for MessageValue {}

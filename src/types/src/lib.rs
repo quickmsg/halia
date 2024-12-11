@@ -12,6 +12,8 @@ pub mod rules;
 pub mod schema;
 pub mod user;
 
+// pub type Id = [u8; 16];
+
 #[derive(Serialize)]
 pub struct Dashboard {
     pub machine_info: MachineInfo,

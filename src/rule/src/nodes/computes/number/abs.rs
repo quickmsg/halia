@@ -121,9 +121,8 @@ mod tests {
             "field".to_owned(),
             serde_json::Value::String("k".to_owned()),
         );
-        let args = Args::new(args);
 
-        let mut computer = new(args).unwrap();
+        let mut computer = new(args.into()).unwrap();
         computer.compute(&mut message);
         assert_eq!(message.get("k"), Some(&message::MessageValue::Null));
 

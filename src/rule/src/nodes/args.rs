@@ -9,6 +9,12 @@ pub(crate) const TARGET_FIELD_KEY: &str = "target_field";
 
 pub(crate) struct Args(HashMap<String, serde_json::Value>);
 
+impl From<HashMap<String, serde_json::Value>> for Args {
+    fn from(args: HashMap<String, serde_json::Value>) -> Self {
+        Args(args)
+    }
+}
+
 impl Args {
     pub fn new(args: HashMap<String, serde_json::Value>) -> Self {
         Args(args)

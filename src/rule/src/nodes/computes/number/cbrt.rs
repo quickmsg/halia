@@ -39,3 +39,25 @@ impl Computer for Cbrt {
         add_or_set_message_value!(self, message, value);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_cbrt_int() {
+        use super::*;
+
+        let mut message = Message::default();
+        message.add("k".to_owned(), message::MessageValue::Int64(27));
+
+        let mut args = HashMap::new();
+        args.insert(
+            "field".to_owned(),
+            serde_json::Value::String("k".to_owned()),
+        );
+        let mut computer = new(args.into()).unwrap();
+        computer.compute(&mut message);
+        assert_eq!(message.get("k"), Some(&message::MessageValue::Float64(3.0)));
+    }
+}
