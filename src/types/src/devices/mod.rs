@@ -66,17 +66,17 @@ impl TryFrom<&str> for DeviceType {
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfType {
-    // 模板
-    Template,
     // 自定义
     Customize,
+    // 模板
+    Template,
 }
 
 impl Into<i32> for ConfType {
     fn into(self) -> i32 {
         match self {
-            ConfType::Template => 1,
-            ConfType::Customize => 2,
+            ConfType::Customize => 1,
+            ConfType::Template => 2,
         }
     }
 }
@@ -86,8 +86,8 @@ impl TryFrom<i32> for ConfType {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(ConfType::Template),
-            2 => Ok(ConfType::Customize),
+            1 => Ok(ConfType::Customize),
+            2 => Ok(ConfType::Template),
             _ => bail!("未知配置类型: {}", value),
         }
     }

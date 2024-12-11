@@ -173,18 +173,24 @@ pub async fn update_source(
     source_id: String,
     req: UpdateSourceSinkReq,
 ) -> HaliaResult<()> {
-    let device_source_req = types::devices::UpdateSourceSinkReq {
-        name: req.name.clone(),
-        conf: req.conf.clone(),
-    };
-    let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
-    for device_id in device_ids {
-        let device_source_id =
-            storage::device::source_sink::read_id_by_device_template_source_sink_id(
-                &device_id, &source_id,
+    let db_source = storage::device::template_source_sink::read_one(&source_id).await?;
+    if req.conf != db_source.conf {
+        let device_ids =
+            storage::device::device::read_ids_by_template_id(&device_template_id).await?;
+        for device_id in device_ids {
+            let device_source_id =
+                storage::device::source_sink::read_id_by_device_template_source_sink_id(
+                    &device_id, &source_id,
+                )
+                .await?;
+            super::device_template_update_source(
+                device_id,
+                device_source_id,
+                &db_source.conf_type,
+                req.conf.clone(),
             )
             .await?;
-        super::update_source(device_id, device_source_id, device_source_req.clone()).await?;
+        }
     }
 
     storage::device::template_source_sink::update(&source_id, req).await?;
@@ -276,23 +282,30 @@ pub async fn read_sink(
     })
 }
 
+// TODO
 pub async fn update_sink(
     device_template_id: String,
     sink_id: String,
     req: UpdateSourceSinkReq,
 ) -> HaliaResult<()> {
-    let device_sink_req = types::devices::UpdateSourceSinkReq {
-        name: req.name.clone(),
-        conf: req.conf.clone(),
-    };
-    let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
-    for device_id in device_ids {
-        let device_source_id =
-            storage::device::source_sink::read_id_by_device_template_source_sink_id(
-                &device_id, &sink_id,
+    let db_sink = storage::device::template_source_sink::read_one(&sink_id).await?;
+    if req.conf != db_sink.conf {
+        let device_ids =
+            storage::device::device::read_ids_by_template_id(&device_template_id).await?;
+        for device_id in device_ids {
+            let device_source_id =
+                storage::device::source_sink::read_id_by_device_template_source_sink_id(
+                    &device_id, &sink_id,
+                )
+                .await?;
+            super::device_template_update_source(
+                device_id,
+                device_source_id,
+                &db_sink.conf_type,
+                req.conf.clone(),
             )
             .await?;
-        super::update_source(device_id, device_source_id, device_sink_req.clone()).await?;
+        }
     }
 
     storage::device::template_source_sink::update(&sink_id, req).await?;

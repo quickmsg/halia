@@ -286,17 +286,6 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn update_template_mode_conf(
-        &mut self,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        // let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
-        // Self::update_conf(&mut self, opcua_conf).await;
-
-        Ok(())
-    }
-
     async fn create_customize_source(
         &mut self,
         source_id: String,
@@ -320,7 +309,7 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn update_customize_source(
+    async fn update_customize_mode_source_conf(
         &mut self,
         source_id: &String,
         conf: serde_json::Value,
@@ -335,11 +324,26 @@ impl Device for Opcua {
         }
     }
 
-    async fn update_template_source(
+    async fn update_template_mode_source_customize_conf(
         &mut self,
         source_id: &String,
         customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        // TODO
+        let conf: SourceConf = serde_json::from_value(customize_conf)?;
+        match self.sources.get_mut(source_id) {
+            Some(mut source) => {
+                source.update_conf(conf).await;
+                Ok(())
+            }
+            None => Err(HaliaError::NotFound(source_id.to_string())),
+        }
+    }
+
+    async fn update_template_mode_source_template_conf(
+        &mut self,
+        source_id: &String,
+        customize_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         // TODO
         let conf: SourceConf = serde_json::from_value(customize_conf)?;

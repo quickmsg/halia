@@ -580,24 +580,13 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn update_template_mode_conf(
-        &mut self,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        // let opcua_conf = Self::get_device_conf(customize_conf, template_conf)?;
-        // Self::update_conf(&mut self, opcua_conf).await;
-
-        Ok(())
-    }
-
     async fn update_template_mode_customize_conf(
         &mut self,
-        template_conf: serde_json::Value,
+        customize_conf: serde_json::Value,
     ) -> HaliaResult<()> {
         self.stop_signal_tx.send(()).unwrap();
         let mut task_loop = self.join_handle.take().unwrap().await.unwrap();
-        task_loop.update_template_conf(template_conf)?;
+        task_loop.update_template_conf(customize_conf)?;
         let join_handle = task_loop.start();
         self.join_handle = Some(join_handle);
 
@@ -650,7 +639,7 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn update_customize_source(
+    async fn update_customize_mode_source_conf(
         &mut self,
         source_id: &String,
         conf: serde_json::Value,
@@ -659,14 +648,24 @@ impl Device for Modbus {
         self.update_source(source_id, conf).await
     }
 
-    async fn update_template_source(
+    async fn update_template_mode_source_customize_conf(
         &mut self,
         source_id: &String,
         customize_conf: serde_json::Value,
+    ) -> HaliaResult<()> {
+        todo!()
+        // let conf = Self::get_source_conf(customize_conf, template_conf)?;
+        // self.update_source(source_id, conf).await
+    }
+
+    async fn update_template_mode_source_template_conf(
+        &mut self,
+        source_id: &String,
         template_conf: serde_json::Value,
     ) -> HaliaResult<()> {
-        let conf = Self::get_source_conf(customize_conf, template_conf)?;
-        self.update_source(source_id, conf).await
+        todo!()
+        // let conf = Self::get_source_conf(customize_conf, template_conf)?;
+        // self.update_source(source_id, conf).await
     }
 
     async fn write_source_value(&mut self, source_id: String, req: Value) -> HaliaResult<()> {

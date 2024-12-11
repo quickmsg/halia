@@ -64,15 +64,12 @@ pub async fn update_source_template(id: String, req: UpdateReq) -> HaliaResult<(
     if old_conf != req.conf {
         let device_sources = storage::device::source_sink::read_sources_by_template_id(&id).await?;
         for device_source in device_sources {
-            if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(&device_source.device_id) {
-                device
-                    .update_template_source(
-                        &device_source.id,
-                        device_source.conf.unwrap(),
-                        req.conf.clone(),
-                    )
-                    .await?;
-            }
+            super::update_template_mode_source_template_conf(
+                &device_source.device_id,
+                &device_source.id,
+                req.conf.clone(),
+            )
+            .await?;
         }
 
         let device_template_sources =

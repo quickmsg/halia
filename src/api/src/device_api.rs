@@ -174,7 +174,7 @@ async fn update_source(
     Path((device_id, source_id)): Path<(String, String)>,
     Json(req): Json<UpdateSourceSinkReq>,
 ) -> AppResult<()> {
-    devices::update_source(device_id, source_id, req).await?;
+    devices::device_update_source(device_id, source_id, req).await?;
     Ok(())
 }
 
