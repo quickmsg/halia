@@ -1,67 +1,58 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use message::MessageValue;
-use types::{rules::functions::ComputerConfItem, TargetValue};
 
-use super::Computer;
+use crate::{
+    add_or_set_message_value,
+    nodes::{
+        args::{Args, FloatFieldArg},
+        computes::Computer,
+    },
+};
 
 struct Log {
     field: String,
-    arg: TargetValue,
     target_field: Option<String>,
+    base: FloatFieldArg,
 }
 
-pub fn new(conf: ComputerConfItem) -> Result<Box<dyn Computer>> {
-    let arg = match conf.arg {
-        Some(mut arg) => match arg.pop() {
-            Some(arg) => arg,
-            None => bail!("log必须含有参数"),
-        },
-        None => bail!("log必须含有参数"),
-    };
+pub fn new(mut args: Args) -> Result<Box<dyn Computer>> {
+    let (field, target_field) = args.take_field_and_option_target_field()?;
+    let base = args.take_float_field("base")?;
     Ok(Box::new(Log {
-        field: conf.field,
-        arg,
-        target_field: conf.target_field,
+        field,
+        target_field,
+        base,
     }))
 }
 
 impl Computer for Log {
-    fn compute(&self, message: &mut message::Message) {
-        let arg = match self.arg.typ {
-            types::TargetValueType::Const => match &self.arg.value {
-                serde_json::Value::Number(n) => match n.as_f64() {
-                    Some(value) => value,
-                    None => return,
+    fn compute(&mut self, message: &mut message::Message) {
+        let base = match &self.base {
+            FloatFieldArg::ConstFloat(f) => *f,
+            FloatFieldArg::Field(f) => match message.get(f) {
+                Some(mv) => match mv {
+                    MessageValue::Int64(mv) => *mv as f64,
+                    MessageValue::Float64(mv) => *mv,
+                    _ => return,
                 },
-                _ => return,
-            },
-            types::TargetValueType::Variable => match &self.arg.value {
-                serde_json::Value::String(field) => match message.get(field) {
-                    Some(mv) => match mv {
-                        message::MessageValue::Int64(mv) => *mv as f64,
-                        message::MessageValue::Float64(mv) => *mv,
-                        _ => return,
-                    },
-                    None => return,
-                },
-                _ => return,
+                None => return,
             },
         };
 
-        let value = match message.get(&self.field) {
+        let result = match message.get(&self.field) {
             Some(mv) => match mv {
                 MessageValue::Int64(mv) => {
                     if *mv <= 0 {
                         MessageValue::Null
                     } else {
-                        MessageValue::Float64((*mv as f64).log(arg))
+                        MessageValue::Float64((*mv as f64).log(base))
                     }
                 }
                 MessageValue::Float64(mv) => {
                     if *mv <= 0.0 {
                         MessageValue::Null
                     } else {
-                        MessageValue::Float64(mv.log(arg))
+                        MessageValue::Float64(mv.log(base))
                     }
                 }
                 _ => MessageValue::Null,
@@ -69,9 +60,6 @@ impl Computer for Log {
             None => MessageValue::Null,
         };
 
-        match &self.target_field {
-            Some(target_field) => message.add(target_field.clone(), value),
-            None => message.set(&self.field, value),
-        }
+        add_or_set_message_value!(self, message, result);
     }
 }

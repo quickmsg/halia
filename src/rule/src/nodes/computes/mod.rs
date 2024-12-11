@@ -64,7 +64,7 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::NumberFloor => todo!(),
             types::rules::functions::Type::NumberLn => todo!(),
             types::rules::functions::Type::NumberLog => todo!(),
-            types::rules::functions::Type::NumberPower => todo!(),
+            types::rules::functions::Type::NumberPow => todo!(),
             types::rules::functions::Type::NumberSub => todo!(),
             types::rules::functions::Type::NumberMulti => todo!(),
             types::rules::functions::Type::NumberDivision => todo!(),
@@ -148,6 +148,7 @@ pub fn validate_conf(conf: Conf) -> Result<()> {
             types::rules::functions::Type::TypeConversionFloat => todo!(),
             types::rules::functions::Type::TypeConversionInt => todo!(),
             types::rules::functions::Type::TypeConversionStr => todo!(),
+            types::rules::functions::Type::NumberSgn => todo!(),
         }
     }
 
@@ -181,11 +182,10 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
                 todo!()
                 // number::bitxor::new(item_conf)?
             }
+            types::rules::functions::Type::NumberSgn => number::sgn::new(item_conf.args.into())?,
 
             // string
-            types::rules::functions::Type::StringNew => {
-                string::new::new(Args::new(item_conf.args))?
-            }
+            types::rules::functions::Type::StringNew => string::new::new(item_conf.args.into())?,
             types::rules::functions::Type::NumberCbrt => {
                 number::cbrt::new(Args::new(item_conf.args))?
             }
@@ -206,8 +206,12 @@ pub fn new(conf: Conf) -> Result<Box<dyn Function>> {
                 number::floor::new(Args::new(item_conf.args))?
             }
             types::rules::functions::Type::NumberLn => number::ln::new(Args::new(item_conf.args))?,
-            types::rules::functions::Type::NumberLog => todo!(),
-            types::rules::functions::Type::NumberPower => todo!(),
+            types::rules::functions::Type::NumberLog => {
+                number::log::new(Args::new(item_conf.args))?
+            }
+            types::rules::functions::Type::NumberPow => {
+                number::pow::new(Args::new(item_conf.args))?
+            }
 
             types::rules::functions::Type::NumberSub => {
                 number::sub::new(Args::new(item_conf.args))?

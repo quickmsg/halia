@@ -143,6 +143,26 @@ impl Args {
         }
     }
 
+    pub fn take_float_field(&mut self, key: &str) -> Result<FloatFieldArg> {
+        let arg = self
+            .0
+            .remove(key)
+            .ok_or_else(|| anyhow::anyhow!("not found"))?;
+        match get_dynamic_value_from_json(&arg) {
+            common::DynamicValue::Const(serde_json::Value::Number(n)) => {
+                if let Some(f) = n.as_f64() {
+                    Ok(FloatFieldArg::ConstFloat(f))
+                } else if let Some(i) = n.as_i64() {
+                    Ok(FloatFieldArg::ConstFloat(i as f64))
+                } else {
+                    bail!("只支持数字常量")
+                }
+            }
+            common::DynamicValue::Const(_) => bail!("只支持数字常量"),
+            common::DynamicValue::Field(f) => Ok(FloatFieldArg::Field(f)),
+        }
+    }
+
     pub fn take_array_int_float_field(&mut self, key: &str) -> Result<Vec<IntFloatFieldArg>> {
         self.0
             .remove(key)
@@ -252,6 +272,11 @@ pub(crate) enum StringFieldArg {
 
 pub(crate) enum IntFloatFieldArg {
     ConstInt(i64),
+    ConstFloat(f64),
+    Field(String),
+}
+
+pub(crate) enum FloatFieldArg {
     ConstFloat(f64),
     Field(String),
 }

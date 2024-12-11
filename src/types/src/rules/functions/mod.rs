@@ -36,13 +36,14 @@ pub enum Type {
     NumberFloor,
     NumberLn,
     NumberLog,
-    NumberPower,
+    NumberPow,
     NumberSub,
     NumberMulti,
     NumberDivision,
     NumberModulo,
     NumberRandom,
     NumberRound,
+    NumberSgn,
 
     // 三角函数
     TrigonometricAcos,
