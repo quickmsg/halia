@@ -226,3 +226,9 @@ pub struct RuleInfoSourceSink {
     pub name: String,
     pub status: Status,
 }
+
+#[derive(Deserialize, Serialize)]
+pub struct CreateUpdateDeviceSourceGroupReq {
+    pub name: String,
+    pub conf: serde_json::Value,
+}

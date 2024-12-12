@@ -1,12 +1,9 @@
 use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
+use tracing::debug;
 use types::{
-    devices::{
-        device_template::source_sink::QueryParams,
-        source_group::{CreateUpdateSourceReq, SourceQueryParams},
-        UpdateSourceSinkReq,
-    },
+    devices::source_group::{CreateUpdateSourceReq, SourceQueryParams},
     Pagination,
 };
 
@@ -85,7 +82,7 @@ pub async fn insert(
     Ok(())
 }
 
-pub async fn read_one(id: &String) -> Result<Source> {
+pub async fn get_by_id(id: &String) -> Result<Source> {
     let db_source = sqlx::query_as::<_, DbSource>(
         format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
     )
@@ -115,23 +112,33 @@ pub async fn search(
     pagination: Pagination,
     query: SourceQueryParams,
 ) -> Result<(usize, Vec<Source>)> {
+    debug!(
+        "search source_group_id: {:?}, query: {:?}",
+        source_group_id, query
+    );
     let (limit, offset) = pagination.to_sql();
     let (count, db_sources) = match query.name {
         Some(name) => {
             let count: i64 = sqlx::query_scalar(
-                format!("SELECT COUNT(*) FROM {} WHERE name LIKE ?", TABLE_NAME).as_str(),
+                format!(
+                    "SELECT COUNT(*) FROM {} WHERE source_group_id = ? AND name LIKE ?",
+                    TABLE_NAME
+                )
+                .as_str(),
             )
+            .bind(source_group_id)
             .bind(format!("%{}%", name))
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let db_sources = sqlx::query_as::<_, DbSource>(
                 format!(
-                    "SELECT * FROM {} WHERE name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    "SELECT * FROM {} WHERE source_group_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
                     TABLE_NAME
                 )
                 .as_str(),
             )
+            .bind(source_group_id)
             .bind(format!("%{}%", name))
             .bind(limit)
             .bind(offset)
@@ -143,17 +150,23 @@ pub async fn search(
         None => {
             let count: i64 = sqlx::query_scalar(
                 format!(
-                    "SELECT COUNT(*) FROM {} WHERE source_sink_type = ? AND device_template_id = ?",
+                    "SELECT COUNT(*) FROM {} WHERE source_group_id = ?",
                     TABLE_NAME
                 )
                 .as_str(),
             )
+            .bind(source_group_id)
             .fetch_one(POOL.get().unwrap())
             .await?;
 
             let db_sources = sqlx::query_as::<_, DbSource>(
-                format!("SELECT * FROM {} WHERE source_sink_type = ? AND device_template_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?", TABLE_NAME).as_str(),
+                format!(
+                    "SELECT * FROM {} WHERE source_group_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    TABLE_NAME
+                )
+                .as_str(),
             )
+            .bind(source_group_id)
             .bind(limit)
             .bind(offset)
             .fetch_all(POOL.get().unwrap())
@@ -171,28 +184,15 @@ pub async fn search(
     Ok((count as usize, sources))
 }
 
-pub async fn count_sources_by_device_template_id(device_template_id: &String) -> Result<usize> {
-    count_by_device_template_id(SourceSinkType::Source, device_template_id).await
-}
-
-pub async fn count_sinks_by_device_template_id(device_template_id: &String) -> Result<usize> {
-    count_by_device_template_id(SourceSinkType::Sink, device_template_id).await
-}
-
-async fn count_by_device_template_id(
-    source_sink_type: SourceSinkType,
-    device_template_id: &String,
-) -> Result<usize> {
-    let source_sink_type: i32 = source_sink_type.into();
+pub async fn count_by_source_group_id(source_group_id: &String) -> Result<usize> {
     let count: i64 = sqlx::query_scalar(
         format!(
-            "SELECT COUNT(*) FROM {} WHERE source_sink_type = ? AND device_template_id = ?",
+            "SELECT COUNT(*) FROM {} WHERE source_group_id = ?",
             TABLE_NAME
         )
         .as_str(),
     )
-    .bind(source_sink_type)
-    .bind(device_template_id)
+    .bind(source_group_id)
     .fetch_one(POOL.get().unwrap())
     .await?;
     Ok(count as usize)
@@ -207,7 +207,7 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: UpdateSourceSinkReq) -> Result<()> {
+pub async fn update(id: &String, req: CreateUpdateSourceReq) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
         .bind(serde_json::to_vec(&req.conf)?)

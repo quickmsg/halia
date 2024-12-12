@@ -109,7 +109,7 @@ VALUES (?, ?, ?, ?)"#,
     Ok(())
 }
 
-pub async fn read_one(id: &String) -> Result<SourceGroup> {
+pub async fn get_by_id(id: &String) -> Result<SourceGroup> {
     let db_source_group = sqlx::query_as::<_, DbSourceGroup>(
         format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
     )

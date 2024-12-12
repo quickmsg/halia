@@ -21,6 +21,7 @@ pub struct QueryParams {
     pub device_type: Option<DeviceType>,
 }
 
+#[derive(Serialize)]
 pub struct ListResp {
     pub count: usize,
     pub list: Vec<ListItem>,
@@ -31,6 +32,16 @@ pub struct ListItem {
     pub id: String,
     pub name: String,
     pub device_type: DeviceType,
+    pub source_cnt: usize,
+    pub reference_cnt: usize,
+}
+
+#[derive(Serialize)]
+pub struct ReadResp {
+    pub id: String,
+    pub name: String,
+    pub device_type: DeviceType,
+    pub source_cnt: usize,
     pub reference_cnt: usize,
 }
 
@@ -40,7 +51,27 @@ pub struct CreateUpdateSourceReq {
     pub conf: serde_json::Value,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct SourceQueryParams {
     pub name: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ListSourcesResp {
+    pub count: usize,
+    pub list: Vec<ListSourcesItem>,
+}
+
+#[derive(Serialize)]
+pub struct ListSourcesItem {
+    pub id: String,
+    pub name: String,
+    pub conf: serde_json::Value,
+}
+
+#[derive(Serialize)]
+pub struct ReadSourceResp {
+    pub id: String,
+    pub name: String,
+    pub conf: serde_json::Value,
 }

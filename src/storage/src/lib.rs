@@ -69,6 +69,10 @@ pub async fn init(config: &StorageConfig) -> Result<()> {
         .execute(POOL.get().unwrap())
         .await
         .unwrap();
+    sqlx::query(&device::source_group_source::create_table())
+        .execute(POOL.get().unwrap())
+        .await
+        .unwrap();
 
     sqlx::query(&app::create_table())
         .execute(POOL.get().unwrap())
