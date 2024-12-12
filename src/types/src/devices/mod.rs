@@ -140,21 +140,13 @@ pub struct ReadDeviceResp {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
-pub struct CreateSourceSinkReq {
-    pub name: String,
-    pub conf_type: ConfType,
-    pub template_id: Option<String>,
-    pub conf: serde_json::Value,
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-pub struct UpdateSourceSinkReq {
+pub struct SourceSinkCreateUpdateReq {
     pub name: String,
     pub conf: serde_json::Value,
 }
 
 #[derive(Deserialize)]
-pub struct QuerySourcesSinksParams {
+pub struct SourceSinkQueryParams {
     pub name: Option<String>,
     pub status: Option<Status>,
 }
@@ -184,12 +176,7 @@ pub struct ListSourcesSinksItem {
 pub struct ReadSourceSinkResp {
     pub id: String,
     pub name: String,
-    pub conf_type: ConfType,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub template_id: Option<String>,
     pub conf: serde_json::Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub template_conf: Option<serde_json::Value>,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,

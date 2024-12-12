@@ -2,7 +2,7 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    devices::{ConfType, CreateSourceSinkReq, QuerySourcesSinksParams, UpdateSourceSinkReq},
+    devices::{SourceSinkCreateUpdateReq, SourceSinkQueryParams},
     Pagination, Status,
 };
 
@@ -16,31 +16,19 @@ struct DbSourceSink {
     pub device_id: String,
     pub device_template_source_sink_id: Option<String>,
     pub name: String,
-    pub conf_type: Option<i32>,
-    pub conf: Option<Vec<u8>>,
-    pub template_id: Option<String>,
+    pub conf: Vec<u8>,
     pub status: i32,
     pub ts: i64,
 }
 
 impl DbSourceSink {
     pub fn transfer(self) -> Result<SourceSink> {
-        let conf_type = match self.conf_type {
-            Some(conf_type) => Some(conf_type.try_into()?),
-            None => None,
-        };
-        let conf = match self.conf {
-            Some(conf) => Some(serde_json::from_slice(&conf)?),
-            None => None,
-        };
         Ok(SourceSink {
             id: self.id,
             device_id: self.device_id,
             device_template_source_sink_id: self.device_template_source_sink_id,
             name: self.name,
-            conf_type,
-            conf,
-            template_id: self.template_id,
+            conf: serde_json::from_slice(&self.conf)?,
             status: self.status.try_into()?,
             ts: self.ts,
         })
@@ -53,9 +41,7 @@ pub struct SourceSink {
     pub device_id: String,
     pub device_template_source_sink_id: Option<String>,
     pub name: String,
-    pub conf_type: Option<ConfType>,
-    pub conf: Option<serde_json::Value>,
-    pub template_id: Option<String>,
+    pub conf: serde_json::Value,
     pub status: Status,
     pub ts: i64,
 }
@@ -87,7 +73,7 @@ CREATE TABLE IF NOT EXISTS {} (
 pub async fn insert_source(
     id: &String,
     device_id: &String,
-    req: CreateSourceSinkReq,
+    req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
     insert(SourceSinkType::Source, id, device_id, req).await
 }
@@ -109,7 +95,11 @@ pub async fn insert_source_by_device_template(
     .await
 }
 
-pub async fn insert_sink(id: &String, device_id: &String, req: CreateSourceSinkReq) -> Result<()> {
+pub async fn insert_sink(
+    id: &String,
+    device_id: &String,
+    req: SourceSinkCreateUpdateReq,
+) -> Result<()> {
     insert(SourceSinkType::Sink, id, device_id, req).await
 }
 
@@ -133,7 +123,7 @@ async fn insert(
     source_sink_type: SourceSinkType,
     id: &String,
     device_id: &String,
-    req: CreateSourceSinkReq,
+    req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
     sqlx::query(
         format!(
@@ -149,9 +139,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(None::<String>)
     .bind(Into::<i32>::into(source_sink_type))
     .bind(req.name)
-    .bind(Into::<i32>::into(req.conf_type))
     .bind(serde_json::to_vec(&req.conf)?)
-    .bind(req.template_id)
     .bind(Into::<i32>::into(Status::default()))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
@@ -356,7 +344,7 @@ async fn read_by_device_template_source_sink_id(
 pub async fn search_sources(
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesSinksParams,
+    query: SourceSinkQueryParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     search(SourceSinkType::Source, device_id, pagination, query).await
 }
@@ -364,7 +352,7 @@ pub async fn search_sources(
 pub async fn search_sinks(
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesSinksParams,
+    query: SourceSinkQueryParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     search(SourceSinkType::Sink, device_id, pagination, query).await
 }
@@ -373,7 +361,7 @@ async fn search(
     source_sink_type: SourceSinkType,
     device_id: &String,
     pagination: Pagination,
-    query: QuerySourcesSinksParams,
+    query: SourceSinkQueryParams,
 ) -> Result<(usize, Vec<SourceSink>)> {
     let source_sink_type: i32 = source_sink_type.into();
     let (limit, offset) = pagination.to_sql();
@@ -506,7 +494,7 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: UpdateSourceSinkReq) -> Result<()> {
+pub async fn update(id: &String, req: SourceSinkCreateUpdateReq) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
         .bind(serde_json::to_vec(&req.conf)?)

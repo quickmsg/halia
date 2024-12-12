@@ -3,10 +3,7 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    devices::{
-        device_template::source_sink::QueryParams, ConfType, CreateSourceSinkReq,
-        UpdateSourceSinkReq,
-    },
+    devices::{device_template::source_sink::QueryParams, SourceSinkCreateUpdateReq},
     Pagination,
 };
 
@@ -19,8 +16,6 @@ struct DbSourceSink {
     pub id: String,
     pub device_template_id: String,
     pub name: String,
-    pub conf_type: i32,
-    pub template_id: Option<String>,
     pub conf: Vec<u8>,
     pub ts: i64,
 }
@@ -31,8 +26,6 @@ impl DbSourceSink {
             id: self.id,
             device_template_id: self.device_template_id,
             name: self.name,
-            conf_type: self.conf_type.try_into()?,
-            template_id: self.template_id,
             conf: serde_json::from_slice(&self.conf)?,
             ts: self.ts,
         })
@@ -44,8 +37,6 @@ pub struct SourceSink {
     pub id: String,
     pub device_template_id: String,
     pub name: String,
-    pub conf_type: ConfType,
-    pub template_id: Option<String>,
     pub conf: serde_json::Value,
     pub ts: i64,
 }
@@ -72,7 +63,7 @@ CREATE TABLE IF NOT EXISTS {} (
 pub async fn insert_source(
     id: &String,
     device_template_id: &String,
-    req: CreateSourceSinkReq,
+    req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
     insert(SourceSinkType::Source, id, device_template_id, req).await
 }
@@ -80,7 +71,7 @@ pub async fn insert_source(
 pub async fn insert_sink(
     id: &String,
     device_template_id: &String,
-    req: CreateSourceSinkReq,
+    req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
     insert(SourceSinkType::Sink, id, device_template_id, req).await
 }
@@ -89,7 +80,7 @@ async fn insert(
     source_sink_type: SourceSinkType,
     id: &String,
     device_template_id: &String,
-    req: CreateSourceSinkReq,
+    req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
     sqlx::query(
         format!(
@@ -104,8 +95,6 @@ async fn insert(
     .bind(device_template_id)
     .bind(Into::<i32>::into(source_sink_type))
     .bind(req.name)
-    .bind(Into::<i32>::into(req.conf_type))
-    .bind(req.template_id)
     .bind(serde_json::to_vec(&req.conf)?)
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
@@ -316,7 +305,7 @@ pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
     Ok(serde_json::from_slice(&conf)?)
 }
 
-pub async fn update(id: &String, req: UpdateSourceSinkReq) -> Result<()> {
+pub async fn update(id: &String, req: SourceSinkCreateUpdateReq) -> Result<()> {
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
         .bind(serde_json::to_vec(&req.conf)?)

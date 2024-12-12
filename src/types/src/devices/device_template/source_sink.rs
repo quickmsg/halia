@@ -23,7 +23,5 @@ pub struct ListItem {
 pub struct ReadResp {
     pub id: String,
     pub name: String,
-    pub conf_type: ConfType,
-    pub template_id: Option<String>,
     pub conf: serde_json::Value,
 }

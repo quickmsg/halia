@@ -19,8 +19,6 @@ use types::devices::{
     source_sink_template::modbus::{SinkCustomizeConf, SinkTemplateConf},
 };
 
-use crate::UpdateConfMode;
-
 use super::WritePointEvent;
 
 pub struct Sink {
@@ -145,24 +143,10 @@ impl Sink {
         }
     }
 
-    pub async fn update(
-        &mut self,
-        mode: UpdateConfMode,
-        sink_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
+    pub async fn update(&mut self, sink_conf: serde_json::Value) -> HaliaResult<()> {
         let mut task_loop = self.stop().await;
-        match mode {
-            UpdateConfMode::CustomizeMode => {
-                let sink_conf: SinkConf = serde_json::from_value(sink_conf)?;
-                task_loop.sink_conf = sink_conf;
-            }
-            UpdateConfMode::TemplateModeCustomize => {
-                update_customize_conf(&mut task_loop.sink_conf, sink_conf)?;
-            }
-            UpdateConfMode::TemplateModeTemplate => {
-                update_template_conf(&mut task_loop.sink_conf, sink_conf)?;
-            }
-        }
+        let sink_conf: SinkConf = serde_json::from_value(sink_conf)?;
+        task_loop.sink_conf = sink_conf;
         let join_handle = task_loop.start();
         self.join_handle = Some(join_handle);
         Ok(())

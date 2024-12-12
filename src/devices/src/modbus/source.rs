@@ -19,8 +19,6 @@ use types::devices::{
     source_sink_template::modbus::{SourceCustomizeConf, SourceTemplateConf},
 };
 
-use crate::UpdateConfMode;
-
 pub struct Source {
     pub source_conf: SourceConf,
     quantity: u16,
@@ -191,24 +189,10 @@ impl Source {
         self.join_handle.take().unwrap().await.unwrap()
     }
 
-    pub async fn update(
-        &mut self,
-        mode: UpdateConfMode,
-        conf: serde_json::Value,
-    ) -> HaliaResult<()> {
+    pub async fn update(&mut self, conf: serde_json::Value) -> HaliaResult<()> {
         let task_loop = self.stop().await;
-        match mode {
-            UpdateConfMode::CustomizeMode => {
-                let conf: SourceConf = serde_json::from_value(conf)?;
-                self.source_conf = conf;
-            }
-            UpdateConfMode::TemplateModeCustomize => {
-                update_customize_conf(&mut self.source_conf, conf)?;
-            }
-            UpdateConfMode::TemplateModeTemplate => {
-                update_template_conf(&mut self.source_conf, conf)?;
-            }
-        }
+        let conf: SourceConf = serde_json::from_value(conf)?;
+        self.source_conf = conf;
         let join_handle = task_loop.start(&self.source_conf);
         self.join_handle = Some(join_handle);
 

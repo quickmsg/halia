@@ -4,14 +4,14 @@ use types::{
         device_template::{
             self, source_sink, CreateReq, ListResp, QueryParams, ReadResp, UpdateReq,
         },
-        ConfType, CreateSourceSinkReq, DeviceType, UpdateSourceSinkReq,
+        DeviceType, SourceSinkCreateUpdateReq,
     },
     Pagination,
 };
 
 use crate::{
-    coap, device_template_create_sink, device_template_create_source, modbus, opcua,
-    UpdateConfMode, GLOBAL_DEVICE_MANAGER,
+    device_template_create_sink, device_template_create_source, modbus, opcua,
+    GLOBAL_DEVICE_MANAGER,
 };
 
 pub async fn create_device_template(req: CreateReq) -> HaliaResult<()> {
@@ -103,12 +103,8 @@ pub async fn delete_device_template(id: String) -> HaliaResult<()> {
 
 pub async fn create_source(
     device_template_id: String,
-    req: CreateSourceSinkReq,
+    req: SourceSinkCreateUpdateReq,
 ) -> HaliaResult<()> {
-    if req.conf_type == ConfType::Template && req.template_id.is_none() {
-        return Err(HaliaError::Common("模板ID不能为空".to_string()));
-    }
-
     // let device_type: DeviceType =
     //     storage::device::template::read_device_type(&device_template_id).await?;
     // match device_type {
@@ -165,22 +161,16 @@ pub async fn read_source(
         id: db_source.id,
         name: db_source.name,
         conf: db_source.conf,
-        conf_type: db_source.conf_type,
-        template_id: db_source.template_id,
     })
 }
 
 pub async fn update_source(
     device_template_id: String,
     source_id: String,
-    req: UpdateSourceSinkReq,
+    req: SourceSinkCreateUpdateReq,
 ) -> HaliaResult<()> {
     let db_source = storage::device::template_source_sink::read_one(&source_id).await?;
     if req.conf != db_source.conf {
-        let mode = match db_source.conf_type {
-            ConfType::Customize => UpdateConfMode::CustomizeMode,
-            ConfType::Template => UpdateConfMode::TemplateModeCustomize,
-        };
         let device_ids =
             storage::device::device::read_ids_by_template_id(&device_template_id).await?;
         for device_id in device_ids {
@@ -189,7 +179,7 @@ pub async fn update_source(
                     &device_id, &source_id,
                 )
                 .await?;
-            super::update_source_conf(device_id, device_source_id, mode, req.conf.clone()).await?;
+            super::update_source_conf(device_id, device_source_id, req.conf.clone()).await?;
         }
     }
 
@@ -219,11 +209,10 @@ pub async fn delete_source(device_template_id: String, source_id: String) -> Hal
     Ok(())
 }
 
-pub async fn create_sink(device_template_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {
-    if req.conf_type == ConfType::Template && req.template_id.is_none() {
-        return Err(HaliaError::Common("模板ID不能为空".to_string()));
-    }
-
+pub async fn create_sink(
+    device_template_id: String,
+    req: SourceSinkCreateUpdateReq,
+) -> HaliaResult<()> {
     // let device_type: DeviceType =
     //     storage::device::template::read_device_type(&device_template_id).await?;
     // match device_type {
@@ -277,22 +266,16 @@ pub async fn read_sink(
         id: db_sink.id,
         name: db_sink.name,
         conf: db_sink.conf,
-        conf_type: db_sink.conf_type,
-        template_id: db_sink.template_id,
     })
 }
 
 pub async fn update_sink(
     device_template_id: String,
     sink_id: String,
-    req: UpdateSourceSinkReq,
+    req: SourceSinkCreateUpdateReq,
 ) -> HaliaResult<()> {
     let db_sink = storage::device::template_source_sink::read_one(&sink_id).await?;
     if req.conf != db_sink.conf {
-        let mode = match db_sink.conf_type {
-            ConfType::Customize => UpdateConfMode::CustomizeMode,
-            ConfType::Template => UpdateConfMode::TemplateModeCustomize,
-        };
         let device_ids =
             storage::device::device::read_ids_by_template_id(&device_template_id).await?;
         for device_id in device_ids {
@@ -301,7 +284,7 @@ pub async fn update_sink(
                     &device_id, &sink_id,
                 )
                 .await?;
-            super::update_sink_conf(device_id, device_sink_id, mode, req.conf.clone()).await?;
+            super::update_sink_conf(device_id, device_sink_id, req.conf.clone()).await?;
         }
     }
 

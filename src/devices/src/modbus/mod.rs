@@ -8,7 +8,7 @@ use halia_derive::ResourceErr;
 use message::RuleMessageBatch;
 use modbus_protocol::{self, rtu, tcp, Context};
 use sink::Sink;
-use source::{get_source_conf, Source};
+use source::Source;
 use tokio::{
     net::{lookup_host, TcpStream},
     select,
@@ -447,7 +447,7 @@ impl Device for Modbus {
         self.stop_signal_tx.send(()).unwrap();
     }
 
-    async fn create_customize_source(
+    async fn create_source(
         &mut self,
         source_id: String,
         conf: serde_json::Value,
@@ -457,26 +457,14 @@ impl Device for Modbus {
         Ok(())
     }
 
-    async fn create_template_source(
-        &mut self,
-        source_id: String,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let conf = get_source_conf(customize_conf, template_conf)?;
-        self.create_source(source_id, conf);
-        Ok(())
-    }
-
-    async fn update_source_conf(
+    async fn update_source(
         &mut self,
         source_id: &String,
-        mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         match self.sources.get_mut(source_id) {
             Some(mut source) => {
-                source.update(mode, conf).await?;
+                source.update(conf).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound(source_id.to_owned())),
@@ -521,36 +509,16 @@ impl Device for Modbus {
         }
     }
 
-    async fn create_customize_sink(
-        &mut self,
-        sink_id: String,
-        conf: serde_json::Value,
-    ) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
         self.create_sink(sink_id, conf);
         Ok(())
     }
 
-    async fn create_template_sink(
-        &mut self,
-        sink_id: String,
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let conf = Self::get_sink_conf(customize_conf, template_conf)?;
-        self.create_sink(sink_id, conf);
-        Ok(())
-    }
-
-    async fn update_sink_conf(
-        &mut self,
-        sink_id: &String,
-        mode: UpdateConfMode,
-        conf: serde_json::Value,
-    ) -> HaliaResult<()> {
+    async fn update_sink(&mut self, sink_id: &String, conf: serde_json::Value) -> HaliaResult<()> {
         match self.sinks.get_mut(sink_id) {
             Some(mut sink) => {
-                sink.update(mode, conf).await?;
+                sink.update(conf).await?;
                 Ok(())
             }
             None => Err(HaliaError::NotFound(sink_id.to_owned())),

@@ -111,7 +111,7 @@ impl Device for Coap {
         }
     }
 
-    async fn create_customize_source(
+    async fn create_source(
         &mut self,
         source_id: String,
         conf: serde_json::Value,
@@ -122,22 +122,9 @@ impl Device for Coap {
         Ok(())
     }
 
-    async fn create_template_source(
-        &mut self,
-        source_id: String,
-        conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let conf: SourceConf = serde_json::from_value(conf)?;
-        let source = Source::new(conf, self.coap_client.clone(), self.token_manager.clone()).await;
-        self.sources.insert(source_id, source);
-        Ok(())
-    }
-
-    async fn update_source_conf(
+    async fn update_source(
         &mut self,
         source_id: &String,
-        mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
@@ -153,35 +140,14 @@ impl Device for Coap {
         }
     }
 
-    async fn create_customize_sink(
-        &mut self,
-        sink_id: String,
-        conf: serde_json::Value,
-    ) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
         let sink = Sink::new(self.coap_client.clone(), conf, self.token_manager.clone()).await;
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
 
-    async fn create_template_sink(
-        &mut self,
-        sink_id: String,
-        conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(self.coap_client.clone(), conf, self.token_manager.clone()).await;
-        self.sinks.insert(sink_id, sink);
-        Ok(())
-    }
-
-    async fn update_sink_conf(
-        &mut self,
-        sink_id: &String,
-        mode: UpdateConfMode,
-        conf: serde_json::Value,
-    ) -> HaliaResult<()> {
+    async fn update_sink(&mut self, sink_id: &String, conf: serde_json::Value) -> HaliaResult<()> {
         todo!()
     }
 

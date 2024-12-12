@@ -271,7 +271,7 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn create_customize_source(
+    async fn create_source(
         &mut self,
         source_id: String,
         conf: serde_json::Value,
@@ -282,22 +282,9 @@ impl Device for Opcua {
         Ok(())
     }
 
-    async fn create_template_source(
-        &mut self,
-        source_id: String,
-        conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let conf: SourceConf = serde_json::from_value(conf)?;
-        let source = Source::new(self.opcua_client.clone(), conf).await;
-        self.sources.insert(source_id, source);
-        Ok(())
-    }
-
-    async fn update_source_conf(
+    async fn update_source(
         &mut self,
         source_id: &String,
-        mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         let conf: SourceConf = serde_json::from_value(conf)?;
@@ -324,33 +311,16 @@ impl Device for Opcua {
         }
     }
 
-    async fn create_customize_sink(
-        &mut self,
-        sink_id: String,
-        conf: serde_json::Value,
-    ) -> HaliaResult<()> {
+    async fn create_sink(&mut self, sink_id: String, conf: serde_json::Value) -> HaliaResult<()> {
         let conf: SinkConf = serde_json::from_value(conf)?;
         let sink = Sink::new(self.opcua_client.clone(), conf);
         self.sinks.insert(sink_id, sink);
         Ok(())
     }
 
-    async fn create_template_sink(
-        &mut self,
-        sink_id: String,
-        conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<()> {
-        let conf: SinkConf = serde_json::from_value(conf)?;
-        let sink = Sink::new(self.opcua_client.clone(), conf);
-        self.sinks.insert(sink_id, sink);
-        Ok(())
-    }
-
-    async fn update_sink_conf(
+    async fn update_sink(
         &mut self,
         source_id: &String,
-        mode: UpdateConfMode,
         conf: serde_json::Value,
     ) -> HaliaResult<()> {
         todo!()
