@@ -28,7 +28,6 @@ use types::{
             Area, DataType, DeviceConf, Encode, Ethernet, Serial, SinkConf, SourceConf, Type,
         },
         device_template::modbus::{CustomizeConf, TemplateConf},
-        source_sink_template::modbus::{SinkCustomizeConf, SinkTemplateConf},
     },
     Value,
 };
@@ -266,22 +265,6 @@ pub fn validate_sink_conf(conf: &serde_json::Value) -> HaliaResult<()> {
 }
 
 impl Modbus {
-    fn get_sink_conf(
-        customize_conf: serde_json::Value,
-        template_conf: serde_json::Value,
-    ) -> HaliaResult<SinkConf> {
-        let customize_conf: SinkCustomizeConf = serde_json::from_value(customize_conf)?;
-        let template_conf: SinkTemplateConf = serde_json::from_value(template_conf)?;
-        Ok(SinkConf {
-            slave: customize_conf.slave,
-            data_type: template_conf.data_type,
-            area: template_conf.area,
-            address: template_conf.address,
-            value: template_conf.value,
-            message_retain: template_conf.message_retain,
-        })
-    }
-
     fn create_source(&mut self, source_id: String, conf: SourceConf) {
         let source = Source::new(
             source_id.clone(),

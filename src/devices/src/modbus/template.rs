@@ -1,7 +1,6 @@
 use common::error::{HaliaError, HaliaResult};
 use types::devices::{
-    device_template::modbus::TemplateConf,
-    source_sink_template::modbus::{SinkTemplateConf, SourceTemplateConf},
+    device_template::modbus::TemplateConf, source_group::modbus::SourceTemplateConf,
 };
 
 pub fn validate_device_template_conf(conf: serde_json::Value) -> HaliaResult<()> {
@@ -23,12 +22,12 @@ pub fn validate_device_template_conf(conf: serde_json::Value) -> HaliaResult<()>
 }
 
 pub fn validate_source_template_conf(conf: serde_json::Value) -> HaliaResult<()> {
-    let _conf: SourceTemplateConf = serde_json::from_value(conf)?;
-    Ok(())
-}
-
-pub fn validate_sink_template_conf(conf: serde_json::Value) -> HaliaResult<()> {
-    let _conf: SinkTemplateConf = serde_json::from_value(conf)?;
+    let conf: SourceTemplateConf = serde_json::from_value(conf)?;
+    if conf.interval == 0 {
+        return Err(HaliaError::Common(
+            "Interval must be greater than 0".to_string(),
+        ));
+    }
     Ok(())
 }
 

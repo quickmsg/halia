@@ -7,7 +7,7 @@ use types::{
     Pagination,
 };
 
-use crate::source_group_create_source;
+use crate::{modbus, source_group_create_source};
 
 pub async fn create_source_group(req: CreateReq) -> HaliaResult<()> {
     match req.device_type {
@@ -69,6 +69,16 @@ pub async fn delete_source_group(id: String) -> HaliaResult<()> {
 }
 
 pub async fn create_source(source_group_id: String, req: CreateUpdateSourceReq) -> HaliaResult<()> {
+    let device_type = storage::device::source_group::read_device_type(&source_group_id).await?;
+    match device_type {
+        types::devices::DeviceType::Modbus => {
+            modbus::template::validate_source_template_conf(req.conf.clone())?;
+        }
+        types::devices::DeviceType::Opcua | types::devices::DeviceType::Coap => {
+            return Err(HaliaError::NotSupportResource);
+        }
+    }
+
     let name = req.name.clone();
     let conf = req.conf.clone();
 

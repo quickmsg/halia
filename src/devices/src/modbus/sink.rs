@@ -14,10 +14,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::devices::{
-    device::modbus::SinkConf,
-    source_sink_template::modbus::{SinkCustomizeConf, SinkTemplateConf},
-};
+use types::devices::device::modbus::SinkConf;
 
 use super::WritePointEvent;
 
@@ -164,43 +161,4 @@ impl Sink {
         }
         txs
     }
-}
-
-pub fn get_sink_conf(
-    customize_conf: serde_json::Value,
-    template_conf: serde_json::Value,
-) -> HaliaResult<SinkConf> {
-    let customize_conf: SinkCustomizeConf = serde_json::from_value(customize_conf)?;
-    let template_conf: SinkTemplateConf = serde_json::from_value(template_conf)?;
-    Ok(SinkConf {
-        slave: customize_conf.slave,
-        data_type: template_conf.data_type,
-        area: template_conf.area,
-        address: template_conf.address,
-        value: template_conf.value,
-        message_retain: template_conf.message_retain,
-    })
-}
-
-pub fn update_customize_conf(
-    sink_conf: &mut SinkConf,
-    customize_conf: serde_json::Value,
-) -> HaliaResult<()> {
-    let customize_conf: SinkCustomizeConf = serde_json::from_value(customize_conf)?;
-    sink_conf.slave = customize_conf.slave;
-
-    Ok(())
-}
-
-pub fn update_template_conf(
-    sink_conf: &mut SinkConf,
-    template_conf: serde_json::Value,
-) -> HaliaResult<()> {
-    let template_conf: SinkTemplateConf = serde_json::from_value(template_conf)?;
-    sink_conf.area = template_conf.area;
-    sink_conf.address = template_conf.address;
-    sink_conf.data_type = template_conf.data_type;
-    sink_conf.value = template_conf.value;
-    sink_conf.message_retain = template_conf.message_retain;
-    Ok(())
 }

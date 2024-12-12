@@ -49,8 +49,6 @@ CREATE TABLE IF NOT EXISTS {} (
     device_template_id CHAR(32) NOT NULL,
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
-    conf_type SMALLINT UNSIGNED NOT NULL,
-    template_id CHAR(32),
     conf BLOB NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
     UNIQUE (device_template_id, source_sink_type, name)
@@ -112,6 +110,17 @@ pub async fn read_one(id: &String) -> Result<SourceSink> {
     .await?;
 
     db_source_or_sink.transfer()
+}
+
+pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
+    let conf: Vec<u8> =
+        sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+    let conf: serde_json::Value = serde_json::from_slice(&conf)?;
+    Ok(conf)
 }
 
 pub async fn read_sources_by_device_template_id(
@@ -294,15 +303,6 @@ async fn count_by_device_template_id(
     .fetch_one(POOL.get().unwrap())
     .await?;
     Ok(count as usize)
-}
-
-pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
-    let conf: Vec<u8> =
-        sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
-            .bind(id)
-            .fetch_one(POOL.get().unwrap())
-            .await?;
-    Ok(serde_json::from_slice(&conf)?)
 }
 
 pub async fn update(id: &String, req: SourceSinkCreateUpdateReq) -> Result<()> {

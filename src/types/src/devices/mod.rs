@@ -8,7 +8,6 @@ use crate::{RuleRefCnt, Status};
 pub mod device;
 pub mod device_template;
 pub mod source_group;
-pub mod source_sink_template;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -175,8 +174,7 @@ pub struct ListSourcesSinksItem {
 pub struct ReadSourceSinkResp {
     pub id: String,
     pub name: String,
-    // TODO
-    // pub conf: serde_json::Value,
+    pub conf: serde_json::Value,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,

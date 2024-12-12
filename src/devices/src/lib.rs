@@ -576,6 +576,8 @@ pub async fn list_sources(
 }
 
 pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<ReadSourceSinkResp> {
+    let device_type = storage::device::device::read_device_type(&device_id).await?;
+
     let db_source = storage::device::source_sink::read_one(&source_id).await?;
     let rule_ref_cnt =
         storage::rule::reference::get_rule_ref_info_by_resource_id(&source_id).await?;
@@ -587,19 +589,45 @@ pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<Re
         _ => None,
     };
 
-    // let conf = match &db_source.device_template_source_sink_id {
-    //     Some(device_template_source_id) => {
-    //         let db_device_template_source =
-    //             storage::device::template_source_sink::read_one(&device_template_source_id).await?;
-    //         db_device_template_source.conf
-    //     }
-    //     None => db_source.conf,
-    // };
+    let conf = match db_source.source_from_type {
+        types::devices::SourceFromType::Device => db_source.conf,
+        types::devices::SourceFromType::DeviceTemplate => match db_source.from_id {
+            Some(device_template_source_id) => {
+                let db_device_template_source_conf =
+                    storage::device::template_source_sink::read_conf(&device_template_source_id)
+                        .await?;
+                todo!()
+                // db_device_template_source.conf
+            }
+            None => unreachable!(),
+        },
+        types::devices::SourceFromType::SourceGroup => match db_source.from_id {
+            Some(source_group_source_id) => {
+                let db_source_group_source_conf =
+                    storage::device::source_sink::read_conf(&source_group_source_id).await?;
+                let template_conf: types::devices::source_group::modbus::TemplateConf =
+                    serde_json::from_value(db_source_group_source_conf)?;
+                let customize_conf: types::devices::source_group::modbus::CustomizeConf =
+                    serde_json::from_value(db_source.conf)?;
+                let conf = types::devices::device::modbus::SourceConf {
+                    slave: customize_conf.slave,
+                    field: template_conf.field,
+                    area: template_conf.area,
+                    data_type: template_conf.data_type,
+                    address: template_conf.address,
+                    interval: template_conf.interval,
+                    metadatas: customize_conf.metadatas,
+                };
+                serde_json::to_value(conf)?
+            }
+            None => unreachable!(),
+        },
+    };
 
     Ok(ReadSourceSinkResp {
         id: db_source.id,
         name: db_source.name,
-        // conf,
+        conf,
         status: db_source.status,
         err,
         rule_ref_cnt,
