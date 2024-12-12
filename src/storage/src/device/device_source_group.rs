@@ -58,7 +58,6 @@ pub struct DeviceSourceGroup {
 pub async fn insert(
     id: &String,
     device_id: &String,
-    source_group_id: &String,
     req: CreateUpdateDeviceSourceGroupReq,
 ) -> HaliaResult<()> {
     if let Err(err) = sqlx::query(

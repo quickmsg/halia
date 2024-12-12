@@ -7,10 +7,10 @@ use message::RuleMessageBatch;
 use tokio::sync::mpsc;
 use types::{
     devices::{
-        device::QueryParams, ConfType, CreateSourceSinkReq, DeviceType, ListDevicesResp,
-        ListSourcesSinksItem, ListSourcesSinksResp, QueryRuleInfoParams, QuerySourcesSinksParams,
-        ReadDeviceResp, ReadSourceSinkResp, RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink,
-        UpdateSourceSinkReq,
+        device::QueryParams, ConfType, CreateSourceSinkReq, CreateUpdateDeviceSourceGroupReq,
+        DeviceType, ListDevicesResp, ListSourcesSinksItem, ListSourcesSinksResp,
+        QueryRuleInfoParams, QuerySourcesSinksParams, ReadDeviceResp, ReadSourceSinkResp,
+        RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink, UpdateSourceSinkReq,
     },
     Pagination, Status, Summary, Value,
 };
@@ -844,6 +844,31 @@ pub async fn get_source_rxs(
         let device_name = storage::device::device::read_name(&device_id).await?;
         Err(HaliaError::Stopped(format!("设备：{}", device_name)))
     }
+}
+
+pub async fn create_source_group(
+    device_id: String,
+    req: CreateUpdateDeviceSourceGroupReq,
+) -> HaliaResult<()> {
+    let id = common::get_id();
+    storage::device::device_source_group::insert(id, device_id, req).await?;
+    Ok(())
+}
+
+pub async fn list_source_groups(device_id: String) -> HaliaResult<()> {
+    todo!()
+}
+
+pub async fn read_source_group(device_id: String, source_group_id: String) -> HaliaResult<()> {
+    todo!()
+}
+
+pub async fn update_source_group(device_id: &String) -> HaliaResult<()> {
+    todo!()
+}
+
+pub async fn delete_source_group(device_id: &String) -> HaliaResult<()> {
+    todo!()
 }
 
 pub async fn device_create_sink(device_id: String, req: CreateSourceSinkReq) -> HaliaResult<()> {

@@ -36,6 +36,7 @@ pub fn routes() -> Router {
                         .route("/:source_id/value", put(write_source_value))
                         .route("/:source_id", delete(delete_source)),
                 )
+                .nest("/source_group", Router::new().route("/", todo!()))
                 .nest(
                     "/sink",
                     Router::new()
