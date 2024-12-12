@@ -1,7 +1,12 @@
 use anyhow::Result;
 use common::error::{HaliaError, HaliaResult};
 use sqlx::prelude::FromRow;
-use types::devices::CreateUpdateDeviceSourceGroupReq;
+use types::{
+    devices::{
+        DeviceSourceGroupCreateReq, DeviceSourceGroupQueryParams, DeviceSourceGroupUpdateReq,
+    },
+    Pagination,
+};
 
 use crate::POOL;
 
@@ -58,7 +63,7 @@ pub struct DeviceSourceGroup {
 pub async fn insert(
     id: &String,
     device_id: &String,
-    req: CreateUpdateDeviceSourceGroupReq,
+    req: DeviceSourceGroupCreateReq,
 ) -> HaliaResult<()> {
     if let Err(err) = sqlx::query(
         format!(
@@ -72,7 +77,7 @@ VALUES (?, ?, ?, ?, ?, ?)"#,
     .bind(id)
     .bind(req.name)
     .bind(device_id)
-    .bind(source_group_id)
+    .bind(req.source_group_id)
     .bind(serde_json::to_vec(&req.conf)?)
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
@@ -123,86 +128,86 @@ pub async fn get_by_id(id: &String) -> Result<DeviceSourceGroup> {
     db_device_source_group.transfer()
 }
 
-// pub async fn search(
-//     pagination: Pagination,
-//     query: QueryParams,
-// ) -> Result<(usize, Vec<SourceGroup>)> {
-//     let (limit, offset) = pagination.to_sql();
-//     let (count, db_source_groups) = match (&query.name, &query.device_type) {
-//         (None, None) => {
-//             let count: i64 =
-//                 sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", TABLE_NAME).as_str())
-//                     .fetch_one(POOL.get().unwrap())
-//                     .await?;
+pub async fn search(
+    device_id: &String,
+    pagination: Pagination,
+    query: DeviceSourceGroupQueryParams,
+) -> Result<(usize, Vec<DeviceSourceGroup>)> {
+    let (limit, offset) = pagination.to_sql();
+    let (count, db_device_source_groups) = match &query.name {
+        None => {
+            let count: i64 = sqlx::query_scalar(
+                format!("SELECT COUNT(*) FROM {} WHERE device_id = ?", TABLE_NAME).as_str(),
+            )
+            .bind(device_id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
-//             let db_source_groups = sqlx::query_as::<_, DbSourceGroup>(
-//                 format!(
-//                     "SELECT * FROM {} ORDER BY ts DESC LIMIT ? OFFSET ?",
-//                     TABLE_NAME
-//                 )
-//                 .as_str(),
-//             )
-//             .bind(limit)
-//             .bind(offset)
-//             .fetch_all(POOL.get().unwrap())
-//             .await?;
+            let db_device_source_groups = sqlx::query_as::<_, DbDeviceSourceGroup>(
+                format!(
+                    "SELECT * FROM {} WHERE device_id = ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    TABLE_NAME
+                )
+                .as_str(),
+            )
+            .bind(device_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
 
-//             (count, db_source_groups)
-//         }
-//         _ => {
-//             let mut where_clause = String::new();
+            (count, db_device_source_groups)
+        }
+        Some(name) => {
+            let count: i64 = sqlx::query_scalar(
+                format!(
+                    "SELECT COUNT(*) FROM {} WHERE device_id = ? AND name LIKE ?",
+                    TABLE_NAME
+                )
+                .as_str(),
+            )
+            .bind(device_id)
+            .bind(format!("%{}%", name))
+            .fetch_one(POOL.get().unwrap())
+            .await?;
 
-//             if query.name.is_some() {
-//                 where_clause.push_str("WHERE name LIKE ?")
-//             }
-//             if query.device_type.is_some() {
-//                 match where_clause.is_empty() {
-//                     true => where_clause.push_str("WHERE device_type = ?"),
-//                     false => where_clause.push_str(" AND device_type = ?"),
-//                 }
-//             }
+            let db_device_source_groups = sqlx::query_as::<_, DbDeviceSourceGroup>(
+                format!(
+                    "SELECT * FROM {} WHERE device_id = ? AND name LIKE ? ORDER BY ts DESC LIMIT ? OFFSET ?",
+                    TABLE_NAME
+                )
+                .as_str(),
+            )
+            .bind(device_id)
+            .bind(format!("%{}%", name))
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(POOL.get().unwrap())
+            .await?;
 
-//             let query_count_str = format!("SELECT COUNT(*) FROM {} {}", TABLE_NAME, where_clause);
-//             let mut query_count_builder: QueryScalar<'_, Any, i64, AnyArguments> =
-//                 sqlx::query_scalar(&query_count_str);
+            (count, db_device_source_groups)
+        }
+    };
 
-//             let query_schemas_str = format!(
-//                 "SELECT * FROM {} {} ORDER BY ts DESC LIMIT ? OFFSET ?",
-//                 TABLE_NAME, where_clause
-//             );
-//             let mut query_schemas_builder: QueryAs<'_, Any, DbSourceGroup, AnyArguments> =
-//                 sqlx::query_as::<_, DbSourceGroup>(&query_schemas_str);
+    let device_source_groups = db_device_source_groups
+        .into_iter()
+        .map(|db_device_source_group| db_device_source_group.transfer())
+        .collect::<Result<Vec<_>>>()?;
+    Ok((count as usize, device_source_groups))
+}
 
-//             if let Some(name) = query.name {
-//                 let name = format!("%{}%", name);
-//                 query_count_builder = query_count_builder.bind(name.clone());
-//                 query_schemas_builder = query_schemas_builder.bind(name);
-//             }
-//             if let Some(device_type) = query.device_type {
-//                 let device_type: i32 = device_type.into();
-//                 query_count_builder = query_count_builder.bind(device_type);
-//                 query_schemas_builder = query_schemas_builder.bind(device_type);
-//             }
+pub async fn read_one(id: &String) -> Result<DeviceSourceGroup> {
+    let db_device_source_group = sqlx::query_as::<_, DbDeviceSourceGroup>(
+        format!("SELECT * FROM {} WHERE id = ?", TABLE_NAME).as_str(),
+    )
+    .bind(id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
 
-//             let count: i64 = query_count_builder.fetch_one(POOL.get().unwrap()).await?;
-//             let db_source_groups = query_schemas_builder
-//                 .bind(limit)
-//                 .bind(offset)
-//                 .fetch_all(POOL.get().unwrap())
-//                 .await?;
+    db_device_source_group.transfer()
+}
 
-//             (count, db_source_groups)
-//         }
-//     };
-
-//     let source_groups = db_source_groups
-//         .into_iter()
-//         .map(|db_source_group| db_source_group.transfer())
-//         .collect::<Result<Vec<_>>>()?;
-//     Ok((count as usize, source_groups))
-// }
-
-pub async fn update(id: &String, req: CreateUpdateDeviceSourceGroupReq) -> HaliaResult<()> {
+pub async fn update(id: &String, req: DeviceSourceGroupUpdateReq) -> HaliaResult<()> {
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)
         .bind(serde_json::to_vec(&req.conf)?)

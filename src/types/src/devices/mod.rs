@@ -228,8 +228,43 @@ pub struct RuleInfoSourceSink {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct CreateUpdateDeviceSourceGroupReq {
+pub struct DeviceSourceGroupCreateReq {
     pub name: String,
     pub source_group_id: String,
+    pub conf: serde_json::Value,
+}
+
+#[derive(Serialize)]
+pub struct DeviceSourceGroupListResp {
+    pub count: usize,
+    pub list: Vec<DeviceSourceGroupListItem>,
+}
+
+#[derive(Serialize)]
+pub struct DeviceSourceGroupListItem {
+    pub id: String,
+    pub name: String,
+    pub source_group_id: String,
+    pub conf: serde_json::Value,
+    pub source_cnt: usize,
+}
+
+#[derive(Deserialize)]
+pub struct DeviceSourceGroupQueryParams {
+    pub name: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct DeviceSourceGroupReadResp {
+    pub id: String,
+    pub name: String,
+    pub source_group_id: String,
+    pub conf: serde_json::Value,
+    pub source_cnt: usize,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct DeviceSourceGroupUpdateReq {
+    pub name: String,
     pub conf: serde_json::Value,
 }
