@@ -207,6 +207,21 @@ pub async fn read_one(id: &String) -> Result<DeviceSourceGroup> {
     db_device_source_group.transfer()
 }
 
+pub async fn read_device_ids_by_source_group_id(source_group_id: &String) -> Result<Vec<String>> {
+    let ids: Vec<String> = sqlx::query_scalar(
+        format!(
+            "SELECT device_id FROM {} WHERE source_group_id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(source_group_id)
+    .fetch_all(POOL.get().unwrap())
+    .await?;
+
+    Ok(ids)
+}
+
 pub async fn update(id: &String, req: DeviceSourceGroupUpdateReq) -> HaliaResult<()> {
     sqlx::query(format!("UPDATE {} SET name = ?, conf = ? WHERE id = ?", TABLE_NAME).as_str())
         .bind(req.name)

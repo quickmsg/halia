@@ -2,7 +2,7 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    devices::{SourceSinkCreateUpdateReq, SourceSinkQueryParams},
+    devices::{SourceFromType, SourceSinkCreateUpdateReq, SourceSinkQueryParams},
     Pagination, Status,
 };
 
@@ -14,7 +14,8 @@ static TABLE_NAME: &str = "device_sources_sinks";
 struct DbSourceSink {
     pub id: String,
     pub device_id: String,
-    pub device_template_source_sink_id: Option<String>,
+    pub source_from_type: i32,
+    pub from_id: Option<String>,
     pub name: String,
     pub conf: Vec<u8>,
     pub status: i32,
@@ -26,7 +27,8 @@ impl DbSourceSink {
         Ok(SourceSink {
             id: self.id,
             device_id: self.device_id,
-            device_template_source_sink_id: self.device_template_source_sink_id,
+            source_from_type: self.source_from_type.try_into()?,
+            from_id: self.from_id,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
             status: self.status.try_into()?,
@@ -39,7 +41,8 @@ impl DbSourceSink {
 pub struct SourceSink {
     pub id: String,
     pub device_id: String,
-    pub device_template_source_sink_id: Option<String>,
+    pub source_from_type: SourceFromType,
+    pub from_id: Option<String>,
     pub name: String,
     pub conf: serde_json::Value,
     pub status: Status,
@@ -52,90 +55,54 @@ pub(crate) fn create_table() -> String {
 CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     device_id CHAR(32) NOT NULL,
-    device_template_source_sink_id CHAR(32),
+    source_from_type SMALLINT UNSIGNED NOT NULL,
+    from_id CHAR(32),
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
-    conf_type SMALLINT UNSIGNED,
     conf BLOB,
-    template_id CHAR(32),
     status SMALLINT UNSIGNED NOT NULL,
     ts BIGINT UNSIGNED NOT NULL,
-    UNIQUE (device_id, source_sink_type, name),
-    FOREIGN KEY (device_id) REFERENCES devices(id),
-    FOREIGN KEY (device_template_source_sink_id) REFERENCES device_template_sources_sinks(id),
-    FOREIGN KEY (template_id) REFERENCES device_source_sink_templates(id)
+    UNIQUE (device_id, source_sink_type, name)
 );
 "#,
         TABLE_NAME
     )
 }
 
-pub async fn insert_source(
-    id: &String,
+pub async fn device_insert_source(
+    source_id: &String,
     device_id: &String,
     req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
-    insert(SourceSinkType::Source, id, device_id, req).await
+    device_insert(source_id, device_id, req, SourceSinkType::Source).await
 }
 
-// 设备模板增加源
-pub async fn insert_source_by_device_template(
-    id: &String,
-    device_id: &String,
-    name: &String,
-    device_template_source_id: &String,
-) -> Result<()> {
-    insert_by_device_template(
-        SourceSinkType::Source,
-        id,
-        device_id,
-        name,
-        device_template_source_id,
-    )
-    .await
-}
-
-pub async fn insert_sink(
-    id: &String,
+pub async fn device_insert_sink(
+    sink_id: &String,
     device_id: &String,
     req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
-    insert(SourceSinkType::Sink, id, device_id, req).await
+    device_insert(sink_id, device_id, req, SourceSinkType::Sink).await
 }
 
-pub async fn insert_sink_by_device_template(
+async fn device_insert(
     id: &String,
     device_id: &String,
-    name: &String,
-    device_template_source_id: &String,
-) -> Result<()> {
-    insert_by_device_template(
-        SourceSinkType::Sink,
-        id,
-        device_id,
-        name,
-        device_template_source_id,
-    )
-    .await
-}
-
-async fn insert(
+    req: SourceSinkCreateUpdateReq,
     source_sink_type: SourceSinkType,
-    id: &String,
-    device_id: &String,
-    req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, device_id, device_template_source_sink_id, source_sink_type, name, conf_type, conf, template_id, status, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_id, source_from_type, from_id, source_sink_type, name, conf_type, conf, template_id, status, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
     .bind(device_id)
+    .bind(Into::<i32>::into(SourceFromType::Device))
     .bind(None::<String>)
     .bind(Into::<i32>::into(source_sink_type))
     .bind(req.name)
@@ -148,25 +115,123 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     Ok(())
 }
 
-async fn insert_by_device_template(
-    source_sink_type: SourceSinkType,
+pub async fn device_template_insert_source(
+    source_id: &String,
+    device_id: &String,
+    name: &String,
+    device_template_source_id: &String,
+) -> Result<()> {
+    device_template_insert(
+        source_id,
+        device_id,
+        name,
+        device_template_source_id,
+        SourceSinkType::Source,
+    )
+    .await
+}
+
+pub async fn device_template_insert_sink(
+    id: &String,
+    device_id: &String,
+    name: &String,
+    device_template_source_id: &String,
+) -> Result<()> {
+    device_template_insert(
+        id,
+        device_id,
+        name,
+        device_template_source_id,
+        SourceSinkType::Sink,
+    )
+    .await
+}
+
+async fn device_template_insert(
     id: &String,
     device_id: &String,
     name: &String,
     device_template_source_sink_id: &String,
+    source_sink_type: SourceSinkType,
 ) -> Result<()> {
     sqlx::query(
         format!(
-            r#"INSERT INTO {} 
-(id, device_id, device_template_source_sink_id, source_sink_type, name, conf_type, conf, template_id, status, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            r#"INSERT INTO {}
+(id, device_id, source_from_type, from_id, source_sink_type, name, conf, template_id, status, ts)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
     )
     .bind(id)
     .bind(device_id)
+    .bind(Into::<i32>::into(SourceFromType::DeviceTemplate))
     .bind(device_template_source_sink_id)
+    .bind(Into::<i32>::into(source_sink_type))
+    .bind(name)
+    .bind(None::<i32>)
+    .bind(None::<Vec<u8>>)
+    .bind(None::<String>)
+    .bind(Into::<i32>::into(Status::default()))
+    .bind(common::timestamp_millis() as i64)
+    .execute(POOL.get().unwrap())
+    .await?;
+
+    Ok(())
+}
+
+pub async fn source_group_insert_source(
+    source_id: &String,
+    device_id: &String,
+    name: &String,
+    source_group_source_id: &String,
+) -> Result<()> {
+    source_group_insert(
+        source_id,
+        device_id,
+        name,
+        source_group_source_id,
+        SourceSinkType::Source,
+    )
+    .await
+}
+
+pub async fn source_group_insert_sink(
+    sink_id: &String,
+    device_id: &String,
+    name: &String,
+    source_group_source_id: &String,
+) -> Result<()> {
+    source_group_insert(
+        sink_id,
+        device_id,
+        name,
+        source_group_source_id,
+        SourceSinkType::Sink,
+    )
+    .await
+}
+
+async fn source_group_insert(
+    id: &String,
+    device_id: &String,
+    name: &String,
+    source_group_source_sink_id: &String,
+    source_sink_type: SourceSinkType,
+) -> Result<()> {
+    sqlx::query(
+        format!(
+            r#"INSERT INTO {}
+(id, device_id, source_from_type, from_id, source_sink_type, name, conf_type, conf, template_id, status, ts)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(id)
+    .bind(device_id)
+    .bind(Into::<i32>::into(SourceFromType::SourceGroup))
+    .bind(source_group_source_sink_id)
     .bind(Into::<i32>::into(source_sink_type))
     .bind(name)
     .bind(None::<i32>)

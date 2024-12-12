@@ -113,17 +113,26 @@ pub async fn create_source(
     //     DeviceType::Coap => coap::validate_source_conf(&req.conf)?,
     // }
 
+    let name = req.name.clone();
+    let conf = req.conf.clone();
+
     let device_template_source_id = common::get_id();
     storage::device::template_source_sink::insert_source(
         &device_template_source_id,
         &device_template_id,
-        req.clone(),
+        req,
     )
     .await?;
 
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
     for device_id in device_ids {
-        device_template_create_source(device_id, &device_template_source_id, req.clone()).await?;
+        device_template_create_source(
+            device_id,
+            &device_template_source_id,
+            name.clone(),
+            conf.clone(),
+        )
+        .await?;
     }
 
     Ok(())
@@ -221,6 +230,8 @@ pub async fn create_sink(
     //     DeviceType::Coap => coap::validate_source_conf(&req.conf)?,
     // }
 
+    let name = req.name.clone();
+    let conf = req.conf.clone();
     let device_template_sink_id = common::get_id();
     storage::device::template_source_sink::insert_sink(
         &device_template_sink_id,
@@ -231,7 +242,13 @@ pub async fn create_sink(
 
     let device_ids = storage::device::device::read_ids_by_template_id(&device_template_id).await?;
     for device_id in device_ids {
-        device_template_create_sink(device_id, &device_template_sink_id, req.clone()).await?;
+        device_template_create_sink(
+            &device_id,
+            &device_template_sink_id,
+            name.clone(),
+            conf.clone(),
+        )
+        .await?;
     }
 
     Ok(())

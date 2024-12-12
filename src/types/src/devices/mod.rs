@@ -161,9 +161,8 @@ pub struct ListSourcesSinksResp {
 pub struct ListSourcesSinksItem {
     pub id: String,
     pub name: String,
-    // pub conf_type: ConfType,
-    // pub template_id: Option<String>,
     pub status: Status,
+    pub source_from_type: SourceFromType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     #[serde(flatten)]
@@ -176,7 +175,8 @@ pub struct ListSourcesSinksItem {
 pub struct ReadSourceSinkResp {
     pub id: String,
     pub name: String,
-    pub conf: serde_json::Value,
+    // TODO
+    // pub conf: serde_json::Value,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
@@ -254,4 +254,34 @@ pub struct DeviceSourceGroupReadResp {
 pub struct DeviceSourceGroupUpdateReq {
     pub name: String,
     pub conf: serde_json::Value,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum SourceFromType {
+    Device,
+    DeviceTemplate,
+    SourceGroup,
+}
+
+impl Into<i32> for SourceFromType {
+    fn into(self) -> i32 {
+        match self {
+            SourceFromType::Device => 1,
+            SourceFromType::DeviceTemplate => 2,
+            SourceFromType::SourceGroup => 3,
+        }
+    }
+}
+
+impl TryFrom<i32> for SourceFromType {
+    type Error = Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(SourceFromType::Device),
+            2 => Ok(SourceFromType::DeviceTemplate),
+            3 => Ok(SourceFromType::SourceGroup),
+            _ => bail!("未知配置类型: {}", value),
+        }
+    }
 }

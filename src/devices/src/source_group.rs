@@ -7,6 +7,8 @@ use types::{
     Pagination,
 };
 
+use crate::source_group_create_source;
+
 pub async fn create_source_group(req: CreateReq) -> HaliaResult<()> {
     match req.device_type {
         types::devices::DeviceType::Modbus => {}
@@ -67,8 +69,19 @@ pub async fn delete_source_group(id: String) -> HaliaResult<()> {
 }
 
 pub async fn create_source(source_group_id: String, req: CreateUpdateSourceReq) -> HaliaResult<()> {
+    let name = req.name.clone();
+    let conf = req.conf.clone();
+
     let source_id = common::get_id();
     storage::device::source_group_source::insert(&source_id, &source_group_id, req).await?;
+
+    let device_ids =
+        storage::device::device_source_group::read_device_ids_by_source_group_id(&source_group_id)
+            .await?;
+    for device_id in device_ids {
+        source_group_create_source(&device_id, &source_id, name.clone(), conf.clone()).await?;
+    }
+
     Ok(())
 }
 
