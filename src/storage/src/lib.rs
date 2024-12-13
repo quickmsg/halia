@@ -126,30 +126,6 @@ async fn delete_by_id(id: &String, table_name: &str) -> HaliaResult<()> {
     Ok(())
 }
 
-enum SourceSinkType {
-    Source,
-    Sink,
-}
-
-impl From<i32> for SourceSinkType {
-    fn from(i: i32) -> Self {
-        match i {
-            1 => SourceSinkType::Source,
-            2 => SourceSinkType::Sink,
-            _ => panic!("invalid type"),
-        }
-    }
-}
-
-impl Into<i32> for SourceSinkType {
-    fn into(self) -> i32 {
-        match self {
-            SourceSinkType::Source => 1,
-            SourceSinkType::Sink => 2,
-        }
-    }
-}
-
 pub async fn get_summary(table_name: &str) -> Result<(usize, usize, usize)> {
     let total: i64 = sqlx::query_scalar(format!("SELECT COUNT(*) FROM {}", table_name).as_str())
         .fetch_one(POOL.get().unwrap())

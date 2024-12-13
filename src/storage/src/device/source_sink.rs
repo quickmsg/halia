@@ -3,10 +3,10 @@ use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
     devices::{Metadatas, SourceFromType, SourceSinkCreateUpdateReq, SourceSinkQueryParams},
-    Pagination, Status,
+    Pagination, SourceSinkType, Status,
 };
 
-use crate::{SourceSinkType, POOL};
+use crate::POOL;
 
 static TABLE_NAME: &str = "device_sources_sinks";
 

@@ -3,10 +3,8 @@ use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
     apps::{CreateUpdateSourceSinkReq, QuerySourcesSinksParams},
-    Pagination, Status,
+    Pagination, SourceSinkType, Status,
 };
-
-use crate::SourceSinkType;
 
 use super::POOL;
 

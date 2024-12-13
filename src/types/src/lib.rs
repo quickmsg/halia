@@ -1,4 +1,4 @@
-use anyhow::bail;
+use anyhow::{bail, Error};
 use base64::{prelude::BASE64_STANDARD, Engine as _};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -165,4 +165,30 @@ impl TryFrom<i32> for Status {
 pub struct RuleRefCnt {
     pub rule_reference_running_cnt: usize,
     pub rule_reference_total_cnt: usize,
+}
+
+pub enum SourceSinkType {
+    Source,
+    Sink,
+}
+
+impl TryFrom<i32> for SourceSinkType {
+    type Error = Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(SourceSinkType::Source),
+            2 => Ok(SourceSinkType::Sink),
+            _ => bail!("数据库非法值: {}", value),
+        }
+    }
+}
+
+impl Into<i32> for SourceSinkType {
+    fn into(self) -> i32 {
+        match self {
+            SourceSinkType::Source => 1,
+            SourceSinkType::Sink => 2,
+        }
+    }
 }

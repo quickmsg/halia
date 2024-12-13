@@ -7,7 +7,7 @@ use types::{
     Pagination,
 };
 
-use crate::{SourceSinkType, POOL};
+use crate::POOL;
 
 static TABLE_NAME: &str = "device_source_group_sources";
 

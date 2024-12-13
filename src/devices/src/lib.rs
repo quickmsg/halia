@@ -15,7 +15,7 @@ use types::{
         RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink, SourceSinkCreateUpdateReq,
         SourceSinkQueryParams,
     },
-    Pagination, Status, Summary, Value,
+    Pagination, SourceSinkType, Status, Summary, Value,
 };
 
 pub mod coap;
@@ -360,7 +360,7 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
     events::insert_start(types::events::ResourceType::Device, &device_id).await;
 
     let db_device = storage::device::device::read_one(&device_id).await?;
-    let mut device = match db_device.conf_type {
+    let device = match db_device.conf_type {
         ConfType::Template => match db_device.template_id {
             Some(template_id) => {
                 let template_conf = storage::device::template::read_conf(&template_id).await?;
@@ -563,14 +563,12 @@ pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<Re
     let db_source = storage::device::source_sink::read_one(&source_id).await?;
     let rule_ref_cnt =
         storage::rule::reference::get_rule_ref_info_by_resource_id(&source_id).await?;
-    let err = match db_source.status {
-        Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
-            Some(device) => device.read_source_err(&db_source.id).await,
-            None => Some("应用未启动！".to_string()),
-        },
+    let err = match &db_source.status {
+        Status::Error => {
+            get_source_sink_err(SourceSinkType::Source, &device_id, &db_source.id).await
+        }
         _ => None,
     };
-
     // TODO 优化 db_source的conf克隆的性能问题,
     let conf = get_source_conf_from_db(&device_type, &db_source).await?;
 
@@ -834,10 +832,9 @@ pub async fn list_sinks(
         let rule_ref_cnt =
             storage::rule::reference::get_rule_ref_info_by_resource_id(&db_sink.id).await?;
         let err = match db_sink.status {
-            Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
-                Some(device) => device.read_sink_err(&db_sink.id).await,
-                None => Some("应用未启动！".to_string()),
-            },
+            Status::Error => {
+                get_source_sink_err(SourceSinkType::Sink, &device_id, &db_sink.id).await
+            }
             _ => None,
         };
         let conf = get_sink_conf_from_db(&device_type, &db_sink).await?;
@@ -862,10 +859,7 @@ pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSo
     let db_sink = storage::device::source_sink::read_one(&sink_id).await?;
     let rule_ref_cnt = storage::rule::reference::get_rule_ref_info_by_resource_id(&sink_id).await?;
     let err = match db_sink.status {
-        Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
-            Some(device) => device.read_sink_err(&db_sink.id).await,
-            None => Some("应用未启动！".to_string()),
-        },
+        Status::Error => get_source_sink_err(SourceSinkType::Sink, &device_id, &db_sink.id).await,
         _ => None,
     };
 
@@ -1015,5 +1009,19 @@ async fn get_sink_conf_from_db(
             None => unreachable!(),
         },
         _ => unreachable!(),
+    }
+}
+
+async fn get_source_sink_err(
+    source_sink_type: SourceSinkType,
+    device_id: &String,
+    source_sink_id: &String,
+) -> Option<String> {
+    match GLOBAL_DEVICE_MANAGER.get(device_id) {
+        Some(device) => match source_sink_type {
+            SourceSinkType::Source => device.read_source_err(source_sink_id).await,
+            SourceSinkType::Sink => device.read_sink_err(source_sink_id).await,
+        },
+        None => Some("应用未启动！".to_string()),
     }
 }
