@@ -167,8 +167,7 @@ pub struct ListSourcesSinksItem {
     pub err: Option<String>,
     #[serde(flatten)]
     pub rule_ref_cnt: RuleRefCnt,
-    // #[serde(flatten)]
-    // pub conf: serde_json::Value,
+    pub conf: serde_json::Value,
 }
 
 #[derive(Serialize)]
