@@ -9,7 +9,6 @@ pub struct OpcuaConf {
     pub auth_method: AuthMethod,
     pub auth_username: Option<AuthUsername>,
     pub auth_certificate: Option<AuthCertificate>,
-
     // pub use_security: bool,
 }
 
@@ -48,6 +47,7 @@ pub struct SourceConf {
     pub group: Option<GroupConf>,
     pub subscription: Option<Subscriptionconf>,
     pub monitored_item: Option<MonitoredItemconf>,
+    pub metadatas: Option<Vec<(String, serde_json::Value)>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]

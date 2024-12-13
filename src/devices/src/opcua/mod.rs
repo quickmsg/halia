@@ -242,6 +242,7 @@ impl Opcua {
             monitored_item: customize_conf
                 .monitored_item
                 .or(template_conf.monitored_item),
+            metadatas: todo!(),
         })
     }
 }

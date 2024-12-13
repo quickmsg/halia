@@ -944,7 +944,15 @@ async fn get_source_conf(
                         let conf = serde_json::to_value(conf)?;
                         Ok(conf)
                     }
-                    DeviceType::Opcua => todo!(),
+                    DeviceType::Opcua => {
+                        let mut conf: types::devices::device::opcua::SourceConf =
+                            serde_json::from_value(device_template_source_conf)?;
+                        let metadatas: types::devices::Metadatas =
+                            serde_json::from_value(device_source_conf)?;
+                        conf.metadatas = metadatas.metadatas;
+                        let conf = serde_json::to_value(conf)?;
+                        Ok(conf)
+                    }
                     DeviceType::Coap => todo!(),
                 }
             }
