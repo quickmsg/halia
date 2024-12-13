@@ -2,7 +2,7 @@ use anyhow::Result;
 use common::error::HaliaResult;
 use sqlx::FromRow;
 use types::{
-    devices::{SourceFromType, SourceSinkCreateUpdateReq, SourceSinkQueryParams},
+    devices::{Metadatas, SourceFromType, SourceSinkCreateUpdateReq, SourceSinkQueryParams},
     Pagination, Status,
 };
 
@@ -61,8 +61,7 @@ CREATE TABLE IF NOT EXISTS {} (
     name VARCHAR(255) NOT NULL,
     conf BLOB,
     status SMALLINT UNSIGNED NOT NULL,
-    ts BIGINT UNSIGNED NOT NULL,
-    UNIQUE (device_id, source_sink_type, name)
+    ts BIGINT UNSIGNED NOT NULL
 );
 "#,
         TABLE_NAME
@@ -94,8 +93,8 @@ async fn device_insert(
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, device_id, source_from_type, from_id, source_sink_type, name, conf_type, conf, template_id, status, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_id, source_from_type, from_id, source_sink_type, name, conf, status, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
@@ -181,49 +180,16 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
 }
 
 pub async fn source_group_insert_source(
-    source_id: &String,
-    device_id: &String,
-    name: &String,
-    source_group_source_id: &String,
-) -> Result<()> {
-    source_group_insert(
-        source_id,
-        device_id,
-        name,
-        source_group_source_id,
-        SourceSinkType::Source,
-    )
-    .await
-}
-
-pub async fn source_group_insert_sink(
-    sink_id: &String,
-    device_id: &String,
-    name: &String,
-    source_group_source_id: &String,
-) -> Result<()> {
-    source_group_insert(
-        sink_id,
-        device_id,
-        name,
-        source_group_source_id,
-        SourceSinkType::Sink,
-    )
-    .await
-}
-
-async fn source_group_insert(
     id: &String,
     device_id: &String,
     name: &String,
     source_group_source_sink_id: &String,
-    source_sink_type: SourceSinkType,
 ) -> Result<()> {
     sqlx::query(
         format!(
             r#"INSERT INTO {}
-(id, device_id, source_from_type, from_id, source_sink_type, name, conf_type, conf, template_id, status, ts)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_id, source_from_type, from_id, source_sink_type, name, conf, status, ts)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
@@ -232,11 +198,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(device_id)
     .bind(Into::<i32>::into(SourceFromType::SourceGroup))
     .bind(source_group_source_sink_id)
-    .bind(Into::<i32>::into(source_sink_type))
+    .bind(Into::<i32>::into(SourceSinkType::Source))
     .bind(name)
-    .bind(None::<i32>)
-    .bind(None::<Vec<u8>>)
-    .bind(None::<String>)
+    .bind(serde_json::to_vec(&Metadatas::default())?)
     .bind(Into::<i32>::into(Status::default()))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())

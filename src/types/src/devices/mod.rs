@@ -161,7 +161,8 @@ pub struct ListSourcesSinksItem {
     pub id: String,
     pub name: String,
     pub status: Status,
-    pub source_from_type: SourceFromType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_from_type: Option<SourceFromType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
     #[serde(flatten)]
@@ -255,6 +256,7 @@ pub struct DeviceSourceGroupUpdateReq {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "snake_case")]
 pub enum SourceFromType {
     Device,
     DeviceTemplate,
@@ -282,4 +284,9 @@ impl TryFrom<i32> for SourceFromType {
             _ => bail!("未知配置类型: {}", value),
         }
     }
+}
+
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct Metadatas {
+    metadatas: Option<Vec<(String, serde_json::Value)>>,
 }

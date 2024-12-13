@@ -5,6 +5,7 @@ use common::error::{HaliaError, HaliaResult};
 use dashmap::DashMap;
 use message::RuleMessageBatch;
 use tokio::sync::mpsc;
+use tracing::debug;
 use types::{
     devices::{
         device::QueryParams, ConfType, DeviceSourceGroupCreateReq, DeviceSourceGroupListItem,
@@ -566,7 +567,7 @@ pub async fn list_sources(
             id: db_source.id,
             name: db_source.name,
             status: db_source.status,
-            source_from_type: db_source.source_from_type,
+            source_from_type: Some(db_source.source_from_type),
             err,
             rule_ref_cnt,
         });
@@ -730,8 +731,50 @@ pub async fn create_source_group(
     device_id: String,
     req: DeviceSourceGroupCreateReq,
 ) -> HaliaResult<()> {
+    let device = storage::device::device::read_one(&device_id).await?;
+    if device.conf_type != ConfType::Customize {
+        return Err(HaliaError::Common("模板设备不能创建源组！".into()));
+    }
+
+    debug!("here");
+
+    let source_group = storage::device::source_group::get_by_id(&req.source_group_id).await?;
+    if device.device_type != source_group.device_type {
+        return Err(HaliaError::Common("源组的设备类型不符合！".into()));
+    }
+    debug!("here");
+
+    match device.device_type {
+        DeviceType::Modbus => {
+            let _device_source_group_conf: types::devices::source_group::modbus::DeviceSourceGroupConf = serde_json::from_value(req.conf.clone())?;
+            // TODO 判断slave是否符合规范
+        }
+        _ => return Err(HaliaError::Common("该设备类型不支持增加源组！".into())),
+    }
+
+    let source_group_sources =
+        storage::device::source_group_source::read_by_source_group_id(&req.source_group_id).await?;
+
+    debug!("here");
+
     let id = common::get_id();
     storage::device::device_source_group::insert(&id, &device_id, req).await?;
+
+    debug!("here");
+
+    for source_group_source in source_group_sources {
+        let soruce_id = common::get_id();
+        storage::device::source_sink::source_group_insert_source(
+            &soruce_id,
+            &device_id,
+            &source_group_source.name,
+            &source_group_source.id,
+        )
+        .await?;
+    }
+
+    debug!("here");
+
     Ok(())
 }
 
@@ -868,7 +911,7 @@ pub async fn list_sinks(
             id: db_sink.id,
             name: db_sink.name,
             status: db_sink.status,
-            source_from_type: db_sink.source_from_type,
+            source_from_type: None,
             err,
             rule_ref_cnt,
             // conf,
