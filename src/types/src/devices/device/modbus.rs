@@ -53,6 +53,7 @@ pub struct SourceConf {
     pub address: u16,
     pub interval: u64,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadatas: Option<Vec<(String, serde_json::Value)>>,
 }
 
@@ -136,6 +137,7 @@ pub struct DataType {
     #[serde(rename = "type")]
     pub typ: Type,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub coder_type: Option<CoderType>,
     // string和bytes拥有len，值为寄存器数量
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -15,7 +15,10 @@ struct DbSourceSink {
     pub id: String,
     pub device_id: String,
     pub source_from_type: i32,
-    pub from_id: Option<String>,
+    pub device_template_source_sink_id: Option<String>,
+    pub source_group_source_id: Option<String>,
+    pub device_source_group_id: Option<String>,
+    // pub from_id: Option<String>,
     pub name: String,
     pub conf: Vec<u8>,
     pub status: i32,
@@ -28,7 +31,9 @@ impl DbSourceSink {
             id: self.id,
             device_id: self.device_id,
             source_from_type: self.source_from_type.try_into()?,
-            from_id: self.from_id,
+            device_template_source_sink_id: self.device_template_source_sink_id,
+            source_group_source_id: self.source_group_source_id,
+            device_source_group_id: self.device_source_group_id,
             name: self.name,
             conf: serde_json::from_slice(&self.conf)?,
             status: self.status.try_into()?,
@@ -42,7 +47,9 @@ pub struct SourceSink {
     pub id: String,
     pub device_id: String,
     pub source_from_type: SourceFromType,
-    pub from_id: Option<String>,
+    pub device_template_source_sink_id: Option<String>,
+    pub source_group_source_id: Option<String>,
+    pub device_source_group_id: Option<String>,
     pub name: String,
     pub conf: serde_json::Value,
     pub status: Status,
@@ -56,7 +63,9 @@ CREATE TABLE IF NOT EXISTS {} (
     id CHAR(32) PRIMARY KEY,
     device_id CHAR(32) NOT NULL,
     source_from_type SMALLINT UNSIGNED NOT NULL,
-    from_id CHAR(32),
+    device_template_source_sink_id CHAR(32),
+    source_group_source_id CHAR(32),
+    device_source_group_id CHAR(32),
     source_sink_type SMALLINT UNSIGNED NOT NULL,
     name VARCHAR(255) NOT NULL,
     conf BLOB,
@@ -93,8 +102,8 @@ async fn device_insert(
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-(id, device_id, source_from_type, from_id, source_sink_type, name, conf, status, ts) 
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_id, source_from_type, source_sink_type, name, conf, status, ts) 
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
@@ -102,7 +111,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(id)
     .bind(device_id)
     .bind(Into::<i32>::into(SourceFromType::Device))
-    .bind(None::<String>)
     .bind(Into::<i32>::into(source_sink_type))
     .bind(req.name)
     .bind(serde_json::to_vec(&req.conf)?)
@@ -156,8 +164,8 @@ async fn device_template_insert(
     sqlx::query(
         format!(
             r#"INSERT INTO {}
-(id, device_id, source_from_type, from_id, source_sink_type, name, conf, template_id, status, ts)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_id, source_from_type, device_template_source_sink_id, source_sink_type, name, conf, status, ts)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
@@ -168,9 +176,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(device_template_source_sink_id)
     .bind(Into::<i32>::into(source_sink_type))
     .bind(name)
-    .bind(None::<i32>)
-    .bind(None::<Vec<u8>>)
-    .bind(None::<String>)
+    .bind(serde_json::to_vec(&Metadatas::default())?)
     .bind(Into::<i32>::into(Status::default()))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
@@ -183,13 +189,14 @@ pub async fn source_group_insert_source(
     id: &String,
     device_id: &String,
     name: &String,
-    source_group_source_sink_id: &String,
+    source_group_source_id: &String,
+    device_source_group_id: &String,
 ) -> Result<()> {
     sqlx::query(
         format!(
             r#"INSERT INTO {}
-(id, device_id, source_from_type, from_id, source_sink_type, name, conf, status, ts)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+(id, device_id, source_from_type, source_group_source_id, device_source_group_id, source_sink_type, name, conf, status, ts)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
@@ -197,7 +204,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(id)
     .bind(device_id)
     .bind(Into::<i32>::into(SourceFromType::SourceGroup))
-    .bind(source_group_source_sink_id)
+    .bind(source_group_source_id)
+    .bind(device_source_group_id)
     .bind(Into::<i32>::into(SourceSinkType::Source))
     .bind(name)
     .bind(serde_json::to_vec(&Metadatas::default())?)

@@ -89,7 +89,20 @@ pub async fn create_source(source_group_id: String, req: CreateUpdateSourceReq) 
         storage::device::device_source_group::read_device_ids_by_source_group_id(&source_group_id)
             .await?;
     for device_id in device_ids {
-        source_group_create_source(&device_id, &source_id, name.clone(), conf.clone()).await?;
+        let device_source_group =
+            storage::device::device_source_group::read_one_by_device_id_and_source_group_id(
+                &device_id,
+                &source_group_id,
+            )
+            .await?;
+        source_group_create_source(
+            &device_id,
+            &source_id,
+            &device_source_group.id,
+            name.clone(),
+            conf.clone(),
+        )
+        .await?;
     }
 
     Ok(())

@@ -207,6 +207,36 @@ pub async fn read_one(id: &String) -> Result<DeviceSourceGroup> {
     db_device_source_group.transfer()
 }
 
+pub async fn read_one_by_device_id_and_source_group_id(
+    device_id: &String,
+    source_group_id: &String,
+) -> Result<DeviceSourceGroup> {
+    let db_device_source_group = sqlx::query_as::<_, DbDeviceSourceGroup>(
+        format!(
+            "SELECT * FROM {} WHERE device_id = ? AND source_group_id = ?",
+            TABLE_NAME
+        )
+        .as_str(),
+    )
+    .bind(device_id)
+    .bind(source_group_id)
+    .fetch_one(POOL.get().unwrap())
+    .await?;
+
+    db_device_source_group.transfer()
+}
+
+pub async fn read_conf(id: &String) -> Result<serde_json::Value> {
+    let conf: Vec<u8> =
+        sqlx::query_scalar(format!("SELECT conf FROM {} WHERE id = ?", TABLE_NAME).as_str())
+            .bind(id)
+            .fetch_one(POOL.get().unwrap())
+            .await?;
+
+    let conf: serde_json::Value = serde_json::from_slice(&conf)?;
+    Ok(conf)
+}
+
 pub async fn read_device_ids_by_source_group_id(source_group_id: &String) -> Result<Vec<String>> {
     let ids: Vec<String> = sqlx::query_scalar(
         format!(
