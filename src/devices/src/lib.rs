@@ -383,13 +383,13 @@ pub async fn start_device(device_id: String) -> HaliaResult<()> {
 
     let db_sources = storage::device::source_sink::read_sources_by_device_id(&device_id).await?;
     for db_source in db_sources {
-        let conf = get_source_conf_from_db(&db_device.device_type, &db_source).await?;
+        let conf = get_source_conf(&db_device.device_type, &db_source).await?;
         device.create_source(db_source.id, conf).await?;
     }
 
     let db_sinks = storage::device::source_sink::read_sinks_by_device_id(&device_id).await?;
     for db_sink in db_sinks {
-        let conf = get_sink_conf_from_db(&db_device.device_type, &db_sink).await?;
+        let conf = get_sink_conf(&db_device.device_type, &db_sink).await?;
         device.create_sink(db_sink.id, conf).await?;
     }
 
@@ -518,9 +518,7 @@ pub async fn list_sources(
             }
             _ => None,
         };
-        debug!("here");
-        let conf = get_source_conf_from_db(&device_type, &db_source).await?;
-        debug!("here");
+        let conf = get_source_conf(&device_type, &db_source).await?;
         list.push(ListSourcesSinksItem {
             id: db_source.id,
             name: db_source.name,
@@ -548,7 +546,7 @@ pub async fn read_source(device_id: String, source_id: String) -> HaliaResult<Re
         _ => None,
     };
     // TODO 优化 db_source的conf克隆的性能问题,
-    let conf = get_source_conf_from_db(&device_type, &db_source).await?;
+    let conf = get_source_conf(&device_type, &db_source).await?;
 
     Ok(ReadSourceSinkResp {
         id: db_source.id,
@@ -808,7 +806,7 @@ pub async fn list_sinks(
             }
             _ => None,
         };
-        let conf = get_sink_conf_from_db(&device_type, &db_sink).await?;
+        let conf = get_sink_conf(&device_type, &db_sink).await?;
 
         list.push(ListSourcesSinksItem {
             id: db_sink.id,
@@ -835,7 +833,7 @@ pub async fn read_sink(device_id: String, sink_id: String) -> HaliaResult<ReadSo
     };
 
     // TODO 优化 db_source的conf克隆的性能问题,
-    let conf = get_sink_conf_from_db(&device_type, &db_sink).await?;
+    let conf = get_sink_conf(&device_type, &db_sink).await?;
 
     Ok(ReadSourceSinkResp {
         id: db_sink.id,
@@ -919,7 +917,7 @@ enum UpdateConfMode {
     TemplateModeTemplate,
 }
 
-async fn get_source_conf_from_db(
+async fn get_source_conf(
     device_type: &DeviceType,
     db_source: &storage::device::source_sink::SourceSink,
 ) -> HaliaResult<serde_json::Value> {
@@ -929,11 +927,26 @@ async fn get_source_conf_from_db(
             .device_template_source_sink_id
         {
             Some(device_template_source_id) => {
-                let db_device_template_source_conf =
+                let device_template_source_conf =
                     storage::device::template_source_sink::read_conf(&device_template_source_id)
                         .await?;
-                todo!()
-                // db_device_template_source.conf
+
+                let device_source_conf =
+                    storage::device::source_sink::read_conf(&db_source.id).await?;
+
+                match device_type {
+                    DeviceType::Modbus => {
+                        let mut conf: types::devices::device::modbus::SourceConf =
+                            serde_json::from_value(device_template_source_conf)?;
+                        let metadatas: types::devices::Metadatas =
+                            serde_json::from_value(device_source_conf)?;
+                        conf.metadatas = metadatas.metadatas;
+                        let conf = serde_json::to_value(conf)?;
+                        Ok(conf)
+                    }
+                    DeviceType::Opcua => todo!(),
+                    DeviceType::Coap => todo!(),
+                }
             }
             None => unreachable!(),
         },
@@ -977,7 +990,7 @@ async fn get_source_conf_from_db(
     }
 }
 
-async fn get_sink_conf_from_db(
+async fn get_sink_conf(
     device_type: &DeviceType,
     db_sink: &storage::device::source_sink::SourceSink,
 ) -> HaliaResult<serde_json::Value> {
