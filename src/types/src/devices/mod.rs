@@ -285,7 +285,5 @@ impl TryFrom<i32> for SourceFromType {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct Metadatas {
-    metadatas: Option<Vec<(String, serde_json::Value)>>,
-}
+// #[derive(Deserialize, Serialize, Debug, Default)]
+// pub type Metadatas = Option<Vec<(String, serde_json::Value)>>;

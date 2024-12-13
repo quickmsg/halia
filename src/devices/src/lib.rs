@@ -11,7 +11,7 @@ use types::{
         device::QueryParams, ConfType, DeviceSourceGroupCreateReq, DeviceSourceGroupListItem,
         DeviceSourceGroupListResp, DeviceSourceGroupQueryParams, DeviceSourceGroupReadResp,
         DeviceSourceGroupUpdateReq, DeviceType, ListDevicesResp, ListSourcesSinksItem,
-        ListSourcesSinksResp, QueryRuleInfoParams, ReadDeviceResp, ReadSourceSinkResp,
+        ListSourcesSinksResp, Metadatas, QueryRuleInfoParams, ReadDeviceResp, ReadSourceSinkResp,
         RuleInfoDevice, RuleInfoResp, RuleInfoSourceSink, SourceSinkCreateUpdateReq,
         SourceSinkQueryParams,
     },
@@ -531,18 +531,20 @@ pub async fn list_sources(
     let device_type = storage::device::device::read_device_type(&device_id).await?;
     let (count, db_sources) =
         storage::device::source_sink::search_sources(&device_id, pagination, query).await?;
+    debug!("{:?}", db_sources);
     let mut list = Vec::with_capacity(db_sources.len());
     for db_source in db_sources {
         let rule_ref_cnt =
             storage::rule::reference::get_rule_ref_info_by_resource_id(&db_source.id).await?;
         let err = match db_source.status {
-            Status::Error => match GLOBAL_DEVICE_MANAGER.get(&device_id) {
-                Some(device) => device.read_source_err(&db_source.id).await,
-                None => Some("应用未启动！".to_string()),
-            },
+            Status::Error => {
+                get_source_sink_err(SourceSinkType::Source, &device_id, &db_source.id).await
+            }
             _ => None,
         };
+        debug!("here");
         let conf = get_source_conf_from_db(&device_type, &db_source).await?;
+        debug!("here");
         list.push(ListSourcesSinksItem {
             id: db_source.id,
             name: db_source.name,
@@ -968,10 +970,16 @@ async fn get_source_conf_from_db(
             Some(source_group_source_id) => match device_type {
                 DeviceType::Modbus => {
                     let db_source_group_source_conf =
-                        storage::device::source_sink::read_conf(&source_group_source_id).await?;
+                        storage::device::source_group_source::read_conf(&source_group_source_id)
+                            .await?;
+                    debug!("{:?}", db_source_group_source_conf);
+
+                    debug!("{:?}", db_source.conf);
+
                     let template_conf: types::devices::source_group::modbus::TemplateConf =
                         serde_json::from_value(db_source_group_source_conf)?;
-                    let customize_conf: types::devices::source_group::modbus::CustomizeConf =
+                    let metadatas: Metadatas =
+                    // let customize_conf: types::devices::source_group::modbus::CustomizeConf =
                         serde_json::from_value(db_source.conf.clone())?;
                     let conf = types::devices::device::modbus::SourceConf {
                         slave: customize_conf.slave,
@@ -980,7 +988,7 @@ async fn get_source_conf_from_db(
                         data_type: template_conf.data_type,
                         address: template_conf.address,
                         interval: template_conf.interval,
-                        metadatas: customize_conf.metadatas,
+                        metadatas,
                     };
                     let conf = serde_json::to_value(conf)?;
                     Ok(conf)
