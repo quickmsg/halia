@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query},
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
     Json, Router,
 };
 use types::{
@@ -17,91 +17,117 @@ use crate::AppResult;
 pub fn routes() -> Router {
     Router::new()
         .route("/summary", get(get_devices_summary))
-        .route("/", post(create_device))
-        .route("/list", get(list_devices))
-        .route("/:device_id", get(read_device))
-        .route("/:device_id", put(update_device))
+        .route("/", post(create_device).get(list_devices))
+        .route(
+            "/:device_id",
+            get(read_device).put(update_device).delete(delete_device),
+        )
         .route("/:device_id/start", put(start_device))
         .route("/:device_id/stop", put(stop_device))
-        .route("/:device_id", delete(delete_device))
         .nest(
             "/:device_id",
             Router::new()
                 .nest(
                     "/source",
                     Router::new()
-                        .route("/", post(create_source))
-                        .route("/list", get(list_sources))
-                        .route("/:source_id", get(read_source))
-                        .route("/:source_id", put(update_source))
-                        .route("/:source_id/value", put(write_source_value))
-                        .route("/:source_id", delete(delete_source)),
+                        .route("/", post(create_source).get(list_sources))
+                        .route(
+                            "/:source_id",
+                            get(read_source).put(update_source).delete(delete_source),
+                        )
+                        .route("/:source_id/value", put(write_source_value)),
                 )
                 .nest(
                     "/source_group",
                     Router::new()
-                        .route("/", post(device_create_source_group))
-                        .route("/list", get(device_list_source_groups))
-                        .route("/:source_group_id", get(device_read_source_group))
-                        .route("/:source_group_id", put(device_update_source_group))
-                        .route("/:source_group_id", delete(device_delete_source_group)),
+                        .route(
+                            "/",
+                            post(device_create_source_group).get(device_list_source_groups),
+                        )
+                        .route(
+                            "/:source_group_id",
+                            get(device_read_source_group)
+                                .put(device_update_source_group)
+                                .delete(device_delete_source_group),
+                        ),
                 )
                 .nest(
                     "/sink",
                     Router::new()
-                        .route("/", post(create_sink))
-                        .route("/list", get(list_sinks))
-                        .route("/:sink_id", get(read_sink))
-                        .route("/:sink_id", put(update_sink))
-                        .route("/:sink_id", delete(delete_sink)),
+                        .route("/", post(create_sink).get(list_sinks))
+                        .route(
+                            "/:sink_id",
+                            get(read_sink).put(update_sink).delete(delete_sink),
+                        ),
                 ),
         )
         .nest(
             "/source_group",
             Router::new()
-                .route("/", post(create_source_group))
-                .route("/list", get(list_source_groups))
-                .route("/:id", get(read_source_group))
-                .route("/:id", put(update_source_group))
-                .route("/:id", delete(delete_source_group))
+                .route("/", post(create_source_group).get(list_source_groups))
+                .route(
+                    "/:id",
+                    get(read_source_group)
+                        .put(update_source_group)
+                        .delete(delete_source_group),
+                )
                 .nest(
                     "/:source_group_id/source",
                     Router::new()
-                        .route("/", post(create_source_group_source))
-                        .route("/list", get(list_source_group_sources))
-                        .route("/:source_id", get(read_source_group_source))
-                        .route("/:source_id", put(update_source_group_source))
-                        .route("/:source_id", delete(delete_source_group_source)),
+                        .route(
+                            "/",
+                            post(create_source_group_source).get(list_source_group_sources),
+                        )
+                        .route(
+                            "/:source_id",
+                            get(read_source_group_source)
+                                .put(update_source_group_source)
+                                .delete(delete_source_group_source),
+                        ),
                 ),
         )
         .nest(
             "/device_template",
             Router::new()
-                .route("/", post(create_device_template))
-                .route("/list", get(list_device_templates))
-                .route("/:id", get(read_device_template))
-                .route("/:id", put(update_device_template))
-                .route("/:id", delete(delete_device_template))
+                .route("/", post(create_device_template).get(list_device_templates))
+                .route(
+                    "/:id",
+                    get(read_device_template)
+                        .put(update_device_template)
+                        .delete(delete_device_template),
+                )
                 .nest(
                     "/:device_template_id",
                     Router::new()
                         .nest(
                             "/source",
                             Router::new()
-                                .route("/", post(create_device_template_source))
-                                .route("/list", get(list_device_template_sources))
-                                .route("/:source_id", get(read_device_template_source))
-                                .route("/:source_id", put(update_device_template_source))
-                                .route("/:source_id", delete(delete_device_template_source)),
+                                .route(
+                                    "/",
+                                    post(create_device_template_source)
+                                        .get(list_device_template_sources),
+                                )
+                                .route(
+                                    "/:source_id",
+                                    get(read_device_template_source)
+                                        .put(update_device_template_source)
+                                        .delete(delete_device_template_source),
+                                ),
                         )
                         .nest(
                             "/sink",
                             Router::new()
-                                .route("/", post(create_device_template_sink))
-                                .route("/list", get(list_device_template_sinks))
-                                .route("/:sink_id", get(read_device_template_sink))
-                                .route("/:sink_id", put(update_device_template_sink))
-                                .route("/:sink_id", delete(delete_device_template_sink)),
+                                .route(
+                                    "/",
+                                    post(create_device_template_sink)
+                                        .get(list_device_template_sinks),
+                                )
+                                .route(
+                                    "/:sink_id",
+                                    get(read_device_template_sink)
+                                        .put(update_device_template_sink)
+                                        .delete(delete_device_template_sink),
+                                ),
                         ),
                 ),
         )
