@@ -79,22 +79,25 @@ CREATE TABLE IF NOT EXISTS {} (
 
 pub async fn device_insert_source(
     source_id: &String,
+    status: Status,
     device_id: &String,
     req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
-    device_insert(source_id, device_id, req, SourceSinkType::Source).await
+    device_insert(source_id, status, device_id, req, SourceSinkType::Source).await
 }
 
 pub async fn device_insert_sink(
     sink_id: &String,
+    status: Status,
     device_id: &String,
     req: SourceSinkCreateUpdateReq,
 ) -> Result<()> {
-    device_insert(sink_id, device_id, req, SourceSinkType::Sink).await
+    device_insert(sink_id, status, device_id, req, SourceSinkType::Sink).await
 }
 
 async fn device_insert(
     id: &String,
+    stauts: Status,
     device_id: &String,
     req: SourceSinkCreateUpdateReq,
     source_sink_type: SourceSinkType,
@@ -114,7 +117,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(Into::<i32>::into(source_sink_type))
     .bind(req.name)
     .bind(serde_json::to_vec(&req.conf)?)
-    .bind(Into::<i32>::into(Status::default()))
+    .bind(Into::<i32>::into(stauts))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
@@ -124,12 +127,14 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
 
 pub async fn device_template_insert_source(
     source_id: &String,
+    status: Status,
     device_id: &String,
     name: &String,
     device_template_source_id: &String,
 ) -> Result<()> {
     device_template_insert(
         source_id,
+        status,
         device_id,
         name,
         device_template_source_id,
@@ -140,12 +145,14 @@ pub async fn device_template_insert_source(
 
 pub async fn device_template_insert_sink(
     id: &String,
+    status: Status,
     device_id: &String,
     name: &String,
     device_template_source_id: &String,
 ) -> Result<()> {
     device_template_insert(
         id,
+        status,
         device_id,
         name,
         device_template_source_id,
@@ -156,6 +163,7 @@ pub async fn device_template_insert_sink(
 
 async fn device_template_insert(
     id: &String,
+    status: Status,
     device_id: &String,
     name: &String,
     device_template_source_sink_id: &String,
@@ -177,7 +185,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(Into::<i32>::into(source_sink_type))
     .bind(name)
     .bind(serde_json::to_vec(&Metadatas::default())?)
-    .bind(Into::<i32>::into(Status::default()))
+    .bind(Into::<i32>::into(status))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;
@@ -187,6 +195,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
 
 pub async fn source_group_insert_source(
     id: &String,
+    status: Status,
     device_id: &String,
     name: &String,
     source_group_source_id: &String,
@@ -209,7 +218,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     .bind(Into::<i32>::into(SourceSinkType::Source))
     .bind(name)
     .bind(serde_json::to_vec(&Metadatas::default())?)
-    .bind(Into::<i32>::into(Status::default()))
+    .bind(Into::<i32>::into(status))
     .bind(common::timestamp_millis() as i64)
     .execute(POOL.get().unwrap())
     .await?;

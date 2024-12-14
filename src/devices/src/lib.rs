@@ -148,13 +148,16 @@ pub async fn create_device(
                         device_template_id,
                     )
                     .await?;
-                let mut source_reqs = vec![];
                 for device_template_source in device_template_sources {
-                    let req = types::devices::SourceSinkCreateUpdateReq {
-                        name: device_template_source.name,
-                        conf: device_template_source.conf,
-                    };
-                    source_reqs.push(req);
+                    let source_id = common::get_id();
+                    storage::device::source_sink::device_template_insert_source(
+                        &source_id,
+                        Status::Stopped,
+                        &device_id,
+                        &device_template_source.name,
+                        &device_template_source.id,
+                    )
+                    .await?;
                 }
 
                 let device_template_sinks =
@@ -162,24 +165,17 @@ pub async fn create_device(
                         device_template_id,
                     )
                     .await?;
-                let mut sink_reqs = vec![];
                 for device_template_sink in device_template_sinks {
-                    let req = types::devices::SourceSinkCreateUpdateReq {
-                        name: device_template_sink.name,
-                        conf: device_template_sink.conf,
-                    };
-                    sink_reqs.push(req);
+                    let sink_id = common::get_id();
+                    storage::device::source_sink::device_template_insert_sink(
+                        &sink_id,
+                        Status::Stopped,
+                        &device_id,
+                        &device_template_sink.name,
+                        &device_template_sink.id,
+                    )
+                    .await?;
                 }
-
-                // 从模板中进行初始化
-
-                // for source_req in source_reqs {
-                //     create_source(device_id.clone(), Some(&device_template_id), source_req).await?;
-                // }
-
-                // for sink_req in sink_reqs {
-                //     create_sink(device_id.clone(), Some(&device_template_id), sink_req).await?;
-                // }
             }
             None => return Err(HaliaError::Common("必须提供模板ID".to_owned())),
         },
@@ -448,8 +444,8 @@ pub async fn device_create_source(
         return Err(HaliaError::Common("模板设备不能创建源".to_string()));
     }
 
-    let source_id = create_source(&device_id, req.conf.clone()).await?;
-    storage::device::source_sink::device_insert_source(&source_id, &device_id, req).await?;
+    let (source_id, status) = create_source(&device_id, req.conf.clone()).await?;
+    storage::device::source_sink::device_insert_source(&source_id, status, &device_id, req).await?;
     Ok(())
 }
 
@@ -459,9 +455,10 @@ pub(crate) async fn device_template_create_source(
     name: String,
     conf: serde_json::Value,
 ) -> HaliaResult<()> {
-    let source_id = create_source(&device_id, conf).await?;
+    let (source_id, status) = create_source(&device_id, conf).await?;
     storage::device::source_sink::device_template_insert_source(
         &source_id,
+        status,
         &device_id,
         &name,
         &device_template_source_id,
@@ -478,9 +475,10 @@ pub(crate) async fn source_group_create_source(
     name: String,
     conf: serde_json::Value,
 ) -> HaliaResult<()> {
-    let source_id = create_source(&device_id, conf).await?;
+    let (source_id, status) = create_source(&device_id, conf).await?;
     storage::device::source_sink::source_group_insert_source(
         &source_id,
+        status,
         device_id,
         &name,
         source_group_source_id,
@@ -490,13 +488,18 @@ pub(crate) async fn source_group_create_source(
     Ok(())
 }
 
-async fn create_source(device_id: &String, conf: serde_json::Value) -> HaliaResult<String> {
+async fn create_source(
+    device_id: &String,
+    conf: serde_json::Value,
+) -> HaliaResult<(String, Status)> {
     let source_id = common::get_id();
+    let mut status = Status::Stopped;
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(device_id) {
-        device.create_source(source_id.clone(), conf).await?
+        device.create_source(source_id.clone(), conf).await?;
+        status = Status::Running;
     }
 
-    Ok(source_id)
+    Ok((source_id, status))
 }
 
 pub async fn list_sources(
@@ -679,10 +682,12 @@ pub async fn create_source_group(
     let device_source_group_id = common::get_id();
     storage::device::device_source_group::insert(&device_source_group_id, &device_id, req).await?;
 
+    let stauts = device.status;
     for source_group_source in source_group_sources {
         let soruce_id = common::get_id();
         storage::device::source_sink::source_group_insert_source(
             &soruce_id,
+            stauts,
             &device_id,
             &source_group_source.name,
             &source_group_source.id,
@@ -756,8 +761,8 @@ pub async fn device_create_sink(
         return Err(HaliaError::Common("模板设备不能创建动作。".to_string()));
     }
 
-    let sink_id = create_sink(&device_id, req.conf.clone()).await?;
-    storage::device::source_sink::device_insert_sink(&sink_id, &device_id, req).await?;
+    let (sink_id, status) = create_sink(&device_id, req.conf.clone()).await?;
+    storage::device::source_sink::device_insert_sink(&sink_id, status, &device_id, req).await?;
     Ok(())
 }
 
@@ -767,9 +772,10 @@ pub(crate) async fn device_template_create_sink(
     name: String,
     conf: serde_json::Value,
 ) -> HaliaResult<()> {
-    let sink_id = create_sink(&device_id, conf).await?;
+    let (sink_id, status) = create_sink(&device_id, conf).await?;
     storage::device::source_sink::device_template_insert_sink(
         &sink_id,
+        status,
         &device_id,
         &name,
         &device_template_sink_id,
@@ -779,13 +785,15 @@ pub(crate) async fn device_template_create_sink(
     Ok(())
 }
 
-async fn create_sink(device_id: &String, conf: serde_json::Value) -> HaliaResult<String> {
+async fn create_sink(device_id: &String, conf: serde_json::Value) -> HaliaResult<(String, Status)> {
     let sink_id = common::get_id();
+    let mut status = Status::Stopped;
     if let Some(mut device) = GLOBAL_DEVICE_MANAGER.get_mut(device_id) {
-        device.create_sink(sink_id.clone(), conf).await?
+        device.create_sink(sink_id.clone(), conf).await?;
+        status = Status::Running;
     }
 
-    Ok(sink_id)
+    Ok((sink_id, status))
 }
 
 pub async fn list_sinks(
@@ -1007,11 +1015,34 @@ async fn get_sink_conf(
         types::devices::SourceFromType::DeviceTemplate => {
             match &db_sink.device_template_source_sink_id {
                 Some(device_template_sink_id) => {
-                    let db_device_template_source_conf =
+                    let device_template_sink_conf =
                         storage::device::template_source_sink::read_conf(&device_template_sink_id)
                             .await?;
-                    todo!()
-                    // db_device_template_source.conf
+
+                    let device_sink_conf =
+                        storage::device::source_sink::read_conf(&db_sink.id).await?;
+
+                    match device_type {
+                        DeviceType::Modbus => {
+                            let mut conf: types::devices::device::modbus::SourceConf =
+                                serde_json::from_value(device_template_sink_conf)?;
+                            let metadatas: types::devices::Metadatas =
+                                serde_json::from_value(device_sink_conf)?;
+                            conf.metadatas = metadatas.metadatas;
+                            let conf = serde_json::to_value(conf)?;
+                            Ok(conf)
+                        }
+                        DeviceType::Opcua => {
+                            let mut conf: types::devices::device::opcua::SourceConf =
+                                serde_json::from_value(device_template_sink_conf)?;
+                            let metadatas: types::devices::Metadatas =
+                                serde_json::from_value(device_sink_conf)?;
+                            conf.metadatas = metadatas.metadatas;
+                            let conf = serde_json::to_value(conf)?;
+                            Ok(conf)
+                        }
+                        DeviceType::Coap => todo!(),
+                    }
                 }
                 None => unreachable!(),
             }

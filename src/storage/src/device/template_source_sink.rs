@@ -83,8 +83,8 @@ async fn insert(
     sqlx::query(
         format!(
             r#"INSERT INTO {} 
-            (id, device_template_id, source_sink_type, name, conf_type, template_id, conf, ts) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
+            (id, device_template_id, source_sink_type, name, conf, ts) 
+            VALUES (?, ?, ?, ?, ?, ?)"#,
             TABLE_NAME
         )
         .as_str(),
