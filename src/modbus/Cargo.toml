@@ -1,0 +1,9 @@
+[package]
+name = "modbus"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tokio = { version = "1.41.0", features = ["full"] }
+async-trait = "0.1.83"
+thiserror = "1.0.65"
